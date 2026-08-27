@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
+import { clearOnboardingDraft } from "./onboardingDraft";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
@@ -20,7 +21,8 @@ export function useOnboarding(): UseOnboardingResult {
 
     useEffect(() => {
         let cancelled = false;
-        apiClient.getSetting(ONBOARDING_KEY)
+        apiClient
+            .getSetting(ONBOARDING_KEY)
             .then((result) => {
                 if (!cancelled) setIsComplete(result?.value === true);
             })
@@ -30,18 +32,24 @@ export function useOnboarding(): UseOnboardingResult {
             .finally(() => {
                 if (!cancelled) setIsLoading(false);
             });
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const complete = useCallback(() => {
         setIsComplete(true);
-        apiClient.saveSetting(ONBOARDING_KEY, true).catch((err) => {
-            logger.error("Failed to persist onboarding completion", err);
-            toast.error(t("onboarding.persist.failed"));
-        });
+        apiClient
+            .saveSetting(ONBOARDING_KEY, true)
+            .then(() => clearOnboardingDraft())
+            .catch((err) => {
+                logger.error("Failed to persist onboarding completion", err);
+                toast.error(t("onboarding.persist.failed"));
+            });
     }, [t]);
 
     const reset = useCallback(() => {
+        clearOnboardingDraft();
         setIsComplete(false);
         apiClient.saveSetting(ONBOARDING_KEY, false).catch((err) => {
             logger.error("Failed to persist onboarding reset", err);

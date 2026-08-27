@@ -1,21 +1,49 @@
 // @vitest-environment jsdom
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useLocation, useNavigate } from "react-router";
 
 const API_BASE = "http://localhost:3002";
 
-function renderLayout() {
+function LocationProbe() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    return (
+        <>
+            <output aria-label="location">
+                {location.pathname}
+                {location.search}
+            </output>
+            <button data-testid="history-back" onClick={() => navigate(-1)}>
+                Test back
+            </button>
+        </>
+    );
+}
+
+function renderLayout(initialEntry = "/") {
     return renderWithApp(
         <AppLayout>
             <div>page content</div>
+            <LocationProbe />
         </AppLayout>,
-        { initialEntries: ["/"] },
+        { initialEntries: [initialEntry] },
+    );
+}
+
+function renderLayoutEntries(initialEntries: string[]) {
+    return renderWithApp(
+        <AppLayout>
+            <div>page content</div>
+            <LocationProbe />
+        </AppLayout>,
+        { initialEntries },
     );
 }
 
@@ -67,7 +95,9 @@ describe("AppLayout a11y landmarks", () => {
 
         (document.activeElement as HTMLElement | null)?.blur();
         await user.tab();
-        expect(screen.getByRole("link", { name: "Skip to content" })).toHaveFocus();
+        expect(
+            screen.getByRole("link", { name: "Skip to content" }),
+        ).toHaveFocus();
 
         await user.keyboard("{Enter}");
         expect(screen.getByRole("main")).toHaveFocus();
@@ -79,5 +109,80 @@ describe("AppLayout a11y landmarks", () => {
 
         const nav = screen.getByRole("navigation", { name: "Main navigation" });
         expect(nav.tagName).toBe("NAV");
+    });
+
+    it("deep-links to a settings section and keeps unrelated query state", async () => {
+        const user = userEvent.setup();
+        renderLayout("/?keep=1&settings=appearance");
+
+        expect(
+            await screen.findByRole("tab", { name: "Appearance" }),
+        ).toHaveAttribute("aria-selected", "true");
+
+        await user.click(screen.getByRole("tab", { name: "Statistics" }));
+        await waitFor(() =>
+            expect(screen.getByLabelText("location")).toHaveTextContent(
+                "/?keep=1&settings=statistics",
+            ),
+        );
+    });
+
+    it("pushes one settings entry and browser Back closes it", async () => {
+        const user = userEvent.setup();
+        renderLayoutEntries(["/sentinel", "/?keep=1"]);
+
+        await user.click(
+            screen.getByRole("button", {
+                name: /^(Open settings|layout\.openSettings)$/,
+            }),
+        );
+        await screen.findByRole("dialog", { name: "Settings" });
+        expect(screen.getByLabelText("location")).toHaveTextContent(
+            "/?keep=1&settings=general",
+        );
+
+        fireEvent.click(screen.getByTestId("history-back"));
+        await waitFor(() =>
+            expect(
+                screen.queryByRole("dialog", { name: "Settings" }),
+            ).not.toBeInTheDocument(),
+        );
+        expect(screen.getByLabelText("location")).toHaveTextContent("/?keep=1");
+    });
+
+    it("explicit close and repeated shortcuts do not leave duplicate entries", async () => {
+        const user = userEvent.setup();
+        renderLayoutEntries(["/sentinel", "/?keep=1"]);
+
+        await user.keyboard("{Meta>},{/Meta}");
+        await screen.findByRole("dialog", { name: "Settings" });
+        await user.keyboard("{Meta>},{/Meta}");
+        await user.click(screen.getByRole("button", { name: "Done" }));
+        await waitFor(() =>
+            expect(screen.getByLabelText("location")).toHaveTextContent(
+                "/?keep=1",
+            ),
+        );
+
+        await user.click(screen.getByTestId("history-back"));
+        await waitFor(() =>
+            expect(screen.getByLabelText("location")).toHaveTextContent(
+                "/sentinel",
+            ),
+        );
+    });
+
+    it("closes a direct deep link with replace and preserves unrelated params", async () => {
+        const user = userEvent.setup();
+        renderLayout("/?keep=1&settings=appearance");
+
+        await screen.findByRole("dialog", { name: "Settings" });
+        await user.click(screen.getByRole("button", { name: "Done" }));
+
+        await waitFor(() =>
+            expect(screen.getByLabelText("location")).toHaveTextContent(
+                "/?keep=1",
+            ),
+        );
     });
 });

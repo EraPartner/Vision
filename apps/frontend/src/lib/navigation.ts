@@ -1,35 +1,6 @@
-import {
-    Activity,
-    ArrowLeftRight,
-    BarChart3,
-    Briefcase,
-    Building2,
-    CalendarClock,
-    CandlestickChart,
-    Coins,
-    Database,
-    Gem,
-    GitCompareArrows,
-    Globe,
-    HandCoins,
-    Import,
-    Landmark,
-    LayoutDashboard,
-    LineChart,
-    PiggyBank,
-    Receipt,
-    Scale,
-    ShieldCheck,
-    Sparkles,
-    Tags,
-    Target,
-    Telescope,
-    TrendingUp,
-    Users,
-    Wallet,
-    type LucideIcon,
-} from "lucide-react";
+import { Briefcase, Receipt, Telescope, type LucideIcon } from "lucide-react";
 import type { Workspace } from "@/contexts/WorkspaceContext";
+import { PAGE_ICONS } from "@/lib/pageIcons";
 
 /**
  * Single source of truth for the app's navigable pages.
@@ -49,11 +20,6 @@ export interface NavItem {
     titleKey: string;
     url: string;
     icon: LucideIcon;
-    /**
-     * Command-palette icon override for the one place the surfaces
-     * deliberately differ (the portfolio dashboard). Omitted everywhere else.
-     */
-    paletteIcon?: LucideIcon;
     /** Second key of the `g`-then-key go-to sequence, if the page has one. */
     shortcutKey?: string;
     /**
@@ -88,8 +54,13 @@ export interface NavWorkspaceSection {
  * forces a workspace switch (see WORKSPACE_AGNOSTIC_URLS).
  */
 export const GLOBAL_NAV_ITEMS: NavItem[] = [
-    { titleKey: "nav.aiChat", url: "/ai-chat", icon: Sparkles, shortcutKey: "a" },
-    { titleKey: "nav.accounts", url: "/accounts", icon: Landmark },
+    {
+        titleKey: "nav.aiChat",
+        url: "/ai-chat",
+        icon: PAGE_ICONS["/ai-chat"],
+        shortcutKey: "a",
+    },
+    { titleKey: "nav.accounts", url: "/accounts", icon: PAGE_ICONS["/accounts"] },
 ];
 
 const BUDGETING_SECTION: NavWorkspaceSection = {
@@ -101,30 +72,64 @@ const BUDGETING_SECTION: NavWorkspaceSection = {
         {
             labelKey: "nav.overview",
             items: [
-                { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard, shortcutKey: "d" },
-                { titleKey: "nav.transactions", url: "/transactions", icon: Receipt, shortcutKey: "t" },
+                {
+                    titleKey: "nav.dashboard",
+                    url: "/",
+                    icon: PAGE_ICONS["/"],
+                    shortcutKey: "d",
+                },
+                {
+                    titleKey: "nav.transactions",
+                    url: "/transactions",
+                    icon: PAGE_ICONS["/transactions"],
+                    shortcutKey: "t",
+                },
             ],
         },
         {
             labelKey: "nav.organization",
             items: [
-                { titleKey: "nav.categories", url: "/categories", icon: Tags, shortcutKey: "c" },
-                { titleKey: "nav.recipients", url: "/recipients", icon: Users, shortcutKey: "r" },
+                {
+                    titleKey: "nav.categories",
+                    url: "/categories",
+                    icon: PAGE_ICONS["/categories"],
+                    shortcutKey: "c",
+                },
+                {
+                    titleKey: "nav.recipients",
+                    url: "/recipients",
+                    icon: PAGE_ICONS["/recipients"],
+                    shortcutKey: "r",
+                },
             ],
         },
         {
             labelKey: "nav.analysis",
             items: [
-                { titleKey: "nav.statistics", url: "/statistics", icon: BarChart3, shortcutKey: "s" },
-                { titleKey: "nav.plannedPayments", url: "/planned", icon: CalendarClock },
-                { titleKey: "nav.whoOwesYou", url: "/owes", icon: HandCoins },
-                { titleKey: "nav.taxOverview", url: "/tax", icon: Landmark },
+                {
+                    titleKey: "nav.statistics",
+                    url: "/statistics",
+                    icon: PAGE_ICONS["/statistics"],
+                    shortcutKey: "s",
+                },
+                {
+                    titleKey: "nav.plannedPayments",
+                    url: "/planned",
+                    icon: PAGE_ICONS["/planned"],
+                },
+                { titleKey: "nav.whoOwesYou", url: "/owes", icon: PAGE_ICONS["/owes"] },
+                { titleKey: "nav.taxOverview", url: "/tax", icon: PAGE_ICONS["/tax"] },
             ],
         },
         {
             labelKey: "nav.tools",
             items: [
-                { titleKey: "nav.importExport", url: "/import", icon: Import, shortcutKey: "i" },
+                {
+                    titleKey: "nav.importExport",
+                    url: "/import",
+                    icon: PAGE_ICONS["/import"],
+                    shortcutKey: "i",
+                },
             ],
         },
     ],
@@ -138,41 +143,80 @@ const PORTFOLIO_SECTION: NavWorkspaceSection = {
     groups: [
         {
             labelKey: "nav.overview",
-            items: [
-                // The palette's flat list has two "Dashboard" rows (budgeting +
-                // portfolio); it keeps the workspace's Briefcase to tell them
-                // apart, while the grouped sidebar uses LayoutDashboard.
-                { titleKey: "nav.dashboard", url: "/portfolio", icon: LayoutDashboard, paletteIcon: Briefcase, shortcutKey: "p", goToTitleKey: "nav.portfolio" },
-                { titleKey: "nav.netWorth", url: "/portfolio/net-worth", icon: Wallet, shortcutKey: "n" },
+            items: [                {
+                    titleKey: "nav.dashboard",
+                    url: "/portfolio",
+                    icon: PAGE_ICONS["/portfolio"],
+                    shortcutKey: "p",
+                    goToTitleKey: "nav.portfolio",
+                },
+                {
+                    titleKey: "nav.netWorth",
+                    url: "/portfolio/net-worth",
+                    icon: PAGE_ICONS["/portfolio/net-worth"],
+                    shortcutKey: "n",
+                },
             ],
         },
         {
             labelKey: "nav.investments",
             items: [
-                { titleKey: "nav.stocksEtfs", url: "/portfolio/stocks", icon: TrendingUp },
-                { titleKey: "nav.crypto", url: "/portfolio/crypto", icon: Coins },
-                { titleKey: "nav.metals", url: "/portfolio/metals", icon: Gem },
+                {
+                    titleKey: "nav.stocksEtfs",
+                    url: "/portfolio/stocks",
+                    icon: PAGE_ICONS["/portfolio/stocks"],
+                },
+                {
+                    titleKey: "nav.crypto",
+                    url: "/portfolio/crypto",
+                    icon: PAGE_ICONS["/portfolio/crypto"],
+                },
+                { titleKey: "nav.metals", url: "/portfolio/metals", icon: PAGE_ICONS["/portfolio/metals"] },
             ],
         },
         {
             labelKey: "nav.assets",
             items: [
-                { titleKey: "nav.realEstate", url: "/portfolio/real-estate", icon: Building2 },
-                { titleKey: "nav.savingsBonds", url: "/portfolio/savings", icon: PiggyBank },
+                {
+                    titleKey: "nav.realEstate",
+                    url: "/portfolio/real-estate",
+                    icon: PAGE_ICONS["/portfolio/real-estate"],
+                },
+                {
+                    titleKey: "nav.savingsBonds",
+                    url: "/portfolio/savings",
+                    icon: PAGE_ICONS["/portfolio/savings"],
+                },
             ],
         },
         {
             labelKey: "nav.analysis",
             items: [
-                { titleKey: "nav.performance", url: "/portfolio/performance", icon: BarChart3 },
-                { titleKey: "nav.rebalance", url: "/portfolio/rebalance", icon: Scale },
-                { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
+                {
+                    titleKey: "nav.performance",
+                    url: "/portfolio/performance",
+                    icon: PAGE_ICONS["/portfolio/performance"],
+                },
+                {
+                    titleKey: "nav.rebalance",
+                    url: "/portfolio/rebalance",
+                    icon: PAGE_ICONS["/portfolio/rebalance"],
+                },
+                {
+                    titleKey: "nav.taxOverview",
+                    url: "/portfolio/tax",
+                    icon: PAGE_ICONS["/portfolio/tax"],
+                },
             ],
         },
         {
             labelKey: "nav.tools",
             items: [
-                { titleKey: "nav.portfolioImport", url: "/portfolio/import", icon: Import },
+                {
+                    titleKey: "nav.portfolioImport",
+                    url: "/portfolio/import",
+                    icon: PAGE_ICONS["/portfolio/import"],
+                },
             ],
         },
     ],
@@ -187,18 +231,47 @@ const RESEARCH_SECTION: NavWorkspaceSection = {
         {
             labelKey: "nav.overview",
             items: [
-                { titleKey: "nav.researchHome", url: "/research", icon: Telescope },
-                { titleKey: "nav.markets", url: "/research/markets", icon: Globe, shortcutKey: "m" },
-                { titleKey: "nav.marketLookup", url: "/research/market", icon: LineChart },
+                {
+                    titleKey: "nav.researchHome",
+                    url: "/research",
+                    icon: PAGE_ICONS["/research"],
+                },
+                {
+                    titleKey: "nav.markets",
+                    url: "/research/markets",
+                    icon: PAGE_ICONS["/research/markets"],
+                    shortcutKey: "m",
+                },
+                {
+                    titleKey: "nav.marketLookup",
+                    url: "/research/market",
+                    icon: PAGE_ICONS["/research/market"],
+                },
             ],
         },
         {
             labelKey: "nav.analysis",
             items: [
-                { titleKey: "nav.compare", url: "/research/compare", icon: GitCompareArrows },
-                { titleKey: "nav.chartBuilder", url: "/research/charts", icon: CandlestickChart },
-                { titleKey: "nav.forecast", url: "/research/forecast", icon: TrendingUp },
-                { titleKey: "nav.watchlist", url: "/research/watchlist", icon: Target },
+                {
+                    titleKey: "nav.compare",
+                    url: "/research/compare",
+                    icon: PAGE_ICONS["/research/compare"],
+                },
+                {
+                    titleKey: "nav.chartBuilder",
+                    url: "/research/charts",
+                    icon: PAGE_ICONS["/research/charts"],
+                },
+                {
+                    titleKey: "nav.forecast",
+                    url: "/research/forecast",
+                    icon: PAGE_ICONS["/research/forecast"],
+                },
+                {
+                    titleKey: "nav.watchlist",
+                    url: "/research/watchlist",
+                    icon: PAGE_ICONS["/research/watchlist"],
+                },
             ],
         },
     ],
@@ -225,11 +298,15 @@ export const NAV_WORKSPACES: ReadonlyArray<NavWorkspaceSection> = [
  * icons win and both surfaces now share them.
  */
 export const ADMIN_NAV_ITEMS: NavItem[] = [
-    { titleKey: "nav.adminOverview", url: "/admin", icon: ShieldCheck },
-    { titleKey: "nav.dbMaintenance", url: "/admin/db", icon: Database },
-    { titleKey: "nav.adminProviders", url: "/admin/providers", icon: Globe },
-    { titleKey: "nav.adminEndpoints", url: "/admin/endpoints", icon: Activity },
-    { titleKey: "nav.exchangeRates", url: "/admin/exchange-rates", icon: ArrowLeftRight },
+    { titleKey: "nav.adminOverview", url: "/admin", icon: PAGE_ICONS["/admin"] },
+    { titleKey: "nav.dbMaintenance", url: "/admin/db", icon: PAGE_ICONS["/admin/db"] },
+    { titleKey: "nav.adminProviders", url: "/admin/providers", icon: PAGE_ICONS["/admin/providers"] },
+    { titleKey: "nav.adminEndpoints", url: "/admin/endpoints", icon: PAGE_ICONS["/admin/endpoints"] },
+    {
+        titleKey: "nav.exchangeRates",
+        url: "/admin/exchange-rates",
+        icon: PAGE_ICONS["/admin/exchange-rates"],
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -251,11 +328,6 @@ export const ALL_NAV_ITEMS: ReadonlyArray<NavItem> = [
     ...ADMIN_NAV_ITEMS,
 ];
 
-/** Palette view of an item: the per-surface icon override applied. */
-function toPaletteItem(item: NavItem): NavItem {
-    return item.paletteIcon ? { ...item, icon: item.paletteIcon } : item;
-}
-
 /**
  * The command palette's always-visible nav sections: each workspace flattened
  * in sidebar order, with the workspace-agnostic pages carried at the tail of
@@ -264,27 +336,40 @@ function toPaletteItem(item: NavItem): NavItem {
  * ordered Performance ahead of the investment pages; it now follows the
  * sidebar's maintained order.
  */
-export const PALETTE_SECTIONS: ReadonlyArray<{ headingKey: string; pages: ReadonlyArray<NavItem> }> =
-    NAV_WORKSPACES.map((ws) => ({
-        headingKey: ws.labelKey,
-        pages: (ws.id === "budgeting"
-            ? [...flattenGroups(ws), ...GLOBAL_NAV_ITEMS]
-            : flattenGroups(ws)
-        ).map(toPaletteItem),
-    }));
+export const PALETTE_SECTIONS: ReadonlyArray<{
+    headingKey: string;
+    pages: ReadonlyArray<NavItem>;
+}> = NAV_WORKSPACES.map((ws) => ({
+    headingKey: ws.labelKey,
+    pages: (ws.id === "budgeting"
+        ? [...flattenGroups(ws), ...GLOBAL_NAV_ITEMS]
+        : flattenGroups(ws)
+    ),
+}));
 
 /** Gmail-style go-to sequences: press `g`, then a destination key. Derived
  *  from `shortcutKey` in registry order; shared with ShortcutsOverlay so the
  *  help sheet stays truthful. */
-export const GO_TO_ROUTES: ReadonlyArray<{ key: string; url: string; titleKey: string }> =
-    ALL_NAV_ITEMS.flatMap((item) =>
-        item.shortcutKey
-            ? [{ key: item.shortcutKey, url: item.url, titleKey: item.goToTitleKey ?? item.titleKey }]
-            : []);
+export const GO_TO_ROUTES: ReadonlyArray<{
+    key: string;
+    url: string;
+    titleKey: string;
+}> = ALL_NAV_ITEMS.flatMap((item) =>
+    item.shortcutKey
+        ? [
+              {
+                  key: item.shortcutKey,
+                  url: item.url,
+                  titleKey: item.goToTitleKey ?? item.titleKey,
+              },
+          ]
+        : [],
+);
 
 /** url → go-to key, so nav surfaces can display an entry's keyboard sequence. */
-export const GO_TO_KEY_BY_URL: ReadonlyMap<string, string> =
-    new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
+export const GO_TO_KEY_BY_URL: ReadonlyMap<string, string> = new Map(
+    GO_TO_ROUTES.map((r) => [r.url, r.key]),
+);
 
 /** The three workspace section roots, in left-to-right cycle order. `[` / `]`
  *  step between them; shared with ShortcutsOverlay so the help stays truthful. */
@@ -292,13 +377,15 @@ export const SECTION_CYCLE: ReadonlyArray<{ url: string; titleKey: string }> =
     NAV_WORKSPACES.map((ws) => ({ url: ws.rootUrl, titleKey: ws.labelKey }));
 
 /** Workspace root urls — active only on an exact match (they have children). */
-export const WORKSPACE_ROOT_URLS: ReadonlySet<string> =
-    new Set(NAV_WORKSPACES.map((ws) => ws.rootUrl));
+export const WORKSPACE_ROOT_URLS: ReadonlySet<string> = new Set(
+    NAV_WORKSPACES.map((ws) => ws.rootUrl),
+);
 
 /** Urls of workspace-agnostic pages: jumping to one keeps the current
  *  workspace (and its sidebar) instead of forcing a switch. */
-export const WORKSPACE_AGNOSTIC_URLS: ReadonlySet<string> =
-    new Set(GLOBAL_NAV_ITEMS.map((item) => item.url));
+export const WORKSPACE_AGNOSTIC_URLS: ReadonlySet<string> = new Set(
+    GLOBAL_NAV_ITEMS.map((item) => item.url),
+);
 
 /**
  * Resolve a pathname to the title key of the most specific matching nav route,
@@ -310,10 +397,13 @@ export const WORKSPACE_AGNOSTIC_URLS: ReadonlySet<string> =
 export function matchNavTitleKey(pathname: string): string | undefined {
     let best: NavItem | undefined;
     for (const route of ALL_NAV_ITEMS) {
-        const matches = route.url === "/"
-            ? pathname === "/"
-            : pathname === route.url || pathname.startsWith(route.url + "/");
-        if (matches && (!best || route.url.length > best.url.length)) best = route;
+        const matches =
+            route.url === "/"
+                ? pathname === "/"
+                : pathname === route.url ||
+                  pathname.startsWith(route.url + "/");
+        if (matches && (!best || route.url.length > best.url.length))
+            best = route;
     }
     return best?.titleKey;
 }

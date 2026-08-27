@@ -53,7 +53,7 @@ function ToolBubble({ message }: { message: ChatMessage }) {
         <div className="flex gap-3 px-1">
             <Avatar role="tool" />
             <div className="max-w-[90%] flex-1 rounded-2xl bg-accent/30 ring-1 ring-border/50 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 eyebrow mb-2">
                     <Wrench className="h-3 w-3" />
                     <span>{message.toolName ?? 'tool'}</span>
                 </div>

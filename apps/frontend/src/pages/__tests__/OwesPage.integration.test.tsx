@@ -9,6 +9,28 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import OwesPage from "@/pages/OwesPage";
 
+vi.mock("@tanstack/react-virtual", () => ({
+    useVirtualizer: ({
+        count,
+        estimateSize,
+    }: {
+        count: number;
+        estimateSize: () => number;
+    }) => ({
+        getVirtualItems: () =>
+            Array.from({ length: count }, (_, index) => ({
+                key: index,
+                index,
+                start: index * estimateSize(),
+                end: (index + 1) * estimateSize(),
+                size: estimateSize(),
+            })),
+        getTotalSize: () => count * estimateSize(),
+        measureElement: vi.fn(),
+        scrollToIndex: vi.fn(),
+    }),
+}));
+
 const API_BASE = "http://localhost:3002";
 
 /** A single recipient with one outstanding split. */
@@ -54,6 +76,25 @@ function splitDetailForRecipient() {
 }
 
 describe("OwesPage (integration)", () => {
+    it("mirrors the summary hero and recipient grid while loading", () => {
+        server.use(
+            http.get(`${API_BASE}/api/splits/owed`, async () => {
+                await new Promise(() => {});
+                return owedSummaryWithRecipient();
+            }),
+        );
+
+        renderWithApp(<OwesPage />);
+
+        expect(
+            screen.getByRole("status", { name: /loading/i }),
+        ).toBeInTheDocument();
+        expect(screen.getByTestId("owes-summary-skeleton")).toBeInTheDocument();
+        expect(screen.getAllByTestId("owes-recipient-skeleton")).toHaveLength(
+            3,
+        );
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<OwesPage />);
         expect(
@@ -90,7 +131,9 @@ describe("OwesPage (integration)", () => {
 
     it("shows recipient card when splits exist", async () => {
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
@@ -102,8 +145,12 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
@@ -115,21 +162,72 @@ describe("OwesPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /record payment/i }),
         ).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "Dinner" })).toHaveAttribute(
+            "href",
+            "/transactions?transaction_id=200&filter_label=Dinner",
+        );
+    });
+
+    it("links recent recipient transaction descriptions to their source row", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 321,
+                            transaction_date: "2025-03-02",
+                            memo: "Recent coffee",
+                            category_name: "FOOD:COFFEE",
+                            amount: -4,
+                            currency: "EUR",
+                            bank_account: "Main",
+                        },
+                    ],
+                    total: 1,
+                    limit: 10,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+
+        renderWithApp(<OwesPage />);
+        await user.click(await screen.findByText("Alice"));
+
+        expect(
+            await screen.findByRole("link", { name: "Recent coffee" }),
+        ).toHaveAttribute(
+            "href",
+            "/transactions?transaction_id=321&filter_label=Recent%20coffee",
+        );
     });
 
     it("opens Record Payment dialog when the icon button is clicked", async () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
 
         await user.click(await screen.findByText("Alice"));
 
-        const recordBtn = await screen.findByRole("button", { name: /record payment/i });
+        const recordBtn = await screen.findByRole("button", {
+            name: /record payment/i,
+        });
         await user.click(recordBtn);
 
         // owesPage.recordDialog.title = "Record Payment"
@@ -143,14 +241,20 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
 
         await user.click(await screen.findByText("Alice"));
-        await user.click(await screen.findByRole("button", { name: /record payment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /record payment/i }),
+        );
         await screen.findByRole("dialog");
 
         // owesPage.recordDialog.placeholder = "Payment amount"
@@ -163,14 +267,20 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
 
         await user.click(await screen.findByText("Alice"));
-        await user.click(await screen.findByRole("button", { name: /record payment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /record payment/i }),
+        );
         await screen.findByRole("dialog");
 
         // owesPage.recordDialog.cancel = "Cancel"
@@ -183,8 +293,12 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
@@ -201,8 +315,12 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
@@ -219,14 +337,20 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
 
         await user.click(await screen.findByText("Alice"));
-        await user.click(await screen.findByRole("button", { name: /record payment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /record payment/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");
@@ -239,8 +363,12 @@ describe("OwesPage (integration)", () => {
         let settleAllCalled = false;
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
             http.post(`${API_BASE}/api/splits/owed/1/settle-all`, () => {
                 settleAllCalled = true;
                 return ok({ settled_count: 1 });
@@ -252,20 +380,22 @@ describe("OwesPage (integration)", () => {
         await user.click(await screen.findByText("Alice"));
 
         // Click the "Settle all" header button
-        const settleAllBtn = await screen.findByRole("button", { name: /settle all/i });
+        const settleAllBtn = await screen.findByRole("button", {
+            name: /settle all/i,
+        });
         await user.click(settleAllBtn);
 
         // AlertDialog appears — role="alertdialog"
         // owesPage.settleAll.confirmTitle = "Settle all outstanding splits"
-        expect(
-            await screen.findByRole("alertdialog"),
-        ).toBeInTheDocument();
+        expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
         expect(
             await screen.findByText(/settle all outstanding splits/i),
         ).toBeInTheDocument();
 
         // Confirm — owesPage.settleAll.confirmAction = "Settle all"
-        const confirmBtn = screen.getByRole("button", { name: /^settle all$/i });
+        const confirmBtn = screen.getByRole("button", {
+            name: /^settle all$/i,
+        });
         await user.click(confirmBtn);
 
         expect(settleAllCalled).toBe(true);
@@ -275,8 +405,12 @@ describe("OwesPage (integration)", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
         );
 
         renderWithApp(<OwesPage />);
@@ -304,13 +438,22 @@ describe("OwesPage (integration)", () => {
         URL.revokeObjectURL = vi.fn();
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1/export/csv`, () =>
-                new HttpResponse("date,amount,recipient\n2025-03-01,50,Alice", {
-                    status: 200,
-                    headers: { "Content-Type": "text/csv" },
-                }),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
+            http.get(
+                `${API_BASE}/api/splits/owed/1/export/csv`,
+                () =>
+                    new HttpResponse(
+                        "date,amount,recipient\n2025-03-01,50,Alice",
+                        {
+                            status: 200,
+                            headers: { "Content-Type": "text/csv" },
+                        },
+                    ),
             ),
         );
 
@@ -320,7 +463,9 @@ describe("OwesPage (integration)", () => {
         await user.click(await screen.findByText("Alice"));
 
         // Click Export CSV
-        await user.click(await screen.findByRole("button", { name: /export csv/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /export csv/i }),
+        );
 
         // owesPage.export.success = "CSV exported"
         await waitFor(() =>
@@ -333,10 +478,15 @@ describe("OwesPage (integration)", () => {
         const toastSpy = vi.spyOn(toast, "error");
 
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => owedSummaryWithRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1`, () => splitDetailForRecipient()),
-            http.get(`${API_BASE}/api/splits/owed/1/export/csv`, () =>
-                new HttpResponse(null, { status: 500 }),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
+            http.get(
+                `${API_BASE}/api/splits/owed/1/export/csv`,
+                () => new HttpResponse(null, { status: 500 }),
             ),
         );
 
@@ -346,7 +496,9 @@ describe("OwesPage (integration)", () => {
         await user.click(await screen.findByText("Alice"));
 
         // Click Export CSV
-        await user.click(await screen.findByRole("button", { name: /export csv/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /export csv/i }),
+        );
 
         // owesPage.export.failed = "Failed to export CSV"
         await waitFor(() =>
@@ -358,9 +510,13 @@ describe("OwesPage (integration)", () => {
     });
 
     it("renders empty state gracefully when splits API fails with 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => err(500, "db unavailable")),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                err(500, "db unavailable"),
+            ),
         );
         renderWithApp(<OwesPage />);
         expect(
@@ -368,21 +524,31 @@ describe("OwesPage (integration)", () => {
         ).toBeInTheDocument();
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
-            await screen.findByText(/no outstanding debts/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /no outstanding debts/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("renders empty state gracefully when splits API fails with 403", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => err(403, "Forbidden")),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                err(403, "Forbidden"),
+            ),
         );
         renderWithApp(<OwesPage />);
         expect(
             await screen.findByRole("heading", { name: /who owes you/i }),
         ).toBeInTheDocument();
-        expect(await screen.findByText(/no outstanding debts/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no outstanding debts/i),
+        ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
@@ -391,7 +557,9 @@ describe("OwesPage (integration)", () => {
     it("does not crash when splits/owed endpoint returns 404", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/splits/owed`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                err(404, "Not found"),
+            ),
         );
         const { container } = renderWithApp(<OwesPage />);
         await new Promise((r) => setTimeout(r, 200));
@@ -424,15 +592,21 @@ describe("OwesPage (integration)", () => {
         const beforeOwed = getOwedCalls;
         const beforeDetail = getDetailCalls;
 
-        const settleAllBtn = await screen.findByRole("button", { name: /settle all/i });
+        const settleAllBtn = await screen.findByRole("button", {
+            name: /settle all/i,
+        });
         await user.click(settleAllBtn);
         await screen.findByRole("alertdialog");
-        const confirmBtn = screen.getByRole("button", { name: /^settle all$/i });
+        const confirmBtn = screen.getByRole("button", {
+            name: /^settle all$/i,
+        });
         await user.click(confirmBtn);
 
         // After settle-all, both queries should refetch
         await waitFor(() =>
-            expect(getOwedCalls + getDetailCalls).toBeGreaterThan(beforeOwed + beforeDetail),
+            expect(getOwedCalls + getDetailCalls).toBeGreaterThan(
+                beforeOwed + beforeDetail,
+            ),
         );
     });
 });

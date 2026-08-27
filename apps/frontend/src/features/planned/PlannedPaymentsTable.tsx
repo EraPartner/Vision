@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CheckCircle2, Circle, Pencil, Repeat, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, Circle, Pencil, Repeat, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 
 import { Money } from "@/components/shared/Money";
 import { VirtualDataTable, type Column } from "@/components/shared/VirtualDataTable";
@@ -98,7 +98,7 @@ export function PlannedPaymentsTable({
             )}>
               <span>{row.name}</span>
               {row.is_loan && (
-                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                <Badge variant="secondary" className="eyebrow">
                   {t("plannedPage.loanBadge")}
                 </Badge>
               )}
@@ -131,7 +131,7 @@ export function PlannedPaymentsTable({
       defaultWidth: 120,
       render: (row) => (
         <span className={cn("font-semibold tabular-nums", row.amount < 0 ? "text-loss" : "text-gain")}>
-          {row.amount < 0 ? "−" : "+"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
+          <Money amount={row.amount} currency={row.currency} signed />
         </span>
       ),
     },
@@ -281,6 +281,7 @@ export function PlannedPaymentsTable({
       subtitle={t("plannedPage.tableSubtitle", { n: totalCount })}
       columns={columns}
       data={rows}
+      emptyIcon={CalendarClock}
       emptyMessage={t("plannedPage.empty")}
     />
   );

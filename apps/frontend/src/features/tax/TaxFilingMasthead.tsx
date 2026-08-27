@@ -44,7 +44,7 @@ const STATUS_CLASS: Record<FilingStatus, string> = {
     live: 'border-primary/40 bg-primary/10 text-primary',
     estimate: 'border-border bg-secondary/60 text-muted-foreground',
     snapshot: 'border-primary/30 bg-primary/5 text-primary',
-    frozen: 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+    frozen: 'border-info/40 bg-info/10 text-info',
     filed: 'border-warning/40 bg-warning/10 text-warning',
 };
 
@@ -101,7 +101,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                     {/* ── Identity: the year, its state, and the year controls ── */}
                     <div className="min-w-0">
-                        <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <p className="eyebrow">
                             {t('tax.masthead.eyebrow')}
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -113,7 +113,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                             </h2>
                             <span
                                 className={cn(
-                                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wider',
+                                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 eyebrow ',
                                     STATUS_CLASS[status],
                                 )}
                             >
@@ -131,7 +131,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                     {/* ── Figures: two qualifiers, then the single hero number ── */}
                     <dl className="flex flex-wrap items-end gap-x-8 gap-y-5">
                         <div className="min-w-0">
-                            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            <dt className="eyebrow">
                                 {t('tax.masthead.meta.region')}
                             </dt>
                             {/* Resolves the stored enum through the same
@@ -142,7 +142,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                             </dd>
                         </div>
                         <div>
-                            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            <dt className="eyebrow">
                                 {t('tax.masthead.meta.marginalRate')}
                             </dt>
                             <dd className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
@@ -150,7 +150,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                             </dd>
                         </div>
                         <div className="border-border/60 sm:border-l sm:pl-8">
-                            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            <dt className="eyebrow">
                                 {t('tax.masthead.meta.effectiveBurden')}
                             </dt>
                             <dd className="mt-1 font-display text-4xl font-semibold leading-none tracking-tight tabular-nums text-primary sm:text-5xl">

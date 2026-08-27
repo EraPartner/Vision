@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-08-26
-updated: 2026-08-26
+last_modified: 2026-08-27
+updated: 2026-08-27
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -13,9 +13,31 @@ related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend
 
 # Feature: Portfolio & Investments
 
+## Shareable view state
+
+- Performance stores `period` and the non-default `fx_neutral=true` toggle in the URL.
+- Rebalance stores the source model or plan plus the full custom draft in repeated `target=<sleeve>:<percentage>` params, with optional `name` and presence-based `cap`. Empty unfinished fields survive reload. Switching back to a model removes only rebalance-owned params.
+- URL drafts contain allocation inputs only. They do not include account data, holdings, transaction data, or credentials. They do expose the saved plan identifier, draft plan name, target percentages, and optional cash-cap value to browser history and anyone who receives the URL.
+
 ## Overview
 
 Vision's portfolio management tracks various investment types with live price updates and comprehensive transaction history.
+
+### Live-price provenance (2026-08-27)
+
+Portfolio totals now show a compact `Prices as of …` caption even while quotes are still within the
+24-hour stale threshold. The Portfolio Overview total and the first summary card on Stocks, Crypto,
+and Metals use the oldest valid `price_updated_at` among their live-provider holdings. That minimum
+is the truthful lower bound for an aggregate value. Manual-provider holdings are excluded because
+their values do not depend on a remote quote. If any included live holding has no valid timestamp,
+the caption says `Live prices not fetched` instead of making a partial timestamp claim. The holdings
+table repeats the same status in a keyboard-focusable tooltip on the Price column header.
+
+This frontend aggregate rule intentionally differs from the portfolio PDF cover. The PDF keeps the
+backend report-provenance contract based on `MAX(price_updated_at)`, which describes the latest
+recorded live update rather than the freshness lower bound of every holding in the visible total.
+
+Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 Under the hood, portfolio storage now uses PostgreSQL inheritance:
 
@@ -25,19 +47,20 @@ Under the hood, portfolio storage now uses PostgreSQL inheritance:
 
 ## Supported Asset Classes
 
-| Asset Class | Description | Examples |
-|-------------|-------------|----------|
-| stock | Individual stocks | AAPL, MSFT, TSLA |
-| etf | Exchange-traded funds | IWDA, VWCE |
-| crypto | Cryptocurrencies | BTC, ETH |
-| metals | Precious metals (unit-based) | GC=F, SI=F |
-| real_estate | Property investments | Apartments, houses |
-| savings | Savings accounts | Term deposits |
-| bonds | Fixed income | Government bonds |
+| Asset Class | Description                  | Examples           |
+| ----------- | ---------------------------- | ------------------ |
+| stock       | Individual stocks            | AAPL, MSFT, TSLA   |
+| etf         | Exchange-traded funds        | IWDA, VWCE         |
+| crypto      | Cryptocurrencies             | BTC, ETH           |
+| metals      | Precious metals (unit-based) | GC=F, SI=F         |
+| real_estate | Property investments         | Apartments, houses |
+| savings     | Savings accounts             | Term deposits      |
+| bonds       | Fixed income                 | Government bonds   |
 
 ## Investment Management
 
 ### Creating Investments
+
 ```javascript
 POST /api/investments
 {
@@ -52,23 +75,25 @@ POST /api/investments
 ```
 
 Implementation notes:
+
 - Backend route parsing/normalization for investment list and transaction-list endpoints now reuses shared helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving endpoint defaults/clamping/validation behavior ([[apps/node-backend/src/routes/investments.js]]).
 
 ### Price Providers
 
-| Provider | Asset Classes | API |
-|----------|---------------|-----|
-| manual | all | User-entered prices |
-| binance | crypto | Binance market data |
-| yahoo | stock, etf, metals | Yahoo Finance |
-| kinesis | metals, commodities | Kinesis market data |
-| custom | all | Custom API endpoint(s) for latest + historical quotes |
+| Provider | Asset Classes       | API                                                   |
+| -------- | ------------------- | ----------------------------------------------------- |
+| manual   | all                 | User-entered prices                                   |
+| binance  | crypto              | Binance market data                                   |
+| yahoo    | stock, etf, metals  | Yahoo Finance                                         |
+| kinesis  | metals, commodities | Kinesis market data                                   |
+| custom   | all                 | Custom API endpoint(s) for latest + historical quotes |
 
 ### Editing Investments
 
 Investment details can be edited from portfolio details/list UIs via dedicated edit dialogs.
 
 Editable fields:
+
 - Name (`name`)
 - Ticker/symbol (`symbol`) for unit-based assets
 - Currency (`currency`)
@@ -77,6 +102,7 @@ Editable fields:
 - Custom provider advanced fields (`price_provider_latest_url`, `price_provider_latest_path`, `price_provider_history_url`, `price_provider_history_path`, `price_provider_history_ts_path`, `price_provider_history_price_path`)
 
 Constraints:
+
 - `asset_class` cannot be changed after creation.
 - `symbol` must be non-empty when set and globally unique (case-insensitive).
 - Edit history is timestamp-only via `updated_at` (no full value history).
@@ -84,6 +110,7 @@ Constraints:
 Code links: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ### Price Refresh
+
 ```
 POST /api/investments/refresh-prices
 ```
@@ -91,6 +118,7 @@ POST /api/investments/refresh-prices
 Updates all investments with non-manual price providers.
 
 When markets are closed or providers return missing/zero values, refresh uses a fallback chain:
+
 - `live`: real-time quote
 - `close`: previous close or latest historical close quote (Yahoo)
 - `cached`: last non-zero `current_price` already stored in DB
@@ -99,6 +127,7 @@ When markets are closed or providers return missing/zero values, refresh uses a 
 The refresh API response includes `priceSources` per investment ID so clients can show where each price came from. When the live provider is unreachable and the backend falls back to `historical_fallback` or `cached` sources, the frontend displays a warning toast (`portfolio.refreshedPricesStale`) with a count of stale prices instead of a plain success message, making the degradation explicit to the user.
 
 Implementation notes:
+
 - Yahoo provider resolution now follows Market Lookup style symbol handling by accepting `price_provider_id` first and falling back to `symbol` when needed.
 - Kinesis provider now resolves symbol/timeframe/from-date through a shared helper for both live and historical paths, keeping lookup behavior consistent.
 - Kinesis refresh eligibility accepts either explicit `price_provider_id` or name/symbol mapping via Kinesis asset config.
@@ -114,19 +143,20 @@ Implementation notes:
 
 ### Transaction Types
 
-| Type | Description |
-|------|-------------|
-| buy | Purchase of units |
-| sell | Sale of units |
-| gift | Gifted units (optionally with basis amount) |
-| dividend | Dividend payment |
-| fee | Transaction fees |
-| tax | Tax payments |
-| interest | Interest income |
-| rent_income | Rental income (real estate) |
-| appreciation | Value appreciation |
+| Type         | Description                                 |
+| ------------ | ------------------------------------------- |
+| buy          | Purchase of units                           |
+| sell         | Sale of units                               |
+| gift         | Gifted units (optionally with basis amount) |
+| dividend     | Dividend payment                            |
+| fee          | Transaction fees                            |
+| tax          | Tax payments                                |
+| interest     | Interest income                             |
+| rent_income  | Rental income (real estate)                 |
+| appreciation | Value appreciation                          |
 
 ### Recording Transactions
+
 ```javascript
 POST /api/investments/:id/transactions
 {
@@ -154,6 +184,7 @@ POST /api/investments/:id/transactions
 Portfolio transaction edits are supported via a dedicated edit modal.
 
 Rules:
+
 - `type` is immutable (cannot be changed after creation).
 - All other transaction fields are editable, including date, amount/unit/price inputs, fees/taxes, note, and recurring settings.
 - `fx_rate_to_eur` is editable as an optional field in the transaction dialogs.
@@ -169,6 +200,7 @@ Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], 
 ## Holdings Calculation
 
 Portfolio calculates:
+
 - **Total Units**: Net units across buy/gift/sell transactions
 - **Average Cost**: Weighted average purchase price (displayed in investment native currency on Stocks/ETFs/Metals page)
 - **Current Value**: Units × Current Price (displayed in investment native currency on Stocks/ETFs/Metals page)
@@ -177,6 +209,7 @@ Portfolio calculates:
 - **Gains/Losses**: Realized/Unrealized P&L is FX-aware using transaction `fx_rate_to_eur` when present, otherwise falling back to exchange-rate map conversion
 
 Oversell safety behavior:
+
 - Backend now blocks oversell create/update operations for unit-based assets (`stock`, `etf`, `crypto`, `metals`) by validating `sell` units against net holdings on the transaction date.
 - Frontend calculation paths clamp sell processing to available pooled units so legacy invalid datasets do not produce exaggerated realized gains/losses.
 - Investment detail modal can display both base portfolio metrics and FX-aware realized/unrealized values when provided by stocks/ETF listing flows.
@@ -200,7 +233,7 @@ export function deriveUnitMath(
   amount: number | null,
   units: number | null,
   price: number | null,
-): { amount: number; units: number; price: number } | null
+): { amount: number; units: number; price: number } | null;
 ```
 
 `deriveUnitMath` fills the missing field (whichever of amount/units/price is null) using the other two and rounds to the appropriate precision. It returns `null` when fewer than two inputs are non-null (nothing can be derived).
@@ -234,12 +267,14 @@ Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[a
 All portfolio aggregation now uses Decimal.js to eliminate IEEE 754 floating-point drift:
 
 **Monetary calculation paths:**
+
 - `portfolioSummaryService.js`: Per-investment accumulators, FX multiplier aggregation, `aggregateTotals()` all use `multiply()` and Decimal accumulation
 - `portfolio/snapshotBuilder.js`: `cumulativeInvested`, per-class totals, `totalValue`, `cumulativeInflation` computed via Decimal; `convertAmount()` returns Decimal for safe FX composition
 - Frontend hooks: `usePortfolioSummaries.ts`, `usePortfolioCalculations.ts` (fixed gross/net bug: `totalSellProceeds` now scales by `sellRatio` via Decimal division)
 - `portfolioMath.js`: `calculateAccruedInterest()`, `computeMetrics()` use `calendarDaysBetween` helper for precise day counts (not floating-point averages)
 
 **Benefits:**
+
 - No phantom balances from FX-aware composition (e.g., 3 FX rates × 20 stocks = exact sum, not ±0.01 rounding)
 - Snapshot consistency: cost basis matches database NUMERIC precision
 - Oversell prevention: unit holdings validated against precise cost basis, not approximated floats
@@ -247,6 +282,7 @@ All portfolio aggregation now uses Decimal.js to eliminate IEEE 754 floating-poi
 ## Belgian Tax Features
 
 ### Real Estate Fields
+
 - `municipality`: Belgian municipality name
 - `cadastral_income`: Kadastraal inkomen
 - `municipality_tax_rate`: Municipal tax rate
@@ -299,6 +335,7 @@ Code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[ap
 Portfolio automatically contributes to net worth calculations.
 
 Current behavior:
+
 - Net Worth chart uses **daily snapshots** instead of monthly snapshots.
 - Net Worth chart header now includes a series toggle (**Total / Investments / Liquid**) so users can inspect one component at a time instead of always overlaying all three lines.
 - Zoom interactions now guard against empty/invalid visible-domain slices and fall back to full displayed data domain to avoid blank chart rendering when zooming out aggressively.
@@ -385,6 +422,7 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 When internet is unavailable and the backend cannot reach live price providers, the portfolio UI degrades gracefully:
 
 ### Online Status Detection & React Query Integration
+
 - New hook `useOnlineStatus()` ([[apps/frontend/src/hooks/useOnlineStatus.ts]]) exposes browser online state via `navigator.onLine` and listens to window `online`/`offline` events for real-time updates.
 - Components using online status gate expensive queries and refetch intervals:
   - **PortfolioNewsFeed**: query enabled only when `isOnline`, refetchInterval conditional, `retry: 1` only online, `refetchOnWindowFocus: false`, shows `WifiOff` empty-state when offline.
@@ -392,33 +430,43 @@ When internet is unavailable and the backend cannot reach live price providers, 
   - **AddToWatchlistDialog, WatchlistChartDialog**: queryFns wrapped in try/catch, `retry: false`, `refetchOnWindowFocus: false` to prevent unhandled rejections / spinner storms when offline.
 
 ### Price Guard Rails (2026-04-28 Bug Fixes)
+
 - **WatchlistChartDialog**: Validates `target_price` against `Number.isFinite() && > 0` before rendering chart domain; falls back to `[0, 1]` when no valid prices exist; removed unsafe `priceDiff!` assertions to prevent NaN chart rendering.
 - **AddToWatchlistDialog**: Guards `quoteData.price` with `Number.isFinite() && > 0` before `.toFixed()` to prevent "undefined" string interpolation and divide-by-zero in percentage calculations.
 - **PortfolioOverviewPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce calls inside legend `.map()`, improving render performance on large portfolios.
 
 ### Stale Price Indicators
+
 - Frontend utility `priceStaleness.ts` detects investments with `price_updated_at` older than 24 hours.
-- Component `StalePriceIndicator.tsx` renders a small clock icon next to stale prices in holdings tables with a tooltip showing the last-updated date.
+- Component `StalePriceIndicator.tsx` renders a small clock icon next to stale prices in holdings tables. Its shared disclosure shows the last-updated date by tap, click, or keyboard and expands the touch target for coarse pointers.
 - Manual-provider investments are never marked stale; missing/un-parseable `price_updated_at` is treated as stale.
 
+Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Investment Detail title expose real Market Lookup links carrying both symbol and investment ID when available. These replace double-click-only navigation and preserve provider-specific price-history lookup.
+
 ### Stale Prices Banner
+
 - Component `StalePricesBanner.tsx` appears above portfolio holdings tables (Stocks, ETFs, Metals, Crypto) when one or more holdings have stale prices.
 - Banner shows count of stale holdings and includes a "Refresh Prices" button that triggers `usePortfolio().refreshPrices` for explicit retry.
 - Wired in `StocksPage.tsx`, `MetalsPage.tsx` (via DRY props to `StocksPage`), `CryptoPage.tsx`, and `PortfolioOverviewPage.tsx`.
 
 ### News Feed Reconciliation (2026-04-28 Bug Fix)
+
 - **PortfolioNewsFeed**: Replaced index-based React key with `article.link` (with `publishedAt+title` fallback) to prevent reconciliation issues on refetch reorder; ensures articles maintain correct component state across API refreshes.
+- **PortfolioNewsFeed density**: requests and renders at most six current articles per placement, keeping the portfolio and research two-column rows balanced instead of letting a 25-item feed create several screens of empty space beside its peer card.
 
 ### Performance & Net Worth Empty States
+
 - `PerformancePage.tsx`: dedicated `<PerformanceEmptyState>` replaces spinner when snapshots are empty; shows "No performance history yet" + "Refresh Prices" CTA to trigger initial snapshot backfill.
 - `NetWorthPage.tsx`: added empty-state branch ("No net worth history yet" + refresh CTA) when snapshots are empty; wires `StalePricesBanner` above the chart.
 - Both pages show these states only when no snapshots have been recorded yet, allowing graceful display instead of indefinite spinners.
 
 ### Offline Error Handling
+
 - `useInvestments()` hook's `refreshPricesMutation.onError` now checks `navigator.onLine` and shows i18n key `portfolio.refreshPricesOffline` instead of raw error message when offline.
 - This provides user-friendly context-aware error messaging during connectivity issues.
 
 ### Report Timestamp Metadata (Phase 8)
+
 - PDF report cover page now includes a "Prices as of <date>" row showing `MAX(price_updated_at)` across active holdings.
 - If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
 - If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
@@ -430,6 +478,7 @@ Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/
 The Performance page architecture was significantly refactored to move heavy computations from the client to the server:
 
 **Backend enhancements (`/api/info/portfolio-performance`):**
+
 - New `period` query parameter: `5d|1m|3m|6m|1y|3y|all` (default `all`) for period-filtered chart data
 - Response now includes **pre-computed metrics, heatmap, and per-investment breakdown** — not just snapshots
 - `metrics` object: `currentValue`, `totalInvested`, `totalGainLoss`, `totalReturnPct`, `annualizedReturn`, `realReturnPct`, `cumulativeInflation`
@@ -446,6 +495,7 @@ The Performance page architecture was significantly refactored to move heavy com
 - Payload shaping: [[apps/node-backend/src/services/info/performanceHelpers.js]] filters the requested period and returns daily snapshots without downsampling
 
 **Frontend simplification (`PerformancePage.tsx`, `PerformanceBreakdown.tsx`):**
+
 - Removed 4 heavy useMemo blocks: `filteredSnapshots`, `downsampledSnapshots`, `overallMetrics`, `heatmapData`
 - Kept only 2 lightweight mapping transforms: `chartData`, `relativePerformanceData`
 - `selectedPeriod` now in query key and API call parameter
@@ -454,17 +504,30 @@ The Performance page architecture was significantly refactored to move heavy com
 - Removed `useQuery` for exchange rates in breakdown component
 - Removed `convertToTarget` helper (server now does all conversions)
 
+### Canonical portfolio-value hero (2026-08-27)
+
+Portfolio Overview and Performance both render
+`features/portfolio/TotalValueCard.tsx` for the portfolio-value hero. The
+shared anatomy owns the headline, feature sheen, trend wash, sparkline, and
+asset-allocation treatment. Performance supplies its invested value, net P&L,
+and FX attribution through the component's `headlineDetails` slot, then keeps
+its three return facts beside the hero. It must not define a page-local
+`TotalValueCard`; this keeps the same financial concept visually stable across
+sibling portfolio routes.
+
 **Performance impact:**
+
 - Page load requests: 4 sequential API calls → 1 single request
 - Payload for 1-month view: ~1000 snapshot rows → ~30 rows + metrics + heatmap + breakdown
 - Client-side memo chains: 6 heavy → 2 lightweight
 - **Heatmap accuracy fix**: Contribution-adjusted returns now correctly account for cash flows; old formula conflated deposits/withdrawals with investment performance
 
 **Short-period chart formatting:**
+
 - **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks use the shared `dayTick` role (day + month, e.g., "15 Jan"). Longer periods use `monthTick` (month + two-digit year, e.g., "Jan 26"). Detailed tooltips use `detail` (day + month + four-digit year). Locale-aware month names follow the app language.
 - **Y-axis adaptive domain**: For short periods (5d, 1m, 3m), the Y-axis uses `auto/auto` domain to zoom into the data range and highlight price fluctuations. For longer periods (≥ 6m), Y-axis uses `0/auto` domain to anchor at zero, showing full historical context.
 
-Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
@@ -484,6 +547,7 @@ Result: Same portfolio, same moment, different total values shown on two pages (
 New realtime endpoint serves portfolio totals (currentValue, totalInvested, totalGainLoss, realized, unrealized, fees, taxes, income, totalReturnPct) as single source of truth:
 
 **Backend:**
+
 - New service `portfolioSummaryService.js` with `getPortfolioSummary(targetCurrency)` function
 - Computes totals server-side with FX conversion applied pre-serialization
 - Returns both aggregate `totals` object and per-asset-class `summaries` array
@@ -491,11 +555,13 @@ New realtime endpoint serves portfolio totals (currentValue, totalInvested, tota
 - Inflight request deduplication prevents cache stampede on cold start
 
 **Frontend:**
+
 - Dashboard headline cards now source from `usePortfolioSummaryQuery(displayCurrency)` instead of client-side FX loop
 - Performance page headline metrics overridden with realtime values from portfolio-summary endpoint
 - Snapshot timeseries (value-over-time chart) still uses historical performance snapshots; only headline totals come from realtime summary
 
 **Reconciliation invariant** (verified by test):
+
 ```
 sum(summaries[].currentValue) === totals.currentValue
 sum(summaries[].invested) === totals.invested
@@ -505,6 +571,7 @@ sum(summaries[].invested) === totals.invested
 ### Cache Invalidation Strategy
 
 Cache cleared atomically on any investment or transaction write:
+
 - Investment creates, updates, deletes
 - Portfolio transaction creates, updates, deletes
 - Transaction creates, updates, deletes (affecting portfolio cash flows)
@@ -582,6 +649,7 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
 **Corporate Action Support:**
 
 All cost basis methods handle:
+
 - **Stock splits** — Unit count adjusts; cost basis per lot unchanged
 - **Spinoffs** — New units tracked separately
 - **Mergers** — Cost-basis-neutral treatment
@@ -619,12 +687,12 @@ Previously a failed fetch would resolve to an empty `investments` array, silentl
 
 Each asset page checks these values before rendering the holdings list:
 
-| State | Rendered | Trigger |
-|---|---|---|
-| Loading | Skeleton placeholder | `isLoading === true` |
-| Error | `PageError` component with "Retry" button | `isError === true` |
-| Empty | Asset-class-specific empty state | Fetch succeeded; zero holdings |
-| Populated | Holdings table / cards | Fetch succeeded; holdings present |
+| State     | Rendered                                  | Trigger                           |
+| --------- | ----------------------------------------- | --------------------------------- |
+| Loading   | Skeleton placeholder                      | `isLoading === true`              |
+| Error     | `PageError` component with "Retry" button | `isError === true`                |
+| Empty     | Asset-class-specific empty state          | Fetch succeeded; zero holdings    |
+| Populated | Holdings table / cards                    | Fetch succeeded; holdings present |
 
 The "Retry" button on the error state calls `refetch()` so users can recover from transient network failures without a full page reload.
 
@@ -654,7 +722,7 @@ A Wall-Street-style horizontally scrolling ticker tape was added to the Portfoli
 
 ### Behaviour
 
-- **Source**: From the full set of holdings with a ticker symbol quotable by Yahoo Finance (the *manageable universe*), only those where `show_in_ticker !== false` are actually quoted and displayed (the *included* set). Non-symbol holdings such as real estate and savings are excluded from the manageable universe automatically.
+- **Source**: From the full set of holdings with a ticker symbol quotable by Yahoo Finance (the _manageable universe_), only those where `show_in_ticker !== false` are actually quoted and displayed (the _included_ set). Non-symbol holdings such as real estate and savings are excluded from the manageable universe automatically.
 - **Excluded holdings make no network requests**: symbols filtered out by `show_in_ticker === false` are not passed to the Yahoo batch quote call — a deliberate network saving.
 - **Symbol resolution**: Prefers `price_provider_id` when `price_provider === 'yahoo'`; falls back to the bare `symbol`. This mirrors how the rest of the codebase requests Yahoo quotes (e.g. a holding named "Apple" priced via provider id `AAPL` quotes as `AAPL`).
 - **Live data**: Fetches batch day-change quotes from `GET /api/market/quote` with `detail=basic` (same endpoint as the Market Overview research page and the command palette ticker lookup). Returns `price`, `change`, `changePercent`, `currency` per symbol.
@@ -676,6 +744,7 @@ Each investment can be individually included in or excluded from the ticker. The
 - Toggling a switch calls `apiClient.updateInvestment(id, { show_in_ticker })` (`PATCH /api/investments/:id`) with an **optimistic cache update** on `INVESTMENTS_QUERY_KEY`; the update rolls back on error and invalidates `investments` + `portfolio-summary` queries on settle.
 
 **Side table** (`investment_ticker_prefs`):
+
 - Schema: `investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`.
 - Created by migration `0061_investments_show_in_ticker` (revision `0061_investments_show_in_ticker`, down_revision `0060_brokerage_import_routing`) via `CREATE TABLE IF NOT EXISTS`. Downgrade: `DROP TABLE IF EXISTS investment_ticker_prefs`.
 - No FK on `investment_id` — `investments` may be a VIEW on legacy inheritance-schema installs; an orphaned pref row is harmless (it simply never joins). There is **no `investments.show_in_ticker` column**.
@@ -698,15 +767,15 @@ Users can hide it from the widget visibility dialog (`portfolio.widget.ticker` i
 
 ### i18n keys
 
-| Key | en | nl |
-|-----|----|----|
-| `portfolio.widget.ticker` | "Price Ticker" | "Koersticker" |
-| `portfolio.ticker.aria` | "Live price ticker for your holdings" | "Live koersticker van je posities" |
-| `portfolio.ticker.manage` | "Manage Ticker" | "Ticker beheren" |
-| `portfolio.ticker.manageTitle` | "Manage Price Ticker" | "Koersticker beheren" |
-| `portfolio.ticker.manageCount` | "{shown} of {total} shown" | "{shown} van {total} zichtbaar" |
-| `portfolio.ticker.allHidden` | "All holdings hidden from ticker" | "Alle posities verborgen uit ticker" |
-| `portfolio.ticker.offline` | "Ticker offline" | "Ticker offline" |
+| Key                            | en                                    | nl                                   |
+| ------------------------------ | ------------------------------------- | ------------------------------------ |
+| `portfolio.widget.ticker`      | "Price Ticker"                        | "Koersticker"                        |
+| `portfolio.ticker.aria`        | "Live price ticker for your holdings" | "Live koersticker van je posities"   |
+| `portfolio.ticker.manage`      | "Manage Ticker"                       | "Ticker beheren"                     |
+| `portfolio.ticker.manageTitle` | "Manage Price Ticker"                 | "Koersticker beheren"                |
+| `portfolio.ticker.manageCount` | "{shown} of {total} shown"            | "{shown} van {total} zichtbaar"      |
+| `portfolio.ticker.allHidden`   | "All holdings hidden from ticker"     | "Alle posities verborgen uit ticker" |
+| `portfolio.ticker.offline`     | "Ticker offline"                      | "Ticker offline"                     |
 
 ### No new API endpoint
 
@@ -778,14 +847,14 @@ Multi-currency portfolios now expose a decomposition of total gain into **asset 
 
 ### Where it appears in the UI
 
-| Surface | What is shown |
-|---------|--------------|
-| **Portfolio Overview — Total Gain/Loss card** | Subline: "Asset gain: X · FX effect: Y" beneath the headline gain/loss |
-| **Stocks & ETFs / Metals tables** | FX P/L column — shown only when at least one holding is in a foreign currency |
-| **Crypto table** | FX P/L column — same condition |
-| **Performance page — headline metrics** | FX attribution line below Total Gain/Loss |
-| **Performance page — value-over-time chart** | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
-| **Investment detail dialog** | FX Attribution card: shows `assetGain`, `fxGain`, `nativeCurrentValue` |
+| Surface                                       | What is shown                                                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Portfolio Overview — Total Gain/Loss card** | Subline: "Asset gain: X · FX effect: Y" beneath the headline gain/loss                                                              |
+| **Stocks & ETFs / Metals tables**             | FX P/L column — shown only when at least one holding is in a foreign currency                                                       |
+| **Crypto table**                              | FX P/L column — same condition                                                                                                      |
+| **Performance page — headline metrics**       | FX attribution line below Total Gain/Loss                                                                                           |
+| **Performance page — value-over-time chart**  | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
+| **Investment detail dialog**                  | FX Attribution card: shows `assetGain`, `fxGain`, `nativeCurrentValue`                                                              |
 
 ### Fallback rate disclosure
 
@@ -816,10 +885,13 @@ Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.j
 A new shared hook at [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]] encapsulates the EUR-pool realized/unrealized P&L computation:
 
 ```typescript
-export function useFxAwarePnl(targetCurrency: string): (holding: InvestmentSummary) => FxAwarePnl
+export function useFxAwarePnl(
+  targetCurrency: string,
+): (holding: InvestmentSummary) => FxAwarePnl;
 ```
 
 The hook:
+
 - Converts each buy/sell/gift to EUR at its transaction-date `fx_rate_to_eur` (falls back to the live rate from `useCurrencyConverter` when the field is absent).
 - Accumulates gains in EUR (handles `split` and `return_of_capital` events correctly, consistent with `snapshotBuilder` and `calculateCostBasis`).
 - Returns `{ realizedTarget, unrealizedTarget, unrealizedPercent }` converted to `targetCurrency`.
@@ -835,9 +907,9 @@ The hook:
 
 **New i18n keys:**
 
-| Key | Purpose |
-|-----|---------|
-| `invDetail.fxAwareRealized` | Label for the FX-aware realized P&L row (shows `{currency}`) |
+| Key                           | Purpose                                                        |
+| ----------------------------- | -------------------------------------------------------------- |
+| `invDetail.fxAwareRealized`   | Label for the FX-aware realized P&L row (shows `{currency}`)   |
 | `invDetail.fxAwareUnrealized` | Label for the FX-aware unrealized P&L row (shows `{currency}`) |
 
 Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
@@ -853,10 +925,10 @@ sells. It calls `POST /api/cross-workspace/rebalance` (see [[docs/adr/098-cross-
 
 The page offers three mutually exclusive source modes:
 
-| Mode | Description |
-|------|-------------|
-| **Presets** | Three built-in plans: `sixty_forty`, `all_weather`, `three_fund` |
-| **Saved plans** | User-named custom allocations persisted across sessions (see below) |
+| Mode             | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| **Presets**      | Three built-in plans: `sixty_forty`, `all_weather`, `three_fund`            |
+| **Saved plans**  | User-named custom allocations persisted across sessions (see below)         |
 | **Custom (new)** | Editable per-sleeve target-% rows; unsaved until explicitly named and saved |
 
 ### Sleeve vocabulary
@@ -891,9 +963,9 @@ the `rebalance_plans` key in the settings store — no DB migration required.
 ```typescript
 interface RebalancePlan {
   id: string;
-  name: string;              // 1–80 chars
-  targetWeights: Record<string, number>;  // sleeve → non-negative %
-  cashCap?: number;          // optional cap ≥ 0
+  name: string; // 1–80 chars
+  targetWeights: Record<string, number>; // sleeve → non-negative %
+  cashCap?: number; // optional cap ≥ 0
 }
 ```
 

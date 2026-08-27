@@ -13,7 +13,8 @@ interface Segment {
 }
 
 const SEGMENT_CLASS: Record<SegmentKind, string | undefined> = {
-    currency: "text-[0.85em] font-medium opacity-85 self-start mt-[0.04em] mr-[0.06em]",
+    currency:
+        "text-[0.85em] font-medium opacity-85 self-start mt-[0.04em] mr-[0.06em]",
     minor: "text-[0.88em] opacity-75",
     plain: undefined,
 };
@@ -28,9 +29,11 @@ function toSegments(parts: Intl.NumberFormatPart[]): Segment[] {
     const segments: Segment[] = [];
     for (const part of parts) {
         const kind: SegmentKind =
-            part.type === "currency" ? "currency"
-                : part.type === "decimal" || part.type === "fraction" ? "minor"
-                    : "plain";
+            part.type === "currency"
+                ? "currency"
+                : part.type === "decimal" || part.type === "fraction"
+                  ? "minor"
+                  : "plain";
         const last = segments[segments.length - 1];
         if (last && last.kind === kind) last.text += part.value;
         else segments.push({ text: part.value, kind });
@@ -48,6 +51,8 @@ interface RollingNumberProps {
      */
     parts?: Intl.NumberFormatPart[];
     className?: string;
+    /** Set false when a parent surface should render a quiet, static return visit. */
+    animate?: boolean;
 }
 
 /**
@@ -58,7 +63,12 @@ interface RollingNumberProps {
  * length changes (999 → 1.000). Screen readers get the plain string via
  * aria-label; the reels are aria-hidden.
  */
-export function RollingNumber({ value, parts, className }: RollingNumberProps) {
+export function RollingNumber({
+    value,
+    parts,
+    className,
+    animate = true,
+}: RollingNumberProps) {
     // Reels start at 0 and roll to the target after first paint.
     const [settled, setSettled] = useState(false);
     useEffect(() => {
@@ -66,17 +76,28 @@ export function RollingNumber({ value, parts, className }: RollingNumberProps) {
         return () => cancelAnimationFrame(raf);
     }, []);
 
-    const segments: Segment[] = parts ? toSegments(parts) : [{ text: value ?? "", kind: "plain" }];
+    const segments: Segment[] = parts
+        ? toSegments(parts)
+        : [{ text: value ?? "", kind: "plain" }];
     const full = segments.map((s) => s.text).join("");
 
-    if (prefersReducedMotion()) {
+    if (!animate || prefersReducedMotion()) {
         if (!parts) {
-            return <span className={cn("tabular-nums", className)}>{full}</span>;
+            return (
+                <span className={cn("tabular-nums", className)}>{full}</span>
+            );
         }
         return (
-            <span className={cn("inline-flex items-baseline tabular-nums whitespace-nowrap", className)}>
+            <span
+                className={cn(
+                    "inline-flex items-baseline tabular-nums whitespace-nowrap",
+                    className,
+                )}
+            >
                 {segments.map((seg, i) => (
-                    <span key={i} className={SEGMENT_CLASS[seg.kind]}>{seg.text}</span>
+                    <span key={i} className={SEGMENT_CLASS[seg.kind]}>
+                        {seg.text}
+                    </span>
                 ))}
             </span>
         );
@@ -87,7 +108,11 @@ export function RollingNumber({ value, parts, className }: RollingNumberProps) {
             const keyFromRight = full.length - (charsBefore + i);
             if (!/\d/.test(ch)) {
                 return (
-                    <span key={`s-${keyFromRight}-${ch}`} aria-hidden="true" className="inline-block">
+                    <span
+                        key={`s-${keyFromRight}-${ch}`}
+                        aria-hidden="true"
+                        className="inline-block"
+                    >
                         {ch}
                     </span>
                 );
@@ -100,8 +125,10 @@ export function RollingNumber({ value, parts, className }: RollingNumberProps) {
                     className="inline-block h-[1em] overflow-hidden"
                 >
                     <span
-                        className="flex flex-col transition-transform duration-[600ms] ease-[var(--ease-glide)]"
-                        style={{ transform: `translateY(calc(${digit} * -1em))` }}
+                        className="flex flex-col transition-transform duration-reveal ease-[var(--ease-glide)]"
+                        style={{
+                            transform: `translateY(calc(${digit} * -1em))`,
+                        }}
                     >
                         {REEL.map((d) => (
                             <span key={d} className="h-[1em] leading-[1em]">
@@ -133,7 +160,11 @@ export function RollingNumber({ value, parts, className }: RollingNumberProps) {
                     return renderChars(seg.text, start);
                 }
                 return (
-                    <span key={`seg-${si}-${seg.kind}`} aria-hidden="true" className={cn("inline-flex", SEGMENT_CLASS[seg.kind])}>
+                    <span
+                        key={`seg-${si}-${seg.kind}`}
+                        aria-hidden="true"
+                        className={cn("inline-flex", SEGMENT_CLASS[seg.kind])}
+                    >
                         {renderChars(seg.text, start)}
                     </span>
                 );

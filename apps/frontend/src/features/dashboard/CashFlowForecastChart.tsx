@@ -10,7 +10,7 @@ import { useState, useCallback } from "react";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, FlaskConical } from "lucide-react";
+import { FlaskConical } from "lucide-react";
 
 import {
     Card,
@@ -33,10 +33,7 @@ import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 import { apiClient } from "@/lib/api";
 import { cashflowKeys } from "@/lib/queryKeys";
 import type { ForecastMethod } from "@/lib/api/aggregations";
-import {
-    ACTUAL_COLOR,
-    METHOD_COLORS,
-} from "@/utils/forecastMerge";
+import { ACTUAL_COLOR, METHOD_COLORS } from "@/utils/forecastMerge";
 import { CashFlowForecastDiagnostics } from "./CashFlowForecastDiagnostics";
 import { ForecastInner } from "./ForecastInner";
 import { ForecastInnerRolling } from "./ForecastInnerRolling";
@@ -99,13 +96,21 @@ export function CashFlowForecastChart({
 
     function setMode(newMode: ForecastMode) {
         setSearchParams(
-            (prev) => { const next = new URLSearchParams(prev); next.set("forecastMode", newMode); return next; },
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("forecastMode", newMode);
+                return next;
+            },
             { replace: true },
         );
     }
     function setRollingDays(days: RollingDays) {
         setSearchParams(
-            (prev) => { const next = new URLSearchParams(prev); next.set("rollingDays", String(days)); return next; },
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("rollingDays", String(days));
+                return next;
+            },
             { replace: true },
         );
     }
@@ -188,7 +193,8 @@ export function CashFlowForecastChart({
     });
 
     const data = mode === "month" ? monthQuery.data : rollingQuery.data;
-    const isLoading = mode === "month" ? monthQuery.isLoading : rollingQuery.isLoading;
+    const isLoading =
+        mode === "month" ? monthQuery.isLoading : rollingQuery.isLoading;
     const error = mode === "month" ? monthQuery.error : rollingQuery.error;
 
     const toggleMethod = useCallback((id: string) => {
@@ -203,17 +209,19 @@ export function CashFlowForecastChart({
         });
     }, []);
 
-    const monthName = mode === "month" && monthQuery.data
-        ? formatMonthYearWithAppSettings(
-              new Date(monthQuery.data.month + "-01T00:00:00"),
-              appSettings.dateFormat,
-              locale,
-          )
-        : "";
+    const monthName =
+        mode === "month" && monthQuery.data
+            ? formatMonthYearWithAppSettings(
+                  new Date(monthQuery.data.month + "-01T00:00:00"),
+                  appSettings.dateFormat,
+                  locale,
+              )
+            : "";
 
-    const description = mode === "rolling"
-        ? t("cashflow.rollingDesc", { n: rollingDays })
-        : t("cashflow.forecastDesc", { monthName });
+    const description =
+        mode === "rolling"
+            ? t("cashflow.rollingDesc", { n: rollingDays })
+            : t("cashflow.forecastDesc", { monthName });
 
     const modeTabs = (
         <Tabs
@@ -246,9 +254,13 @@ export function CashFlowForecastChart({
                         onClick={() => setRollingDays(days)}
                         className="px-3 py-0.5 rounded-full border text-xs transition-opacity"
                         style={{
-                            borderColor: active ? "hsl(var(--primary))" : BORDER_COLOR,
+                            borderColor: active
+                                ? "hsl(var(--primary))"
+                                : BORDER_COLOR,
                             opacity: active ? 1 : 0.55,
-                            background: active ? "hsl(var(--primary) / 0.08)" : "transparent",
+                            background: active
+                                ? "hsl(var(--primary) / 0.08)"
+                                : "transparent",
                         }}
                     >
                         {t(`cashflow.window${days}`)}
@@ -281,7 +293,10 @@ export function CashFlowForecastChart({
                     onCheckedChange={setIncludePlanned}
                     className="scale-90"
                 />
-                <label htmlFor="include-planned" className="text-xs text-muted-foreground cursor-pointer">
+                <label
+                    htmlFor="include-planned"
+                    className="text-xs text-muted-foreground cursor-pointer"
+                >
                     {t("cashflow.withPlanned")}
                 </label>
             </div>
@@ -301,9 +316,14 @@ export function CashFlowForecastChart({
     const methodToggles = data && (
         <div className="flex flex-wrap gap-2 mb-3">
             {/* Non-toggleable "This Month" actual indicator */}
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs"
-                style={{ borderColor: ACTUAL_COLOR }}>
-                <span className="inline-block size-2 rounded-full" style={swatchStyle(ACTUAL_COLOR)} />
+            <span
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs"
+                style={{ borderColor: ACTUAL_COLOR }}
+            >
+                <span
+                    className="inline-block size-2 rounded-full"
+                    style={swatchStyle(ACTUAL_COLOR)}
+                />
                 {t("cashflow.thisMonth")}
             </span>
             {data.methods.map((m: ForecastMethod) => {
@@ -323,7 +343,10 @@ export function CashFlowForecastChart({
                         />
                         {m.label}
                         {m.error && (
-                            <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">
+                            <Badge
+                                variant="destructive"
+                                className="text-2xs px-1 py-0 h-4"
+                            >
                                 err
                             </Badge>
                         )}
@@ -339,7 +362,10 @@ export function CashFlowForecastChart({
             {rollingPresets}
             {controls}
             {isLoading && (
-                <Skeleton {...loadingSurfaceProps} className="w-full h-[320px] rounded-lg" />
+                <Skeleton
+                    {...loadingSurfaceProps}
+                    className="w-full h-[320px] rounded-lg"
+                />
             )}
             {error && (
                 <div className="flex items-center justify-center h-[320px] text-sm text-destructive">
@@ -368,12 +394,15 @@ export function CashFlowForecastChart({
                 </>
             )}
             {(() => {
-                const diag = mode === "month"
-                    ? monthQuery.data?.diagnostics
-                    : rollingDiagnosticsQuery.data?.diagnostics;
-                const cur = mode === "month"
-                    ? monthQuery.data?.currency
-                    : (rollingQuery.data?.currency ?? rollingDiagnosticsQuery.data?.currency);
+                const diag =
+                    mode === "month"
+                        ? monthQuery.data?.diagnostics
+                        : rollingDiagnosticsQuery.data?.diagnostics;
+                const cur =
+                    mode === "month"
+                        ? monthQuery.data?.currency
+                        : (rollingQuery.data?.currency ??
+                          rollingDiagnosticsQuery.data?.currency);
                 return diag && cur ? (
                     <CashFlowForecastDiagnostics
                         open={showDiagnostics}
@@ -389,21 +418,16 @@ export function CashFlowForecastChart({
     if (embedded) return chartContent;
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame lg:col-span-2">
+        <Card className="relative overflow-hidden lg:col-span-2">
             <CardSheen />
             <CardHeader className="space-y-3">
-                <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
-                        <Activity className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1">
-                        <CardTitle className="text-xl">
-                            {t("cashflow.forecastTitle")}
-                        </CardTitle>
-                        <CardDescription className="text-base">
-                            {description}
-                        </CardDescription>
-                    </div>
+                <div>
+                    <CardTitle variant="sm">
+                        {t("cashflow.forecastTitle")}
+                    </CardTitle>
+                    <CardDescription className="text-base">
+                        {description}
+                    </CardDescription>
                 </div>
             </CardHeader>
             <CardContent>{chartContent}</CardContent>

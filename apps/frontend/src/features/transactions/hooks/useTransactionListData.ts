@@ -7,6 +7,7 @@ import { transactionKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import type { RawApiTransaction } from "../types";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 type SortDir = "asc" | "desc" | null;
 
@@ -18,9 +19,10 @@ export interface UseTransactionListDataOptions {
     recipientIdFilter?: number;
     categoryIdFilter?: number;
     categoryIdsFilter?: number[];
+    uncategorisedFilter?: boolean;
     startDateFilter?: string;
     endDateFilter?: string;
-    transactionTypeFilter?: 'income' | 'expense';
+    transactionTypeFilter?: "income" | "expense";
     amountMinFilter?: number;
     amountMaxFilter?: number;
     amountSignedFilter?: boolean;
@@ -54,6 +56,7 @@ export function useTransactionListData({
     recipientIdFilter,
     categoryIdFilter,
     categoryIdsFilter,
+    uncategorisedFilter,
     startDateFilter,
     endDateFilter,
     transactionTypeFilter,
@@ -72,7 +75,8 @@ export function useTransactionListData({
     const [searchParams, setSearchParams] = useSearchParams();
     const sortDirParam = searchParams.get("sort_dir");
     const sortKeyParam = searchParams.get("sort_key");
-    const validDir: SortDir = sortDirParam === "asc" || sortDirParam === "desc" ? sortDirParam : null;
+    const validDir: SortDir =
+        sortDirParam === "asc" || sortDirParam === "desc" ? sortDirParam : null;
     const sortKey = validDir && sortKeyParam ? sortKeyParam : null;
     const sortDir: SortDir = sortKey ? validDir : null;
 
@@ -96,7 +100,13 @@ export function useTransactionListData({
         isEditingRef.current = editing;
     }, []);
 
-    const { data: initialData, isLoading, error } = useQuery({
+    const {
+        data: initialData,
+        isLoading,
+        error,
+        isFetching,
+        isPlaceholderData,
+    } = useQuery({
         queryKey: transactionKeys.virtualList({
             active: !showAll,
             search: search || undefined,
@@ -104,6 +114,7 @@ export function useTransactionListData({
             recipientIdFilter,
             categoryIdFilter,
             categoryIdsFilter,
+            uncategorisedFilter,
             startDateFilter,
             endDateFilter,
             transactionTypeFilter,
@@ -120,37 +131,45 @@ export function useTransactionListData({
         // Forward React Query's abort `signal` so a superseded keystroke's
         // request is actually aborted client-side (React Query drops the stale
         // query, but without this the expensive backend search kept running).
-        queryFn: ({ signal }) => apiClient.getTransactions({
-            limit: pageSize,
-            offset: 0,
-            active: !showAll,
-            search: search || undefined,
-            transaction_id: transactionIdFilter,
-            recipient_id: recipientIdFilter,
-            category_id: categoryIdFilter,
-            category_ids: categoryIdsFilter,
-            start_date: startDateFilter,
-            end_date: endDateFilter,
-            transaction_type: transactionTypeFilter,
-            amount_min: amountMinFilter,
-            amount_max: amountMaxFilter,
-            amount_signed: amountSignedFilter || undefined,
-            tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
-            account_id: accountIdFilter,
-            bank_account: bankAccountFilter,
-            sort_by: sortKey || undefined,
-            sort_dir: sortDir || undefined,
-        }, signal),
+        queryFn: ({ signal }) =>
+            apiClient.getTransactions(
+                {
+                    limit: pageSize,
+                    offset: 0,
+                    active: !showAll,
+                    search: search || undefined,
+                    transaction_id: transactionIdFilter,
+                    recipient_id: recipientIdFilter,
+                    category_id: categoryIdFilter,
+                    category_ids: categoryIdsFilter,
+                    uncategorised: uncategorisedFilter,
+                    start_date: startDateFilter,
+                    end_date: endDateFilter,
+                    transaction_type: transactionTypeFilter,
+                    amount_min: amountMinFilter,
+                    amount_max: amountMaxFilter,
+                    amount_signed: amountSignedFilter || undefined,
+                    tags: tagsFilter?.length ? tagsFilter.join(",") : undefined,
+                    account_id: accountIdFilter,
+                    bank_account: bankAccountFilter,
+                    sort_by: sortKey || undefined,
+                    sort_dir: sortDir || undefined,
+                },
+                signal,
+            ),
         placeholderData: (prev) => prev, // keep previous page while a new filter/search/sort round-trips
         staleTime: 30_000,
     });
+    useBackgroundQueryCue(isFetching && isPlaceholderData);
 
     useEffect(() => {
         if (initialData && !isEditingRef.current) {
             setAllItems(initialData.items as unknown as RawApiTransaction[]);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
-            hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
+            hasMoreRef.current =
+                initialData.items.length <
+                (initialData.total ?? initialData.items.length);
         }
     }, [initialData]);
 
@@ -161,7 +180,27 @@ export function useTransactionListData({
     // Previously only handleSortChange bumped it, so filter/search changes raced.
     useEffect(() => {
         requestIdRef.current += 1;
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [
+        showAll,
+        search,
+        transactionIdFilter,
+        recipientIdFilter,
+        categoryIdFilter,
+        categoryIdsFilter,
+        uncategorisedFilter,
+        startDateFilter,
+        endDateFilter,
+        transactionTypeFilter,
+        amountMinFilter,
+        amountMaxFilter,
+        amountSignedFilter,
+        tagsFilter,
+        accountIdFilter,
+        bankAccountFilter,
+        sortKey,
+        sortDir,
+        pageSize,
+    ]);
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
@@ -178,13 +217,14 @@ export function useTransactionListData({
                 recipient_id: recipientIdFilter,
                 category_id: categoryIdFilter,
                 category_ids: categoryIdsFilter,
+                uncategorised: uncategorisedFilter,
                 start_date: startDateFilter,
                 end_date: endDateFilter,
                 transaction_type: transactionTypeFilter,
                 amount_min: amountMinFilter,
                 amount_max: amountMaxFilter,
                 amount_signed: amountSignedFilter || undefined,
-                tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+                tags: tagsFilter?.length ? tagsFilter.join(",") : undefined,
                 account_id: accountIdFilter,
                 bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
@@ -193,25 +233,30 @@ export function useTransactionListData({
             // Sort/filter change bumped requestIdRef while we awaited — drop
             // this stale page so it cannot append rows from a prior query.
             if (myRequestId !== requestIdRef.current) return;
-            setAllItems(prev => {
+            setAllItems((prev) => {
                 const existingIds = new Set(prev.map((t) => t.id));
-                const newItems = (result.items as unknown as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
+                const newItems = (
+                    result.items as unknown as RawApiTransaction[]
+                ).filter((t) => !existingIds.has(t.id));
                 return [...prev, ...newItems];
             });
             offsetRef.current += result.items.length;
-            hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
+            hasMoreRef.current =
+                offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } catch (err) {
             if (myRequestId !== requestIdRef.current) return;
-            logger.error('Failed to load more transactions:', err);
+            logger.error("Failed to load more transactions:", err);
             // A silently-truncated finance list reads as "end of data", which
             // is worse than an error. Say so, and offer an explicit retry —
             // `hasMoreRef` is untouched, so the next page is still fetchable.
-            toast.error(t('txPage.loadMoreFailed'), {
-                description: t('txPage.loadMoreFailedDesc'),
+            toast.error(t("txPage.loadMoreFailed"), {
+                description: t("txPage.loadMoreFailedDesc"),
                 action: {
-                    label: t('common.retry'),
-                    onClick: () => { void loadMoreRef.current?.(); },
+                    label: t("common.retry"),
+                    onClick: () => {
+                        void loadMoreRef.current?.();
+                    },
                 },
             });
         } finally {
@@ -220,7 +265,28 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize, t]);
+    }, [
+        showAll,
+        search,
+        transactionIdFilter,
+        recipientIdFilter,
+        categoryIdFilter,
+        categoryIdsFilter,
+        uncategorisedFilter,
+        startDateFilter,
+        endDateFilter,
+        transactionTypeFilter,
+        amountMinFilter,
+        amountMaxFilter,
+        amountSignedFilter,
+        tagsFilter,
+        accountIdFilter,
+        bankAccountFilter,
+        sortKey,
+        sortDir,
+        pageSize,
+        t,
+    ]);
 
     // Assigned in an effect, not during render: a render can be discarded under
     // concurrent rendering, and the retry action only fires post-commit anyway.
@@ -228,33 +294,36 @@ export function useTransactionListData({
         loadMoreRef.current = loadMore;
     }, [loadMore]);
 
-    const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
-        setSearchParams(
-            (prev) => {
-                const next = new URLSearchParams(prev);
-                if (key && dir) {
-                    next.set("sort_key", key);
-                    next.set("sort_dir", dir);
-                } else {
-                    next.delete("sort_key");
-                    next.delete("sort_dir");
-                }
-                return next;
-            },
-            // Replace so cycling a column through asc/desc/none does not push
-            // three history entries the user has to Back through.
-            { replace: true },
-        );
-        // Keep the current rows on screen while the re-sorted page round-trips
-        // (React Query's placeholderData does the same for filter/search): the
-        // initialData effect swaps in the new ordering when it arrives, so the
-        // list re-sorts in place instead of blanking to a skeleton.
-        offsetRef.current = 0;
-        hasMoreRef.current = true;
-        // Invalidate any in-flight loadMore so its response cannot append
-        // rows from the previous sort/filter into the list.
-        requestIdRef.current += 1;
-    }, [setSearchParams]);
+    const handleSortChange = useCallback(
+        (key: string | null, dir: SortDir) => {
+            setSearchParams(
+                (prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (key && dir) {
+                        next.set("sort_key", key);
+                        next.set("sort_dir", dir);
+                    } else {
+                        next.delete("sort_key");
+                        next.delete("sort_dir");
+                    }
+                    return next;
+                },
+                // Replace so cycling a column through asc/desc/none does not push
+                // three history entries the user has to Back through.
+                { replace: true },
+            );
+            // Keep the current rows on screen while the re-sorted page round-trips
+            // (React Query's placeholderData does the same for filter/search): the
+            // initialData effect swaps in the new ordering when it arrives, so the
+            // list re-sorts in place instead of blanking to a skeleton.
+            offsetRef.current = 0;
+            hasMoreRef.current = true;
+            // Invalidate any in-flight loadMore so its response cannot append
+            // rows from the previous sort/filter into the list.
+            requestIdRef.current += 1;
+        },
+        [setSearchParams],
+    );
 
     return {
         allItems,

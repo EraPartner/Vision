@@ -3,11 +3,28 @@ title: Feature - Onboarding
 type: feature
 status: active
 date: 2026-04-19
-updated: 2026-08-26
-tags: [feature, onboarding, wizard, first-run, phase-9, backup, encrypt, passphrase, phase-2]
+updated: 2026-08-27
+tags:
+  [
+    feature,
+    onboarding,
+    wizard,
+    first-run,
+    phase-9,
+    backup,
+    encrypt,
+    passphrase,
+    phase-2,
+  ]
 description: First-run onboarding wizard for new Vision users
 aliases: [onboarding, setup wizard, first-run, welcome]
-related_code: ["apps/frontend/src/features/onboarding/OnboardingWizard.tsx", "apps/frontend/src/features/onboarding/useOnboarding.ts", "apps/frontend/src/components/layout/AppLayout.tsx", "apps/frontend/src/features/settings/sections/AboutSection.tsx"]
+related_code:
+  [
+    "apps/frontend/src/features/onboarding/OnboardingWizard.tsx",
+    "apps/frontend/src/features/onboarding/useOnboarding.ts",
+    "apps/frontend/src/components/layout/AppLayout.tsx",
+    "apps/frontend/src/features/settings/sections/AboutSection.tsx",
+  ]
 ---
 
 # Feature: Onboarding
@@ -15,6 +32,11 @@ related_code: ["apps/frontend/src/features/onboarding/OnboardingWizard.tsx", "ap
 ## Overview
 
 The Onboarding Wizard guides new users through initial setup of Vision, ensuring they configure essential settings before using the application.
+
+Completing the final setup step hands off to the Dashboard and requests its full once-per-session
+arrival reveal. This is completion feedback: the Dashboard suppresses the same stagger and number
+reels on ordinary return navigation. If onboarding produced an import batch that still needs review,
+the review handoff remains higher priority and does not redirect past that work.
 
 ---
 
@@ -36,7 +58,7 @@ A multi-step wizard (`STEP_KEYS` in `OnboardingWizard.tsx`) that covers, in orde
 
 The bank cards are native toggle buttons. Their `aria-pressed` state exposes the selected adapter to assistive technology as well as through the visible border treatment.
 
-Categories deliberately run *before* the import step: a first import lands on the
+Categories deliberately run _before_ the import step: a first import lands on the
 review page (every recipient is new on an empty database), and the review page is
 where categories get assigned — so the user must arrive there with categories
 already created. Taking the review hand-off from the import step ends onboarding
@@ -48,6 +70,7 @@ Settings → About).
 ## Trigger Conditions
 
 The onboarding wizard is shown when:
+
 - No transactions exist in the database
 - User has not completed onboarding before
 
@@ -57,11 +80,20 @@ It can be restarted from **Settings → About & Maintenance → Restart setup wi
 
 ## State and resource writes
 
-The wizard persists only the `onboarding_complete` setting through `useOnboarding()` in
-`apps/frontend/src/features/onboarding/useOnboarding.ts`. The steps do
-not configure language, currency, date, or dashboard preferences. Category creation, CSV import,
-and backup restore use their normal resource APIs, so their data follows the same validation and
-error handling as the corresponding application pages.
+The wizard stores a versioned, non-sensitive in-progress draft under
+`vision.onboarding.draft.v1`. It restores the current step, bank choice, category selection,
+category-creation receipt, import result, and review hand-off after a reload. The selected CSV file
+is deliberately not persisted, so an interrupted import resumes at file selection. Removed bank
+adapters and invalid or stale draft data fall back to the nearest safe earlier step, but a failed
+adapter-catalog request preserves the bank choice until a successful response can validate it.
+Completing onboarding clears the draft only after the server acknowledges completion; resetting
+onboarding clears it immediately. A local-storage failure is surfaced once while the failure lasts.
+
+Completion itself remains server-persisted as the `onboarding_complete` setting through
+`useOnboarding()` in `apps/frontend/src/features/onboarding/useOnboarding.ts`. The steps do not
+configure language, currency, date, or dashboard preferences. Category creation, CSV import, and
+backup restore use their normal resource APIs, so their data follows the same validation and error
+handling as the corresponding application pages.
 
 ---
 

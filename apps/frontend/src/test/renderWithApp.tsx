@@ -1,17 +1,20 @@
 import { ReactElement, ReactNode } from "react";
 import { render, RenderOptions, RenderResult } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, type MemoryRouterProps } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
-import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import {
+    AppSettingsProvider,
+    useAppSettings,
+} from "@/contexts/AppSettingsContext";
 import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 
 interface RenderWithAppOptions extends Omit<RenderOptions, "wrapper"> {
-    initialEntries?: string[];
+    initialEntries?: MemoryRouterProps["initialEntries"];
     queryClient?: QueryClient;
 }
 
@@ -31,7 +34,8 @@ function makeTestQueryClient(): QueryClient {
 function LanguageBridge({ children }: { children: ReactNode }) {
     const { appSettings, updateAppSettings } = useAppSettings();
     const language: Language = (appSettings.language as Language) ?? "en";
-    const setLanguage = (lang: Language) => updateAppSettings({ language: lang });
+    const setLanguage = (lang: Language) =>
+        updateAppSettings({ language: lang });
     return (
         <LanguageProvider language={language} setLanguage={setLanguage}>
             {children}
@@ -45,7 +49,7 @@ function AllProviders({
     queryClient,
 }: {
     children: ReactNode;
-    initialEntries: string[];
+    initialEntries: NonNullable<MemoryRouterProps["initialEntries"]>;
     queryClient: QueryClient;
 }) {
     return (
@@ -57,7 +61,9 @@ function AllProviders({
                             <BelgianTaxProfileProvider>
                                 <LanguageBridge>
                                     <TooltipProvider>
-                                        <MemoryRouter initialEntries={initialEntries}>
+                                        <MemoryRouter
+                                            initialEntries={initialEntries}
+                                        >
                                             {children}
                                         </MemoryRouter>
                                     </TooltipProvider>
@@ -80,10 +86,17 @@ export function renderWithApp(
     ui: ReactElement,
     options: RenderWithAppOptions = {},
 ): RenderWithAppResult {
-    const { initialEntries = ["/"], queryClient = makeTestQueryClient(), ...rest } = options;
+    const {
+        initialEntries = ["/"],
+        queryClient = makeTestQueryClient(),
+        ...rest
+    } = options;
     const result = render(ui, {
         wrapper: ({ children }) => (
-            <AllProviders initialEntries={initialEntries} queryClient={queryClient}>
+            <AllProviders
+                initialEntries={initialEntries}
+                queryClient={queryClient}
+            >
                 {children}
             </AllProviders>
         ),

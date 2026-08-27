@@ -278,7 +278,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         onChange={(e) => onDisplayNameChange(e.target.value)}
                     />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label htmlFor="acct-institution">{t('accounts.field.institution')}</Label>
                         <Input
@@ -319,7 +319,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                     'opening' ledger row after creation. Liability accounts
                     call it what it is: outstanding debt. */}
                 {!isEditMode && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="acct-opening-balance">
                                 {form.type === "liability"
@@ -346,7 +346,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                 onChange={(e) => setOpeningBalanceDate(e.target.value)}
                             />
                         </div>
-                        <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                        <p className="-mt-1 text-xs text-muted-foreground sm:col-span-2">
                             {t('accounts.openingBalance.createHint')}
                         </p>
                     </div>
@@ -363,7 +363,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
                 {showAdvanced && (
                     <div className="space-y-3 rounded-lg border border-border/50 p-3">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="acct-owner">{t('accounts.field.owner')}</Label>
                                 <Select value={form.owner} onValueChange={(v) => set("owner", v as AccountOwner)}>
@@ -402,7 +402,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                             figure through the opening-balance field above, and a
                             later statement through the Reconcile dialog. */}
                         {isEditMode && (
-                            <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="acct-stmt-bal">{t('accounts.field.statementBalance')}</Label>
                                     <Input id="acct-stmt-bal" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" value={form.statementBalance} onChange={(e) => set("statementBalance", e.target.value)} />

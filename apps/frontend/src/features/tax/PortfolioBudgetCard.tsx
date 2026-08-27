@@ -14,7 +14,7 @@ export function PortfolioBudgetCard({ totalPIT, totalTaxes, portfolioTaxesPlusPI
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.budgetTitle")}</CardTitle>
         <CardDescription>{t("tax.portfolioBudgetLikeDesc")}</CardDescription>

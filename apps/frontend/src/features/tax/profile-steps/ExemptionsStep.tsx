@@ -43,7 +43,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             {profile.dependentChildren > 0 && (
                 <div className="space-y-2 pl-3 border-l-2 border-border">
                     <Label htmlFor="dep-children-disabled" className="text-sm font-medium">
-                        {t('tax.profile.field.childrenDisabled')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
+                        {t('tax.profile.field.childrenDisabled')} <Badge variant="outline" className="text-2xs ml-1">{t('common.optional')}</Badge>
                     </Label>
                     <p className="text-xs text-muted-foreground">{t('tax.profile.field.childrenDisabled.desc')}</p>
                     <Select
@@ -66,7 +66,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
             <div className="space-y-2">
                 <Label htmlFor="dep-other" className="text-sm font-medium">
-                    {t('tax.profile.field.others')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
+                    {t('tax.profile.field.others')} <Badge variant="outline" className="text-2xs ml-1">{t('common.optional')}</Badge>
                 </Label>
                 <p className="text-xs text-muted-foreground">{t('tax.profile.dependents.others.desc')}</p>
                 <Select
@@ -93,7 +93,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             {profile.dependentOtherPersons > 0 && (
                 <div className="space-y-2 pl-3 border-l-2 border-border">
                     <Label htmlFor="dep-other-disabled" className="text-sm font-medium">
-                        {t('tax.profile.field.othersDisabled')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
+                        {t('tax.profile.field.othersDisabled')} <Badge variant="outline" className="text-2xs ml-1">{t('common.optional')}</Badge>
                     </Label>
                     <p className="text-xs text-muted-foreground">{t('tax.profile.field.othersDisabled.desc')}</p>
                     <Select

@@ -3,8 +3,8 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-06-18
-last_modified: 2026-08-26
-updated: 2026-08-26
+last_modified: 2026-08-27
+updated: 2026-08-27
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -43,16 +43,16 @@ interface WatchlistItem {
 
 ### Database Table: `watchlist`
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | SERIAL | Primary key |
-| `symbol` | VARCHAR | Ticker symbol |
-| `name` | VARCHAR | Security name |
-| `provider` | VARCHAR | Price provider key |
-| `target_price` | DECIMAL | Optional target price alert |
-| `current_price` | DECIMAL | Latest fetched price |
-| `created_at` | TIMESTAMP | Creation timestamp |
-| `updated_at` | TIMESTAMP | Last update timestamp |
+| Column          | Type      | Description                 |
+| --------------- | --------- | --------------------------- |
+| `id`            | SERIAL    | Primary key                 |
+| `symbol`        | VARCHAR   | Ticker symbol               |
+| `name`          | VARCHAR   | Security name               |
+| `provider`      | VARCHAR   | Price provider key          |
+| `target_price`  | DECIMAL   | Optional target price alert |
+| `current_price` | DECIMAL   | Latest fetched price        |
+| `created_at`    | TIMESTAMP | Creation timestamp          |
+| `updated_at`    | TIMESTAMP | Last update timestamp       |
 
 ## API Endpoints
 
@@ -61,6 +61,7 @@ interface WatchlistItem {
 Returns all watchlist items with current prices.
 
 Implementation note:
+
 - Backend list pagination now normalizes `limit` and `offset` (`limit` clamped to `1..5000`, `offset` floored at `0`) to prevent pathological page sizes while preserving payload shape (`{ items, total, limit, offset }`) ([[apps/node-backend/src/routes/watchlist.js]]).
 - Backend watchlist list endpoint now uses repository one-query pagination (`getAllWithCount`) instead of separate list + count calls, preserving filter/order/response semantics while reducing DB round-trips ([[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]).
 
@@ -94,8 +95,11 @@ The watchlist page uses a smart display strategy:
 
 - **At or below target**: Shows the current price (encourages buying)
 - **Above target**: Shows the percentage above target (shows how much it's exceeded)
+- **Since added**: Shows a signed percentage from the stored added price
 
 This provides actionable information: either "it's cheap enough" (price shown) or "it's gone up X%" (percentage shown).
+Target distance and since-added change use the shared `DeltaPill`: direction, semantic gain/loss
+tone, neutral zero, and locale-aware precision therefore match the other market-change surfaces.
 
 ## API Integration (Phase 3.6)
 
@@ -104,6 +108,7 @@ This provides actionable information: either "it's cheap enough" (price shown) o
 **Phase 3.6 Enhancement**: WatchlistPage now uses encapsulated `apiClient` methods instead of raw `fetch()` calls, improving code maintainability and enabling shared error handling.
 
 Available methods:
+
 - `getWatchlist(params?)` — `GET /api/watchlist` with optional `limit`/`offset` pagination
 - `createWatchlistItem(data)` — `POST /api/watchlist` to add item
 - `updateWatchlistItem(id, data)` — `PATCH /api/watchlist/:id` to update (e.g., set target price)
@@ -117,6 +122,7 @@ Code links: [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/research
 ## Price Updates
 
 Watchlist prices are updated when:
+
 1. The user manually refreshes investment prices via `POST /api/investments/refresh-prices`
 2. The price provider service fetches live prices for all tracked symbols
 3. **Phase 3.6**: WatchlistPage uses `useQuery({ queryKey: ["watchlist-quotes", symbols], queryFn: () => apiClient.getMarketQuotes(symbols) })` with 60s refetch interval for automatic market quote updates
@@ -124,6 +130,7 @@ Watchlist prices are updated when:
 ## API Client Migration (2026-04-29)
 
 **AddToWatchlistDialog** refactored to use encapsulated `apiClient` methods instead of raw `fetch()` calls:
+
 - Replaced 3 raw `fetch()` calls with `searchMarket()`, `getMarketQuotes()`, `createWatchlistItem()` from api client
 - Removed hardcoded `API_BASE_URL` dependency (now sourced via api client)
 - Added `MarketSearchResult` type export from `[[apps/frontend/src/lib/api/market.ts]]`
@@ -137,9 +144,9 @@ Watchlist prices are updated when:
 interface WatchlistPrefill {
   symbol: string;
   name: string;
-  type?: string;      // maps to asset class auto-detection
+  type?: string; // maps to asset class auto-detection
   currency?: string;
-  price?: number;     // seeds the target price field
+  price?: number; // seeds the target price field
 }
 ```
 
@@ -158,18 +165,21 @@ The watchlist page gracefully degrades when offline:
 - **Dialog handling**: Add/edit dialogs wrap queryFns in try/catch, set `retry: false`, and `refetchOnWindowFocus: false` to prevent unhandled rejections or spinner storms
 - **User feedback**: When quotes are unavailable (offline or provider error), a banner displays showing i18n key `watchlist.quotesOffline` ("Live quotes unavailable. Showing target prices only.")
 - **Target price fallback**: Page continues to show target prices and allow editing even when live quotes are unavailable
+- **Inline target editing**: The chart dialog's target-price editor is a labeled form. Enter and the named Save button submit the same single update; Cancel never submits.
 
 Code links: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
 
 ## i18n Fixes (2026-04-28)
 
 **Dutch Localization Cleanup:**
+
 - Fixed corrupted `watchlist.empty` i18n key in Dutch (`nl.json`): previously contained ~80 escaped backslashes instead of actual newline character (`\n`)
   - Fixed in: `i18n/source/nl.json`, `apps/frontend/src/locales/nl.ts`, `packaging/electron/i18n/nl.json`
 - Translated `portfolio.refreshPricesFailedTitle` from English "Refresh prices failed" to Dutch "Bijwerken van koersen mislukt"
 - Translated `portfolio.recordTxnFailedTitle` from English "Record transaction failed" to Dutch "Registreren van portfoliotransactie mislukt"
 
 **Dutch Translation Gap — RESOLVED (2026-06-16):**
+
 - The `*FailedTitle` keys (categories/recipients/transactions/portfolio — 18 keys total) that
   previously displayed English text in the Dutch locale are now fully translated in
   `i18n/source/nl.json`. No remaining `*FailedTitle` gap.
@@ -206,6 +216,7 @@ See [[docs/api/watchlist|Watchlist API]] for the updated request/response shape.
 ## Adding from Watchlist
 
 Users can promote a watchlist item to a full portfolio investment with one click, which:
+
 1. Opens the `AddInvestmentFromMarketDialog` pre-filled with the watchlist data
 2. Creates the investment in the portfolio
 3. Optionally removes the item from the watchlist

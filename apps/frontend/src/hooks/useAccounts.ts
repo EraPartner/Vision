@@ -5,14 +5,17 @@ import { toast } from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { accountKeys, invalidateAccountDerived, invalidateAccountRepoint } from '@/lib/queryKeys';
+import { useBackgroundQueryCue } from '@/components/shared/BackgroundQueryIndicator';
 
 export function useAccounts(params?: { active?: 'true' | 'false' | 'all' }) {
-    return useQuery({
+    const query = useQuery({
         queryKey: accountKeys.list(params),
         queryFn: () => apiClient.getAccounts(params),
         staleTime: 2 * 60_000, // accounts rarely change - 2min stale
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useCreateAccount() {
@@ -40,6 +43,7 @@ export function useUpdateAccount() {
             apiClient.updateAccount(id, data),
         onSuccess: () => {
             invalidateAccountDerived(queryClient);
+            toast.success(t('accounts.updated'));
         },
         onError: (error: Error) => {
             toast.error(t('accounts.updateFailedTitle'), { description: apiErrorToMessage(error, t) });

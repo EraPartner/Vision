@@ -163,6 +163,14 @@ describe("formatCurrencyCompact", () => {
     const result = formatCurrencyCompact(1_000_000, "GBP", "en-US", 2);
     expect(result.isCompact).toBe(true);
   });
+
+  test("uses exceptZero consistently in full and compact signed output", () => {
+    expect(formatCurrencyCompact(42, "EUR", "en-US", 2, true).display).toBe("+€42.00");
+    expect(formatCurrencyCompact(0, "EUR", "en-US", 2, true).display).toBe("€0.00");
+    const compact = formatCurrencyCompact(1_253_632, "EUR", "en-US", 2, true);
+    expect(compact.display).toBe("+€1.3M");
+    expect(compact.full).toBe("+€1,253,632.00");
+  });
 });
 
 describe("formatPercent — value scale", () => {

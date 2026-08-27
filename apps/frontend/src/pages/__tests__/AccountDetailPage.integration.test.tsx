@@ -92,7 +92,10 @@ const LEDGER_ROWS = [
     },
 ];
 
-function mockApi({ accounts = [CHECKING, BROKER, DRIFTING], rows = LEDGER_ROWS } = {}) {
+function mockApi({
+    accounts = [CHECKING, BROKER, DRIFTING],
+    rows = LEDGER_ROWS,
+} = {}) {
     const captured: URLSearchParams[] = [];
     server.use(
         http.get(`${API_BASE}/api/accounts`, () =>
@@ -100,7 +103,13 @@ function mockApi({ accounts = [CHECKING, BROKER, DRIFTING], rows = LEDGER_ROWS }
         ),
         http.get(`${API_BASE}/api/transactions`, ({ request }) => {
             captured.push(new URL(request.url).searchParams);
-            return ok({ items: rows, total: rows.length, limit: 100, offset: 0, links: [] });
+            return ok({
+                items: rows,
+                total: rows.length,
+                limit: 100,
+                offset: 0,
+                links: [],
+            });
         }),
     );
     return captured;
@@ -122,22 +131,41 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         renderDetail("/accounts/1");
 
         // Header: display name + computed balance + WP-B2 provenance subline.
-        expect(await screen.findByRole("heading", { name: "KBC Checking", level: 1 })).toBeInTheDocument();
-        expect(await screen.findByText(/950,00/)).toBeInTheDocument();
-        expect(screen.getByText(/bank statement \+ 2 entries since/i)).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", {
+                name: "KBC Checking",
+                level: 1,
+            }),
+        ).toBeInTheDocument();
+        const balanceCard = screen.getByText("Balance").closest("div")
+            ?.parentElement as HTMLElement;
+        expect(balanceCard).toHaveTextContent(/950,00/);
+        expect(balanceCard).toHaveTextContent(
+            /bank statement \+ 2 entries since/i,
+        );
 
         // Ledger table: rows carry the running-balance column.
         const table = await screen.findByRole("table");
-        expect(within(table).getByRole("columnheader", { name: "Balance" })).toBeInTheDocument();
-        const groceries = within(table).getByText("Albert Heijn").closest("tr") as HTMLElement;
-        expect(within(groceries).getByText(/-50,00/)).toBeInTheDocument();
-        expect(within(groceries).getByText(/^950,00/)).toBeInTheDocument();
-        const salary = within(table).getByText("Employer BV").closest("tr") as HTMLElement;
+        expect(
+            within(table).getByRole("columnheader", { name: "Balance" }),
+        ).toBeInTheDocument();
+        const groceries = within(table)
+            .getByText("Albert Heijn")
+            .closest("tr") as HTMLElement;
+        expect(groceries).toHaveTextContent(/-50,00/);
+        expect(groceries).toHaveTextContent(/950,00/);
+        const salary = within(table)
+            .getByText("Employer BV")
+            .closest("tr") as HTMLElement;
         // Amount and running balance are both 1.000,00 € on this row.
-        expect(within(salary).getAllByText(/1\.000,00/)).toHaveLength(2);
+        const salaryCells = within(salary).getAllByRole("cell");
+        expect(salaryCells.at(-2)).toHaveTextContent(/1\.000,00/);
+        expect(salaryCells.at(-1)).toHaveTextContent(/1\.000,00/);
 
         // First frontend consumer of include_balance=true — assert the wire params.
-        const ledgerCall = captured.find((p) => p.get("include_balance") === "true");
+        const ledgerCall = captured.find(
+            (p) => p.get("include_balance") === "true",
+        );
         expect(ledgerCall).toBeDefined();
         expect(ledgerCall!.get("account_id")).toBe("1");
         expect(ledgerCall!.get("sort_dir")).toBe("desc");
@@ -148,10 +176,18 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         renderDetail("/accounts/1");
         await screen.findByRole("heading", { name: "KBC Checking", level: 1 });
 
-        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
-        expect(await screen.findByRole("menuitem", { name: /edit/i })).toBeInTheDocument();
-        expect(screen.getByRole("menuitem", { name: /merge into/i })).toBeInTheDocument();
-        expect(screen.getByRole("menuitem", { name: /close account/i })).toBeInTheDocument();
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: /edit/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /merge into/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        ).toBeInTheDocument();
     });
 
     // ── WP-B5 §3 F5: ONE Close verb; Delete gated on has_transactions ────────
@@ -161,12 +197,18 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         renderDetail("/accounts/1"); // CHECKING: has_transactions: true, active
         await screen.findByRole("heading", { name: "KBC Checking", level: 1 });
 
-        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
         await screen.findByRole("menuitem", { name: /edit/i });
 
         // One lifecycle verb: Close. The old Archive item is folded into it.
-        expect(screen.getByRole("menuitem", { name: /close account/i })).toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /^archive$/i }),
+        ).not.toBeInTheDocument();
 
         // Delete is present but disabled, with the close-instead explanation.
         const del = screen.getByRole("menuitem", { name: /delete/i });
@@ -179,7 +221,9 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         renderDetail("/accounts/2"); // BROKER: has_transactions: false
         await screen.findByRole("heading", { name: "Degiro", level: 1 });
 
-        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
         const del = await screen.findByRole("menuitem", { name: /delete/i });
         expect(del).not.toHaveAttribute("aria-disabled", "true");
 
@@ -190,15 +234,31 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
 
     it("shows Reopen (not Close/Archive) for a closed account", async () => {
         mockApi({
-            accounts: [{ ...CHECKING, id: 4, name: "Shut", display_name: "Shut", is_active: false }],
+            accounts: [
+                {
+                    ...CHECKING,
+                    id: 4,
+                    name: "Shut",
+                    display_name: "Shut",
+                    is_active: false,
+                },
+            ],
         });
         renderDetail("/accounts/4");
         await screen.findByRole("heading", { name: "Shut", level: 1 });
 
-        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
-        expect(await screen.findByRole("menuitem", { name: /reopen/i })).toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /close account/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument();
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: /reopen/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /close account/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /^archive$/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("renders the drift chip and opens the Reconcile dialog from it", async () => {
@@ -209,7 +269,9 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         const chip = screen.getByRole("button", { name: "Reconcile balance" });
         expect(chip.textContent).toMatch(/\+.*15,50/);
         await userEvent.click(chip);
-        expect(await screen.findByRole("dialog", { name: "Reconcile balance" })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("dialog", { name: "Reconcile balance" }),
+        ).toBeInTheDocument();
     });
 
     // ── WP-B5 §3 F1: chip carries the statement date + a stale tone; the
@@ -223,7 +285,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
 
         const chip = screen.getByRole("button", { name: "Reconcile balance" });
         expect(chip.textContent).toContain("statement 01/03/2025");
-        expect(chip.className).toMatch(/amber/);
+        expect(chip.className).toMatch(/text-warning/);
         expect(chip.className).not.toMatch(/text-destructive/);
     });
 
@@ -232,11 +294,13 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         recent.setDate(recent.getDate() - 5);
         const recentYmd = toYmd(recent);
         mockApi({
-            accounts: [{
-                ...DRIFTING,
-                // Bare YYYY-MM-DD — accountRepository.js emits the DATE via to_char.
-                statement_balance_date: recentYmd,
-            }],
+            accounts: [
+                {
+                    ...DRIFTING,
+                    // Bare YYYY-MM-DD — accountRepository.js emits the DATE via to_char.
+                    statement_balance_date: recentYmd,
+                },
+            ],
         });
         renderDetail("/accounts/3");
         await screen.findByRole("heading", { name: "Drifty", level: 1 });
@@ -251,19 +315,27 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         renderDetail("/accounts/3");
         await screen.findByRole("heading", { name: "Drifty", level: 1 });
 
-        await userEvent.click(screen.getByRole("button", { name: "Reconcile balance" }));
+        await userEvent.click(
+            screen.getByRole("button", { name: "Reconcile balance" }),
+        );
         await screen.findByRole("dialog", { name: "Reconcile balance" });
 
         // The stored statement day (2025-03-01) drives the deep-link…
         await userEvent.click(
-            await screen.findByRole("button", { name: /show transactions since 01\/03\/2025/i }),
+            await screen.findByRole("button", {
+                name: /show transactions since 01\/03\/2025/i,
+            }),
         );
 
         // …and the ledger below narrows to it, banner and all.
-        expect(await screen.findByText(/showing transactions since/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/showing transactions since/i),
+        ).toBeInTheDocument();
         const table = screen.getByRole("table");
         expect(within(table).getByText("Albert Heijn")).toBeInTheDocument();
-        expect(within(table).queryByText("Employer BV")).not.toBeInTheDocument();
+        expect(
+            within(table).queryByText("Employer BV"),
+        ).not.toBeInTheDocument();
     });
 
     it("shows the Holdings placeholder (and no cash balance) for portfolio-type accounts", async () => {
@@ -272,11 +344,15 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         await screen.findByRole("heading", { name: "Degiro", level: 1 });
 
         expect(screen.getByText("Holdings")).toBeInTheDocument();
-        expect(screen.getByText(/holdings arrive in a later release/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/holdings arrive in a later release/i),
+        ).toBeInTheDocument();
         // The misleading €0,00 ledger balance is replaced by the placeholder…
         expect(screen.getByText(/tracked in portfolio/i)).toBeInTheDocument();
         // …and a has_transactions=false account explains its missing ledger.
-        expect(screen.getByText(/keeps its activity in the portfolio/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/keeps its activity in the portfolio/i),
+        ).toBeInTheDocument();
     });
 
     it("narrows the ledger to rows on/after ?since= and clears back to the full view", async () => {
@@ -286,20 +362,32 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         const table = await screen.findByRole("table");
         expect(within(table).getByText("Albert Heijn")).toBeInTheDocument();
         // The 2025-02-01 salary row predates the since-date and is hidden.
-        expect(within(table).queryByText("Employer BV")).not.toBeInTheDocument();
-        expect(screen.getByText(/showing transactions since/i)).toBeInTheDocument();
+        expect(
+            within(table).queryByText("Employer BV"),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByText(/showing transactions since/i),
+        ).toBeInTheDocument();
 
-        await userEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+        await userEvent.click(
+            screen.getByRole("button", { name: "Clear filter" }),
+        );
         expect(await screen.findByText("Employer BV")).toBeInTheDocument();
-        expect(screen.queryByText(/showing transactions since/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/showing transactions since/i),
+        ).not.toBeInTheDocument();
     });
 
     it("shows a not-found state (with a way back) for an unknown account id", async () => {
         mockApi();
         renderDetail("/accounts/999");
 
-        expect(await screen.findByText("Account not found")).toBeInTheDocument();
-        await userEvent.click(screen.getByRole("button", { name: /all accounts/i }));
+        expect(
+            await screen.findByText("Account not found"),
+        ).toBeInTheDocument();
+        await userEvent.click(
+            screen.getByRole("button", { name: /all accounts/i }),
+        );
         expect(await screen.findByText("hub page")).toBeInTheDocument();
     });
 });

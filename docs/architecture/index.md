@@ -311,15 +311,15 @@ Documentation:
 ## Dense-Fintech Visual Skin — VITE_SKIN_V2 flag (June 2026, ADR-104)
 
 > [!info] Scope after ADR-105
-> The flatten direction explored in ADR-104 (atmosphere removal, flat glass, Inter headings, tight radius, calmed motion) was **abandoned**. `VITE_SKIN_V2` now gates **only** the colorblind-safe gain/loss recoloring (`.amount-gain`/`.amount-loss` → Okabe-Ito `--gain`/`--loss` tokens). The geometry, glass, typography, motion, and accent are now governed by the base design (ADR-105 above), not this flag.
+> The flatten direction explored in ADR-104 (atmosphere removal, flat glass, Inter headings, tight radius, calmed motion) was **abandoned**. `VITE_SKIN_V2` now gates **only** the colorblind-safe gain/loss token recoloring used by `text-gain`/`text-loss`, related Tailwind utilities, and charts. The geometry, glass, typography, motion, and accent are now governed by the base design (ADR-105 above), not this flag.
 
 [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104]] ships `apps/frontend/src/styles/skin-v2.css` as a CSS layer that sits **outside every `@layer` block**, scoped under `:root.skin-v2`. The class is applied synchronously before the first React render by `applySkinV2Class()` (`lib/skin.ts`) from `main.tsx`.
 
 **Activation**: build-time `VITE_SKIN_V2=true` env flag (ADR-030 `booleanEnv`, **default `false`**) or `localStorage` override `vision_skin_v2`. Dev console helper: `window.__setSkinV2(true | false | undefined)`.
 
 **What skin-v2 currently changes** (surviving scope after the revert):
-- `.amount-gain` → `hsl(var(--gain))` — Okabe-Ito green `162 84% 30%` (light) / `160 65% 52%` (dark)
-- `.amount-loss` → `hsl(var(--loss))` — Okabe-Ito vermillion `24 85% 45%` (light) / `24 90% 62%` (dark)
+- `--gain` → Okabe-Ito green `162 84% 30%` (light) / `160 65% 52%` (dark)
+- `--loss` → Okabe-Ito vermillion `24 85% 45%` (light) / `24 90% 62%` (dark)
 
 These are always paired with explicit +/− signs and directional arrows in component markup.
 

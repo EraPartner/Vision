@@ -1,14 +1,14 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {registerUndo} from '@/lib/undo';
-import { downloadBlob } from '@/lib/downloadBlob';
-import {apiClient} from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { registerUndo } from "@/lib/undo";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { apiClient } from "@/lib/api";
 import {
     categoryKeys,
     invalidateTransactionData,
     recipientKeys,
     tagKeys,
     transactionKeys,
-} from '@/lib/queryKeys';
+} from "@/lib/queryKeys";
 import type {
     BulkExportRequest,
     BulkSelectionRequest,
@@ -18,10 +18,11 @@ import type {
     TransactionCreate,
     TransactionsListResponse,
     TransactionUpdate,
-} from '@/types/api';
-import {toast} from 'sonner';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import {useLanguage} from '@/contexts/LanguageContext';
+} from "@/types/api";
+import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 interface UseTransactionsParams {
     limit?: number;
@@ -38,12 +39,14 @@ interface UseTransactionsParams {
 }
 
 export function useTransactions(params?: UseTransactionsParams) {
-    return useQuery({
+    const query = useQuery({
         queryKey: transactionKeys.list(params),
         queryFn: () => apiClient.getTransactions(params),
         staleTime: 30_000,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useCreateTransaction() {
@@ -51,42 +54,57 @@ export function useCreateTransaction() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (transaction: TransactionCreate) => apiClient.createTransaction(transaction),
+        mutationFn: (transaction: TransactionCreate) =>
+            apiClient.createTransaction(transaction),
         // Optimistic insert at the head of the plain list caches with a
         // temporary negative id; onSuccess swaps in the server row (so row
         // actions get the real id immediately), onSettled re-sorts/filters
         // via invalidation. Derived fields (category_name, …) stay undefined
         // until the refetch — renderers already fall back for those.
         onMutate: async (transaction) => {
-            await queryClient.cancelQueries({queryKey: transactionKeys.all});
+            await queryClient.cancelQueries({ queryKey: transactionKeys.all });
             const snapshot = snapshotTransactionLists(queryClient);
             const tempId = -Date.now();
-            const tempRow = {...transaction, id: tempId} as unknown as Transaction;
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
-                if (!old?.items) return old;
-                return {
-                    ...old,
-                    items: [tempRow, ...old.items],
-                    total: (old.total ?? old.items.length) + 1,
-                };
-            });
-            return {snapshot, tempId};
-        },
-        onSuccess: (created, _vars, context) => {
-            if (context?.tempId != null) {
-                queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
+            const tempRow = {
+                ...transaction,
+                id: tempId,
+            } as unknown as Transaction;
+            queryClient.setQueriesData<TransactionsListResponse>(
+                { queryKey: transactionKeys.all },
+                (old) => {
                     if (!old?.items) return old;
                     return {
                         ...old,
-                        items: old.items.map((tx) => (tx.id === context.tempId ? created : tx)),
+                        items: [tempRow, ...old.items],
+                        total: (old.total ?? old.items.length) + 1,
                     };
-                });
+                },
+            );
+            return { snapshot, tempId };
+        },
+        onSuccess: (created, _vars, context) => {
+            if (context?.tempId != null) {
+                queryClient.setQueriesData<TransactionsListResponse>(
+                    { queryKey: transactionKeys.all },
+                    (old) => {
+                        if (!old?.items) return old;
+                        return {
+                            ...old,
+                            items: old.items.map((tx) =>
+                                tx.id === context.tempId ? created : tx,
+                            ),
+                        };
+                    },
+                );
             }
-            toast.success(t('transactions.created'));
+            toast.success(t("transactions.created"));
         },
         onError: (error: Error, _vars, context) => {
-            if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.createFailedTitle'), { description: apiErrorToMessage(error, t) });
+            if (context?.snapshot)
+                rollbackTransactionLists(queryClient, context.snapshot);
+            toast.error(t("transactions.createFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -94,7 +112,9 @@ export function useCreateTransaction() {
     });
 }
 
-type TransactionsSnapshot = Array<[readonly unknown[], TransactionsListResponse | undefined]>;
+type TransactionsSnapshot = Array<
+    [readonly unknown[], TransactionsListResponse | undefined]
+>;
 
 /**
  * Optimistic-update helpers for the plain `['transactions', params]` caches.
@@ -106,11 +126,18 @@ type TransactionsSnapshot = Array<[readonly unknown[], TransactionsListResponse 
  * Snapshot-all → patch-all → rollback-all-on-error, with onSettled
  * invalidation so server truth always wins regardless of outcome.
  */
-function snapshotTransactionLists(queryClient: ReturnType<typeof useQueryClient>): TransactionsSnapshot {
-    return queryClient.getQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all});
+function snapshotTransactionLists(
+    queryClient: ReturnType<typeof useQueryClient>,
+): TransactionsSnapshot {
+    return queryClient.getQueriesData<TransactionsListResponse>({
+        queryKey: transactionKeys.all,
+    });
 }
 
-function rollbackTransactionLists(queryClient: ReturnType<typeof useQueryClient>, snapshot: TransactionsSnapshot) {
+function rollbackTransactionLists(
+    queryClient: ReturnType<typeof useQueryClient>,
+    snapshot: TransactionsSnapshot,
+) {
     for (const [key, data] of snapshot) {
         queryClient.setQueryData(key, data);
     }
@@ -121,29 +148,37 @@ export function useUpdateTransaction() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({id, data}: { id: number; data: TransactionUpdate }) =>
+        mutationFn: ({ id, data }: { id: number; data: TransactionUpdate }) =>
             apiClient.updateTransaction(id, data),
-        onMutate: async ({id, data}) => {
-            await queryClient.cancelQueries({queryKey: transactionKeys.all});
+        onMutate: async ({ id, data }) => {
+            await queryClient.cancelQueries({ queryKey: transactionKeys.all });
             const snapshot = snapshotTransactionLists(queryClient);
             // `tags` is excluded from the optimistic merge: the update payload
             // carries string[] while the cached rows hold Tag[] objects.
-            const {tags: _tags, ...optimisticFields} = data;
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
-                if (!old?.items) return old;
-                return {
-                    ...old,
-                    items: old.items.map((tx) => (tx.id === id ? {...tx, ...optimisticFields} : tx)),
-                };
-            });
-            return {snapshot};
+            const { tags: _tags, ...optimisticFields } = data;
+            queryClient.setQueriesData<TransactionsListResponse>(
+                { queryKey: transactionKeys.all },
+                (old) => {
+                    if (!old?.items) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((tx) =>
+                            tx.id === id ? { ...tx, ...optimisticFields } : tx,
+                        ),
+                    };
+                },
+            );
+            return { snapshot };
         },
         onSuccess: () => {
-            toast.success(t('transactions.updated'));
+            toast.success(t("transactions.updated"));
         },
         onError: (error: Error, _vars, context) => {
-            if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
+            if (context?.snapshot)
+                rollbackTransactionLists(queryClient, context.snapshot);
+            toast.error(t("transactions.updateFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -158,7 +193,7 @@ export function useDeleteTransaction() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteTransaction(id),
         onMutate: async (id) => {
-            await queryClient.cancelQueries({queryKey: transactionKeys.all});
+            await queryClient.cancelQueries({ queryKey: transactionKeys.all });
             const snapshot = snapshotTransactionLists(queryClient);
             // Keep the deleted row so Undo can faithfully recreate it.
             let deletedRow: Transaction | undefined;
@@ -166,23 +201,30 @@ export function useDeleteTransaction() {
                 deletedRow = data?.items?.find((tx) => tx.id === id);
                 if (deletedRow) break;
             }
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
-                if (!old?.items) return old;
-                const items = old.items.filter((tx) => tx.id !== id);
-                if (items.length === old.items.length) return old;
-                return {
-                    ...old,
-                    items,
-                    total: Math.max(0, (old.total ?? old.items.length) - 1),
-                };
-            });
-            return {snapshot, deletedRow};
+            queryClient.setQueriesData<TransactionsListResponse>(
+                { queryKey: transactionKeys.all },
+                (old) => {
+                    if (!old?.items) return old;
+                    const items = old.items.filter((tx) => tx.id !== id);
+                    if (items.length === old.items.length) return old;
+                    return {
+                        ...old,
+                        items,
+                        total: Math.max(0, (old.total ?? old.items.length) - 1),
+                    };
+                },
+            );
+            return { snapshot, deletedRow };
         },
         onSuccess: (_data, _id, context) => {
             const row = context?.deletedRow;
             // recipient_id is required by the create contract — without it we
             // cannot faithfully restore, so no Undo is offered.
-            if (row?.recipient_id != null && row.transaction_date && row.bank_account) {
+            if (
+                row?.recipient_id != null &&
+                row.transaction_date &&
+                row.bank_account
+            ) {
                 const restore = async () => {
                     try {
                         await apiClient.createTransaction({
@@ -197,27 +239,35 @@ export function useDeleteTransaction() {
                             balance: row.balance,
                             category_id: row.category_id ?? undefined,
                             comment: row.comment ?? undefined,
-                            tags: row.tags?.map((tag) => (typeof tag === 'string' ? tag : tag.slug)),
+                            tags: row.tags?.map((tag) =>
+                                typeof tag === "string" ? tag : tag.slug,
+                            ),
                         });
                         invalidateTransactionData(queryClient);
-                        toast.success(t('transactions.restored'));
+                        toast.success(t("transactions.restored"));
                     } catch (error) {
-                        toast.error(t('transactions.restoreFailedTitle'), {
+                        toast.error(t("transactions.restoreFailedTitle"), {
                             description: apiErrorToMessage(error, t),
                         });
                     }
                 };
                 registerUndo(restore);
-                toast.success(t('transactions.deleted'), {
-                    action: {label: t('common.undo'), onClick: () => void restore()},
+                toast.success(t("transactions.deleted"), {
+                    action: {
+                        label: t("common.undo"),
+                        onClick: () => void restore(),
+                    },
                 });
             } else {
-                toast.success(t('transactions.deleted'));
+                toast.success(t("transactions.deleted"));
             }
         },
         onError: (error: Error, _id, context) => {
-            if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
+            if (context?.snapshot)
+                rollbackTransactionLists(queryClient, context.snapshot);
+            toast.error(t("transactions.deleteFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -230,68 +280,121 @@ export function useBulkTagTransactions() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (request: BulkTagRequest) => apiClient.bulkTagTransactions(request),
+        mutationFn: (request: BulkTagRequest) =>
+            apiClient.bulkTagTransactions(request),
         onSuccess: () => {
             invalidateTransactionData(queryClient);
-            queryClient.invalidateQueries({queryKey: tagKeys.all});
-            toast.success(t('tags.bulkApplied'));
+            queryClient.invalidateQueries({ queryKey: tagKeys.all });
+            toast.success(t("tags.bulkApplied"));
         },
         onError: (error: Error) => {
-            toast.error(t('tags.bulkFailed'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("tags.bulkFailed"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
 
 export function useBulkDeleteTransactions() {
     const queryClient = useQueryClient();
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
 
     return useMutation({
-        mutationFn: (request: BulkSelectionRequest) => apiClient.bulkDeleteTransactions(request),
+        mutationFn: (request: BulkSelectionRequest) =>
+            apiClient.bulkDeleteTransactions(request),
         onSuccess: (result) => {
             invalidateTransactionData(queryClient);
-            toast.success(t('txPage.bulk.deleted', { n: result.deleted }));
+            toast.success(
+                result.matched !== result.requested
+                    ? tc(
+                          "txPage.bulk.deletedSelectionChanged",
+                          result.deleted,
+                          {
+                              affected: result.deleted,
+                              requested: result.requested,
+                              matched: result.matched,
+                          },
+                      )
+                    : result.deleted === result.requested
+                      ? tc("txPage.bulk.deleted", result.deleted, {
+                            n: result.deleted,
+                        })
+                      : tc("txPage.bulk.deletedOf", result.requested, {
+                            affected: result.deleted,
+                            requested: result.requested,
+                            skipped: result.requested - result.deleted,
+                        }),
+            );
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("txPage.bulk.failed"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
 
 export function useBulkUpdateTransactions() {
     const queryClient = useQueryClient();
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
 
     return useMutation({
-        mutationFn: (request: BulkUpdateRequest) => apiClient.bulkUpdateTransactions(request),
+        mutationFn: (request: BulkUpdateRequest) =>
+            apiClient.bulkUpdateTransactions(request),
         onSuccess: (result) => {
             invalidateTransactionData(queryClient);
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             queryClient.invalidateQueries({ queryKey: recipientKeys.all });
-            toast.success(t('txPage.bulk.updated', { n: result.updated }));
+            toast.success(
+                result.matched !== result.requested
+                    ? tc(
+                          "txPage.bulk.updatedSelectionChanged",
+                          result.updated,
+                          {
+                              affected: result.updated,
+                              requested: result.requested,
+                              matched: result.matched,
+                          },
+                      )
+                    : result.updated === result.requested
+                      ? tc("txPage.bulk.updated", result.updated, {
+                            n: result.updated,
+                        })
+                      : tc("txPage.bulk.updatedOf", result.requested, {
+                            affected: result.updated,
+                            requested: result.requested,
+                            skipped: result.requested - result.updated,
+                        }),
+            );
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("txPage.bulk.failed"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
 
 export function useBulkExportTransactions() {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
 
     return useMutation({
-        mutationFn: (request: BulkExportRequest) => apiClient.bulkExportTransactions(request),
-        onSuccess: (blob, request) => {
-            const ext = request.format === 'csv' ? 'csv' : 'ndjson';
-            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        mutationFn: (request: BulkExportRequest) =>
+            apiClient.bulkExportTransactions(request),
+        onSuccess: (result, request) => {
+            const ext = request.format === "csv" ? "csv" : "ndjson";
+            const stamp = new Date()
+                .toISOString()
+                .replace(/[:.]/g, "-")
+                .slice(0, 19);
             const filename = `transactions_export_${stamp}.${ext}`;
-            downloadBlob(blob, filename);
-            toast.success(t('txPage.bulk.exported'));
+            downloadBlob(result.blob, filename);
+            toast.success(tc("txPage.bulk.exportedCount", result.exported));
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("txPage.bulk.failed"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
-
-

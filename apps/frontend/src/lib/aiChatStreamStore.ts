@@ -10,20 +10,20 @@
  * have a real id at stream start — no PENDING bookkeeping required.
  */
 
-import type { QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from "@tanstack/react-query";
 
-import { apiClient } from '@/lib/api';
-import { aiKeys } from '@/lib/queryKeys';
-import logger from '@/lib/logger';
+import { apiClient } from "@/lib/api";
+import { aiKeys } from "@/lib/queryKeys";
+import logger from "@/lib/logger";
 import type {
     ChatDoneEvent,
     ChatMessage,
     ChatStreamEvent,
     ConversationDetail,
     SendChatBody,
-} from '@/types/aiChat';
+} from "@/types/aiChat";
 
-export const OPTIMISTIC_USER_ID_PREFIX = '__optimistic_user__';
+export const OPTIMISTIC_USER_ID_PREFIX = "__optimistic_user__";
 
 export function isOptimisticUserId(id: string): boolean {
     return id.startsWith(OPTIMISTIC_USER_ID_PREFIX);
@@ -62,9 +62,9 @@ function mergeDoneIntoConversationCache(
             const additions: ChatMessage[] = [];
 
             if (
-                current.userMessage
-                && !isOptimisticUserId(current.userMessage.id)
-                && !seen.has(current.userMessage.id)
+                current.userMessage &&
+                !isOptimisticUserId(current.userMessage.id) &&
+                !seen.has(current.userMessage.id)
             ) {
                 additions.push(current.userMessage);
                 seen.add(current.userMessage.id);
@@ -75,10 +75,7 @@ function mergeDoneIntoConversationCache(
                     seen.add(toolMsg.id);
                 }
             }
-            if (
-                done.assistantMessage
-                && !seen.has(done.assistantMessage.id)
-            ) {
+            if (done.assistantMessage && !seen.has(done.assistantMessage.id)) {
                 additions.push(done.assistantMessage);
             }
 
@@ -93,7 +90,7 @@ function mergeDoneIntoConversationCache(
 function buildOptimisticUserMessage(content: string): ChatMessage {
     return {
         id: `${OPTIMISTIC_USER_ID_PREFIX}${Date.now()}`,
-        role: 'user',
+        role: "user",
         content,
         createdAt: new Date().toISOString(),
     };
@@ -101,25 +98,31 @@ function buildOptimisticUserMessage(content: string): ChatMessage {
 
 export interface StreamState {
     isStreaming: boolean;
+    status: "idle" | "streaming" | "stopped" | "interrupted" | "timed_out";
     assistantDraft: string;
     toolMessages: ChatMessage[];
     userMessage: ChatMessage | null;
     error: string | null;
+    lastRequest: SendBody | null;
 }
 
 export const INITIAL_STREAM_STATE: StreamState = Object.freeze({
     isStreaming: false,
-    assistantDraft: '',
+    status: "idle",
+    assistantDraft: "",
     toolMessages: [],
     userMessage: null,
     error: null,
+    lastRequest: null,
 });
 
 const EMPTY_ACTIVE_IDS: readonly string[] = Object.freeze([]);
 
 type Listener = () => void;
 
-export type SendBody = Omit<SendChatBody, 'conversationId'> & { conversationId: string };
+export type SendBody = Omit<SendChatBody, "conversationId"> & {
+    conversationId: string;
+};
 
 class AiChatStreamStore {
     private streams = new Map<string, StreamState>();
@@ -127,6 +130,7 @@ class AiChatStreamStore {
     private listeners = new Set<Listener>();
     private activeIdsCache: readonly string[] = EMPTY_ACTIVE_IDS;
     private activeIdsDirty = false;
+    private generations = new Map<string, number>();
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -158,14 +162,22 @@ class AiChatStreamStore {
         // `useSyncExternalStore` consumers (ChatConversationList) don't re-render
         // per streamed token.
         const prev = this.activeIdsCache;
-        if (ids.length === prev.length && ids.every((id, i) => id === prev[i])) {
+        if (
+            ids.length === prev.length &&
+            ids.every((id, i) => id === prev[i])
+        ) {
             return prev;
         }
-        this.activeIdsCache = ids.length === 0 ? EMPTY_ACTIVE_IDS : Object.freeze(ids);
+        this.activeIdsCache =
+            ids.length === 0 ? EMPTY_ACTIVE_IDS : Object.freeze(ids);
         return this.activeIdsCache;
     }
 
     cancel(conversationId: string): void {
+        this.generations.set(
+            conversationId,
+            (this.generations.get(conversationId) ?? 0) + 1,
+        );
         const abort = this.aborts.get(conversationId);
         if (abort) {
             abort();
@@ -173,7 +185,12 @@ class AiChatStreamStore {
         }
         const current = this.streams.get(conversationId);
         if (current && current.isStreaming) {
-            this.streams.set(conversationId, { ...current, isStreaming: false });
+            this.streams.set(conversationId, {
+                ...current,
+                isStreaming: false,
+                status: "stopped",
+                error: null,
+            });
             this.emit();
         }
     }
@@ -196,61 +213,102 @@ class AiChatStreamStore {
         onError: (error: unknown) => void,
     ): Promise<ChatDoneEvent | null> {
         const id = body.conversationId;
+        const generation = (this.generations.get(id) ?? 0) + 1;
+        this.generations.set(id, generation);
 
         const prior = this.aborts.get(id);
         if (prior) {
-            logger.warn('[aiChatStreamStore] new send aborts prior stream', { id });
+            logger.warn("[aiChatStreamStore] new send aborts prior stream", {
+                id,
+            });
             prior();
         }
 
         this.streams.set(id, {
             ...INITIAL_STREAM_STATE,
             isStreaming: true,
+            status: "streaming",
             userMessage: buildOptimisticUserMessage(body.message),
+            lastRequest: body,
         });
         this.emit();
 
         const handleEvent = (event: ChatStreamEvent): void => {
+            if (this.generations.get(id) !== generation) return;
             const current = this.streams.get(id) ?? INITIAL_STREAM_STATE;
             let next: StreamState;
             switch (event.type) {
-                case 'user_message':
+                case "user_message":
                     next = { ...current, userMessage: event.message };
                     try {
-                        mergeMessageIntoConversationCache(queryClient, id, event.message);
+                        mergeMessageIntoConversationCache(
+                            queryClient,
+                            id,
+                            event.message,
+                        );
                     } catch (cacheErr) {
-                        logger.warn('[aiChatStreamStore] cache merge failed', { cacheErr });
+                        logger.warn("[aiChatStreamStore] cache merge failed", {
+                            cacheErr,
+                        });
                     }
                     break;
-                case 'token':
-                    next = { ...current, assistantDraft: current.assistantDraft + event.delta };
+                case "token":
+                    next = {
+                        ...current,
+                        assistantDraft: current.assistantDraft + event.delta,
+                    };
                     break;
-                case 'tool_result':
-                    next = { ...current, toolMessages: [...current.toolMessages, event.message] };
+                case "tool_result":
+                    next = {
+                        ...current,
+                        toolMessages: [...current.toolMessages, event.message],
+                    };
                     try {
-                        mergeMessageIntoConversationCache(queryClient, id, event.message);
+                        mergeMessageIntoConversationCache(
+                            queryClient,
+                            id,
+                            event.message,
+                        );
                     } catch (cacheErr) {
-                        logger.warn('[aiChatStreamStore] cache merge failed', { cacheErr });
+                        logger.warn("[aiChatStreamStore] cache merge failed", {
+                            cacheErr,
+                        });
                     }
                     break;
-                case 'done':
+                case "done":
                     // Fast-path cleanup. Tied to the SSE event so the UI flips
                     // out of streaming the instant the terminal frame lands —
                     // we do not wait for the post-await path which can race
                     // against a refetch that has already populated the cache.
                     try {
-                        mergeDoneIntoConversationCache(queryClient, id, event.payload, current);
+                        mergeDoneIntoConversationCache(
+                            queryClient,
+                            id,
+                            event.payload,
+                            current,
+                        );
                     } catch (cacheErr) {
-                        logger.warn('[aiChatStreamStore] done merge failed', { cacheErr });
+                        logger.warn("[aiChatStreamStore] done merge failed", {
+                            cacheErr,
+                        });
                     }
                     this.streams.delete(id);
                     this.aborts.delete(id);
                     this.emit();
-                    queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
-                    queryClient.invalidateQueries({ queryKey: aiKeys.conversation(id) });
+                    queryClient.invalidateQueries({
+                        queryKey: aiKeys.conversations,
+                    });
+                    queryClient.invalidateQueries({
+                        queryKey: aiKeys.conversation(id),
+                    });
                     return;
-                case 'error':
-                    next = { ...current, error: event.detail, isStreaming: false };
+                case "error":
+                    next = {
+                        ...current,
+                        error: event.detail,
+                        isStreaming: false,
+                        status: "interrupted",
+                    };
                     break;
                 default:
                     return;
@@ -274,9 +332,47 @@ class AiChatStreamStore {
             this.aborts.delete(id);
             return done.payload;
         } catch (err) {
+            if (this.generations.get(id) !== generation) return null;
+            if (
+                err instanceof Error &&
+                "code" in err &&
+                err.code === "TURN_ALREADY_COMPLETE"
+            ) {
+                this.streams.delete(id);
+                this.aborts.delete(id);
+                this.emit();
+                try {
+                    const completed = await apiClient.getConversation(id);
+                    if (this.generations.get(id) !== generation) return null;
+                    queryClient.setQueryData(
+                        aiKeys.conversation(id),
+                        completed,
+                    );
+                } catch (refreshError) {
+                    logger.warn(
+                        "[aiChatStreamStore] completed-turn refresh failed",
+                        { id, refreshError },
+                    );
+                    queryClient.invalidateQueries({
+                        queryKey: aiKeys.conversation(id),
+                    });
+                }
+                queryClient.invalidateQueries({
+                    queryKey: aiKeys.conversations,
+                });
+                return null;
+            }
             const message = err instanceof Error ? err.message : String(err);
             const current = this.streams.get(id) ?? INITIAL_STREAM_STATE;
-            this.streams.set(id, { ...current, isStreaming: false, error: message });
+            this.streams.set(id, {
+                ...current,
+                isStreaming: false,
+                status:
+                    message === "Chat stream timed out"
+                        ? "timed_out"
+                        : "interrupted",
+                error: message,
+            });
             this.aborts.delete(id);
             this.emit();
             onError(err);

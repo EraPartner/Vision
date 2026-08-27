@@ -5,7 +5,8 @@ status: active
 date: 2026-03-31
 tags: [guide, frontend, react, page, how-to, tutorial, routing]
 description: Step-by-step guide for adding a new page to the Vision frontend
-aliases: [add page, new page, create page, new route, frontend page, page tutorial]
+aliases:
+  [add page, new page, create page, new route, frontend page, page tutorial]
 ---
 
 # How to Add a New Page
@@ -23,6 +24,8 @@ Create the page file in `apps/frontend/src/pages/`:
 // apps/frontend/src/pages/<Feature>Page.tsx
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { PageShell } from '@/components/shared/PageShell';
 import { use<Feature> } from '@/hooks/use<Feature>';
 
 export function <Feature>Page() {
@@ -32,17 +35,18 @@ export function <Feature>Page() {
   if (isLoading) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="container mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">{t('<feature>.title')}</h1>
+    <PageShell>
+      <PageHeader title={t('<feature>.title')} />
       <Card>
         <CardHeader>
+          {/* CardTitle defaults to h2 directly beneath the page h1. */}
           <CardTitle>{t('<feature>.cardTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Page content */}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 ```
@@ -89,6 +93,7 @@ Add translation keys to both `i18n/source/en.json` and `i18n/source/nl.json`:
 ```
 
 Then regenerate locale bundles:
+
 ```bash
 bun run build
 ```
@@ -99,12 +104,12 @@ If the page fetches data, create a hook in `apps/frontend/src/hooks/`:
 
 ```ts
 // apps/frontend/src/hooks/use<Feature>.ts
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 
 export function use<Feature>() {
   return useQuery({
-    queryKey: ['<feature>'],
+    queryKey: ["<feature>"],
     queryFn: () => apiClient.get<Feature>(),
   });
 }
@@ -151,24 +156,26 @@ describe('<Feature>Page', () => {
 
 ```tsx
 // apps/frontend/src/pages/ReportsPage.tsx
-import { useLanguage } from '@/contexts/LanguageContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PageShell } from "@/components/shared/PageShell";
 
 export function ReportsPage() {
   const { t } = useLanguage();
 
   return (
-    <div className="container mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">{t('reports.title')}</h1>
+    <PageShell>
+      <PageHeader title={t("reports.title")} />
       <Card>
         <CardHeader>
-          <CardTitle>{t('reports.recentTitle')}</CardTitle>
+          <CardTitle>{t("reports.recentTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p>{t('reports.noReports')}</p>
+          <p>{t("reports.noReports")}</p>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 ```

@@ -44,7 +44,8 @@
         --destructive: 358 74% 48%;
         --destructive-foreground: 0 0% 100%;
         --success: 152 58% 38%;
-        --warning: 38 80% 50%;
+        --info: 204 68% 41%;
+        --warning: 38 80% 33%;
         --expense: 358 74% 44%;
         --loss-colorblind: 24 85% 45%;
 
@@ -132,6 +133,9 @@
         --duration-fast: 150ms;
         --duration-normal: 260ms;
         --duration-slow: 420ms;
+        --duration-press: 90ms;
+        --duration-dismiss: 200ms;
+        --duration-reveal: 600ms;
         --ease-glide: cubic-bezier(0.32, 0.72, 0, 1);
         --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
         --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
@@ -143,6 +147,9 @@
             "Palatino", "Georgia", serif;
         --font-body: "Inter", -apple-system,
             BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        /* Identifier/code voice only: tickers, IBANs, SQL, API paths, and
+           machine values. Money uses the body face through <Money>, whose
+           tabular figures and currency micro-typography are canonical. */
         --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
     }
 
@@ -182,6 +189,7 @@
         --destructive: 358 82% 62%;
         --destructive-foreground: 200 20% 6%;
         --success: 152 62% 54%;
+        --info: 204 78% 62%;
         --warning: 38 88% 62%;
         --expense: 358 92% 68%;
         --loss-colorblind: 24 90% 62%;

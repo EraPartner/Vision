@@ -28,7 +28,7 @@ export function TaxYearStatusIcon({
     if (hasFrozenCalculation) {
         return (
             <Snowflake
-                className={cn('text-sky-600', className)}
+                className={cn('text-info', className)}
                 aria-label={t('tax.yearSwitcher.frozenAria')}
             />
         );

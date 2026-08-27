@@ -33,7 +33,7 @@ interface SnapshotHistoryDialogProps {
 const KIND_VARIANT: Record<SnapshotAuditEntryKind, string> = {
     created: 'bg-primary/15 text-primary border-primary/30',
     patched: 'bg-warning/10 text-warning border-warning/30',
-    frozen: 'bg-sky-500/10 text-sky-700 border-sky-500/30',
+    frozen: 'bg-info/10 text-info border-info/30',
     unfrozen: 'bg-muted text-muted-foreground border-border',
     filed: 'bg-success/10 text-success border-success/30',
     unfiled: 'bg-muted text-muted-foreground border-border',
@@ -106,7 +106,7 @@ export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogPr
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Badge
                                             variant="outline"
-                                            className={cn('text-[10px] uppercase tracking-wide', KIND_VARIANT[entry.kind])}
+                                            className={cn('eyebrow ', KIND_VARIANT[entry.kind])}
                                         >
                                             {t(`tax.history.kind.${entry.kind}`)}
                                         </Badge>

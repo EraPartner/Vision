@@ -40,4 +40,22 @@ describe("PitBreakdownCard", () => {
     expect(within(row).getByText(/111,00/)).toBeInTheDocument();
     expect(within(row).queryByText(/222,00/)).not.toBeInTheDocument();
   });
+
+  it("uses signed money for reductions and leaves a zero reduction unsigned", async () => {
+    renderWithApp(
+      <PitBreakdownCard
+        calculation={{ ...calculation, federalTaxCredits: 0 }}
+        portfolioTaxesForYear={13}
+        totalTaxIncludingPortfolio={14}
+        totalTaxIncludingPropertyEstimate={15}
+        viewedYear={2026}
+      />,
+    );
+
+    const exemptionRow = screen.getByText("tax.pit.row.personalExemptionBenefit").closest("tr") as HTMLTableRowElement;
+    const creditsRow = screen.getByText("tax.pit.row.federalTaxCredits").closest("tr") as HTMLTableRowElement;
+    expect(within(exemptionRow).getByText(/\+6,00/)).toBeInTheDocument();
+    expect(within(creditsRow).getByText(/^0,00/)).toBeInTheDocument();
+    expect(within(creditsRow).queryByText(/\+0,00/)).not.toBeInTheDocument();
+  });
 });

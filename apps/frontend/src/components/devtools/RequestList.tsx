@@ -11,10 +11,10 @@ interface Props {
 }
 
 const METHOD_COLOR: Record<string, string> = {
-    GET: 'text-sky-500',
+    GET: 'text-info',
     POST: 'text-success',
     PUT: 'text-warning',
-    PATCH: 'text-orange-500',
+    PATCH: 'text-warning',
     DELETE: 'text-destructive',
 };
 
@@ -42,7 +42,7 @@ function RequestRow({
         >
             <span
                 className={cn(
-                    'w-14 shrink-0 text-[10px] font-mono font-semibold',
+                    'w-14 shrink-0 text-2xs font-mono font-semibold',
                     METHOD_COLOR[event.method] ?? 'text-muted-foreground',
                 )}
             >
@@ -50,20 +50,20 @@ function RequestRow({
             </span>
             <span
                 className={cn(
-                    'flex-1 text-[10px] font-mono truncate',
+                    'flex-1 text-2xs font-mono truncate',
                     isError ? 'text-destructive' : 'text-foreground',
                 )}
             >
                 {event.endpoint}
             </span>
             {isInFlight ? (
-                <span className="shrink-0 text-[10px] text-warning animate-pulse">…</span>
+                <span className="shrink-0 text-2xs text-warning animate-pulse">…</span>
             ) : (
                 <>
                     {event.status && (
                         <span
                             className={cn(
-                                'shrink-0 text-[10px] font-mono tabular-nums',
+                                'shrink-0 text-2xs font-mono tabular-nums',
                                 isError ? 'text-destructive' : 'text-success',
                             )}
                         >
@@ -73,7 +73,7 @@ function RequestRow({
                     {event.durationMs !== undefined && (
                         <span
                             className={cn(
-                                'shrink-0 text-[10px] tabular-nums',
+                                'shrink-0 text-2xs tabular-nums',
                                 event.durationMs >= 1000 ? 'text-warning' : 'text-muted-foreground',
                             )}
                         >

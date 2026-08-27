@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { aiKeys } from '@/lib/queryKeys';
 import type { OllamaStatus } from '@/types/aiChat';
+import { useBackgroundQueryCue } from '@/components/shared/BackgroundQueryIndicator';
 
 /** Reachable Ollama: unchanged cadence, so a model/URL change is noticed as fast as before. */
 const HEALTHY_POLL_MS = 30_000;
@@ -40,7 +41,7 @@ export function nextOllamaPollInterval(state: {
 
 /** Ollama health for the chat + settings surfaces (adaptive poll, see above). */
 export function useOllamaStatus() {
-    return useQuery({
+    const query = useQuery({
         queryKey: aiKeys.ollamaStatus,
         queryFn: () => apiClient.getOllamaStatus(),
         staleTime: 15_000,
@@ -49,10 +50,12 @@ export function useOllamaStatus() {
         retry: 0,
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useOllamaModels(enabled = true) {
-    return useQuery({
+    const query = useQuery({
         queryKey: aiKeys.ollamaModels,
         queryFn: () => apiClient.getOllamaModels(),
         enabled,
@@ -60,4 +63,6 @@ export function useOllamaModels(enabled = true) {
         retry: 0,
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }

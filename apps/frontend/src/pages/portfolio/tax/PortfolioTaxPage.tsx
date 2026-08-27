@@ -1,4 +1,5 @@
-import { Landmark, Calculator } from "lucide-react";
+import { PAGE_ICONS } from "@/lib/pageIcons";
+import { Calculator } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioTaxData } from "@/hooks/usePortfolioTaxData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
@@ -25,6 +26,8 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { AssetClassTaxChart } from "./AssetClassTaxChart";
 import { InvestmentTaxBreakdownTable } from "./InvestmentTaxBreakdownTable";
+import { Money } from "@/components/shared/Money";
+import { PageShell } from "@/components/shared/PageShell";
 
 function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) => string): WidgetDefinition[] {
   return [
@@ -87,11 +90,11 @@ export default function PortfolioTaxPage() {
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility("portfolioTax", WIDGETS);
 
   return (
-    <div className="space-y-6">
+    <PageShell className="">
       <PageHeader
         title={t("tax.portfolioTitle")}
         subtitle={t("tax.portfolioDesc")}
-        icon={Landmark}
+        icon={PAGE_ICONS["/portfolio/tax"]}
         actions={(
           <>
             <TaxProfileDialog
@@ -118,8 +121,8 @@ export default function PortfolioTaxPage() {
       <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
         <TaxYearSwitcher />
         <YearActionsMenu year={viewedYear} />
-        <Badge variant="outline">{t("tax.taxes")}: {fmt(totalTaxes)}</Badge>
-        <Badge variant="outline">{t("tax.fees")}: {fmt(totalFees)}</Badge>
+        <Badge variant="outline">{t("tax.taxes")}: <Money amount={totalTaxes} /></Badge>
+        <Badge variant="outline">{t("tax.fees")}: <Money amount={totalFees} /></Badge>
       </div>
 
       <HistoricalYearBannerSection />
@@ -132,7 +135,7 @@ export default function PortfolioTaxPage() {
       )}
 
       {isEmpty ? (
-        <EmptyState icon={Landmark} title={t("tax.noData")} description={t("tax.noDataDesc")} />
+        <EmptyState icon={PAGE_ICONS["/portfolio/tax"]} title={t("tax.noData")} description={t("tax.noDataDesc")} />
       ) : (
         <>
           {isVisible("summaryCards") && (
@@ -190,7 +193,6 @@ export default function PortfolioTaxPage() {
           {isVisible("investmentBreakdown") && investmentBreakdown.length > 0 && (
             <InvestmentTaxBreakdownTable
               investments={investmentBreakdown}
-              fmt={fmt}
               convertToTarget={convertToTarget}
               t={t}
             />
@@ -213,6 +215,6 @@ export default function PortfolioTaxPage() {
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

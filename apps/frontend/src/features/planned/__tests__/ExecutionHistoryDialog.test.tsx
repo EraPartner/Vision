@@ -74,7 +74,7 @@ function stubGymTransaction() {
                 return ok(GYM_TRANSACTION_RESPONSE);
             }
             return ok({ items: [], total: 0, limit: 1, offset: 0, links: [] });
-        })
+        }),
     );
 }
 
@@ -89,7 +89,7 @@ function renderDialog(open: boolean, payments: PlannedPayment[]) {
             open={open}
             onOpenChange={onOpenChange}
             payments={payments}
-        />
+        />,
     );
     return { ...result, onOpenChange };
 }
@@ -109,7 +109,7 @@ describe("ExecutionHistoryDialog", () => {
 
         // Assert
         expect(
-            await screen.findByText(/no executed planned payments found yet/i)
+            await screen.findByText(/no executed planned payments found yet/i),
         ).toBeInTheDocument();
     });
 
@@ -122,7 +122,9 @@ describe("ExecutionHistoryDialog", () => {
 
         // Assert — both the planned payment name and transaction memo appear
         expect(await screen.findByText("Gym Fee")).toBeInTheDocument();
-        expect(await screen.findByText("January membership")).toBeInTheDocument();
+        expect(
+            await screen.findByText("January membership"),
+        ).toBeInTheDocument();
     });
 
     it("shows history items after loading resolves", async () => {
@@ -134,7 +136,9 @@ describe("ExecutionHistoryDialog", () => {
 
         // Assert — history item appears once fetch resolves
         await waitFor(() => {
-            expect(screen.queryByText(/loading execution history/i)).not.toBeInTheDocument();
+            expect(
+                screen.queryByText(/loading execution history/i),
+            ).not.toBeInTheDocument();
         });
         expect(await screen.findByText("Gym Fee")).toBeInTheDocument();
     });
@@ -147,7 +151,9 @@ describe("ExecutionHistoryDialog", () => {
 
         // Act — the footer Close button is the last among multiple "Close" buttons
         // (the X icon button also carries an sr-only "Close" label)
-        const closeBtns = await screen.findAllByRole("button", { name: /^close$/i });
+        const closeBtns = await screen.findAllByRole("button", {
+            name: /^close$/i,
+        });
         const footerCloseBtn = closeBtns[closeBtns.length - 1];
         await user.click(footerCloseBtn);
 
@@ -167,7 +173,9 @@ describe("ExecutionHistoryDialog", () => {
         await screen.findByText("Gym Fee");
 
         // Act — click the external link icon button for this history item
-        const openBtn = await screen.findByTitle(/open transaction/i);
+        const openBtn = await screen.findByRole("link", {
+            name: /open transaction/i,
+        });
         await user.click(openBtn);
 
         // Assert — dialog closed via onOpenChange

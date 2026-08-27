@@ -3,9 +3,9 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-09: keyboardNav.ts — shared keyboard access to per-point values (focusable charts, arrow-key stepping, Shift+arrow scrub, Escape/blur clear) on LineChart/AreaChart/BarChart and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
@@ -17,12 +17,15 @@ related_code:
   - apps/frontend/src/components/charts/ChartSyncContext.tsx
   - apps/frontend/src/components/charts/ChartSkeleton.tsx
   - apps/frontend/src/components/charts/ChartPeriodSelector.tsx
+  - apps/frontend/src/components/charts/ResearchRangeSelector.tsx
   - apps/frontend/src/components/charts/__tests__/ChartPeriodSelector.test.tsx
 ---
 
 # Chart Primitives
 
 Vision frontend uses **visx + d3** for low-level chart primitives, replacing Recharts. All charts consume design tokens directly and support reduced-motion via conditional animation.
+
+`ChartCard` owns title, description, controls, content, and legend layout. Its header is intentionally icon-free because the chart is already the visual identity. Use icons inside chart content only for state or action feedback.
 
 ## Migration from Recharts (Phase 9)
 
@@ -41,48 +44,49 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 
 ### Core Primitives
 
-| Component | Purpose | Use Case | Example Consumer |
-|-----------|---------|----------|------------------|
-| `AreaChart` | Stacked time-series areas | Monthly income/expense trends | DashboardPage, StatisticsPage |
-| `BarChart` | Grouped or stacked bars | Category breakdown, monthly comparison | StatisticsPage, DashboardPage |
-| `StackedBarChart` | Multi-series bar stacks | Side-by-side category comparison | PerformancePage, StatisticsPage |
-| `PieChart` | Basic pie distribution | Category spending pie | StatisticsPage |
-| `DonutChart` | Donut/ring distribution | Segmented breakdown with center label | StatisticsPage |
-| `LineChart` | Multi-line trends + reference lines | Portfolio performance, rolling cashflow forecast | PerformancePage, WatchlistPage, CashFlowForecastChart (Phase H) |
-| `Sparkline` | Mini inline sparkline with optional hover indicator | Micro-charts in stat cards or tables | StatCard, NetSummaryCard scrub surface, performance tables |
-| `Candlestick` | OHLC price action | Stock/crypto price visualization | StocksPage, CryptoPage |
-| `TreemapChart` | Hierarchical rectangles | Category spending breakdown | StatisticsPage |
-| `SankeyChart` | Flow diagram with d3-sankey | Income-to-category allocation | StatisticsPage Flow tab |
+| Component          | Purpose                                             | Use Case                                                         | Example Consumer                                                |
+| ------------------ | --------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| `AreaChart`        | Stacked time-series areas                           | Monthly income/expense trends                                    | DashboardPage, StatisticsPage                                   |
+| `BarChart`         | Grouped or stacked bars                             | Category breakdown, monthly comparison                           | StatisticsPage, DashboardPage                                   |
+| `StackedBarChart`  | Multi-series bar stacks                             | Side-by-side category comparison                                 | Statistics CustomChart                                          |
+| `PieChart`         | Basic pie distribution                              | Exported primitive; currently no direct production consumer      | —                                                               |
+| `DonutChart`       | Donut/ring distribution                             | Segmented breakdown with center label                            | Dashboard, Statistics, PortfolioOverview                        |
+| `LineChart`        | Multi-line trends + reference lines                 | Portfolio performance, rolling cashflow forecast                 | PerformancePage, WatchlistPage, CashFlowForecastChart (Phase H) |
+| `Sparkline`        | Mini inline sparkline with optional hover indicator | Micro-charts in stat cards or tables                             | StatCard, NetSummaryCard scrub surface, performance tables      |
+| `ComposedChart`    | Mixed line/area/bar/candlestick series              | Research chart builder                                           | ChartBuilderPage                                                |
+| `CandlestickChart` | Thin OHLC wrapper over ComposedChart                | Exported wrapper; keyboard behavior inherited from ComposedChart | —                                                               |
+| `TreemapChart`     | Hierarchical rectangles                             | Category spending breakdown                                      | StatisticsPage                                                  |
+| `SankeyChart`      | Flow diagram with d3-sankey                         | Income-to-category allocation                                    | StatisticsPage Flow tab                                         |
 
 ### Shared Components
 
-| Component | Purpose |
-|-----------|---------|
-| `ChartTooltip` | Shared tooltip renderer with design-token colors |
-| `ChartLegend` | Shared legend component respecting reduced-motion |
-| `ChartAxis` | Shared axis renderer (x, y) with token-based color, inherited type, and tabular numeric ticks |
-| `ChartSkeleton` | Ghost waveform + shimmer loading placeholder (Premium v3) |
+| Component             | Purpose                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ChartTooltip`        | Shared tooltip renderer with design-token colors                                                       |
+| `ChartLegend`         | Shared legend component respecting reduced-motion                                                      |
+| `ChartAxis`           | Shared axis renderer (x, y) with token-based color, inherited type, and tabular numeric ticks          |
+| `ChartSkeleton`       | Ghost waveform + shimmer loading placeholder (Premium v3)                                              |
 | `ChartPeriodSelector` | Segmented native-button control for selecting a chart window; `aria-pressed` exposes the active period |
 
 ### Interaction Modules (Premium v3)
 
-| Module | Exports | Purpose |
-|--------|---------|---------|
-| `scrub.tsx` | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill |
-| `ChartSyncContext.tsx` | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId` |
-| `keyboardNav.ts` | `useChartKeyboardNav` | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08) |
+| Module                 | Exports                             | Purpose                                                                                       |
+| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `scrub.tsx`            | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill                                            |
+| `ChartSyncContext.tsx` | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId`                                            |
+| `keyboardNav.ts`       | `useChartKeyboardNav`               | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08) |
 
 ## Usage Patterns
 
 ### Basic AreaChart
 
 ```tsx
-import { AreaChart } from '@/components/charts/AreaChart';
+import { AreaChart } from "@/components/charts/AreaChart";
 
 function MonthlyTrendsPage() {
   const data = [
-    { month: 'Jan', income: 5000, expenses: 3200 },
-    { month: 'Feb', income: 4800, expenses: 3100 },
+    { month: "Jan", income: 5000, expenses: 3200 },
+    { month: "Feb", income: 4800, expenses: 3100 },
     // ...
   ];
 
@@ -91,8 +95,8 @@ function MonthlyTrendsPage() {
       data={data}
       xKey="month"
       areas={[
-        { key: 'income', color: 'emerald', label: 'Income' },
-        { key: 'expenses', color: 'red', label: 'Expenses' },
+        { key: "income", color: "emerald", label: "Income" },
+        { key: "expenses", color: "red", label: "Expenses" },
       ]}
       height={300}
       margin={{ top: 10, right: 30, bottom: 30, left: 60 }}
@@ -109,7 +113,7 @@ function MonthlyTrendsPage() {
 > The example below uses `surface-elevated premium-frame` (pre-ADR-070 style). Current canonical recipe for KPI/stat cards is `glass-regular premium-frame micro-lift` or use the `<Card>` component with `className="glass-regular micro-lift"` (`premium-frame` is now baked into `Card`).
 
 ```tsx
-import { Sparkline } from '@/components/charts/Sparkline';
+import { Sparkline } from "@/components/charts/Sparkline";
 
 function StatCard() {
   const sparkData = [100, 120, 110, 150, 130, 160, 140];
@@ -150,7 +154,7 @@ const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   height={32}
   activeIndex={activeIndex}
   strokeColor="emerald"
-/>
+/>;
 ```
 
 **Code:** [[apps/frontend/src/components/charts/Sparkline.tsx]]
@@ -158,12 +162,12 @@ const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
 ### LineChart with Multiple Series
 
 ```tsx
-import { LineChart } from '@/components/charts/LineChart';
+import { LineChart } from "@/components/charts/LineChart";
 
 function PerformanceChart() {
   const data = [
-    { date: '2026-01-01', stocks: 10000, crypto: 2000 },
-    { date: '2026-01-02', stocks: 10200, crypto: 2100 },
+    { date: "2026-01-01", stocks: 10000, crypto: 2000 },
+    { date: "2026-01-02", stocks: 10200, crypto: 2100 },
     // ...
   ];
 
@@ -172,8 +176,8 @@ function PerformanceChart() {
       data={data}
       xKey="date"
       lines={[
-        { key: 'stocks', color: 'emerald', label: 'Stocks' },
-        { key: 'crypto', color: 'gold', label: 'Crypto' },
+        { key: "stocks", color: "emerald", label: "Stocks" },
+        { key: "crypto", color: "gold", label: "Crypto" },
       ]}
       height={400}
       showLegend
@@ -189,31 +193,29 @@ function PerformanceChart() {
 `LineChart` supports an optional vertical reference line to mark a point-in-time (e.g., "today" in a rolling forecast):
 
 ```tsx
-import { LineChart, LineReferenceLine } from '@/components/charts/LineChart';
+import { LineChart, LineReferenceLine } from "@/components/charts/LineChart";
 
 function RollingForecastChart() {
   const data = [
-    { date: new Date('2026-04-28'), cumulative: 3450.75 },
-    { date: new Date('2026-04-29'), cumulative: 3365.75 },
-    { date: new Date('2026-05-01'), cumulative: 6865.75 },
+    { date: new Date("2026-04-28"), cumulative: 3450.75 },
+    { date: new Date("2026-04-29"), cumulative: 3365.75 },
+    { date: new Date("2026-05-01"), cumulative: 6865.75 },
   ];
 
   return (
     <LineChart
       data={data}
       xKey="date"
-      xIsDate={true}  // Enable date-based X-axis scaling
-      lines={[
-        { key: 'cumulative', color: 'emerald', label: 'Cumulative' },
-      ]}
+      xIsDate={true} // Enable date-based X-axis scaling
+      lines={[{ key: "cumulative", color: "emerald", label: "Cumulative" }]}
       height={300}
       referenceLines={[
         {
-          x: new Date('2026-04-28'),  // Vertical line at today's date
-          label: 'Today',
-          color: 'var(--color-text-muted)',
-          strokeDasharray: '4 4'
-        }
+          x: new Date("2026-04-28"), // Vertical line at today's date
+          label: "Today",
+          color: "var(--color-text-muted)",
+          strokeDasharray: "4 4",
+        },
       ]}
     />
   );
@@ -250,7 +252,7 @@ All charts automatically consume tokens from `apps/frontend/src/styles/tokens.cs
 />
 
 // Spacing uses token spacing
-margin={{ 
+margin={{
   top: 'var(--space-2)',     // clamp-based responsive
   right: 'var(--space-4)',
   bottom: 'var(--space-4)',
@@ -263,7 +265,7 @@ margin={{
 All charts disable animations when `prefers-reduced-motion: reduce` is active:
 
 ```tsx
-import { useReducedMotion } from '@/lib/motion';
+import { useReducedMotion } from "@/lib/motion";
 
 export function MyChart() {
   const prefersReduced = useReducedMotion();
@@ -271,7 +273,7 @@ export function MyChart() {
   return (
     <AreaChart
       data={data}
-      animate={!prefersReduced}  // Skip animations if reduced-motion
+      animate={!prefersReduced} // Skip animations if reduced-motion
       transitionDuration={300}
       // ...
     />
@@ -285,10 +287,7 @@ export function MyChart() {
 - **Reduced-motion**: Instant appearance, no animation
 
 ```tsx
-<ChartTooltip
-  content={<div>{value}</div>}
-  prefersReduced={prefersReduced}
-/>
+<ChartTooltip content={<div>{value}</div>} prefersReduced={prefersReduced} />
 ```
 
 ## Performance Considerations
@@ -300,11 +299,11 @@ Use LTTB (Largest-Triangle-Three-Buckets) downsampling on the backend (see [[doc
 ```tsx
 // Backend computes downsampled data (e.g., ~400 points)
 const response = await apiClient.getPerformanceData({
-  period: '1y',
+  period: "1y",
   // Backend returns pre-downsampled snapshots
 });
 
-<LineChart data={response.data.snapshots} />
+<LineChart data={response.data.snapshots} />;
 ```
 
 ### Medium Datasets (100-1000 points)
@@ -325,29 +324,42 @@ data window and does not own discrete `tabpanel` elements or implement the tabs 
 Every period therefore remains reachable and operable with the browser's standard button keyboard
 behavior without promising unsupported tab semantics.
 
-**Test:** `apps/frontend/src/components/charts/__tests__/ChartPeriodSelector.test.tsx` verifies the
-absence of tab roles, the pressed-state contract, and selection callbacks.
+Period buttons use the shared 40×40px minimum touch target. The segmented rail is bounded to its
+container and scrolls horizontally when a range ladder is wider than a small card. Research pages
+use `ResearchRangeSelector`, a thin adapter that maps their range/interval options and localized
+English/Dutch labels onto this same primitive; Market Lookup stacks its card header on narrow screens.
+
+**Tests:** `apps/frontend/src/components/charts/__tests__/ChartPeriodSelector.test.tsx` verifies the
+absence of tab roles, pressed state, 40px target, and selection callbacks;
+`ResearchRangeSelector.test.tsx` verifies localized adapter labels and option selection.
 
 ### Generated `aria-label` Summaries (2026-05-29)
 
 **Location:** `apps/frontend/src/components/charts/chartAria.ts`
 
-All 7 chart components (`BarChart`, `LineChart`, `AreaChart`, `StackedBarChart`, `PieChart`, `DonutChart`, `Sparkline`) now generate a meaningful one-line `aria-label` by default. Previously the `ariaLabel` prop existed but no caller populated it, so screen readers announced only "Bar chart" or "Pie chart" with no data context. The initial implementation used hardcoded English; as of 2026-05-29 all strings are fully localized (audit finding [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]]).
+Eight chart components (`BarChart`, `LineChart`, `AreaChart`, `StackedBarChart`, `PieChart`, `DonutChart`, `Sparkline`, and `ComposedChart`) generate a meaningful one-line `aria-label` by default. The original seven were localized in 2026-05; `ComposedChart`, including candlestick use, joined the same localized summary contract in 2026-08. The `ariaLabel` prop remains available for a caller-supplied data-story description.
 
 Three generator functions handle the main chart shapes. Each now accepts `t` (the `TFn` translator from `useLanguage()`) and a `kindKey` string instead of a hardcoded English label:
 
-| Function | Signature | Output example (EN) |
-|----------|-----------|---------------------|
-| `summarizeSeriesChart` | `(t, kindKey, categoryCount, seriesLabels?)` | `"Bar chart with 12 categories, series: Income, Expenses"` |
-| `summarizeProportionChart` | `(t, kindKey, names)` | `"Pie chart with 5 segments"` |
-| `summarizeSparkline` | `(t, values)` | `"Sparkline of 7 points, ranging 100 to 160"` |
+| Function                   | Signature                                    | Output example (EN)                                        |
+| -------------------------- | -------------------------------------------- | ---------------------------------------------------------- |
+| `summarizeSeriesChart`     | `(t, kindKey, categoryCount, seriesLabels?)` | `"Bar chart with 12 categories, series: Income, Expenses"` |
+| `summarizeProportionChart` | `(t, kindKey, names)`                        | `"Pie chart with 5 segments"`                              |
+| `summarizeSparkline`       | `(t, values)`                                | `"Sparkline of 7 points, ranging 100 to 160"`              |
 
 Chart kind keys live in the `chart.aria.kind.*` namespace (e.g. `chart.aria.kind.bar`, `chart.aria.kind.pie`). All callers pass the appropriate key:
 
 ```tsx
 // BarChart.tsx — example caller
 const { t } = useLanguage();
-const ariaLabel = ariaLabelProp ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map(s => s.label));
+const ariaLabel =
+  ariaLabelProp ??
+  summarizeSeriesChart(
+    t,
+    "chart.aria.kind.bar",
+    data.length,
+    series.map((s) => s.label),
+  );
 ```
 
 The generated label is used as the default value for `role="img"` on the outermost SVG element. The `ariaLabel` prop still overrides the default when callers supply a custom description.
@@ -355,7 +367,7 @@ The generated label is used as the default value for `role="img"` on the outermo
 **Tests:** `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` — unit tests covering all three generators (empty data, single series, multiple series, label-key variation, Dutch locale).
 
 > [!tip] When to supply a custom `ariaLabel`
-> The generated summaries describe shape and axis dimensionality. For charts showing specific business KPIs (e.g., "Year-to-date tax spend by asset class"), supply a custom `ariaLabel` that describes the *data story*, not just the chart structure.
+> The generated summaries describe shape and axis dimensionality. For charts showing specific business KPIs (e.g., "Year-to-date tax spend by asset class"), supply a custom `ariaLabel` that describes the _data story_, not just the chart structure.
 
 ### Color
 
@@ -365,13 +377,13 @@ The generated label is used as the default value for `role="img"` on the outermo
 
 ### Tooltips & Legends
 
-- All charts include `ChartTooltip` on hover for numeric values
+- All interactive charts expose numeric values through their existing pointer and keyboard readout (`ChartTooltip` or Donut center morph).
 - Legends are keyboard-accessible (tab to focus, arrow keys to navigate)
 - SVG elements carry a generated `aria-label` describing chart type and data dimensions (see above)
 
 ### Keyboard Navigation (2026-08-09, `keyboardNav.ts`)
 
-Per-point values are reachable without a pointer. `useChartKeyboardNav` provides one shared key map, wired into `LineChart`, `AreaChart`, `BarChart` (SVG root gets `tabIndex={0}` — only when the chart has data, so empty charts are never dead tab stops) and the `NetSummaryCard` sparkline scrub div:
+Per-point values are reachable without a pointer. `useChartKeyboardNav` provides one shared key map, wired into `LineChart`, `AreaChart`, `BarChart`, `StackedBarChart`, `DonutChart`, `PieChart`, and `ComposedChart` (including its `CandlestickChart` wrapper), plus the `NetSummaryCard` sparkline scrub div. Each SVG root gets `tabIndex={0}` only when it has data, so empty charts are never dead tab stops.
 
 - **Tab** focuses the chart (`:focus-visible` shows the app's global focus ring; mouse clicks don't).
 - **←/→** step one data point, clamped at the ends; from an empty state → starts at the first point, ← starts at the last. Reuses the exact hover state the pointer drives, so the existing `ChartTooltip`/readout renders — no new visual affordance.
@@ -382,7 +394,7 @@ Per-point values are reachable without a pointer. `useChartKeyboardNav` provides
 
 ARIA: the SVG keeps `role="img"` + the generated `aria-label` summary (above); focusable images are valid and keep the SR overview intact. `role="application"` was deliberately avoided (would drop virtual-cursor semantics), and no `aria-live` was added to the tooltip (it re-renders at pointermove rate — live announcement would be SR spam).
 
-Charts synced via `syncId` publish keyboard hover the same way as pointer hover, so siblings mirror the crosshair.
+Charts synced via `syncId` publish keyboard hover the same way as pointer hover, so siblings mirror the crosshair. Stacked bars reuse their existing per-category tooltip; donut slices reuse the center morph; pie and composed/candlestick charts reuse their existing tooltips. Data replacement safely invalidates a stale keyboard index instead of dereferencing a removed point.
 
 **Tests:** `apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx` (hook unit + wiring per chart), `apps/frontend/src/features/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
 
@@ -392,9 +404,9 @@ All charts use SVG viewBox for automatic scaling:
 
 ```tsx
 <AreaChart
-  width="100%"          // Fills container width
-  height={300}          // Fixed height
-  responsive={true}     // Auto-resize on window change
+  width="100%" // Fills container width
+  height={300} // Fixed height
+  responsive={true} // Auto-resize on window change
 />
 ```
 
@@ -422,20 +434,20 @@ Mobile breakpoints automatically adjust:
 **Example:**
 
 ```tsx
-import { SankeyChart } from '@/features/statistics/SankeyChart';
+import { SankeyChart } from "@/features/statistics/SankeyChart";
 
 function FlowTab() {
   const flowData = {
     nodes: [
       { id: "__income__", label: "Income", value: 5000 },
       { id: "cat:Groceries", label: "Groceries", value: 2000 },
-      { id: "__savings__", label: "Savings", value: 3000 }
+      { id: "__savings__", label: "Savings", value: 3000 },
     ],
     links: [
       { source: "__income__", target: "cat:Groceries", value: 2000 },
-      { source: "__income__", target: "__savings__", value: 3000 }
+      { source: "__income__", target: "__savings__", value: 3000 },
     ],
-    year: 2026
+    year: 2026,
   };
 
   return <SankeyChart data={flowData} height={420} />;

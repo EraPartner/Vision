@@ -134,7 +134,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
                     <SettingsGroup label={
                         <span className="flex items-center justify-between">
                             <span>{t('settings.dashboard.excludedCategories')}</span>
-                            <Badge variant="secondary" className="text-[10px] normal-case">
+                            <Badge variant="secondary" className="text-2xs normal-case">
                                 {excludedCategories.length} {t('settings.dashboard.excluded')}
                             </Badge>
                         </span>
@@ -221,7 +221,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
                     <SettingsGroup label={
                         <span className="flex items-center justify-between">
                             <span>{t('settings.dashboard.excludedRecipients')}</span>
-                            <Badge variant="secondary" className="text-[10px] normal-case">
+                            <Badge variant="secondary" className="text-2xs normal-case">
                                 {excludedRecipients.length} {t('settings.dashboard.excluded')}
                             </Badge>
                         </span>

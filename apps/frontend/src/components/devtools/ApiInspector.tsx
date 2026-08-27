@@ -45,12 +45,12 @@ export function ApiInspector() {
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-foreground">API Inspector</span>
                     {inFlight.length > 0 && (
-                        <Badge variant="warning" size="sm" className="px-1.5 text-[10px] font-mono tabular-nums">
+                        <Badge variant="warning" size="sm" className="px-1.5 text-2xs font-mono tabular-nums">
                             {inFlight.length} in-flight
                         </Badge>
                     )}
                     {totalCount > 0 && inFlight.length === 0 && (
-                        <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                        <span className="text-2xs text-muted-foreground font-mono tabular-nums">
                             {totalCount} requests
                         </span>
                     )}
@@ -81,13 +81,13 @@ export function ApiInspector() {
                     <TabsList className="shrink-0 rounded-none border-b border-border h-8 bg-transparent justify-start px-2 gap-0">
                         <TabsTrigger
                             value="requests"
-                            className="text-[11px] h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
+                            className="text-2xs h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
                         >
                             Requests
                         </TabsTrigger>
                         <TabsTrigger
                             value="metrics"
-                            className="text-[11px] h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
+                            className="text-2xs h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
                         >
                             Metrics
                         </TabsTrigger>

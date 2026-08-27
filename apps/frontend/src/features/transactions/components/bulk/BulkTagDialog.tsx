@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { TagFilterCombobox } from "@/components/shared/TagFilterCombobox";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
 interface BulkTagDialogProps {
     open: boolean;
@@ -29,6 +30,7 @@ export function BulkTagDialog({
     const { t } = useLanguage();
     const [addSlugs, setAddSlugs] = useState<string[]>([]);
     const [removeSlugs, setRemoveSlugs] = useState<string[]>([]);
+    useUnsavedChanges(addSlugs.length > 0 || removeSlugs.length > 0);
 
     function reset() {
         setAddSlugs([]);
@@ -52,39 +54,71 @@ export function BulkTagDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{t('txPage.bulk.tagTitle', { n: selectedCount })}</DialogTitle>
-                    <DialogDescription>{t('txPage.bulk.tagDesc')}</DialogDescription>
+                    <DialogTitle>
+                        {t("txPage.bulk.tagTitle", { n: selectedCount })}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {t("txPage.bulk.tagDesc")}
+                    </DialogDescription>
                 </DialogHeader>
                 {/* Real <form> so Enter submits once tags are chosen (cmdk
                     preventDefaults Enter inside the comboboxes, so item selection
                     never falls through to this). grid gap-5 mirrors DialogContent's
                     layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleApply} className="grid gap-5">
-                <div className="py-2 space-y-3">
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
-                            {t('txPage.bulk.tagAdd')}
-                        </label>
-                        <TagFilterCombobox value={addSlugs} onChange={setAddSlugs} className="w-full" />
+                    <div className="py-2 space-y-3">
+                        <div className="space-y-1">
+                            <label
+                                htmlFor="bulk-tag-add"
+                                className="text-xs font-medium text-muted-foreground"
+                            >
+                                {t("txPage.bulk.tagAdd")}
+                            </label>
+                            <TagFilterCombobox
+                                id="bulk-tag-add"
+                                value={addSlugs}
+                                onChange={setAddSlugs}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label
+                                htmlFor="bulk-tag-remove"
+                                className="text-xs font-medium text-muted-foreground"
+                            >
+                                {t("txPage.bulk.tagRemove")}
+                            </label>
+                            <TagFilterCombobox
+                                id="bulk-tag-remove"
+                                value={removeSlugs}
+                                onChange={setRemoveSlugs}
+                                className="w-full"
+                            />
+                        </div>
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
-                            {t('txPage.bulk.tagRemove')}
-                        </label>
-                        <TagFilterCombobox value={removeSlugs} onChange={setRemoveSlugs} className="w-full" />
-                    </div>
-                </div>
-                <DialogFooter className="gap-2">
-                    <Button type="button" variant="ghost" onClick={() => { reset(); onOpenChange(false); }} disabled={pending}>
-                        {t('common.cancel')}
-                    </Button>
-                    <Button
-                        type="submit"
-                        disabled={pending || (addSlugs.length === 0 && removeSlugs.length === 0)}
-                    >
-                        {pending ? t('common.applying') : t('common.apply')}
-                    </Button>
-                </DialogFooter>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                reset();
+                                onOpenChange(false);
+                            }}
+                            disabled={pending}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={
+                                pending ||
+                                (addSlugs.length === 0 &&
+                                    removeSlugs.length === 0)
+                            }
+                        >
+                            {pending ? t("common.applying") : t("common.apply")}
+                        </Button>
+                    </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>

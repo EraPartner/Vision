@@ -3,11 +3,28 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-06-24
-updated: 2026-08-26
-tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog]
+updated: 2026-08-27
+tags:
+  [
+    components,
+    portfolio,
+    investments,
+    phase-1,
+    phase-3.6,
+    portfolio-ticker,
+    ticker-manager,
+    show-in-ticker,
+    migration-0061,
+    fx-aware-pnl,
+    unified-detail-dialog,
+  ]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
-related_code: ["apps/frontend/src/features/portfolio/", "apps/frontend/src/pages/research/WatchlistPage.tsx"]
+related_code:
+  [
+    "apps/frontend/src/features/portfolio/",
+    "apps/frontend/src/pages/research/WatchlistPage.tsx",
+  ]
 ---
 
 # Portfolio Components
@@ -16,19 +33,35 @@ Components for managing investment portfolios, including stocks, crypto, metals,
 
 ## Component List
 
-| Component | Description | File |
-|-----------|-------------|------|
-| AddInvestmentDialog | Add new investment | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]] |
-| AddPortfolioTxnDialog | Record buy/sell transactions | [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]] |
-| EditInvestmentDialog | Edit existing investment details | [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]] |
-| EditPortfolioTxnDialog | Edit existing portfolio transaction | [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]] |
-| InvestmentDetailDialog | View investment details | [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]] |
-| AddToWatchlistDialog | Add symbol to watchlist | [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]] |
-| PortfolioNewsFeed | Market news for holdings | [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx\|PortfolioNewsFeed.tsx]] |
-| WatchlistChartDialog | Chart for watchlist symbol | [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]] |
-| AddInvestmentFromMarketDialog | Add investment from market search | [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
-| PortfolioTaxAdjustmentsDialog | Tax adjustments for investments | [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
-| PortfolioTicker | Live day-change scrolling ticker tape for the Portfolio Overview | [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx\|PortfolioTicker.tsx]] |
+| Component                     | Description                                                      | File                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| AddInvestmentDialog           | Add new investment                                               | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]]                     |
+| AddPortfolioTxnDialog         | Record buy/sell transactions                                     | [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]]                 |
+| EditInvestmentDialog          | Edit existing investment details                                 | [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]]                   |
+| EditPortfolioTxnDialog        | Edit existing portfolio transaction                              | [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]]               |
+| InvestmentDetailDialog        | View investment details                                          | [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]]               |
+| AddToWatchlistDialog          | Add symbol to watchlist                                          | [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]]                   |
+| PortfolioNewsFeed             | Market news for holdings                                         | [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx\|PortfolioNewsFeed.tsx]]                         |
+| WatchlistChartDialog          | Chart for watchlist symbol                                       | [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]]                   |
+| AddInvestmentFromMarketDialog | Add investment from market search                                | [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
+| PortfolioTaxAdjustmentsDialog | Tax adjustments for investments                                  | [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
+| PortfolioTicker               | Live day-change scrolling ticker tape for the Portfolio Overview | [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx\|PortfolioTicker.tsx]]                             |
+| PriceFreshnessCaption         | Aggregate live-price provenance for portfolio totals             | [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx\|PriceFreshnessCaption.tsx]]                 |
+
+---
+
+## PriceFreshnessCaption
+
+`PriceFreshnessCaption` presents aggregate live-price provenance with app-configured date/time
+formatting. Its `portfolio` scope renders `Prices as of …`; its `investment` scope makes the narrower
+Net Worth claim `Investment prices as of …`. The shared `usePriceFreshnessLabel` hook also supplies
+the Stocks/Crypto/Metals Price-column tooltip.
+
+The component uses `getAggregatePriceFreshness`: manual holdings are ignored, every live holding
+must have a valid timestamp, and the oldest live timestamp wins. With no live holdings it renders
+nothing; with an incomplete live set it renders the localized not-fetched state.
+
+Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], [[apps/frontend/src/utils/priceStaleness.ts]]
 
 ---
 
@@ -46,15 +79,15 @@ interface AddInvestmentDialogProps {
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Investment name |
-| `symbol` | string | No | Ticker symbol |
-| `asset_class` | string | Yes | Asset class (stocks, crypto, etc.) |
-| `currency` | string | No | Currency code |
-| `current_price` | number | No | Current price |
-| `location` | string | No | Physical location (real estate) |
-| `notes` | string | No | Notes |
+| Field           | Type   | Required | Description                        |
+| --------------- | ------ | -------- | ---------------------------------- |
+| `name`          | string | Yes      | Investment name                    |
+| `symbol`        | string | No       | Ticker symbol                      |
+| `asset_class`   | string | Yes      | Asset class (stocks, crypto, etc.) |
+| `currency`      | string | No       | Currency code                      |
+| `current_price` | number | No       | Current price                      |
+| `location`      | string | No       | Physical location (real estate)    |
+| `notes`         | string | No       | Notes                              |
 
 ### Asset Classes
 
@@ -72,7 +105,7 @@ bonds       - Government/corporate bonds
 ```tsx
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 
-<AddInvestmentDialog />
+<AddInvestmentDialog />;
 ```
 
 ### Settings Propagation Notes
@@ -99,6 +132,7 @@ When `price_provider = custom`, the add/edit dialogs support advanced provider c
 - `price_provider_history_price_path`: JSON path (per point) to price
 
 Compatibility note:
+
 - legacy `price_provider_url` / `price_provider_id` remain accepted by backend and are still mapped in UI payloads.
 - full compatibility for advanced latest/history fields in inheritance + legacy-schema bridge paths is provided by migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 
@@ -110,16 +144,16 @@ Record buy or sell transactions for an investment.
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | Yes | "buy" or "sell" |
-| `date` | date | Yes | Transaction date |
-| `amount` | number | Yes | Total amount |
-| `units` | number | No | Number of units |
-| `price_per_unit` | number | No | Price per unit |
-| `fees` | number | No | Transaction fees |
-| `currency` | string | No | Currency |
-| `note` | string | No | Notes |
+| Field            | Type   | Required | Description      |
+| ---------------- | ------ | -------- | ---------------- |
+| `type`           | string | Yes      | "buy" or "sell"  |
+| `date`           | date   | Yes      | Transaction date |
+| `amount`         | number | Yes      | Total amount     |
+| `units`          | number | No       | Number of units  |
+| `price_per_unit` | number | No       | Price per unit   |
+| `fees`           | number | No       | Transaction fees |
+| `currency`       | string | No       | Currency         |
+| `note`           | string | No       | Notes            |
 
 ### Usage
 
@@ -128,7 +162,7 @@ import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialo
 
 <AddPortfolioTxnDialog investmentId={123}>
   <Button>Record Transaction</Button>
-</AddPortfolioTxnDialog>
+</AddPortfolioTxnDialog>;
 ```
 
 ---
@@ -170,6 +204,7 @@ Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]],
 Dedicated modal used from investment details/list contexts to update investment metadata without changing asset class.
 
 Editable fields:
+
 - name
 - symbol (unit-based assets)
 - currency
@@ -177,6 +212,7 @@ Editable fields:
 - price provider + provider identifiers
 
 Validation highlights:
+
 - symbol required for unit-based assets in UI
 - backend enforces non-empty + globally unique symbol and immutable `asset_class`
 
@@ -187,6 +223,7 @@ Code link: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]]
 Dedicated modal used from transaction rows to edit existing portfolio transactions.
 
 Behavior:
+
 - transaction type is displayed but immutable
 - buy/sell keeps two-of-three amount/units/price validation and auto-derivation
 - supports recurring fields and note updates
@@ -204,7 +241,7 @@ import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDia
 
 <InvestmentDetailDialog investmentId={123}>
   <Button>View Details</Button>
-</InvestmentDetailDialog>
+</InvestmentDetailDialog>;
 ```
 
 ---
@@ -217,8 +254,8 @@ Displays market news related to portfolio holdings.
 
 ```typescript
 interface PortfolioNewsFeedProps {
-  symbols: string[];  // List of symbols to fetch news for
-  limit?: number;     // Max number of articles
+  symbols: string[]; // List of symbols to fetch news for
+  limit?: number; // Max number of articles
 }
 ```
 
@@ -227,7 +264,7 @@ interface PortfolioNewsFeedProps {
 ```tsx
 const symbols = ["AAPL", "BTC", "ETH"];
 
-<PortfolioNewsFeed symbols={symbols} limit={10} />
+<PortfolioNewsFeed symbols={symbols} limit={10} />;
 ```
 
 ### Features
@@ -259,11 +296,11 @@ interface AddToWatchlistDialogProps {
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol |
-| `target_price` | number | No | Target price for alerts |
-| `notes` | string | No | Notes |
+| Field          | Type   | Required | Description             |
+| -------------- | ------ | -------- | ----------------------- |
+| `symbol`       | string | Yes      | Ticker symbol           |
+| `target_price` | number | No       | Target price for alerts |
+| `notes`        | string | No       | Notes                   |
 
 ### Usage
 
@@ -272,7 +309,7 @@ import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog"
 
 <AddToWatchlistDialog>
   <Button>Add to Watchlist</Button>
-</AddToWatchlistDialog>
+</AddToWatchlistDialog>;
 ```
 
 ---
@@ -296,7 +333,7 @@ import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTax
 
 <PortfolioTaxAdjustmentsDialog investmentId={123}>
   <Button>Tax Adjustments</Button>
-</PortfolioTaxAdjustmentsDialog>
+</PortfolioTaxAdjustmentsDialog>;
 ```
 
 ---
@@ -335,7 +372,7 @@ interface PortfolioTickerProps {
 }
 ```
 
-`InvestmentSummary` carries the `show_in_ticker?: boolean` field (from `apps/frontend/src/types/portfolio.ts`). The component splits the full prop set into a *manageable universe* (holdings with a quotable symbol) and an *included set* (`show_in_ticker !== false`). Only the included set is passed to the Yahoo batch quote call.
+`InvestmentSummary` carries the `show_in_ticker?: boolean` field (from `apps/frontend/src/types/portfolio.ts`). The component splits the full prop set into a _manageable universe_ (holdings with a quotable symbol) and an _included set_ (`show_in_ticker !== false`). Only the included set is passed to the Yahoo batch quote call.
 
 ### Behaviour summary
 
@@ -353,6 +390,7 @@ interface PortfolioTickerProps {
 A sliders icon at the tape's right edge (outside the edge-fade mask) opens a `TickerManager` popover listing every holding in the manageable universe. Each row has a Radix `Switch` bound to `show_in_ticker`.
 
 **Toggle behaviour:**
+
 1. Optimistically updates the `INVESTMENTS_QUERY_KEY` React Query cache to flip `show_in_ticker` on the target investment.
 2. Calls `apiClient.updateInvestment(id, { show_in_ticker })` (`PATCH /api/investments/:id`).
 3. On error: rolls back the optimistic cache update.
@@ -366,7 +404,7 @@ The popover header shows a count badge: `portfolio.ticker.manageCount` with `{sh
 import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
 
 // In PortfolioOverviewPage — rendered when isVisible('ticker') is true:
-<PortfolioTicker items={summaries} />
+<PortfolioTicker items={summaries} />;
 ```
 
 Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
@@ -375,10 +413,10 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 
 ## Related Hooks
 
-| Hook | Description |
-|------|-------------|
-| `usePortfolio()` | Portfolio data and operations |
-| `usePortfolioTaxAdjustments()` | Tax adjustment data |
+| Hook                           | Description                   |
+| ------------------------------ | ----------------------------- |
+| `usePortfolio()`               | Portfolio data and operations |
+| `usePortfolioTaxAdjustments()` | Tax adjustment data           |
 
 ---
 
@@ -393,7 +431,7 @@ interface WatchlistItem {
   id: number;
   name: string;
   symbol: string | null;
-  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
+  asset_class: "stock" | "etf" | "crypto" | "metals";
   target_price: number;
   currency: string;
   notes: string | null;
@@ -405,7 +443,7 @@ interface WatchlistItem {
 interface WatchlistCreate {
   name: string;
   symbol?: string;
-  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
+  asset_class: "stock" | "etf" | "crypto" | "metals";
   target_price: number;
   currency?: string;
   notes?: string;
@@ -415,7 +453,7 @@ interface WatchlistCreate {
 interface WatchlistUpdate {
   name?: string;
   symbol?: string;
-  asset_class?: 'stock' | 'etf' | 'crypto' | 'metals';
+  asset_class?: "stock" | "etf" | "crypto" | "metals";
   target_price?: number;
   currency?: string;
   notes?: string;
@@ -447,6 +485,7 @@ The `WatchlistPage.tsx` was refactored to use encapsulated `apiClient` watchlist
 **After (Phase 3.6):** Centralized via `apiClient.getWatchlist()`, `apiClient.getMarketQuotes(symbols)`, and `apiClient.deleteWatchlistItem(id)`.
 
 Benefits:
+
 - Shared retry logic and timeout handling
 - Built-in error formatting and user feedback
 - React Query integration for caching and invalidation

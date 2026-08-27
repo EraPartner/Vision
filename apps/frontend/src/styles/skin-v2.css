@@ -13,9 +13,8 @@
  * ================================================================== */
 
 /* Okabe-Ito colorblind-safe gain/loss tokens (light + dark). Overriding only
-   the --gain/--loss tokens is enough: every gain/loss surface (the .amount-gain
-   / .amount-loss text classes in index.css, gain/loss badges, and charts via
-   useGainLossColors) reads these tokens, so the whole app recolors from this
+   the --gain/--loss tokens is enough: every gain/loss surface (Tailwind
+   gain/loss utilities, badges, and charts) reads these tokens, so the whole app recolors from this
    one override with no per-component branch. The legacy palette (gold/red)
    lives in tokens.css and applies whenever this class is absent. The +/- sign
    and directional arrows alongside values are the non-color cues that satisfy

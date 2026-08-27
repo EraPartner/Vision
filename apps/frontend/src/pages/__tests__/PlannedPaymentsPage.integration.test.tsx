@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -16,7 +16,13 @@ import { todayYmd } from "@/lib/timezone";
 // VirtualDataTable's unit test). In a real browser the container has height and
 // rows render normally.
 vi.mock("@tanstack/react-virtual", () => ({
-    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    useVirtualizer: ({
+        count,
+        estimateSize,
+    }: {
+        count: number;
+        estimateSize: () => number;
+    }) => ({
         getVirtualItems: () =>
             Array.from({ length: count }, (_, i) => ({
                 key: i,
@@ -49,19 +55,43 @@ const rentPayment = {
 
 const API_BASE = "http://localhost:3002";
 
+beforeEach(() => {
+    server.use(
+        http.get(`${API_BASE}/api/planned-transactions/match-suggestions`, () =>
+            ok({ items: [], total: 0 }),
+        ),
+    );
+});
+
 describe("PlannedPaymentsPage (integration)", () => {
+    it("hydrates the show-all filter from the URL", async () => {
+        renderWithApp(<PlannedPaymentsPage />, {
+            initialEntries: ["/planned?show_all=true"],
+        });
+
+        expect(
+            await screen.findByRole("button", { name: /showing all/i }),
+        ).toBeInTheDocument();
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<PlannedPaymentsPage />);
-        expect(await screen.findByRole("heading", { name: /planned payments/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /planned payments/i }),
+        ).toBeInTheDocument();
     });
 
     it("renders New Payment button", async () => {
         renderWithApp(<PlannedPaymentsPage />);
-        expect(await screen.findByRole("button", { name: /new payment/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /new payment/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows error alert when planned-transactions API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
                 err(500, "db unavailable"),
@@ -70,9 +100,15 @@ describe("PlannedPaymentsPage (integration)", () => {
 
         renderWithApp(<PlannedPaymentsPage />);
 
-        expect(await screen.findByText(/db unavailable/i, {}, { timeout: 5000 })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: /new payment/i })).not.toBeInTheDocument();
+        expect(
+            await screen.findByText(/db unavailable/i, {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /new payment/i }),
+        ).not.toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });
@@ -81,7 +117,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", { name: /new payment/i });
+        const newPaymentBtn = await screen.findByRole("button", {
+            name: /new payment/i,
+        });
         await user.click(newPaymentBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -92,7 +130,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", { name: /new payment/i });
+        const newPaymentBtn = await screen.findByRole("button", {
+            name: /new payment/i,
+        });
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -105,7 +145,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", { name: /new payment/i });
+        const newPaymentBtn = await screen.findByRole("button", {
+            name: /new payment/i,
+        });
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -120,9 +162,7 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("shows All Payments table section", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         // plannedPage.tableTitle = "All Payments"
-        expect(
-            await screen.findByText(/all payments/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/all payments/i)).toBeInTheDocument();
     });
 
     it("shows Active Only filter button", async () => {
@@ -138,7 +178,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         // Wait for full page load (translations lazy-load after settings fetch + locale import)
         await screen.findByRole("button", { name: /new payment/i });
         expect(
-            screen.getByText(/keep recurring bills and future payments visible/i),
+            screen.getByText(
+                /keep recurring bills and future payments visible/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -146,7 +188,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", { name: /new payment/i });
+        const newPaymentBtn = await screen.findByRole("button", {
+            name: /new payment/i,
+        });
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -161,10 +205,15 @@ describe("PlannedPaymentsPage (integration)", () => {
 
         // First "New" open: dirty the sticky fields — flip the direction
         // toggle to Income and type a name.
-        await user.click(await screen.findByRole("button", { name: /new payment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /new payment/i }),
+        );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("radio", { name: /income/i }));
-        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute("aria-checked", "true");
+        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
         await user.type(screen.getByLabelText("Name *"), "Salary");
 
         // Close without saving, reopen "New".
@@ -175,15 +224,27 @@ describe("PlannedPaymentsPage (integration)", () => {
 
         // The form remounted blank: direction back on its Expense default
         // (the sign-owning field), name cleared.
-        expect(screen.getByRole("radio", { name: /expense/i })).toHaveAttribute("aria-checked", "true");
-        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute("aria-checked", "false");
+        expect(screen.getByRole("radio", { name: /expense/i })).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
+        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute(
+            "aria-checked",
+            "false",
+        );
         expect(screen.getByLabelText("Name *")).toHaveValue("");
     });
 
     it("shows payment name in table row when MSW returns a planned payment", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
-                ok({ items: [rentPayment], total: 1, limit: 1000, offset: 0, links: [] }),
+                ok({
+                    items: [rentPayment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -196,7 +257,13 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("shows payment amount in table row", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
-                ok({ items: [rentPayment], total: 1, limit: 1000, offset: 0, links: [] }),
+                ok({
+                    items: [rentPayment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -210,7 +277,13 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("shows recurring frequency badge when payment is recurring", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
-                ok({ items: [rentPayment], total: 1, limit: 1000, offset: 0, links: [] }),
+                ok({
+                    items: [rentPayment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -224,7 +297,13 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("KPI card Est. Monthly shows non-zero when active recurring payment exists", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
-                ok({ items: [rentPayment], total: 1, limit: 1000, offset: 0, links: [] }),
+                ok({
+                    items: [rentPayment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -237,7 +316,13 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("shows All Payments table with payment row after data loads", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
-                ok({ items: [rentPayment], total: 1, limit: 1000, offset: 0, links: [] }),
+                ok({
+                    items: [rentPayment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -253,7 +338,9 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("button", { name: /active only/i });
+        const activeOnlyBtn = await screen.findByRole("button", {
+            name: /active only/i,
+        });
         await user.click(activeOnlyBtn);
 
         // After toggle, button label flips to "Showing All" (plannedPage.showingAll)
@@ -267,7 +354,9 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("does not crash when planned-transactions endpoint returns 404", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/planned-transactions`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/planned-transactions`, () =>
+                err(404, "Not found"),
+            ),
         );
         const { container } = renderWithApp(<PlannedPaymentsPage />);
         // Container should render (skeleton or content)
@@ -330,7 +419,13 @@ describe("PlannedPaymentsPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () => {
                 getCalls += 1;
-                return ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                });
             }),
             http.post(`${API_BASE}/api/planned-transactions`, () => ok(stub)),
         );
@@ -366,10 +461,20 @@ describe("PlannedPaymentForm (inline validation)", () => {
     }
 
     /** Bank account is an AccountCombobox: open it, type, take the create escape hatch. */
-    async function pickBankAccount(user: ReturnType<typeof userEvent.setup>, name: string) {
+    async function pickBankAccount(
+        user: ReturnType<typeof userEvent.setup>,
+        name: string,
+    ) {
         await user.click(screen.getByLabelText(/bank account/i));
-        await user.type(screen.getByPlaceholderText(/search or type a new account/i), name);
-        await user.click(await screen.findByText(new RegExp(`create account "${name}"`, "i")));
+        await user.type(
+            screen.getByPlaceholderText(/search or type a new account/i),
+            name,
+        );
+        await user.click(
+            await screen.findByText(
+                new RegExp(`create account "${name}"`, "i"),
+            ),
+        );
     }
 
     /** New payment, name + bank filled — the point where the submit button unlocks. */
@@ -377,7 +482,11 @@ describe("PlannedPaymentForm (inline validation)", () => {
         const user = userEvent.setup();
         const onSubmit = vi.fn();
         renderWithApp(
-            <PlannedPaymentForm open onOpenChange={() => {}} onSubmit={onSubmit} />,
+            <PlannedPaymentForm
+                open
+                onOpenChange={() => {}}
+                onSubmit={onSubmit}
+            />,
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText("Name *"), "Mortgage");
@@ -386,16 +495,21 @@ describe("PlannedPaymentForm (inline validation)", () => {
         return { user, onSubmit };
     }
 
-    const submitBtn = () => screen.getByRole("button", { name: /create payment/i });
+    const submitBtn = () =>
+        screen.getByRole("button", { name: /create payment/i });
 
     /** Empty form, waited out to real English (the dictionary loads lazily). */
     async function renderEmptyForm() {
         const user = userEvent.setup();
         const onSubmit = vi.fn();
         renderWithApp(
-            <PlannedPaymentForm open onOpenChange={() => {}} onSubmit={onSubmit} />,
+            <PlannedPaymentForm
+                open
+                onOpenChange={() => {}}
+                onSubmit={onSubmit}
+            />,
         );
-        await screen.findByText("New Planned Payment");
+        await screen.findByText("New planned payment");
         return { user, onSubmit };
     }
 
@@ -418,7 +532,9 @@ describe("PlannedPaymentForm (inline validation)", () => {
         // defaults to today, so it is not among them.)
         const amount = screen.getByLabelText("Amount *");
         expect(amount).toHaveAttribute("aria-invalid", "true");
-        expect(describedError(amount)).toHaveTextContent(/valid amount is required/i);
+        expect(describedError(amount)).toHaveTextContent(
+            /valid amount is required/i,
+        );
         const bank = screen.getByLabelText(/bank account/i);
         expect(bank).toHaveAttribute("aria-invalid", "true");
         expect(describedError(bank)).toHaveTextContent(/select account/i);
@@ -431,19 +547,30 @@ describe("PlannedPaymentForm (inline validation)", () => {
 
         // A combobox takes no name from its own content, so a <Label> with no
         // htmlFor (or one pointing at a control with no id) left these nameless.
-        for (const name of [/^recipient$/i, /^category$/i, /^tags$/i, /bank account/i]) {
+        for (const name of [
+            /^recipient$/i,
+            /^category$/i,
+            /^tags$/i,
+            /bank account/i,
+        ]) {
             expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
         }
 
         // Loan section.
         await user.click(screen.getByLabelText(/loan repayment/i));
-        expect(screen.getByRole("combobox", { name: /loan type/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: /loan type/i }),
+        ).toBeInTheDocument();
         await user.click(screen.getByLabelText(/loan repayment/i));
 
         // Recurrence section — the end-date picker is a button, not a combobox.
         await user.click(screen.getByLabelText("Recurring"));
-        expect(screen.getByRole("combobox", { name: /frequency/i })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /end date/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: /frequency/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /end date/i }),
+        ).toBeInTheDocument();
     });
 
     it("flags every missing loan field, focuses the first, and blocks submit", async () => {
@@ -478,15 +605,23 @@ describe("PlannedPaymentForm (inline validation)", () => {
 
         await user.click(submitBtn());
 
-        await waitFor(() => expect(termField).toHaveAttribute("aria-invalid", "true"));
-        expect(describedError(termField)).toHaveTextContent(/between 1 and 600 months/i);
+        await waitFor(() =>
+            expect(termField).toHaveAttribute("aria-invalid", "true"),
+        );
+        expect(describedError(termField)).toHaveTextContent(
+            /between 1 and 600 months/i,
+        );
         expect(onSubmit).not.toHaveBeenCalled();
 
         // Correcting the field clears its message without another submit.
         await user.clear(termField);
         await user.type(termField, "240");
-        await waitFor(() => expect(termField).not.toHaveAttribute("aria-invalid"));
-        expect(screen.queryByText(/between 1 and 600 months/i)).not.toBeInTheDocument();
+        await waitFor(() =>
+            expect(termField).not.toHaveAttribute("aria-invalid"),
+        );
+        expect(
+            screen.queryByText(/between 1 and 600 months/i),
+        ).not.toBeInTheDocument();
     });
 
     it("flags a blank custom repeat interval on the interval field and blocks submit", async () => {
@@ -495,12 +630,16 @@ describe("PlannedPaymentForm (inline validation)", () => {
         await user.click(screen.getByLabelText("Recurring"));
         const frequency = screen.getByRole("combobox", { name: /frequency/i });
         await user.click(frequency);
-        await user.click(await screen.findByRole("option", { name: /custom interval/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /custom interval/i }),
+        );
 
         await user.click(submitBtn());
 
         const days = screen.getByLabelText(/repeat every/i);
-        await waitFor(() => expect(days).toHaveAttribute("aria-invalid", "true"));
+        await waitFor(() =>
+            expect(days).toHaveAttribute("aria-invalid", "true"),
+        );
         expect(describedError(days)).toHaveTextContent(/at least 1 day/i);
         expect(onSubmit).not.toHaveBeenCalled();
     });
@@ -554,15 +693,20 @@ describe("PlannedPaymentForm (inline validation)", () => {
             http.get(`${API_BASE}/api/planned-transactions`, () =>
                 ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
             ),
-            http.post(`${API_BASE}/api/planned-transactions`, async ({ request }) => {
-                rawBody = await request.text();
-                return ok({ ...rentPayment, id: 99, memo: "Groceries" });
-            }),
+            http.post(
+                `${API_BASE}/api/planned-transactions`,
+                async ({ request }) => {
+                    rawBody = await request.text();
+                    return ok({ ...rentPayment, id: 99, memo: "Groceries" });
+                },
+            ),
         );
 
         renderWithApp(<PlannedPaymentsPage />);
 
-        await user.click(await screen.findByRole("button", { name: /new payment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /new payment/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText("Name *"), "Groceries");

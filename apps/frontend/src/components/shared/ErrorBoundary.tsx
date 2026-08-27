@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import logger from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { StateBlock } from "@/components/shared/StateBlock";
 
 interface Props {
   children: ReactNode;
@@ -18,20 +19,19 @@ interface State {
 function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
   const { t } = useLanguage();
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 p-8 text-center">
-      <AlertTriangle className="h-12 w-12 text-destructive" />
-      <h2 className="text-lg font-semibold text-foreground">
-        {t('common.errorBoundary')}
-      </h2>
-      <p className="text-sm text-muted-foreground max-w-md">
-        {t('common.errorBoundaryDetail')}
-      </p>
-      {import.meta.env.DEV && error && (
+    <StateBlock
+      icon={AlertTriangle}
+      tone="destructive"
+      headingLevel={2}
+      className="min-h-[400px]"
+      title={t('common.errorBoundary')}
+      description={t('common.errorBoundaryDetail')}
+      details={import.meta.env.DEV && error ? (
         <pre className="mt-2 max-w-lg overflow-auto rounded-md bg-muted p-3 text-xs text-left text-muted-foreground">
           {error.message}
         </pre>
-      )}
-      <div className="flex gap-2 mt-2">
+      ) : undefined}
+      action={<div className="flex gap-2">
         <Button variant="outline" onClick={onReset}>
           <RefreshCw className="mr-2 h-4 w-4" />
           {t('common.retry')}
@@ -39,8 +39,8 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
         <Button variant="default" onClick={() => window.location.reload()}>
           {t('common.reload')}
         </Button>
-      </div>
-    </div>
+      </div>}
+    />
   );
 }
 

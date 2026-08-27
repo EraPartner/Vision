@@ -13,6 +13,7 @@ import { getChartColor } from "./palette";
 import { formatPercent } from "@/utils/currency";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useChartKeyboardNav } from "./keyboardNav";
 
 export interface PieDatum {
     readonly name: string;
@@ -36,7 +37,9 @@ export function PieChart(props: PieChartProps) {
         <div style={{ width: "100%", height }}>
             <ParentSize>
                 {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? <Inner {...props} width={w} height={h} /> : null
+                    w > 0 && h > 0 ? (
+                        <Inner {...props} width={w} height={h} />
+                    ) : null
                 }
             </ParentSize>
         </div>
@@ -60,13 +63,44 @@ function Inner({
     const centerY = height / 2;
 
     const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data]);
-    const [hover, setHover] = useState<{ datum: PieDatum; x: number; y: number } | null>(null);
+    const [hover, setHover] = useState<{
+        index: number;
+        x: number;
+        y: number;
+    } | null>(null);
 
     const handleLeave = useCallback(() => setHover(null), []);
+    const hoverIndex = hover && hover.index < data.length ? hover.index : null;
+    const hoverDatum = hoverIndex == null ? null : data[hoverIndex];
+    const handleKeyboardIndex = useCallback(
+        (index: number) => setHover({ index, x: centerX, y: centerY }),
+        [centerX, centerY],
+    );
+    const keyboardNav = useChartKeyboardNav({
+        pointCount: data.length,
+        index: hoverIndex,
+        onIndexChange: handleKeyboardIndex,
+        onClear: handleLeave,
+    });
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart(t, 'chart.aria.kind.pie', data.map((d) => d.name))}>
+            <svg
+                width={width}
+                height={height}
+                role="img"
+                aria-label={
+                    ariaLabel ??
+                    summarizeProportionChart(
+                        t,
+                        "chart.aria.kind.pie",
+                        data.map((d) => d.name),
+                    )
+                }
+                tabIndex={data.length > 0 ? 0 : undefined}
+                onKeyDown={keyboardNav.onKeyDown}
+                onBlur={keyboardNav.onBlur}
+            >
                 <Group top={centerY} left={centerX}>
                     <Pie
                         data={data as PieDatum[]}
@@ -77,10 +111,12 @@ function Inner({
                     >
                         {(pie) =>
                             pie.arcs.map((arc, i) => {
-                                const color = arc.data.color ?? getChartColor(i);
+                                const color =
+                                    arc.data.color ?? getChartColor(i);
                                 const d = pie.path(arc) ?? "";
                                 const [cx, cy] = pie.path.centroid(arc);
-                                const pct = total > 0 ? arc.data.value / total : 0;
+                                const pct =
+                                    total > 0 ? arc.data.value / total : 0;
                                 const showLabel = showLabels && pct > 0.04;
                                 return (
                                     <g key={`arc-${i}`}>
@@ -92,17 +128,22 @@ function Inner({
                                             initial={
                                                 reduce
                                                     ? { opacity: 1, scale: 1 }
-                                                    : { opacity: 0, scale: 0.92 }
+                                                    : {
+                                                          opacity: 0,
+                                                          scale: 0.92,
+                                                      }
                                             }
                                             animate={{ opacity: 1, scale: 1 }}
                                             transition={{
-                                                duration: reduce ? 0 : durations.slow,
+                                                duration: reduce
+                                                    ? 0
+                                                    : durations.slow,
                                                 ease: easings.outExpo,
                                                 delay: i * 0.04,
                                             }}
                                             onPointerEnter={() => {
                                                 setHover({
-                                                    datum: arc.data,
+                                                    index: i,
                                                     x: centerX + cx,
                                                     y: centerY + cy,
                                                 });
@@ -122,7 +163,9 @@ function Inner({
                                             >
                                                 {labelFormat
                                                     ? labelFormat(arc.data, pct)
-                                                    : formatPercent(pct * 100, { digits: 0 })}
+                                                    : formatPercent(pct * 100, {
+                                                          digits: 0,
+                                                      })}
                                             </text>
                                         ) : null}
                                     </g>
@@ -134,19 +177,19 @@ function Inner({
             </svg>
 
             <ChartTooltip
-                open={hover != null}
+                open={hoverDatum != null}
                 left={hover?.x ?? 0}
                 top={hover?.y ?? 0}
-                title={hover?.datum.name}
+                title={hoverDatum?.name}
                 items={
-                    hover
+                    hoverDatum
                         ? [
                               {
-                                  label: hover.datum.name,
-                                  color: hover.datum.color,
+                                  label: hoverDatum.name,
+                                  color: hoverDatum.color,
                                   value: tooltipValueFormat
-                                      ? tooltipValueFormat(hover.datum.value)
-                                      : String(hover.datum.value),
+                                      ? tooltipValueFormat(hoverDatum.value)
+                                      : String(hoverDatum.value),
                               },
                           ]
                         : []

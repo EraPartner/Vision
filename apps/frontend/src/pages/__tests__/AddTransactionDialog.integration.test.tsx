@@ -28,17 +28,27 @@ const testRecipientsList = {
     links: [],
 };
 
-
 // The bank-account field is an AccountCombobox (Phase B2, ADR-088 addendum D1):
 // open it, type the label, and take the explicit-create escape hatch (the MSW
 // accounts list is empty, so every label is "new").
-async function pickBankAccount(user: ReturnType<typeof userEvent.setup>, name: string) {
+async function pickBankAccount(
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+) {
     await user.click(screen.getByLabelText(/bank account/i));
-    await user.type(screen.getByPlaceholderText(/search or type a new account/i), name);
-    await user.click(await screen.findByText(new RegExp(`create account "${name}"`, "i")));
+    await user.type(
+        screen.getByPlaceholderText(/search or type a new account/i),
+        name,
+    );
+    await user.click(
+        await screen.findByText(new RegExp(`create account "${name}"`, "i")),
+    );
 }
 
-async function pickRecipient(user: ReturnType<typeof userEvent.setup>, name: string) {
+async function pickRecipient(
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+) {
     await user.click(screen.getByRole("combobox", { name: /recipient/i }));
     await user.click(await screen.findByRole("option", { name }));
 }
@@ -52,7 +62,9 @@ describe("AddTransactionDialog (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(screen.getByLabelText(/amount/i)).toBeInTheDocument();
@@ -63,7 +75,9 @@ describe("AddTransactionDialog (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
         await user.click(screen.getByRole("button", { name: /cancel/i }));
@@ -77,7 +91,9 @@ describe("AddTransactionDialog (integration)", () => {
         let capturedBody: unknown;
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedBody = await request.json();
                 return ok({
@@ -93,7 +109,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
@@ -112,7 +130,9 @@ describe("AddTransactionDialog (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
         await user.keyboard("{Escape}");
@@ -126,7 +146,9 @@ describe("AddTransactionDialog (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // Dialog contains comboboxes for currency and recipient (both Radix Select triggers)
@@ -138,7 +160,9 @@ describe("AddTransactionDialog (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // form.addTransaction.date = "Date" — label text (DatePicker, no form control assoc)
@@ -148,7 +172,9 @@ describe("AddTransactionDialog (integration)", () => {
         // addTxn.categoryOptional = "Category (optional)"
         expect(screen.getByText(/category \(optional\)/i)).toBeInTheDocument();
         // addTxn.commentOptional = "Comment (optional)" — id="tx_comment"
-        expect(screen.getByLabelText(/comment \(optional\)/i)).toBeInTheDocument();
+        expect(
+            screen.getByLabelText(/comment \(optional\)/i),
+        ).toBeInTheDocument();
     });
 
     it("shows the backdated note when the chosen account's anchor is on/after the entered date (WP-B2)", async () => {
@@ -188,11 +214,15 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // No account chosen yet → no note.
-        expect(screen.queryByText(/balance won't change/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/balance won't change/i),
+        ).not.toBeInTheDocument();
 
         // Pick the anchored account from the combobox.
         await user.click(screen.getByLabelText(/bank account/i));
@@ -208,7 +238,9 @@ describe("AddTransactionDialog (integration)", () => {
         const toastSpy = vi.spyOn(toast, "error");
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () =>
                 err(409, "Duplicate transaction detected"),
             ),
@@ -216,7 +248,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
@@ -234,11 +268,15 @@ describe("AddTransactionDialog (integration)", () => {
 
     it("keeps dialog open when server returns 500 error", async () => {
         const user = userEvent.setup();
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         let postCalled = false;
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
                 return err(500, "server error");
@@ -247,7 +285,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
@@ -268,7 +308,9 @@ describe("AddTransactionDialog (integration)", () => {
         const toastSpy = vi.spyOn(toast, "error");
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () =>
                 err(422, "amount must be positive"),
             ),
@@ -276,7 +318,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
@@ -316,7 +360,9 @@ describe("AddTransactionDialog (integration)", () => {
         let postCalled = false;
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
                 return ok({});
@@ -325,7 +371,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const amount = screen.getByLabelText(/amount/i);
@@ -338,7 +386,9 @@ describe("AddTransactionDialog (integration)", () => {
         const formEl = screen.getByRole("dialog").querySelector("form")!;
         fireEvent.submit(formEl);
 
-        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+        await waitFor(() =>
+            expect(amount).toHaveAttribute("aria-invalid", "true"),
+        );
         expect(describedError(amount)).toHaveTextContent(/invalid amount/i);
         // Submit is blocked exactly as before, and the dialog stays open.
         expect(postCalled).toBe(false);
@@ -352,7 +402,9 @@ describe("AddTransactionDialog (integration)", () => {
         let postCalled = false;
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
                 return ok({});
@@ -361,7 +413,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const amount = screen.getByLabelText(/amount/i);
@@ -371,7 +425,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         await user.click(screen.getByRole("button", { name: /create/i }));
 
-        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+        await waitFor(() =>
+            expect(amount).toHaveAttribute("aria-invalid", "true"),
+        );
         expect(describedError(amount)).toHaveTextContent(/cannot be zero/i);
         expect(postCalled).toBe(false);
     });
@@ -379,11 +435,17 @@ describe("AddTransactionDialog (integration)", () => {
     it("clears the inline error once the field is corrected", async () => {
         const user = userEvent.setup();
 
-        server.use(http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)));
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
+        );
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const amount = screen.getByLabelText(/amount/i);
@@ -392,7 +454,9 @@ describe("AddTransactionDialog (integration)", () => {
         await pickRecipient(user, "Test Supermarket");
         await user.click(screen.getByRole("button", { name: /create/i }));
 
-        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+        await waitFor(() =>
+            expect(amount).toHaveAttribute("aria-invalid", "true"),
+        );
 
         await user.clear(amount);
         await user.type(amount, "12.50");
@@ -405,11 +469,17 @@ describe("AddTransactionDialog (integration)", () => {
     it("moves focus to the first invalid field on a blocked submit", async () => {
         const user = userEvent.setup();
 
-        server.use(http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)));
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
+        );
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // Amount is left empty and no recipient is picked: amount comes first in
@@ -432,7 +502,9 @@ describe("AddTransactionDialog (integration)", () => {
         let postCalled = false;
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
                 return ok({});
@@ -441,7 +513,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // The button used to be disabled on exactly the empty required fields,
@@ -475,7 +549,9 @@ describe("AddTransactionDialog (integration)", () => {
         let rawBody = "";
 
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 rawBody = await request.text();
                 return ok({
@@ -491,7 +567,9 @@ describe("AddTransactionDialog (integration)", () => {
 
         renderWithApp(<AddTransactionDialog />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
@@ -507,5 +585,122 @@ describe("AddTransactionDialog (integration)", () => {
         expect(rawBody).toBe(
             `{"transaction_date":"${todayYmd()}","bank_account":"Main","recipient_id":7,"amount":12.5,"currency":"EUR"}`,
         );
+    });
+
+    it("searches for a recipient beyond the initial page and submits its id", async () => {
+        const user = userEvent.setup();
+        let capturedRecipientId: unknown;
+        const remoteRecipient = {
+            ...testRecipient,
+            id: 701,
+            name: "Remote Search Result",
+        };
+        const recipientRequests: URL[] = [];
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, ({ request }) => {
+                const url = new URL(request.url);
+                recipientRequests.push(url);
+                const search = url.searchParams.get("search");
+                const items = search ? [remoteRecipient] : [];
+                return ok({
+                    items,
+                    total: items.length,
+                    limit: 100,
+                    offset: 0,
+                    links: [],
+                });
+            }),
+            http.get(`${API_BASE}/api/recipients/701`, () =>
+                ok(remoteRecipient),
+            ),
+            http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
+                capturedRecipientId = (
+                    (await request.json()) as Record<string, unknown>
+                ).recipient_id;
+                return ok({ id: 42 });
+            }),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
+        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await pickBankAccount(user, "Main");
+
+        await user.click(
+            screen.getByRole("combobox", { name: /^recipient$/i }),
+        );
+        await user.type(
+            screen.getByPlaceholderText(/search recipients/i),
+            "Remote",
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Remote Search Result" }),
+        );
+        await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+        await waitFor(() => expect(capturedRecipientId).toBe(701));
+        expect(recipientRequests.length).toBeGreaterThanOrEqual(2);
+        expect(
+            recipientRequests.every(
+                (url) => url.searchParams.get("active") === "true",
+            ),
+        ).toBe(true);
+    });
+
+    it("selects and submits a category beyond the old 200-item cap", async () => {
+        const user = userEvent.setup();
+        let capturedCategoryId: unknown;
+        const categories = Array.from({ length: 202 }, (_, index) => ({
+            id: index + 1,
+            general: index === 201 ? "SPECIAL" : "GENERAL",
+            detail:
+                index === 201 ? "Archived receipts" : `Category ${index + 1}`,
+            description: null,
+            is_active: true,
+            created_at: "2025-01-01T00:00:00Z",
+            links: [],
+        }));
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok(testRecipientsList),
+            ),
+            http.get(`${API_BASE}/api/categories`, () =>
+                ok({ items: categories, total: categories.length, links: [] }),
+            ),
+            http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
+                capturedCategoryId = (
+                    (await request.json()) as Record<string, unknown>
+                ).category_id;
+                return ok({ id: 42 });
+            }),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
+        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
+
+        await user.click(
+            screen.getByRole("combobox", { name: /category \(optional\)/i }),
+        );
+        await user.type(
+            screen.getByPlaceholderText(/search categories/i),
+            "Archived receipts",
+        );
+        await user.click(
+            await screen.findByRole("option", {
+                name: "SPECIAL: Archived receipts",
+            }),
+        );
+        await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+        await waitFor(() => expect(capturedCategoryId).toBe(202));
     });
 });

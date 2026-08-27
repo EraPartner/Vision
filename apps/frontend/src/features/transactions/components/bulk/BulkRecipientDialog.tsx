@@ -57,7 +57,7 @@ export function BulkRecipientDialog({
                     />
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
                     <Button type="submit" disabled={pending || recipientId == null}>

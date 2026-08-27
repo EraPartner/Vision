@@ -47,9 +47,9 @@ function mapeLabel(mape: number): string {
 }
 
 function RankBadge({ rank }: { rank: number }) {
-    if (rank === 1) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">#{rank}</Badge>;
-    if (rank === 2) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">#{rank}</Badge>;
-    if (rank === 3) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">#{rank}</Badge>;
+    if (rank === 1) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">#{rank}</Badge>;
+    if (rank === 2) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">#{rank}</Badge>;
+    if (rank === 3) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">#{rank}</Badge>;
     return <span className="text-xs text-muted-foreground">#{rank}</span>;
 }
 
@@ -196,7 +196,7 @@ export function CashFlowForecastDiagnostics({
                             {t("cashflow.diagnostics.accuracy")}
                         </h3>
                         {hasPersistedData && (
-                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                                 <Database className="h-3 w-3" />
                                 <span>{t("cashflow.diagnostics.persistedHistory")}</span>
                             </div>
@@ -228,7 +228,7 @@ export function CashFlowForecastDiagnostics({
                             </TableBody>
                         </Table>
                     </div>
-                    <p className="mt-2 text-[11px] text-muted-foreground">
+                    <p className="mt-2 text-2xs text-muted-foreground">
                         {hasPersistedData
                             ? t("cashflow.diagnostics.backtestNoteWithHistory")
                             : t("cashflow.diagnostics.backtestNote", { n: String(diagnostics.history_months), currency })}
@@ -240,7 +240,7 @@ export function CashFlowForecastDiagnostics({
                         <h3 className="text-sm font-semibold mb-1 text-foreground">
                             {t("cashflow.diagnostics.suggestedWeights")}
                         </h3>
-                        <p className="text-[11px] text-muted-foreground mb-3">
+                        <p className="text-2xs text-muted-foreground mb-3">
                             {t("cashflow.diagnostics.weightsNote")}
                         </p>
                         <div className="space-y-2">
@@ -260,7 +260,7 @@ export function CashFlowForecastDiagnostics({
                                             <span className="text-xs w-44 truncate">{e.label}</span>
                                             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                                                 <div
-                                                    className="h-full rounded-full transition-[width] duration-300"
+                                                    className="h-full rounded-full transition-[width] duration-normal"
                                                     style={{
                                                         width: `${barPct}%`,
                                                         background: color,

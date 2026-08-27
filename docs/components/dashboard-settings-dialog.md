@@ -3,7 +3,7 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084, small-viewport-robustness]
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
@@ -137,7 +137,7 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 | Component | Purpose | Layout |
 |-----------|---------|--------|
 | `SettingsSection` | Title + description header for a section | Full-width heading block |
-| `SettingsGroup` | Bordered, hairline-divided card; optional label | Groups related rows |
+| `SettingsGroup` | Bordered, hairline-divided card; optional label and description | Groups related rows |
 | `SettingRow` | Label + hint + control | `row` for switches/actions; `stack` for selects/lists |
 
 `SettingRow` replaces the three inconsistent label-control patterns from the old tabs (bare rows with full-width `Separator`, bordered cards, button-cards). Every setting in every section now uses the same primitive.
@@ -288,7 +288,9 @@ All backup state (`backupDir`, `backupPassphrase`, `backupEncrypt`, `showRestore
 
 ## AIChatSettingsSection
 
-Reusable section for AI chat model configuration. Unchanged from Phase 3; now composed inside `AiSection`.
+Reusable AI chat model group composed inside `AiSection`. It and `ResearchKeysSection` use the same
+`SettingsGroup`/`SettingRow` anatomy as every other settings section; Appearance's theme-variant picker
+also uses a stacked row instead of a hand-built heading/card pair.
 
 ### File
 

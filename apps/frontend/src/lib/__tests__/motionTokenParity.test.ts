@@ -136,6 +136,81 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
         expect(dangling).toEqual([]);
     });
 
+    it("requires direct press-feedback consumers to compose their transition list", () => {
+        const roots = [join(process.cwd(), "src")];
+        const violations: string[] = [];
+
+        while (roots.length) {
+            const dir = roots.pop()!;
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) {
+                    if (entry !== "node_modules") roots.push(full);
+                    continue;
+                }
+                if (!/\.tsx$/.test(entry)) continue;
+
+                const relative = full.replace(`${process.cwd()}/`, "");
+                const lines = readFileSync(full, "utf8")
+                    .replace(/\/\*[\s\S]*?\*\//g, "")
+                    .split("\n");
+                lines.forEach((line, index) => {
+                    const trimmed = line.trimStart();
+                    if (trimmed.startsWith("//")) return;
+                    const classLiteral = line.match(/["'`]([^"'`]*\bpress-feedback\b[^"'`]*)["'`]/)?.[1];
+                    if (!classLiteral) return;
+
+                    // Interactive Card composes at the higher-specificity CSS
+                    // rule because every instance shares one fixed list.
+                    if (relative === "src/components/ui/card.tsx") return;
+                    if (
+                        classLiteral.includes("--press-compose:") &&
+                        classLiteral.includes("transform_var(--duration-press)_ease-out")
+                    ) return;
+                    violations.push(`${relative}:${index + 1}`);
+                });
+            }
+        }
+
+        expect(violations).toEqual([]);
+    });
+
+    it("does not reintroduce literal transition-duration utilities or inline milliseconds", () => {
+        const roots = [join(process.cwd(), "src")];
+        const violations: string[] = [];
+        while (roots.length) {
+            const dir = roots.pop()!;
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) {
+                    if (entry !== "node_modules" && entry !== "__tests__") roots.push(full);
+                    continue;
+                }
+                if (!/\.(?:css|ts|tsx)$/.test(entry) || entry.includes(".test.")) continue;
+                const source = readFileSync(full, "utf8");
+                if (
+                    /\bduration-(?:100|150|200|300|500|600|700|1000)\b/.test(source) ||
+                    /\bduration-\[\d+ms\]/.test(source) ||
+                    /transition:\s*["'][^"']*\b\d+ms\b/.test(source)
+                ) {
+                    violations.push(full.replace(`${process.cwd()}/`, ""));
+                }
+            }
+        }
+        expect(violations).toEqual([]);
+    });
+
+    it("keeps the sidebar workspace-pill scale and press transitions distinct", () => {
+        const sidebar = readFileSync(
+            join(process.cwd(), "src/components/layout/AppSidebar.tsx"),
+            "utf8",
+        );
+        expect(sidebar).toContain(
+            "scale_var(--duration-normal)_var(--ease-glide)",
+        );
+        expect(sidebar).toContain("transform_var(--duration-press)_ease-out");
+    });
+
     it("keeps the shared durations in step (CSS ms <-> Framer seconds)", () => {
         const css = parseCssDurations();
         for (const key of Object.keys(css)) {
@@ -146,5 +221,12 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
         // now that PageTransition solely owns the page-level move.
         const framerOnly = Object.keys(durations).filter((k) => !(k in css));
         expect(framerOnly).toEqual(["page"]);
+    });
+
+    it("maps every CSS duration token into Tailwind transition utilities", () => {
+        const config = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
+        for (const key of Object.keys(parseCssDurations())) {
+            expect(config).toContain(`${key}: "var(--duration-${key})"`);
+        }
     });
 });

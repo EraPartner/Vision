@@ -1,17 +1,16 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Info } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { apiClient } from '@/lib/api';
-import { useState } from 'react';
-import type { StepProps } from './types';
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Search, Info } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { apiClient } from "@/lib/api";
+import { useState } from "react";
+import type { StepProps } from "./types";
 
 /**
  * Tax income source step.
@@ -22,12 +21,15 @@ import type { StepProps } from './types';
  */
 export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
-    const [filter, setFilter] = useState('');
+    const [filter, setFilter] = useState("");
 
     const categoriesQuery = useQuery({
-        queryKey: ['categories', 'all-for-tax-profile'],
+        queryKey: ["categories", "all-for-tax-profile"],
         queryFn: async () => {
-            const res = await apiClient.getCategories({ limit: 500, active: true });
+            const res = await apiClient.getCategories({
+                limit: 500,
+                active: true,
+            });
             return res.items;
         },
         staleTime: 60_000,
@@ -63,30 +65,36 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
         <div className="space-y-5">
             <div>
                 <p className="text-sm font-semibold text-foreground mb-1">
-                    {t('tax.profile.section.incomeSources.title')}
+                    {t("tax.profile.section.incomeSources.title")}
                 </p>
                 <p className="text-xs text-muted-foreground mb-3">
-                    {t('tax.profile.section.incomeSources.desc')}
+                    {t("tax.profile.section.incomeSources.desc")}
                 </p>
                 <div className="flex items-start gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
                     <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                     <p className="text-xs text-foreground">
-                        {t('tax.profile.section.incomeSources.note')}
+                        {t("tax.profile.section.incomeSources.note")}
                     </p>
                 </div>
             </div>
 
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">
-                        {t('tax.profile.section.incomeSources.categoriesLabel')}{' '}
-                        <Badge variant="outline" className="text-[10px] ml-1">
-                            {selected.length} {t('tax.profile.section.incomeSources.selected')}
+                    <p className="text-sm font-medium">
+                        {t("tax.profile.section.incomeSources.categoriesLabel")}{" "}
+                        <Badge variant="outline" className="text-2xs ml-1">
+                            {selected.length}{" "}
+                            {t("tax.profile.section.incomeSources.selected")}
                         </Badge>
-                    </Label>
+                    </p>
                     {selected.length > 0 && (
-                        <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs">
-                            {t('common.clear')}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearAll}
+                            className="text-xs"
+                        >
+                            {t("common.clear")}
                         </Button>
                     )}
                 </div>
@@ -94,8 +102,13 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
                 <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
+                        aria-label={t(
+                            "tax.profile.section.incomeSources.searchPlaceholder",
+                        )}
                         type="text"
-                        placeholder={t('tax.profile.section.incomeSources.searchPlaceholder')}
+                        placeholder={t(
+                            "tax.profile.section.incomeSources.searchPlaceholder",
+                        )}
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         className="pl-8 h-8 text-sm"
@@ -106,11 +119,11 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
 
                 {categoriesQuery.isLoading ? (
                     <p className="text-xs text-muted-foreground text-center py-8">
-                        {t('common.loading')}
+                        {t("common.loading")}
                     </p>
                 ) : filtered.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-8">
-                        {t('tax.profile.section.incomeSources.empty')}
+                        {t("tax.profile.section.incomeSources.empty")}
                     </p>
                 ) : (
                     <ScrollArea className="h-[260px] pr-3">
@@ -126,7 +139,9 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
                                         checked={selected.includes(c.id)}
                                         onCheckedChange={() => toggle(c.id)}
                                     />
-                                    <span className="text-sm text-foreground">{c.label}</span>
+                                    <span className="text-sm text-foreground">
+                                        {c.label}
+                                    </span>
                                 </label>
                             ))}
                         </div>

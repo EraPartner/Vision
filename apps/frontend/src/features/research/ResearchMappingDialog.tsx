@@ -219,11 +219,11 @@ export function ResearchMappingDialog({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{p.provider}</span>
                         {p.providerSymbol && (
-                          <Badge variant="secondary" className="font-mono text-[10px]">{p.providerSymbol}</Badge>
+                          <Badge variant="secondary" className="font-mono text-2xs">{p.providerSymbol}</Badge>
                         )}
                         <ProposalStatus status={p.status} />
                         {fromHolding && (
-                          <Badge variant="outline" className="text-[10px] border-success/30 text-success">
+                          <Badge variant="outline" className="text-2xs border-success/30 text-success">
                             {t('research.mapping.fromHolding')}
                           </Badge>
                         )}
@@ -267,7 +267,7 @@ export function ResearchMappingDialog({
               {existing.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 rounded-lg border border-border p-2.5">
                   <span className="font-semibold text-sm w-24 shrink-0">{m.provider}</span>
-                  <Badge variant="secondary" className="font-mono text-[10px]">{m.provider_symbol}</Badge>
+                  <Badge variant="secondary" className="font-mono text-2xs">{m.provider_symbol}</Badge>
                   <span className="text-xs text-muted-foreground truncate flex-1">
                     {[m.resolved_name, m.exchange, m.currency].filter(Boolean).join(" · ")}
                   </span>
@@ -333,5 +333,5 @@ function ProposalStatus({ status }: { status: MappingProposal["status"] }) {
     failed: { label: t('research.mapping.status.error'), className: "border-destructive/30 text-destructive" },
   };
   const entry = map[status] ?? map.none;
-  return <Badge variant="outline" className={cn("text-[10px]", entry.className)}>{entry.label}</Badge>;
+  return <Badge variant="outline" className={cn("text-2xs", entry.className)}>{entry.label}</Badge>;
 }

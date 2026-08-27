@@ -70,6 +70,7 @@ describe("useUpdateAccount", () => {
       await result.current.mutateAsync({ id: 3, data: { name: "Y" } as never });
     });
     expect(spy).toHaveBeenCalledWith(3, { name: "Y" });
+    expect(toast.success).toHaveBeenCalledWith("accounts.updated");
   });
 
   it("toasts an error on failure", async () => {

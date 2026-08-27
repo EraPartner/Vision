@@ -3,8 +3,19 @@ import type { ReactNode } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface MultiComboboxProps<T, V extends string | number> {
     value: V[];
@@ -23,6 +34,9 @@ interface MultiComboboxProps<T, V extends string | number> {
     popoverClassName?: string;
     disabled?: boolean;
     className?: string;
+    id?: string;
+    "aria-label"?: string;
+    "aria-labelledby"?: string;
 }
 
 export function MultiCombobox<T, V extends string | number>({
@@ -38,6 +52,9 @@ export function MultiCombobox<T, V extends string | number>({
     popoverClassName = "w-[280px]",
     disabled,
     className,
+    id,
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
 }: MultiComboboxProps<T, V>) {
     const [open, setOpen] = useState(false);
     const selectedSet = useMemo(() => new Set(value), [value]);
@@ -50,26 +67,38 @@ export function MultiCombobox<T, V extends string | number>({
         }
     }
 
-    const sorted = useMemo(() => [
-        ...items.filter((item) => selectedSet.has(getValue(item))),
-        ...items.filter((item) => !selectedSet.has(getValue(item))),
-    ], [items, selectedSet, getValue]);
+    const sorted = useMemo(
+        () => [
+            ...items.filter((item) => selectedSet.has(getValue(item))),
+            ...items.filter((item) => !selectedSet.has(getValue(item))),
+        ],
+        [items, selectedSet, getValue],
+    );
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
+                    id={id}
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
+                    aria-label={ariaLabel}
+                    aria-labelledby={ariaLabelledBy}
                     disabled={disabled}
-                    className={cn("justify-between font-normal h-8 text-sm", className)}
+                    className={cn(
+                        "justify-between font-normal h-8 text-sm",
+                        className,
+                    )}
                 >
                     <span className="truncate">{displayLabel}</span>
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className={cn(popoverClassName, "p-0 z-50")} align="start">
+            <PopoverContent
+                className={cn(popoverClassName, "p-0 z-50")}
+                align="start"
+            >
                 <Command>
                     <CommandInput placeholder={searchPlaceholder} />
                     <CommandList>
@@ -81,10 +110,21 @@ export function MultiCombobox<T, V extends string | number>({
                                 return (
                                     <CommandItem
                                         key={v}
-                                        value={getSearchValue ? getSearchValue(item) : String(v)}
+                                        value={
+                                            getSearchValue
+                                                ? getSearchValue(item)
+                                                : String(v)
+                                        }
                                         onSelect={() => toggle(v)}
                                     >
-                                        <Check className={cn("mr-2 h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
+                                        <Check
+                                            className={cn(
+                                                "mr-2 h-4 w-4",
+                                                selected
+                                                    ? "opacity-100"
+                                                    : "opacity-0",
+                                            )}
+                                        />
                                         {renderItem(item)}
                                     </CommandItem>
                                 );

@@ -3,10 +3,50 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-26
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass, small-viewport-robustness, badge-size-variant]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via hooks/useGenieOrigin.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier. Aug 2026 (small-viewport robustness, PR #156): Badge gains `size` (`default`/`sm`) and `muted` variants; DialogContent caps at `max-h-[90vh] overflow-y-auto`; TabsList scrolls horizontally with a hidden scrollbar; AccordionTrigger gains a `trailing` slot for header-row controls that must not nest inside the trigger button.
-aliases: [ui-components, radix-components, shadcn-components, primitive-components]
+updated: 2026-08-27
+tags:
+  [
+    components,
+    ui,
+    radix,
+    shadcn,
+    design-system,
+    phase-9,
+    phase-5,
+    performance,
+    glass-downgrade,
+    dependency-slim-down,
+    liquid-glass-v2,
+    premium-v3,
+    june-2026,
+    command-palette,
+    rolling-number,
+    money-typography,
+    delta-pill,
+    shortcuts-overlay,
+    chart-skeleton,
+    virtual-data-table,
+    context-menu,
+    quick-look,
+    keyboard-nav,
+    dialog-genie,
+    icon-bounce,
+    semantic-tokens,
+    focus-visible,
+    overscroll,
+    glass-chrome,
+    liquid-glass-sidebar,
+    canvas-text,
+    aurora-legibility,
+    glass-consistency,
+    popover-glass-thick,
+    role-based-glass,
+    small-viewport-robustness,
+    badge-size-variant,
+  ]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 established the glass and premium-frame system; current Card behavior keeps the resting frame and glass material in the base and gates hover lift, elevated shadow, and press feedback behind `variant="interactive"`. Dialog/AlertDialog use dialog-in/out keyframes; Sonner toasts are glass-thick; EmptyState and CommandPalette are shared primitives. June 2026 Premium v3 added RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton, animated tabs, VirtualDataTable context menus/keyboard navigation, TransactionQuickLook, success-icon motion, and dialog genie exits. June 2026 consistency work tokenized raw palette/focus/overscroll behavior and converted the full popover family to glass-thick. Aug 2026 small-viewport work added Badge sizes, bounded DialogContent, horizontally scrolling TabsList, and Accordion trailing controls. 2026-08-27 synchronizes the Card and press-feedback motion contract.
+aliases:
+  [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
 
@@ -27,18 +67,19 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 
 **Glass-based surfaces** (blur + saturate, `backdrop-filter`):
 
-| Class | Blur | Usage |
-|-------|------|-------|
-| `.glass-thin` | 12px | Subtle interactive elements |
-| `.glass-regular` | 20px | **All content / chart / stat / state cards** (role-based glass, June 2026 — see note below); also AI-chat panes |
-| `.glass-chrome` | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur |
-| `.glass-thick` | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
-| `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard) |
+| Class             | Blur | Usage                                                                                                                                                                                                        |
+| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.glass-thin`     | 12px | Subtle controls, top chrome, and sticky table headers                                                                                                                                                        |
+| `.glass-regular`  | 20px | **All content / chart / stat / state cards** (role-based glass, June 2026 — see note below); also AI-chat panes                                                                                              |
+| `.glass-chrome`   | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur                                                                      |
+| `.glass-thick`    | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
+| `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                              |
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
 
 > [!info] June 2026 — `.glass-sticky-col` (tier-aware frozen-column helper)
 > A `position: sticky` first column inside a glass card needs a background opaque enough to occlude the value cells scrolling beneath it. Plain `bg-card` reads as a matte slab against the translucent card; a per-cell **gradient** is worse (it bands row-to-row down the stack of frozen cells); and `saturate()` over the blur amplifies the aurora behind the card into a muddy tint on the narrow column. `.glass-sticky-col` instead uses a **flat** tint that blends into the card material plus a plain (no-saturate) backdrop blur, scaled by the visual-effects tier (ADR-075):
+>
 > - **reduced** (`.fx-reduced`) / `prefers-reduced-transparency` / no `backdrop-filter` support → fully opaque `hsl(var(--card))`, no blur.
 > - **standard** (base) → `hsl(var(--card) / 0.72)` + `blur(12px)`.
 > - **enhanced** (`.fx-enhanced`) → `hsl(var(--card) / 0.55)` + `blur(16px)` — the card glass reads softly through the column.
@@ -46,13 +87,14 @@ All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode
 > The freeze edge is a **soft drop shadow** (`box-shadow: 7px 0 12px -9px …`) — a depth cue, not a hairline border (an earlier hairline read as a "weird border"). `VisualEffectsController` also tags `<html>` with `fx-enhanced` (standard carries no tier class — it is the CSS base). Used by the Category Pivot Table (`CategoryPivotTable.tsx`) on its frozen Category column: header, group/detail rows, and total row.
 
 > [!info] June 2026 — Role-based glass broadening (no ADR yet; a future ADR may formalize this)
-> ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened in June 2026 to a **role-based** model: `glass-regular` is now applied to ALL content / chart / stat / state (loading/empty/error) cards so peers shine consistently. The base `Card` component was NOT modified — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque under `fx-reduced` and on large displays). Profiling the packaged Electron app on Apple Silicon before each release remains the recommended watchpoint.
+> ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened to a **role-based** model: the base `Card` now carries `glass-regular` so content/chart/stat/state peers shine consistently. Dense tables, forms, placeholders, callouts, and nested cards opt out with their own opaque surface classes. GPU trade-off: card-dense pages can exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt. Profile the packaged Electron app on Apple Silicon before each release.
 
 **`.glass-chrome` sidebar transparency (June 2026):** Background alphas were lowered from 0.72→0.88 (light) / 0.82→0.96 (dark) to 0.55→0.72 / 0.55→0.74, making the sidebar visibly liquid: the aurora blobs and Electron vibrancy glow through the blur. The blur + saturate veil keeps text legibility even at the lowest alpha. Browsers that lack `backdrop-filter` support fall back to a near-opaque ramp (0.92→0.98) via an `@supports not` rule. `prefers-reduced-transparency` fallback is unchanged.
 
 **`prefers-reduced-transparency`** — strips `backdrop-filter` and applies near-opaque fallbacks. (Previously incorrectly gated on `prefers-reduced-motion`; corrected in ADR-070.)
 
 **Opaque surfaces** (no `backdrop-filter` — role-based exceptions):
+
 - `DataTable`, `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — stay opaque; dense row rendering under a backdrop-filter exceeds GPU budget with no readability benefit
 - Dense form/import cards — opaque by design
 - Dashed "add" placeholder cards (`bg-muted/30 border-dashed`) — intentionally flat
@@ -67,25 +109,44 @@ All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode
 > [!info] Popover family converted to glass-thick (June 2026)
 > Previously only the dialog family (Dialog, AlertDialog, Sheet) and Sonner toasts used `glass-thick`. The full popover family (Popover, DropdownMenu, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) was on the flat `bg-popover` fallback. All content/overlay layers in this family now use `glass-thick`, achieving uniform material across every floating surface. The `bg-popover` token, redundant `border border-border/50`, and `shadow-lg/md` were dropped from each primitive (glass-thick supplies them). Reduced-transparency and dark-mode fallbacks in `index.css` already covered glass-thick and are inherited automatically.
 
+Floating overlays keep a quieter motion hierarchy than modal dialogs. Popover, DropdownMenu,
+SelectContent, ContextMenu, and Tooltip retain their subtle scale/directional transitions but use
+`--duration-fast` with `--ease-out-expo`. Both entry and exit animation are disabled under
+`prefers-reduced-motion`. Sheet retains its larger side-slide at `--duration-slow` on entry and
+`--duration-normal` on exit; content and dimming overlay share those tokens and the same two-state
+reduced-motion gate.
+
 **Removed UI wrappers (Phase 5 slim-down)**:
+
 - `Carousel` — unused wrapper around embla-carousel-react; removed with package
 - `Resizable` — unused wrapper around react-resizable-panels; removed with package
 - `Drawer` — unused wrapper around vaul; removed with package (using Sheet instead)
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
 
+`CardTitle` has three named typography roles: `default` for a 2xl display title,
+`sm` for the smallest supported display title (`text-lg`), and `label` for the
+body-font eyebrow role used by KPI labels. Call sites do not downsize the display
+face with `text-xs`, `text-sm`, or `text-base` overrides.
+
+Its semantic heading level is independent of typography. `CardTitle` defaults to
+`level={2}` so a page card follows the page `h1` without skipping a level. Use
+`level={3}` or `level={4}` only when the card is genuinely nested beneath a visible
+parent section heading; do not choose a level to obtain a visual size.
+
 **Motion and premium polish utilities**:
 
-- `.micro-lift` — hover elevation (`translateY(-2px)` + shadow increase, GPU-safe)
-- `.press-feedback` — subtle click/tap compression feedback (`transform: scale(0.97)` at a deliberate 90ms/`ease-out`). It owns the element's `transition` **shorthand**, so a consumer that declares its own transitions must supply its full list — restating the `transform 90ms ease-out` press entry verbatim — via the `--press-compose` custom property (e.g. `[--press-compose:background-color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out]`), **not** via `transition-*` utilities, which the shorthand silently clobbers (Aug 2026 fix: Button, sidebar segmented control, onboarding tiles, research tiles all lost their declared background/box-shadow/color fades this way). Registered non-inheriting via `@property`; the interactive Card composes through its own higher-specificity rule instead. See the comment block at `.press-feedback` in `index.css`.
+- `.micro-lift` — a non-Card hover elevation (`translateY(-1px)`); it does not add a shadow.
+- `.press-feedback` — subtle click/tap compression feedback (`transform: scale(0.97)` at `--duration-press`/`ease-out`). It owns the element's `transition` **shorthand**. Direct TSX consumers therefore put their full transition list in the non-inheriting `--press-compose` custom property and restate `transform var(--duration-press) ease-out`; the source contract test enforces both entries. Do not use `transition-*` utilities beside `.press-feedback`, because the shorthand clobbers them. Interactive Card is the sole exception: its higher-specificity CSS rule composes one fixed list for every instance.
 - `.premium-icon-action` — premium icon-button hover/focus polish in chrome controls
-- `.premium-frame` — baked into base `Card` (since ADR-070) — primary-tinted hover outline; previously had to be added per callsite. Declares the same full `transition` list as `micro-lift` (border-color, box-shadow, transform) so both classes harmonize when combined.
+- `.premium-frame` — the resting frame baked into the Card base.
+- `.premium-frame-interactive` — added only by `Card variant="interactive"`; owns the hover outline, lift, pre-rendered elevated-shadow crossfade, composed press response, and reduced-motion cancellation.
 - `.icon-touch-target` — consistent touch-safe icon action hit areas (2.5rem square)
 - `.liquid-canvas` — fixed-position atmosphere wrapper rendered by `AppLayout`
 - `.liquid-canvas-grain` — SVG grain child of the atmosphere layer
 - `.canvas-text` — canvas-text legibility guarantee (see below)
 
-Shared table shells (`DataTable`, `VirtualDataTable`) use `premium-frame` + `micro-lift` (opaque, non-glass) for density and readability.
+Dense table shells override the base material with an opaque surface. They do not add Card hover motion unless the table itself has a real activation affordance.
 
 `prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar `ActiveRail` transitions are instant.
 
@@ -96,6 +157,7 @@ Text rendered directly over the aurora canvas can be washed out when a bright bl
 **Scope**: The halo is applied in dark mode only (`.dark`-scoped). Light mode text is darker than any canvas peak so it needs no supplement.
 
 **Coverage**:
+
 - `dark:` `h1`, `h2`, `h3`, `.font-display` — unconditionally, app-wide
 - `.canvas-text` subtree — all `h1/h2/h3/p/span/div` children inside the subtree receive the same halo
 
@@ -115,18 +177,18 @@ Approximately 130 raw Tailwind palette colors (`text-green-600 dark:text-green-4
 
 **Semantic tokens in use:**
 
-| Token | Meaning | Usage |
-|-------|---------|-------|
-| `text-success` / `bg-success` / `border-success` / `ring-success` | Positive/income/green | Profit indicators, income amounts, success states |
-| `text-destructive` / `bg-destructive` / `border-destructive` / `ring-destructive` | Negative/expense/red | Loss indicators, expense amounts, error states |
-| `text-warning` / `bg-warning` / `border-warning` | Caution/amber | Warning banners, caution states |
+| Token                                                                             | Meaning                  | Usage                                             |
+| --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------- |
+| `text-success` / `bg-success` / `border-success` / `ring-success`                 | Positive/income/green    | Profit indicators, income amounts, success states |
+| `text-destructive` / `bg-destructive` / `border-destructive` / `ring-destructive` | Negative/expense/red     | Loss indicators, expense amounts, error states    |
+| `text-warning` / `bg-warning` / `border-warning`                                  | Caution/amber            | Warning banners, caution states                   |
+| `text-info` / `bg-info` / `border-info`                                           | Neutral information/blue | Import status, HTTP GET, frozen-year information  |
 
 These tokens resolve to the correct color for both light and dark modes and respect the macOS system-accent overlay (ADR-072) and all five theme variants.
 
 **Deliberately preserved raw colors (not converted):**
 
-- Categorical palettes: watchlist asset-class hue map, performance allocation series colors, PerformanceBreakdown heatmap ramp, onboarding step decorations, devtools HTTP-method color map
-- Blue info accents (`text-blue-*`) — no `--info` semantic token exists yet
+- Categorical palettes: watchlist asset-class hue map, performance allocation series colors, PerformanceBreakdown heatmap ramp, onboarding step decorations
 - Chart series colors (visx color scales)
 
 **`alert` + `badge` success variants:** The `alert.tsx` and `badge.tsx` primitives gained a `success` CVA variant using `bg-success/10 text-success border-success/20`.
@@ -150,26 +212,31 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 > [!info] June 2026 update — atmosphere layer, topbar, CommandPalette, PageTransition re-added
 
 **AppLayout.tsx** — Main app container:
+
 - Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`. Sets `data-workspace` on the liquid canvas for workspace-aware hue swaps (premium v3).
-- Conditionally renders `ShaderAurora` inside the liquid canvas when `appSettings.enhancedEffects === true` (premium v3). The CSS aurora blobs are always rendered underneath as a fallback.
+- Conditionally renders `ShaderAurora` inside the liquid canvas when the effective ADR-075 visual-effects tier is `enhanced`. The CSS aurora blobs are always rendered underneath as a fallback.
 - Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set; passive scroll listener sets the attribute. Also shows page title (from `PageTitleContext`) past 96px scroll (premium v3).
 - Mounts `CommandPalette` with topbar ⌘K trigger button.
 - Mounts `ShortcutsOverlay` (`?` key) alongside `CommandPalette` (premium v3).
 - Wraps child routes in `PageTransition` (enter-only spring).
 - Sidebar + chrome: `.glass-chrome` (24px blur, saturated).
+- The first keyboard stop is a focus-visible skip link that moves focus to `main#main`. `AppSidebar` exposes its shared desktop/mobile menu as a localized navigation landmark, and its trigger and rail use the same localized toggle label.
 
 **AppSidebar.tsx** — Navigation chrome:
+
 - `.glass-chrome` with active-route accent rail.
 - Active rail is now a framer-motion `layoutId="active-rail"` element (`ActiveRail`) that animates between nav items on route change; instant under reduced motion.
 - Item `onMouseEnter` triggers `routePreload(path)` via `lib/routePreload.ts` to warm route chunks before click.
 - `micro-lift` on hover.
 
 **PageTransition.tsx** — New in June 2026 (enter-only spring):
+
 - Enter-only `motion.div` spring keyed on `location.pathname` — no `AnimatePresence` exit to avoid double-rendering React Suspense boundaries around lazy routes.
 - Instant transition when `prefers-reduced-motion` is active.
 - Was removed in 2026-04-17 (ADR-020); re-added as enter-only in 2026-06-10 (ADR-070).
 
 **CommandPalette.tsx** — New in June 2026:
+
 - ⌘K / Ctrl+K keyboard shortcut, also triggered by topbar button.
 - Built on `cmdk` library; covers all budgeting/portfolio/admin pages, theme variant switch, and settings navigation.
 - Cross-workspace jumps sync the sidebar workspace automatically.
@@ -184,12 +251,16 @@ Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/fronte
 **Typography stack** (after font optimization, 2026-04-17):
 
 - **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
-- **Body**: Inter (static weights: 400/500/600, latin subset) — copy, labels, form inputs
+- **Body**: Inter (static weights: 400/500/600/700 plus 400 italic, latin subset) — copy, labels, form inputs, and monetary values
+- **Mono**: SF Mono / JetBrains Mono fallback stack — identifiers and code such as tickers, IBANs, SQL, and API paths; never monetary amounts. `<Money>` owns the canonical Inter/body tabular treatment for currency.
+- **Dense microcopy**: `text-2xs` (11px/14px) is the named minimum for chart labels, compact badges, and developer chrome. Do not mint arbitrary `text-[10px]` or `text-[11px]` utilities.
+- **Eyebrow labels**: `.eyebrow` owns the uppercase 11px/14px, medium-weight, 0.12em-tracking muted label role. Semantic color utilities may override its muted default; do not rebuild the typography recipe per file.
 - **Self-hosted**: Font files loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files, no preload needed)
 
 Previous: Variable font ranges (`@fontsource-variable/*`) superseded by static weight selection (5kb savings, faster download).
 
 CSS cleanup:
+
 - Removed: `-webkit-font-smoothing: antialiased` (redundant in modern webkit)
 - Removed: `text-rendering: optimizeLegibility` (can cause layout jank on dynamic text)
 
@@ -200,6 +271,8 @@ Code links: [[apps/frontend/package.json]], [[apps/frontend/src/index.css]]
 Page-level consistency is provided by reusable shared components:
 
 - `PageHeader` for canonical page title/subtitle/icon/actions layout
+- Destination identity icons come from `lib/pageIcons.ts`. Sidebar, command palette, page headers, and identity empty states must not choose separate icons for the same route.
+- Ordinary section and chart headings are text-first. Keep an icon only when it communicates identity, state, action, or distinguishes sibling cards; do not add an icon that merely repeats the heading noun.
 - `EmptyState` for standardized empty-state messaging and CTA composition (see below)
 - `PageError` for standardized recoverable error presentation
 
@@ -229,86 +302,86 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 ### Actions
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Button | Versatile button with multiple variants | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]] |
-| IconButton | Square icon-only button | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]] |
-| Command | Searchable command menu | [[apps/frontend/src/components/ui/command.tsx\|command.tsx]] |
+| Component  | Description                             | File                                                         |
+| ---------- | --------------------------------------- | ------------------------------------------------------------ |
+| Button     | Versatile button with multiple variants | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]]   |
+| IconButton | Square icon-only button                 | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]]   |
+| Command    | Searchable command menu                 | [[apps/frontend/src/components/ui/command.tsx\|command.tsx]] |
 
 ### Forms
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Input | Text input field | [[apps/frontend/src/components/ui/input.tsx\|input.tsx]] |
-| Textarea | Multi-line text input | [[apps/frontend/src/components/ui/textarea.tsx\|textarea.tsx]] |
-| Select | Dropdown select | [[apps/frontend/src/components/ui/select.tsx\|select.tsx]] |
-| Checkbox | Binary checkbox | [[apps/frontend/src/components/ui/checkbox.tsx\|checkbox.tsx]] |
-| RadioGroup | Radio button group | [[apps/frontend/src/components/ui/radio-group.tsx\|radio-group.tsx]] |
-| Switch | Toggle switch | [[apps/frontend/src/components/ui/switch.tsx\|switch.tsx]] |
-| Slider | Range slider | [[apps/frontend/src/components/ui/slider.tsx\|slider.tsx]] |
-| Label | Form label | [[apps/frontend/src/components/ui/label.tsx\|label.tsx]] |
-| Form | Form wrapper with validation | [[apps/frontend/src/components/ui/form.tsx\|form.tsx]] |
+| Component  | Description                  | File                                                                 |
+| ---------- | ---------------------------- | -------------------------------------------------------------------- |
+| Input      | Text input field             | [[apps/frontend/src/components/ui/input.tsx\|input.tsx]]             |
+| Textarea   | Multi-line text input        | [[apps/frontend/src/components/ui/textarea.tsx\|textarea.tsx]]       |
+| Select     | Dropdown select              | [[apps/frontend/src/components/ui/select.tsx\|select.tsx]]           |
+| Checkbox   | Binary checkbox              | [[apps/frontend/src/components/ui/checkbox.tsx\|checkbox.tsx]]       |
+| RadioGroup | Radio button group           | [[apps/frontend/src/components/ui/radio-group.tsx\|radio-group.tsx]] |
+| Switch     | Toggle switch                | [[apps/frontend/src/components/ui/switch.tsx\|switch.tsx]]           |
+| Slider     | Range slider                 | [[apps/frontend/src/components/ui/slider.tsx\|slider.tsx]]           |
+| Label      | Form label                   | [[apps/frontend/src/components/ui/label.tsx\|label.tsx]]             |
+| Form       | Form wrapper with validation | [[apps/frontend/src/components/ui/form.tsx\|form.tsx]]               |
 
 ### Feedback
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Alert | Alert message box | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]] |
-| AlertDialog | Confirmation dialog | [[apps/frontend/src/components/ui/alert-dialog.tsx\|alert-dialog.tsx]] |
-| Sonner | Toast notification system | [[apps/frontend/src/components/ui/sonner.tsx\|sonner.tsx]] |
-| Progress | Progress bar | [[apps/frontend/src/components/ui/progress.tsx\|progress.tsx]] |
-| Skeleton | Loading placeholder | [[apps/frontend/src/components/ui/skeleton.tsx\|skeleton.tsx]] |
+| Component   | Description               | File                                                                   |
+| ----------- | ------------------------- | ---------------------------------------------------------------------- |
+| Alert       | Alert message box         | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]]               |
+| AlertDialog | Confirmation dialog       | [[apps/frontend/src/components/ui/alert-dialog.tsx\|alert-dialog.tsx]] |
+| Sonner      | Toast notification system | [[apps/frontend/src/components/ui/sonner.tsx\|sonner.tsx]]             |
+| Progress    | Progress bar              | [[apps/frontend/src/components/ui/progress.tsx\|progress.tsx]]         |
+| Skeleton    | Loading placeholder       | [[apps/frontend/src/components/ui/skeleton.tsx\|skeleton.tsx]]         |
 
 ### Layout
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Card | Content container | [[apps/frontend/src/components/ui/card.tsx\|card.tsx]] |
-| Sheet | Side/modal drawer panel | [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]] |
-| Separator | Visual divider | [[apps/frontend/src/components/ui/separator.tsx\|separator.tsx]] |
-| Accordion | Collapsible sections | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]] |
-| Collapsible | Collapsible content | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]] |
-| AspectRatio | Fixed aspect ratio | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
+| Component   | Description             | File                                                                   |
+| ----------- | ----------------------- | ---------------------------------------------------------------------- |
+| Card        | Content container       | [[apps/frontend/src/components/ui/card.tsx\|card.tsx]]                 |
+| Sheet       | Side/modal drawer panel | [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]]               |
+| Separator   | Visual divider          | [[apps/frontend/src/components/ui/separator.tsx\|separator.tsx]]       |
+| Accordion   | Collapsible sections    | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]]       |
+| Collapsible | Collapsible content     | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]]   |
+| AspectRatio | Fixed aspect ratio      | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
 
 ### Navigation
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Sidebar | Collapsible sidebar | [[apps/frontend/src/components/ui/sidebar.tsx\|sidebar.tsx]] |
-| Tabs | Tabbed content | [[apps/frontend/src/components/ui/tabs.tsx\|tabs.tsx]] |
-| NavigationMenu | Navigation menu | [[apps/frontend/src/components/ui/navigation-menu.tsx\|navigation-menu.tsx]] |
-| Breadcrumb | Breadcrumb trail | [[apps/frontend/src/components/ui/breadcrumb.tsx\|breadcrumb.tsx]] |
-| DropdownMenu | Dropdown menu | [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]] |
-| ContextMenu | Right-click menu | [[apps/frontend/src/components/ui/context-menu.tsx\|context-menu.tsx]] |
-| MenuBar | Menu bar | [[apps/frontend/src/components/ui/menubar.tsx\|menubar.tsx]] |
+| Component      | Description         | File                                                                         |
+| -------------- | ------------------- | ---------------------------------------------------------------------------- |
+| Sidebar        | Collapsible sidebar | [[apps/frontend/src/components/ui/sidebar.tsx\|sidebar.tsx]]                 |
+| Tabs           | Tabbed content      | [[apps/frontend/src/components/ui/tabs.tsx\|tabs.tsx]]                       |
+| NavigationMenu | Navigation menu     | [[apps/frontend/src/components/ui/navigation-menu.tsx\|navigation-menu.tsx]] |
+| Breadcrumb     | Breadcrumb trail    | [[apps/frontend/src/components/ui/breadcrumb.tsx\|breadcrumb.tsx]]           |
+| DropdownMenu   | Dropdown menu       | [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]]     |
+| ContextMenu    | Right-click menu    | [[apps/frontend/src/components/ui/context-menu.tsx\|context-menu.tsx]]       |
+| MenuBar        | Menu bar            | [[apps/frontend/src/components/ui/menubar.tsx\|menubar.tsx]]                 |
 
 ### Data Display
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Table | Data table | [[apps/frontend/src/components/ui/table.tsx\|table.tsx]] |
-| Badge | Status badge | [[apps/frontend/src/components/ui/badge.tsx\|badge.tsx]] |
-| Avatar | User avatar | [[apps/frontend/src/components/ui/avatar.tsx\|avatar.tsx]] |
+| Component | Description     | File                                                               |
+| --------- | --------------- | ------------------------------------------------------------------ |
+| Table     | Data table      | [[apps/frontend/src/components/ui/table.tsx\|table.tsx]]           |
+| Badge     | Status badge    | [[apps/frontend/src/components/ui/badge.tsx\|badge.tsx]]           |
+| Avatar    | User avatar     | [[apps/frontend/src/components/ui/avatar.tsx\|avatar.tsx]]         |
 | HoverCard | Popup info card | [[apps/frontend/src/components/ui/hover-card.tsx\|hover-card.tsx]] |
-| Tooltip | Hover tooltip | [[apps/frontend/src/components/ui/tooltip.tsx\|tooltip.tsx]] |
-| Popover | Popup content | [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]] |
+| Tooltip   | Hover tooltip   | [[apps/frontend/src/components/ui/tooltip.tsx\|tooltip.tsx]]       |
+| Popover   | Popup content   | [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]]       |
 
 ### Charts
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Chart | Base chart component | `chart.tsx` (removed in ADR-018; current chart components live under `apps/frontend/src/components/charts/`) |
+| Component | Description          | File                                                                                                         |
+| --------- | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Chart     | Base chart component | `chart.tsx` (removed in ADR-018; current chart components live under `apps/frontend/src/components/charts/`) |
 
 ### Utilities
 
-| Component | Description | File |
-|-----------|-------------|------|
-| Pagination | Page navigation | [[apps/frontend/src/components/ui/pagination.tsx\|pagination.tsx]] |
-| ScrollArea | Scrollable container | [[apps/frontend/src/components/ui/scroll-area.tsx\|scroll-area.tsx]] |
-| Calendar | Date picker calendar | [[apps/frontend/src/components/ui/calendar.tsx\|calendar.tsx]] |
-| Toggle | Binary toggle | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]] |
-| ToggleGroup | Toggle button group | [[apps/frontend/src/components/ui/toggle-group.tsx\|toggle-group.tsx]] |
-| InputOTP | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]] |
+| Component   | Description             | File                                                                   |
+| ----------- | ----------------------- | ---------------------------------------------------------------------- |
+| Pagination  | Page navigation         | [[apps/frontend/src/components/ui/pagination.tsx\|pagination.tsx]]     |
+| ScrollArea  | Scrollable container    | [[apps/frontend/src/components/ui/scroll-area.tsx\|scroll-area.tsx]]   |
+| Calendar    | Date picker calendar    | [[apps/frontend/src/components/ui/calendar.tsx\|calendar.tsx]]         |
+| Toggle      | Binary toggle           | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]]             |
+| ToggleGroup | Toggle button group     | [[apps/frontend/src/components/ui/toggle-group.tsx\|toggle-group.tsx]] |
+| InputOTP    | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]]       |
 
 ---
 
@@ -349,12 +422,12 @@ Primary action component with multiple variants.
 
 ### Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `variant` | `'default' \| 'destructive' \| 'outline' \| 'secondary' \| 'ghost' \| 'link'` | `'default'` | Visual style |
-| `size` | `'default' \| 'sm' \| 'lg' \| 'icon'` | `'default'` | Size |
-| `asChild` | `boolean` | `false` | Render as child element |
-| `disabled` | `boolean` | `false` | Disabled state |
+| Prop       | Type                                                                          | Default     | Description             |
+| ---------- | ----------------------------------------------------------------------------- | ----------- | ----------------------- |
+| `variant`  | `'default' \| 'destructive' \| 'outline' \| 'secondary' \| 'ghost' \| 'link'` | `'default'` | Visual style            |
+| `size`     | `'default' \| 'sm' \| 'lg' \| 'icon'`                                         | `'default'` | Size                    |
+| `asChild`  | `boolean`                                                                     | `false`     | Render as child element |
+| `disabled` | `boolean`                                                                     | `false`     | Disabled state          |
 
 ---
 
@@ -370,9 +443,7 @@ Content container with header, content, and footer sections.
     <CardTitle>Title</CardTitle>
     <CardDescription>Description</CardDescription>
   </CardHeader>
-  <CardContent>
-    Content goes here
-  </CardContent>
+  <CardContent>Content goes here</CardContent>
   <CardFooter>
     <Button>Action</Button>
   </CardFooter>
@@ -388,7 +459,9 @@ Content container with header, content, and footer sections.
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
 
-`Card` now has `premium-frame` baked into its base class (June 2026, ADR-070). All cards receive the primary-tinted hover outline and transition list (border-color, box-shadow, transform) without adding any class manually. Add `glass-regular` / `glass-elevated` via `className` to opt into the glass material — the role-based glass rule (June 2026) means all content/chart/stat/state cards should carry `glass-regular`; the base Card itself is intentionally left opaque for tables, forms, and other exceptions (see opaque surfaces list above).
+`Card` now has `glass-regular` and the resting `premium-frame` baked into its base class. Static cards do not lift or glow on hover. Use `variant="interactive"` only for activatable cards and deliberately promoted KPI/hero surfaces; that variant adds `premium-frame-interactive`, hover lift, press feedback, and reduced-motion handling. Dense tables, forms, and other opaque exceptions override the base material through their surface class. Do not add `premium-frame` or `micro-lift` manually to a Card.
+
+`CardContent` owns repeated padding shapes through named roles. Use `default` after a header or when nested content owns its vertical inset, `headerless` for ordinary first-child content needing the full 24px inset, `flush` for edge-to-edge tables or media, `compact` for dense controls, `row` for vertically compact rows and summaries, and `state` for short centered empty/error states. Keep `className` for layout and one-off spacing only; do not restate a named role's padding classes at the call site. Component-owned exceptions are the compact `p-1` search result shell, the one-off `py-3` match banner, the investment dialog's asymmetric `pt-4` sections, large empty canvases, and `StatCard`'s size-coupled padding.
 
 ---
 
@@ -399,7 +472,7 @@ Standard text input field.
 ### Usage
 
 ```tsx
-<Input 
+<Input
   type="number"
   placeholder="Enter amount"
   value={value}
@@ -409,12 +482,12 @@ Standard text input field.
 
 ### Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `type` | `string` | Input type (text, number, email, password) |
-| `placeholder` | `string` | Placeholder text |
-| `value` | `string` | Controlled value |
-| `disabled` | `boolean` | Disabled state |
+| Prop          | Type      | Description                                |
+| ------------- | --------- | ------------------------------------------ |
+| `type`        | `string`  | Input type (text, number, email, password) |
+| `placeholder` | `string`  | Placeholder text                           |
+| `value`       | `string`  | Controlled value                           |
+| `disabled`    | `boolean` | Disabled state                             |
 
 ---
 
@@ -458,7 +531,9 @@ V10 adds pointer-driven transform-origin for dialog close animations:
 - **`dialog-out` keyframe target** (tailwind.config.ts): now animates to `scale(var(--genie-scale, 0.97)) translateY(var(--genie-y, 6px))` — pointer-opened dialogs shrink toward the pointer; keyboard-opened dialogs fall back to the previous neutral exit. Duration increased from 160 ms to 200 ms for readable travel.
 - **Closed-state**: `data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)]` is applied in `dialog.tsx` and `alert-dialog.tsx`.
 - **`composeRefs` helper**: exported from `lib/composeRefs.ts` for merging multiple React refs on the same element.
-- **Sheets**: not affected (Sheet polish remains on the v4 candidate list).
+- **Sheets**: do not use the pointer-driven genie origin. Their directional slide is deliberately
+  quieter than Dialog: tokenized slow entry, normal exit, matching overlay timing, and complete
+  entry/exit reduced-motion gates.
 - **Reduced motion**: unaffected — `animate-none` already kills both keyframes.
 
 ```typescript
@@ -501,18 +576,33 @@ All Sonner success toast icons receive an SF-Symbols-style bounce animation auto
 ```css
 /* index.css — covers all ~75 toast.success() call sites */
 [data-sonner-toast][data-type="success"] [data-icon] {
-  animation: icon-success-bounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: icon-success-bounce var(--duration-reveal) var(--ease-out-expo)
+    150ms both;
 }
 
 @keyframes icon-success-bounce {
-  0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; }
-  60%  { transform: scale(1.15) rotate(4deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); }
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 ```
 
 - The `.icon-success-bounce` utility class is also available for ad-hoc use on any icon element (e.g., the `CheckCircle2` in `TransactionImportCard`'s import-complete summary).
-- `prefers-reduced-motion: reduce` sets `animation: none` on the class and the global rule.
+- Vision overrides Sonner's runtime-injected motion with the shared `--duration-*` and `--ease-*` tokens for stack reflow, arrival, dismissal, swipe-out, toast children, promise icons, close and action buttons, and the loader. The declarations use `!important` because Sonner injects its stylesheet after the application stylesheet.
+- `prefers-reduced-motion: reduce` disables the success bounce and all Sonner stack, toast, child, promise, swipe, and loader motion.
+- The visible, Alt+T-focusable Sonner region has `aria-live="off"`. `Toaster` mirrors new and updated ordinary messages into a polite screen-reader region and errors into an assertive region, avoiding duplicate announcements while preserving the keyboard shortcut.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/features/imports/TransactionImportCard.tsx]]
 
@@ -615,12 +705,8 @@ Code link: [[apps/frontend/src/components/ui/tabs.tsx]]
     <TabsTrigger value="overview">Overview</TabsTrigger>
     <TabsTrigger value="details">Details</TabsTrigger>
   </TabsList>
-  <TabsContent value="overview">
-    Overview content
-  </TabsContent>
-  <TabsContent value="details">
-    Details content
-  </TabsContent>
+  <TabsContent value="overview">Overview content</TabsContent>
+  <TabsContent value="details">Details content</TabsContent>
 </Tabs>
 ```
 
@@ -650,15 +736,14 @@ Collapsible sections built on `@radix-ui/react-accordion`.
 ```tsx
 <AccordionTrigger
   headerClassName="px-4"
-  trailing={
-    <RecipientCombobox value={value} onSelect={onSelect} />
-  }
+  trailing={<RecipientCombobox value={value} onSelect={onSelect} />}
 >
   <span>Row label</span>
 </AccordionTrigger>
 ```
 
 When `trailing` is set:
+
 - The `AccordionPrimitive.Header` itself becomes the flex row; the trigger shrinks to just the label, `trailing` is rendered as its sibling, and the chevron moves **outside** the trigger button so it still paints last.
 - `headerClassName` carries the row-box classes (padding, etc.) since the header now owns the row box — `className` on `AccordionTrigger` still targets the trigger button itself.
 - The chevron keeps its open/close rotation and hover color via a `group/accordion-row` class on the header (Radix mirrors `data-state` onto the header element), and forwards clicks to the trigger so the "click the chevron to toggle" affordance survives the move out of the button.
@@ -710,10 +795,10 @@ Odometer-style digit animation for hero numeric values.
 
 Standardized tinted change chip:
 
-- **success** tint for positive deltas; **destructive** tint for negative; **muted** for neutral.
+- **gain** tint for positive deltas; **loss** tint for negative; **muted** for neutral.
 - Direction arrow (↑/↓) included.
 - `invert?: boolean` prop for spend-down-is-good semantics (e.g., expense reduction should be green).
-- **Adoption:** StatCard `change` prop; portfolio holdings tables and summary cards (StocksPage unrealized-percent cell, CryptoPage unrealized-percent cell, RealEstatePage Total Return ROI subtitle and per-property card ROI — B3 of the Premium v3 batch, completed 2026-06-11).
+- **Adoption:** StatCard `change` prop; portfolio holdings tables and summary cards; Research Home benchmark/watchlist quotes; Market Lookup quote changes; Watchlist target/since-added deltas; Research Compare total return; and Statistics subscription price changes. Numeric delta labels use the locale-aware `formatPercent` contract. Signed values use `{ signed: true }`, whose `exceptZero` rule leaves zero unsigned and keeps money and percent signs aligned. Prose such as "above target" passes an unsigned absolute percent because the words already carry the direction.
 
 ### ShortcutsOverlay
 
@@ -746,10 +831,10 @@ Ghost waveform placeholder for chart loading states:
 
 ### New Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `onRowOpen` | `(row, index) => void` | Called on Enter key when a row is focused. Falls back to `onRowDoubleClick` if absent. |
-| `onRowQuickLook` | `(row, index) => void` | Called on Space key when a row is focused. Falls back to `onRowDoubleClick` if absent. |
+| Prop             | Type                                                     | Description                                                                                                   |
+| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `onRowOpen`      | `(row, index) => void`                                   | Called on Enter key when a row is focused. Falls back to `onRowDoubleClick` if absent.                        |
+| `onRowQuickLook` | `(row, index) => void`                                   | Called on Space key when a row is focused. Falls back to `onRowDoubleClick` if absent.                        |
 | `rowContextMenu` | `(row, index, helpers: { startEditing() }) => ReactNode` | Per-row right-click menu. Return a `<ContextMenuContent>`. Each row is wrapped in a Radix `ContextMenu` root. |
 
 ### Keyboard Row Navigation
@@ -862,6 +947,7 @@ Components are composed together for complex UIs:
 ### Accessibility
 
 All components follow WAI-ARIA patterns via Radix primitives:
+
 - Keyboard navigation
 - Screen reader support
 - Focus management

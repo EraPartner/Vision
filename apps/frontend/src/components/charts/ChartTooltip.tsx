@@ -233,7 +233,7 @@ export function ChartTooltip({
                         )}
                     >
                         {title ? (
-                            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <div className="mb-1.5 eyebrow">
                                 {title}
                             </div>
                         ) : null}

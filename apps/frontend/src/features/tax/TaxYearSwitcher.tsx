@@ -87,7 +87,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                             </span>
                             <span className="flex items-center gap-1">
                                 {entry.isCurrent && (
-                                    <Badge variant="default" className="h-4 px-1.5 text-[10px]">
+                                    <Badge variant="default" className="h-4 px-1.5 text-2xs">
                                         <Sparkles className="mr-0.5 h-2.5 w-2.5" />
                                         {t('tax.yearSwitcher.currentBadge')}
                                     </Badge>
@@ -95,7 +95,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 {!entry.isCurrent && entry.isFiled && (
                                     <Badge
                                         variant="outline"
-                                        className="h-4 px-1.5 text-[10px] border-warning/40 text-warning"
+                                        className="h-4 px-1.5 text-2xs border-warning/40 text-warning"
                                     >
                                         {t('tax.yearSwitcher.filedBadge')}
                                     </Badge>
@@ -103,7 +103,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 {!entry.isCurrent && !entry.isFiled && entry.hasFrozenCalculation && (
                                     <Badge
                                         variant="outline"
-                                        className="h-4 px-1.5 text-[10px] border-sky-500/40 text-sky-700"
+                                        className="h-4 px-1.5 text-2xs border-info/40 text-info"
                                     >
                                         {t('tax.yearSwitcher.frozenBadge')}
                                     </Badge>
@@ -112,7 +112,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                     !entry.isFiled &&
                                     !entry.hasFrozenCalculation &&
                                     entry.hasSnapshot && (
-                                        <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                        <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
                                             {t('tax.yearSwitcher.snapshotBadge')}
                                         </Badge>
                                     )}
@@ -121,7 +121,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                     entry.hasTransactions && (
                                         <Badge
                                             variant="outline"
-                                            className="h-4 px-1.5 text-[10px] text-muted-foreground"
+                                            className="h-4 px-1.5 text-2xs text-muted-foreground"
                                         >
                                             <Wallet className="mr-0.5 h-2.5 w-2.5" />
                                             {t('tax.yearSwitcher.transactionsBadge')}

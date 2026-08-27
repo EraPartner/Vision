@@ -3,12 +3,56 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-08-26
-updated: 2026-08-26
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, adr-082, capability-map, quota-governor, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned]
-aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
+last_modified: 2026-08-27
+updated: 2026-08-27
+tags:
+  [
+    integration,
+    price,
+    stocks,
+    crypto,
+    api,
+    historical-quotes,
+    quote-backfill,
+    phase-1,
+    eur-to-usd-mapping,
+    data-sanitization,
+    kinesis,
+    offline-resilience,
+    price-history-default,
+    provider-timeout,
+    parallel-fetching,
+    startup-optimization,
+    network-reachability,
+    ssrf,
+    url-safety,
+    binance-pagination,
+    gap-fill,
+    daily-granularity,
+    densify,
+    research,
+    adr-079,
+    adr-082,
+    capability-map,
+    quota-governor,
+    macro,
+    macroeconomic,
+    fred,
+    dbnomics,
+    eurostat,
+    provider-pinned,
+  ]
+aliases:
+  [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
-related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
+related_code:
+  [
+    [apps/node-backend/src/services/priceProviderService.js],
+    [apps/node-backend/src/services/quoteBackfillService.js],
+    [apps/node-backend/src/services/prices/priceProviderRegistry.js],
+    [apps/node-backend/tests/priceProviderRegistry.test.js],
+    [apps/node-backend/src/lib/network.js],
+  ]
 ---
 
 # Integration: Price Providers
@@ -23,11 +67,13 @@ Price providers fetch live and historical market prices for investments, support
 ## Supported Providers
 
 ### Manual
+
 - **Asset Classes**: All
 - **Usage**: User enters prices manually
 - **Implementation**: No API calls, uses stored `current_price`
 
 ### Binance
+
 - **Asset Classes**: Crypto
 - **API**: Binance market data API
 - **Endpoint**: `https://api.binance.com/api/v3/ticker/price` (live); `/api/v3/klines` (historical)
@@ -37,6 +83,7 @@ Price providers fetch live and historical market prices for investments, support
   - **Full-window paginated history (2026-05-31):** Historical fetch uses `/api/v3/klines` with `startTime`/`endTime`/`limit=1000` (BINANCE_PAGE_LIMIT) across the full holding window. A runaway guard of 30 pages maximum (BINANCE_MAX_PAGES) logs a `WARN` if hit. The old `days = Math.min(daysDiff, 365)` cap that silently discarded all history older than ~1 year has been removed. A crypto position held since 2023 now receives 3+ years of daily closes on first backfill. Cache key is window-aware: `binance-history:${symbol}:${dayKey(start)}:${dayKey(end)}`.
 
 ### Kinesis
+
 - **Asset Classes**: Metals, commodities
 - **API**: Kinesis market trendline API
 - **Endpoint**: default `https://api.kinesis.money/api/market-data/trendlines` via `KINESIS_BASE_URL` ([[apps/node-backend/src/config/kinesisConfig.js]])
@@ -55,6 +102,7 @@ Price providers fetch live and historical market prices for investments, support
 > Note: `normalizeHistoryPoints` deduplicates by date, so finer-than-daily provider cadence does not itself cause sparsity — only missing date rows do.
 
 ### Yahoo Finance
+
 - **Asset Classes**: Stocks, ETFs, Metals
 - **Implementation**: Web scraping / Yahoo Finance API
 - **Features**:
@@ -66,6 +114,7 @@ Price providers fetch live and historical market prices for investments, support
   - Supports futures-style metals tickers (for example, `GC=F`)
 
 ### Custom
+
 - **Asset Classes**: All
 - **Configuration**: Custom latest/history URLs and JSON paths
 - **Usage**: For proprietary or unsupported APIs
@@ -110,6 +159,7 @@ URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud 
 ## Usage
 
 ### Configure Investment
+
 ```javascript
 POST /api/investments
 {
@@ -122,18 +172,20 @@ POST /api/investments
 ```
 
 ### Refresh Prices
+
 ```javascript
-POST /api/investments/refresh-prices
+POST / api / investments / refresh - prices;
 ```
 
 Response:
+
 ```json
 {
   "updated": 10,
   "total": 15,
   "prices": {
-    "1": 45000.00,
-    "2": 185.50
+    "1": 45000.0,
+    "2": 185.5
   },
   "priceSources": {
     "1": "live",
@@ -145,12 +197,23 @@ Response:
 
 ## Price Provider Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| price_provider | enum | Provider name |
-| price_provider_id | string | Provider-specific ID |
-| price_provider_url | string | Custom endpoint URL |
-| price_updated_at | timestamp | Last price fetch |
+| Field              | Type      | Description          |
+| ------------------ | --------- | -------------------- |
+| price_provider     | enum      | Provider name        |
+| price_provider_id  | string    | Provider-specific ID |
+| price_provider_url | string    | Custom endpoint URL  |
+| price_updated_at   | timestamp | Last price fetch     |
+
+### Aggregate UI freshness
+
+Portfolio UI totals derive an aggregate freshness status from active live-provider holdings. They
+use `MIN(price_updated_at)` because the oldest constituent quote limits the truth of an aggregate
+`as of` claim. Manual holdings are excluded. A missing or invalid timestamp on any live holding
+produces a localized not-fetched state, while a manual-only aggregate has no live-price caption.
+
+The PDF report contract below remains different by design: its backend helper uses
+`MAX(price_updated_at)` to report the latest recorded price update. It must not be interpreted as a
+guarantee that every holding in the report was updated at that instant.
 
 ## Rate Limits
 
@@ -161,6 +224,7 @@ Response:
 ## Error Handling & Offline Fallback
 
 If price fetch fails:
+
 - Fallback to previous close where available (Yahoo)
 - Fallback to latest historical close from Yahoo chart data when quote fields are unavailable
 - Fallback to existing stored `current_price` (`cached` source) when provider data is unavailable
@@ -170,6 +234,7 @@ If price fetch fails:
 
 **Offline Resilience (Apr 2026):**
 Each fallback source is tracked in the refresh response as `priceSources: Record<investmentId, PriceSource>`. The frontend uses this to differentiate:
+
 - `live`: Fresh real-time quote — no warning
 - `close`, `cached`: Potentially stale but known good — no warning
 - `historical_fallback`: Database-backed but may be stale — frontend shows warning toast `portfolio.refreshedPricesStale` with count of stale prices
@@ -178,6 +243,7 @@ This makes graceful offline degradation visible without blocking the user.
 
 **Startup Behavior When Offline (May 2026):**
 During server startup, before any price refresh attempts, a network reachability probe (TCP to 1.1.1.1:443, 1.5s timeout) determines if the host has internet connectivity. When the probe detects offline status:
+
 - **Startup refresh skipped**: `refreshInvestmentPricesOnStartup()` is not called
 - **Historical backfill skipped**: `backfillHistoricalAssetQuotes()` is not called
 - **No timeouts**: Avoids 5–15s burn-time on per-call timeouts waiting for unreachable providers
@@ -187,11 +253,13 @@ During server startup, before any price refresh attempts, a network reachability
 Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
 
 **Provider Timeout Safety (Apr 2026):**
+
 - Binance ticker fetch now includes `signal: AbortSignal.timeout(8_000)` to abort after 8 seconds if the provider is unreachable/slow
 - Prevents hung refresh requests that would block startup or user-initiated refreshes indefinitely
 - Timeouts fall through to cached/historical fallback without blocking other providers
 
 **Parallel Provider Fetching (Apr 2026):**
+
 - The four provider buckets in `fetchLivePricesDetailed` (Binance, Yahoo, Custom, Kinesis) are now wrapped in async IIFEs and awaited via `Promise.allSettled()`
 - Changes from sequential bucket execution (wall time = sum of provider times) to parallel execution (wall time = max of provider times)
 - Improves overall refresh latency, especially when individual providers are slow or unresponsive
@@ -199,16 +267,19 @@ Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves
 - Fallback chain is applied per-investment based on individual provider success/failure
 
 **Custom Provider Health Recording (2026-04-28):**
+
 - Custom provider now records success/error health metrics via `recordProviderSuccess('custom')` and `recordProviderError('custom', err)` to maintain consistency with Yahoo, Binance, and Kinesis health tracking
 - Previously custom provider errors were silently logged without health recording
 
 **Binance Symbol Coercion Fix (2026-04-28):**
+
 - Binance historical symbol coercion now correctly appends `USDT` only when symbol lacks a known quote suffix
 - Previously: `symbol.replace(/EUR$/, 'USDT')` was a no-op on non-EUR symbols (e.g., `BTCUSDT` remained unchanged, no USDT appended)
 - Now: Logic checks for existing `EUR`, `USDT`, `USDC`, `BUSD`, `BTC`, `ETH` suffixes before appending `USDT`, preventing duplicate suffixes
 - **Binance Ticker Validation (2026-04-28):** Parsed ticker prices now validate `Number.isFinite(p) && p > 0` before populating priceMap, preventing NaN/zero prices from being stored as valid quotes
 
 **Price Cache Eviction (2026-04-28):**
+
 - In-memory price cache now runs scheduled `sweepExpiredCacheEntries()` every 5 minutes (with `unref()` for graceful shutdown) to prevent unbounded Map growth
 - Previously relied on lazy-delete only; large portfolios over extended uptime could accumulate orphaned cache entries
 - Entries expire based on provider-specific TTLs (typically 60 minutes for live quotes)
@@ -216,6 +287,7 @@ Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves
 Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 **Price History & Report Timestamp Metadata (Apr 2026):**
+
 - Price-history endpoint (`GET /api/investments/:id/price-history`) now defaults `db_only=true` to prevent accidental external-fetch when no query is supplied (safe default for offline-first). Frontend can opt out with `?db_only=false` for explicit provider refresh.
 - Backend provides `getLatestPriceUpdatedAt()` helper returning `MAX(price_updated_at)` across active non-manual investments for report provenance.
 - Portfolio PDF reports include a "Prices as of <date>" meta row on the cover page. If prices are >1 day old, age in days is shown. If no live prices ever recorded, shows "No live prices recorded".
@@ -257,6 +329,7 @@ the backend catalog instead of maintaining separate Add and Edit dialog lists. I
 compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The current touchpoints:
 
 **Backend**
+
 1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.js`.
 2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.js`.
 3. Extend live-price fetching in the same file: add the provider's key to the
@@ -265,19 +338,16 @@ compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The cu
 5. Add a probe entry in `services/providerHealthService.js` when the provider supports a useful
    health probe.
 
-**Database**
-6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
-   defined in `0001_initial_database_schema.py`; adding a value follows the enum-migration safety
-   pattern used by `0022_add_kinesis_price_provider_enum.py`).
+**Database** 6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
+defined in `0001_initial_database_schema.py`; adding a value follows the enum-migration safety
+pattern used by `0022_add_kinesis_price_provider_enum.py`).
 
-**Contract + frontend**
-7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
-   update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`.
-8. Add the provider to `FALLBACK_CATALOG` in `features/portfolio/usePriceProviderCatalog.ts` so an
-   existing holding remains editable while the catalog request is loading or unavailable. Add an
-   `addInv.provider.hint.*` localization key and `HINT_KEYS` mapping when the backend's English
-   description is not sufficient. Add and Edit both render the shared `PriceProviderFields`, so
-   they need no separate per-dialog catalog edits.
+**Contract + frontend** 7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
+update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`. 8. Add the provider to `FALLBACK_CATALOG` in `features/portfolio/usePriceProviderCatalog.ts` so an
+existing holding remains editable while the catalog request is loading or unavailable. Add an
+`addInv.provider.hint.*` localization key and `HINT_KEYS` mapping when the backend's English
+description is not sufficient. Add and Edit both render the shared `PriceProviderFields`, so
+they need no separate per-dialog catalog edits.
 
 > [!tip] Reducing this cost
 > Live fetching already groups providers into identifier-based and investment-based descriptor

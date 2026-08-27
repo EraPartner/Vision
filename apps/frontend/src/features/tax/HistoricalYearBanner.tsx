@@ -34,14 +34,14 @@ interface HistoricalYearBannerProps {
 
 const MODE_CLASS: Record<HistoricalYearBannerMode, string> = {
     filed: 'border-warning/40 bg-warning/5',
-    frozen: 'border-sky-500/40 bg-sky-500/5',
+    frozen: 'border-info/40 bg-info/5',
     snapshot: 'border-primary/30 bg-primary/5',
     estimate: 'border-primary/30 bg-primary/5',
 };
 
 const MODE_ICON_CLASS: Record<HistoricalYearBannerMode, string> = {
     filed: 'text-warning',
-    frozen: 'text-sky-600',
+    frozen: 'text-info',
     snapshot: 'text-primary',
     estimate: 'text-primary',
 };

@@ -3,8 +3,33 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-08-26
-tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar, accessibility, colorblind, gain-loss]
+updated: 2026-08-27
+tags:
+  [
+    feature,
+    settings,
+    configuration,
+    preferences,
+    frontend,
+    backend,
+    refactor,
+    phase-3,
+    phase-4,
+    zustand,
+    store,
+    backup,
+    encrypt,
+    passphrase,
+    phase-2,
+    auto-link,
+    planned-match,
+    june-2026,
+    instant-apply,
+    sidebar,
+    accessibility,
+    colorblind,
+    gain-loss,
+  ]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
@@ -46,6 +71,7 @@ All application settings are managed by a unified **Zustand store** located at `
 - **ThemeContext** (theme_settings key)
 
 The Provider components in each context file still exist as thin wrappers to handle:
+
 - Hydration from SettingsPreloadContext
 - Debounced persistence back to the API (500 ms)
 - DOM side-effects (ThemeContext: CSS class, matchMedia, interval)
@@ -72,7 +98,12 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 3. **Context Wrappers** (AppSettingsContext, SettingsContext, ThemeContext): Provide convenience hooks that use `useShallow()` to subscribe to store slices. Example:
    ```typescript
    export const useAppSettings = () => {
-     return useSettingsStore(useShallow(s => ({ ...s.appSettings, isLoading: s.isAppSettingsLoading })));
+     return useSettingsStore(
+       useShallow((s) => ({
+         ...s.appSettings,
+         isLoading: s.isAppSettingsLoading,
+       })),
+     );
    };
    ```
 
@@ -87,25 +118,25 @@ A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...
 
 ### Settings Keys
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `defaultCurrency` | string | `'EUR'` | Default display currency |
-| `numberFormat` | string | `'european'` | Number formatting style |
-| `showDecimalPlaces` | number | `2` | Decimal places for display |
-| `dateFormat` | string | `'DD/MM/YYYY'` | One of the five date display formats exposed by Settings |
-| `defaultPageSize` | number | `50` | Default table page size |
-| `excludedCategoryIds` | number[] | `[]` | Categories to exclude from stats |
-| `excludedRecipientIds` | number[] | `[]` | Recipients to exclude from stats |
-| `excludeHiddenCategories` | boolean | `false` | Exclude inactive categories |
-| `exclusionScope` | string | `'nowhere'` | Where exclusions apply |
-| `theme_settings` | object | `{variant: 'default', mode: 'system'}` | Theme variant and mode preferences |
-| `widget_visibility` | object | `{}` | Per-page widget visibility |
-| `portfolio_tax_adjustments_v1` | object | `{}` | Manual tax adjustments |
-| `backup_settings` | object | `{}` | Backup configuration |
-| `rebalance_plans` | array | `[]` | Saved custom rebalancing plans (max 50); each entry `{ id, name, targetWeights, cashCap? }` — see [[docs/adr/098-cross-workspace-features\|ADR-098]] |
-| `startupSection` | `StartupSection` | `'budgeting'` | Section the app navigates to at launch (field within the `app_settings` JSONB blob) |
-| `autoClearPlannedOnMatch` | boolean | `true` | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]]. |
-| `colorblindGainLoss` | boolean | `false` | When `true`, applies the Okabe-Ito colorblind-safe gain/loss palette (green gain / orange loss, `.skin-v2` root class). When `false` (default), uses the classic gold gain (`--gain: var(--accent)`) / red loss (`--loss: var(--destructive)`) palette. Controlled via **Settings → Appearance → Accessibility → Gain & loss colors**. Persisted in the `app_settings` JSONB blob; `AppSettingsProvider` calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. See [[docs/adr/104-skin-v2-dense-fintech-visual-redesign\|ADR-104 addendum]]. |
+| Key                            | Type             | Default                                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultCurrency`              | string           | `'EUR'`                                | Default display currency                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `numberFormat`                 | string           | `'european'`                           | Number formatting style                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `showDecimalPlaces`            | number           | `2`                                    | Decimal places for display                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `dateFormat`                   | string           | `'DD/MM/YYYY'`                         | One of the five date display formats exposed by Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `defaultPageSize`              | number           | `50`                                   | Default table page size                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `excludedCategoryIds`          | number[]         | `[]`                                   | Categories to exclude from stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `excludedRecipientIds`         | number[]         | `[]`                                   | Recipients to exclude from stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `excludeHiddenCategories`      | boolean          | `false`                                | Exclude inactive categories                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `exclusionScope`               | string           | `'nowhere'`                            | Where exclusions apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `theme_settings`               | object           | `{variant: 'default', mode: 'system'}` | Theme variant and mode preferences                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `widget_visibility`            | object           | `{}`                                   | Per-page widget visibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `portfolio_tax_adjustments_v1` | object           | `{}`                                   | Manual tax adjustments                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `backup_settings`              | object           | `{}`                                   | Backup configuration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `rebalance_plans`              | array            | `[]`                                   | Saved custom rebalancing plans (max 50); each entry `{ id, name, targetWeights, cashCap? }` — see [[docs/adr/098-cross-workspace-features\|ADR-098]]                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `startupSection`               | `StartupSection` | `'budgeting'`                          | Section the app navigates to at launch (field within the `app_settings` JSONB blob)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `autoClearPlannedOnMatch`      | boolean          | `true`                                 | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]].                                                                                                                                                                                                                                 |
+| `colorblindGainLoss`           | boolean          | `false`                                | When `true`, applies the Okabe-Ito colorblind-safe gain/loss palette (green gain / orange loss, `.skin-v2` root class). When `false` (default), uses the classic gold gain (`--gain: var(--accent)`) / red loss (`--loss: var(--destructive)`) palette. Controlled via **Settings → Appearance → Accessibility → Gain & loss colors**. Persisted in the `app_settings` JSONB blob; `AppSettingsProvider` calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. See [[docs/adr/104-skin-v2-dense-fintech-visual-redesign\|ADR-104 addendum]]. |
 
 ## Startup Section
 
@@ -114,17 +145,17 @@ The `startupSection` field controls which top-level section the app opens on imm
 **Type definition (from `[[apps/frontend/src/stores/settingsStore.ts]]`):**
 
 ```typescript
-type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat';
+type StartupSection = "budgeting" | "portfolio" | "research" | "ai-chat";
 ```
 
 **Section → home-page mapping:**
 
-| Value | Navigates to |
-|-------|-------------|
+| Value         | Navigates to               |
+| ------------- | -------------------------- |
 | `'budgeting'` | `/` (default, no redirect) |
-| `'portfolio'` | `/portfolio` |
-| `'research'` | `/research` |
-| `'ai-chat'` | `/ai-chat` |
+| `'portfolio'` | `/portfolio`               |
+| `'research'`  | `/research`                |
+| `'ai-chat'`   | `/ai-chat`                 |
 
 **Redirect behavior** is handled by `[[apps/frontend/src/components/shared/StartupRedirect.tsx]]`, mounted inside `<BrowserRouter>` in `App.tsx`. It fires once, after settings hydrate, and only when the app opened at the root path `/`. It calls `navigate(..., { replace: true })` so the redirect does not create a history entry. Deep links (any non-`/` initial path) and later in-app navigation back to `/` are unaffected.
 
@@ -157,11 +188,13 @@ Returns a single setting by key.
 Upserts a single setting.
 
 **Request body:**
+
 ```json
 { "value": "EUR" }
 ```
 
 Implementation note:
+
 - Backend route logic reuses `assertSettingKeyLength` and `validateSettingValue` across single-key and bulk writes. Dashboard exclusion fields must be arrays; digit-string IDs are coerced to positive PostgreSQL `int4` integers, while malformed or out-of-range values are rejected before storage.
 - The repository serializes the already-validated value directly to JSONB. It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.js]]).
 
@@ -170,6 +203,7 @@ Implementation note:
 Bulk upserts multiple settings.
 
 **Request body:**
+
 ```json
 {
   "defaultCurrency": "EUR",
@@ -198,7 +232,7 @@ The `useWidgetVisibility` hook manages per-page widget visibility settings:
 
 ```typescript
 const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults } =
-  useWidgetVisibility('statistics', STATISTICS_WIDGETS);
+  useWidgetVisibility("statistics", STATISTICS_WIDGETS);
 ```
 
 - **Page-scoped**: Each page has its own visibility state (e.g., `'statistics'`, `'portfolioTax'`)
@@ -223,15 +257,15 @@ Settings control which categories and recipients are excluded from statistics:
 
 Settings changes propagate throughout the application:
 
-| Setting | Affected Areas |
-|---------|---------------|
-| `defaultCurrency` | All currency displays, portfolio pages, net worth, tax |
-| `numberFormat` | All number formatting (European vs US) |
-| `showDecimalPlaces` | All currency displays |
-| `dateFormat` | All date displays, chart labels |
-| `defaultPageSize` | VirtualDataTable pagination |
-| `excludedCategoryIds` | Statistics, dashboard, charts |
-| `excludedRecipientIds` | Statistics, recipient insights |
+| Setting                | Affected Areas                                         |
+| ---------------------- | ------------------------------------------------------ |
+| `defaultCurrency`      | All currency displays, portfolio pages, net worth, tax |
+| `numberFormat`         | All number formatting (European vs US)                 |
+| `showDecimalPlaces`    | All currency displays                                  |
+| `dateFormat`           | All date displays, chart labels                        |
+| `defaultPageSize`      | VirtualDataTable pagination                            |
+| `excludedCategoryIds`  | Statistics, dashboard, charts                          |
+| `excludedRecipientIds` | Statistics, recipient insights                         |
 
 ## Performance Optimizations
 
@@ -245,17 +279,20 @@ Settings changes propagate throughout the application:
 In Electron desktop builds, the application persists settings to a local `settings.json` file. If this file becomes corrupted (e.g., due to a crash during write):
 
 **Recovery behavior:**
+
 - App detects JSON parse error on startup
 - Quarantines the corrupted file as `settings.json.corrupt-<ISO-timestamp>`
 - Returns application defaults
 - App continues startup normally
 
 **User experience:**
+
 - Settings are reset to defaults (one-time)
 - Corrupted file is preserved for forensics
 - User can manually restore from backup if needed
 
 **Example quarantine:**
+
 ```
 settings.json.corrupt-2026-04-19T14-30-45-123Z
 ```
@@ -273,21 +310,22 @@ The section rail implements the tabs accessibility pattern: one selected tab is 
 each tab controls the active tab panel, and Arrow keys plus Home/End move focus and selection.
 
 **Shared layout primitives** live in `[[apps/frontend/src/features/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]`:
+
 - `SettingsSection` — title + description header
-- `SettingsGroup` — bordered, hairline-divided card with optional label
+- `SettingsGroup` — bordered, hairline-divided card with optional label and description
 - `SettingRow` — label + hint + control; `row` layout for switches/actions, `stack` layout for selects/lists
 
 ### Section Taxonomy
 
-| Section | File | Contents |
-|---------|------|---------|
-| General | `sections/GeneralSection.tsx` | Currency, number/decimal/date format, language, start of week, page size |
-| Appearance | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
-| Statistics | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab) |
-| Behavior | `sections/BehaviorSection.tsx` | Startup section, cost-basis method, auto-clear planned, reset recurring dismissals |
-| AI & Research | `sections/AiSection.tsx` | Ollama AI chat model, research provider keys (composes `AIChatSettingsSection` + `ResearchKeysSection`) |
-| Backup | `sections/BackupSection.tsx` | Directory, backup-on-quit, passphrase, run/restore (Electron only) |
-| About & Maintenance | `sections/AboutSection.tsx` | App updates, restart onboarding, developer/admin mode, reset-all (danger zone) |
+| Section             | File                             | Contents                                                                                                                                                                 |
+| ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| General             | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                                 |
+| Appearance          | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic)     |
+| Statistics          | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                         |
+| Behavior            | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, reset recurring dismissals                                                                                       |
+| AI & Research       | `sections/AiSection.tsx`         | Ollama AI chat model, research provider keys (composes `AIChatSettingsSection` + `ResearchKeysSection`)                                                                  |
+| Backup              | `sections/BackupSection.tsx`     | Directory, backup-on-quit, passphrase, run/restore (Electron only)                                                                                                       |
+| About & Maintenance | `sections/AboutSection.tsx`      | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates, restart onboarding, developer/admin mode, reset-all (danger zone) |
 
 ### Instant-Apply Model
 
@@ -297,24 +335,28 @@ Every control writes through on change — there is no global Save/Cancel footer
 - **`includeTransfers`**: a server-only aggregation setting with no client reader. Its toggle persists via `apiClient.saveSetting` then `queryClient.invalidateQueries()` for an optimistic cache refresh. Lives in the Statistics section.
 - **Visual-effects tier**: applied inline on change (ADR-075 addendum). On an auto-adapt-capped display, a pick writes to `sessionTierOverride`; on an uncapped display it writes the synced `visualEffects` preference and clears the override. Toggling auto-adapt clears the override.
 - **Reset to defaults**: moved out of a Save-time action into the **About & Maintenance** danger zone as an explicit "Reset to defaults" button with confirmation.
+- **Product identity**: `lib/appIdentity.ts` exposes the build-time root-package version, product name, license, repository, and documentation URLs. The same version appears in the sidebar footer and the About identity card; package manifests are kept aligned so neither surface can make a stale hardcoded claim.
 
 Rejected `app_settings`, `dashboard_settings`, and `widget_visibility` saves all increment the shared `settingsSaveErrorNonce`. `SettingsSaveErrorToaster`, mounted under `LanguageProvider`, shows the existing localized `settings.saveFailed` message when it observes the nonce advance; React may coalesce simultaneous failures into one toast. The optimistic local state is deliberately not rolled back, so the user can keep working while being warned that the change may not survive a restart.
 
 ### Legacy Deep-Link Compatibility
 
-The Electron menu bridge and onboarding flows deep-link into specific settings sections via key names. Legacy tab keys (`general`, `appearance`, `dashboard`, `app`, `backup`) are mapped to new section ids by a `LEGACY_TAB_MAP` inside `DashboardSettingsDialog.tsx`:
+Settings are addressable through `?settings=<section>`, where the canonical section ids are `general`, `appearance`, `statistics`, `behavior`, `ai`, `backup`, and `about`. Opening settings adds a browser-history entry, changing sections replaces that entry, and closing removes the parameter. Browser Back therefore closes a newly opened settings dialog without losing unrelated query parameters. The Electron menu and onboarding use the same route-backed entry point.
 
-| Legacy key | New section id |
-|-----------|---------------|
-| `dashboard` | `statistics` |
-| `app` | `about` |
-| `general`, `appearance`, `backup` | unchanged |
+Legacy tab keys (`general`, `appearance`, `dashboard`, `app`, `backup`) are mapped to new section ids by `resolveSettingsSection` inside `DashboardSettingsDialog.tsx`. Legacy URLs are replaced with their canonical form:
 
-Existing callers continue to work without modification.
+| Legacy key                        | New section id |
+| --------------------------------- | -------------- |
+| `dashboard`                       | `statistics`   |
+| `app`                             | `about`        |
+| `general`, `appearance`, `backup` | unchanged      |
+
+Existing callers continue to work without modification. Unknown values are removed instead of opening an arbitrary section.
 
 ### i18n Keys (ADR-084)
 
 New keys added (en + nl); no existing keys removed:
+
 - `settings.done` — close button label
 - `settings.section.{general,appearance,statistics,behavior,ai,backup,about}` — sidebar nav labels
 - `settings.section.{general,appearance,...}.desc` — section description text
@@ -326,13 +368,13 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 
 New keys added in en + nl (Appearance section):
 
-| Key | EN value |
-|-----|---------|
-| `settings.group.accessibility` | "Accessibility" |
-| `settings.appearance.gainLossColors` | "Gain & loss colors" |
-| `settings.appearance.gainLossColorsHint` | Hint text explaining the two options |
-| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
-| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
+| Key                                             | EN value                             |
+| ----------------------------------------------- | ------------------------------------ |
+| `settings.group.accessibility`                  | "Accessibility"                      |
+| `settings.appearance.gainLossColors`            | "Gain & loss colors"                 |
+| `settings.appearance.gainLossColorsHint`        | Hint text explaining the two options |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)"      |
+| `settings.appearance.gainLossColors.classic`    | "Classic (red loss)"                 |
 
 **Full Documentation**: See [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog Documentation]]
 

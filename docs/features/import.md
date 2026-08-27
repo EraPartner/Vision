@@ -3,12 +3,97 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-26
-last_modified: 2026-08-26
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match, account-disclosure, wp-b6, july-2026]
-aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
+updated: 2026-08-27
+last_modified: 2026-08-27
+tags:
+  [
+    feature,
+    import,
+    export,
+    csv,
+    json,
+    deduplication,
+    phase-5a,
+    attachments,
+    phase-c,
+    phase-e,
+    phase-1,
+    phase-12,
+    phase-13,
+    performance,
+    concurrency,
+    import-pipeline,
+    component-split,
+    error-handling,
+    recipient-clusters,
+    multi-select,
+    export-filters,
+    adr-046,
+    category-review,
+    bigserial-fix,
+    staging-rows,
+    tx-hash-dedup,
+    race-safe-dedup,
+    decimal-precision,
+    ing,
+    bnp,
+    saved-custom-parsers,
+    custom-parser-configs,
+    named-parsers,
+    adr-066,
+    electron-native,
+    csv-open-with,
+    import-handoff,
+    drag-drop,
+    june-2026,
+    file-headers-panel,
+    csv-separator,
+    adr-078,
+    auto-link,
+    planned-match,
+    account-disclosure,
+    wp-b6,
+    july-2026,
+  ]
+aliases:
+  [
+    csv-import,
+    bank-import,
+    bank-statement,
+    deduplication,
+    data-import,
+    streaming-import,
+  ]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/importBatchService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/lib/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/importBatchRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/FileHeadersPanel.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/features/imports/csvSeparator.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
+related_code:
+  [
+    "apps/node-backend/src/services/importPipeline/index.js",
+    "apps/node-backend/src/services/importPipeline/stage.js",
+    "apps/node-backend/src/services/importPipeline/validate.js",
+    "apps/node-backend/src/services/importPipeline/match.js",
+    "apps/node-backend/src/services/importPipeline/commit.js",
+    "apps/node-backend/src/services/importBatchService.js",
+    "apps/node-backend/src/services/dataImportService.js",
+    "apps/node-backend/src/services/deduplication.js",
+    "apps/node-backend/src/lib/textNormalization.js",
+    "apps/node-backend/src/routes/importRoutes.js",
+    "apps/node-backend/src/routes/importBatchRoutes.js",
+    "apps/node-backend/src/lib/sse.js",
+    "apps/node-backend/src/repositories/importBatchRepository.js",
+    "apps/node-backend/src/repositories/customParserConfigRepository.js",
+    "apps/frontend/src/features/imports/TransactionImportCard.tsx",
+    "apps/frontend/src/features/imports/FileHeadersPanel.tsx",
+    "apps/frontend/src/features/imports/RecipientsImportCard.tsx",
+    "apps/frontend/src/features/imports/CategoriesImportCard.tsx",
+    "apps/frontend/src/features/imports/ExportCard.tsx",
+    "apps/frontend/src/features/imports/SupportedBanksCard.tsx",
+    "apps/frontend/src/features/imports/useAdapters.ts",
+    "apps/frontend/src/features/imports/csvSeparator.ts",
+    "apps/frontend/src/hooks/useCustomParserConfigs.ts",
+    "apps/frontend/src/lib/importHandoff.ts",
+    "apps/frontend/src/pages/ImportPage.tsx",
+    "apps/frontend/src/pages/ImportReviewPage.tsx",
+  ]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -20,44 +105,50 @@ Vision provides comprehensive CSV import capabilities with support for multiple 
 ## Phase E — Frontend Component Decomposition (April 2026)
 
 **Status:** Complete  
-**Impact:** 1019-line `ImportPage.tsx` refactored into 6 self-contained feature components (~914 lines total, ~35 lines remaining in orchestrator)
+**Impact:** 1019-line `ImportPage.tsx` refactored into 6 self-contained feature components with a thin page orchestrator.
 
 ### Component Breakdown
 
 The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/imports/`:
 
-| Component | Lines | Responsibility |
-|-----------|-------|-----------------|
-| `TransactionImportCard.tsx` | 394 | CSV transaction import with SSE progress, column mapper, export buttons |
-| `RecipientsImportCard.tsx` | 155 | Bulk recipients CSV import with file upload and status |
-| `CategoriesImportCard.tsx` | 140 | Categories CSV import with category format validation |
-| `ExportCard.tsx` | 159 | Dual export UI (CSV + JSON) with multi-select filter pickers (Phase 13) |
-| `SupportedBanksCard.tsx` | 38 | Read-only chip list of supported bank adapters |
-| `useAdapters.ts` | 28 | Shared hook for fetching bank adapters (prevents duplicate API calls) |
+| Component                   | Responsibility                                                          |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `TransactionImportCard.tsx` | CSV transaction import with SSE progress, column mapper, export buttons |
+| `RecipientsImportCard.tsx`  | Bulk recipients CSV import with file upload and status                  |
+| `CategoriesImportCard.tsx`  | Categories CSV import with category format validation                   |
+| `ExportCard.tsx`            | Dual export UI (CSV + JSON) with multi-select filter pickers (Phase 13) |
+| `SupportedBanksCard.tsx`    | Read-only chip list of supported bank adapters                          |
+| `useAdapters.ts`            | Shared hook for fetching bank adapters (prevents duplicate API calls)   |
 
 **Orchestrator**  
-`apps/frontend/src/pages/ImportPage.tsx` (35 lines):
+`apps/frontend/src/pages/ImportPage.tsx`:
+
 - Imports all sub-components
 - Manages `historyKey` state (passed to `ImportHistoryCard` via `onImportSuccess` callback from `TransactionImportCard`)
-- Renders layout with `PageHeader` and all cards
+- Renders the task hierarchy with `PageHeader` and the feature cards
+- Keeps the desktop column at `max-w-4xl`: Transaction Import is the elevated primary task, followed by Import History and Export; one-time recipient/category imports and Supported Banks live in a default-collapsed Setup & reference disclosure
 
 ### Architecture Decisions
 
 **Self-Contained State:**
+
 - Each import card owns its own form state, upload progress, and error handling
 - No prop-drilling; each card is independent except for shared hooks
 
 **Shared Adapter Hook:**
+
 - `useAdapters.ts` exported hook prevents duplicate API calls in both `TransactionImportCard` and `SupportedBanksCard`
 - Both components call `useAdapters()` independently; hook deduplicates requests via React Query
 
 **History Refresh Pattern:**
+
 - `historyKey` state lives in `ImportPage` (only orchestrator needs it)
 - `TransactionImportCard` calls `onImportSuccess()` callback after successful import
 - Callback increments `historyKey`, forcing `ImportHistoryCard` to refetch history
 - Avoids exposing `setHistoryKey` to child components
 
 **Existing Imports (June 2026 update):**
+
 - `ImportHistoryCard` and `CsvColumnMapper` have been moved from `@/components/import/` to `apps/frontend/src/features/imports/` to co-locate all import-related UI within the feature module.
 - `ImportPage` imports both from `@/features/imports/`.
 - `components/import/` no longer exists as a source directory.
@@ -81,7 +172,7 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 - **Non-CSV files** are silently discarded.
 - **CSV files** are read as text via the `File` API (no filesystem permission required in the sandboxed renderer) and pushed into `lib/importHandoff.ts`. The app then navigates to `/import`.
 - **`[data-dropzone]` ancestors** are exempted: the in-card dropzone on `TransactionImportCard` has `data-dropzone` on its root element, so drops inside the card still reach the card's own handler normally.
-- This also closes the Chromium default behavior of *navigating to* a dropped file, which would have produced a blank page.
+- This also closes the Chromium default behavior of _navigating to_ a dropped file, which would have produced a blank page.
 
 ### Path 2 — Finder "Open With" / Dock Drop (main process)
 
@@ -98,10 +189,10 @@ When the OS fires `app.on('open-file')` (macOS Finder "Open With" or dock drop):
 
 Provides two functions:
 
-| Function | Description |
-|----------|-------------|
-| `registerPendingImportFile(file: File)` | Stores the file in a module-level slot with a 30-second TTL. Overwrites any previous pending slot. |
-| `consumePendingImportFile(): File \| undefined` | Returns and clears the pending slot. Returns `undefined` if empty or expired. |
+| Function                                        | Description                                                                                        |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `registerPendingImportFile(file: File)`         | Stores the file in a module-level slot with a 30-second TTL. Overwrites any previous pending slot. |
+| `consumePendingImportFile(): File \| undefined` | Returns and clears the pending slot. Returns `undefined` if empty or expired.                      |
 
 Pattern mirrors `lib/undo.ts` (same one-slot, TTL design). `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting, the card pre-fills its dropzone with that file and begins the import flow automatically.
 
@@ -120,6 +211,7 @@ After merging recipients via the `POST /api/recipients/:id/merge` endpoint, the 
 ### Pattern Suggestion Toast (Frontend)
 
 When a merge response includes a `patternSuggestion`, the `useMergeRecipients` hook displays a second toast notification (duration 10 seconds with action button):
+
 - **Title:** `recipients.createRuleSuggestion` (i18n key)
 - **Action Button:** `recipients.createRule` (i18n key)
 - **Purpose:** Suggest pattern-based rules for automating future merges
@@ -130,12 +222,14 @@ When a merge response includes a `patternSuggestion`, the `useMergeRecipients` h
 **Backend Service:** [[apps/node-backend/src/services/recipientClusterService.js]]
 
 Analyzes active primary recipients and identifies clusters with:
+
 - Longest common prefix (LCP) of 8+ characters
 - Shared or similar categories
 - Confidence scoring (0.0–1.0)
 - Suggested pattern kind (`"prefix"` for `LCCPREFIX%` matching)
 
 **Response Example:**
+
 ```json
 {
   "items": [
@@ -143,7 +237,11 @@ Analyzes active primary recipients and identifies clusters with:
       "lcp": "SUPER",
       "confidence": 0.95,
       "recipientIds": [1, 5, 7],
-      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Super Convenience"],
+      "recipientNames": [
+        "Supermarket ABC",
+        "Supermarket XYZ",
+        "Super Convenience"
+      ],
       "categoryId": 5,
       "suggestedPattern": "super%",
       "suggestedKind": "prefix"
@@ -165,23 +263,24 @@ Analyzes active primary recipients and identifies clusters with:
 
 **9 Supported Banks (May 2026):**
 
-| Bank | Format | Columns | Detection |
-|------|--------|---------|-----------|
-| Belfius | Belgian format, semicolon-delimited | Date, amount, recipient, balance | `Rekeningnummer` + `Boekingsdatum` |
-| Revolut | Multi-currency, ISO 8601 dates | Completed date, amount, fee, currency | `Completed Date` + `Currency` |
-| ING | Dutch-language export, semicolon-delimited | Booking date, counterparty IBAN, description | `Omzetnummer` + `Detail van de omzet` |
-| KBC | Belgian corporate, semicolon-delimited | Counterparty, structured communication | `Rekeningnummer` + `Datum` |
+| Bank               | Format                                     | Columns                                                  | Detection                                             |
+| ------------------ | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------- |
+| Belfius            | Belgian format, semicolon-delimited        | Date, amount, recipient, balance                         | `Rekeningnummer` + `Boekingsdatum`                    |
+| Revolut            | Multi-currency, ISO 8601 dates             | Completed date, amount, fee, currency                    | `Completed Date` + `Currency`                         |
+| ING                | Dutch-language export, semicolon-delimited | Booking date, counterparty IBAN, description             | `Omzetnummer` + `Detail van de omzet`                 |
+| KBC                | Belgian corporate, semicolon-delimited     | Counterparty, structured communication                   | `Rekeningnummer` + `Datum`                            |
 | BNP Paribas Fortis | Dutch-language export, semicolon-delimited | Sequence, execution date, transaction type, counterparty | `Volgnummer` + `Uitvoeringsdatum` + `Valuta rekening` |
-| SABB | Belgian bank format, semicolon-delimited | Posting date, description, amount | `Rekeningnummer` + `Datum` |
-| Wise | Multi-currency transfers, ISO 8601 | Finished date, exchange rate, fee | `Finished On` + `Currency` |
-| Vision | Internal format | Standard transaction fields | Explicit selection |
-| Custom | User-defined via mapper | Configurable column mapping | Manual column picker |
+| SABB               | Belgian bank format, semicolon-delimited   | Posting date, description, amount                        | `Rekeningnummer` + `Datum`                            |
+| Wise               | Multi-currency transfers, ISO 8601         | Finished date, exchange rate, fee                        | `Finished On` + `Currency`                            |
+| Vision             | Internal format                            | Standard transaction fields                              | Explicit selection                                    |
+| Custom             | User-defined via mapper                    | Configurable column mapping                              | Manual column picker                                  |
 
 ## Import Service Architecture (Phase C Refactor)
 
 Phase C (April 2026) unified import processing into a **single orchestrator pipeline** that manages staging, validation, matching, and commit phases. The pipeline replaces the three separate services (`importService`, `streamingImportService`, `rawTransactionImportService`) with a modular, idempotent architecture.
 
 ### Import Pipeline Orchestrator
+
 **File:** [[apps/node-backend/src/services/importPipeline/index.js]]
 
 **Main export:** `runImportPipeline({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? })`
@@ -195,6 +294,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 Each phase is idempotent at its boundary. On error, the batch is marked `failed` and the error is propagated. Progress callbacks are async and propagate SSE backpressure all the way into the batch loop.
 
 **Return value:**
+
 ```typescript
 {
   batchId: number,
@@ -208,21 +308,24 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 ### Pipeline Phases
 
 #### 1. **Staging** (`stageBatch`)
+
 - Parse CSV via bank adapter (Belfius, Revolut, KBC, SABB, Wise, Vision, or custom)
 - Store parsed rows in the `import_staging_rows` table (the original CSV line is retained in the
   `raw_data` column)
 - Emit progress events: `{ phase: 'staging', current, total }`
 
 #### 2. **Validation** (`validateBatch`)
+
 - Check required fields (date, recipient, amount)
 - Parse amounts and dates to canonical form
 - Compute each row's `tx_hash` and flag rows whose hash already exists in the canonical
-  `transactions` table or collides with an earlier row in the same batch (see *Deduplication* below;
+  `transactions` table or collides with an earlier row in the same batch (see _Deduplication_ below;
   there are no per-bank raw tables in this path)
 - Mark invalid rows with error details
 - Emit progress events: `{ phase: 'validating', current, total, errors }`
 
 #### 3. **Matching** (`matchBatch`)
+
 - Look up or create recipients
 - Look up or create categories (via recipient default or explicit mapping)
 - Resolve recipient aliases
@@ -230,6 +333,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Emit progress events: `{ phase: 'matching', current, total }`
 
 #### 4. **Commit** (`commitBatch`)
+
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
 - **Transaction Hash Deduplication (2026-05-14):** Transaction INSERT statements now include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The `tx_hash` is computed from `date|amount|recipient|memo|bank_account` and stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch deduplication tracks committed hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
@@ -238,9 +342,10 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - **Unresolved-recipient decision (2026-08-09):** before any chunk is planned, `commitBatch` marks every drained row whose effective recipient (`user_override_recipient_id ?? resolved_recipient_id`) is missing as `status='error'` with `error_message` `"unresolved recipient — no recipient was matched or assigned in review"`, and counts it into `rows_error`. Previously such rows were attempted against `transactions.recipient_id NOT NULL`, surfacing as a 23502 constraint error — and, post-batching (#142), demoting the row's whole chunk from the bulk-INSERT path to the per-row replay.
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
-- **Post-commit navigation (Aug 2026):** on success, `ImportReviewPage` navigates to `/import` with `{ replace: true }` instead of a normal push — the reviewed batch is consumed, so Back now skips the review URL entirely rather than re-inviting a commit of an already-committed batch. Same fix applied to `PortfolioImportReviewPage` → `/portfolio` (see [[docs/features/portfolio-import#5-commit|Portfolio CSV Import: Commit]]).
+- **Post-commit navigation (Aug 2026):** on success, `ImportReviewPage` navigates to `/import` with `{ replace: true }` instead of a normal push — the reviewed batch is consumed, so Back now skips the review URL entirely rather than re-inviting a commit of an already-committed batch. The replacement history entry carries a validated, transient receipt. `ImportPage` presents the imported count with the success-bounce and number reel, plus duplicate/error counts, then consumes the history state so a reload does not replay it. Same routing fix applies to `PortfolioImportReviewPage` → `/portfolio` (see [[docs/features/portfolio-import#5-commit|Portfolio CSV Import: Commit]]).
 
 #### 5. **Aggregation Refresh** (post-pipeline)
+
 - Synchronously refresh materialized views (as of Phase 12 Bugfix Sweep)
 - Awaits aggregation refresh before import response is sent
 - Ensures `/api/aggregations/*` endpoints see new data immediately in the response
@@ -261,28 +366,32 @@ After committed rows are inserted and aggregations refreshed, `commit.js` calls 
 
 > [!warning] Deleted (2026-05-29)
 > The following services were removed from the codebase (zero importers after Phase C consolidation):
+>
 > - `streamingImportService.js` — deleted
 > - `rawTransactionImportService.js` — deleted
 >
 > `importService.js` was superseded by routes calling `runImportPipeline()` directly.
 
 ### Data Import Service (Recipients & Categories)
+
 **File:** [[apps/node-backend/src/services/dataImportService.js]]
 
 Handles bulk CSV import for **recipients** and **categories** (not transactions).
 
 **Recipient CSV format:**
-| Column | Required | Notes |
-|--------|----------|-------|
-| name | Yes | Recipient name |
-| bank_account | No | IBAN or account number |
-| address | No | Stored in `notes` field |
-| category | No | Format: `GENERAL:DETAIL` |
+
+| Column       | Required | Notes                    |
+| ------------ | -------- | ------------------------ |
+| name         | Yes      | Recipient name           |
+| bank_account | No       | IBAN or account number   |
+| address      | No       | Stored in `notes` field  |
+| category     | No       | Format: `GENERAL:DETAIL` |
 
 **Category CSV format:**
-| Column | Required | Notes |
-|--------|----------|-------|
-| category | Yes | Format: `GENERAL:DETAIL` (falls back to first column) |
+
+| Column   | Required | Notes                                                 |
+| -------- | -------- | ----------------------------------------------------- |
+| category | Yes      | Format: `GENERAL:DETAIL` (falls back to first column) |
 
 Both use `createOrGet` pattern — existing records are skipped, not overwritten.
 
@@ -291,25 +400,28 @@ Both use `createOrGet` pattern — existing records are skipped, not overwritten
 ## Supporting Services
 
 ### `lib/textNormalization.js`
+
 **File:** [[apps/node-backend/src/lib/textNormalization.js]]
 
 Text processing utilities for import and recipient matching:
 
-| Function | Purpose |
-|----------|---------|
-| `cleanRecipientName()` | Strips common prefixes ("Payment from", "Transfer to", etc.) |
-| `cleanKbcRecipientName()` | KBC-specific parsing (handles Dutch/French transaction types and separators) |
-| `normalizeToUppercase()` | Uppercase + trim validation |
-| `normalizeForMatching()` | Canonical form for recipient matching — filters initials, sorts tokens alphabetically, removes punctuation. E.g., "John F Doe" → "DOE JOHN" |
-| `formatAmountString()` | Handles European decimal formats (comma as decimal separator) |
-| `extractCurrencyCode()` | Extracts 3-letter currency code from strings |
+| Function                  | Purpose                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cleanRecipientName()`    | Strips common prefixes ("Payment from", "Transfer to", etc.)                                                                                |
+| `cleanKbcRecipientName()` | KBC-specific parsing (handles Dutch/French transaction types and separators)                                                                |
+| `normalizeToUppercase()`  | Uppercase + trim validation                                                                                                                 |
+| `normalizeForMatching()`  | Canonical form for recipient matching — filters initials, sorts tokens alphabetically, removes punctuation. E.g., "John F Doe" → "DOE JOHN" |
+| `formatAmountString()`    | Handles European decimal formats (comma as decimal separator)                                                                               |
+| `extractCurrencyCode()`   | Extracts 3-letter currency code from strings                                                                                                |
 
 ### `deduplication.js`
+
 **File:** [[apps/node-backend/src/services/deduplication.js]]
 
 Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|recipient|memo|bank_account` for raw table dedup, and direct field matching for the legacy path.
 
 **Memo inclusion (2026-04-28):** All deduplication checks now include trimmed `memo` field:
+
 - `isDuplicate()` — Hash-based check includes memo
 - `isDuplicateByFields()` — Field-based check includes memo
 - `isManualDuplicate()` — Field-fallback path includes `COALESCE(TRIM(memo), '')` matching
@@ -321,11 +433,13 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 ## Import Process
 
 ### 1. File Upload
+
 - Maximum file size: 50MB
 - Supported format: CSV
 - Encoding: UTF-8 (configurable)
 
 ### 2. Parsing & Normalization
+
 - CSV parsed with configurable separator
 - **UTF-8 BOM stripping (Bug-Hunt Sweep 2026-05-08):** `splitCsvLines()` in [[apps/node-backend/src/services/importPipeline/adapters/_shared.js]] strips the UTF-8 BOM character (U+FEFF) that Excel and Windows tools prepend to CSV exports. Without stripping, the first header field becomes `﻿field_name` (invalid key), breaking the column mapping. Implementation: Regex `^﻿` applied before line split.
 - Date formats converted to YYYY-MM-DD
@@ -334,17 +448,21 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 - Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.js]]).
 
 ### 3. Deduplication
+
 Uses SHA-256 hash of:
+
 ```
 date|amount|recipient|memo|bank_account
 ```
 
 Duplicate detection checks:
+
 1. Hash comparison with existing raw transactions
 2. Date + Amount + Recipient field matching
 3. Bank-specific deduplication strategies
 
 ### 4. Category Detection (ADR-046)
+
 - At review time, each group surfaces its `recipient_default_category_id` plus any per-row `override_category_id`.
 - The user can change the category in the review accordion. Changes apply to all rows in the group via `POST /api/import/batches/:id/rows/:rowId/category-override`.
 - **Recipient picker as `trailing` (Aug 2026):** the per-group recipient-override combobox on the review accordion is a real `<button>`-based combobox, so it renders via `AccordionTrigger`'s `trailing` prop — a sibling of the trigger button — rather than nested inside it with a `stopPropagation()` click guard (invalid HTML previously; unreachable for assistive tech). Its accessible name is `t('importReview.recipientPickerLabel', { name })`. See [[docs/components/ui-components#trailing--headerclassname-props-aug-2026|UI Components: Accordion trailing]].
@@ -365,6 +483,7 @@ The review page (`ImportReviewPage`) discloses, before commit, which accounts th
 - i18n keys: `importReview.accounts.*` (line, newBadge, unspecified) and `importReview.toast.newAccounts` / `importReview.toast.reviewAccounts` (en + nl).
 
 ### 5. Transaction Creation
+
 - Creates transactions in main table
 - Links to raw source for audit trail
 - **Phase 0+**: Triggers fire-and-forget materialized view refresh (post-commit) to keep aggregations warm
@@ -377,13 +496,14 @@ As of 2026-05-14, all transactions are deduplicated via a `tx_hash` column in th
 
 ```sql
 ALTER TABLE transactions ADD COLUMN tx_hash TEXT;
-CREATE UNIQUE INDEX uq_transactions_tx_hash 
+CREATE UNIQUE INDEX uq_transactions_tx_hash
   ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
 ```
 
 **Hash computation:** SHA-256 of `date|amount|recipient|memo|bank_account` (same as legacy bank-specific dedup).
 
 **Conflict handling:**
+
 - `INSERT ... ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` (race-safe)
 - If insert fails with UNIQUE violation, the existing transaction's `id` is returned (idempotent)
 - Enables safe concurrent imports without cross-import duplicate checking
@@ -392,6 +512,7 @@ CREATE UNIQUE INDEX uq_transactions_tx_hash
 
 The per-bank `*_raw_transactions` tables each carry a `deduplication_hash` column and historically
 provided bank-specific duplicate detection:
+
 - `belfius_raw_transactions.deduplication_hash`
 - `revolut_raw_transactions.deduplication_hash`
 - `kbc_raw_transactions.deduplication_hash`
@@ -408,14 +529,17 @@ provided bank-specific duplicate detection:
 > migration `0008_drop_custom_raw_transactions.py`.
 
 ### Field-based Matching
+
 For manual transactions, checks:
+
 ```sql
-SELECT id FROM transactions 
+SELECT id FROM transactions
 WHERE date = $1 AND amount = $2 AND recipient_id = $3
 AND is_active = true
 ```
 
 ### Duplicate Handling
+
 - **Skipped**: Duplicate transactions are counted but not imported
 - **Status**: Import result includes `duplicates_skipped` count
 
@@ -429,13 +553,13 @@ Users can now save a custom CSV column-mapping configuration under a unique name
 
 Saved parsers are persisted in the `custom_parser_configs` table (migration `0037_add_custom_parser_configs`):
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | SERIAL PK | |
-| `name` | TEXT NOT NULL | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions |
+| Column        | Type           | Notes                                                                                                                  |
+| ------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `id`          | SERIAL PK      |                                                                                                                        |
+| `name`        | TEXT NOT NULL  | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions             |
 | `config_json` | JSONB NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | Maintained by the shared `update_updated_at_column()` trigger |
+| `created_at`  | TIMESTAMPTZ    |                                                                                                                        |
+| `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                          |
 
 **Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
 
@@ -445,12 +569,12 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 
 Four new endpoints under `/api/import/parsers` (see [[docs/api/imports|Imports API]] for full contracts):
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/import/parsers` | List all saved parsers |
-| POST | `/api/import/parsers` | Create; 409 on duplicate name; 400 if required columns missing |
-| PATCH | `/api/import/parsers/:id` | Update name and/or config; 404 if missing; 409 on name conflict |
-| DELETE | `/api/import/parsers/:id` | Delete; 204 on success; 404 if missing |
+| Method | Path                      | Description                                                     |
+| ------ | ------------------------- | --------------------------------------------------------------- |
+| GET    | `/api/import/parsers`     | List all saved parsers                                          |
+| POST   | `/api/import/parsers`     | Create; 409 on duplicate name; 400 if required columns missing  |
+| PATCH  | `/api/import/parsers/:id` | Update name and/or config; 404 if missing; 409 on name conflict |
+| DELETE | `/api/import/parsers/:id` | Delete; 204 on success; 404 if missing                          |
 
 ### Parser Name as Bank/Account Label
 
@@ -490,6 +614,7 @@ POST /api/import/csv/custom
 **Storage**: Custom imports use the generic import path with field-based deduplication (no dedicated raw table since migration `0008`).
 
 Parameters:
+
 - `bank_name`: Custom identifier
 - `date_format`: e.g., "DD/MM/YYYY", "MM/DD/YYYY"
 - `date_column`: Column name containing date
@@ -502,6 +627,7 @@ Parameters:
 The Import Page now features an interactive visual CSV column mapper for flexible bank format support.
 
 ### Features
+
 - **Client-side header detection**: Reads first 16 KB of CSV via FileReader to extract headers automatically
 - **Preview table**: Shows up to 5 rows of data with mapped columns highlighted
 - **Configurable separators**: Auto-detect or manually select `;`, `,`, `\t`
@@ -510,12 +636,14 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 - **Validation**: Prevents import until required fields are mapped
 
 ### Implementation
+
 - **Hook**: [[apps/frontend/src/hooks/useCsvPreview.ts]] — handles CSV parsing, header extraction, preview row generation
 - **Component**: [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display (moved from `components/import/` in June 2026)
 - **Integration**: Replaces 4 inline text inputs in [[apps/frontend/src/pages/ImportPage.tsx]]; separator field moved above mapper
 - **i18n**: New keys: `csvParsing`, `csvParseError`, `csvPreviewTitle`, `noMapping` (en + nl translations)
 
 ### Usage
+
 1. Select CSV file or drag-and-drop
 2. Choose separator (auto-detected by default)
 3. Preview table shows detected headers and sample data
@@ -611,11 +739,13 @@ Import routes sanitize error details to prevent exposure of internal exception m
 ## Raw Transaction Storage
 
 Imported transactions are stored in raw tables:
+
 - Original CSV line preserved
 - Deduplication hash for future imports
 - Links to normalized transactions
 
 This allows:
+
 - Re-import without duplicates
 - Audit trail of original data
 - Multiple bank account management
@@ -625,12 +755,14 @@ This allows:
 Vision supports transaction export in two formats:
 
 ### CSV Export
+
 - Streaming CSV with columns: Date, Bank Account, Recipient, Memo, Amount, Currency, Balance, Category, Comment
 - Optional running balance computation via JavaScript accumulator
 - Formula-injection protection (neutralizes `=`, `+`, `-`, `@` prefixes)
 - Endpoint: `GET /api/transactions/export/csv` (30 req/min rate limit)
 
 ### JSON Export (Phase 5A)
+
 - Streaming NDJSON (newline-delimited JSON) format for programmatic processing
 - One complete JSON object per line with fields: id, date, bank_account, recipient, memo, amount, currency, balance, category, comment
 - No balance computation (direct field passthrough)
@@ -638,6 +770,7 @@ Vision supports transaction export in two formats:
 - See [[docs/api/transactions#get-apitransactionsexportjson|Transactions API]] for full spec
 
 ### Frontend Support
+
 - [[apps/frontend/src/pages/ImportPage.tsx]]: Dual export buttons (CSV + JSON) with `exportingFormat` state management
 - i18n: `importPage.exportBtn` ("Export CSV") and `importPage.exportJsonBtn` ("Export JSON")
 - Download helper: [[apps/frontend/src/lib/downloadBlob.ts]] (shared utility centralizing createObjectURL → anchor.click → revokeObjectURL pattern, used by `ExportCard` and `OwesPage`)
@@ -651,6 +784,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 ### Frontend Components
 
 #### CategoryMultiCombobox
+
 **Path:** `[[apps/frontend/src/components/shared/CategoryMultiCombobox.tsx]]`
 
 - **Purpose:** Select multiple categories for export filtering
@@ -658,6 +792,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 - **Integration:** Replaces raw text input in `ExportCard`
 
 #### BankAccountMultiCombobox
+
 **Path:** `[[apps/frontend/src/components/shared/BankAccountMultiCombobox.tsx]]`
 
 - **Purpose:** Select multiple bank accounts (real IBANs) for export filtering
@@ -666,6 +801,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 - **Note:** Returns real bank account IBANs, not legacy adapter keys
 
 #### useBankAccounts Hook
+
 **Path:** `[[apps/frontend/src/hooks/useBankAccounts.ts]]`
 
 - **Purpose:** React Query hook wrapping `apiClient.getDistinctBankAccounts()`
@@ -675,6 +811,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 ### Backend Filter Building
 
 #### buildExportFilters
+
 **File:** `[[apps/node-backend/src/routes/transactions.js]]`
 
 - **Purpose:** Construct precise SQL filters for `bank_accounts` and `category_ids` query params
@@ -684,6 +821,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 - **Validation:** `category_ids` throws `ValidationError` if any value is not an integer
 
 #### filterBuilder.buildTransactionWhere
+
 **File:** `[[apps/node-backend/src/lib/filterBuilder.js]]`
 
 - **Purpose:** Build WHERE clause for transaction queries
@@ -694,11 +832,13 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 ### Query Parameter Contracts
 
 #### CSV Export
+
 ```
 GET /api/transactions/export/csv?bank_accounts=BE12...,BE34...&category_ids=5,7,12
 ```
 
 #### JSON Export
+
 ```
 GET /api/transactions/export/json?bank_accounts=BE12...,BE34...&category_ids=5,7,12
 ```
@@ -706,7 +846,9 @@ GET /api/transactions/export/json?bank_accounts=BE12...,BE34...&category_ids=5,7
 Both endpoints use `buildExportFilters()` to convert comma-separated strings into precise SQL IN clauses.
 
 ### i18n Keys
+
 New keys added in Phase 13:
+
 - `combobox.bankAccount.label` - "Bank Account"
 - `combobox.bankAccount.placeholder` - "Select account..."
 - `combobox.bankAccount.searchPlaceholder` - "Search accounts..."
@@ -722,6 +864,7 @@ New keys added in Phase 13:
 Vision supports receipt and document attachments for transactions via the attachment service.
 
 ### Features
+
 - **File upload**: Attach receipts, invoices, and supporting documents to transactions
 - **Image preview**: Automatic thumbnail generation for image attachments
 - **File management**: Upload, download, and delete attachments
@@ -730,6 +873,7 @@ Vision supports receipt and document attachments for transactions via the attach
 - **MIME types**: Supports PDF, JPEG, PNG, and other standard document formats
 
 ### Backend Services
+
 - [[apps/node-backend/src/middleware/attachmentUpload.js]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
 - [[apps/node-backend/src/services/attachmentService.js]]: Content verification, file storage, path resolution, and removal
 - [[apps/node-backend/src/repositories/attachmentRepository.js]]: Database operations (CRUD)
@@ -737,11 +881,13 @@ Vision supports receipt and document attachments for transactions via the attach
 - Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
 
 ### Frontend Components
+
 - [[apps/frontend/src/components/shared/AttachmentPanel.tsx]]: React Query-integrated upload/list/delete UI with thumbnail preview and hover-reveal delete button
 - [[apps/frontend/src/lib/api/attachments.ts]]: Typed API client for attachment operations
 - [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]]: AttachmentPanel integrated into transaction detail view
 
 ### API
+
 See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples.
 
 ## Related

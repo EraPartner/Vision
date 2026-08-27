@@ -2,7 +2,17 @@ import { useCallback, useRef } from "react";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 
-export type CurrencyFormatter = (val: number, currency?: string, decimals?: number) => string;
+export interface CurrencyFormatterOptions {
+  currency?: string;
+  decimals?: number;
+  /** Render a locale-correct sign for non-zero amounts. */
+  signed?: boolean;
+}
+
+export interface CurrencyFormatter {
+  (val: number, currency?: string, decimals?: number): string;
+  (val: number, options: CurrencyFormatterOptions): string;
+}
 
 /**
  * Shared currency formatter for the portfolio value-table pages (stocks,
@@ -12,8 +22,8 @@ export type CurrencyFormatter = (val: number, currency?: string, decimals?: numb
  * per-row/per-cell formatting doesn't re-instantiate the formatter.
  *
  * `currency` defaults to `defaultCurrency` (or the app's default currency);
- * `decimals` defaults to the `showDecimalPlaces` setting. Pass overrides at the
- * call site for foreign-currency holdings or fixed-precision columns.
+ * `decimals` defaults to the `showDecimalPlaces` setting. Pass the options form
+ * when a display also needs the house `signed: true` / `exceptZero` convention.
  */
 export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatter {
   const { appSettings } = useAppSettings();
@@ -23,9 +33,14 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
   const cacheRef = useRef<Map<string, Intl.NumberFormat>>(new Map());
 
   return useCallback(
-    (val: number, currency: string = fallbackCurrency, decimals?: number) => {
-      const resolvedDecimals = decimals ?? decimalsSetting ?? 2;
-      const key = `${locale}:${currency}:${resolvedDecimals}`;
+    (val: number, currencyOrOptions: string | CurrencyFormatterOptions = fallbackCurrency, legacyDecimals?: number) => {
+      const options = typeof currencyOrOptions === "string"
+        ? { currency: currencyOrOptions, decimals: legacyDecimals }
+        : currencyOrOptions;
+      const currency = options.currency ?? fallbackCurrency;
+      const resolvedDecimals = options.decimals ?? decimalsSetting ?? 2;
+      const signed = options.signed ?? false;
+      const key = `${locale}:${currency}:${resolvedDecimals}:${signed ? "s" : "a"}`;
       // Same guard as the parts sibling below: degrade to the byte-identical
       // bare-number text instead of throwing RangeError into the error
       // boundary, so both formatters on a page fail the same way for the same
@@ -39,6 +54,7 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
             currency,
             minimumFractionDigits: resolvedDecimals,
             maximumFractionDigits: resolvedDecimals,
+            signDisplay: signed ? "exceptZero" : "auto",
           });
           cacheRef.current.set(key, formatter);
         }

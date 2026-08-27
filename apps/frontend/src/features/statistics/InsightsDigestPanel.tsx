@@ -1,12 +1,24 @@
 import { useState } from "react";
 import { useInsightsDigest } from "@/hooks/useInsightsDigest";
 import { formatCurrency, formatPercent } from "@/utils/currency";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CreditCard,
-    PieChart, Sparkles, TrendingDown, TrendingUp, Wallet, X,
+    AlertTriangle,
+    CheckCircle2,
+    ChevronDown,
+    ChevronUp,
+    CreditCard,
+    PieChart,
+    Wallet,
+    X,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -20,6 +32,7 @@ import {
     type SubscriptionFindingType,
 } from "@/lib/insightsDismiss";
 import type { CategoryOutlier } from "@/lib/api/info";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 /**
  * AI-insights digest for the Statistics page (detection layer, no LLM):
@@ -38,15 +51,18 @@ export function InsightsDigestPanel() {
     const { data, isLoading, error } = useInsightsDigest();
 
     const PATTERN_LABELS: Record<string, string> = {
-        weekly: t('recurring.pattern.weekly'),
-        biweekly: t('recurring.pattern.biweekly'),
-        monthly: t('recurring.pattern.monthly'),
-        quarterly: t('recurring.pattern.quarterly'),
-        yearly: t('recurring.pattern.yearly'),
-        custom: t('recurring.pattern.custom'),
+        weekly: t("recurring.pattern.weekly"),
+        biweekly: t("recurring.pattern.biweekly"),
+        monthly: t("recurring.pattern.monthly"),
+        quarterly: t("recurring.pattern.quarterly"),
+        yearly: t("recurring.pattern.yearly"),
+        custom: t("recurring.pattern.custom"),
     };
 
-    const handleDismissSubscription = (recipientId: number, findingType: SubscriptionFindingType) => {
+    const handleDismissSubscription = (
+        recipientId: number,
+        findingType: SubscriptionFindingType,
+    ) => {
         setDismissState(dismissSubscription(recipientId, findingType));
     };
 
@@ -56,11 +72,10 @@ export function InsightsDigestPanel() {
 
     if (isLoading) {
         return (
-            <Card className="glass-regular">
+            <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        {t('insights.panel.loading')}
+                    <CardTitle variant="sm">
+                        {t("insights.panel.loading")}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -76,32 +91,41 @@ export function InsightsDigestPanel() {
         filterDigest(data, dismissState);
     const count = countUndismissed(data, dismissState);
 
-    if (newSubscriptions.length === 0 && priceChanges.length === 0
-        && categoryOutliers.length === 0 && !cashForecast) {
+    if (
+        newSubscriptions.length === 0 &&
+        priceChanges.length === 0 &&
+        categoryOutliers.length === 0 &&
+        !cashForecast
+    ) {
         return (
             <Card className="!border-dashed">
-                <CardContent className="flex items-center gap-3 py-4">
+                <CardContent variant="row" className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-accent shrink-0" />
-                    <p className="text-sm font-medium text-foreground">{t('insights.panel.empty')}</p>
+                    <p className="text-sm font-medium text-foreground">
+                        {t("insights.panel.empty")}
+                    </p>
                 </CardContent>
             </Card>
         );
     }
 
-    const forecastAlert = cashForecast?.prominence === 'alert';
+    const forecastAlert = cashForecast?.prominence === "alert";
 
     return (
-        <Card className="glass-regular">
+        <Card>
             <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                     <div>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            {t('insights.panel.title')}
-                            {count > 0 && <Badge variant="secondary" className="ml-1">{count}</Badge>}
+                        <CardTitle variant="sm">
+                            {t("insights.panel.title")}
+                            {count > 0 && (
+                                <Badge variant="secondary" className="ml-1">
+                                    {count}
+                                </Badge>
+                            )}
                         </CardTitle>
                         <CardDescription className="mt-1">
-                            {t('insights.panel.desc')}
+                            {t("insights.panel.desc")}
                         </CardDescription>
                     </div>
                     <Button
@@ -111,7 +135,11 @@ export function InsightsDigestPanel() {
                         aria-label={expanded ? "Collapse" : "Expand"}
                         onClick={() => setExpanded(!expanded)}
                     >
-                        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        {expanded ? (
+                            <ChevronUp className="h-4 w-4" />
+                        ) : (
+                            <ChevronDown className="h-4 w-4" />
+                        )}
                     </Button>
                 </div>
             </CardHeader>
@@ -119,7 +147,9 @@ export function InsightsDigestPanel() {
                 <CardContent className="space-y-5">
                     {newSubscriptions.length > 0 && (
                         <section className="space-y-2">
-                            <SectionLabel>{t('insights.panel.newSubscriptions')}</SectionLabel>
+                            <SectionLabel>
+                                {t("insights.panel.newSubscriptions")}
+                            </SectionLabel>
                             {newSubscriptions.map((finding) => (
                                 <div
                                     key={`new-${finding.recipientId}`}
@@ -132,16 +162,29 @@ export function InsightsDigestPanel() {
                                         <p className="text-sm font-semibold text-foreground truncate">
                                             {finding.recipientName}
                                         </p>
-                                        <Badge variant="outline" className="text-xs mt-0.5">
-                                            {PATTERN_LABELS[finding.detectedPattern] || finding.detectedPattern}
+                                        <Badge
+                                            variant="outline"
+                                            className="text-xs mt-0.5"
+                                        >
+                                            {PATTERN_LABELS[
+                                                finding.detectedPattern
+                                            ] || finding.detectedPattern}
                                         </Badge>
                                     </div>
                                     <span className="text-sm font-bold text-foreground shrink-0">
-                                        {formatCurrency(finding.latestAmount, finding.currency)}
+                                        {formatCurrency(
+                                            finding.latestAmount,
+                                            finding.currency,
+                                        )}
                                     </span>
                                     <DismissButton
-                                        label={t('insights.dismiss')}
-                                        onClick={() => handleDismissSubscription(finding.recipientId, 'new')}
+                                        label={t("insights.dismiss")}
+                                        onClick={() =>
+                                            handleDismissSubscription(
+                                                finding.recipientId,
+                                                "new",
+                                            )
+                                        }
                                     />
                                 </div>
                             ))}
@@ -150,9 +193,12 @@ export function InsightsDigestPanel() {
 
                     {priceChanges.length > 0 && (
                         <section className="space-y-2">
-                            <SectionLabel>{t('insights.panel.priceChanges')}</SectionLabel>
+                            <SectionLabel>
+                                {t("insights.panel.priceChanges")}
+                            </SectionLabel>
                             {priceChanges.map((finding) => {
-                                const increased = finding.direction === 'increased';
+                                const increased =
+                                    finding.direction === "increased";
                                 return (
                                     <div
                                         key={`price-${finding.recipientId}`}
@@ -164,26 +210,50 @@ export function InsightsDigestPanel() {
                                             </p>
                                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                 <span className="text-xs text-muted-foreground line-through">
-                                                    {formatCurrency(finding.previousAmount, finding.currency)}
+                                                    {formatCurrency(
+                                                        finding.previousAmount,
+                                                        finding.currency,
+                                                    )}
                                                 </span>
-                                                <span className="text-xs">→</span>
-                                                <span className={cn("text-xs font-bold", increased ? "text-loss" : "text-gain")}>
-                                                    {formatCurrency(finding.newAmount, finding.currency)}
+                                                <span className="text-xs">
+                                                    →
                                                 </span>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn("text-xs", increased ? "text-loss border-loss/30" : "text-gain border-gain/30")}
+                                                <span
+                                                    className={cn(
+                                                        "text-xs font-bold",
+                                                        increased
+                                                            ? "text-loss"
+                                                            : "text-gain",
+                                                    )}
                                                 >
-                                                    {increased
-                                                        ? <TrendingUp className="h-3 w-3 mr-1" />
-                                                        : <TrendingDown className="h-3 w-3 mr-1" />}
-                                                    {formatPercent(finding.percentChange, { digits: 1, signed: true })}
-                                                </Badge>
+                                                    {formatCurrency(
+                                                        finding.newAmount,
+                                                        finding.currency,
+                                                    )}
+                                                </span>
+                                                <DeltaPill
+                                                    value={
+                                                        finding.percentChange
+                                                    }
+                                                    invert
+                                                    label={formatPercent(
+                                                        finding.percentChange,
+                                                        {
+                                                            digits: 1,
+                                                            signed: true,
+                                                        },
+                                                    )}
+                                                />
                                             </div>
                                         </div>
                                         <DismissButton
-                                            label={t('insights.dismiss')}
-                                            onClick={() => handleDismissSubscription(finding.recipientId, 'priceChange')}
+                                            label={t("insights.dismiss")}
+                                            onClick={() =>
+                                                handleDismissSubscription(
+                                                    finding.recipientId,
+                                                    "priceChange",
+                                                )
+                                            }
                                         />
                                     </div>
                                 );
@@ -193,7 +263,9 @@ export function InsightsDigestPanel() {
 
                     {categoryOutliers.length > 0 && (
                         <section className="space-y-2">
-                            <SectionLabel>{t('insights.panel.categoryOverspend')}</SectionLabel>
+                            <SectionLabel>
+                                {t("insights.panel.categoryOverspend")}
+                            </SectionLabel>
                             {categoryOutliers.map((outlier) => (
                                 <div
                                     key={`outlier-${outlier.categoryId}-${outlier.monthKey}`}
@@ -208,18 +280,24 @@ export function InsightsDigestPanel() {
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
                                             <span className="font-bold text-loss">
-                                                {formatCurrency(outlier.currentAmount)}
+                                                {formatCurrency(
+                                                    outlier.currentAmount,
+                                                )}
                                             </span>{" "}
-                                            {t('insights.panel.thisMonth')}
+                                            {t("insights.panel.thisMonth")}
                                             {" · "}
-                                            {t('insights.panel.vsTypical', {
-                                                amount: formatCurrency(outlier.baselineMedian),
+                                            {t("insights.panel.vsTypical", {
+                                                amount: formatCurrency(
+                                                    outlier.baselineMedian,
+                                                ),
                                             })}
                                         </p>
                                     </div>
                                     <DismissButton
-                                        label={t('insights.dismiss')}
-                                        onClick={() => handleDismissOutlier(outlier)}
+                                        label={t("insights.dismiss")}
+                                        onClick={() =>
+                                            handleDismissOutlier(outlier)
+                                        }
                                     />
                                 </div>
                             ))}
@@ -228,7 +306,9 @@ export function InsightsDigestPanel() {
 
                     {cashForecast && (
                         <section className="space-y-2">
-                            <SectionLabel>{t('insights.panel.cashForecast')}</SectionLabel>
+                            <SectionLabel>
+                                {t("insights.panel.cashForecast")}
+                            </SectionLabel>
                             <div
                                 className={cn(
                                     "flex items-center gap-3 rounded-lg p-3",
@@ -237,20 +317,36 @@ export function InsightsDigestPanel() {
                                         : "border bg-card",
                                 )}
                             >
-                                {forecastAlert
-                                    ? <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-                                    : <Wallet className="h-4 w-4 text-muted-foreground shrink-0" />}
+                                {forecastAlert ? (
+                                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                                ) : (
+                                    <Wallet className="h-4 w-4 text-muted-foreground shrink-0" />
+                                )}
                                 <div className="min-w-0 flex-1">
-                                    <p className={cn("text-sm", forecastAlert ? "font-semibold text-foreground" : "text-muted-foreground")}>
-                                        {t('insights.panel.monthEndProjected', {
-                                            amount: formatCurrency(cashForecast.monthEndProjected, cashForecast.currency),
+                                    <p
+                                        className={cn(
+                                            "text-sm",
+                                            forecastAlert
+                                                ? "font-semibold text-foreground"
+                                                : "text-muted-foreground",
+                                        )}
+                                    >
+                                        {t("insights.panel.monthEndProjected", {
+                                            amount: formatCurrency(
+                                                cashForecast.monthEndProjected,
+                                                cashForecast.currency,
+                                            ),
                                         })}
                                     </p>
                                     {forecastAlert && (
                                         <p className="text-xs text-destructive mt-0.5">
                                             {cashForecast.crossesZero
-                                                ? t('insights.panel.overdraftRisk')
-                                                : t('insights.panel.significantMove')}
+                                                ? t(
+                                                      "insights.panel.overdraftRisk",
+                                                  )
+                                                : t(
+                                                      "insights.panel.significantMove",
+                                                  )}
                                         </p>
                                     )}
                                 </div>
@@ -264,14 +360,16 @@ export function InsightsDigestPanel() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {children}
-        </p>
-    );
+    return <p className="eyebrow">{children}</p>;
 }
 
-function DismissButton({ label, onClick }: { label: string; onClick: () => void }) {
+function DismissButton({
+    label,
+    onClick,
+}: {
+    label: string;
+    onClick: () => void;
+}) {
     return (
         <Button
             variant="ghost"

@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { cn } from "@/lib/utils";
 import { NetWorthSnapshot, fmtDay } from "./netWorthChartUtils";
+import { Money } from "@/components/shared/Money";
 
 interface SnapshotDataTableProps {
   snapshots: NetWorthSnapshot[];
-  fmt: (val: number) => string;
+  currency: string;
   dateFormat: string;
   t: (key: string) => string;
   totalItems?: number;
@@ -25,7 +26,7 @@ type BreakdownRow = {
 
 export function SnapshotDataTable({
   snapshots,
-  fmt,
+  currency,
   dateFormat,
   t,
   totalItems,
@@ -71,25 +72,25 @@ export function SnapshotDataTable({
       key: 'liquid',
       header: t('networth.liquid'),
       className: 'text-right tabular-nums',
-      render: (row: BreakdownRow) => fmt(row.liquid),
+      render: (row: BreakdownRow) => <Money amount={row.liquid} currency={currency} />,
     },
     ...(hasLiabilities ? [{
       key: 'liabilities',
       header: t('networth.liabilities'),
       className: 'text-right tabular-nums',
-      render: (row: BreakdownRow) => fmt(row.liabilities),
+      render: (row: BreakdownRow) => <Money amount={row.liabilities} currency={currency} />,
     }] : []),
     {
       key: 'investments',
       header: t('networth.investments'),
       className: 'text-right tabular-nums',
-      render: (row: BreakdownRow) => fmt(row.investments),
+      render: (row: BreakdownRow) => <Money amount={row.investments} currency={currency} />,
     },
     {
       key: 'netWorth',
       header: t('networth.title'),
       className: 'text-right tabular-nums font-bold',
-      render: (row: BreakdownRow) => fmt(row.netWorth),
+      render: (row: BreakdownRow) => <Money amount={row.netWorth} currency={currency} />,
     },
     {
       key: 'change',
@@ -98,13 +99,13 @@ export function SnapshotDataTable({
       render: (row: BreakdownRow) => {
         if (row.change === undefined) return '—';
         return (
-          <span className={cn("font-medium", row.change >= 0 ? "amount-gain" : "amount-loss")}>
-            {row.change >= 0 ? "+" : ""}{fmt(row.change)}
+          <span className={cn("font-medium", row.change >= 0 ? "text-gain" : "text-loss")}>
+            <Money amount={row.change} currency={currency} signed />
           </span>
         );
       },
     },
-  ], [dateFormat, fmt, t, hasLiabilities]);
+  ], [currency, dateFormat, t, hasLiabilities]);
 
   if (snapshots.length === 0) return null;
 

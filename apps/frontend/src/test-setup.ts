@@ -15,6 +15,25 @@ configure({ asyncUtilTimeout: 5000 });
 
 // Polyfills for Radix UI in jsdom (jsdom tests only — node-env tests have no window).
 if (typeof window !== "undefined") {
+    // Node's experimental global localStorage can be present but undefined when
+    // no --localstorage-file is configured. It shadows jsdom's implementation
+    // in Vitest workers, so install a deterministic per-worker browser store.
+    const values = new Map<string, string>();
+    const localStorage: Storage = {
+        get length() {
+            return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key) => values.get(key) ?? null,
+        key: (index) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key) => values.delete(key),
+        setItem: (key, value) => values.set(key, String(value)),
+    };
+    Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: localStorage,
+    });
+
     window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
     Element.prototype.hasPointerCapture = () => false;
     Element.prototype.setPointerCapture = () => {};
@@ -56,6 +75,7 @@ beforeAll(() => {
 afterEach(() => {
     cleanup();
     server.resetHandlers();
+    if (typeof localStorage !== "undefined") localStorage.clear();
 });
 
 afterAll(() => {

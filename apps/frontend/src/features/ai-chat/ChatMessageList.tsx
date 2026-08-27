@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Bot } from 'lucide-react';
-import type { ChatMessage } from '@/types/aiChat';
-import { ChatBubble } from './ChatBubble';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { isOptimisticUserId } from '@/lib/aiChatStreamStore';
+import { useEffect, useMemo, useRef } from "react";
+import { Bot } from "lucide-react";
+import type { ChatMessage } from "@/types/aiChat";
+import { ChatBubble } from "./ChatBubble";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
+import type { StreamState } from "@/lib/aiChatStreamStore";
+import { isOptimisticUserId } from "@/lib/aiChatStreamStore";
 
 interface ChatMessageListProps {
     messages: ChatMessage[];
@@ -11,6 +13,8 @@ interface ChatMessageListProps {
     streamingToolMessages: ChatMessage[];
     assistantDraft: string;
     isStreaming: boolean;
+    streamStatus?: StreamState["status"];
+    onRetry?: () => void;
     emptyState?: React.ReactNode;
     /**
      * Id of the conversation being displayed. Only used to re-pin the
@@ -41,6 +45,8 @@ export function ChatMessageList({
     streamingToolMessages,
     assistantDraft,
     isStreaming,
+    streamStatus = isStreaming ? "streaming" : "idle",
+    onRetry,
     emptyState,
     conversationId,
 }: ChatMessageListProps) {
@@ -67,9 +73,11 @@ export function ChatMessageList({
             // collide with any server-issued UUID.
             const isOptimistic = isOptimisticUserId(streamingUserMessage.id);
             const optimisticAlreadyPersisted =
-                isOptimistic
-                && messages.some(
-                    (m) => m.role === 'user' && m.content === streamingUserMessage.content,
+                isOptimistic &&
+                messages.some(
+                    (m) =>
+                        m.role === "user" &&
+                        m.content === streamingUserMessage.content,
                 );
             if (!optimisticAlreadyPersisted) {
                 extras.push(streamingUserMessage);
@@ -85,10 +93,11 @@ export function ChatMessageList({
     // `combined.length`, so length alone isn't enough to keep the view pinned.
     // Track the total streaming-tool content size as well.
     const streamingToolContentLength = useMemo(
-        () => streamingToolMessages.reduce(
-            (sum, message) => sum + (message.content?.length ?? 0),
-            0,
-        ),
+        () =>
+            streamingToolMessages.reduce(
+                (sum, message) => sum + (message.content?.length ?? 0),
+                0,
+            ),
         [streamingToolMessages],
     );
     // React Query briefly keeps the previous conversation as placeholder data
@@ -123,8 +132,8 @@ export function ChatMessageList({
                 isPinnedRef.current = false;
             }
         };
-        el.addEventListener('scroll', onScroll, { passive: true });
-        return () => el.removeEventListener('scroll', onScroll);
+        el.addEventListener("scroll", onScroll, { passive: true });
+        return () => el.removeEventListener("scroll", onScroll);
     }, []);
 
     // Re-pin on the two explicit "show me the newest message" intents, so the
@@ -157,29 +166,45 @@ export function ChatMessageList({
             el.scrollTo({ top: el.scrollHeight });
         });
         return () => cancelAnimationFrame(raf);
-    }, [combined.length, latestCombinedMessageId, assistantDraft, isStreaming, streamingToolContentLength, conversationId]);
+    }, [
+        combined.length,
+        latestCombinedMessageId,
+        assistantDraft,
+        isStreaming,
+        streamingToolContentLength,
+        conversationId,
+    ]);
 
     const { t } = useLanguage();
-    const showDraft = isStreaming && assistantDraft.length > 0;
+    const showDraft = assistantDraft.length > 0;
     const draftLifecycleKey = showDraft ? conversationId : undefined;
     const draftCreatedAt = useMemo(
-        () => draftLifecycleKey !== undefined ? new Date().toISOString() : null,
+        () =>
+            draftLifecycleKey !== undefined ? new Date().toISOString() : null,
         [draftLifecycleKey],
     );
     const draftMessage = useMemo<ChatMessage | null>(
-        () => showDraft && draftCreatedAt ? {
-            id: '__draft__',
-            role: 'assistant',
-            content: assistantDraft,
-            createdAt: draftCreatedAt,
-        } : null,
+        () =>
+            showDraft && draftCreatedAt
+                ? {
+                      id: "__draft__",
+                      role: "assistant",
+                      content: assistantDraft,
+                      createdAt: draftCreatedAt,
+                  }
+                : null,
         [assistantDraft, draftCreatedAt, showDraft],
     );
     const showThinking =
-        isStreaming
-        && assistantDraft.length === 0
-        && streamingToolMessages.length === 0;
-    const showEmpty = combined.length === 0 && !showDraft && !showThinking;
+        isStreaming &&
+        assistantDraft.length === 0 &&
+        streamingToolMessages.length === 0;
+    const showTerminal =
+        streamStatus === "stopped" ||
+        streamStatus === "interrupted" ||
+        streamStatus === "timed_out";
+    const showEmpty =
+        combined.length === 0 && !showDraft && !showThinking && !showTerminal;
 
     return (
         <div
@@ -190,17 +215,17 @@ export function ChatMessageList({
             className="flex-1 overflow-y-auto px-4 py-6"
         >
             {/*
-              * Deliberately no `.cv-auto-row` on the bubbles. This scroller is
-              * bottom-anchored: the resting position is the end of the
-              * transcript, so nearly every bubble sits *above* the viewport and
-              * would be skipped at the utility's fixed fallback height. On the
-              * first open of a conversation no bubble has a last-remembered
-              * size yet, so `scrollHeight` at auto-scroll time is a large
-              * underestimate and the "scroll to bottom" write lands partway up
-              * the conversation, with no later commit to correct it. The
-              * dashboard/statistics sections the utility was written for are
-              * top-anchored and below the fold, where that error is harmless.
-              */}
+             * Deliberately no `.cv-auto-row` on the bubbles. This scroller is
+             * bottom-anchored: the resting position is the end of the
+             * transcript, so nearly every bubble sits *above* the viewport and
+             * would be skipped at the utility's fixed fallback height. On the
+             * first open of a conversation no bubble has a last-remembered
+             * size yet, so `scrollHeight` at auto-scroll time is a large
+             * underestimate and the "scroll to bottom" write lands partway up
+             * the conversation, with no later commit to correct it. The
+             * dashboard/statistics sections the utility was written for are
+             * top-anchored and below the fold, where that error is harmless.
+             */}
             <div className="mx-auto flex max-w-3xl flex-col gap-5">
                 {showEmpty && emptyState}
                 {combined.map((message) => (
@@ -209,8 +234,34 @@ export function ChatMessageList({
                 {draftMessage && (
                     <ChatBubble
                         message={draftMessage}
-                        streaming
+                        streaming={isStreaming}
                     />
+                )}
+                {showTerminal && (
+                    <div
+                        className="ml-12 flex max-w-[85%] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                        role="status"
+                    >
+                        <span>
+                            {t(
+                                streamStatus === "stopped"
+                                    ? "aiChat.streamStopped"
+                                    : streamStatus === "timed_out"
+                                      ? "aiChat.streamTimedOut"
+                                      : "aiChat.streamInterrupted",
+                            )}
+                        </span>
+                        {onRetry && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={onRetry}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        )}
+                    </div>
                 )}
                 {showThinking && (
                     <div className="flex items-center gap-3 px-1">
@@ -219,11 +270,22 @@ export function ChatMessageList({
                         </div>
                         <div className="rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-2.5 text-sm text-muted-foreground ring-1 ring-border/50">
                             <span className="inline-flex items-center gap-1">
-                                <span className="motion-safe:animate-pulse">{t('aiChat.thinking')}</span>
-                                <span className="inline-flex gap-0.5" aria-hidden="true">
-                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:0ms]">.</span>
-                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:300ms]">.</span>
-                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:600ms]">.</span>
+                                <span className="motion-safe:animate-pulse">
+                                    {t("aiChat.thinking")}
+                                </span>
+                                <span
+                                    className="inline-flex gap-0.5"
+                                    aria-hidden="true"
+                                >
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:0ms]">
+                                        .
+                                    </span>
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:300ms]">
+                                        .
+                                    </span>
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:600ms]">
+                                        .
+                                    </span>
                                 </span>
                             </span>
                         </div>

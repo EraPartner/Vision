@@ -22,6 +22,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -30,19 +31,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Sparkline } from "@/components/charts";
 import {
-    ArchiveRestore, ArrowLeft, Coins, DoorClosed, GitMerge, Landmark,
-    Lock, MoreVertical, Pencil, Receipt, Trash2, X,
+    ArchiveRestore,
+    ArrowLeft,
+    Coins,
+    DoorClosed,
+    GitMerge,
+    Lock,
+    MoreVertical,
+    Pencil,
+    Receipt,
+    Trash2,
+    X,
 } from "lucide-react";
+import { PAGE_ICONS } from "@/lib/pageIcons";
 import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";
-import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useAccounts,
+    useUpdateAccount,
+    useDeleteAccount,
+} from "@/hooks/useAccounts";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -50,8 +79,14 @@ import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { isPortfolioType } from "@/features/accounts/groupAccounts";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
-import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
+import {
+    AddAccountDialog,
+    type AccountFormValues,
+} from "@/features/accounts/AddAccountDialog";
+import {
+    toAccountPayload,
+    accountToFormValues,
+} from "@/features/accounts/accountFormMapping";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
@@ -59,6 +94,8 @@ import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/types/api";
+import { Money } from "@/components/shared/Money";
+import { PageShell } from "@/components/shared/PageShell";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -79,7 +116,6 @@ export default function AccountDetailPage() {
     const validId = Number.isInteger(accountId) && accountId > 0;
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const fmtCur = useCurrencyFormatter();
     const balanceProvenance = useBalanceProvenance();
     // Shared drift chip content + tone (§3 F1) — identical to the hub card.
     const driftBadge = useDriftBadge();
@@ -90,7 +126,9 @@ export default function AccountDetailPage() {
     // one account, and usually already warm from the hub navigation.
     const { data, isLoading, isError, error } = useAccounts({ active: "all" });
     const accounts = useMemo(() => data?.items ?? [], [data]);
-    const account = validId ? accounts.find((a) => a.id === accountId) : undefined;
+    const account = validId
+        ? accounts.find((a) => a.id === accountId)
+        : undefined;
 
     const updateMutation = useUpdateAccount();
     const deleteMutation = useDeleteAccount();
@@ -107,11 +145,14 @@ export default function AccountDetailPage() {
     const sinceRaw = searchParams.get("since");
     const since = sinceRaw && YMD_RE.test(sinceRaw) ? sinceRaw : undefined;
     const clearSince = () =>
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete("since");
-            return next;
-        }, { replace: true });
+        setSearchParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("since");
+                return next;
+            },
+            { replace: true },
+        );
 
     // Portfolio-type accounts keep their activity in portfolio_transactions —
     // there may still be ledger rows (broker cash), but no reconcile-cash story.
@@ -123,19 +164,28 @@ export default function AccountDetailPage() {
     // LIMIT/OFFSET, ordered date ASC regardless of display sort) — WP-B4 is its
     // first frontend consumer. No server-side `since` filter: that would
     // restrict the window's input set and restate history from zero.
-    const { data: txData, isLoading: txLoading, isError: txIsError, error: txError, isPlaceholderData } = useQuery({
+    const {
+        data: txData,
+        isLoading: txLoading,
+        isError: txIsError,
+        error: txError,
+        isFetching,
+        isPlaceholderData,
+    } = useQuery({
         queryKey: transactionKeys.accountLedger(account?.id, ledgerLimit),
-        queryFn: () => apiClient.getTransactions({
-            account_id: account!.id,
-            limit: ledgerLimit,
-            sort_by: "date",
-            sort_dir: "desc",
-            include_balance: true,
-        }),
+        queryFn: () =>
+            apiClient.getTransactions({
+                account_id: account!.id,
+                limit: ledgerLimit,
+                sort_by: "date",
+                sort_dir: "desc",
+                include_balance: true,
+            }),
         enabled: !!account && canViewTransactions,
         staleTime: 30_000,
         placeholderData: (prev) => prev, // keep rows visible while Load more fetches
     });
+    useBackgroundQueryCue(isFetching && isPlaceholderData);
 
     const rows = useMemo(() => txData?.items ?? [], [txData]);
     const total = txData?.total ?? 0;
@@ -144,14 +194,20 @@ export default function AccountDetailPage() {
     // prefix — plain YYYY-MM-DD string comparison, no Date parsing (and no
     // local-midnight shift).
     const visibleRows = useMemo(
-        () => (since ? rows.filter((r) => (r.transaction_date ?? "").slice(0, 10) >= since) : rows),
+        () =>
+            since
+                ? rows.filter(
+                      (r) => (r.transaction_date ?? "").slice(0, 10) >= since,
+                  )
+                : rows,
         [rows, since],
     );
 
     // More rows exist server-side AND (unfiltered, or the since-window still
     // spans every loaded row — once an older-than-since row is loaded, the
     // date-desc prefix is complete and Load more can stop).
-    const hasMore = rows.length < total && (!since || visibleRows.length === rows.length);
+    const hasMore =
+        rows.length < total && (!since || visibleRows.length === rows.length);
 
     // Oldest → newest running balances for the header trend line, most recent
     // window only. Prefer the computed running_balance; fall back to the
@@ -159,7 +215,11 @@ export default function AccountDetailPage() {
     const sparkPoints = useMemo(() => {
         return rows
             .slice(0, SPARKLINE_MAX_POINTS)
-            .map((r) => (typeof r.running_balance === "number" ? r.running_balance : r.balance))
+            .map((r) =>
+                typeof r.running_balance === "number"
+                    ? r.running_balance
+                    : r.balance,
+            )
             .filter((v): v is number => typeof v === "number")
             .reverse();
     }, [rows]);
@@ -167,7 +227,11 @@ export default function AccountDetailPage() {
     const sparkColor = useMemo(() => {
         if (sparkPoints.length < 2) return SPARK_COLOR_NEUTRAL;
         const delta = sparkPoints[sparkPoints.length - 1] - sparkPoints[0];
-        return delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
+        return delta > 0
+            ? SPARK_COLOR_POSITIVE
+            : delta < 0
+              ? SPARK_COLOR_NEGATIVE
+              : SPARK_COLOR_NEUTRAL;
     }, [sparkPoints]);
 
     const handleSave = (values: AccountFormValues) => {
@@ -187,7 +251,9 @@ export default function AccountDetailPage() {
     const requestDelete = async (a: Account) => {
         const ok = await confirm({
             title: t("accounts.delete.title"),
-            description: t("accounts.delete.description", { name: a.display_name || a.name }),
+            description: t("accounts.delete.description", {
+                name: a.display_name || a.name,
+            }),
             confirmLabel: t("common.delete"),
             variant: "destructive",
         });
@@ -198,7 +264,11 @@ export default function AccountDetailPage() {
                 // Still referenced (409): route to the close flow instead of
                 // dead-ending (lifecycle D5, ADR-088 addendum) — same as the hub.
                 if ((err as { status?: number }).status === 409) {
-                    toast.info(t("accounts.delete.stillReferenced", { name: a.display_name || a.name }));
+                    toast.info(
+                        t("accounts.delete.stillReferenced", {
+                            name: a.display_name || a.name,
+                        }),
+                    );
                     setClosing(true);
                 }
             },
@@ -218,17 +288,25 @@ export default function AccountDetailPage() {
         return <SectionLoader />;
     }
     if (isError) {
-        return <p className="text-sm text-destructive">{apiErrorToMessage(error, t)}</p>;
+        return (
+            <p className="text-sm text-destructive">
+                {apiErrorToMessage(error, t)}
+            </p>
+        );
     }
     if (!account) {
         return (
             <EmptyState
-                icon={Landmark}
+                icon={PAGE_ICONS["/accounts"]}
                 title={t("accounts.detail.notFoundTitle")}
                 description={t("accounts.detail.notFoundDescription")}
                 action={
-                    <Button variant="outline" onClick={() => navigate("/accounts")}>
-                        <ArrowLeft className="mr-2 h-4 w-4" /> {t("accounts.detail.back")}
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate("/accounts")}
+                    >
+                        <ArrowLeft className="mr-2 h-4 w-4" />{" "}
+                        {t("accounts.detail.back")}
                     </Button>
                 }
             />
@@ -240,20 +318,41 @@ export default function AccountDetailPage() {
     const provenanceText = balanceProvenance(a);
 
     const metadata: Array<{ label: string; value: string }> = [
-        { label: t("accounts.field.type"), value: t(`accounts.type.${a.type}`) },
+        {
+            label: t("accounts.field.type"),
+            value: t(`accounts.type.${a.type}`),
+        },
         { label: t("accounts.field.currency"), value: a.currency },
-        { label: t("accounts.field.owner"), value: t(`accounts.owner.${a.owner}`) },
-        { label: t("accounts.field.liquidityClass"), value: t(`accounts.liquidity.${a.liquidity_class}`) },
+        {
+            label: t("accounts.field.owner"),
+            value: t(`accounts.owner.${a.owner}`),
+        },
+        {
+            label: t("accounts.field.liquidityClass"),
+            value: t(`accounts.liquidity.${a.liquidity_class}`),
+        },
         // tax_wrapper is consumer-less and hidden from the UI (§3 F7) — not shown here either.
-        ...(a.institution ? [{ label: t("accounts.field.institution"), value: a.institution }] : []),
-        { label: t("accounts.field.spendable"), value: a.spendable ? t("common.yes") : t("common.no") },
-        { label: t("accounts.field.inNetWorth"), value: a.in_net_worth ? t("common.yes") : t("common.no") },
+        ...(a.institution
+            ? [{ label: t("accounts.field.institution"), value: a.institution }]
+            : []),
+        {
+            label: t("accounts.field.spendable"),
+            value: a.spendable ? t("common.yes") : t("common.no"),
+        },
+        {
+            label: t("accounts.field.inNetWorth"),
+            value: a.in_net_worth ? t("common.yes") : t("common.no"),
+        },
     ];
 
-    const subtitleParts = [t(`accounts.type.${a.type}`), a.currency, a.institution].filter(Boolean);
+    const subtitleParts = [
+        t(`accounts.type.${a.type}`),
+        a.currency,
+        a.institution,
+    ].filter(Boolean);
 
     return (
-        <div className="space-y-6">
+        <PageShell className="">
             {/* Back to the hub */}
             <Button
                 variant="ghost"
@@ -261,52 +360,77 @@ export default function AccountDetailPage() {
                 className="-ml-2 h-8 px-2 text-muted-foreground hover:text-foreground"
                 onClick={() => navigate("/accounts")}
             >
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> {t("accounts.detail.back")}
+                <ArrowLeft className="mr-1.5 h-4 w-4" />{" "}
+                {t("accounts.detail.back")}
             </Button>
 
             <PageHeader
                 title={a.display_name || a.name}
                 subtitle={subtitleParts.join(" · ")}
-                icon={Landmark}
+                icon={PAGE_ICONS["/accounts"]}
                 actions={
                     <>
                         {!a.is_active && (
-                            <Badge variant="outline">{t("accounts.archived")}</Badge>
+                            <Badge variant="outline">
+                                {t("accounts.archived")}
+                            </Badge>
                         )}
                         {/* Edit / Merge / Close live HERE now (moved off the hub cards, WP-B4). */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon" aria-label={t("accounts.actionsMenu")}>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t("accounts.actionsMenu")}
+                                >
                                     <MoreVertical className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setEditing(true)}>
-                                    <Pencil className="mr-2 h-4 w-4" /> {t("common.edit")}
+                                <DropdownMenuItem
+                                    onClick={() => setEditing(true)}
+                                >
+                                    <Pencil className="mr-2 h-4 w-4" />{" "}
+                                    {t("common.edit")}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setAnchoring(true)}>
-                                    <Coins className="mr-2 h-4 w-4" /> {t("accounts.openingBalance.action")}
+                                <DropdownMenuItem
+                                    onClick={() => setAnchoring(true)}
+                                >
+                                    <Coins className="mr-2 h-4 w-4" />{" "}
+                                    {t("accounts.openingBalance.action")}
                                 </DropdownMenuItem>
                                 {canViewTransactions && (
-                                    <DropdownMenuItem onClick={() => openAccountTransactions(a)}>
-                                        <Receipt className="mr-2 h-4 w-4" /> {t("accounts.openTransactions")}
+                                    <DropdownMenuItem
+                                        onClick={() =>
+                                            openAccountTransactions(a)
+                                        }
+                                    >
+                                        <Receipt className="mr-2 h-4 w-4" />{" "}
+                                        {t("accounts.openTransactions")}
                                     </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSeparator />
                                 {accounts.length > 1 && (
-                                    <DropdownMenuItem onClick={() => setMerging(true)}>
-                                        <GitMerge className="mr-2 h-4 w-4" /> {t("accounts.merge")}
+                                    <DropdownMenuItem
+                                        onClick={() => setMerging(true)}
+                                    >
+                                        <GitMerge className="mr-2 h-4 w-4" />{" "}
+                                        {t("accounts.merge")}
                                     </DropdownMenuItem>
                                 )}
                                 {/* ONE lifecycle verb (§3 F5): Close (= archive + drop from
                                     aggregates, WP-A3) while active, Reopen while closed. */}
                                 {a.is_active ? (
-                                    <DropdownMenuItem onClick={() => setClosing(true)}>
-                                        <DoorClosed className="mr-2 h-4 w-4" /> {t("accounts.close.action")}
+                                    <DropdownMenuItem
+                                        onClick={() => setClosing(true)}
+                                    >
+                                        <DoorClosed className="mr-2 h-4 w-4" />{" "}
+                                        {t("accounts.close.action")}
                                     </DropdownMenuItem>
                                 ) : (
                                     <DropdownMenuItem onClick={() => reopen(a)}>
-                                        <ArchiveRestore className="mr-2 h-4 w-4" /> {t("accounts.restore")}
+                                        <ArchiveRestore className="mr-2 h-4 w-4" />{" "}
+                                        {t("accounts.restore")}
                                     </DropdownMenuItem>
                                 )}
                                 {/* Delete only exists for an account with no transactions;
@@ -316,7 +440,8 @@ export default function AccountDetailPage() {
                                         className="text-destructive focus:text-destructive"
                                         onClick={() => requestDelete(a)}
                                     >
-                                        <Trash2 className="mr-2 h-4 w-4" /> {t("common.delete")}
+                                        <Trash2 className="mr-2 h-4 w-4" />{" "}
+                                        {t("common.delete")}
                                     </DropdownMenuItem>
                                 ) : (
                                     <DropdownMenuItem disabled>
@@ -324,7 +449,9 @@ export default function AccountDetailPage() {
                                         <span className="flex flex-col">
                                             <span>{t("common.delete")}</span>
                                             <span className="text-xs text-muted-foreground">
-                                                {t("accounts.delete.hasTransactions")}
+                                                {t(
+                                                    "accounts.delete.hasTransactions",
+                                                )}
                                             </span>
                                         </span>
                                     </DropdownMenuItem>
@@ -336,10 +463,13 @@ export default function AccountDetailPage() {
             />
 
             {/* Balance + provenance + drift + sparkline */}
-            <Card className="glass-regular">
-                <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between">
+            <Card>
+                <CardContent
+                    variant="headerless"
+                    className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between"
+                >
                     <div className="min-w-0">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                        <div className="eyebrow">
                             {t("accounts.detail.balance")}
                         </div>
                         {portfolio ? (
@@ -353,17 +483,26 @@ export default function AccountDetailPage() {
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <div className="mt-1 text-3xl font-semibold tabular-nums">
-                                            {fmtCur(a.computed_balance, a.currency)}
+                                            <Money
+                                                amount={a.computed_balance}
+                                                currency={a.currency}
+                                            />
                                         </div>
                                     </TooltipTrigger>
-                                    <TooltipContent>{t("accounts.balanceTooltip")}</TooltipContent>
+                                    <TooltipContent>
+                                        {t("accounts.balanceTooltip")}
+                                    </TooltipContent>
                                 </Tooltip>
                                 {provenanceText && (
-                                    <div className="mt-1 text-xs text-muted-foreground">{provenanceText}</div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                        {provenanceText}
+                                    </div>
                                 )}
                             </>
                         ) : (
-                            <div className="mt-1 text-sm text-muted-foreground">{t("accounts.detail.noBalance")}</div>
+                            <div className="mt-1 text-sm text-muted-foreground">
+                                {t("accounts.detail.noBalance")}
+                            </div>
                         )}
                         {drift && (
                             // Drift chip → Reconcile (same affordance as the hub card badge).
@@ -372,7 +511,9 @@ export default function AccountDetailPage() {
                                     <button
                                         type="button"
                                         className={`${badgeVariants({ variant: drift.variant })} mt-3 cursor-pointer text-xs`}
-                                        aria-label={t("accounts.reconcile.open")}
+                                        aria-label={t(
+                                            "accounts.reconcile.open",
+                                        )}
                                         onClick={() => setReconciling(true)}
                                     >
                                         {drift.label}
@@ -399,26 +540,34 @@ export default function AccountDetailPage() {
 
             {/* Holdings placeholder — portfolio-type only; fed for real in WP-C5. */}
             {portfolio && (
-                <Card className="glass-regular">
+                <Card>
                     <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                        <CardTitle
+                            variant="sm"
+                            className="flex items-center gap-2"
+                        >
                             {t("accounts.detail.holdings")}
-                            <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            <Lock
+                                className="h-3.5 w-3.5 text-muted-foreground"
+                                aria-hidden
+                            />
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="rounded-xl border border-dashed border-border/60 p-4">
-                            <p className="text-sm text-muted-foreground">{t("accounts.detail.holdingsDark")}</p>
+                            <p className="text-sm text-muted-foreground">
+                                {t("accounts.detail.holdingsDark")}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
             )}
 
             {/* Running-balance ledger */}
-            <Card className="glass-regular">
+            <Card>
                 <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                        <CardTitle className="text-sm font-semibold tracking-tight">
+                        <CardTitle variant="sm">
                             {t("accounts.detail.ledgerTitle")}
                         </CardTitle>
                         {canViewTransactions && total > 0 && (
@@ -433,7 +582,10 @@ export default function AccountDetailPage() {
                         <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
                             <span className="text-sm text-foreground">
                                 {t("accounts.detail.sinceBanner", {
-                                    date: formatDateStringWithAppSettings(since, appSettings.dateFormat),
+                                    date: formatDateStringWithAppSettings(
+                                        since,
+                                        appSettings.dateFormat,
+                                    ),
                                 })}
                             </span>
                             <Button
@@ -449,55 +601,106 @@ export default function AccountDetailPage() {
                     )}
 
                     {!canViewTransactions ? (
-                        <p className="text-sm text-muted-foreground">{t("accounts.detail.noLedger")}</p>
+                        <p className="text-sm text-muted-foreground">
+                            {t("accounts.detail.noLedger")}
+                        </p>
                     ) : txLoading ? (
                         <SectionLoader />
                     ) : txIsError ? (
-                        <p className="text-sm text-destructive">{apiErrorToMessage(txError, t)}</p>
+                        <p className="text-sm text-destructive">
+                            {apiErrorToMessage(txError, t)}
+                        </p>
                     ) : visibleRows.length === 0 ? (
-                        <p className="py-4 text-sm text-muted-foreground">{t("accounts.detail.noTransactions")}</p>
+                        <p className="py-4 text-sm text-muted-foreground">
+                            {t("accounts.detail.noTransactions")}
+                        </p>
                     ) : (
                         <>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>{t("txPage.col.date")}</TableHead>
-                                        <TableHead>{t("txPage.field.description")}</TableHead>
-                                        <TableHead className="hidden md:table-cell">{t("txPage.col.category")}</TableHead>
-                                        <TableHead className="text-right">{t("txPage.col.amount")}</TableHead>
-                                        <TableHead className="text-right">{t("txPage.field.balance")}</TableHead>
+                                        <TableHead>
+                                            {t("txPage.col.date")}
+                                        </TableHead>
+                                        <TableHead>
+                                            {t("txPage.field.description")}
+                                        </TableHead>
+                                        <TableHead className="hidden md:table-cell">
+                                            {t("txPage.col.category")}
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                            {t("txPage.col.amount")}
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                            {t("txPage.field.balance")}
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody className={cn(isPlaceholderData && "opacity-60")}>
+                                <TableBody
+                                    className={cn(
+                                        isPlaceholderData && "opacity-60",
+                                    )}
+                                >
                                     {visibleRows.map((txn) => (
                                         <TableRow key={txn.id}>
                                             <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                                                 {formatDateStringWithAppSettings(
-                                                    (txn.transaction_date ?? "").slice(0, 10),
+                                                    (
+                                                        txn.transaction_date ??
+                                                        ""
+                                                    ).slice(0, 10),
                                                     appSettings.dateFormat,
                                                 )}
                                             </TableCell>
                                             <TableCell className="max-w-[18rem]">
                                                 <div className="truncate font-medium">
-                                                    {txn.recipient_name || txn.memo || t("accounts.detail.unlabelled")}
+                                                    {txn.recipient_name ||
+                                                        txn.memo ||
+                                                        t(
+                                                            "accounts.detail.unlabelled",
+                                                        )}
                                                 </div>
-                                                {txn.recipient_name && txn.memo && (
-                                                    <div className="truncate text-xs text-muted-foreground">{txn.memo}</div>
-                                                )}
+                                                {txn.recipient_name &&
+                                                    txn.memo && (
+                                                        <div className="truncate text-xs text-muted-foreground">
+                                                            {txn.memo}
+                                                        </div>
+                                                    )}
                                             </TableCell>
                                             <TableCell className="hidden max-w-[10rem] truncate text-muted-foreground md:table-cell">
                                                 {txn.category_name || "—"}
                                             </TableCell>
-                                            <TableCell className={cn(
-                                                "whitespace-nowrap text-right tabular-nums",
-                                                txn.amount >= 0 ? "amount-gain" : "amount-loss",
-                                            )}>
-                                                {fmtCur(txn.amount, txn.currency || a.currency)}
+                                            <TableCell
+                                                className={cn(
+                                                    "whitespace-nowrap text-right tabular-nums",
+                                                    txn.amount >= 0
+                                                        ? "text-gain"
+                                                        : "text-loss",
+                                                )}
+                                            >
+                                                <Money
+                                                    amount={txn.amount}
+                                                    currency={
+                                                        txn.currency ||
+                                                        a.currency
+                                                    }
+                                                    signed
+                                                />
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
-                                                {txn.running_balance != null
-                                                    ? fmtCur(txn.running_balance, txn.currency || a.currency)
-                                                    : "—"}
+                                                {txn.running_balance != null ? (
+                                                    <Money
+                                                        amount={
+                                                            txn.running_balance
+                                                        }
+                                                        currency={
+                                                            txn.currency ||
+                                                            a.currency
+                                                        }
+                                                    />
+                                                ) : (
+                                                    "—"
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -509,7 +712,11 @@ export default function AccountDetailPage() {
                                         variant="outline"
                                         size="sm"
                                         disabled={isPlaceholderData}
-                                        onClick={() => setLedgerLimit((l) => l + LEDGER_PAGE_SIZE)}
+                                        onClick={() =>
+                                            setLedgerLimit(
+                                                (l) => l + LEDGER_PAGE_SIZE,
+                                            )
+                                        }
                                     >
                                         {t("accounts.detail.loadMore")}
                                     </Button>
@@ -521,9 +728,9 @@ export default function AccountDetailPage() {
             </Card>
 
             {/* Metadata — the sheet's Details grid, kept on the page. */}
-            <Card className="glass-regular">
+            <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold tracking-tight">
+                    <CardTitle variant="sm">
                         {t("accounts.detail.details")}
                     </CardTitle>
                 </CardHeader>
@@ -531,7 +738,7 @@ export default function AccountDetailPage() {
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                         {metadata.map((m) => (
                             <div key={m.label} className="flex flex-col">
-                                <dt className="text-xs uppercase tracking-wide text-muted-foreground">{m.label}</dt>
+                                <dt className="eyebrow">{m.label}</dt>
                                 <dd className="tabular-nums">{m.value}</dd>
                             </div>
                         ))}
@@ -545,7 +752,9 @@ export default function AccountDetailPage() {
                     key={a.id}
                     mode="edit"
                     open={editing}
-                    onOpenChange={(o) => { if (!o) setEditing(false); }}
+                    onOpenChange={(o) => {
+                        if (!o) setEditing(false);
+                    }}
                     isSaving={updateMutation.isPending}
                     initialValues={accountToFormValues(a)}
                     onSave={handleSave}
@@ -555,14 +764,18 @@ export default function AccountDetailPage() {
                 <MergeAccountDialog
                     source={a}
                     open={merging}
-                    onOpenChange={(o) => { if (!o) setMerging(false); }}
+                    onOpenChange={(o) => {
+                        if (!o) setMerging(false);
+                    }}
                 />
             )}
             {closing && (
                 <CloseAccountDialog
                     account={a}
                     open={closing}
-                    onOpenChange={(o) => { if (!o) setClosing(false); }}
+                    onOpenChange={(o) => {
+                        if (!o) setClosing(false);
+                    }}
                 />
             )}
             {anchoring && (
@@ -570,7 +783,9 @@ export default function AccountDetailPage() {
                     key={a.id}
                     account={a}
                     open={anchoring}
-                    onOpenChange={(o) => { if (!o) setAnchoring(false); }}
+                    onOpenChange={(o) => {
+                        if (!o) setAnchoring(false);
+                    }}
                 />
             )}
             {reconciling && (
@@ -578,11 +793,13 @@ export default function AccountDetailPage() {
                     key={a.id}
                     account={a}
                     open={reconciling}
-                    onOpenChange={(o) => { if (!o) setReconciling(false); }}
+                    onOpenChange={(o) => {
+                        if (!o) setReconciling(false);
+                    }}
                 />
             )}
 
             <ConfirmDialog />
-        </div>
+        </PageShell>
     );
 }

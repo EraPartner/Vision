@@ -358,7 +358,7 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
                 ref={ref}
                 data-sidebar="group-label"
                 className={cn(
-                    "flex h-8 shrink-0 items-center rounded-md px-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70 outline-none ring-ring transition-[margin,opa] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+"flex h-8 shrink-0 items-center rounded-md px-3 eyebrow outline-none ring-ring transition-[margin,opa] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
                     "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:pointer-events-none",
                     className,
                 )}
@@ -506,7 +506,7 @@ const SidebarMenuBadge = React.forwardRef<HTMLDivElement, React.ComponentProps<"
             ref={ref}
             data-sidebar="menu-badge"
             className={cn(
-                "pointer-events-none absolute right-2 flex h-5 min-w-5 select-none items-center justify-center rounded-md bg-foreground/[0.08] px-1.5 text-[10px] font-medium tabular-nums tracking-wide text-muted-foreground",
+                "pointer-events-none absolute right-2 flex h-5 min-w-5 select-none items-center justify-center rounded-md bg-foreground/[0.08] px-1.5 text-2xs font-medium tabular-nums tracking-wide text-muted-foreground",
                 "peer-data-[active=true]/menu-button:bg-primary/15 peer-data-[active=true]/menu-button:text-primary",
                 "peer-data-[size=sm]/menu-button:top-1",
                 "peer-data-[size=default]/menu-button:top-2",

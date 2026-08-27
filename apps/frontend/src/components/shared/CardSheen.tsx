@@ -3,12 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * Two tiers of one motif (see the `.card-sheen` block in index.css for the
+ * Three tiers of one motif (see the `.card-sheen` block in index.css for the
  * paint). Mirrors `Card`'s cva variant idiom: the tier is a named place in the
  * hierarchy, not a bag of size/colour knobs at the call site.
  *
  * - `default` — the KPI/widget tier: 8rem, `--glass-highlight`, a light sheen
  *   in both modes. Every stat tile, chart card and panel header.
+ * - `feature` — a prominent in-page feature card: the same token and tone as
+ *   `default`, at 10rem. Today this is PerformancePage's total-value card.
  * - `hero` — a page's single hero tile (today only the dashboard's
  *   NetSummaryCard): 12rem, `--background`, which inverts the tone by mode —
  *   pale wash in light, dark vignette in dark. Deliberate, not drift.
@@ -19,6 +21,7 @@ const cardSheenVariants = cva("", {
     variants: {
         tier: {
             default: "card-sheen",
+            feature: "card-sheen-feature",
             hero: "card-sheen-hero",
         },
     },
@@ -48,7 +51,7 @@ export function CardSheen({ animated = false, tier, className }: CardSheenProps)
             aria-hidden
             className={cn(
                 cardSheenVariants({ tier }),
-                animated && "transition-transform duration-500 group-hover:scale-110",
+                animated && "transition-transform duration-reveal group-hover:scale-110",
                 className,
             )}
         />

@@ -58,6 +58,7 @@ type ElectronAPI = {
     platform: string;
     ready: () => Promise<{ success: boolean }>;
     setDockBadge: (count: number) => Promise<{ success: boolean }>;
+    setLanguage?: (language: 'en' | 'nl') => Promise<{ success: boolean }>;
     getAccentColor: () => Promise<string | null>;
     onAccentColorChanged: (cb: (color: string | null) => void) => () => void;
     onMenuAction: (cb: (message: ElectronMenuAction) => void) => () => void;
@@ -98,9 +99,14 @@ export function isElectronMac(): boolean {
     return getElectronAPI()?.platform === 'darwin';
 }
 
-/** Set the macOS dock badge (0 clears). No-op outside Electron. */
+/** Set the native taskbar/dock badge (0 clears). No-op outside Electron. */
 export function setDockBadge(count: number): void {
     getElectronAPI()?.setDockBadge(count).catch(() => { /* badge is best-effort */ });
+}
+
+/** Keep Electron-native menus and dialogs aligned with the in-app language. */
+export function setNativeLanguage(language: 'en' | 'nl'): void {
+    getElectronAPI()?.setLanguage?.(language).catch(() => { /* best-effort */ });
 }
 
 /**

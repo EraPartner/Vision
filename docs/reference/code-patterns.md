@@ -5,7 +5,7 @@ status: active
 date: 2026-04-26
 updated: 2026-08-27
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
 ---
 
@@ -22,14 +22,14 @@ Pure logic that is needed on both the frontend and backend lives in this Bun wor
 
 **Shared modules:**
 
-| Module | Purpose |
-|--------|---------|
-| `money` | Decimal conversion, arithmetic, and canonical banker's rounding |
-| `portfolio` | Cost-basis, lot-event, and portfolio-summary calculations shared across workspaces (ADR-073) |
-| `assetClasses` | Canonical investment asset-class constants and predicates |
-| `category` | Category-name parsing and formatting |
-| `csv` | Safe CSV quoting and formula-neutralization helpers |
-| `slugify` | Canonical slug generation |
+| Module         | Purpose                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `money`        | Decimal conversion, arithmetic, and canonical banker's rounding                              |
+| `portfolio`    | Cost-basis, lot-event, and portfolio-summary calculations shared across workspaces (ADR-073) |
+| `assetClasses` | Canonical investment asset-class constants and predicates                                    |
+| `category`     | Category-name parsing and formatting                                                         |
+| `csv`          | Safe CSV quoting and formula-neutralization helpers                                          |
+| `slugify`      | Canonical slug generation                                                                    |
 
 Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies. Money keeps per-app re-export shims for compatibility. Use an explicit package subpath for modules exposed that way; `category` remains the root-barrel exception. Add new modules only when their logic is genuinely shared and pure; backend-only or frontend-only domain logic stays in its owning app.
 
@@ -43,6 +43,8 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 **Source:** [[packages/shared-utils/src/money.js]] (re-exported via [[apps/node-backend/src/lib/money.js]] and [[apps/frontend/src/lib/money.ts]])
 
+For rendered frontend values, use `components/shared/Money.tsx` after calculation. Pass raw negative/positive deltas with `signed`; pass an explicit currency when the amount is native or already converted. Keep `useCurrencyFormatter` for APIs that require a string, such as translated interpolation, chart ticks/tooltips, input placeholders, titles, and ARIA text.
+
 All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision uses banker's rounding (HALF_EVEN) to match PostgreSQL NUMERIC semantics.
 
 > [!note] Banker's Rounding is Now Canonical (June 2026)
@@ -50,8 +52,6 @@ All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-poi
 
 > [!note] Hot-Path Enforcement (Phase 12 Bugfix Sweep)
 > ESLint custom rule `no-raw-money-arithmetic` now warns on raw `+`, `-`, `*`, `÷` operators on identifiers matching money-like names (e.g., `amount`, `balance`, `cost`). This helps prevent drift in hot paths like split allocation and portfolio math. Not all warnings are errors — context matters — but all should be reviewed before merge.
-
-
 
 ### Layer boundary
 
@@ -63,7 +63,15 @@ All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-poi
 ### Pattern
 
 ```js
-import { toDecimal, addAll, subtract, multiply, divide, roundMoney, toNumber } from '../lib/money.js';
+import {
+  toDecimal,
+  addAll,
+  subtract,
+  multiply,
+  divide,
+  roundMoney,
+  toNumber,
+} from "../lib/money.js";
 
 // Convert any input (number, string, Decimal, null) to Decimal
 const amount = toDecimal(100.5);
@@ -72,61 +80,61 @@ const amount = toDecimal(100.5);
 const total = toNumber(addAll([0.1, 0.2, 0.3])); // 0.6 exactly
 
 // Safe subtraction (e.g., outstanding balance)
-const outstanding = toNumber(subtract('100.00', '66.67')); // 33.33 exactly
+const outstanding = toNumber(subtract("100.00", "66.67")); // 33.33 exactly
 
 // Safe multiplication (e.g., currency conversion, portfolio aggregation)
-const converted = toNumber(multiply('100.00', '1.2145')); // 121.45 exactly
+const converted = toNumber(multiply("100.00", "1.2145")); // 121.45 exactly
 
 // Safe division (e.g., split allocation, fee distribution)
-const perShare = toNumber(divide('100.00', 3)); // 33.33 (pre-rounded)
+const perShare = toNumber(divide("100.00", 3)); // 33.33 (pre-rounded)
 
 // Round to cents with banker's rounding (HALF_EVEN) or custom places
-const rounded = toNumber(roundMoney('10.125')); // 10.12 (rounds to even)
-const scaled = toNumber(roundMoney('0.123456', 4)); // 0.1235 (to 4 DP)
+const rounded = toNumber(roundMoney("10.125")); // 10.12 (rounds to even)
+const scaled = toNumber(roundMoney("0.123456", 4)); // 0.1235 (to 4 DP)
 
 // Database NUMERIC strings
-const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision loss
+const dbAmount = toNumber(toDecimal("100.00")); // Safe from string precision loss
 
 // Repository read boundary: coerce a single DB NUMERIC column, preserving SQL NULL
-import { numericColumn, coerceNumericFields } from '../lib/money.js';
+import { numericColumn, coerceNumericFields } from "../lib/money.js";
 
 const price = numericColumn(row.current_price); // '31.20' → 31.2; null → null; '' → undefined
 
 // Coerce multiple columns at once (shallow copy, does not mutate input)
-const NUMERIC_FIELDS = ['amount', 'fees', 'fx_rate_to_eur'];
+const NUMERIC_FIELDS = ["amount", "fees", "fx_rate_to_eur"];
 const normalized = coerceNumericFields(row, NUMERIC_FIELDS);
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| All monetary input | Wrap in `toDecimal()` immediately |
-| All accumulations | Use `addAll([...])` instead of `.reduce((a, b) => a + b)` |
-| Multiplication | Use `multiply(a, b)` for FX rates, portfolio aggregation, fee scaling |
-| Division | Use `divide(a, b)` for per-unit costs, fee splits; result auto-rounded to 2 DP |
-| Rounding strategy | Use `roundMoney(value, places=2)` for custom precision; defaults to banker's rounding (HALF_EVEN) |
-| Final output | Use `toNumber()` or `.toString()` for JSON/display |
-| Null/undefined | Treated as 0 by `toDecimal()` |
-| Database NUMERIC | Convert string to `toDecimal(string)` for safe math |
-| Banker's rounding | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02 |
+| Rule                   | Rationale                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| All monetary input     | Wrap in `toDecimal()` immediately                                                                                     |
+| All accumulations      | Use `addAll([...])` instead of `.reduce((a, b) => a + b)`                                                             |
+| Multiplication         | Use `multiply(a, b)` for FX rates, portfolio aggregation, fee scaling                                                 |
+| Division               | Use `divide(a, b)` for per-unit costs, fee splits; result auto-rounded to 2 DP                                        |
+| Rounding strategy      | Use `roundMoney(value, places=2)` for custom precision; defaults to banker's rounding (HALF_EVEN)                     |
+| Final output           | Use `toNumber()` or `.toString()` for JSON/display                                                                    |
+| Null/undefined         | Treated as 0 by `toDecimal()`                                                                                         |
+| Database NUMERIC       | Convert string to `toDecimal(string)` for safe math                                                                   |
+| Banker's rounding      | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02                                                                   |
 | Single column coercion | `numericColumn(v)` — converts NUMERIC string to number; `null`/`undefined` pass through unchanged; `''` → `undefined` |
-| Multi-column coercion | `coerceNumericFields(row, fields)` — returns shallow copy with named columns coerced; no-op on nullish row |
+| Multi-column coercion  | `coerceNumericFields(row, fields)` — returns shallow copy with named columns coerced; no-op on nullish row            |
 
 ### Mandatory Scopes (Phase 9 Complete + May 2026 Audit)
 
 As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API output paths and extends to portfolio aggregation and import pipeline precision:
 
-| Scope | Files | Enforcement |
-|-------|-------|-----------|
-| **Repository reads** | splitRepository, infoRepositoryBanks/Helpers/Monthly, portfolioTransactionRepository, rawTransactionRepository | `toNumber(toDecimal(value))` on all NUMERIC/DECIMAL DB columns |
-| **Repository reads (June 2026 stragglers)** | investmentRepository, watchlistRepository, portfolioTxRepo.reads.js (+ writes via `mapPortfolioTxRow`) | `coerceNumericFields(row, NUMERIC_FIELDS)` via `numericColumn` — covers current_price, interest_rate, cadastral_income, municipality_tax_rate, target_price, amount, units, price_per_unit, fees, taxes, fx_rate_to_eur, getSummary aggregation totals; `null`/`undefined` preserved so response shapes are unchanged |
-| **Route responses** | transactions, plannedTransactions, info, aggregations | `toDecimal()` → math → `toNumber()` before JSON serialization |
-| **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder, portfolioSummaryService | Decimal.js throughout; `toNumber()` for output |
-| **Portfolio aggregation** | portfolioSummaryService.js, portfolio/snapshotBuilder.js, portfolioMath.js | Per-investment accumulators + FX multipliers routed through Decimal; `multiply()` for conversion factors; `toNumber()` final aggregate |
-| **CSV/XML parsing** | Bank import adapters (_shared.js, belfius.js, revolut.js, sabb.js, vision.js) | parseFloat only; streaming running balances held as Decimal throughout import; DB writes go through repositories |
-| **Imports** | importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence (`streamingImportService.js` and `rawTransactionImportService.js` deleted 2026-05-29) |
-| **Exports** | transactionExport.js, calculations/aggregation/cashflowForecast.js, calculations/recurrence.js | All accumulations (running balance, cumulative flows) via Decimal; `divide()` for per-row allocation |
+| Scope                                       | Files                                                                                                          | Enforcement                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Repository reads**                        | splitRepository, infoRepositoryBanks/Helpers/Monthly, portfolioTransactionRepository, rawTransactionRepository | `toNumber(toDecimal(value))` on all NUMERIC/DECIMAL DB columns                                                                                                                                                                                                                                                        |
+| **Repository reads (June 2026 stragglers)** | investmentRepository, watchlistRepository, portfolioTxRepo.reads.js (+ writes via `mapPortfolioTxRow`)         | `coerceNumericFields(row, NUMERIC_FIELDS)` via `numericColumn` — covers current_price, interest_rate, cadastral_income, municipality_tax_rate, target_price, amount, units, price_per_unit, fees, taxes, fx_rate_to_eur, getSummary aggregation totals; `null`/`undefined` preserved so response shapes are unchanged |
+| **Route responses**                         | transactions, plannedTransactions, info, aggregations                                                          | `toDecimal()` → math → `toNumber()` before JSON serialization                                                                                                                                                                                                                                                         |
+| **Service calculations**                    | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder, portfolioSummaryService  | Decimal.js throughout; `toNumber()` for output                                                                                                                                                                                                                                                                        |
+| **Portfolio aggregation**                   | portfolioSummaryService.js, portfolio/snapshotBuilder.js, portfolioMath.js                                     | Per-investment accumulators + FX multipliers routed through Decimal; `multiply()` for conversion factors; `toNumber()` final aggregate                                                                                                                                                                                |
+| **CSV/XML parsing**                         | Bank import adapters (_shared.js, belfius.js, revolut.js, sabb.js, vision.js)                                  | parseFloat only; streaming running balances held as Decimal throughout import; DB writes go through repositories                                                                                                                                                                                                      |
+| **Imports**                                 | importPipeline/commit.js                                                                                       | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence (`streamingImportService.js` and `rawTransactionImportService.js` deleted 2026-05-29)                                                                                                                           |
+| **Exports**                                 | transactionExport.js, calculations/aggregation/cashflowForecast.js, calculations/recurrence.js                 | All accumulations (running balance, cumulative flows) via Decimal; `divide()` for per-row allocation                                                                                                                                                                                                                  |
 
 ### When to Use
 
@@ -152,27 +160,27 @@ As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API outp
 Frontend monetary display and form parsing use `parseDecimal()` for safe handling of comma-formatted input and edge cases:
 
 ```typescript
-import { parseDecimal } from '@/lib/decimal';
+import { parseDecimal } from "@/lib/decimal";
 
 // Parse user input (form field)
-const amount = parseDecimal('1.234,56'); // → 1234.56
-const amount2 = parseDecimal('100');     // → 100
-const amount3 = parseDecimal(null);      // → 0 (fallback)
+const amount = parseDecimal("1.234,56"); // → 1234.56
+const amount2 = parseDecimal("100"); // → 100
+const amount3 = parseDecimal(null); // → 0 (fallback)
 
 // Safe fallback
-const value = parseDecimal(userInput, 0);  // Use 0 if parsing fails
+const value = parseDecimal(userInput, 0); // Use 0 if parsing fails
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| User form input | Always wrap in `parseDecimal()` |
-| Comma handling | Automatically strips commas (locale-aware parsing) |
-| Null/undefined/empty | Returns `fallback` (default 0) |
-| Non-finite results | Returns `fallback` (NaN, Infinity handled) |
-| API responses | Already precise (server sends 2 DP numbers), display as-is |
-| Frontend calculations | Avoid frontend monetary math; compute server-side |
+| Rule                  | Rationale                                                  |
+| --------------------- | ---------------------------------------------------------- |
+| User form input       | Always wrap in `parseDecimal()`                            |
+| Comma handling        | Automatically strips commas (locale-aware parsing)         |
+| Null/undefined/empty  | Returns `fallback` (default 0)                             |
+| Non-finite results    | Returns `fallback` (NaN, Infinity handled)                 |
+| API responses         | Already precise (server sends 2 DP numbers), display as-is |
+| Frontend calculations | Avoid frontend monetary math; compute server-side          |
 
 ### When to Use
 
@@ -199,9 +207,9 @@ Always explicitly type variables on declaration when not initialized:
 
 ```typescript
 // WRONG: Type inference on uninitialized variable
-let count = 0;  // inferred as number, but looks unintentional
-let values = [];  // inferred as unknown[], unclear intent
-let currentValue = 0;  // ambiguous for linting
+let count = 0; // inferred as number, but looks unintentional
+let values = []; // inferred as unknown[], unclear intent
+let currentValue = 0; // ambiguous for linting
 
 // CORRECT: Explicit type annotation
 let count: number;
@@ -211,7 +219,7 @@ let currentValue: number = 0;
 // Or use const in loop/scope when possible
 let maxValue: number;
 for (const item of items) {
-  maxValue = Math.max(item.value);  // Now clearly typed
+  maxValue = Math.max(item.value); // Now clearly typed
 }
 ```
 
@@ -219,13 +227,13 @@ for (const item of items) {
 
 ```typescript
 // Avoid casting with `as any`
-const value = data.field as any;  // ❌ Disables type safety
+const value = data.field as any; // ❌ Disables type safety
 
 // Instead, use type guards with `instanceof` or `typeof`
 if (value instanceof Error) {
-  console.log(value.message);  // ✅ value is Error here
-} else if (typeof value === 'string') {
-  console.log(value.toUpperCase());  // ✅ value is string here
+  console.log(value.message); // ✅ value is Error here
+} else if (typeof value === "string") {
+  console.log(value.toUpperCase()); // ✅ value is string here
 }
 ```
 
@@ -235,7 +243,7 @@ if (value instanceof Error) {
 
 ```typescript
 // Type alias (simple/discriminated union)
-type ThemeVariant = 'default' | 'dracula' | 'solarized';
+type ThemeVariant = "default" | "dracula" | "solarized";
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // Empty interface extends becomes type alias (cleaner)
@@ -272,7 +280,7 @@ function process<T extends Entity>(item: T) { ... }
 ```typescript
 // WRONG: Variable assigned but never used before reassignment
 let total = 0;
-total = calculateSum(items);  // First assignment is useless
+total = calculateSum(items); // First assignment is useless
 
 // CORRECT: Declare without initial assignment, or initialize correctly
 let total: number;
@@ -291,31 +299,31 @@ const total = calculateSum(items);
 Frontend date operations avoid the pitfall of `new Date("YYYY-MM-DD")`, which parses as UTC midnight and shifts the calendar date in timezones east of UTC. Use helper functions instead:
 
 ```typescript
-import { parseYmd, toYmd, todayYmd, daysBetween } from '@/lib/timezone';
+import { parseYmd, toYmd, todayYmd, daysBetween } from "@/lib/timezone";
 
 // Parse a YYYY-MM-DD string as local midnight (not UTC)
-const date = parseYmd('2026-04-22');  // → Date at 00:00:00 local time
+const date = parseYmd("2026-04-22"); // → Date at 00:00:00 local time
 
 // Convert Date to YYYY-MM-DD string
-const ymdString = toYmd(new Date());  // → "2026-04-22"
+const ymdString = toYmd(new Date()); // → "2026-04-22"
 
 // Today's date as string
-const today = todayYmd();              // → "2026-04-22"
+const today = todayYmd(); // → "2026-04-22"
 
 // Days between two dates (fractional)
-const elapsed = daysBetween(startDate, endDate);  // → 5.5 (days)
+const elapsed = daysBetween(startDate, endDate); // → 5.5 (days)
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Date-only values | Always use `parseYmd()`, never `new Date("YYYY-MM-DD")` |
-| String output | Use `toYmd()` for YYYY-MM-DD format |
-| Today | Use `todayYmd()` for current date string |
-| Date arithmetic | Use `daysBetween()` for elapsed time calculations |
+| Rule                   | Rationale                                                             |
+| ---------------------- | --------------------------------------------------------------------- |
+| Date-only values       | Always use `parseYmd()`, never `new Date("YYYY-MM-DD")`               |
+| String output          | Use `toYmd()` for YYYY-MM-DD format                                   |
+| Today                  | Use `todayYmd()` for current date string                              |
+| Date arithmetic        | Use `daysBetween()` for elapsed time calculations                     |
 | No timezone conversion | These functions work in browser local time (no APP_TIMEZONE crossing) |
-| Server dates | Backend sends ISO 8601; parse with `parseYmd(txn.date)` |
+| Server dates           | Backend sends ISO 8601; parse with `parseYmd(txn.date)`               |
 
 ### When to Use
 
@@ -339,28 +347,32 @@ const elapsed = daysBetween(startDate, endDate);  // → 5.5 (days)
 The `parseLocalDateFromYmd()` function safely parses ISO date strings with defensive input validation:
 
 ```typescript
-import { parseLocalDateFromYmd, toYmd, formatDistanceToNow } from '@/components/shared/dateUtils';
+import {
+  parseLocalDateFromYmd,
+  toYmd,
+  formatDistanceToNow,
+} from "@/components/shared/dateUtils";
 
 // Parse YYYY-MM-DD safely; returns new Date(NaN) for invalid input
-const date = parseLocalDateFromYmd('2026-04-22');  // → Date at 00:00:00 local time
-const invalid = parseLocalDateFromYmd(null);        // → new Date(NaN) (safe fallback)
-const empty = parseLocalDateFromYmd('');            // → new Date(NaN) (safe fallback)
+const date = parseLocalDateFromYmd("2026-04-22"); // → Date at 00:00:00 local time
+const invalid = parseLocalDateFromYmd(null); // → new Date(NaN) (safe fallback)
+const empty = parseLocalDateFromYmd(""); // → new Date(NaN) (safe fallback)
 
 // Format relative dates with locale support
-const ago = formatDistanceToNow(new Date('2026-04-20'), { locale: 'nl' });  // → "2 days ago" (in Dutch)
+const ago = formatDistanceToNow(new Date("2026-04-20"), { locale: "nl" }); // → "2 days ago" (in Dutch)
 
 // Convert Date to YYYY-MM-DD
-const ymdString = toYmd(new Date());                // → "2026-04-22"
+const ymdString = toYmd(new Date()); // → "2026-04-22"
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Input validation | Guard against non-string/empty input in `parseLocalDateFromYmd()` by returning `new Date(NaN)` instead of throwing |
-| Locale support | `formatDistanceToNow()` accepts locale option to respect user language preferences (en or nl) instead of hardcoding English |
-| Immutability | All helpers return new values; no mutations of input dates |
-| Local time | Parse dates in browser local time (no UTC shifts) |
+| Rule             | Rationale                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Input validation | Guard against non-string/empty input in `parseLocalDateFromYmd()` by returning `new Date(NaN)` instead of throwing          |
+| Locale support   | `formatDistanceToNow()` accepts locale option to respect user language preferences (en or nl) instead of hardcoding English |
+| Immutability     | All helpers return new values; no mutations of input dates                                                                  |
+| Local time       | Parse dates in browser local time (no UTC shifts)                                                                           |
 
 ### When to Use
 
@@ -385,15 +397,15 @@ import {
   appLanguageToLocale,
   CHART_DATE_PATTERNS,
   formatDate,
-} from '@/components/shared/dateUtils';
+} from "@/components/shared/dateUtils";
 
 const { language } = useLanguage();
-const monthLabelLocale = appLanguageToLocale(language);   // 'nl' → 'nl-NL', else 'en-US'
+const monthLabelLocale = appLanguageToLocale(language); // 'nl' → 'nl-NL', else 'en-US'
 
 formatDate(d, CHART_DATE_PATTERNS.monthTick, monthLabelLocale);
 ```
 
-**Do not reuse `numberFormatToLocale` for this.** It maps the *number-format setting*
+**Do not reuse `numberFormatToLocale` for this.** It maps the _number-format setting_
 (`eu` → `de-DE`) and would render German months in a Dutch UI. Month names follow the
 UI language; number shapes follow the number setting — two different inputs.
 
@@ -437,6 +449,7 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > [!note] `null` as a "parse/fetch miss" sentinel
 > The same "distinguish absence from a missing argument" reasoning extends `null` to two more
 > boundaries beyond the repository layer:
+>
 > - **CSV import adapters** (`services/importPipeline/adapters/*.js`, `_shared.js`) return `null`
 >   for an unparseable row so the pipeline can count it as skipped rather than treating it as data.
 > - **Rate fetching** (`services/currency/rateFetcher.js`) returns `null` when a provider has no
@@ -446,7 +459,7 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > boundaries should keep returning `null` (test with `== null`). Everywhere else, prefer `undefined`.
 
 ```js
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 export const entityRepository = {
   async getAll({ limit = 50, offset = 0, active = true, ...filters } = {}) {
@@ -471,7 +484,7 @@ export const entityRepository = {
   },
 
   async getById(id) {
-    const result = await query('SELECT * FROM table_name WHERE id = $1', [id]);
+    const result = await query("SELECT * FROM table_name WHERE id = $1", [id]);
     return result.rows[0] || null;
   },
 
@@ -496,13 +509,13 @@ export const entityRepository = {
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const sql = `UPDATE table_name SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
+    const sql = `UPDATE table_name SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING *`;
     const result = await query(sql, params);
     return result.rows[0] || null;
   },
 
   async hardDelete(id) {
-    const result = await query('DELETE FROM table_name WHERE id = $1', [id]);
+    const result = await query("DELETE FROM table_name WHERE id = $1", [id]);
     return result.rowCount > 0;
   },
 };
@@ -512,16 +525,16 @@ export default entityRepository;
 
 ### Key Conventions
 
-| Pattern | Rule |
-|---------|------|
-| DB access | Import `query` from `../database/connection.js` |
-| Filter building | `WHERE 1=1` + dynamic `AND` clauses |
-| Parameters | Positional (`$1`, `$2`) with manual index tracking |
-| Single row | `result.rows[0] || null` |
-| Delete success | `result.rowCount > 0` |
-| Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined` |
-| SQL injection | Use parameterized queries only, never string concatenation |
-| Export shape | Entity CRUD object or specialized named functions, chosen by responsibility |
+| Pattern         | Rule                                                                        |
+| --------------- | --------------------------------------------------------------------------- |
+| DB access       | Import `query` from `../database/connection.js`                             |
+| Filter building | `WHERE 1=1` + dynamic `AND` clauses                                         |
+| Parameters      | Positional (`$1`, `$2`) with manual index tracking                          |
+| Single row      | `result.rows[0]                                                             |     | null` |
+| Delete success  | `result.rowCount > 0`                                                       |
+| Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined`               |
+| SQL injection   | Use parameterized queries only, never string concatenation                  |
+| Export shape    | Entity CRUD object or specialized named functions, chosen by responsibility |
 
 ### Layering: repositories must not import services — with a closed list of sanctioned exceptions
 
@@ -537,7 +550,7 @@ The intended layering is `routes → services → repositories`, with pure, fram
 `vision-local/no-repo-direct-from-route`. Its `SANCTIONED_REPO_SERVICE_IMPORTS` allowlist is the
 machine-readable twin of the callout below and pins **both** the service module and the exact
 binding names, so it fires on a new repository importing a service, on a sanctioned repository
-importing a *different* service, and on a sanctioned repository *widening* its binding list. The
+importing a _different_ service, and on a sanctioned repository _widening_ its binding list. The
 two lists must be edited together.
 
 > [!note] Accepted exception — eight read-repositories may import currency conversion
@@ -580,6 +593,7 @@ two lists must be edited together.
 **Source:** [[apps/node-backend/src/lib/timezone.js|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
 
 **May 2026 Update:** As of 2026-05-14, date bucketing throughout the backend now consistently uses `APP_TIMEZONE` (default `Europe/Brussels`):
+
 - `cashflowForecast.js`: All date bucketing via `toAppTz` / `appDateStringToUtc` / `toAppDateString`
 - `infoRepositoryPlanned.js`: Month window anchored to APP_TIMEZONE
 - `portfolioMath.js`: Calendar-day counts via `calendarDaysBetween` helper
@@ -610,20 +624,22 @@ const zoned = toAppTz(utcDate, zone);
 ### Implementation
 
 When `hour === 24`:
+
 1. Set `hour = 0`
 2. Increment `day` (via `Date.UTC(year, month-1, day+1)`)
 3. Extract year, month, day from rolled Date to handle month/year overflow automatically
 
 ### Key Cases
 
-| Scenario | Input | Output |
-|----------|-------|--------|
-| Jan 31 23:00 UTC (Feb 1 00:00 Brussels) | `hour=24, day=31, month=1` | `hour=0, day=1, month=2, year=2026` |
+| Scenario                                | Input                       | Output                              |
+| --------------------------------------- | --------------------------- | ----------------------------------- |
+| Jan 31 23:00 UTC (Feb 1 00:00 Brussels) | `hour=24, day=31, month=1`  | `hour=0, day=1, month=2, year=2026` |
 | Dec 31 23:00 UTC (Jan 1 00:00 Brussels) | `hour=24, day=31, month=12` | `hour=0, day=1, month=1, year=2027` |
 
 ### Tests
 
 Two new test cases in `timezone.test.js`:
+
 - `toAppTz handles year boundary at Dec 31 -> Jan 1 rollover`
 - (Existing case already covered Jan 31 → Feb 1)
 
@@ -636,16 +652,16 @@ Two new test cases in `timezone.test.js`:
 Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. PATCH handlers must sanitize read-only fields immutably:
 
 ```js
-import { Router } from 'express';
-import entityRepository from '../repositories/entityRepository.js';
-import { logger } from '../config/logger.js';
-import { validateIdParam } from '../middleware/validation.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { Router } from "express";
+import entityRepository from "../repositories/entityRepository.js";
+import { logger } from "../config/logger.js";
+import { validateIdParam } from "../middleware/validation.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 
 const router = Router();
 
 // GET /api/entities — paginated list
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   const { limit = 50, offset = 0, ...filters } = req.query;
   const opts = {
     limit: Math.min(parseInt(limit, 10) || 50, 1000),
@@ -662,17 +678,17 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/entities/:id
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get("/:id", validateIdParam, async (req, res) => {
   const entity = await entityRepository.getById(assertIdParam(req));
-  if (!entity) throw new NotFoundError('Entity not found');
+  if (!entity) throw new NotFoundError("Entity not found");
   res.ok(entity);
 });
 
 // POST /api/entities
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   const { requiredField, ...data } = req.body;
   if (!requiredField) {
-    throw new ValidationError('Missing required fields: requiredField');
+    throw new ValidationError("Missing required fields: requiredField");
   }
   const entity = await entityRepository.create(data);
   res.status(201);
@@ -680,19 +696,19 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/entities/:id
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch("/:id", validateIdParam, async (req, res) => {
   // Remove read-only fields immutably (via destructuring rest, not in-place delete)
   const { id: _id, createdAt: _createdAt, ...sanitized } = req.body;
   const updated = await entityRepository.update(assertIdParam(req), sanitized);
-  if (!updated) throw new NotFoundError('Entity not found');
+  if (!updated) throw new NotFoundError("Entity not found");
   res.ok(updated);
 });
 
 // DELETE /api/entities/:id — hard delete answers 204 with no body (see
 // "DELETE Response Pattern" below for the soft-delete / side-effect exceptions)
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete("/:id", validateIdParam, async (req, res) => {
   const deleted = await entityRepository.hardDelete(assertIdParam(req));
-  if (!deleted) throw new NotFoundError('Entity not found');
+  if (!deleted) throw new NotFoundError("Entity not found");
   res.status(204).send();
 });
 
@@ -701,17 +717,17 @@ export default router;
 
 ### Key Conventions
 
-| Pattern | Rule |
-|---------|------|
-| **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
-| **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
-| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
-| **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
-| **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
-| **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |
-| **Route ordering** | Static routes (e.g., `/providers`) BEFORE `/:id` routes |
-| **Rate limiting** | Per-route limiters for heavy endpoints (e.g., export, search) |
-| **Export** | `export default router` |
+| Pattern                | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **List envelope**      | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ADR-026]]                  |
+| **Parallel fetch**     | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Error handling**     | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Success response**   | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | DELETE Response Pattern]]) |
+| **Route ordering**     | Static routes (e.g., `/providers`) BEFORE `/:id` routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Rate limiting**      | Per-route limiters for heavy endpoints (e.g., export, search)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Export**             | `export default router`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ---
 
@@ -750,14 +766,14 @@ router.get('/', async (req, res) => {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| **Items always present** | `data.items` is the array; never bare `data` as array |
-| **Total count required** | Pagination requires `data.total` (total records matching filter) |
-| **Limit/offset optional** | Include if pagination is used; omit for fixed-size responses |
-| **Payload wrapping** | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)` |
-| **Parallel fetch** | Use `Promise.all([getAll, getCount])` to avoid N+1 queries |
-| **Frontend unwrapping** | API client returns `body.data` automatically; consumer receives `{items, total, ...}` |
+| Rule                             | Rationale                                                                                                                                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Items always present**         | `data.items` is the array; never bare `data` as array                                                                                                                                                          |
+| **Total count required**         | Pagination requires `data.total` (total records matching filter)                                                                                                                                               |
+| **Limit/offset optional**        | Include if pagination is used; omit for fixed-size responses                                                                                                                                                   |
+| **Payload wrapping**             | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)`                                                                                                                      |
+| **Parallel fetch**               | Use `Promise.all([getAll, getCount])` to avoid N+1 queries                                                                                                                                                     |
+| **Frontend unwrapping**          | API client returns `body.data` automatically; consumer receives `{items, total, ...}`                                                                                                                          |
 | **Pagination lives in the body** | `{items, total, limit, offset}` inside `data` — never `meta.pagination`. The envelope-level variant was documented once, emitted by exactly one endpoint, and has been retired ([[packages/types/src/api.js]]) |
 
 ### Common Patterns
@@ -770,7 +786,7 @@ res.ok({ items, total, limit: opts.limit, offset: opts.offset });
 res.ok({ items: summary, total: summary.length });
 
 // With metadata
-res.ok({ items, total }, { source: 'mv', computedAt: '...' });
+res.ok({ items, total }, { source: "mv", computedAt: "..." });
 ```
 
 Route-specific metadata fields live directly under `meta`, beside the optional
@@ -789,7 +805,7 @@ const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
 const items = await repository.getAll({ active, ...(page ?? {}) });
 // Unbounded query ⇒ the rows ARE the total; skip the COUNT round-trip.
 const total = page ? await repository.getCount({ active }) : items.length;
-res.ok(listBody(items, total, page));   // adds limit/offset only when paging
+res.ok(listBody(items, total, page)); // adds limit/offset only when paging
 ```
 
 Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
@@ -802,7 +818,7 @@ clause at all, rather than a large default that silently caps the result.
 // API client unwraps envelope; frontend gets {items, total, ...}
 const { items, total } = await apiClient.getEntities({ limit: 50 });
 
-items.forEach(item => console.log(item));  // items is already the array
+items.forEach((item) => console.log(item)); // items is already the array
 ```
 
 ---
@@ -813,19 +829,19 @@ items.forEach(item => console.log(item));  // items is already the array
 
 DELETE success responses previously used six different shapes (`204` empty, `{message}`, `{deleted:true}`, `{removed}`, `{ok:true}`, `{patternId}`), which made a generic delete-mutation hook impossible. One rule now applies:
 
-> **A hard delete answers `204 No Content` with no body. A 200 body is allowed only when the operation is *not* a plain delete and the body carries something the caller cannot derive.**
+> **A hard delete answers `204 No Content` with no body. A 200 body is allowed only when the operation is _not_ a plain delete and the body carries something the caller cannot derive.**
 
 ```js
 // Hard delete — the row is gone; nothing to report.
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete("/:id", validateIdParam, async (req, res) => {
   const deleted = await entityRepository.hardDelete(assertIdParam(req));
-  if (!deleted) throw new NotFoundError('Entity not found');
+  if (!deleted) throw new NotFoundError("Entity not found");
   res.status(204).send();
 });
 
 // Soft delete / deactivate — the row survives with is_active = false, so the
 // caller gets the updated entity back (same shape as PATCH).
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete("/:id", validateIdParam, async (req, res) => {
   const deactivated = await tagService.softDelete(assertIdParam(req));
   res.ok({ ...deactivated, links: [] });
 });
@@ -837,25 +853,25 @@ res.ok({ deleted, recipientsRemoved });
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| **204 has no envelope** | `res.status(204).send()`, never `res.ok(...)`. Per [[docs/adr/026-unified-api-response-envelope|ADR-026]] the envelope is a property of JSON bodies; a 204 has no body to wrap |
-| **Not-found still throws** | `throw new NotFoundError(...)` → the error envelope is unaffected. 204 applies to the success path only |
-| **Idempotent deletes** | Where an already-removed row is deliberately not an error (`/api/research/mappings/:id`, `/api/research/provider-keys/:provider`), answer 204 regardless — do not leak a `{removed:false}` body |
-| **No echo bodies** | Never return the id/params the caller just sent (`{patternId}`), a bare `{ok:true}`, or a human-readable `{message}`. None of it is information |
-| **Frontend clients return `void`** | `await apiRequest<void>(path, { method: 'DELETE' })`. `apiRequest` short-circuits on 204 and resolves `undefined`; a client typed to return a body would be lying |
-| **openapi.yaml** | Document `"204": { description: No Content }` with no `content:` block, then re-run `bun run generate:types` |
+| Rule                               | Rationale                                                                                                                                                                                       |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **204 has no envelope**            | `res.status(204).send()`, never `res.ok(...)`. Per [[docs/adr/026-unified-api-response-envelope                                                                                                 | ADR-026]] the envelope is a property of JSON bodies; a 204 has no body to wrap |
+| **Not-found still throws**         | `throw new NotFoundError(...)` → the error envelope is unaffected. 204 applies to the success path only                                                                                         |
+| **Idempotent deletes**             | Where an already-removed row is deliberately not an error (`/api/research/mappings/:id`, `/api/research/provider-keys/:provider`), answer 204 regardless — do not leak a `{removed:false}` body |
+| **No echo bodies**                 | Never return the id/params the caller just sent (`{patternId}`), a bare `{ok:true}`, or a human-readable `{message}`. None of it is information                                                 |
+| **Frontend clients return `void`** | `await apiRequest<void>(path, { method: 'DELETE' })`. `apiRequest` short-circuits on 204 and resolves `undefined`; a client typed to return a body would be lying                               |
+| **openapi.yaml**                   | Document `"204": { description: No Content }` with no `content:` block, then re-run `bun run generate:types`                                                                                    |
 
 ### The Exceptions
 
 Only these four justify a 200 body. Each is annotated in-route with a pointer back here.
 
-| Endpoint | Body | Why not 204 |
-|----------|------|-------------|
-| `DELETE /api/tags/:id` | the deactivated tag | Soft delete — `is_active` flips, the row survives, and the caller wants the new state |
-| `DELETE /api/recipients/:id/bank-accounts/:accountId` | the deactivated bank account | Same soft delete; mirrors the sibling `set-primary` response |
-| `DELETE /api/import/batches/:id` | `{ deleted, recipientsRemoved }` | Rollback, not a delete of the addressed resource — the counts are rendered by the import history card |
-| `DELETE /api/portfolio/import/batches/:id` | `{ deleted }` | Same rollback semantics |
+| Endpoint                                              | Body                             | Why not 204                                                                                           |
+| ----------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `DELETE /api/tags/:id`                                | the deactivated tag              | Soft delete — `is_active` flips, the row survives, and the caller wants the new state                 |
+| `DELETE /api/recipients/:id/bank-accounts/:accountId` | the deactivated bank account     | Same soft delete; mirrors the sibling `set-primary` response                                          |
+| `DELETE /api/import/batches/:id`                      | `{ deleted, recipientsRemoved }` | Rollback, not a delete of the addressed resource — the counts are rendered by the import history card |
+| `DELETE /api/portfolio/import/batches/:id`            | `{ deleted }`                    | Same rollback semantics                                                                               |
 
 Side-effect-count bodies keep their existing key names; unifying response keys across endpoints is a separate concern from this convention.
 
@@ -878,47 +894,51 @@ Request and response bodies were split by router: the domain API speaks snake_ca
 
 ```js
 // Route: snake_case in, camelCase from there inward.
-router.post('/portfolio-forecast', async (req, res) => {
+router.post("/portfolio-forecast", async (req, res) => {
   const body = req.body ?? {};
   const result = await runPortfolioForecast({
-    horizonMonths: body.horizon_months,          // wire → internal, once, at the edge
+    horizonMonths: body.horizon_months, // wire → internal, once, at the edge
     monthlyContribution: body.monthly_contribution,
   });
-  res.ok(result);                                // response keys are snake_case too
+  res.ok(result); // response keys are snake_case too
 });
 ```
 
 ```ts
 // Frontend client owns the same translation on its side.
-return researchSend<PortfolioForecast>('/api/research/portfolio-forecast', 'POST', {
-  horizon_months: input.horizonMonths,
-  monthly_contribution: input.monthlyContribution,
-});
+return researchSend<PortfolioForecast>(
+  "/api/research/portfolio-forecast",
+  "POST",
+  {
+    horizon_months: input.horizonMonths,
+    monthly_contribution: input.monthlyContribution,
+  },
+);
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| **snake_case on the wire** | Request bodies, response bodies, and query params. It matches the DB columns most payloads mirror, so a row can be returned without a rename pass |
-| **Translate at the edge** | The route handler is the only place the two spellings meet. Services and repositories never see wire keys; the frontend client maps them back to camelCase for React |
-| **Never dual-accept** | Accepting `horizon_months ?? horizonMonths` ships two undocumented contracts and doubles the surface every future validator has to cover. Pick snake_case; the camel key is simply an unknown field |
-| **New routers are snake_case** | No matter which neighbour they sit next to in `routes/`. A grandfathered router is not a precedent |
-| **openapi.yaml is the check** | The documented spelling is the contract. If a handler reads a key `openapi.yaml` does not list, one of the two is wrong |
+| Rule                           | Rationale                                                                                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **snake_case on the wire**     | Request bodies, response bodies, and query params. It matches the DB columns most payloads mirror, so a row can be returned without a rename pass                                                   |
+| **Translate at the edge**      | The route handler is the only place the two spellings meet. Services and repositories never see wire keys; the frontend client maps them back to camelCase for React                                |
+| **Never dual-accept**          | Accepting `horizon_months ?? horizonMonths` ships two undocumented contracts and doubles the surface every future validator has to cover. Pick snake_case; the camel key is simply an unknown field |
+| **New routers are snake_case** | No matter which neighbour they sit next to in `routes/`. A grandfathered router is not a precedent                                                                                                  |
+| **openapi.yaml is the check**  | The documented spelling is the contract. If a handler reads a key `openapi.yaml` does not list, one of the two is wrong                                                                             |
 
 ### Grandfathered Exceptions
 
 These predate the rule and keep camelCase — including **new endpoints added to them** — until a dedicated migration retires the list. Do not half-migrate one: a router with both spellings is worse than a router that is consistently camel.
 
-| Surface | camelCase keys | Direction |
-|---------|----------------|-----------|
-| [[apps/node-backend/src/routes/ai.js|ai.js]] | `conversationId`, `useTools` | request + response |
-| [[apps/node-backend/src/routes/savedCharts.js|savedCharts.js]] | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response |
-| [[apps/node-backend/src/routes/crossWorkspace.js|crossWorkspace.js]] | `targetWeights`, `availableCash` | request + response |
-| [[apps/node-backend/src/routes/admin.js|admin.js]] DB-editor routes | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor|ADR-101]]) | request |
-| [[apps/node-backend/src/routes/marketLookup.js|marketLookup.js]] | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, … | response only — passthrough of the upstream provider shape |
-| [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]] rollback body | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id` | response only |
-| [[apps/node-backend/src/routes/portfolioImportRoutes.js|portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id` | response only |
+| Surface                                                 | camelCase keys                           | Direction                                                                     |
+| ------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| [[apps/node-backend/src/routes/ai.js                    | ai.js]]                                  | `conversationId`, `useTools`                                                  | request + response                                         |
+| [[apps/node-backend/src/routes/savedCharts.js           | savedCharts.js]]                         | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response                                         |
+| [[apps/node-backend/src/routes/crossWorkspace.js        | crossWorkspace.js]]                      | `targetWeights`, `availableCash`                                              | request + response                                         |
+| [[apps/node-backend/src/routes/admin.js                 | admin.js]] DB-editor routes              | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor                 | ADR-101]])                                                 | request |
+| [[apps/node-backend/src/routes/marketLookup.js          | marketLookup.js]]                        | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, …                     | response only — passthrough of the upstream provider shape |
+| [[apps/node-backend/src/routes/importRoutes.js          | importRoutes.js]] rollback body          | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id`          | response only                                              |
+| [[apps/node-backend/src/routes/portfolioImportRoutes.js | portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id`                   | response only                                              |
 
 Everything else in the import routers is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
 
@@ -935,31 +955,34 @@ Everything else in the import routers is snake_case (`auto_linked_count`); only 
 **Source:** [[apps/frontend/src/hooks/useTransactions.ts|useTransactions.ts]], [[apps/frontend/src/hooks/useCategories.ts|useCategories.ts]]
 
 ```ts
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createRecipient as createEntity,
   deleteRecipient as deleteEntity,
   getRecipient as getEntity,
   getRecipients as getEntities,
   updateRecipient as updateEntity,
-} from '@/lib/api/recipients';
-import { toast } from 'sonner';
-import { useLanguage } from '@/contexts/LanguageContext';
+} from "@/lib/api/recipients";
+import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 // LIST query
 export function useEntities(params?: { limit?: number; offset?: number }) {
-  return useQuery({
-    queryKey: ['entities', params],
+  const query = useQuery({
+    queryKey: ["entities", params],
     queryFn: () => getEntities(params),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
+  useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+  return query;
 }
 
 // SINGLE query
 export function useEntity(id: number) {
   return useQuery({
-    queryKey: ['entities', id],
+    queryKey: ["entities", id],
     queryFn: () => getEntity(id),
     enabled: !!id,
     staleTime: 60_000,
@@ -974,11 +997,13 @@ export function useCreateEntity() {
   return useMutation({
     mutationFn: (data: EntityCreate) => createEntity(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entities'] });
-      toast.success(t('entities.created'));
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+      toast.success(t("entities.created"));
     },
     onError: (error: Error) => {
-      toast.error(t('entities.createFailedTitle'), { description: error.message });
+      toast.error(t("entities.createFailedTitle"), {
+        description: error.message,
+      });
     },
   });
 }
@@ -992,11 +1017,13 @@ export function useUpdateEntity() {
     mutationFn: ({ id, data }: { id: number; data: EntityUpdate }) =>
       updateEntity(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entities'] });
-      toast.success(t('entities.updated'));
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+      toast.success(t("entities.updated"));
     },
     onError: (error: Error) => {
-      toast.error(t('entities.updateFailedTitle'), { description: error.message });
+      toast.error(t("entities.updateFailedTitle"), {
+        description: error.message,
+      });
     },
   });
 }
@@ -1009,11 +1036,13 @@ export function useDeleteEntity() {
   return useMutation({
     mutationFn: (id: number) => deleteEntity(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entities'] });
-      toast.success(t('entities.deleted'));
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+      toast.success(t("entities.deleted"));
     },
     onError: (error: Error) => {
-      toast.error(t('entities.deleteFailedTitle'), { description: error.message });
+      toast.error(t("entities.deleteFailedTitle"), {
+        description: error.message,
+      });
     },
   });
 }
@@ -1021,14 +1050,27 @@ export function useDeleteEntity() {
 
 ### Key Conventions
 
-| Pattern | Rule |
-|---------|------|
-| Query key | `['entities', params]` — params for cache differentiation |
-| Stale time | 30s for transactional data, 2min for reference data |
-| Pagination | `placeholderData: (prev) => prev` for smooth transitions |
-| Conditional queries | `enabled: !!id` for single-item queries |
-| Invalidation | Mutations invalidate base key `['entities']` |
-| Toasts | `useLanguage()` for i18n, `description` for error details |
+| Pattern             | Rule                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Query key           | `['entities', params]` — params for cache differentiation                                                                                                                                                                                                                                                                                                                         |
+| Stale time          | 30s for transactional data, 2min for reference data                                                                                                                                                                                                                                                                                                                               |
+| Pagination          | `placeholderData: (prev) => prev` for smooth transitions                                                                                                                                                                                                                                                                                                                          |
+| Background refresh  | `BackgroundQueryIndicator` in `AppLayout` shows the global topbar cue only when a fetching query already has visible cached data. A `placeholderData` query must call `useBackgroundQueryCue(result.isFetching && result.isPlaceholderData)` from the same observer. Do not infer placeholder state from neighboring cache keys or add per-list duplicate spinners for this state |
+| Conditional queries | `enabled: !!id` for single-item queries                                                                                                                                                                                                                                                                                                                                           |
+| Invalidation        | Mutations invalidate base key `['entities']`                                                                                                                                                                                                                                                                                                                                      |
+| Toasts              | `useLanguage()` for i18n, a success receipt for create/update/delete, and `description` for error details                                                                                                                                                                                                                                                                         |
+
+Sonner's visible, Alt+T-focusable toast region has `aria-live="off"` because the shared `Toaster` mirrors each new or updated toast into app-owned screen-reader regions: ordinary feedback is polite and errors are assertive. Keep calling `toast.success/info/warning/error` normally; do not add a second live region at individual call sites. Toast arrival, stack reflow, dismissal, swipe, children, and loader motion are governed by the shared `--duration-*` and `--ease-*` tokens in `index.css`, including the complete reduced-motion override.
+
+Cold initial loads still belong to the page and use its skeleton, loader, or
+state block. The global cached-refetch cue deliberately checks
+`query.state.data !== undefined`, so a first request never flashes both the
+topbar cue and a page loading surface. React Query stores placeholder results
+on the observer rather than the new raw query, so every `placeholderData`
+observer explicitly registers its own `isFetching && isPlaceholderData` state
+with `useBackgroundQueryCue`. The indicator is `aria-hidden`: cached polling
+must not repeatedly announce itself, while page-owned loading and error states
+retain their existing accessible feedback.
 
 ### Search Debounce Pattern (June 2026)
 
@@ -1040,7 +1082,7 @@ keystrokes during fast typing, short enough to still feel instant. Never
 hardcode a search delay — import the constant so every search box stays in sync.
 
 ```ts
-import { useDebounce, SEARCH_DEBOUNCE_MS } from '@/hooks/useDebounce';
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
 const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
 // table components that hand-roll setTimeout use the same constant:
@@ -1063,25 +1105,32 @@ research pages (Home/Compare/ChartBuilder/MarketLookup).
 **Source:** [[apps/frontend/src/lib/api.ts|api.ts]]
 
 ```ts
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
 
 class ApiClient {
-  cancelAll(): void { /* abort all in-flight requests */ }
+  cancelAll(): void {
+    /* abort all in-flight requests */
+  }
 
-  async getEntities(params?: Record<string, any>): Promise<EntitiesListResponse> {
+  async getEntities(
+    params?: Record<string, any>,
+  ): Promise<EntitiesListResponse> {
     const query = this.buildQuery(params);
-    return this.request(`/api/entities${query ? '?' + query : ''}`);
+    return this.request(`/api/entities${query ? "?" + query : ""}`);
   }
 
   async createEntity(data: EntityCreate): Promise<Entity> {
-    return this.request('/api/entities', { method: 'POST', body: JSON.stringify(data) });
+    return this.request("/api/entities", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   private buildQuery(params?: Record<string, any>): string {
-    if (!params) return '';
+    if (!params) return "";
     const qp = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) qp.append(key, String(value));
@@ -1089,24 +1138,39 @@ class ApiClient {
     return qp.toString();
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retries = MAX_RETRIES,
+  ): Promise<T> {
     const url = API_BASE_URL + endpoint;
-    const method = options.method || 'GET';
-    const isIdempotent = ['GET', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'].includes(method);
+    const method = options.method || "GET";
+    const isIdempotent = ["GET", "PUT", "DELETE", "HEAD", "OPTIONS"].includes(
+      method,
+    );
 
     for (let attempt = 0; attempt <= (isIdempotent ? retries : 0); attempt++) {
       if (attempt > 0) await backoffDelay(attempt - 1);
       try {
         const response = await this.rawFetch(url, {
           ...options,
-          headers: { 'Content-Type': 'application/json', ...options.headers },
+          headers: { "Content-Type": "application/json", ...options.headers },
         });
 
-        if (RETRYABLE_STATUS_CODES.has(response.status) && isIdempotent && attempt < retries) continue;
+        if (
+          RETRYABLE_STATUS_CODES.has(response.status) &&
+          isIdempotent &&
+          attempt < retries
+        )
+          continue;
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-          throw new Error(error.detail || 'Request failed with status ' + response.status);
+          const error = await response
+            .json()
+            .catch(() => ({ detail: "Request failed" }));
+          throw new Error(
+            error.detail || "Request failed with status " + response.status,
+          );
         }
 
         if (response.status === 204) return undefined as unknown as T;
@@ -1115,7 +1179,7 @@ class ApiClient {
         if (!isIdempotent || attempt >= retries) throw err;
       }
     }
-    throw new Error('Request failed');
+    throw new Error("Request failed");
   }
 }
 
@@ -1124,15 +1188,15 @@ export const apiClient = new ApiClient();
 
 ### Key Conventions
 
-| Pattern | Rule |
-|---------|------|
-| Base URL | `VITE_API_URL` env var, fallback to `localhost:3002` |
-| Imports | New narrow consumers import from `@/lib/api/<domain>`; `apiClient` remains a compatibility or multi-domain facade |
-| Query params | `buildQuery()` skips `undefined`/`null` values |
-| Retry | Exponential backoff for idempotent methods only |
-| Timeout | AbortController with 30s default timeout |
-| 204 handling | Returns `undefined` |
-| Cancel | `cancelAll()` aborts all in-flight requests |
+| Pattern      | Rule                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Base URL     | `VITE_API_URL` env var, fallback to `localhost:3002`                                                              |
+| Imports      | New narrow consumers import from `@/lib/api/<domain>`; `apiClient` remains a compatibility or multi-domain facade |
+| Query params | `buildQuery()` skips `undefined`/`null` values                                                                    |
+| Retry        | Exponential backoff for idempotent methods only                                                                   |
+| Timeout      | AbortController with 30s default timeout                                                                          |
+| 204 handling | Returns `undefined`                                                                                               |
+| Cancel       | `cancelAll()` aborts all in-flight requests                                                                       |
 
 ---
 
@@ -1147,7 +1211,7 @@ Query parameters from `req.query.*` are always strings (or string arrays if mult
 Extracts and validates integer query parameters with configurable bounds:
 
 ```js
-import { parseInt } from 'builtins';  // Standard parseInt, not a library
+import { parseInt } from "builtins"; // Standard parseInt, not a library
 
 function parseIntClamped(raw, { min = 1, max, fallback }) {
   const parsed = parseInt(raw, 10);
@@ -1156,15 +1220,25 @@ function parseIntClamped(raw, { min = 1, max, fallback }) {
 }
 
 // Usage in route handlers
-router.get('/forecast', async (req, res) => {
+router.get("/forecast", async (req, res) => {
   // months: defaults to 3, accepts 1–24
   const months = parseIntClamped(req.query.months, { max: 24, fallback: 3 });
   // mcPaths: defaults to 1000, accepts 1–5000
-  const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
+  const mcPaths = parseIntClamped(req.query.mc_paths, {
+    max: 5000,
+    fallback: 1000,
+  });
   // historyMonths: defaults to 36, accepts 1–120
-  const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
-  
-  const { data, meta } = await computeCashflowForecast({ months, mcPaths, historyMonths });
+  const historyMonths = parseIntClamped(req.query.history_months, {
+    max: 120,
+    fallback: 36,
+  });
+
+  const { data, meta } = await computeCashflowForecast({
+    months,
+    mcPaths,
+    historyMonths,
+  });
   res.ok({ data, meta });
 });
 ```
@@ -1177,18 +1251,24 @@ one accept set:
 
 ```js
 function parseIdArrayQueryParam(raw, field) {
-  if (raw == null || raw === '') return [];      // absent/empty = no filter, not an error
+  if (raw == null || raw === "") return []; // absent/empty = no filter, not an error
   const result = validateIntArray(raw, field);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
 }
 
 // Usage in route handlers
-router.get('/monthly-summary', async (req, res) => {
+router.get("/monthly-summary", async (req, res) => {
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
-    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
+    excludedCategoryIds: parseIdArrayQueryParam(
+      req.query.excluded_category_ids,
+      "excluded_category_ids",
+    ),
+    excludedRecipientIds: parseIdArrayQueryParam(
+      req.query.excluded_recipient_ids,
+      "excluded_recipient_ids",
+    ),
   });
   res.ok({ data, meta });
 });
@@ -1206,14 +1286,14 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ### Key Rules
 
-| Pattern | Rule |
-|---------|------|
-| `parseInt(raw, 10)` | Always radix 10 (avoid accidental octal from leading 0) |
-| Non-finite check | Reject NaN, Infinity, undefined parse results |
-| Bounds enforcement | Apply min (default 1) and max bounds; use `fallback` if out of range |
-| String arrays | Handle both single `?param=val` and multi `?param=val1&param=val2` |
-| Array filtering | **Request ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. A documented lower merge-service defense may use `filterValidatedIdNumbers` only after strict boundary validation. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
-| Type narrowing | Results are always `number | number[]` or fallback type, never string |
+| Pattern             | Rule                                                                                                                                                                                                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInt(raw, 10)` | Always radix 10 (avoid accidental octal from leading 0)                                                                                                                                                                                                                                                                           |
+| Non-finite check    | Reject NaN, Infinity, undefined parse results                                                                                                                                                                                                                                                                                     |
+| Bounds enforcement  | Apply min (default 1) and max bounds; use `fallback` if out of range                                                                                                                                                                                                                                                              |
+| String arrays       | Handle both single `?param=val` and multi `?param=val1&param=val2`                                                                                                                                                                                                                                                                |
+| Array filtering     | **Request ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. A documented lower merge-service defense may use `filterValidatedIdNumbers` only after strict boundary validation. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
+| Type narrowing      | Results are always `number                                                                                                                                                                                                                                                                                                        | number[]` or fallback type, never string |
 
 ### When to Use
 
@@ -1259,8 +1339,14 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 ### Graceful Shutdown
 
 ```js
-process.on('SIGINT', async () => { await closePool(); process.exit(0); });
-process.on('SIGTERM', async () => { await closePool(); process.exit(0); });
+process.on("SIGINT", async () => {
+  await closePool();
+  process.exit(0);
+});
+process.on("SIGTERM", async () => {
+  await closePool();
+  process.exit(0);
+});
 ```
 
 ---
@@ -1279,21 +1365,28 @@ When a table or column may not exist in older schema versions, use PostgreSQL er
 try {
   const result = await query(
     `SELECT transaction_id FROM manual_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
-    [hash]
+    [hash],
   );
   if (result.rows.length > 0) {
-    return { isDuplicate: true, existingTransactionId: result.rows[0].transaction_id };
+    return {
+      isDuplicate: true,
+      existingTransactionId: result.rows[0].transaction_id,
+    };
   }
 } catch (err) {
   // Only suppress table-not-exist errors (42P01); log other unexpected errors
-  if (err.code !== '42P01') {
-    logger.warn('Unexpected error in manual dedup hash check', { error: err.message, code: err.code });
+  if (err.code !== "42P01") {
+    logger.warn("Unexpected error in manual dedup hash check", {
+      error: err.message,
+      code: err.code,
+    });
   }
   // Fall through to field-based check — table may not exist yet
 }
 ```
 
 **Rationale:**
+
 - Services must work across multiple schema versions during gradual migrations
 - PostgreSQL error code 42P01 = "undefined table"
 - Only this error is expected and silenced; other errors are logged for visibility
@@ -1310,11 +1403,11 @@ import {
   NotFoundError,
   ConflictError,
   RateLimitedError,
-} from '../middleware/errorHandler.js';
+} from "../middleware/errorHandler.js";
 
 // Usage in routes:
 if (!requiredField) {
-  throw new ValidationError('Missing required field');
+  throw new ValidationError("Missing required field");
 }
 
 const entity = await repository.getById(id);
@@ -1323,7 +1416,7 @@ if (!entity) {
 }
 
 if (isDuplicate) {
-  throw new ConflictError('Duplicate entry');
+  throw new ConflictError("Duplicate entry");
 }
 ```
 
@@ -1332,20 +1425,24 @@ if (isDuplicate) {
 The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
 
 ```json
-{ "ok": false, "error": { "code": "ERROR_TYPE", "message": "Human-readable error message" }, "meta": { "requestId": "…" } }
+{
+  "ok": false,
+  "error": { "code": "ERROR_TYPE", "message": "Human-readable error message" },
+  "meta": { "requestId": "…" }
+}
 ```
 
 `error.details` is included only when the thrown `AppError` carried a non-sensitive `details` object; `meta.requestId` is included when the request has an id. 5xx messages are suppressed in production.
 
-| Status Code | Class | Error Code | When to Use |
-|-------------|-------|-----------|-------------|
-| 400 | ValidationError | VALIDATION_ERROR | Validation error, missing fields |
-| 401 | UnauthorizedError | UNAUTHORIZED | Authentication required |
-| 403 | ForbiddenError | FORBIDDEN | Access denied |
-| 404 | NotFoundError | NOT_FOUND | Resource not found |
-| 409 | ConflictError | CONFLICT | Duplicate entry |
-| 429 | RateLimitedError | RATE_LIMITED | Rate limit exceeded |
-| 500 | AppError | APP_ERROR (INTERNAL_SERVER_ERROR when unhandled) | Internal server error |
+| Status Code | Class             | Error Code                                       | When to Use                      |
+| ----------- | ----------------- | ------------------------------------------------ | -------------------------------- |
+| 400         | ValidationError   | VALIDATION_ERROR                                 | Validation error, missing fields |
+| 401         | UnauthorizedError | UNAUTHORIZED                                     | Authentication required          |
+| 403         | ForbiddenError    | FORBIDDEN                                        | Access denied                    |
+| 404         | NotFoundError     | NOT_FOUND                                        | Resource not found               |
+| 409         | ConflictError     | CONFLICT                                         | Duplicate entry                  |
+| 429         | RateLimitedError  | RATE_LIMITED                                     | Rate limit exceeded              |
+| 500         | AppError          | APP_ERROR (INTERNAL_SERVER_ERROR when unhandled) | Internal server error            |
 
 ### Frontend Error Handling (Phase 5+)
 
@@ -1353,11 +1450,11 @@ The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.j
 // Type-safe error handling with unknown type
 try {
   const result = await apiClient.createEntity(data);
-  toast.success('Created successfully');
+  toast.success("Created successfully");
 } catch (err: unknown) {
   // Always type err as unknown, then narrow
   const message = err instanceof Error ? err.message : String(err);
-  toast.error('Failed to create', { description: message });
+  toast.error("Failed to create", { description: message });
 }
 
 // When re-throwing, preserve error context
@@ -1365,7 +1462,7 @@ try {
   await riskyOperation();
 } catch (err: unknown) {
   // Chain error context for logging
-  throw new Error('Operation failed', { cause: err });
+  throw new Error("Operation failed", { cause: err });
 }
 
 // Empty catch blocks must include comment
@@ -1380,11 +1477,11 @@ try {
 
 Always use `catch (err: unknown)` instead of `catch (err: any)`:
 
-| Pattern | Status | Reason |
-|---------|--------|--------|
-| `catch (err: any)` | ❌ **Deprecated** | Disables type checking; allows silent bugs |
-| `catch (err: unknown)` | ✅ **Required** | Enforces type narrowing before access |
-| `catch { ... }` | ✅ **Acceptable** | When error is unused; must have comment |
+| Pattern                | Status            | Reason                                     |
+| ---------------------- | ----------------- | ------------------------------------------ |
+| `catch (err: any)`     | ❌ **Deprecated** | Disables type checking; allows silent bugs |
+| `catch (err: unknown)` | ✅ **Required**   | Enforces type narrowing before access      |
+| `catch { ... }`        | ✅ **Acceptable** | When error is unused; must have comment    |
 
 Type narrowing in catch blocks:
 
@@ -1394,11 +1491,11 @@ try {
 } catch (err: unknown) {
   // Narrowing examples:
   if (err instanceof Error) {
-    logger.error('Error message:', err.message);
-  } else if (typeof err === 'string') {
-    logger.error('String error:', err);
+    logger.error("Error message:", err.message);
+  } else if (typeof err === "string") {
+    logger.error("String error:", err);
   } else {
-    logger.error('Unknown error type:', String(err));
+    logger.error("Unknown error type:", String(err));
   }
 }
 ```
@@ -1427,15 +1524,18 @@ Centralized SQL WHERE clause builder for transaction-like queries. Consolidates 
 ### Usage
 
 ```js
-import { buildTransactionWhere, validateInt4Ids } from '../lib/filterBuilder.js';
+import {
+  buildTransactionWhere,
+  validateInt4Ids,
+} from "../lib/filterBuilder.js";
 
 const opts = {
-  startDate: '2026-01-01',
-  endDate: '2026-12-31',
+  startDate: "2026-01-01",
+  endDate: "2026-12-31",
   categoryId: 5,
   excludedCategoryIds: [10, 11, 12],
   excludedRecipientIds: [20, 21],
-  bankAccount: 'CH93%',  // ILIKE substring
+  bankAccount: "CH93%", // ILIKE substring
   active: true,
   startParamIdx: 1,
 };
@@ -1461,23 +1561,24 @@ const result = await db.query(query, params);
 ### Contract
 
 Every builder returns `{ sql, params, nextParamIdx }`:
+
 - `sql` — Composable fragment with no leading/trailing whitespace guarantees
 - `params` — Flattened array of bind parameters (in order with `sql`)
 - `nextParamIdx` — First unused `$`-index for further predicates
 
 ### Options
 
-| Option | Type | Purpose |
-|--------|------|---------|
-| `recipientId` | number | Filter by recipient ID directly and its aliases (one direction) |
+| Option             | Type   | Purpose                                                                                                                                                                            |
+| ------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `recipientId`      | number | Filter by recipient ID directly and its aliases (one direction)                                                                                                                    |
 | `recipientGroupId` | number | Filter by full primary-recipient group (Phase Q) — resolves the complete group via scalar subqueries: matches recipient itself, all aliases, recipient's own primary, and siblings |
 
 ### Key Functions
 
-| Function | Purpose |
-|----------|---------|
+| Function                           | Purpose                                                                                                                                                                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `validateInt4Ids(ids, fieldName?)` | Validate a list of PostgreSQL INT4 IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
-| `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q) |
+| `buildTransactionWhere(opts)`      | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q)                                                                                                                        |
 
 ### Recipient Group Resolution (Phase Q)
 
@@ -1533,12 +1634,12 @@ const totalHistory = [...totalsByMonth.keys()]
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Single-pass aggregation | Use `Map` to accumulate values in one loop, not nested searches |
-| Key-value lookup | `.get()` / `.set()` for O(1) aggregation; avoid `.find()` in loops |
-| Deferred sorting | Collect keys, sort once, then map to results (not sort during accumulation) |
-| Null coalescing | Use `?? 0` for safe defaults when key not yet in map |
+| Rule                    | Rationale                                                                   |
+| ----------------------- | --------------------------------------------------------------------------- |
+| Single-pass aggregation | Use `Map` to accumulate values in one loop, not nested searches             |
+| Key-value lookup        | `.get()` / `.set()` for O(1) aggregation; avoid `.find()` in loops          |
+| Deferred sorting        | Collect keys, sort once, then map to results (not sort during accumulation) |
+| Null coalescing         | Use `?? 0` for safe defaults when key not yet in map                        |
 
 ### When to Use
 
@@ -1561,15 +1662,16 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 
 **Modules:**
 
-| Module | Purpose |
-|--------|---------|
-| `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
-| `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
-| `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_ | Transaction-split allocation/payment validation and owed-summary projection |
-| `services/calculations/portfolioMath.js` | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation |
-| `@vision/shared-utils/portfolio` | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
+| Module                                                                              | Purpose                                                                                                          |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `services/calculations/loanSchedule.js`                                             | Loan amortization schedule generation (amortizing, fixed_principal, interest_only)                               |
+| `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
+| `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
+| `services/calculations/portfolioMath.js`                                            | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation                         |
+| `@vision/shared-utils/portfolio`                                                    | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
 
 **Immutability in shared portfolio math (2026-04-25):**
+
 - `calculateCostBasisFIFO()` and `calculateCostBasisLIFO()` now use immutable patterns throughout: spread operators for array construction, immutable object creation for lot updates, and immutable transformations via `.map()` in helper functions.
 - `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
 - Shared cost-basis calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
@@ -1604,11 +1706,13 @@ tests/golden/__fixtures__/
 ### Coverage (Phase 3)
 
 **loanSchedule.golden.test.js:**
+
 - Amortizing: standard, zero-APR, month-end clamp, single-month, 360-month
 - Fixed principal: standard, edge cases
 - Interest-only: standard, edge cases
 
 **recurrence.golden.test.js:**
+
 - Built-in patterns: daily, weekly, biweekly, monthly, quarterly, yearly
 - Edge cases: Jan 31 clamping (non-leap + leap), Feb 29 yearly rollover, custom "every N days" regex
 - Invalid patterns return null
@@ -1616,13 +1720,13 @@ tests/golden/__fixtures__/
 ### Usage in Vitest
 
 ```js
-import { describe, it } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
-import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.js';
+import { describe, it } from "vitest";
+import { runGolden } from "../golden/runGolden.js";
+import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.js";
 
-describe('loanSchedule golden', () => {
-  it('amortizing-standard', async () => {
-    await runGolden('loanSchedule/amortizing-standard', (input) =>
+describe("loanSchedule golden", () => {
+  it("amortizing-standard", async () => {
+    await runGolden("loanSchedule/amortizing-standard", (input) =>
       generateLoanSchedule(input),
     );
   });
@@ -1729,21 +1833,22 @@ The `meta.source` field indicates whether the response was served from a materia
 
 ```js
 // Service: computeMonthlySummary (calculation module)
-import { buildEnvelope } from './_envelope.js';
-import { getMonthlyFinancialSummary } from '../../repositories/infoRepository.js';
+import { buildEnvelope } from "./_envelope.js";
+import { getMonthlyFinancialSummary } from "../../repositories/infoRepository.js";
 
 export async function computeMonthlySummary({
   targetCurrency,
   excludedCategoryIds,
   excludedRecipientIds,
 }) {
-  const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
-  const source = hasExclusions ? 'live' : 'mv';
+  const hasExclusions =
+    excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
+  const source = hasExclusions ? "live" : "mv";
 
   const data = await getMonthlyFinancialSummary(
     excludedCategoryIds,
     targetCurrency,
-    excludedRecipientIds
+    excludedRecipientIds,
   );
 
   // Return domain envelope; route will nest inside transport envelope
@@ -1758,19 +1863,24 @@ The API client unwraps the outer envelope, so consumers receive the aggregation 
 ```tsx
 function DashboardStatCards() {
   const { data: envelope, isLoading } = useQuery({
-    queryFn: () => apiClient.getAggregationMonthlySummary({ currency: 'EUR' }),
+    queryFn: () => apiClient.getAggregationMonthlySummary({ currency: "EUR" }),
   });
 
   if (!envelope) return null;
 
   // envelope has shape: { data: {...}, meta: { source, computedAt } }
-  const isMV = envelope.meta.source === 'mv';
-  const freshness = isMV ? '~15 min old' : 'current';
+  const isMV = envelope.meta.source === "mv";
+  const freshness = isMV ? "~15 min old" : "current";
 
   return (
     <>
-      <StatCard title="Monthly Income" value={envelope.data.summary.total_income} />
-      <small>{freshness} ({envelope.meta.source})</small>
+      <StatCard
+        title="Monthly Income"
+        value={envelope.data.summary.total_income}
+      />
+      <small>
+        {freshness} ({envelope.meta.source})
+      </small>
     </>
   );
 }
@@ -1789,15 +1899,16 @@ Single entrypoint for refreshing PostgreSQL aggregations (materialized views + t
 After bulk imports or mass updates:
 
 ```js
-import { refreshAggregations } from '../services/aggregationRefresh.js';
+import { refreshAggregations } from "../services/aggregationRefresh.js";
 
 // In import service:
 await bulkInsertTransactions(transactions);
-await refreshAggregations();  // Refreshes all MVs in parallel
-logger.info('Aggregations refreshed');
+await refreshAggregations(); // Refreshes all MVs in parallel
+logger.info("Aggregations refreshed");
 ```
 
 **What it does:**
+
 - Refreshes legacy MVs via `materializedViewService.refreshMaterializedViews()`
 - Refreshes Phase-1 MVs (`mv_recipient_monthly`) in parallel
 - No-op for trigger-maintained tables (automatic updates)
@@ -1807,22 +1918,23 @@ logger.info('Aggregations refreshed');
 After editing or deleting a transaction:
 
 ```js
-import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
+import { scheduleAggregationRefresh } from "../services/aggregationRefresh.js";
 
 // In transaction route:
-app.patch('/api/transactions/:id', async (req, res) => {
+app.patch("/api/transactions/:id", async (req, res) => {
   const updated = await transactionService.update(req.params.id, req.body);
-  
+
   // Fire-and-forget debounced refresh
-  scheduleAggregationRefresh().catch(err =>
-    logger.error('Scheduled refresh failed', { error: err?.message })
+  scheduleAggregationRefresh().catch((err) =>
+    logger.error("Scheduled refresh failed", { error: err?.message }),
   );
-  
+
   res.json(updated);
 });
 ```
 
 **Behavior:**
+
 - Coalesces rapid changes into one refresh (1s debounce)
 - Fire-and-forget (doesn't block response)
 - Triggers maintain `agg_recipient_totals` and `agg_split_outstanding` automatically
@@ -1831,8 +1943,8 @@ app.patch('/api/transactions/:id', async (req, res) => {
 
 ```js
 import aggregationService, {
-  TRIGGER_MAINTAINED_TABLES,  // ['agg_recipient_totals', 'agg_split_outstanding']
-} from './aggregationRefresh.js';
+  TRIGGER_MAINTAINED_TABLES, // ['agg_recipient_totals', 'agg_split_outstanding']
+} from "./aggregationRefresh.js";
 
 await aggregationService.refreshAggregations();
 await aggregationService.scheduleAggregationRefresh();
@@ -1858,14 +1970,20 @@ Running all-time totals per recipient per currency.
 
 ```js
 // ❌ WRONG: Trigger hasn't fired yet
-const txn = await query('INSERT INTO transactions (...) RETURNING *');
-const totals = await query('SELECT * FROM agg_recipient_totals WHERE recipient_id = $1', [txn.recipient_id]);
+const txn = await query("INSERT INTO transactions (...) RETURNING *");
+const totals = await query(
+  "SELECT * FROM agg_recipient_totals WHERE recipient_id = $1",
+  [txn.recipient_id],
+);
 // totals is stale
 
 // ✓ CORRECT: Read after transaction commits or fetch in separate query
-const txn = await query('INSERT INTO transactions (...) RETURNING *');
+const txn = await query("INSERT INTO transactions (...) RETURNING *");
 // Now (after transaction commit) the trigger has fired
-const totals = await query('SELECT * FROM agg_recipient_totals WHERE recipient_id = $1', [txn.recipient_id]);
+const totals = await query(
+  "SELECT * FROM agg_recipient_totals WHERE recipient_id = $1",
+  [txn.recipient_id],
+);
 ```
 
 ### agg_split_outstanding
@@ -1875,6 +1993,7 @@ Outstanding balance per split (original minus paid).
 **PK:** `split_id`
 
 **Automatic Updates:** Via two triggers:
+
 - `fn_trg_split_sync()` on `transaction_splits`
 - `fn_trg_split_payment_sync()` on `split_payments`
 
@@ -1882,26 +2001,30 @@ Outstanding balance per split (original minus paid).
 
 ```js
 // After split_payments insert:
-const payment = await query('INSERT INTO split_payments (split_id, amount) VALUES (...) RETURNING *');
+const payment = await query(
+  "INSERT INTO split_payments (split_id, amount) VALUES (...) RETURNING *",
+);
 
 // The trigger has now fired. Safe to read:
 const outstanding = await query(
-  'SELECT outstanding_amount FROM agg_split_outstanding WHERE split_id = $1',
-  [payment.split_id]
+  "SELECT outstanding_amount FROM agg_split_outstanding WHERE split_id = $1",
+  [payment.split_id],
 );
 ```
 
 ### Best Practices
 
 1. **Document trigger-maintained aggregates** — Add a comment in code that reads them:
+
    ```js
    // Reads agg_recipient_totals; maintained by fn_agg_recipient_totals_sync trigger
-   const result = await query('SELECT * FROM agg_recipient_totals WHERE ...');
+   const result = await query("SELECT * FROM agg_recipient_totals WHERE ...");
    ```
 
 2. **Never manually INSERT/UPDATE trigger tables** — Writes bypass triggers and create inconsistency. The triggers are the source of truth.
 
 3. **Verify triggers are enabled** — If aggregates look stale:
+
    ```sql
    SELECT tgname, tgenabled FROM pg_trigger
    WHERE tgrelid = 'transactions'::regclass
@@ -1910,10 +2033,10 @@ const outstanding = await query(
 
 4. **Test trigger firing in DB-backed tests** — Use the `hasTestDatabase()` gate:
    ```js
-   import { hasTestDatabase, getTestPool } from './setup/db.js';
-   
-   describe.skipIf(!hasTestDatabase())('trigger-maintained tables', () => {
-     it('syncs agg_recipient_totals on insert', async () => {
+   import { hasTestDatabase, getTestPool } from "./setup/db.js";
+
+   describe.skipIf(!hasTestDatabase())("trigger-maintained tables", () => {
+     it("syncs agg_recipient_totals on insert", async () => {
        const pool = getTestPool();
        // Insert transaction, verify agg_recipient_totals updated
      });
@@ -1935,13 +2058,15 @@ Without caching, checking view existence on every request produces N+1 round-tri
 ### Solution
 
 ```js
-import { mvAvailable } from '../repositories/infoRepositoryHelpers.js';
+import { mvAvailable } from "../repositories/infoRepositoryHelpers.js";
 
 // Always use the helper, never raw SELECT without it
-const isCategoryTotalsAvailable = await mvAvailable('mv_category_totals');
+const isCategoryTotalsAvailable = await mvAvailable("mv_category_totals");
 
 if (isCategoryTotalsAvailable) {
-  const result = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
+  const result = await query(
+    "SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500",
+  );
   // Process result
 } else {
   // Fallback: compute inline or return empty set
@@ -1959,11 +2084,11 @@ if (isCategoryTotalsAvailable) {
 
 4. **Cache clearing:** After bulk imports or migrations that recreate views, call `clearMvCache()` to force fresh checks:
    ```js
-   import { clearMvCache } from '../repositories/infoRepositoryHelpers.js';
-   
+   import { clearMvCache } from "../repositories/infoRepositoryHelpers.js";
+
    await bulkImportTransactions(rows);
    await refreshAggregations();
-   clearMvCache();  // Views now exist; next mvAvailable() call hits DB
+   clearMvCache(); // Views now exist; next mvAvailable() call hits DB
    ```
 
 ### When to Use
@@ -1986,6 +2111,7 @@ if (isCategoryTotalsAvailable) {
 ### Problem
 
 Queries without `LIMIT` can return unbounded result sets when table size grows unexpectedly. This causes:
+
 - Memory spikes from large result sets in Node.js
 - Slow response times for front-end pagination or dropdowns
 - Denial-of-service risk from users with large datasets
@@ -1994,25 +2120,27 @@ Queries without `LIMIT` can return unbounded result sets when table size grows u
 
 ```js
 // ❌ WRONG: No limit; can return 10,000+ rows if table grows
-const stats = await query('SELECT * FROM transactions ORDER BY date DESC');
+const stats = await query("SELECT * FROM transactions ORDER BY date DESC");
 
 // ✓ CORRECT: Explicit LIMIT prevents runaway result sets
-const stats = await query('SELECT * FROM transactions ORDER BY date DESC LIMIT 500');
+const stats = await query(
+  "SELECT * FROM transactions ORDER BY date DESC LIMIT 500",
+);
 
 // ✓ CORRECT: Even for aggregations, bound the output
 const catStats = await query(
-  'SELECT category_id, count, total FROM mv_category_totals ORDER BY count DESC LIMIT 500'
+  "SELECT category_id, count, total FROM mv_category_totals ORDER BY count DESC LIMIT 500",
 );
 ```
 
 ### Guidelines
 
-| Query Type | Recommended LIMIT |
-|------------|------------------|
-| Enumerate all items (UI list) | 50–500 (depends on UI viewport) |
-| Top-N aggregations | 500 (rarely need more) |
-| Full-table scan (e.g., export) | Use pagination or streaming (not LIMIT) |
-| Single-row lookups (WHERE id = ...) | No LIMIT needed (indexed) |
+| Query Type                          | Recommended LIMIT                       |
+| ----------------------------------- | --------------------------------------- |
+| Enumerate all items (UI list)       | 50–500 (depends on UI viewport)         |
+| Top-N aggregations                  | 500 (rarely need more)                  |
+| Full-table scan (e.g., export)      | Use pagination or streaming (not LIMIT) |
+| Single-row lookups (WHERE id = ...) | No LIMIT needed (indexed)               |
 
 ### Fallback Path
 
@@ -2026,7 +2154,7 @@ if (!isCategoryTotalsAvailable) {
 }
 
 // MV exists; safe to query with LIMIT
-const result = await query('SELECT ... FROM mv_category_totals LIMIT 500');
+const result = await query("SELECT ... FROM mv_category_totals LIMIT 500");
 ```
 
 ---
@@ -2053,7 +2181,7 @@ Result: Arbitrary code execution when file is opened
 
 ```js
 // apps/node-backend/src/lib/csv.js
-const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(['=', '+', '-', '@']);
+const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(["=", "+", "-", "@"]);
 
 export function neutralizeCsvFormula(value) {
   if (!value) return value;
@@ -2061,13 +2189,15 @@ export function neutralizeCsvFormula(value) {
   if (!trimmedStart) return value;
   const firstChar = trimmedStart.charAt(0);
   if (!DANGEROUS_CSV_FORMULA_PREFIXES.has(firstChar)) return value;
-  return `'${value}`;  // Prefix dangerous char with '
+  return `'${value}`; // Prefix dangerous char with '
 }
 
 export function escapeCsvValue(value) {
-  if (value == null) return '';
+  if (value == null) return "";
   const stringValue = neutralizeCsvFormula(String(value));
-  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
+  return stringValue.includes(",") ||
+    stringValue.includes('"') ||
+    stringValue.includes("\n")
     ? `"${stringValue.replace(/"/g, '""')}"`
     : stringValue;
 }
@@ -2078,13 +2208,22 @@ export function escapeCsvValue(value) {
 Import the utility and use it to escape all user-controllable fields before CSV serialization:
 
 ```js
-import { escapeCsvValue } from '../lib/csv.js';
+import { escapeCsvValue } from "../lib/csv.js";
 
 function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
-  const cols = [row.date, row.bank_account, row.recipient_name, row.memo,
-                row.amount, row.currency, row.balance, row.category_name, row.comment];
+  const cols = [
+    row.date,
+    row.bank_account,
+    row.recipient_name,
+    row.memo,
+    row.amount,
+    row.currency,
+    row.balance,
+    row.category_name,
+    row.comment,
+  ];
   if (includeBalance) cols.push(row.running_balance);
-  return cols.map(escapeCsvValue).join(',');  // ← All fields escaped
+  return cols.map(escapeCsvValue).join(","); // ← All fields escaped
 }
 ```
 
@@ -2123,7 +2262,7 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
     let offset = 0;
     while (true) {
       const chunkSql = `
-        SELECT t.id, t.date, t.bank_account, 
+        SELECT t.id, t.date, t.bank_account,
                COALESCE(pr.name, r.name) AS recipient_name,
                t.memo, t.amount, t.currency, t.balance,
                CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE '' END AS category_name,
@@ -2136,13 +2275,13 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
         ORDER BY t.date ASC, t.id ASC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `;
-      
+
       const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
       if (chunk.rows.length === 0) break;
 
       const lines = chunk.rows.map(row => buildTransactionCsvRow(row));
       res.write(lines.join('\n') + '\n');
-      
+
       if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
       offset += CSV_EXPORT_CHUNK_SIZE;
     }
@@ -2161,14 +2300,14 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 
 ### Key Points
 
-| Pattern | Rule |
-|---------|------|
-| **Escaping** | **All fields must use `escapeCsvValue()`** to prevent CWE-1236 formula injection |
-| **Chunk size** | 1000–5000 rows per chunk depending on row width; tuned to balance memory + latency |
-| **Stable sort** | `ORDER BY date ASC, id ASC` ensures no gaps or duplicate rows across chunks |
-| **Probe first** | Check for empty results before streaming headers (early 404 return) |
-| **Error recovery** | If headers sent, close gracefully (`res.end()`); otherwise return JSON error |
-| **Rate limiting** | Apply per-route limiter to protect DB from concurrent bulk exports |
+| Pattern            | Rule                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| **Escaping**       | **All fields must use `escapeCsvValue()`** to prevent CWE-1236 formula injection   |
+| **Chunk size**     | 1000–5000 rows per chunk depending on row width; tuned to balance memory + latency |
+| **Stable sort**    | `ORDER BY date ASC, id ASC` ensures no gaps or duplicate rows across chunks        |
+| **Probe first**    | Check for empty results before streaming headers (early 404 return)                |
+| **Error recovery** | If headers sent, close gracefully (`res.end()`); otherwise return JSON error       |
+| **Rate limiting**  | Apply per-route limiter to protect DB from concurrent bulk exports                 |
 
 ---
 
@@ -2188,8 +2327,9 @@ description here",100.50
 ```
 
 Naive split:
+
 ```typescript
-const records = csvText.split('\n');  // ❌ Splits on line 2, breaking multi-line field
+const records = csvText.split("\n"); // ❌ Splits on line 2, breaking multi-line field
 // Result: ["Name,Description,Amount", "\"John Doe\",\"Multi-line", "description here\",100.50", ...]
 ```
 
@@ -2198,7 +2338,7 @@ const records = csvText.split('\n');  // ❌ Splits on line 2, breaking multi-li
 ```typescript
 function splitCsvRecords(csvText: string): string[] {
   const records: string[] = [];
-  let currentRecord = '';
+  let currentRecord = "";
   let insideQuotes = false;
 
   for (let i = 0; i < csvText.length; i++) {
@@ -2214,16 +2354,16 @@ function splitCsvRecords(csvText: string): string[] {
         insideQuotes = !insideQuotes;
         currentRecord += char;
       }
-    } else if (char === '\n' || char === '\r') {
+    } else if (char === "\n" || char === "\r") {
       if (insideQuotes) {
         // Preserve line break inside quoted field
         currentRecord += char;
       } else {
         // End of record
         if (currentRecord.trim()) records.push(currentRecord);
-        currentRecord = '';
+        currentRecord = "";
         // Skip \r\n sequence
-        if (char === '\r' && csvText[i + 1] === '\n') i++;
+        if (char === "\r" && csvText[i + 1] === "\n") i++;
       }
     } else {
       currentRecord += char;
@@ -2247,19 +2387,22 @@ const handleCsvSelect = (file: File) => {
     const text = e.target?.result as string;
     // ✅ Use quote-aware splitter
     const records = splitCsvRecords(text);
-    
+
     // Parse header
     const headerRecord = Papa.parse(records[0]).data[0] as string[];
-    
+
     // Parse preview rows (first 10 data rows)
-    const preview = records.slice(1, 11).map(record => {
+    const preview = records.slice(1, 11).map((record) => {
       const parsed = Papa.parse(record).data[0] as string[];
-      return headerRecord.reduce((row, header, idx) => {
-        row[header] = parsed[idx] ?? '';
-        return row;
-      }, {} as Record<string, string>);
+      return headerRecord.reduce(
+        (row, header, idx) => {
+          row[header] = parsed[idx] ?? "";
+          return row;
+        },
+        {} as Record<string, string>,
+      );
     });
-    
+
     setCsvData(preview);
   };
   reader.readAsText(file);
@@ -2268,13 +2411,13 @@ const handleCsvSelect = (file: File) => {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Track quote state | Toggle on unescaped `"` character |
-| Handle `""` escape | RFC 4180 uses doubled quotes for literal quotes inside quoted fields |
-| Preserve line breaks in fields | Only treat `\n` as record boundary when outside quotes |
-| Trim empty records | Skip blank lines that parse to empty strings |
-| Test with edge cases | Empty quotes `""`, trailing newlines, CRLF line endings |
+| Rule                           | Rationale                                                            |
+| ------------------------------ | -------------------------------------------------------------------- |
+| Track quote state              | Toggle on unescaped `"` character                                    |
+| Handle `""` escape             | RFC 4180 uses doubled quotes for literal quotes inside quoted fields |
+| Preserve line breaks in fields | Only treat `\n` as record boundary when outside quotes               |
+| Trim empty records             | Skip blank lines that parse to empty strings                         |
+| Test with edge cases           | Empty quotes `""`, trailing newlines, CRLF line endings              |
 
 ### When to Use
 
@@ -2295,11 +2438,11 @@ When building query strings, filter out falsy and empty values to keep URLs clea
 ```typescript
 // Without careful filtering, query strings include noise and spurious values:
 const params = {
-  category: 'FOOD:GROCERIES',
-  recipient: '',           // Empty string (should be filtered)
-  start_date: null,        // Null (should be filtered)
-  exclude_splits: false,   // Boolean false (meaningful; should be preserved)
-  limit: 50
+  category: "FOOD:GROCERIES",
+  recipient: "", // Empty string (should be filtered)
+  start_date: null, // Null (should be filtered)
+  exclude_splits: false, // Boolean false (meaningful; should be preserved)
+  limit: 50,
 };
 
 // ❌ Without filtering: ?category=FOOD:GROCERIES&recipient=&start_date=null&exclude_splits=false&limit=50
@@ -2310,10 +2453,10 @@ const params = {
 
 ```typescript
 function buildQuery(params?: QueryParams): string {
-  if (!params) return '';
+  if (!params) return "";
   const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value !== undefined && value !== null && value !== "") {
       queryParams.append(key, String(value));
     }
   });
@@ -2330,9 +2473,9 @@ The function preserves `false` boolean values because they represent explicit fi
 const query = buildQuery({
   limit: 50,
   offset: 0,
-  category: selectedCategory || undefined,  // Filtered if undefined
-  start_date: filters.startDate || null,   // Filtered if null
-  exclude_splits: false,                    // PRESERVED as "false"
+  category: selectedCategory || undefined, // Filtered if undefined
+  start_date: filters.startDate || null, // Filtered if null
+  exclude_splits: false, // PRESERVED as "false"
 });
 
 // Result: ?limit=50&offset=0&exclude_splits=false
@@ -2341,14 +2484,14 @@ const query = buildQuery({
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Filter `null` and `undefined` | Prevents `?param=null` or `?param=undefined` strings |
-| Filter empty string `''` | Reduces noise; `?param=` is meaningless |
-| Preserve `false` | Boolean false is a meaningful filter choice (e.g., "exclude splits = false" means "include splits") |
-| Keep `0` | Numeric zero is valid (offset=0, limit=0 are meaningful) |
-| Keep `true` | Boolean true is serializable (some APIs use flag params) |
-| Use `String()` serialization | Converts values to canonical string form for URLSearchParams |
+| Rule                          | Rationale                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| Filter `null` and `undefined` | Prevents `?param=null` or `?param=undefined` strings                                                |
+| Filter empty string `''`      | Reduces noise; `?param=` is meaningless                                                             |
+| Preserve `false`              | Boolean false is a meaningful filter choice (e.g., "exclude splits = false" means "include splits") |
+| Keep `0`                      | Numeric zero is valid (offset=0, limit=0 are meaningful)                                            |
+| Keep `true`                   | Boolean true is serializable (some APIs use flag params)                                            |
+| Use `String()` serialization  | Converts values to canonical string form for URLSearchParams                                        |
 
 ### When to Use
 
@@ -2384,21 +2527,21 @@ const IMPORT_BATCH_SIZE = Math.max(2, Math.floor(_poolMax / 2));
 // In import processing loop
 for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
   const batch = rows.slice(i, i + IMPORT_BATCH_SIZE);
-  
+
   // Process batch rows in parallel (up to IMPORT_BATCH_SIZE concurrent queries)
   const settled = await Promise.allSettled(
     batch.map(async (row) => {
       // Dedup check
       const isDup = await isDuplicateByFields(row.date, row.amount, row.recipient, row.memo);
       if (isDup) return { dup: true };
-      
+
       // Recipient upsert (single round-trip via INSERT ... ON CONFLICT)
       const recipientId = await getOrCreateRecipient(row.recipient, row.account, row.address, row.bank);
-      
+
       return { dup: false, row: [row.date, row.amount, recipientId, ...] };
     })
   );
-  
+
   // Aggregate results
   for (const outcome of settled) {
     if (outcome.status === 'rejected') {
@@ -2415,14 +2558,14 @@ for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Compute concurrency from pool ceiling | Adapts to deployment config (local dev vs. production) |
-| Use `Math.max(2, Math.floor(poolMax / 2))` | Always keep ≥50% of pool for other requests |
-| Read env vars at module init | Avoid per-request resolution overhead |
-| Default: 5 (for poolMax=10) | Safe for single-user self-hosted deployments |
-| Use `Promise.allSettled()` per batch | One bad row doesn't stall the entire batch |
-| Preserve insertion order | `pendingInserts` array maintains order across batches |
+| Rule                                       | Rationale                                              |
+| ------------------------------------------ | ------------------------------------------------------ |
+| Compute concurrency from pool ceiling      | Adapts to deployment config (local dev vs. production) |
+| Use `Math.max(2, Math.floor(poolMax / 2))` | Always keep ≥50% of pool for other requests            |
+| Read env vars at module init               | Avoid per-request resolution overhead                  |
+| Default: 5 (for poolMax=10)                | Safe for single-user self-hosted deployments           |
+| Use `Promise.allSettled()` per batch       | One bad row doesn't stall the entire batch             |
+| Preserve insertion order                   | `pendingInserts` array maintains order across batches  |
 
 ### When to Use
 
@@ -2472,39 +2615,39 @@ Node.js's `res.write()` returns `false` when the internal buffer is full (`res.w
 Create a backpressure-aware writer and `await` after each frame:
 
 ```js
-import { createSseWriter } from '../lib/sse.js';
+import { createSseWriter } from "../lib/sse.js";
 
-router.post('/import/csv/stream', async (req, res) => {
+router.post("/import/csv/stream", async (req, res) => {
   const writer = createSseWriter(req, res);
-  
+
   try {
     // Probe for data...
-    
-    res.setHeader('Content-Type', 'text/event-stream');
-    
+
+    res.setHeader("Content-Type", "text/event-stream");
+
     // Import in batches
     for (const batch of batches) {
       for (const row of batch) {
         const { imported, duplicates, errors } = await processRow(row);
-        
+
         // Backpressure-aware write
-        await writer.write('progress', {
+        await writer.write("progress", {
           imported,
           duplicates,
           errors,
           total: totalRows,
         });
-        
+
         // Early exit if client disconnected
         if (writer.closed) return;
       }
     }
-    
-    await writer.write('complete', { imported, duplicates, errors });
+
+    await writer.write("complete", { imported, duplicates, errors });
     writer.end();
   } catch (err) {
     if (!writer.closed) {
-      await writer.write('error', { detail: 'Import failed' });
+      await writer.write("error", { detail: "Import failed" });
     }
     writer.end();
   }
@@ -2524,11 +2667,11 @@ router.post('/import/csv/stream', async (req, res) => {
 
 **Returns:** `{ closed: boolean, write(event, data): Promise<void>, end(): void }`
 
-| Property | Purpose |
-|----------|---------|
-| `closed` | Getter that returns `true` if the client disconnected |
+| Property             | Purpose                                                                    |
+| -------------------- | -------------------------------------------------------------------------- |
+| `closed`             | Getter that returns `true` if the client disconnected                      |
 | `write(event, data)` | Async. Writes SSE frame if not closed; calls `drainIfNeeded()` after write |
-| `end()` | Ends the response if not already ended |
+| `end()`              | Ends the response if not already ended                                     |
 
 ### Implementation Details
 
@@ -2539,15 +2682,20 @@ export function createSseWriter(req, res) {
   // body is consumed by upstream middleware (e.g., express.json()), which would
   // mark the writer closed before any event is emitted. res's 'close' event
   // covers both client disconnects and normal end-of-response.
-  if (typeof res?.on === 'function') res.on('close', () => { closed = true; });
+  if (typeof res?.on === "function")
+    res.on("close", () => {
+      closed = true;
+    });
 
   return {
-    get closed() { return closed; },
+    get closed() {
+      return closed;
+    },
 
     async write(event, data) {
-      if (closed) return;  // No-op if client disconnected
+      if (closed) return; // No-op if client disconnected
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      await drainIfNeeded(res);  // Pause if buffer full
+      await drainIfNeeded(res); // Pause if buffer full
     },
 
     end() {
@@ -2559,13 +2707,13 @@ export function createSseWriter(req, res) {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Always use `createSseWriter` for streaming | Single source of truth for backpressure and client tracking |
-| `await writer.write()` in loops | Critical: pauses production when client can't keep up |
-| Check `writer.closed` between writes | Exit early if client disconnected to avoid wasted work |
-| Async progress callbacks | Make import/AI callbacks `async` and `await` the `write()` result |
-| Call `writer.end()` in finally | Ensures response is always closed, even on error |
+| Rule                                       | Rationale                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| Always use `createSseWriter` for streaming | Single source of truth for backpressure and client tracking       |
+| `await writer.write()` in loops            | Critical: pauses production when client can't keep up             |
+| Check `writer.closed` between writes       | Exit early if client disconnected to avoid wasted work            |
+| Async progress callbacks                   | Make import/AI callbacks `async` and `await` the `write()` result |
+| Call `writer.end()` in finally             | Ensures response is always closed, even on error                  |
 
 ### When to Use
 
@@ -2583,26 +2731,26 @@ export function createSseWriter(req, res) {
 ### Testing
 
 ```js
-import { test, expect } from 'vitest';
-import { createSseWriter, drainIfNeeded } from '../lib/sse.js';
+import { test, expect } from "vitest";
+import { createSseWriter, drainIfNeeded } from "../lib/sse.js";
 
-test('drainIfNeeded returns immediately when buffer not full', async () => {
+test("drainIfNeeded returns immediately when buffer not full", async () => {
   const res = { writableNeedDrain: false };
   const start = Date.now();
   await drainIfNeeded(res);
-  expect(Date.now() - start).toBeLessThan(10);  // No pause
+  expect(Date.now() - start).toBeLessThan(10); // No pause
 });
 
-test('createSseWriter tracks client close', (done) => {
+test("createSseWriter tracks client close", (done) => {
   const req = new EventEmitter();
   const res = { write: () => true, writableEnded: false };
-  
+
   const writer = createSseWriter(req, res);
   expect(writer.closed).toBe(false);
-  
-  req.emit('close');
+
+  req.emit("close");
   expect(writer.closed).toBe(true);
-  
+
   done();
 });
 ```
@@ -2620,11 +2768,11 @@ Vision is a single-user application, but the HTTP process can overlap user reque
 ### Pattern
 
 ```js
-import { withTransaction } from '../database/connection.js';
+import { withTransaction } from "../database/connection.js";
 
 export async function complexMultiStepOperation(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {
-    throw new Error('Invalid inputs');
+    throw new Error("Invalid inputs");
   }
 
   return withTransaction(async (client) => {
@@ -2633,7 +2781,7 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
       [primaryId],
     );
     if (!primaryCheck.rows.length) {
-      throw new Error('Primary not found');
+      throw new Error("Primary not found");
     }
 
     const step1 = await client.query(
@@ -2674,16 +2822,16 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 
 ### Key Conventions
 
-| Pattern | Rule |
-|---------|------|
-| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release |
-| Row locking | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access |
-| Dependency order | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate) |
-| Conflict dedup | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication |
-| Error handling | `ROLLBACK` on any error; caller receives clear error message |
-| Fallback reads | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID |
-| Validation first | Validate all inputs before `BEGIN` to fail fast |
-| Nested work | Reuse the ambient transaction and `withSavepointIfInTransaction` for per-item isolation; do not start an independent nested transaction |
+| Pattern            | Rule                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release                                                       |
+| Row locking        | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access                                                        |
+| Dependency order   | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate)                    |
+| Conflict dedup     | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication                                                         |
+| Error handling     | `ROLLBACK` on any error; caller receives clear error message                                                                            |
+| Fallback reads     | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID                            |
+| Validation first   | Validate all inputs before `BEGIN` to fail fast                                                                                         |
+| Nested work        | Reuse the ambient transaction and `withSavepointIfInTransaction` for per-item isolation; do not start an independent nested transaction |
 
 ### When to Use
 
@@ -2712,27 +2860,34 @@ The alternative is not permission for arbitrary partial writes: every chunk must
 
 ```javascript
 // WRONG: PostgreSQL rejects this
-const result = await client.query(`
+const result = await client.query(
+  `
   SELECT id FROM transactions WHERE id = $1
   GROUP BY id, amount
   FOR UPDATE OF t
-`, [transactionId]);
+`,
+  [transactionId],
+);
 
 // CORRECT: Separate the lock from the aggregate
 const lockResult = await client.query(
   `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-  [transactionId]
+  [transactionId],
 );
-if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+if (lockResult.rows.length === 0)
+  throw new NotFoundError("Transaction not found");
 
-const aggregateResult = await client.query(`
+const aggregateResult = await client.query(
+  `
   SELECT ABS(t.amount) AS transaction_total,
          COALESCE(SUM(ts.amount), 0) AS current_split_total
     FROM transactions t
     LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
    WHERE t.id = $1
    GROUP BY t.id, t.amount
-`, [transactionId]);
+`,
+  [transactionId],
+);
 ```
 
 Both queries execute within the same transaction, so atomicity is preserved: the lock acquired on the first query holds until `COMMIT`.
@@ -2756,17 +2911,17 @@ All Framer Motion-enabled components must check `useReducedMotion()` and conditi
 ### Pattern
 
 ```tsx
-import { m, useReducedMotion } from 'framer-motion';
-import { durations, easings } from '@/lib/motion';
+import { m, useReducedMotion } from "framer-motion";
+import { durations, easings } from "@/lib/motion";
 
 export function MyAnimatedComponent() {
   const prefersReduced = useReducedMotion();
-  
+
   return (
     <m.div
       initial={prefersReduced ? {} : { opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={prefersReduced ? {} : { opacity: 0, scale: 0.90 }}
+      exit={prefersReduced ? {} : { opacity: 0, scale: 0.9 }}
       transition={{
         duration: prefersReduced ? 0 : durations.normal,
         ease: easings.outExpo,
@@ -2780,31 +2935,37 @@ export function MyAnimatedComponent() {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Always check `useReducedMotion()` | Mandatory accessibility compliance for non-essential motion |
-| Empty initial/exit when reduced | Simplest way to skip animations entirely (no jank from animation state) |
-| Instant transition when reduced | Zero delay, zero animation time |
-| Use token-based timing | Never hardcode durations; import from `motion.ts` |
-| Only animate transforms/opacity | GPU-accelerated, no layout thrashing |
-| Centralize motion configs | New patterns go into `motion.ts`, not scattered in components |
+| Rule                              | Rationale                                                               |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| Always check `useReducedMotion()` | Mandatory accessibility compliance for non-essential motion             |
+| Empty initial/exit when reduced   | Simplest way to skip animations entirely (no jank from animation state) |
+| Instant transition when reduced   | Zero delay, zero animation time                                         |
+| Use token-based timing            | Never hardcode durations; import from `motion.ts`                       |
+| Only animate transforms/opacity   | GPU-accelerated, no layout thrashing                                    |
+| Centralize motion configs         | New patterns go into `motion.ts`, not scattered in components           |
 
 ### Use Cases
 
-| Pattern | Duration | Timing | When |
-|---------|----------|--------|------|
-| Dialog enter | 420ms | CSS `dialog-in` overshoot | Modal overlay, form dialog |
-| Dialog exit | 200ms | CSS `dialog-out` glide | Dismissal or cancel |
-| Page transition | 520ms enter-only | `easings.outExpo` | Route change |
-| Layout indicator | spring | `springs.snappy` | Sidebar rail, tab pill |
-| Hover elevation | 150ms | `easings.glide` | Card, button hover state |
-| Micro-interaction | 150ms | `easings.outExpo` | Icon action, toggle state |
-| Loading pulse | 1.5s | ease-in-out | Skeleton screens (opacity only) |
-| Fade in | 260ms | `easings.outExpo` | Runtime-controlled content appearance |
+| Pattern           | Duration         | Timing                    | When                                  |
+| ----------------- | ---------------- | ------------------------- | ------------------------------------- |
+| Dialog enter      | 420ms            | CSS `dialog-in` overshoot | Modal overlay, form dialog            |
+| Dialog exit       | 200ms            | CSS `dialog-out` glide    | Dismissal or cancel                   |
+| Page transition   | 520ms enter-only | `easings.outExpo`         | Route change                          |
+| Layout indicator  | spring           | `springs.snappy`          | Sidebar rail, tab pill                |
+| Hover elevation   | 150ms            | `easings.glide`           | Card, button hover state              |
+| Micro-interaction | 150ms            | `easings.outExpo`         | Icon action, toggle state             |
+| Loading pulse     | 1.5s             | ease-in-out               | Skeleton screens (opacity only)       |
+| Fade in           | 260ms            | `easings.outExpo`         | Runtime-controlled content appearance |
 
 ---
 
 ## Surface Shell Pattern (Phase 9 + June 2026)
+
+### Destination and heading icons
+
+Use `apps/frontend/src/lib/pageIcons.ts` as the sole destination-icon registry. Navigation and page identity surfaces consume the same component for a route. `Landmark` is intentionally shared only within the tax family; unrelated destinations use distinct icons.
+
+Page headers and identity empty states may show that destination icon. Chart headers and ordinary section headings stay icon-free unless the icon communicates state, action, or a meaningful sibling distinction.
 
 **Source:** [[apps/frontend/src/components/ui/card.tsx|card.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx|StatCard.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx|AppLayout.tsx]]
 
@@ -2815,20 +2976,21 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 ### Canonical Card Material Rule (June 2026, role-based)
 
-| Surface type | Class | Notes |
-|---|---|---|
-| Content / chart / stat / state card | `glass-regular` | ALL cards in these roles — peers must shine consistently (role-based glass, June 2026) |
-| Dashboard hero card | `glass-elevated` | 32px blur + saturate; trend tint in overlay child |
-| Table container (DataTable / VirtualDataTable / Watchlist / pivot/summary/RatesTable) | opaque (no glass class) | Dense row rendering; GPU budget exemption |
-| Dense form/import card | opaque | Intentional flat surface |
-| Dashed "add" placeholder card | opaque | `bg-muted/30 border-dashed` — flat by design |
-| Accent/danger callout card | opaque | `bg-primary/5` / `bg-destructive/5` — colored tint defeats glass |
-| Card nested inside a glass dialog | opaque | Avoids double-blur (e.g., `InvestmentDetailDialog` inner cards) |
-| Modal dialog | `glass-thick` | Handled by the base Dialog component |
-| Toast | `glass-thick` | Handled by Sonner |
-| Navigation chrome | `glass-chrome` | Handled by AppLayout/AppSidebar |
+| Surface type                                                                | Class                                   | Notes                                                                                                                                                            |
+| --------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Content / chart / stat / state card                                         | Base `<Card>`                           | `Card` owns `glass-regular` and `premium-frame`; call sites do not restate either class                                                                          |
+| Dashboard hero card                                                         | `glass-elevated`                        | 32px blur + saturate; trend tint in overlay child                                                                                                                |
+| Table container implemented with `<Card>` (including `VirtualDataTable`)    | Base `<Card>`                           | Current implementation inherits `glass-regular`; use a plain bordered `bg-card` section when a new dense surface explicitly needs an opaque GPU-budget exception |
+| Dense form/import card implemented with `<Card>`                            | Base `<Card>`                           | Current implementation inherits the base material                                                                                                                |
+| Dashed "add" placeholder or accent/danger callout implemented with `<Card>` | Base `<Card>` plus semantic tint/border | The tint is additive; it does not disable the base backdrop filter                                                                                               |
+| Card nested inside a glass dialog                                           | Base `<Card>`                           | Current implementation still inherits `glass-regular`; avoid adding another explicit glass tier                                                                  |
+| Modal dialog                                                                | `glass-thick`                           | Handled by the base Dialog component                                                                                                                             |
+| Toast                                                                       | `glass-thick`                           | Handled by Sonner                                                                                                                                                |
+| Navigation chrome                                                           | `glass-chrome`                          | Handled by AppLayout/AppSidebar                                                                                                                                  |
 
-`premium-frame` is baked into the base `Card` component — you no longer need to add it as a className. Both `premium-frame` and `micro-lift` declare identical full `transition` lists (border-color, box-shadow, transform) so whichever class wins the cascade still animates all three properties.
+Warning and neutral-information UI use the semantic `warning` and `info` tokens; raw amber, yellow, blue, or sky utilities are not allowed. Material shadows use `hsl(var(--glass-shadow) / alpha)` so every theme variant retains its own depth hue. Gain/loss signals remain exclusively on `--gain` and `--loss`.
+
+`premium-frame` is baked into the base `Card` component — do not add it through `className`. Static cards keep the resting frame and material. Use `variant="interactive"` for cards that can be activated or are deliberately promoted as KPI/hero surfaces; the variant owns the hover lift, elevated-shadow crossfade, press response, and reduced-motion fallback. `micro-lift` remains for non-Card interactive surfaces only.
 
 > [!warning] GPU trade-off (card-dense pages)
 > Card-dense pages (e.g., PortfolioOverviewPage, StatisticsPage) now have more active `backdrop-filter` surfaces per viewport than the old ~6-surface budget. This is mitigated by ADR-075 tier auto-adapt: glass auto-degrades to near-opaque on large displays (`fx-reduced` class via `VisualEffectsController`) and under `prefers-reduced-transparency`. Profile the packaged Electron app on Apple Silicon before each release to catch regression.
@@ -2837,26 +2999,25 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 ```tsx
 // Content / chart / stat card (most common — role-based glass)
-<Card className="glass-regular micro-lift">
-  {/* Content — premium-frame hover outline included automatically from Card base */}
+<Card>
+  {/* Content — resting premium frame and glass material come from Card base */}
 </Card>
 
 // State cards (loading/empty/error) also get glass-regular for peer consistency
-<Card className="glass-regular">
+<Card>
   <EmptyState ... />
 </Card>
 
 // Dashboard hero card (income/net summary)
-<Card className="glass-elevated micro-lift">
-  {/* Trend tint as overlay child, not on the card itself */}
-  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+<Card variant="interactive" className="glass-elevated">
+  <TrendHue tone="neutral" />
   {/* Content */}
 </Card>
 
-// Opaque table container (role-based exception — dense rows)
-<Card>
-  <DataTable ... />  {/* No glass class — tables stay opaque */}
-</Card>
+// Opaque table container (role-based exception — do not wrap in Card)
+<section className="rounded-xl border border-border bg-card">
+  <DataTable ... />
+</section>
 
 // Glass surface (dialogs, overlays — handled by Dialog component)
 <div className="relative overflow-hidden glass-thick rounded-lg border border-white/10">
@@ -2871,20 +3032,25 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 ### Utilities Breakdown
 
-| Utility | Purpose |
-|---------|---------|
-| `glass-regular` | Content/chart/stat/state cards — 20px blur + saturate |
-| `glass-elevated` | Hero cards — 32px blur + saturate + lensing edges |
-| `glass-thick` | Modal dialogs, toasts — 28px blur + saturate |
-| `glass-chrome` | Sidebar/topbar navigation — 24px blur + saturate |
-| `glass-thin` | Subtle elements — 12px blur + saturate |
-| `premium-frame` | Primary-tinted hover outline (baked into Card base since ADR-070) |
-| `micro-lift` | Hover transform: `translateY(-2px)` + shadow increase |
-| `group` | Parent selector for hover states affecting children |
-| `overflow-hidden` | Clip rounded corners (important for glass + grain texture) |
-| `border border-white/10` | Subtle highlight rim at 10% white opacity |
+| Utility                     | Purpose                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `glass-regular`             | Content/chart/stat/state cards — 20px blur + saturate                                                       |
+| `glass-elevated`            | Hero cards — 32px blur + saturate + lensing edges                                                           |
+| `glass-thick`               | Modal dialogs, toasts — 28px blur + saturate                                                                |
+| `glass-chrome`              | Sidebar/topbar navigation — 24px blur + saturate                                                            |
+| `glass-thin`                | Subtle elements — 12px blur + saturate                                                                      |
+| `premium-frame`             | Resting frame baked into the Card base                                                                      |
+| `premium-frame-interactive` | Interactive Card hover outline and pre-rendered elevated-shadow crossfade; added by `variant="interactive"` |
+| `micro-lift`                | Hover transform for non-Card interactive surfaces                                                           |
+| `group`                     | Parent selector for hover states affecting children                                                         |
+| `overflow-hidden`           | Clip rounded corners (important for glass + grain texture)                                                  |
+| `border border-white/10`    | Subtle highlight rim at 10% white opacity                                                                   |
 
 ### Gradient Icon Tile Pattern (Phase 9 + June 2026)
+
+Icon tiles use `icon-tile-glow`. Its shadow is derived from `currentColor`, so a
+gain, loss, warning, or chart-series tile casts a matching low-opacity glow.
+Do not hardcode the primary token in an icon-tile shadow.
 
 **Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx|StatCard.tsx]]
 
@@ -2898,25 +3064,24 @@ The shared `TrendHue` component (see [[docs/components/shared-components#trendhu
 import { TrendHue } from "@/components/shared/TrendHue";
 
 // Summary/stat card with gain/loss/neutral tint
-<Card className="glass-elevated micro-lift relative overflow-hidden">
-  <TrendHue variant="gain" />   {/* or "loss" or "neutral" */}
+<Card variant="interactive" className="glass-elevated relative overflow-hidden">
+  <TrendHue tone="gain" /> {/* or "loss" or "neutral" */}
   <CardContent className="relative flex items-center gap-3">
     {/* ... */}
   </CardContent>
-</Card>
+</Card>;
 ```
 
 `TrendHue` renders `bg-gradient-to-br from-{gain|loss|primary}/10 to-.../5` as an `absolute inset-0 pointer-events-none rounded-[inherit]` overlay — structurally identical to the manual div pattern below, but token-reactive and DRY.
 
-**Do not inline a gradient div on new summary cards.** Use `<TrendHue>` instead. The old inline pattern is shown only for reference:
+**Do not inline a gradient div on new summary cards.** Use `<TrendHue>` instead:
 
 ```tsx
-<Card className="glass-elevated micro-lift relative">
-  {/* Tint overlay as child — not on the card background itself */}
-  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none rounded-[inherit]" />
+<Card variant="interactive" className="glass-elevated relative">
+  <TrendHue tone="gain" />
   <CardContent className="relative flex items-center gap-3">
-    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-400/30 via-transparent to-primary/20 flex items-center justify-center">
-      <TrendingUpIcon className="h-6 w-6 text-emerald-400" />
+    <div className="icon-tile-glow h-12 w-12 rounded-lg bg-gradient-to-br from-gain/30 via-transparent to-primary/20 text-gain flex items-center justify-center">
+      <TrendingUpIcon className="h-6 w-6" />
     </div>
     <div>
       <p className="text-sm text-muted-foreground">Monthly Income</p>
@@ -2928,28 +3093,28 @@ import { TrendHue } from "@/components/shared/TrendHue";
 
 #### Colour-role rule for summary/stat cards (2026-06-24)
 
-| Surface | Rule |
-|---|---|
-| Card background tint | `<TrendHue variant="gain|loss|neutral" />` — gain/loss/neutral at 0.10 opacity; **neutral border always** (no gain/loss border) |
-| Featured total headline (net worth, portfolio total, total value) | `text-primary` |
-| Directional figures (return %, gain/loss amounts) | `amount-gain` / `amount-loss` |
-| Component figures (cost basis, unrealized, realized) | `text-foreground` (neutral) |
+| Surface                                                           | Rule                        |
+| ----------------------------------------------------------------- | --------------------------- |
+| Card background tint                                              | `<TrendHue tone="gain       | loss | neutral" />` — gain/loss/neutral at 0.10 opacity; **neutral border always** (no gain/loss border) |
+| Featured total headline (net worth, portfolio total, total value) | `text-primary`              |
+| Directional figures (return %, gain/loss amounts)                 | `text-gain` / `text-loss`   |
+| Component figures (cost basis, unrealized, realized)              | `text-foreground` (neutral) |
 
 > [!info] The gain/loss coloured BORDER on `PerformancePage` CompactReturnCard and TotalValueCard (previously via `liquid-glass-trend-up/down`) was removed in the 2026-06-24 consistency pass. The card hue is retained via `<TrendHue>`; the coloured border is gone everywhere for consistency. The `glass-trend-up`, `glass-trend-down`, `liquid-glass-trend-up`, and `liquid-glass-trend-down` CSS classes have been deleted from `index.css`.
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Always use `overflow-hidden` with rounded corners | Prevents gradient overflow; clips grain texture properly |
-| Do NOT put `premium-frame` on `<Card>` manually | It is now baked into the Card base class |
-| Use `glass-regular` for ALL content/chart/stat/state cards | Role-based glass (June 2026) — peer cards must shine consistently; the old "~6 surfaces" limit is superseded |
-| Use `glass-elevated` for hero/summary cards | Max-tier material for dashboard emphasis |
-| Tables, forms, placeholders, and callout cards stay opaque | Role-based exceptions — see table above |
-| Cards nested in glass dialogs stay opaque | Avoid double-blur |
-| Tint overlay as child, not on card bg (`<TrendHue>` or manual div) | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
-| Gradient icons muted opacity (20-40%) | Ensure text contrast and readability |
-| Summary card tint via `<TrendHue>`, not inline divs | Single source of truth; token-reactive with `--gain`/`--loss` toggle |
+| Rule                                                                                                                   | Rationale                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Always use `overflow-hidden` with rounded corners                                                                      | Prevents gradient overflow; clips grain texture properly                                         |
+| Do NOT put `premium-frame` or `micro-lift` on `<Card>` manually                                                        | The base owns the resting frame; `variant="interactive"` owns Card hover and press behavior      |
+| Base `<Card>` supplies `glass-regular` for content/chart/stat/state cards                                              | Role-based glass (June 2026) — do not re-add the base material at call sites                     |
+| Use `glass-elevated` for hero/summary cards                                                                            | Max-tier material for dashboard emphasis                                                         |
+| Tables, forms, placeholders, and callouts that must stay opaque use a plain bordered `bg-card` container, not `<Card>` | Avoids accidentally inheriting the base glass material                                           |
+| Cards nested in glass dialogs use only the base material                                                               | Do not add an explicit second glass tier                                                         |
+| Tint overlay as child, not on card bg (`<TrendHue>` or manual div)                                                     | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
+| Gradient icons muted opacity (20-40%)                                                                                  | Ensure text contrast and readability                                                             |
+| Summary card tint via `<TrendHue>`, not inline divs                                                                    | Single source of truth; token-reactive with `--gain`/`--loss` toggle                             |
 
 ---
 
@@ -2971,31 +3136,31 @@ export function useUpdateTransaction() {
 
     onMutate: async ({ id, data }) => {
       // 1. Cancel any in-flight refetches so they don't overwrite optimistic data
-      await queryClient.cancelQueries({ queryKey: ['transactions'] });
+      await queryClient.cancelQueries({ queryKey: ["transactions"] });
 
       // 2. Snapshot all matching cache entries
       const snapshots = queryClient.getQueriesData<TransactionListResponse>({
-        queryKey: ['transactions'],
+        queryKey: ["transactions"],
       });
 
       // 3. Apply optimistic update across all ['transactions', params] caches
       //    NOTE: ['transactions-virtual'] is intentionally NOT patched here
       queryClient.setQueriesData<TransactionListResponse>(
-        { queryKey: ['transactions'], exact: false },
+        { queryKey: ["transactions"], exact: false },
         (old) => {
           if (!old) return old;
           return {
             ...old,
             items: old.items.map((tx) =>
               tx.id === id
-                ? { ...tx, ...data, tags: tx.tags }  // tags excluded from merge
+                ? { ...tx, ...data, tags: tx.tags } // tags excluded from merge
                 : tx,
             ),
           };
         },
       );
 
-      return { snapshots };  // context passed to onError
+      return { snapshots }; // context passed to onError
     },
 
     onError: (_err, _vars, context) => {
@@ -3009,7 +3174,7 @@ export function useUpdateTransaction() {
 
     onSettled: () => {
       // 5. Always invalidate so server truth wins after settlement
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -3017,15 +3182,15 @@ export function useUpdateTransaction() {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| `cancelQueries` before `setQueriesData` | Prevents an in-flight refetch from overwriting the optimistic state |
-| Snapshot with `getQueriesData` | Returns all matching cache entries (not just the most recent) |
-| `setQueriesData` with `exact: false` | Patches all `['transactions', params]` variants (different pages, filters) |
-| Exclude `['transactions-virtual']` | `useTransactionListData` mirrors its first page to local state; patching would collapse the scrolled list |
-| Exclude `tags` from merge | Payload carries `string[]` slugs; cache holds `Tag[]` objects; shapes differ |
-| Rollback via snapshot | Restore every key from the snapshot in `onError` |
-| Invalidate in `onSettled` | Always refetch after success OR error so server truth wins |
+| Rule                                    | Rationale                                                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `cancelQueries` before `setQueriesData` | Prevents an in-flight refetch from overwriting the optimistic state                                       |
+| Snapshot with `getQueriesData`          | Returns all matching cache entries (not just the most recent)                                             |
+| `setQueriesData` with `exact: false`    | Patches all `['transactions', params]` variants (different pages, filters)                                |
+| Exclude `['transactions-virtual']`      | `useTransactionListData` mirrors its first page to local state; patching would collapse the scrolled list |
+| Exclude `tags` from merge               | Payload carries `string[]` slugs; cache holds `Tag[]` objects; shapes differ                              |
+| Rollback via snapshot                   | Restore every key from the snapshot in `onError`                                                          |
+| Invalidate in `onSettled`               | Always refetch after success OR error so server truth wins                                                |
 
 ### When to Use
 
@@ -3054,16 +3219,18 @@ export function useUpdateTransaction() {
 `AreaChart` and `LineChart` accept a `scrubbable?: boolean` prop. To add scrub to a new chart:
 
 ```tsx
-import { useChartScrub, formatScrubDelta } from '@/components/charts/scrub';
+import { useChartScrub, formatScrubDelta } from "@/components/charts/scrub";
 
 // Inside chart component
-const { scrubRange, handlePointerDown, handlePointerMove, handlePointerUp } = useChartScrub(data, xScale);
+const { scrubRange, handlePointerDown, handlePointerMove, handlePointerUp } =
+  useChartScrub(data, xScale);
 
 // The hook suppresses tooltip while scrubbing
 // A glass Δ pill div is rendered over the chart when scrubRange is non-null
 ```
 
 Key rules:
+
 - Use pointer events (not mouse events) — works on desktop and touch.
 - Use `setPointerCapture` on pointer-down so drags work even when the pointer leaves the SVG.
 - Suppress `ChartTooltip` while `scrubRange !== null`.
@@ -3100,7 +3267,7 @@ Use Zustand for client state that spans multiple pages or contexts. Vision uses 
 ### Pattern
 
 ```typescript
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface AppState {
   // State slices
@@ -3129,7 +3296,7 @@ export const useAppStore = create<AppState>((set) => ({
 When using multiple slices in a component, use `useShallow()` to prevent re-renders when unrelated slices change:
 
 ```typescript
-import { useShallow } from 'zustand/react'; // v4.5+
+import { useShallow } from "zustand/react"; // v4.5+
 
 // AVOID: Re-renders if ANY part of state changes
 const settings = useAppStore((s) => s.settings);
@@ -3140,19 +3307,19 @@ const slice = useAppStore(
   useShallow((s) => ({
     settings: s.settings,
     count: s.count,
-  }))
+  })),
 );
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Store for cross-page state only | Local component state → useState; UI state → Context |
-| Use `useShallow()` for multiple selections | Prevents unrelated updates from triggering re-renders |
-| Actions mutate immutably | Always spread objects: `{ ...state, field: value }` |
-| Split large stores into slices | Keep each store <200 LOC; use multiple stores if needed |
-| Pair with Context wrappers | Zustand for state, Context Providers for side-effects (hydration, persistence) |
+| Rule                                       | Rationale                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| Store for cross-page state only            | Local component state → useState; UI state → Context                           |
+| Use `useShallow()` for multiple selections | Prevents unrelated updates from triggering re-renders                          |
+| Actions mutate immutably                   | Always spread objects: `{ ...state, field: value }`                            |
+| Split large stores into slices             | Keep each store <200 LOC; use multiple stores if needed                        |
+| Pair with Context wrappers                 | Zustand for state, Context Providers for side-effects (hydration, persistence) |
 
 ### When to Use
 
@@ -3187,6 +3354,7 @@ const slice = useAppStore(
 ## Scoped-Skin Behind a Flag Pattern (ADR-104)
 
 **Source files:**
+
 - `[[apps/frontend/src/lib/env.ts]]` — flag declaration via `booleanEnv`
 - `[[apps/frontend/src/lib/skin.ts]]` — activation logic
 - `[[apps/frontend/src/main.tsx]]` — pre-render call
@@ -3217,33 +3385,35 @@ export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
 
 ```ts
 // apps/frontend/src/lib/skin.ts
-const STORAGE_KEY = 'vision_skin_v2';
-const ROOT_CLASS  = 'skin-v2';
+const STORAGE_KEY = "vision_skin_v2";
+const ROOT_CLASS = "skin-v2";
 
 export function isSkinV2Active(): boolean {
-    try {
-        const override = localStorage.getItem(STORAGE_KEY);
-        if (override === 'true')  return true;
-        if (override === 'false') return false;
-    } catch { /* SSR / private mode */ }
-    return isSkinV2Default;   // build-time flag
+  try {
+    const override = localStorage.getItem(STORAGE_KEY);
+    if (override === "true") return true;
+    if (override === "false") return false;
+  } catch {
+    /* SSR / private mode */
+  }
+  return isSkinV2Default; // build-time flag
 }
 
 export function applySkinV2Class(): void {
-    document.documentElement.classList.toggle(ROOT_CLASS, isSkinV2Active());
+  document.documentElement.classList.toggle(ROOT_CLASS, isSkinV2Active());
 }
 
 export function setSkinV2(on: boolean | undefined): void {
-    try {
-        if (on === undefined) localStorage.removeItem(STORAGE_KEY);
-        else localStorage.setItem(STORAGE_KEY, String(on));
-    } catch {}
-    applySkinV2Class();
+  try {
+    if (on === undefined) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, String(on));
+  } catch {}
+  applySkinV2Class();
 }
 
 // Dev-mode escape hatch — never ships in production
 if (import.meta.env.DEV) {
-    (window as any).__setSkinV2 = setSkinV2;
+  (window as any).__setSkinV2 = setSkinV2;
 }
 ```
 
@@ -3251,8 +3421,8 @@ if (import.meta.env.DEV) {
 
 ```ts
 // apps/frontend/src/main.tsx
-import { applySkinV2Class } from './lib/skin';
-applySkinV2Class();   // must run before createRoot / render
+import { applySkinV2Class } from "./lib/skin";
+applySkinV2Class(); // must run before createRoot / render
 ```
 
 **4. UNLAYERED CSS scoped under the root class**
@@ -3262,13 +3432,13 @@ applySkinV2Class();   // must run before createRoot / render
 /* No @layer wrapper — unlayered rules win over all Tailwind layers by cascade order. */
 
 :root.skin-v2 {
-    --radius: 0.5rem;
-    /* structural token overrides ... */
+  --radius: 0.5rem;
+  /* structural token overrides ... */
 }
 
 :root.skin-v2 .glass-regular {
-    background: hsl(var(--card));
-    /* override Tailwind utilities without specificity tricks */
+  background: hsl(var(--card));
+  /* override Tailwind utilities without specificity tricks */
 }
 ```
 
@@ -3278,23 +3448,28 @@ applySkinV2Class();   // must run before createRoot / render
 > [!info] Exception: `--gain` and `--loss` are CSS-overridable (2026-06-24)
 > `--gain` and `--loss` are defined in `tokens.css` (not by `applyThemePalette()`), so `skin-v2.css` **can** override them. These are the only color-bearing tokens that are safely overridable from CSS. `skin-v2.css` overrides only these two tokens to apply the Okabe-Ito colorblind-safe palette; all other color overrides still require `themes.ts` changes.
 >
-> **Gain/loss contributor rule**: any gain/loss-semantic color must use `.amount-gain`/`.amount-loss`, the `gain`/`loss` Tailwind utilities (`text-gain`, `bg-loss/12`, etc.), or `hsl(var(--gain))`/`hsl(var(--loss))` — never raw `text-success`/`text-destructive`/`text-accent`.
+> **Gain/loss contributor rule**: any gain/loss-semantic color must use the `gain`/`loss` Tailwind utilities (`text-gain`, `bg-loss/12`, etc.) or `hsl(var(--gain))`/`hsl(var(--loss))` — never raw `text-success`/`text-destructive`/`text-accent`.
 
 **5. Gating component branches (Phase 3+)**
 
 When a skin change requires JSX changes (not pure CSS), gate it behind `isSkinV2Active()` so the flag-off path is byte-identical to the legacy code:
 
 ```tsx
-import { isSkinV2Active } from '@/lib/skin';
+import { isSkinV2Active } from "@/lib/skin";
 
 function AmountCell({ value }: { value: number }) {
-    const sign = value >= 0 ? '+' : '−';
-    if (isSkinV2Active()) {
-        // skin-v2: always show +/− and arrow, use --gain/--loss tokens
-        return <span className="gain-loss" data-positive={value >= 0}>{sign}{format(value)}</span>;
-    }
-    // legacy: unchanged
-    return <span>{format(value)}</span>;
+  const sign = value >= 0 ? "+" : "−";
+  if (isSkinV2Active()) {
+    // skin-v2: always show +/− and arrow, use --gain/--loss tokens
+    return (
+      <span className="gain-loss" data-positive={value >= 0}>
+        {sign}
+        {format(value)}
+      </span>
+    );
+  }
+  // legacy: unchanged
+  return <span>{format(value)}</span>;
 }
 ```
 
@@ -3343,6 +3518,7 @@ The function disambiguates locale formats by examining the position of commas an
 ### Pre-Processing
 
 Before heuristic evaluation:
+
 - Strip leading/trailing whitespace
 - Remove internal whitespace
 - Strip currency symbols (`$`, `€`, `£`, `¥`)
@@ -3361,32 +3537,32 @@ parseLocaleNumber(input: string | number | null | undefined): number
 
 ```typescript
 // US formats
-parseLocaleNumber("1,234.56")      // → 1234.56
-parseLocaleNumber("1,000")         // → 1000 (single-comma thousands)
-parseLocaleNumber("12,345,500")    // → 12345500
+parseLocaleNumber("1,234.56"); // → 1234.56
+parseLocaleNumber("1,000"); // → 1000 (single-comma thousands)
+parseLocaleNumber("12,345,500"); // → 12345500
 
 // EU formats
-parseLocaleNumber("1.234,56")      // → 1234.56
-parseLocaleNumber("1,50")          // → 1.5
+parseLocaleNumber("1.234,56"); // → 1234.56
+parseLocaleNumber("1,50"); // → 1.5
 
 // With currency symbols and whitespace
-parseLocaleNumber("$ 1,234.56 ")   // → 1234.56
-parseLocaleNumber("€1,50")         // → 1.5
+parseLocaleNumber("$ 1,234.56 "); // → 1234.56
+parseLocaleNumber("€1,50"); // → 1.5
 
 // Negatives
-parseLocaleNumber("-42.50")        // → -42.5
-parseLocaleNumber("(42.50)")       // → -42.5
+parseLocaleNumber("-42.50"); // → -42.5
+parseLocaleNumber("(42.50)"); // → -42.5
 
 // Invalid
-parseLocaleNumber("")              // → NaN
-parseLocaleNumber("abc")           // → NaN
-parseLocaleNumber(null)            // → NaN
-parseLocaleNumber(undefined)       // → NaN
+parseLocaleNumber(""); // → NaN
+parseLocaleNumber("abc"); // → NaN
+parseLocaleNumber(null); // → NaN
+parseLocaleNumber(undefined); // → NaN
 
 // Numbers pass through unchanged
-parseLocaleNumber(42.5)            // → 42.5
-parseLocaleNumber(-7)              // → -7
-parseLocaleNumber(0)               // → 0
+parseLocaleNumber(42.5); // → 42.5
+parseLocaleNumber(-7); // → -7
+parseLocaleNumber(0); // → 0
 ```
 
 ### Bug Fix (2026-05-08)
@@ -3403,6 +3579,39 @@ Primary usage: transaction amount input dialogs and CSV import amount parsing wh
 
 ---
 
+## Signed Money Pattern
+
+**Sources:** `[[apps/frontend/src/components/shared/Money.tsx]]`,
+`[[apps/frontend/src/hooks/useCurrencyFormatter.ts]]`, and
+`[[apps/frontend/src/utils/currency.ts]]`
+
+Never concatenate `+`, `-`, or `−` around a formatted money value. Pass the raw
+signed amount to an `Intl.NumberFormat`-backed shared path:
+
+```tsx
+<Money amount={gainLoss} currency={currency} signed />;
+
+const fmt = useCurrencyFormatter(currency);
+fmt(gainLoss, { signed: true });
+
+const { formatCompact } = useChartCurrencyFormatter();
+formatCompact(gainLoss, true);
+```
+
+For a domain where direction comes from a type rather than the stored number,
+derive one signed numeric value first, then format it. Do not format
+`Math.abs(value)` and place a separate sign outside the money span. Keeping the
+sign inside the formatter gives one locale-correct glyph, one tabular run, and
+one line-breaking unit.
+
+All three paths use `signDisplay: "exceptZero"`: non-zero gains show `+`, losses
+show the locale's minus, and exact or rounded zero has no sign. This deliberately
+means a sub-rounding loss can display as unsigned zero. It is the chosen house
+convention; changing one surface alone would recreate the sign dialect this rule
+prevents.
+
+---
+
 ## Percent Formatting Pattern
 
 **Source:** `[[apps/frontend/src/utils/currency.ts]]` (`formatPercent`)
@@ -3415,14 +3624,14 @@ default `eu` number format saw `1.234,56 €` next to `12.5%` on the same card.
 ```typescript
 import { formatPercent } from "@/utils/currency";
 
-formatPercent(12.5)                                  // "12,5%"  (eu) / "12.5%" (us)
-formatPercent(-3.2, { digits: 1, signed: true })     // "-3,2%"
-formatPercent(60, { digits: 1, minDigits: 0 })       // "60%"    ("up to" 1 decimal)
+formatPercent(12.5); // "12,5%"  (eu) / "12.5%" (us)
+formatPercent(-3.2, { digits: 1, signed: true }); // "-3,2%"
+formatPercent(60, { digits: 1, minDigits: 0 }); // "60%"    ("up to" 1 decimal)
 ```
 
 **Value scale — percent units, never fractions.** `12.5` means 12.5%. Call sites
 holding a fraction scale at the boundary (`formatPercent(v * 100, …)`), exactly as
-they did before their `toFixed`. The helper deliberately does *not* use
+they did before their `toFixed`. The helper deliberately does _not_ use
 `Intl` `style: 'percent'`, so there is no hidden ×100 to get wrong.
 
 **Why `decimal` + a literal `%` instead of `style: 'percent'`.** The locale here is a
@@ -3437,7 +3646,7 @@ take the locale's number shape, not its unit typography.
 `formatCurrency` / `useCurrencyPartsFormatter` already use for money, so a gain/loss
 percent and the amount next to it agree about what a zero looks like. This inherits
 the known `exceptZero` pitfall (a loss rounding to zero prints `0,0%` and loses its
-minus) — but inherits it *identically* to its money sibling, which is the point.
+minus) — but inherits it _identically_ to its money sibling, which is the point.
 Don't move one site to `always`/`auto` without moving its money sibling too.
 
 **Digits.** Gain/loss deltas on portfolio holdings use signed 1dp. Market-quote day
@@ -3450,7 +3659,7 @@ keep whatever precision their surface already showed.
 
 **Source:** `[[apps/frontend/src/utils/currency.ts]]`, `[[apps/frontend/src/hooks/useChartCurrencyFormatter.ts]]`
 
-Large monetary totals in headline slots (dashboard cards, statistics tables) abbreviate automatically when the full formatted string exceeds 9 characters. Full precision is preserved in a native `title` tooltip. No user-configurable toggle — always on.
+Large monetary totals in headline slots (dashboard cards, statistics tables) abbreviate automatically when the full formatted string exceeds 9 characters. Full precision is preserved through `CompactValueDisclosure`, which opens by tap, click, or keyboard and gives the trigger the exact value as its accessible name. No user-configurable toggle — always on.
 
 ### Utility Function
 
@@ -3459,15 +3668,16 @@ import { formatCurrencyCompact } from "@/utils/currency";
 
 const result = formatCurrencyCompact(1_253_632, "EUR", "en-US", 2);
 // result.display  → "€1.3M"    (compact, shown in UI)
-// result.full     → "€1,253,632.00"  (full, shown on hover)
+// result.full     → "€1,253,632.00"  (full, shown in the disclosure)
 // result.isCompact → true
 ```
 
 `CompactFormatResult`:
+
 ```typescript
 export interface CompactFormatResult {
-  display: string;   // compact if full > 9 chars AND compact is shorter, else full
-  full: string;      // always full-precision
+  display: string; // compact if full > 9 chars AND compact is shorter, else full
+  full: string; // always full-precision
   isCompact: boolean;
   parts: Intl.NumberFormatPart[]; // parts for display/animated rendering
 }
@@ -3491,7 +3701,12 @@ import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 function HeadlineCard({ amount }: { amount: number }) {
   const { formatCompact } = useChartCurrencyFormatter();
   const r = formatCompact(amount);
-  return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>;
+  return (
+    <CompactValueDisclosure
+      display={r.display}
+      fullValue={r.isCompact ? r.full : undefined}
+    />
+  );
 }
 ```
 
@@ -3499,13 +3714,15 @@ function HeadlineCard({ amount }: { amount: number }) {
 
 ### Render Pattern
 
-- Attach `title` **only when `isCompact` is true** — avoids redundant tooltip on full-precision renders.
+- Pass `fullValue` **only when `isCompact` is true**. The component stays a passive span for full-precision renders and becomes an explicit disclosure only when information is hidden.
 - Use `tabular-nums` class alongside compact values in tables for alignment consistency.
 - In animated count-up contexts (`useCountUp`), pass `formatValue={r => formatCompact(r).display}` and a static `titleValue={r.isCompact ? r.full : undefined}` computed once from the final value (not every animation frame).
+- Use `TouchDisclosure` directly for other essential hover-only information such as stale-price timestamps and fallback-rate warnings. Its trigger is a real button; place it beside, never inside, a link or other interactive control.
 
 ### Scope
 
 Apply compact formatting to headline / summary slots only:
+
 - Dashboard: `NetSummaryCard`, `BankBalancesWidget`, `StatCard` (income/spending/net cards)
 - Statistics: `MonthlyRhythm`, `YearlySummaryTable`, `CategoryPivotTable` (grand-total row/column only)
 
@@ -3538,10 +3755,10 @@ Result: Same portfolio, different totals on two pages (e.g., EUR 100,000 vs EUR 
  * @param {string} targetCurrency - Target currency code (default: EUR)
  * @returns {Promise<object>}
  */
-export async function getPortfolioSummary(targetCurrency = 'EUR') {
+export async function getPortfolioSummary(targetCurrency = "EUR") {
   // 1. Fetch all active investments with current prices
   const investments = await investmentRepository.getAll();
-  
+
   // 2. Group by asset class
   // 3. For each group: aggregate values in their native currency
   // 4. Convert group totals to target currency (single FX call per group, not per investment)
@@ -3555,9 +3772,9 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
 
 ```typescript
 // apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts
-export function usePortfolioSummaryQuery(currency = 'EUR') {
+export function usePortfolioSummaryQuery(currency = "EUR") {
   return useQuery({
-    queryKey: ['portfolio-summary', currency],
+    queryKey: ["portfolio-summary", currency],
     queryFn: () => apiClient.getPortfolioSummary({ currency }),
     staleTime: 60_000, // 60 second TTL matches backend cache
     retry: 1,
@@ -3570,7 +3787,7 @@ export function usePortfolioSummaryQuery(currency = 'EUR') {
 ```typescript
 function PortfolioOverviewPage() {
   const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
-  
+
   return (
     <div>
       <Card>Total: {summary?.totals.currentValue.toFixed(2)}</Card>
@@ -3588,7 +3805,7 @@ function PortfolioOverviewPage() {
 function PerformancePage() {
   const { data: performance } = usePortfolioPerformanceQuery(displayCurrency, period);
   const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
-  
+
   // Override snapshot-era totals with realtime values
   const metricsBlock = {
     ...performance.metrics,
@@ -3597,21 +3814,21 @@ function PerformancePage() {
     totalGainLoss: summary?.totals.totalGainLoss,
     totalReturnPct: summary?.totals.totalReturnPct,
   };
-  
+
   return <MetricsCard metrics={metricsBlock} />;
 }
 ```
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| **No client FX loops** | Don't recompute totals client-side; always use `/api/info/portfolio-summary` |
-| **Single API call per surface** | Dashboard = 1 call, Performance = 1 call (not per-investment calls + FX magic) |
-| **Cache invalidation** | `clearInvestmentsCaches()` on investment/transaction writes clears the summary cache automatically |
-| **FX applied server-side** | All monetary values in response are pre-converted; client just renders them |
-| **Reconciliation invariant** | `sum(summaries[].currentValue) === totals.currentValue` guaranteed by service, verified by tests |
-| **Future totals surfaces** | Any new portfolio-total UI (widgets, exports, reports, etc.) must use this endpoint |
+| Rule                            | Rationale                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **No client FX loops**          | Don't recompute totals client-side; always use `/api/info/portfolio-summary`                       |
+| **Single API call per surface** | Dashboard = 1 call, Performance = 1 call (not per-investment calls + FX magic)                     |
+| **Cache invalidation**          | `clearInvestmentsCaches()` on investment/transaction writes clears the summary cache automatically |
+| **FX applied server-side**      | All monetary values in response are pre-converted; client just renders them                        |
+| **Reconciliation invariant**    | `sum(summaries[].currentValue) === totals.currentValue` guaranteed by service, verified by tests   |
+| **Future totals surfaces**      | Any new portfolio-total UI (widgets, exports, reports, etc.) must use this endpoint                |
 
 ### When to Use
 
@@ -3696,13 +3913,13 @@ function PortfolioTaxPage() {
 
 ### Key Patterns
 
-| Pattern | Rationale |
-|---------|-----------|
-| **Settings JSONB keying** | Store all classifications under a single `portfolio_tax_classifications_v1` key; map by investmentId internally |
-| **Optimistic updates** | `setClassification()` updates local state immediately; `saveToSettings()` persists asynchronously |
-| **Transparent hydration** | `SettingsPreloadContext` provides initial data; hook reads from context during mount to avoid loading states |
-| **Per-investment overrides** | Only store non-default values (e.g., omit `etfStructure` if default accumulating is intended) |
-| **No API endpoint** | Use generic `apiClient.saveSetting()` method; no dedicated PATCH /api/portfolio-tax/classifications endpoint |
+| Pattern                      | Rationale                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Settings JSONB keying**    | Store all classifications under a single `portfolio_tax_classifications_v1` key; map by investmentId internally |
+| **Optimistic updates**       | `setClassification()` updates local state immediately; `saveToSettings()` persists asynchronously               |
+| **Transparent hydration**    | `SettingsPreloadContext` provides initial data; hook reads from context during mount to avoid loading states    |
+| **Per-investment overrides** | Only store non-default values (e.g., omit `etfStructure` if default accumulating is intended)                   |
+| **No API endpoint**          | Use generic `apiClient.saveSetting()` method; no dedicated PATCH /api/portfolio-tax/classifications endpoint    |
 
 ### When to Use
 
@@ -3723,6 +3940,7 @@ function PortfolioTaxPage() {
 **Problem:** Using array index as React key (`key={index}`) causes reconciliation bugs when list items are reordered, filtered, or when item state changes between renders.
 
 **Symptoms:**
+
 - Form state persists across different items (checkbox checked on wrong item after reorder)
 - Animation state mismatches (entered animation plays for wrong item)
 - Component-local state mixups (focus lost, internal state corrupted)
@@ -3730,7 +3948,9 @@ function PortfolioTaxPage() {
 ### Solution: Stable Unique Identifiers
 
 #### For Database Entities
+
 Use database ID (guaranteed unique and stable):
+
 ```typescript
 // ✅ CORRECT
 {items.map(item => (
@@ -3739,6 +3959,7 @@ Use database ID (guaranteed unique and stable):
 ```
 
 #### For Generated Items (Splits, Residences)
+
 Generate stable UIDs on initialization and store in a ref:
 
 ```typescript
@@ -3758,6 +3979,7 @@ return (
 ```
 
 #### Ref-Based UID Management
+
 For immutable lists that need UID rebinding on external changes:
 
 ```typescript
@@ -3782,14 +4004,14 @@ return (
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Never use index | Index changes with reorder/filter; causes state corruption |
-| Use DB ID when available | Guaranteed unique and stable across renders |
-| Generate UIDs for new items | Use `crypto.randomUUID()` at creation time |
-| Store UIDs in state or ref | Never regenerate on every render |
-| Don't change keys between renders | Same item must have same key always |
-| For linked lists with refs | Use ref to maintain UID→ID mapping across external changes |
+| Rule                              | Rationale                                                  |
+| --------------------------------- | ---------------------------------------------------------- |
+| Never use index                   | Index changes with reorder/filter; causes state corruption |
+| Use DB ID when available          | Guaranteed unique and stable across renders                |
+| Generate UIDs for new items       | Use `crypto.randomUUID()` at creation time                 |
+| Store UIDs in state or ref        | Never regenerate on every render                           |
+| Don't change keys between renders | Same item must have same key always                        |
+| For linked lists with refs        | Use ref to maintain UID→ID mapping across external changes |
 
 ### When to Use
 
@@ -3805,6 +4027,7 @@ return (
 **Problem:** Async operations (fetch, timers) can set state after a component unmounts, causing React warnings and potential memory leaks.
 
 **Symptoms:**
+
 - "Can't perform a React state update on an unmounted component" warning
 - Stale state updates overwriting newer data
 - Leaked timers/intervals continuing after unmount
@@ -3815,7 +4038,7 @@ return (
 function usePlannedPayments(options?: UsePlannedPaymentsOptions) {
   const mountedRef = useRef(true);
   const [data, setData] = useState<PlannedPayment[]>([]);
-  
+
   // Set ref to true on mount, false on unmount
   useEffect(() => {
     mountedRef.current = true;
@@ -3834,7 +4057,7 @@ function usePlannedPayments(options?: UsePlannedPaymentsOptions) {
         }
       } catch (error) {
         if (mountedRef.current) {
-          console.error('Failed to load planned payments:', error);
+          console.error("Failed to load planned payments:", error);
         }
       }
     };
@@ -3847,13 +4070,14 @@ function usePlannedPayments(options?: UsePlannedPaymentsOptions) {
 ```
 
 ### Interval Cleanup
+
 For long-running intervals, guard cleanup and state updates:
 
 ```typescript
 useEffect(() => {
   const intervalId = setInterval(() => {
     if (!mountedRef.current) return; // Skip if unmounted
-    
+
     // Perform work
     fetchStatus();
   }, 5000);
@@ -3866,13 +4090,13 @@ useEffect(() => {
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Initialize to `true` in mount effect | Synchronous, guaranteed before any async work |
-| Check before all `setState()` calls | Guards against post-unmount updates |
-| Clear timers in cleanup | `clearInterval`, `clearTimeout` still required |
-| Use in custom hooks | Not in component bodies directly |
-| Return false on unmount | Cleanup effect sets it to false |
+| Rule                                 | Rationale                                      |
+| ------------------------------------ | ---------------------------------------------- |
+| Initialize to `true` in mount effect | Synchronous, guaranteed before any async work  |
+| Check before all `setState()` calls  | Guards against post-unmount updates            |
+| Clear timers in cleanup              | `clearInterval`, `clearTimeout` still required |
+| Use in custom hooks                  | Not in component bodies directly               |
+| Return false on unmount              | Cleanup effect sets it to false                |
 
 ### When to Use
 
@@ -3900,7 +4124,8 @@ When displaying calculated tax information (PIT, effective rates, etc.) for hist
 
 ```typescript
 // In a read site (page, component, hook):
-const { displayCalculationForYear, isYearFiled } = useBelgianTaxProfileContext();
+const { displayCalculationForYear, isYearFiled } =
+  useBelgianTaxProfileContext();
 
 // For the viewed year, use the display getter (not live recompute)
 const calculation = displayCalculationForYear(viewedYear);
@@ -3918,13 +4143,13 @@ const canEditFreely = !isYearFiled(viewedYear);
 
 ### Behavioral rules
 
-| Scenario | Result | Why |
-|----------|--------|-----|
-| User marks year filed | Frozen calc captured (if not already frozen); filing metadata recorded | Engine changes won't alter filed numbers |
-| User unfiling (clerical correction) | Frozen calc preserved; filing record removed | User may still want the frozen calc for reference |
-| User explicitly freezes a year | Frozen calc captured before marking filed | Deliberate freeze point wins if filed afterward |
-| Viewing a filed year on read sites | `displayCalculationForYear` returns frozen calc verbatim | Filed numbers are byte-stable across sessions |
-| Editing a filed year | `TaxProfileDialog` gates behind "Amend this filed year" confirmation | Deliberate escape hatch, not hard-lock |
+| Scenario                            | Result                                                                 | Why                                               |
+| ----------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| User marks year filed               | Frozen calc captured (if not already frozen); filing metadata recorded | Engine changes won't alter filed numbers          |
+| User unfiling (clerical correction) | Frozen calc preserved; filing record removed                           | User may still want the frozen calc for reference |
+| User explicitly freezes a year      | Frozen calc captured before marking filed                              | Deliberate freeze point wins if filed afterward   |
+| Viewing a filed year on read sites  | `displayCalculationForYear` returns frozen calc verbatim               | Filed numbers are byte-stable across sessions     |
+| Editing a filed year                | `TaxProfileDialog` gates behind "Amend this filed year" confirmation   | Deliberate escape hatch, not hard-lock            |
 
 ### Read-site example
 
@@ -3932,10 +4157,10 @@ const canEditFreely = !isYearFiled(viewedYear);
 // Tax Overview page — yearly chart
 function YearlyChart({ viewedYear }) {
   const { displayCalculationForYear, profileForYear, calculationForYear } = useBelgianTaxProfileContext();
-  
+
   const calculation = displayCalculationForYear(viewedYear);
   const profile = profileForYear(viewedYear);
-  
+
   return (
     <div>
       <h2>PIT for {viewedYear}: {calculation.totalPIT}</h2>
@@ -3952,29 +4177,31 @@ function YearlyChart({ viewedYear }) {
 // Year Actions Menu — freeze button clicked
 async function handleFreezeYear(year) {
   const { freezeCalculation } = useBelgianTaxProfileContext();
-  
+
   try {
     await freezeCalculation(year);
-    showToast('Year calculation frozen. Engine changes will not affect this year.');
+    showToast(
+      "Year calculation frozen. Engine changes will not affect this year.",
+    );
   } catch (err) {
-    showError('Failed to freeze year calculation');
+    showError("Failed to freeze year calculation");
   }
 }
 ```
 
 ### Context surface
 
-| Member | Purpose |
-|---|---|
-| `snapshotMetas` | Sparse per-year meta map (`Record<incomeYear, BelgianTaxProfileSnapshotMeta>`). |
-| `displayCalculationForYear(year)` | Returns frozen calc if present, else live recompute. Use this on all read sites. |
-| `getFrozenCalculation(year)` | Returns frozen calc or `null`. |
-| `isYearFiled(year)` | Boolean — true iff filing metadata exists. |
-| `freezeCalculation(year)` | Capture and persist frozen calc for the year. |
-| `unfreezeCalculation(year)` | Clear frozen calc (filed metadata preserved). |
-| `markYearAsFiled(year, reference?)` | Freeze (if not already frozen) + record filing metadata. |
-| `unmarkYearAsFiled(year)` | Clear filing metadata (frozen calc preserved). |
-| `getSnapshotHistory(year)` | Audit log entries (append-only, capped at 200 per year). |
+| Member                              | Purpose                                                                          |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `snapshotMetas`                     | Sparse per-year meta map (`Record<incomeYear, BelgianTaxProfileSnapshotMeta>`).  |
+| `displayCalculationForYear(year)`   | Returns frozen calc if present, else live recompute. Use this on all read sites. |
+| `getFrozenCalculation(year)`        | Returns frozen calc or `null`.                                                   |
+| `isYearFiled(year)`                 | Boolean — true iff filing metadata exists.                                       |
+| `freezeCalculation(year)`           | Capture and persist frozen calc for the year.                                    |
+| `unfreezeCalculation(year)`         | Clear frozen calc (filed metadata preserved).                                    |
+| `markYearAsFiled(year, reference?)` | Freeze (if not already frozen) + record filing metadata.                         |
+| `unmarkYearAsFiled(year)`           | Clear filing metadata (frozen calc preserved).                                   |
+| `getSnapshotHistory(year)`          | Audit log entries (append-only, capped at 200 per year).                         |
 
 ### Storage
 
@@ -3982,9 +4209,9 @@ Persisted in Settings API under key `belgian_tax_profile_snapshot_meta_v1`:
 
 ```typescript
 type BelgianTaxProfileSnapshotMeta = {
-  frozenCalculation?: BelgianTaxCalculation;  // "as-filed" calc, byte-stable
+  frozenCalculation?: BelgianTaxCalculation; // "as-filed" calc, byte-stable
   filing?: { filedAt: string; reference?: string }; // present iff year is filed
-  history?: SnapshotAuditEntry[];             // append-only, diff-only entries, trimmed at 200
+  history?: SnapshotAuditEntry[]; // append-only, diff-only entries, trimmed at 200
 };
 ```
 
@@ -4006,6 +4233,7 @@ type BelgianTaxProfileSnapshotMeta = {
 ## Devtools Integration Pattern (Dev-Only Observability, May 2026)
 
 **Source:**
+
 - [[apps/frontend/src/lib/devtools/apiEventBus.ts|apiEventBus.ts]] — Event bus
 - [[apps/frontend/src/lib/devtools/apiRequestLog.ts|apiRequestLog.ts]] — Request log hook
 - [[apps/frontend/src/lib/devtools/queryMetrics.ts|queryMetrics.ts]] — Metrics hook
@@ -4027,16 +4255,16 @@ Ensure any new API operations flow through `apiRequest()` via the [[docs/referen
 
 ```typescript
 // Good: Uses apiRequest() chokepoint
-import { apiRequest } from '@/lib/api/client';
+import { apiRequest } from "@/lib/api/client";
 
 export async function getTransactions(params) {
-  return apiRequest('/api/transactions', 'GET', null, { query: params });
+  return apiRequest("/api/transactions", "GET", null, { query: params });
 }
 
 // Then in a hook:
 const { data } = useQuery({
-  queryKey: ['transactions'],
-  queryFn: () => getTransactions({ limit: 50 })
+  queryKey: ["transactions"],
+  queryFn: () => getTransactions({ limit: 50 }),
 });
 // Observability: automatically tracked in inspector
 ```
@@ -4049,7 +4277,7 @@ runtime Admin Mode toggle is on:
 ```tsx
 // In App.tsx
 const isDevtoolsBuildEnabled =
-  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === "true";
 
 function DevtoolsGate() {
   const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
@@ -4076,10 +4304,10 @@ Use `useApiRequestLog()` in components to subscribe to request history:
 const requests = useApiRequestLog(); // Returns ApiRequest[] (max 200)
 
 // Filter in-flight requests
-const inFlight = requests.filter(r => r.phase === 'start');
+const inFlight = requests.filter((r) => r.phase === "start");
 
 // Get error count
-const errorCount = requests.filter(r => r.phase === 'error').length;
+const errorCount = requests.filter((r) => r.phase === "error").length;
 ```
 
 ### Pattern: Querying Metrics
@@ -4146,12 +4374,12 @@ The helper fires the handler on **Enter** or **Space** and ignores events that b
 
 ### Key Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Pair with `role="button"` + `tabIndex={0}` | Required on non-interactive elements; omit on native `<button>` |
-| `e.preventDefault()` is called inside | Prevents Space from scrolling the page |
-| Do not fire on bubbled events | Inner `<input>`, `<select>`, or `<button>` key events must not trigger the outer handler |
-| Keep `onDoubleClick` / `onClick` as-is | Keyboard path supplements, does not replace, the mouse binding |
+| Rule                                       | Rationale                                                                                |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Pair with `role="button"` + `tabIndex={0}` | Required on non-interactive elements; omit on native `<button>`                          |
+| `e.preventDefault()` is called inside      | Prevents Space from scrolling the page                                                   |
+| Do not fire on bubbled events              | Inner `<input>`, `<select>`, or `<button>` key events must not trigger the outer handler |
+| Keep `onDoubleClick` / `onClick` as-is     | Keyboard path supplements, does not replace, the mouse binding                           |
 
 ### When to Use
 
@@ -4186,18 +4414,20 @@ A modal Radix overlay (`modal={true}`, the default) sets `pointer-events: none` 
 ```tsx
 // Inside VirtualDataTable render (per row):
 <ContextMenu modal={false}>
-    <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
-    {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
+  <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+  {rowContextMenu(row, sourceIndex, {
+    startEditing: () => startEditing(sourceIndex, row),
+  })}
 </ContextMenu>
 ```
 
 ### Rules
 
-| Rule | Rationale |
-|------|-----------|
-| Use `modal={false}` when any menu item opens a `Dialog` or `AlertDialog` | Prevents the body pointer-events race described above |
-| Do not use `modal={false}` on standalone menus with no dialog children | The default modal=true is safer (traps focus correctly for pure menus) |
-| Verify with both mouse and keyboard (Tab + Space/Enter) | Keyboard-only users open dialogs from menu items too |
+| Rule                                                                     | Rationale                                                              |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Use `modal={false}` when any menu item opens a `Dialog` or `AlertDialog` | Prevents the body pointer-events race described above                  |
+| Do not use `modal={false}` on standalone menus with no dialog children   | The default modal=true is safer (traps focus correctly for pure menus) |
+| Verify with both mouse and keyboard (Tab + Space/Enter)                  | Keyboard-only users open dialogs from menu items too                   |
 
 ### When to Apply
 
@@ -4235,12 +4465,12 @@ The nine existing PG enums (`asset_class`, `portfolio_txn_type`, `recurrence_int
 
 Name **every** constraint and index explicitly — an anonymous inline CHECK/FK gets an auto-generated name that later migrations must discover at runtime via `pg_constraint` (this bit twice: 0015 and 0048). Canonical prefixes, aligned across the whole schema by 0090:
 
-| Object | Prefix | Example |
-|--------|--------|---------|
-| CHECK constraint | `chk_` | `chk_transactions_transfer_source` |
-| UNIQUE constraint or unique index | `uq_` | `uq_transactions_tx_hash` |
-| Index (plain or partial) | `idx_` | `idx_db_editor_audit_table_time` |
-| Named foreign key | `fk_` | `fk_asset_price_history_investment` |
+| Object                            | Prefix | Example                             |
+| --------------------------------- | ------ | ----------------------------------- |
+| CHECK constraint                  | `chk_` | `chk_transactions_transfer_source`  |
+| UNIQUE constraint or unique index | `uq_`  | `uq_transactions_tx_hash`           |
+| Index (plain or partial)          | `idx_` | `idx_db_editor_audit_table_time`    |
+| Named foreign key                 | `fk_`  | `fk_asset_price_history_investment` |
 
 Not canonical (renamed away by 0090; do not reintroduce): `ck_`, `uniq_`, `ux_`, `ix_`, and suffix-style `*_idx`. Prefer `chk_<table>_<column-or-rule>` / `uq_<table>_<columns>` / `idx_<table>_<columns>`; keep names ≤ 63 chars (PostgreSQL truncates silently beyond that).
 

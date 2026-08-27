@@ -9,7 +9,7 @@ const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(naviga
 
 function Key({ children }: { children: React.ReactNode }) {
     return (
-        <kbd className="inline-flex min-w-[1.6rem] items-center justify-center rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <kbd className="inline-flex min-w-[1.6rem] items-center justify-center rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
             {children}
         </kbd>
     );
@@ -86,7 +86,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
                             <span className="flex items-center gap-1">{row.keys}</span>
                         </div>
                     ))}
-                    <p className="pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+                    <p className="pt-2 eyebrow">
                         {t("shortcuts.goTo")}
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -102,7 +102,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
                     </div>
                     {isElectron() && (
                         <>
-                            <p className="pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+                            <p className="pt-2 eyebrow">
                                 {t("shortcuts.desktopSection")}
                             </p>
                             {desktop.map((row, i) => (

@@ -130,13 +130,13 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
     }
     return (
         <div className="max-h-72 overflow-auto rounded-lg border border-border/40 bg-background/60">
-            <table className="w-full border-collapse text-[11px]">
-                <thead className="sticky top-0 bg-muted/40 text-muted-foreground backdrop-blur-sm">
+            <table className="w-full border-collapse text-2xs">
+                <thead className="glass-thin sticky top-0 text-muted-foreground">
                     <tr>
                         {cols.map((col) => (
                             <th
                                 key={col}
-                                className="border-b border-border/40 px-2 py-1.5 text-left font-medium uppercase tracking-wide"
+                                className="border-b border-border/40 px-2 py-1.5 text-left eyebrow"
                             >
                                 {col}
                             </th>
@@ -276,7 +276,7 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
 
 function JsonView({ data }: { data: unknown }) {
     return (
-        <pre className="max-h-64 overflow-auto rounded-md border border-border/40 bg-background/60 p-2 text-[11px] leading-snug text-foreground/80">
+        <pre className="max-h-64 overflow-auto rounded-md border border-border/40 bg-background/60 p-2 text-2xs leading-snug text-foreground/80">
             {JSON.stringify(data, null, 2)}
         </pre>
     );
@@ -297,7 +297,7 @@ function Footer({
             ? `Showing ${shown} of ${total}`
             : `${shown} row${shown === 1 ? '' : 's'}`;
     return (
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+        <p className="eyebrow">
             {label}
         </p>
     );

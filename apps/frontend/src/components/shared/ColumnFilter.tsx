@@ -74,7 +74,7 @@ export function ColumnFilter({
                             </button>
                         ))}
                         {filteredValues.length > 30 && (
-                            <p className="text-[10px] text-muted-foreground px-2">
+                            <p className="text-2xs text-muted-foreground px-2">
                                 {t('table.moreValues', { count: (filteredValues.length - 30).toString() })}
                             </p>
                         )}

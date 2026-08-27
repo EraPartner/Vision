@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import { Route, Routes } from "react-router";
 import { http } from "msw";
@@ -24,6 +24,17 @@ import NotFound from "@/pages/NotFound";
 
 const API_BASE = "http://localhost:3002";
 
+beforeEach(() => {
+    server.use(
+        http.get(`${API_BASE}/api/import/parsers`, () =>
+            ok({ items: [], total: 0 }),
+        ),
+        http.get(`${API_BASE}/api/planned-transactions/match-suggestions`, () =>
+            ok({ items: [], total: 0 }),
+        ),
+    );
+});
+
 /** Override settings to force Dutch locale for the duration of one test. */
 function useDutch() {
     server.use(
@@ -37,13 +48,19 @@ describe("Language switch (integration)", () => {
     // ── PlannedPaymentsPage ──────────────────────────────────────────────────
     it("PlannedPaymentsPage renders English heading by default", async () => {
         renderWithApp(<PlannedPaymentsPage />);
-        expect(await screen.findByRole("heading", { name: /planned payments/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /planned payments/i }),
+        ).toBeInTheDocument();
     });
 
     it("PlannedPaymentsPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<PlannedPaymentsPage />);
-        expect(await screen.findByRole("heading", { name: /geplande betalingen/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", {
+                name: /geplande betalingen/i,
+            }),
+        ).toBeInTheDocument();
     });
 
     // ── TransactionsPage ─────────────────────────────────────────────────────
@@ -54,7 +71,9 @@ describe("Language switch (integration)", () => {
             </Routes>,
             { initialEntries: ["/transactions"] },
         );
-        expect(await screen.findByRole("heading", { name: /^transactions$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /^transactions$/i }),
+        ).toBeInTheDocument();
     });
 
     it("TransactionsPage renders Dutch heading when language is nl", async () => {
@@ -66,27 +85,37 @@ describe("Language switch (integration)", () => {
             { initialEntries: ["/transactions"] },
         );
         // Dutch: "Transacties"
-        expect(await screen.findByRole("heading", { name: /^transacties$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /^transacties$/i }),
+        ).toBeInTheDocument();
     });
 
     // ── ImportPage ────────────────────────────────────────────────────────────
     it("ImportPage renders English heading by default", async () => {
         renderWithApp(<ImportPage />);
-        expect(await screen.findByRole("heading", { name: /import & export/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /import & export/i }),
+        ).toBeInTheDocument();
     });
 
     it("ImportPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<ImportPage />);
         // Dutch: "Importeren & exporteren"
-        expect(await screen.findByRole("heading", { name: /importeren & exporteren/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", {
+                name: /importeren & exporteren/i,
+            }),
+        ).toBeInTheDocument();
     });
 
     // ── TaxOverviewPage ───────────────────────────────────────────────────────
     it("TaxOverviewPage renders English heading by default", async () => {
         renderWithApp(<TaxOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /belgian personal tax overview/i }),
+            await screen.findByRole("heading", {
+                name: /belgian personal tax overview/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -119,7 +148,9 @@ describe("Language switch (integration)", () => {
     // ── RecipientsPage ────────────────────────────────────────────────────────
     it("RecipientsPage renders English heading by default", async () => {
         renderWithApp(<RecipientsPage />);
-        const headings = await screen.findAllByRole("heading", { name: /all recipients/i });
+        const headings = await screen.findAllByRole("heading", {
+            name: /all recipients/i,
+        });
         expect(headings.length).toBeGreaterThan(0);
     });
 
@@ -127,7 +158,9 @@ describe("Language switch (integration)", () => {
         useDutch();
         renderWithApp(<RecipientsPage />);
         // Dutch: recipientsPage.tableTitle = "Alle ontvangers"
-        const headings = await screen.findAllByRole("heading", { name: /alle ontvangers/i });
+        const headings = await screen.findAllByRole("heading", {
+            name: /alle ontvangers/i,
+        });
         expect(headings.length).toBeGreaterThan(0);
     });
 
@@ -161,7 +194,9 @@ describe("Language switch (integration)", () => {
         renderWithApp(<OwesPage />);
         // Dutch: owesPage.title = "Wie jou iets verschuldigd is"
         expect(
-            await screen.findByRole("heading", { name: /wie jou iets verschuldigd is/i }),
+            await screen.findByRole("heading", {
+                name: /wie jou iets verschuldigd is/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -169,7 +204,9 @@ describe("Language switch (integration)", () => {
     it("DashboardPage renders English greeting heading by default", async () => {
         renderWithApp(<DashboardPage />);
         expect(
-            await screen.findByRole("heading", { name: /good\s+(morning|afternoon|evening)/i }),
+            await screen.findByRole("heading", {
+                name: /good\s+(morning|afternoon|evening)/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -178,7 +215,9 @@ describe("Language switch (integration)", () => {
         renderWithApp(<DashboardPage />);
         // Dutch: "Goedemorgen" / "Goedemiddag" / "Goedenavond"
         expect(
-            await screen.findByRole("heading", { name: /goedemorgen|goedemiddag|goedenavond/i }),
+            await screen.findByRole("heading", {
+                name: /goedemorgen|goedemiddag|goedenavond/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -210,9 +249,11 @@ describe("Language switch (integration)", () => {
     it("PortfolioOverviewPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<PortfolioOverviewPage />);
-        // Dutch: portfolio.overviewTitle = "Portefeuille Overzicht"
+        // Dutch: portfolio.overviewTitle = "Portefeuilleoverzicht"
         expect(
-            await screen.findByRole("heading", { name: /portefeuille overzicht/i }),
+            await screen.findByRole("heading", {
+                name: /^portefeuilleoverzicht$/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -229,7 +270,9 @@ describe("Language switch (integration)", () => {
         renderWithApp(<AdminOverviewPage />);
         // Dutch: admin.overview.title = "Beheerdersoverzicht"
         expect(
-            await screen.findByRole("heading", { name: /beheerdersoverzicht/i }),
+            await screen.findByRole("heading", {
+                name: /beheerdersoverzicht/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -270,9 +313,7 @@ describe("Language switch (integration)", () => {
     // ── NotFound ──────────────────────────────────────────────────────────────
     it("NotFound renders English page-not-found text by default", async () => {
         renderWithApp(<NotFound />);
-        expect(
-            await screen.findByText(/page not found/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/page not found/i)).toBeInTheDocument();
     });
 
     it("NotFound renders Dutch page-not-found text when language is nl", async () => {

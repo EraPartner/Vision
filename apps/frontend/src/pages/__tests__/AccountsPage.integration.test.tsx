@@ -28,12 +28,56 @@ function ddmmyyyy(ymd: string): string {
 // Same-currency (EUR) fixture so FX conversion is identity — the grouped hub's
 // Net cash reconciliation under test is population + sign (WP-A1 definition).
 const FIXTURE = [
-    { ...ACCOUNT_STUB, id: 1, name: "KBC Checking", display_name: "KBC Checking", type: "checking", computed_balance: 1000 },
-    { ...ACCOUNT_STUB, id: 2, name: "Argenta Savings", display_name: "Argenta Savings", type: "savings", computed_balance: 500 },
-    { ...ACCOUNT_STUB, id: 3, name: "Mortgage", display_name: "Mortgage", type: "liability", computed_balance: -300 },
-    { ...ACCOUNT_STUB, id: 4, name: "Degiro", display_name: "Degiro", type: "brokerage", computed_balance: 0 },
-    { ...ACCOUNT_STUB, id: 5, name: "Partner Checking", display_name: "Partner Checking", type: "checking", in_net_worth: false, computed_balance: 999 },
-    { ...ACCOUNT_STUB, id: 6, name: "Old Savings", display_name: "Old Savings", type: "savings", is_active: false, computed_balance: 555 },
+    {
+        ...ACCOUNT_STUB,
+        id: 1,
+        name: "KBC Checking",
+        display_name: "KBC Checking",
+        type: "checking",
+        computed_balance: 1000,
+    },
+    {
+        ...ACCOUNT_STUB,
+        id: 2,
+        name: "Argenta Savings",
+        display_name: "Argenta Savings",
+        type: "savings",
+        computed_balance: 500,
+    },
+    {
+        ...ACCOUNT_STUB,
+        id: 3,
+        name: "Mortgage",
+        display_name: "Mortgage",
+        type: "liability",
+        computed_balance: -300,
+    },
+    {
+        ...ACCOUNT_STUB,
+        id: 4,
+        name: "Degiro",
+        display_name: "Degiro",
+        type: "brokerage",
+        computed_balance: 0,
+    },
+    {
+        ...ACCOUNT_STUB,
+        id: 5,
+        name: "Partner Checking",
+        display_name: "Partner Checking",
+        type: "checking",
+        in_net_worth: false,
+        computed_balance: 999,
+    },
+    {
+        ...ACCOUNT_STUB,
+        id: 6,
+        name: "Old Savings",
+        display_name: "Old Savings",
+        type: "savings",
+        is_active: false,
+        computed_balance: 555,
+    },
 ];
 
 // `unknown[]`: fixtures below deliberately vary in shape (drift/statement
@@ -49,31 +93,43 @@ function mockAccounts(items: unknown[] = FIXTURE) {
 describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     it("uses the shared retryable error state when accounts fail to load", async () => {
         server.use(
-            http.get(`${API_BASE}/api/accounts`, () => err(403, "Access denied")),
+            http.get(`${API_BASE}/api/accounts`, () =>
+                err(403, "Access denied"),
+            ),
         );
 
         renderWithApp(<AccountsPage />);
 
         expect(await screen.findByText(/access denied/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
     });
 
     it("renders the four groups in deterministic order with label-sorted cards", async () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
 
-        const cash = await screen.findByRole("region", { name: "Cash & Savings" });
-        expect(screen.getByRole("region", { name: "Portfolio accounts" })).toBeInTheDocument();
-        expect(screen.getByRole("region", { name: "Liabilities" })).toBeInTheDocument();
-        expect(screen.getByRole("region", { name: "Archived" })).toBeInTheDocument();
+        const cash = await screen.findByRole("region", {
+            name: "Cash & Savings",
+        });
+        expect(
+            screen.getByRole("region", { name: "Portfolio accounts" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("region", { name: "Liabilities" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("region", { name: "Archived" }),
+        ).toBeInTheDocument();
 
         // Within Cash & Savings: sorted by display label (Argenta before KBC);
         // the not-in-net-worth checking account still renders in its type group.
-        const cashCards = within(cash).getAllByRole("button", { name: /open details for/i });
-        expect(cashCards.map((c) => c.getAttribute("aria-label"))).toEqual([
-            "Open details for Argenta Savings",
-            "Open details for KBC Checking",
-            "Open details for Partner Checking",
+        const accountLinks = within(cash).getAllByRole("link");
+        expect(accountLinks.map((link) => link.textContent)).toEqual([
+            "Argenta Savings",
+            "KBC Checking",
+            "Partner Checking",
         ]);
     });
 
@@ -83,10 +139,14 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         await screen.findByRole("region", { name: "Cash & Savings" });
 
         // The old toggle is gone.
-        expect(screen.queryByRole("button", { name: /show archived/i })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /show archived/i }),
+        ).not.toBeInTheDocument();
 
         // Collapsed by default: header shows the count, the card is hidden.
-        const trigger = screen.getByRole("button", { name: /archived\s*\(1\)/i });
+        const trigger = screen.getByRole("button", {
+            name: /archived\s*\(1\)/i,
+        });
         expect(trigger).toHaveAttribute("aria-expanded", "false");
         expect(screen.queryByText("Old Savings")).not.toBeInTheDocument();
 
@@ -100,30 +160,43 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
 
-        const cash = await screen.findByRole("region", { name: "Cash & Savings" });
+        const cash = await screen.findByRole("region", {
+            name: "Cash & Savings",
+        });
         // Default settings: EUR, 'eu' number format → de-DE (1.234,56 €).
         // Cash & Savings subtotal is the FULL group: 1000 + 500 + 999 = 2499.
-        expect(within(cash).getByText(/subtotal/i).textContent).toMatch(/2\.499,00/);
+        expect(within(cash).getByText(/subtotal/i).textContent).toMatch(
+            /2\.499,00/,
+        );
 
         // Liabilities subtotal is naturally negative.
         const liabilities = screen.getByRole("region", { name: "Liabilities" });
-        expect(within(liabilities).getByText(/subtotal/i).textContent).toMatch(/-300,00/);
+        expect(within(liabilities).getByText(/subtotal/i).textContent).toMatch(
+            /-300,00/,
+        );
 
         // Net cash = in_net_worth-only Cash&Savings + Liabilities
         // (1000 + 500 − 300 = 1200) — excludes the not-in-net-worth account,
         // the archived account, and the portfolio-type ledger balance.
         const netCashLabel = screen.getByText("Net cash");
-        const grandLine = netCashLabel.closest("div")?.parentElement as HTMLElement;
-        expect(within(grandLine).getByText(/1\.200,00/)).toBeInTheDocument();
+        const grandLine = netCashLabel.closest("div")
+            ?.parentElement as HTMLElement;
+        expect(grandLine).toHaveTextContent(/1\.200,00/);
     });
 
     it("renders the Tracked-in-Portfolio placeholder instead of a misleading zero balance on portfolio-type cards", async () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
 
-        const portfolio = await screen.findByRole("region", { name: "Portfolio accounts" });
-        const brokerCard = within(portfolio).getByRole("button", { name: "Open details for Degiro" });
-        expect(within(brokerCard).getByText(/tracked in portfolio/i)).toBeInTheDocument();
+        const portfolio = await screen.findByRole("region", {
+            name: "Portfolio accounts",
+        });
+        const brokerCard = within(portfolio)
+            .getByRole("link", { name: "Degiro" })
+            .closest(".glass-regular") as HTMLElement;
+        expect(
+            within(brokerCard).getByText(/tracked in portfolio/i),
+        ).toBeInTheDocument();
         // The card must NOT show the €0,00 computed ledger balance.
         expect(within(brokerCard).queryByText(/0,00/)).not.toBeInTheDocument();
     });
@@ -132,12 +205,22 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
 
-        const cash = await screen.findByRole("region", { name: "Cash & Savings" });
-        const excluded = within(cash).getByRole("button", { name: "Open details for Partner Checking" });
-        expect(within(excluded).getByText("not in net worth")).toBeInTheDocument();
+        const cash = await screen.findByRole("region", {
+            name: "Cash & Savings",
+        });
+        const excluded = within(cash)
+            .getByRole("link", { name: "Partner Checking" })
+            .closest(".glass-regular") as HTMLElement;
+        expect(
+            within(excluded).getByText("not in net worth"),
+        ).toBeInTheDocument();
 
-        const included = within(cash).getByRole("button", { name: "Open details for KBC Checking" });
-        expect(within(included).queryByText("not in net worth")).not.toBeInTheDocument();
+        const included = within(cash)
+            .getByRole("link", { name: "KBC Checking" })
+            .closest(".glass-regular") as HTMLElement;
+        expect(
+            within(included).queryByText("not in net worth"),
+        ).not.toBeInTheDocument();
     });
 
     it("still renders the empty state when there are no accounts at all", async () => {
@@ -146,7 +229,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
     });
 
-    // ── WP-B4: card click → /accounts/:id; lifecycle verbs moved off the hub ──
+    // ── WP-B4: native account link → /accounts/:id; lifecycle verbs moved off the hub ──
 
     function renderWithDetailRoute(initialEntries = ["/accounts"]) {
         return renderWithApp(
@@ -158,12 +241,13 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         );
     }
 
-    it("navigates to the /accounts/:id ledger route on a single card click", async () => {
+    it("navigates to the /accounts/:id ledger route from the account-name link", async () => {
         mockAccounts();
         renderWithDetailRoute();
 
-        const card = await screen.findByRole("button", { name: "Open details for KBC Checking" });
-        await userEvent.click(card);
+        const link = await screen.findByRole("link", { name: "KBC Checking" });
+        expect(link).toHaveAttribute("href", "/accounts/1");
+        await userEvent.click(link);
         expect(await screen.findByText("detail route")).toBeInTheDocument();
     });
 
@@ -171,16 +255,34 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         mockAccounts();
         renderWithDetailRoute();
 
-        const cash = await screen.findByRole("region", { name: "Cash & Savings" });
-        const card = within(cash).getByRole("button", { name: "Open details for KBC Checking" });
-        await userEvent.click(within(card).getByRole("button", { name: "Account actions" }));
+        const cash = await screen.findByRole("region", {
+            name: "Cash & Savings",
+        });
+        const card = within(cash)
+            .getByRole("link", { name: "KBC Checking" })
+            .closest(".glass-regular") as HTMLElement;
+        await userEvent.click(
+            within(card).getByRole("button", { name: "Account actions" }),
+        );
 
-        expect(await screen.findByRole("menuitem", { name: /view details/i })).toBeInTheDocument();
-        expect(screen.getByRole("menuitem", { name: /view transactions/i })).toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /edit/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /merge/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /close account/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("menuitem", { name: /delete/i })).not.toBeInTheDocument();
+        expect(
+            await screen.findByRole("menuitem", { name: /view details/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /view transactions/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /edit/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /merge/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /close account/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /delete/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("forwards the legacy ?account= deep-link to the detail route", async () => {
@@ -204,30 +306,60 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
 
     const DRIFT_FIXTURE = [
         {
-            ...ACCOUNT_STUB, id: 10, name: "Fresh Drift", display_name: "Fresh Drift",
-            type: "checking", computed_balance: 1284.4, statement_balance: 1299.9,
-            drift: 15.5, statement_balance_date: FRESH_YMD,
+            ...ACCOUNT_STUB,
+            id: 10,
+            name: "Fresh Drift",
+            display_name: "Fresh Drift",
+            type: "checking",
+            computed_balance: 1284.4,
+            statement_balance: 1299.9,
+            drift: 15.5,
+            statement_balance_date: FRESH_YMD,
         },
         {
-            ...ACCOUNT_STUB, id: 11, name: "Day 44", display_name: "Day 44",
-            type: "liability", computed_balance: -8420.15, statement_balance: -8500,
-            drift: -79.85, statement_balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
+            ...ACCOUNT_STUB,
+            id: 11,
+            name: "Day 44",
+            display_name: "Day 44",
+            type: "liability",
+            computed_balance: -8420.15,
+            statement_balance: -8500,
+            drift: -79.85,
+            statement_balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
             // (ISO-timestamp shape — the defensive slice in statementYmd.)
         },
         {
-            ...ACCOUNT_STUB, id: 12, name: "Day 46", display_name: "Day 46",
-            type: "liability", computed_balance: "-8420.15", statement_balance: "-8500.00",
-            drift: "-79.85", statement_balance_date: DAY_46_YMD,
+            ...ACCOUNT_STUB,
+            id: 12,
+            name: "Day 46",
+            display_name: "Day 46",
+            type: "liability",
+            computed_balance: "-8420.15",
+            statement_balance: "-8500.00",
+            drift: "-79.85",
+            statement_balance_date: DAY_46_YMD,
         },
         {
-            ...ACCOUNT_STUB, id: 14, name: "Day 45", display_name: "Day 45",
-            type: "liability", computed_balance: -8420.15, statement_balance: -8500,
-            drift: -79.85, statement_balance_date: DAY_45_YMD,
+            ...ACCOUNT_STUB,
+            id: 14,
+            name: "Day 45",
+            display_name: "Day 45",
+            type: "liability",
+            computed_balance: -8420.15,
+            statement_balance: -8500,
+            drift: -79.85,
+            statement_balance_date: DAY_45_YMD,
         },
         {
-            ...ACCOUNT_STUB, id: 13, name: "No Stamp", display_name: "No Stamp",
-            type: "checking", computed_balance: 300, statement_balance: 312.4,
-            drift: 12.4, statement_balance_date: null,
+            ...ACCOUNT_STUB,
+            id: 13,
+            name: "No Stamp",
+            display_name: "No Stamp",
+            type: "checking",
+            computed_balance: 300,
+            statement_balance: 312.4,
+            drift: 12.4,
+            statement_balance_date: null,
         },
         {
             // The MISLABELLED-account topology (accountBalanceSql.js
@@ -236,17 +368,27 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             // against that partition and `drift` comes back in USD —
             // `reconcilable_currency !== currency`. The badge must stamp the
             // symbol of the currency the figure is actually IN.
-            ...ACCOUNT_STUB, id: 15, name: "Mislabelled", display_name: "Mislabelled",
-            type: "checking", currency: "EUR", multi_currency_cash: true,
-            computed_balance: 1150, statement_balance: 1299.9,
-            reconcilable_balance: 1284.4, reconcilable_currency: "USD",
-            drift: 15.5, statement_balance_date: FRESH_YMD,
+            ...ACCOUNT_STUB,
+            id: 15,
+            name: "Mislabelled",
+            display_name: "Mislabelled",
+            type: "checking",
+            currency: "EUR",
+            multi_currency_cash: true,
+            computed_balance: 1150,
+            statement_balance: 1299.9,
+            reconcilable_balance: 1284.4,
+            reconcilable_currency: "USD",
+            drift: 15.5,
+            statement_balance_date: FRESH_YMD,
         },
     ];
 
     /** The drift badge inside the card for `label`. */
     function driftBadgeFor(label: string): HTMLElement {
-        const card = screen.getByRole("button", { name: `Open details for ${label}` });
+        const card = screen
+            .getByRole("link", { name: label })
+            .closest(".glass-regular") as HTMLElement;
         return within(card).getByRole("button", { name: "Reconcile balance" });
     }
 
@@ -274,19 +416,19 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(badge.className).toMatch(/text-destructive/);
     });
 
-    it("stays destructive at 44 days and turns warning-amber at 46 (the ~45-day staleness boundary)", async () => {
+    it("stays destructive at 44 days and turns warning-toned at 46 (the ~45-day staleness boundary)", async () => {
         mockAccounts(DRIFT_FIXTURE);
         renderWithApp(<AccountsPage />);
         await screen.findByRole("region", { name: "Liabilities" });
 
         const fresh = driftBadgeFor("Fresh Drift");
         expect(fresh.className).toMatch(/text-destructive/);
-        expect(fresh.className).not.toMatch(/amber/);
+        expect(fresh.className).not.toMatch(/text-warning/);
 
         // 44 days old — inside the window, still "something is wrong" red.
         const day44 = driftBadgeFor("Day 44");
         expect(day44.className).toMatch(/text-destructive/);
-        expect(day44.className).not.toMatch(/amber/);
+        expect(day44.className).not.toMatch(/text-warning/);
         // Negative drift on a liability keeps its minus sign, no stray plus.
         expect(day44.textContent).toMatch(/-79,85/);
         expect(day44.textContent).not.toMatch(/\+/);
@@ -295,11 +437,11 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         // strictly `> 45`; a `>= 45` regression fails here.
         const day45 = driftBadgeFor("Day 45");
         expect(day45.className).toMatch(/text-destructive/);
-        expect(day45.className).not.toMatch(/amber/);
+        expect(day45.className).not.toMatch(/text-warning/);
 
-        // 46 days old — past the threshold, "probably just out of date" amber.
+        // 46 days old — past the threshold, use the semantic warning tone.
         const day46 = driftBadgeFor("Day 46");
-        expect(day46.className).toMatch(/amber/);
+        expect(day46.className).toMatch(/text-warning/);
         expect(day46.className).not.toMatch(/text-destructive/);
         // NUMERIC-string drift still renders as money (normalizeAccount coercion).
         expect(day46.textContent).toMatch(/-79,85/);
@@ -329,6 +471,8 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         await screen.findByRole("region", { name: "Liabilities" });
 
         await userEvent.click(driftBadgeFor("Day 46"));
-        expect(await screen.findByRole("dialog", { name: "Reconcile balance" })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("dialog", { name: "Reconcile balance" }),
+        ).toBeInTheDocument();
     });
 });

@@ -284,7 +284,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
     <Button
       variant={emphasized ? 'outline' : 'ghost'}
       className={emphasized
-        ? 'mt-2 w-full justify-start border-amber-500/50 text-sm font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-400'
+        ? 'mt-2 w-full justify-start border-warning/50 text-sm font-medium text-warning hover:bg-warning/10'
         : 'w-full justify-start border-t border-border/50 pt-3 text-sm font-normal'}
       disabled={busy}
       onClick={showLedgerSince}
@@ -344,7 +344,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
           )}
 
           {/* Recording a statement reading no longer means Edit → Advanced. */}
-          <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
+          <div className="mt-2 grid grid-cols-1 gap-3 border-t border-border/50 pt-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="reconcile-reading">{t('accounts.reconcile.readingLabel')}</Label>
               <Input
@@ -393,7 +393,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
                 previewIsZero ? 'text-muted-foreground' : 'text-destructive',
               )}
             >
-              {previewDrift > 0 ? '+' : ''}{fmtCur(previewDrift, baseCurrency)}
+              {fmtCur(previewDrift, { currency: baseCurrency, signed: true })}
             </span>
           </div>
           {hasReading && (
@@ -402,12 +402,12 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
             </p>
           )}
           {readingInvalid && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+            <p className="mt-1 text-xs text-warning">
               {t('accounts.reconcile.readingInvalid')}
             </p>
           )}
           {readingNeedsDate && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+            <p className="mt-1 text-xs text-warning">
               {t('accounts.reconcile.readingNeedsDate')}
             </p>
           )}
@@ -416,8 +416,8 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
         {/* Backdated reading: the difference may be later activity, not an error.
             Resolving with an adjustment here would double-count it. */}
         {readingIsBackdated && sinceDate && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2.5">
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+          <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5">
+            <p className="text-xs text-warning">
               {t('accounts.reconcile.backdatedWarning', {
                 date: formatDateStringWithAppSettings(readingDate, appSettings.dateFormat),
               })}
@@ -485,7 +485,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
         {sinceDate && !readingIsBackdated && ledgerSinceButton(false)}
 
         <DialogFooter className="pt-2">
-          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
         </DialogFooter>

@@ -15,6 +15,7 @@ import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useChartKeyboardNav } from "./keyboardNav";
 
 export interface StackedBarSeries<Datum> {
     readonly key: string;
@@ -34,13 +35,21 @@ export interface StackedBarChartProps<Datum> {
     readonly valueTickFormat?: (value: number) => string;
     readonly tooltipTitle?: (datum: Datum) => string;
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly margin?: { top: number; right: number; bottom: number; left: number };
+    readonly margin?: {
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+    };
     readonly ariaLabel?: string;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 16, bottom: 36, left: 48 };
 
-type StackRow<Datum> = Record<string, number> & { __datum: Datum; __category: string };
+type StackRow<Datum> = Record<string, number> & {
+    __datum: Datum;
+    __category: string;
+};
 
 interface StackedBarLayerProps<Datum> {
     readonly rows: StackRow<Datum>[];
@@ -134,7 +143,9 @@ function StackedBarLayerInner<Datum>({
 }
 
 // memo() erases the generic signature; the cast restores it for callers.
-const StackedBarLayer = memo(StackedBarLayerInner) as typeof StackedBarLayerInner;
+const StackedBarLayer = memo(
+    StackedBarLayerInner,
+) as typeof StackedBarLayerInner;
 
 export function StackedBarChart<Datum>(props: StackedBarChartProps<Datum>) {
     const { height = 280 } = props;
@@ -142,7 +153,9 @@ export function StackedBarChart<Datum>(props: StackedBarChartProps<Datum>) {
         <div style={{ width: "100%", height }}>
             <ParentSize>
                 {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? <Inner {...props} width={w} height={h} /> : null
+                    w > 0 && h > 0 ? (
+                        <Inner {...props} width={w} height={h} />
+                    ) : null
                 }
             </ParentSize>
         </div>
@@ -174,7 +187,10 @@ function Inner<Datum>({
     // scales, rows, and the memoized stack layer valid across consumer re-renders.
     const categoryAccessorRef = useRef(categoryAccessor);
     categoryAccessorRef.current = categoryAccessor;
-    const stableCategoryAccessor = useCallback((d: Datum) => categoryAccessorRef.current(d), []);
+    const stableCategoryAccessor = useCallback(
+        (d: Datum) => categoryAccessorRef.current(d),
+        [],
+    );
 
     const categories = useMemo(
         () => data.map((d) => stableCategoryAccessor(d)),
@@ -182,8 +198,7 @@ function Inner<Datum>({
     );
 
     const totals = useMemo(
-        () =>
-            data.map((d) => sum(series, (s) => s.accessor(d) ?? 0)),
+        () => data.map((d) => sum(series, (s) => s.accessor(d) ?? 0)),
         [data, series],
     );
 
@@ -227,31 +242,71 @@ function Inner<Datum>({
         [stableCategoryAccessor, data, series],
     );
 
-    const [hover, setHover] = useState<{ datum: Datum; x: number; y: number } | null>(null);
+    const [hover, setHover] = useState<{
+        index: number;
+        x: number;
+        y: number;
+    } | null>(null);
 
     const handleEnter = useCallback(
-        (datum: Datum, x: number, y: number) => setHover({ datum, x, y }),
-        [],
+        (datum: Datum, x: number, y: number) => {
+            const index = data.indexOf(datum);
+            if (index >= 0) setHover({ index, x, y });
+        },
+        [data],
     );
     const handleLeave = useCallback(() => setHover(null), []);
+    const hoverIndex = hover && hover.index < data.length ? hover.index : null;
+    const hoverDatum = hoverIndex == null ? null : data[hoverIndex];
+    const handleKeyboardIndex = useCallback(
+        (index: number) => {
+            const x = categoryScale(categories[index]) ?? 0;
+            setHover({ index, x: x + categoryScale.bandwidth() / 2, y: 0 });
+        },
+        [categories, categoryScale, data],
+    );
+    const keyboardNav = useChartKeyboardNav({
+        pointCount: data.length,
+        index: hoverIndex,
+        onIndexChange: handleKeyboardIndex,
+        onClear: handleLeave,
+    });
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
-        if (!hover) return [];
+        if (!hoverDatum) return [];
         return series.map((s, i) => {
-            const v = s.accessor(hover.datum);
+            const v = s.accessor(hoverDatum);
             return {
                 label: s.label ?? s.key,
                 color: s.color ?? getChartColor(i),
-                value: tooltipValueFormat ? tooltipValueFormat(v, s.key) : String(v),
+                value: tooltipValueFormat
+                    ? tooltipValueFormat(v, s.key)
+                    : String(v),
             };
         });
-    }, [hover, series, tooltipValueFormat]);
+    }, [hoverDatum, series, tooltipValueFormat]);
 
     const baseline = valueScale(0) ?? innerHeight;
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.stackedBar', data.length, series.map((s) => s.label))}>
+            <svg
+                width={width}
+                height={height}
+                role="img"
+                aria-label={
+                    ariaLabel ??
+                    summarizeSeriesChart(
+                        t,
+                        "chart.aria.kind.stackedBar",
+                        data.length,
+                        series.map((s) => s.label),
+                    )
+                }
+                tabIndex={data.length > 0 ? 0 : undefined}
+                onKeyDown={keyboardNav.onKeyDown}
+                onBlur={keyboardNav.onBlur}
+            >
                 <Group left={margin.left} top={margin.top}>
                     {valueScale.ticks(5).map((tick) => (
                         <line
@@ -294,21 +349,23 @@ function Inner<Datum>({
                     <LeftAxis
                         scale={valueScale}
                         tickFormat={
-                            valueTickFormat ? (v) => valueTickFormat(v as number) : undefined
+                            valueTickFormat
+                                ? (v) => valueTickFormat(v as number)
+                                : undefined
                         }
                     />
                 </Group>
             </svg>
 
             <ChartTooltip
-                open={hover != null}
+                open={hoverDatum != null}
                 left={hover ? margin.left + hover.x : 0}
                 top={hover ? margin.top + hover.y : 0}
                 title={
-                    hover
+                    hoverDatum
                         ? tooltipTitle
-                            ? tooltipTitle(hover.datum)
-                            : categoryAccessor(hover.datum)
+                            ? tooltipTitle(hoverDatum)
+                            : categoryAccessor(hoverDatum)
                         : undefined
                 }
                 items={tooltipItems}

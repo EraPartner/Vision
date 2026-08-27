@@ -11,6 +11,7 @@ import {
   isElectron,
   isElectronMac,
   setDockBadge,
+  setNativeLanguage,
   persistSplashTheme,
   getSystemAccentColor,
   triggerDockerUpdate,
@@ -45,8 +46,9 @@ describe("electron capability detection (absent branch)", () => {
     expect(isElectronMac()).toBe(false);
   });
 
-  it("setDockBadge and persistSplashTheme are safe no-ops outside Electron", () => {
+  it("native UI setters are safe no-ops outside Electron", () => {
     expect(() => setDockBadge(3)).not.toThrow();
+    expect(() => setNativeLanguage("nl")).not.toThrow();
     expect(() => persistSplashTheme({ background: "0 0% 0%", foreground: "0 0% 100%" })).not.toThrow();
   });
 
@@ -93,6 +95,7 @@ describe("electron capability detection (present branch)", () => {
     win.electronAPI = {
       platform: "darwin",
       setDockBadge: vi.fn().mockResolvedValue({ success: true }),
+      setLanguage: vi.fn().mockResolvedValue({ success: true }),
       getAccentColor: vi.fn().mockResolvedValue("FF0000FF"),
       persistSplashTheme: vi.fn().mockResolvedValue({ success: true }),
     };
@@ -103,10 +106,12 @@ describe("electron capability detection (present branch)", () => {
     expect(isElectronMac()).toBe(true);
   });
 
-  it("setDockBadge and persistSplashTheme call through to the bridge", () => {
+  it("native UI setters call through to the bridge", () => {
     setDockBadge(5);
+    setNativeLanguage("nl");
     persistSplashTheme({ background: "x", foreground: "y" });
     expect(win.electronAPI).toBeTruthy();
+    expect((win.electronAPI as { setLanguage: ReturnType<typeof vi.fn> }).setLanguage).toHaveBeenCalledWith("nl");
   });
 
   it("getSystemAccentColor returns the native accent", async () => {
@@ -135,6 +140,11 @@ describe("electron capability detection (present branch)", () => {
       getAccentColor: vi.fn().mockRejectedValue(new Error("boom")),
     };
     expect(await getSystemAccentColor()).toBeNull();
+  });
+
+  it("does not crash in an older shell without the language bridge", () => {
+    win.electronAPI = { platform: "darwin" };
+    expect(() => setNativeLanguage("nl")).not.toThrow();
   });
 
   it("isBackupEncrypted returns false when the bridge throws", async () => {

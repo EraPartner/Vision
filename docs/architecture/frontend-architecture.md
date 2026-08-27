@@ -4,13 +4,13 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
 > [!info] June 2026 — Semantic Token Sweep + UI Fixes
-> ~130 raw Tailwind palette colors replaced with semantic tokens (`text-success`, `text-destructive`, `text-warning` and bg-/border-/ring- variants) across import pages/cards, watchlist, performance, market lookup, tax, settings, notifications, onboarding, ai-chat banner, and UI primitives (`alert` + `badge` success variants, Sonner success icon). `focus:ring` → `focus-visible:ring` on two stragglers. `body` gains `overscroll-behavior-y: none`. Deliberately kept raw: categorical palettes, chart series colors, blue info accents (no `--info` token). See [[docs/components/ui-components|UI Components]] for the full token table.
+> Raw Tailwind palette colors route through semantic `success`, `destructive`, `warning`, and `info` tokens, including import status, frozen-year information, and devtools HTTP-method accents. Categorical and chart-series palettes remain deliberately raw. `focus:ring` → `focus-visible:ring` on two stragglers. `body` gains `overscroll-behavior-y: none`. See [[docs/components/ui-components|UI Components]] for the full token table.
 
 > [!info] June 2026 — Premium v3 (ADR-071) + Visual-Effects Tiers (ADR-075)
 > The second June 2026 batch adds RollingNumber/Money/DeltaPill shared components, chart scrub-to-compare and synced crosshairs, ChartSkeleton, large-title collapse (PageTitleContext), palette v2 with recents and recipient search, ShortcutsOverlay, go-to key sequences (g+key), animated tab indicator, workspace-aware aurora, ShaderAurora (WebGL aurora), light-mode paper & ink token pass, per-widget dashboard hydration, and optimistic transaction CREATE. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]]. On 2026-06-12 the original `AppSettings.enhancedEffects` boolean was superseded by the ADR-075 tier model — see [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] and the Enhanced-Effects Toggle section below.
@@ -21,6 +21,11 @@ aliases: [frontend architecture, react architecture, frontend design, design sys
 # Frontend Architecture
 
 This document contains UML diagrams for the React frontend application.
+
+The browser bundle includes a minimal Web App Manifest (`public/manifest.json`) with Vision's
+name, standalone launch metadata, brand colors, and SVG/192/512 icons. `index.html` links it and
+publishes light/dark browser-chrome colors. This is install metadata only: Vision does not register
+a service worker and does not claim offline web-app behavior.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
 
@@ -45,16 +50,17 @@ primitives), `components/shared/`, `components/charts/`, `components/layout/`,
 > The rule carries a **closed allowlist** of two sanctioned exceptions, which is the
 > machine-readable twin of this callout — keep the two in sync, and prefer moving the component
 > into the feature over widening the list:
+>
 > - `components/layout/AppLayout.tsx` — the app shell / composition root, which mounts
 >   `@/features/settings/DashboardSettingsDialog` and `@/features/onboarding/OnboardingWizard`, and
 >   consumes `@/features/onboarding/useOnboarding` over every page. It is `components/`-shaped only
 >   because there is no `app/` directory.
-> - `components/shared/__tests__/loadingSurface.test.tsx` — a test of the *shared* loading-surface
+> - `components/shared/__tests__/loadingSurface.test.tsx` — a test of the _shared_ loading-surface
 >   contract that uses `@/features/research/ResearchAnalystTab` as its worked example. Test-only:
 >   never bundled into the app.
 
 When adding a component, put it in `features/<feature>/` unless it is reused by unrelated features
-*and* carries no feature-specific domain logic — in which case it belongs in `components/shared/`
+_and_ carries no feature-specific domain logic — in which case it belongs in `components/shared/`
 (or `components/ui/` for a design-system primitive).
 
 ### Shared code placement
@@ -152,12 +158,12 @@ package "Statistics (April 2026 Refactoring)" {
     +Widget visibility
     +232 lines
   }
-  
+
   class ChartCard {
     +Exclusion toggle
     +Render-prop children
   }
-  
+
   class MonthlyRhythm
   class MonthlyChart
   class NetTrendChart
@@ -169,7 +175,7 @@ package "Statistics (April 2026 Refactoring)" {
   class YearlySummaryTable
   class RecipientInsightsTab
   class SavedChartsSection
-  
+
   StatisticsPage --> ChartCard
   StatisticsPage --> MonthlyRhythm
   StatisticsPage --> MonthlyChart
@@ -199,6 +205,7 @@ Zustand for client state (settings) + React Context wrappers for hydration/persi
 ### Zustand Settings Store
 
 Unified store at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]` consolidates three previously separate contexts:
+
 - AppSettingsContext (app settings)
 - SettingsContext (dashboard/exclusion settings)
 - ThemeContext (theme settings)
@@ -227,33 +234,33 @@ package "Context Providers" {
   class QueryClientProvider {
     +QueryClient (staleTime: 30s)
   }
-  
+
   class SettingsPreloadContext {
     +Fetches before render
     +Passes to store
   }
-  
+
   class ThemeContext {
     +Wraps useSettingsStore theme slice
     +Handles DOM effects (CSS class, matchMedia)
     +Debounced persistence
   }
-  
+
   class SettingsContext {
     +Wraps useSettingsStore dashboard slice
     +Debounced persistence
   }
-  
+
   class AppSettingsContext {
     +Wraps useSettingsStore appSettings slice
     +useShallow() for performance
   }
-  
+
   class LanguageContext {
     +language
     +t(key)
   }
-  
+
   class BelgianTaxProfileContext {
     +taxProfile
   }
@@ -322,7 +329,7 @@ package "API Client" {
     +retry()
     +cancelAll()
   }
-  
+
   class DEFAULT_TIMEOUT_MS = 30000
   class MAX_RETRIES = 2
 }
@@ -357,6 +364,14 @@ RESTAPI --> Database
 ```
 
 ## Routes & Pages
+
+### Route-scoped browser reports
+
+`AppLayout` enables print-report mode only for `/tax`, `/statistics`, and
+`/portfolio/net-worth`. Stable `data-print-*` hooks let `index.css` hide shell chrome, notifications,
+dialogs, and page actions under `@media print`, while flattening glass materials into a light paper
+surface and retaining ordinary screen behavior everywhere else. Each report page owns its content
+marker; the shared shell owns route detection and cleanup of the document-level print marker.
 
 ```plantuml
 @startuml
@@ -451,13 +466,13 @@ With real background content behind glass surfaces, `backdrop-filter` now produc
 
 Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 
-| Class | Blur | Saturate | Usage |
-|-------|------|---------|-------|
-| `glass-thin` | 12px | 180%/150% | Subtle interactive elements |
-| `glass-regular` | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
-| `glass-chrome` | 24px | 180%/150% | Sidebar, AppLayout topbar |
-| `glass-thick` | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
-| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard) |
+| Class            | Blur | Saturate  | Usage                                                                                                                                                                                                                                                                       |
+| ---------------- | ---- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glass-thin`     | 12px | 180%/150% | Subtle interactive elements                                                                                                                                                                                                                                                 |
+| `glass-regular`  | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
+| `glass-chrome`   | 24px | 180%/150% | Sidebar, AppLayout topbar                                                                                                                                                                                                                                                   |
+| `glass-thick`    | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip)                                                       |
+| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                                                                                             |
 
 Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
 
@@ -467,6 +482,7 @@ Thick and elevated materials gain lensing edges (inset top specular + bottom con
 > ADR-070 rolled out glass selectively ("only ~6 KPI/hero/chart surfaces per viewport"). In practice that left many content/chart/stat cards opaque while their siblings were glass, causing visible inconsistency in the enhanced/vibrancy tier. The rule was broadened in June 2026 to **role-based**: glass is now applied to ALL content / chart / stat / state cards so peer cards shine consistently. The base `Card` component was NOT changed — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old 6-surface budget in standard/enhanced; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque on large displays and under `fx-reduced`); profiling the packaged Electron app on Apple Silicon before each release is the watchpoint.
 
 **Opaque surfaces (deliberate — role-based exceptions):**
+
 - `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — intentionally opaque; dense row rendering under a backdrop-filter would exceed GPU budget with no readability benefit.
 - Dense form/import cards — opaque by design.
 - Dashed "add" placeholder cards (`bg-muted/30 border-dashed`) — intentionally flat.
@@ -480,7 +496,8 @@ Thick and elevated materials gain lensing edges (inset top specular + bottom con
 > Previously `DropdownMenu`, `Select` content, `ContextMenu`, `MenuBar` content, `Popover`, `HoverCard`, and `Tooltip` were on the flat `bg-popover` fallback. All were converted to `glass-thick` in a June 2026 consistency audit, completing uniform glass coverage across every floating overlay. Triggers remain opaque by design.
 
 Additional layout utilities:
-- `premium-frame` — baked into the base `Card` component; provides the primary-tinted hover outline universally (previously had to be applied per-callsite). Both `premium-frame` and `micro-lift` animate border-color, box-shadow, and transform identically so either class wins the cascade safely.
+
+- `premium-frame` — baked into the base `Card` component; provides its resting embossed frame. `Card variant="interactive"` adds `premium-frame-interactive` for the primary-tinted hover outline and lift.
 - `micro-lift` — subtle hover elevation (`translateY(-2px)`, GPU-safe).
 - `liquid-canvas` — fixed-position atmosphere wrapper rendered by `AppLayout`.
 - `liquid-canvas-grain` — SVG grain child of the atmosphere layer.
@@ -504,7 +521,7 @@ Previous variable fonts were superseded by static weight selection for performan
 
 Centralized in `apps/frontend/src/lib/motion.ts`:
 
-- **Durations**: fast (150ms), normal (260ms), slow (420ms), page (520ms)
+- **Durations**: press (90ms), fast (150ms), dismiss (200ms), normal (260ms), slow (420ms), page (520ms), reveal (600ms)
 - **Easings**: glide, out-expo, and in-out-quart
 - **Spring configs**: snappy
 - **Reduced-motion**: `useReducedMotion()` hook ensures `prefers-reduced-motion: reduce` compliance
@@ -534,18 +551,20 @@ All charts consume design tokens directly and respect reduced-motion via Framer 
 Upgraded to Tailwind CSS v4 (4.2.4) with unified build system:
 
 **PostCSS Configuration** (`apps/frontend/postcss.config.cjs`):
+
 ```js
 module.exports = {
-    plugins: {
-        '@tailwindcss/postcss': {},
-        autoprefixer: {},
-    },
+  plugins: {
+    "@tailwindcss/postcss": {},
+    autoprefixer: {},
+  },
 };
 ```
 
 Replaced v3's plugin-based config with v4's unified `@tailwindcss/postcss` single plugin. Config resolution automatic.
 
 **CSS Entry Point** (`apps/frontend/src/index.css`):
+
 ```css
 @import "tailwindcss";
 @config '../tailwind.config.ts';
@@ -554,11 +573,13 @@ Replaced v3's plugin-based config with v4's unified `@tailwindcss/postcss` singl
 The `@import "tailwindcss"` loads entire Tailwind v4 layer system; explicit `@config` ensures deterministic config resolution.
 
 **@apply Restrictions (v4)**:
+
 - Tailwind v4 restricts `@apply` to registered utilities only
 - Custom glass/surface class aliases declare full CSS rules instead of @apply
 - All `.glass*` variants in `@layer utilities` are now complete declarations
 
 **Typography Optimization**:
+
 - Static font weights (400/500/600) via `@fontsource/*` instead of variable fonts
 - Reduces payload; no visual regression for current design
 
@@ -592,13 +613,13 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 
 #### Shared Components (new)
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `RollingNumber` | `components/shared/RollingNumber.tsx` | Odometer digit reels (per-digit 0–9 strips, em-based transforms, keyed from right); reduced-motion → plain span. Replaces `useCountUp` in StatCard/NetSummaryCard hero values. |
-| `Money` | `components/shared/Money.tsx` | `Intl.NumberFormat.formatToParts`-based micro-typography: raised small currency symbol (~0.65em), de-emphasized fraction+separator. Adopted in transactions table amount cell and dashboard recent-transactions. Dashboard negatives now show an explicit "−" (was color-only). |
-| `DeltaPill` | `components/shared/DeltaPill.tsx` | Standardized tinted change chip (success/destructive/muted, `invert` prop for spend-down-is-good). Adopted in StatCard `change` prop; portfolio holdings tables and summary cards (StocksPage, CryptoPage unrealized-percent cells; RealEstatePage Total Return ROI subtitle and per-property ROI — B3 complete 2026-06-11). |
-| `ShortcutsOverlay` | `components/shared/ShortcutsOverlay.tsx` | `?` key opens a glass dialog listing real shortcuts (⌘K, ?, Esc, chart scrub). Mounted in AppLayout. i18n keys: `shortcuts.*`. |
-| `ChartSkeleton` | `components/charts/ChartSkeleton.tsx` | Ghost waveform + shimmer; replaces rectangle skeletons for charts in DashboardPage. |
+| Component          | Location                                 | Purpose                                                                                                                                                                                                                                                                                                                                           |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RollingNumber`    | `components/shared/RollingNumber.tsx`    | Odometer digit reels (per-digit 0–9 strips, em-based transforms, keyed from right); reduced-motion → plain span. Replaces `useCountUp` in StatCard/NetSummaryCard hero values.                                                                                                                                                                    |
+| `Money`            | `components/shared/Money.tsx`            | `Intl.NumberFormat.formatToParts`-based micro-typography: raised small currency symbol, de-emphasized fraction+separator, and optional explicit signed deltas. Adopted across transaction, account, portfolio, net-worth, and portfolio-tax page values; string formatters remain for translated interpolation, chart callbacks, and input hints. |
+| `DeltaPill`        | `components/shared/DeltaPill.tsx`        | Standardized tinted change chip (success/destructive/muted, `invert` prop for spend-down-is-good). Adopted in StatCard `change` prop; portfolio holdings tables and summary cards (StocksPage, CryptoPage unrealized-percent cells; RealEstatePage Total Return ROI subtitle and per-property ROI — B3 complete 2026-06-11).                      |
+| `ShortcutsOverlay` | `components/shared/ShortcutsOverlay.tsx` | `?` key opens a glass dialog listing real shortcuts (⌘K, ?, Esc, chart scrub). Mounted in AppLayout. i18n keys: `shortcuts.*`.                                                                                                                                                                                                                    |
+| `ChartSkeleton`    | `components/charts/ChartSkeleton.tsx`    | Ghost waveform + shimmer; replaces rectangle skeletons for charts in DashboardPage.                                                                                                                                                                                                                                                               |
 
 #### Chart Interactions (new)
 
@@ -609,6 +630,7 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 #### Navigation Additions
 
 - **Large-title collapse**: `PageTitleContext` in `contexts/PageTitleContext.tsx`. `PageHeader` registers its title; the topbar shows it (fade/slide) past 96px scroll (separate `titleVisible` state).
+- **Keyboard shell structure**: a focus-visible skip link is the first shell control and hands focus to `main#main`. The shared desktop/mobile sidebar menu is a localized `<nav>` landmark; the sidebar trigger and rail share the localized toggle label.
 - **Palette v2**: Recents track last ~5 visited routes in `localStorage` (`LOCAL_STORAGE_KEYS.PALETTE_RECENTS = 'vision.palette.recents'`, registered in `lib/localStorage-keys.ts` and added to `LOCAL_STORAGE_EXCLUDED_KEYS` — not backed up). Debounced recipient search (≥2 chars, `SEARCH_DEBOUNCE_MS` = 300ms) deep-links to `/transactions?recipient_id=…&filter_label=…`. "Search transactions for X" action navigates to `/transactions?search=…`; `TransactionsPage` seeds and syncs its search state from that URL param.
 - **Animated tab indicator**: `tabs.tsx` rewritten — `Tabs` mirrors active value via React context (both controlled and uncontrolled); `TabsTrigger` renders a framer `layoutId` pill scoped per-tablist via `useId`. Static active background/ring removed in favor of pill. New Tabs consumers must route through the wrapper; existing consumers already do.
 
@@ -617,7 +639,7 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 - **Go-to key sequences**: `hooks/useGoToShortcuts.ts` — `g` then a destination key (900 ms window, inert in inputs); route table shared with ShortcutsOverlay so the help sheet stays truthful. (A cursor-specular sheen was implemented and removed same-day at user request.)
 - **Workspace-aware aurora**: `AppLayout` reads `useWorkspace()` (route-derived, no provider), sets `data-workspace` on `.liquid-canvas`. CSS swaps blob hue emphasis (portfolio = gold-led, budgeting = emerald-led).
 - **Light-mode paper & ink**: Conservative token deltas in `tokens.css` light block (warmer paper background `oklch(40 36% 96%)`, deeper ink foreground, warmed border/muted). `premium-frame` gains an embossed bottom hairline. `styles/themes.ts` `defaultLight` palette kept mirrored; `themes.test.ts` 4/4 green.
-- **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled and additionally capped at 640px wide, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Mounted in `AppLayout` only when the *effective* visual-effects tier (ADR-075) is `'enhanced'`.
+- **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled and additionally capped at 640px wide, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Mounted in `AppLayout` only when the _effective_ visual-effects tier (ADR-075) is `'enhanced'`.
 
 #### Visual-Effects Tier Model (ADR-075, supersedes ADR-071 boolean)
 
@@ -628,11 +650,12 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 **Session-scoped override (ADR-075 addendum, 2026-06-12)**: The Appearance-tab tier Select shows the **effective tier currently in use**, not the synced preference. `settingsStore` carries `sessionTierOverride` outside `appSettings` — never persisted, cleared on restart. `resolveEffectiveTier` accepts it as an optional 4th argument and uses it to replace the auto-adapt cap while `autoAdaptDisplay && isLargeDisplay`; on a small display or after a restart the synced preference governs. `DashboardSettingsDialog` stages a `tierSelection` value and routes it on Save: capped display → `sessionTierOverride` (picking `'reduced'` clears it); uncapped display → synced `visualEffects` + override cleared; toggling auto-adapt clears the override. `useVisualEffectsTier` reads the override from the store. 4 new tests (17 total in `visualEffects.test.ts`).
 
 **New files introduced by ADR-075**:
+
 - `lib/visualEffects.ts` — `isLargeDisplay()` + `resolveEffectiveTier()` (4-arg)
 - `hooks/useVisualEffectsTier.ts` — resize listener + 5s property-read poll; reads `sessionTierOverride`
 - `components/layout/VisualEffectsController.tsx` — tags `<html>` with `fx-reduced` / `fx-static-atmosphere`
 
-`ShaderAurora` backing store is additionally capped at 640px wide (`MAX_CANVAS_WIDTH`). The gate moves from a boolean in `AppLayout` (`enhancedEffects === true`) to a check against the *effective* tier (`=== 'enhanced'`). See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] and [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the GPU-budget rationale.
+`ShaderAurora` backing store is additionally capped at 640px wide (`MAX_CANVAS_WIDTH`). The gate moves from a boolean in `AppLayout` (`enhancedEffects === true`) to a check against the _effective_ tier (`=== 'enhanced'`). See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] and [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the GPU-budget rationale.
 
 i18n keys added: `settings.appearance.visualEffects`, `settings.appearance.visualEffects.reduced|standard|enhanced`, `settings.appearance.visualEffectsHint`, `settings.appearance.autoAdaptDisplay`, `settings.appearance.autoAdaptDisplayHint`, `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`. Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`.
 
@@ -685,23 +708,34 @@ App
 │                       └── TooltipProvider
 │                           └── ErrorBoundary
 │                               ├── Sonner
-│                               └── BrowserRouter
-│                                   └── AppLayout
+│                               └── RouterProvider
+│                                   └── UnsavedChangesProvider
+│                                       └── AppLayout
 │                                       ├── VisualEffectsController (null render; html class mgr — ADR-075)
 │                                       ├── LiquidCanvas (fixed atmosphere layer)
 │                                       ├── Topbar (scroll-linked ::before + ⌘K trigger)
 │                                       ├── CommandPalette (⌘K, all pages + theme/settings)
 │                                       ├── AppSidebar (ActiveRail layoutId)
 │                                       ├── PageTransition (enter-only spring)
-│                                       └── Routes
-│                                           ├── Budgeting (/, /transactions, etc.)
-│                                           └── Portfolio (/portfolio/*)
+│                                           └── Routes
+│                                               ├── Budgeting (/, /transactions, etc.)
+│                                               └── Portfolio (/portfolio/*)
 ```
+
+`App.tsx` uses a React Router data router because route blocking is unavailable
+to declarative `BrowserRouter`. `UnsavedChangesProvider` owns the single
+`useBlocker` and `beforeunload` listeners. Forms register a boolean dirty state
+through `useUnsavedChanges`; pathname changes show the localized leave/stay
+confirmation, while query-only state updates remain unblocked. Successful
+workflows that navigate before their dirty state settles call the provider's
+one-shot bypass immediately before that navigation.
 
 ## Key Patterns
 
 ### 1. Code Splitting with Route Preload
+
 All pages are lazy-loaded using the shared route loader map:
+
 ```typescript
 // lib/routePreload.ts — shared map; used by App.tsx lazy() AND AppSidebar hover
 const routeLoaders = { '/': () => import('./pages/DashboardPage'), ... };
@@ -710,6 +744,7 @@ const DashboardPage = lazy(routeLoaders['/']);
 ```
 
 ### 2. React Query Configuration
+
 ```typescript
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -724,6 +759,7 @@ const queryClient = new QueryClient({
 ```
 
 ### 3. API Client Pattern
+
 - Automatic retry with exponential backoff
 - Request cancellation support
 - Timeout handling (30s default)
@@ -923,6 +959,7 @@ The frontend implements a low-level chart library using **visx + d3** primitives
 Located in `apps/frontend/src/components/charts/`:
 
 **Primitive Chart Components:**
+
 - `AreaChart.tsx` — Stacked time-series areas (DashboardPage, StatisticsPage)
 - `BarChart.tsx` — Grouped or stacked bars (StatisticsPage, DashboardPage)
 - `StackedBarChart.tsx` — Multi-series bar stacks (PerformancePage)
@@ -934,6 +971,7 @@ Located in `apps/frontend/src/components/charts/`:
 - `TreemapChart.tsx` — Hierarchical spending breakdown (StatisticsPage)
 
 **Shared Chart Components:**
+
 - `ChartTooltip.tsx` — Shared tooltip renderer (design-token colors)
 - `ChartLegend.tsx` — Shared legend component (keyboard accessible)
 - `ChartAxis.tsx` — Shared axis renderer (x, y with token-based styling)
@@ -972,6 +1010,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] an
 The raw PlantUML source files are stored in `docs/diagrams/`:
 
 **Frontend Architecture:**
+
 - `frontend-component-structure.puml` - UI components and features
 - `frontend-state-management.puml` - Context providers and hooks
 - `frontend-data-flow.puml` - API layer and data flow
@@ -981,14 +1020,17 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `transaction-state.puml` - Transaction lifecycle states
 
 Recent update note (2026-04-10):
+
 - Shared table architecture now uses `VirtualDataTable` with extracted `ColumnFilter` and explicit source-row identity (`sourceIndex`) mapping semantics ([[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]).
 
 **System-Wide:**
+
 - `api-communication.puml` - Frontend to Backend communication
 - `system-architecture.puml` - Full system overview
 - `deployment-architecture.puml` - Deployment diagram
 
 **Backend Flow Diagrams:**
+
 - `import-pipeline.puml` - CSV import flow
 - `import-sequence.puml` - Detailed import sequence
 - `currency-conversion-flow.puml` - Exchange rate conversion
@@ -1028,10 +1070,10 @@ The frontend uses a token-based theming system with runtime color palette swappi
 
 `--gain` and `--loss` are app-wide semantic CSS tokens for financial positive/negative values. They live in `tokens.css` and are the single source of truth for all gain/loss coloring — text, backgrounds, gradients, borders, charts, and glass trend indicators all consume them.
 
-| Mode | `--gain` resolves to | `--loss` resolves to |
-|------|---------------------|---------------------|
-| Classic (default, `.skin-v2` absent) | `var(--accent)` — variant-aware gold | `var(--destructive)` — variant-aware red |
-| Colorblind-safe (`.skin-v2` on `<html>`) | Okabe-Ito green `#009E73` | Okabe-Ito orange/vermillion `#D55E00` |
+| Mode                                     | `--gain` resolves to                 | `--loss` resolves to                     |
+| ---------------------------------------- | ------------------------------------ | ---------------------------------------- |
+| Classic (default, `.skin-v2` absent)     | `var(--accent)` — variant-aware gold | `var(--destructive)` — variant-aware red |
+| Colorblind-safe (`.skin-v2` on `<html>`) | Okabe-Ito green `#009E73`            | Okabe-Ito orange/vermillion `#D55E00`    |
 
 The toggle is controlled by `AppSettings.colorblindGainLoss` (default `false`) via **Settings → Appearance → Accessibility → Gain & loss colors**. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]].
 
@@ -1045,7 +1087,7 @@ loss: 'hsl(var(--loss) / <alpha-value>)',
 Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, `from-gain/20`, `ring-loss/25`, `border-loss/30`. All follow the toggle automatically.
 
 > [!warning] Contributor rule
-> Any gain/loss-semantic color must use `.amount-gain`/`.amount-loss`, the `gain`/`loss` Tailwind utilities, or `hsl(var(--gain))`/`hsl(var(--loss))` in CSS/inline styles. Never use raw `text-success`, `text-destructive`, `text-accent`, or hardcoded hex values for gain/loss meaning. Generic status/error/delete UI is unaffected and continues to use `--destructive`/`--success`.
+> Any gain/loss-semantic color must use the `gain`/`loss` Tailwind utilities or `hsl(var(--gain))`/`hsl(var(--loss))` in CSS/inline styles. Never use raw `text-success`, `text-destructive`, `text-accent`, or hardcoded hex values for gain/loss meaning. Generic status/error/delete UI is unaffected and continues to use `--destructive`/`--success`.
 
 ### Runtime Palette Application
 
@@ -1063,6 +1105,7 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 `ThemeContext` in `contexts/ThemeContext.tsx` tracks current variant and mode, applies palette to DOM on change, and persists user preference to backend `theme_settings` via 500ms debounced API calls.
 
 **Related Diagrams & Code**:
+
 - [[apps/frontend/src/styles/themes.ts|Theme Variants Source]]
 - [[apps/frontend/src/styles/tokens.css|CSS Tokens]]
 - [[apps/frontend/src/styles/skin-v2.css|skin-v2 overrides]]
@@ -1075,6 +1118,7 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 ---
 
 **Related Documentation**
+
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] (2026-06-12)
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026; enhancedEffects boolean superseded by ADR-075)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)

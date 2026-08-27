@@ -11,6 +11,8 @@ export interface ChartPeriodSelectorProps<P extends string> {
     readonly labels: Readonly<Record<P, string>>;
     readonly className?: string;
     readonly size?: "sm" | "md";
+    readonly "aria-label"?: string;
+    readonly "aria-labelledby"?: string;
 }
 
 export function ChartPeriodSelector<P extends string>({
@@ -20,10 +22,20 @@ export function ChartPeriodSelector<P extends string>({
     labels,
     className,
     size = "md",
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
 }: ChartPeriodSelectorProps<P>) {
     const pad = size === "sm" ? "px-2 py-1" : "px-3 py-1.5";
     return (
-        <div className={cn("flex w-fit gap-1 rounded-lg bg-muted p-1", className)}>
+        <div
+            role="group"
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabelledBy}
+            className={cn(
+                "flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1",
+                className,
+            )}
+        >
             {periods.map((p) => {
                 const active = p === value;
                 return (
@@ -33,7 +45,7 @@ export function ChartPeriodSelector<P extends string>({
                         aria-pressed={active}
                         onClick={() => onChange(p)}
                         className={cn(
-                            "rounded-md text-xs font-medium transition-[color,background-color,box-shadow]",
+                            "relative min-h-10 min-w-10 shrink-0 rounded-md text-xs font-medium transition-[color,background-color,box-shadow]",
                             pad,
                             active
                                 ? "bg-background text-foreground shadow-sm"

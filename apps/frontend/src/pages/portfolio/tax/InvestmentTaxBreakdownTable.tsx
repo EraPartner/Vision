@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/shared/Money";
 
 export interface InvestmentTaxRow {
   id: string | number;
@@ -19,12 +20,11 @@ export interface InvestmentTaxRow {
 
 interface InvestmentTaxBreakdownTableProps {
   investments: InvestmentTaxRow[];
-  fmt: (v: number) => string;
   convertToTarget: (amount: number, currency?: string) => number;
   t: (key: string) => string;
 }
 
-export function InvestmentTaxBreakdownTable({ investments, fmt, convertToTarget, t }: InvestmentTaxBreakdownTableProps) {
+export function InvestmentTaxBreakdownTable({ investments, convertToTarget, t }: InvestmentTaxBreakdownTableProps) {
   return (
     <Card>
       <CardHeader>
@@ -39,24 +39,24 @@ export function InvestmentTaxBreakdownTable({ investments, fmt, convertToTarget,
                 <div className="flex items-center gap-2">
                   {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
                   <span className="font-medium text-sm truncate">{inv.name}</span>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{inv.assetClass}</Badge>
+                  <Badge variant="secondary" className="text-2xs shrink-0">{inv.assetClass}</Badge>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                   <span>
-                    {t("tax.taxes")}: {fmt(inv.recordedTaxes)} + {fmt(inv.manualTaxes)}
+                    {t("tax.taxes")}: <Money amount={inv.recordedTaxes} /> + <Money amount={inv.manualTaxes} />
                   </span>
                   <span>
-                    {t("tax.fees")}: {fmt(inv.recordedFees)} + {fmt(inv.manualFees)}
+                    {t("tax.fees")}: <Money amount={inv.recordedFees} /> + <Money amount={inv.manualFees} />
                   </span>
                   {inv.realizedGain !== 0 && (
-                    <span className={inv.realizedGain >= 0 ? "amount-gain" : "amount-loss"}>
-                      {t("tax.realized")}: {inv.realizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(inv.realizedGain, inv.currency))}
+                    <span className={inv.realizedGain >= 0 ? "text-gain" : "text-loss"}>
+                      {t("tax.realized")}: <Money amount={convertToTarget(inv.realizedGain, inv.currency)} signed />
                     </span>
                   )}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="font-bold text-sm tabular-nums text-loss">{fmt(inv.total)}</p>
+                <p className="font-bold text-sm tabular-nums text-loss"><Money amount={inv.total} /></p>
                 <p className="text-xs text-muted-foreground">{t("tax.totalCosts")}</p>
               </div>
             </div>

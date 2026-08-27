@@ -19,6 +19,10 @@ import { useChartKeyboardNav } from "@/components/charts/keyboardNav";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { LineChart } from "@/components/charts/LineChart";
 import { BarChart } from "@/components/charts/BarChart";
+import { ComposedChart } from "@/components/charts/ComposedChart";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { PieChart } from "@/components/charts/PieChart";
+import { StackedBarChart } from "@/components/charts/StackedBarChart";
 
 // ParentSize measures 0×0 in jsdom, which suppresses every chart's inner
 // render; give it a fixed viewport so LineChart/BarChart mount their SVGs.
@@ -29,7 +33,10 @@ vi.mock("@visx/responsive", async (importOriginal) => {
         ParentSize: ({
             children,
         }: {
-            children: (size: { width: number; height: number }) => React.ReactNode;
+            children: (size: {
+                width: number;
+                height: number;
+            }) => React.ReactNode;
         }) => children({ width: 600, height: 300 }),
     };
 });
@@ -43,11 +50,21 @@ function keyEvent(key: string, shiftKey = false): KeyboardEvent {
 }
 
 describe("useChartKeyboardNav (shared key map)", () => {
-    function setup(index: number | null, pointCount = 5, scrub?: Parameters<typeof useChartKeyboardNav>[0]["scrub"]) {
+    function setup(
+        index: number | null,
+        pointCount = 5,
+        scrub?: Parameters<typeof useChartKeyboardNav>[0]["scrub"],
+    ) {
         const onIndexChange = vi.fn();
         const onClear = vi.fn();
         const { result } = renderHook(() =>
-            useChartKeyboardNav({ pointCount, index, onIndexChange, onClear, scrub }),
+            useChartKeyboardNav({
+                pointCount,
+                index,
+                onIndexChange,
+                onClear,
+                scrub,
+            }),
         );
         return { result, onIndexChange, onClear };
     }
@@ -121,14 +138,25 @@ describe("useChartKeyboardNav (shared key map)", () => {
     });
 
     it("Shift+arrow anchors then extends a scrub; a plain arrow ends it", () => {
-        const scrub = { scrubbing: false, begin: vi.fn(), move: vi.fn(), end: vi.fn() };
+        const scrub = {
+            scrubbing: false,
+            begin: vi.fn(),
+            move: vi.fn(),
+            end: vi.fn(),
+        };
         const first = setup(1, 5, scrub);
         first.result.current.onKeyDown(keyEvent("ArrowRight", true));
         expect(scrub.begin).toHaveBeenCalledWith(1);
         expect(scrub.move).toHaveBeenCalledWith(2);
         expect(first.onIndexChange).toHaveBeenCalledWith(2);
 
-        const active = { ...scrub, scrubbing: true, begin: vi.fn(), move: vi.fn(), end: vi.fn() };
+        const active = {
+            ...scrub,
+            scrubbing: true,
+            begin: vi.fn(),
+            move: vi.fn(),
+            end: vi.fn(),
+        };
         const second = setup(2, 5, active);
         second.result.current.onKeyDown(keyEvent("ArrowRight", true));
         expect(active.begin).not.toHaveBeenCalled();
@@ -307,7 +335,13 @@ describe("BarChart keyboard access", () => {
             <BarChart
                 data={BAR_DATA}
                 categoryAccessor={(d) => d.label}
-                series={[{ key: "total", label: "Total", accessor: (d: (typeof BAR_DATA)[number]) => d.total }]}
+                series={[
+                    {
+                        key: "total",
+                        label: "Total",
+                        accessor: (d: (typeof BAR_DATA)[number]) => d.total,
+                    },
+                ]}
                 tooltipValueFormat={fmt}
             />,
         );
@@ -321,5 +355,204 @@ describe("BarChart keyboard access", () => {
         await expectTooltipValue(25);
         fireEvent.blur(svg);
         await expectNoTooltipValues();
+    });
+});
+
+describe("remaining chart primitive keyboard access", () => {
+    const CATEGORIES = [
+        { label: "Jan", first: 5, second: 2 },
+        { label: "Feb", first: 15, second: 3 },
+    ];
+    const PROPORTIONS = [
+        { name: "Food", value: 5 },
+        { name: "Rent", value: 15 },
+    ];
+
+    it("steps StackedBar categories through the existing tooltip", async () => {
+        const { container } = renderWithApp(
+            <StackedBarChart
+                data={CATEGORIES}
+                categoryAccessor={(datum) => datum.label}
+                series={[
+                    { key: "first", accessor: (datum) => datum.first },
+                    { key: "second", accessor: (datum) => datum.second },
+                ]}
+                tooltipValueFormat={fmt}
+            />,
+        );
+        const svg = getSvg(container);
+        expect(svg).toHaveAttribute("tabindex", "0");
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        await expectTooltipValue(5);
+        fireEvent.keyDown(svg, { key: "End" });
+        await expectTooltipValue(15);
+        fireEvent.blur(svg);
+        await expectNoTooltipValues();
+    });
+
+    it("steps Donut slices through its existing center readout", async () => {
+        const { container } = renderWithApp(
+            <DonutChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
+        );
+        const svg = getSvg(container);
+        expect(svg).toHaveAttribute("tabindex", "0");
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        expect(await screen.findByText("Food")).toBeInTheDocument();
+        expect(await screen.findByText(fmt(5))).toBeInTheDocument();
+        fireEvent.keyDown(svg, { key: "End" });
+        expect(await screen.findByText("Rent")).toBeInTheDocument();
+        fireEvent.keyDown(svg, { key: "Escape" });
+        await expectNoTooltipValues();
+    });
+
+    it("steps Pie slices through the existing tooltip", async () => {
+        const { container } = renderWithApp(
+            <PieChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
+        );
+        const svg = getSvg(container);
+        expect(svg).toHaveAttribute("tabindex", "0");
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        await expectTooltipValue(5);
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        await expectTooltipValue(15);
+    });
+
+    it("steps a Composed candlestick series using its close-value tooltip", async () => {
+        const candles = DATA.map((datum) => ({
+            ...datum,
+            open: datum.value - 1,
+            high: datum.value + 2,
+            low: datum.value - 2,
+            close: datum.value + 1,
+        }));
+        const { container } = renderWithApp(
+            <ComposedChart
+                data={candles}
+                xAccessor={(datum) => datum.date}
+                xIsDate
+                series={[
+                    {
+                        key: "ohlc",
+                        type: "candlestick",
+                        open: (datum) => datum.open,
+                        high: (datum) => datum.high,
+                        low: (datum) => datum.low,
+                        close: (datum) => datum.close,
+                    },
+                ]}
+                tooltipValueFormat={fmt}
+            />,
+        );
+        const svg = getSvg(container);
+        expect(svg).toHaveAttribute("tabindex", "0");
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        await expectTooltipValue(11);
+        fireEvent.keyDown(svg, { key: "End" });
+        await expectTooltipValue(41);
+    });
+
+    it("keeps Donut pointer behavior and safely drops a stale last-slice index", async () => {
+        const { container, rerender } = renderWithApp(
+            <DonutChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
+        );
+        const paths = container.querySelectorAll("path");
+        fireEvent.pointerEnter(paths[1]);
+        expect(await screen.findByText("Rent")).toBeInTheDocument();
+
+        rerender(
+            <DonutChart
+                data={PROPORTIONS.slice(0, 1)}
+                tooltipValueFormat={fmt}
+            />,
+        );
+        await waitFor(() =>
+            expect(screen.queryByText("Rent")).not.toBeInTheDocument(),
+        );
+
+        const svg = getSvg(container);
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        expect(await screen.findByText("Food")).toBeInTheDocument();
+    });
+
+    it("keeps pointer readouts aligned with keyboard readouts for changed chart primitives", async () => {
+        const stacked = renderWithApp(
+            <StackedBarChart
+                data={CATEGORIES}
+                categoryAccessor={(datum) => datum.label}
+                series={[
+                    { key: "first", accessor: (datum) => datum.first },
+                    { key: "second", accessor: (datum) => datum.second },
+                ]}
+                tooltipValueFormat={fmt}
+            />,
+        );
+        const stackedBars = stacked.container.querySelectorAll("rect[fill]");
+        fireEvent.pointerEnter(stackedBars[1]);
+        await expectTooltipValue(15);
+        fireEvent.pointerLeave(stackedBars[1]);
+        await expectNoTooltipValues();
+        stacked.unmount();
+
+        const pie = renderWithApp(
+            <PieChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
+        );
+        const pieSlices = pie.container.querySelectorAll(
+            'path[style*="cursor"]',
+        );
+        fireEvent.pointerEnter(pieSlices[1]);
+        await expectTooltipValue(15);
+        fireEvent.pointerLeave(pieSlices[1]);
+        await expectNoTooltipValues();
+        pie.unmount();
+
+        const candles = DATA.map((datum) => ({
+            ...datum,
+            open: datum.value - 1,
+            high: datum.value + 2,
+            low: datum.value - 2,
+            close: datum.value + 1,
+        }));
+        const composed = renderWithApp(
+            <ComposedChart
+                data={candles}
+                xAccessor={(datum) => datum.date}
+                xIsDate
+                series={[
+                    {
+                        key: "ohlc",
+                        type: "candlestick",
+                        open: (datum) => datum.open,
+                        high: (datum) => datum.high,
+                        low: (datum) => datum.low,
+                        close: (datum) => datum.close,
+                    },
+                ]}
+                tooltipValueFormat={fmt}
+            />,
+        );
+        const overlay = composed.container.querySelector(
+            'rect[fill="transparent"]',
+        );
+        if (!overlay) throw new Error("composed pointer overlay not rendered");
+        fireEvent.pointerMove(overlay, { clientX: 500 });
+        await expectTooltipValue(41);
+    });
+
+    it("does not add dead tab stops to empty extended primitives", () => {
+        const { container } = renderWithApp(
+            <>
+                <StackedBarChart
+                    data={[]}
+                    categoryAccessor={() => ""}
+                    series={[]}
+                />
+                <DonutChart data={[]} />
+                <PieChart data={[]} />
+                <ComposedChart data={[]} xAccessor={() => 0} series={[]} />
+            </>,
+        );
+        for (const svg of container.querySelectorAll("svg[role=img]")) {
+            expect(svg).not.toHaveAttribute("tabindex");
+        }
     });
 });

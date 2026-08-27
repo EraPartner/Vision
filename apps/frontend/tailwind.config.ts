@@ -21,6 +21,9 @@ export default {
             },
         },
         extend: {
+            fontSize: {
+                '2xs': ['0.6875rem', { lineHeight: '0.875rem' }],
+            },
             fontFamily: {
                 display: [
                     "Fraunces",
@@ -65,6 +68,7 @@ export default {
                     foreground: "hsl(var(--destructive-foreground))",
                 },
                 success: "hsl(var(--success))",
+                info: "hsl(var(--info) / <alpha-value>)",
                 warning: "hsl(var(--warning))",
                 expense: "hsl(var(--expense))",
                 // Gain/loss palette — follows the colorblind accessibility
@@ -133,9 +137,12 @@ export default {
                 "in-out-quart": "var(--ease-in-out-quart)",
             },
             transitionDuration: {
-                fast: "150ms",
-                normal: "260ms",
-                slow: "420ms",
+                fast: "var(--duration-fast)",
+                normal: "var(--duration-normal)",
+                slow: "var(--duration-slow)",
+                press: "var(--duration-press)",
+                dismiss: "var(--duration-dismiss)",
+                reveal: "var(--duration-reveal)",
             },
             keyframes: {
                 "accordion-down": {
@@ -163,15 +170,15 @@ export default {
                 },
             },
             animation: {
-                "accordion-down": "accordion-down 0.2s ease-out",
-                "accordion-up": "accordion-up 0.2s ease-out",
+                "accordion-down": "accordion-down var(--duration-dismiss) ease-out",
+                "accordion-up": "accordion-up var(--duration-dismiss) ease-out",
                 shimmer: shimmerAnimation,
                 // Overshooting bezier gives the spring feel without JS.
-                "dialog-in": "dialog-in 420ms cubic-bezier(0.34, 1.45, 0.64, 1) both",
+                "dialog-in": "dialog-in var(--duration-slow) cubic-bezier(0.34, 1.45, 0.64, 1) both",
                 // Dismissal is a settle, not an arrival — glide (Apple's sheet
                 // curve) is the same cubic-bezier `--ease-out-quint` resolved
                 // to, so this is a rename, not a retune.
-                "dialog-out": "dialog-out 200ms var(--ease-glide) both",
+                "dialog-out": "dialog-out var(--duration-dismiss) var(--ease-glide) both",
             },
         },
     },

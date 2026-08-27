@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChartSkeleton } from '@/components/charts/ChartSkeleton';
-import { PageLoader } from '@/components/shared/PageLoader';
+import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
+import { PageLoader } from "@/components/shared/PageLoader";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ResearchAnalystTab } from "@/features/research/ResearchAnalystTab";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -18,24 +18,31 @@ import { renderWithApp } from "@/test/renderWithApp";
  *     not a hardcoded English literal.
  */
 describe("loading surface a11y", () => {
-    it('moves a clipped child layer instead of repainting each loading surface', () => {
-        const { container, rerender } = render(<Skeleton className="h-4 w-full" />);
+    it("moves a clipped child layer instead of repainting each loading surface", () => {
+        const { container, rerender } = render(
+            <Skeleton className="h-4 w-full" />,
+        );
         const skeleton = container.firstElementChild!;
-        expect(skeleton).toHaveClass('overflow-hidden');
-        expect(skeleton).not.toHaveClass('animate-shimmer');
-        const skeletonSweep = skeleton.querySelector('.animate-shimmer');
-        expect(skeletonSweep).toHaveClass('absolute', 'pointer-events-none');
-        expect(skeletonSweep).toHaveAttribute('aria-hidden', 'true');
+        expect(skeleton).toHaveClass("overflow-hidden");
+        expect(skeleton).not.toHaveClass("animate-shimmer");
+        const skeletonSweep = skeleton.querySelector(".animate-shimmer");
+        expect(skeletonSweep).toHaveClass("absolute", "pointer-events-none");
+        expect(skeletonSweep).toHaveAttribute("aria-hidden", "true");
 
         rerender(<ChartSkeleton />);
         const chart = container.firstElementChild!;
-        expect(chart).toHaveClass('overflow-hidden');
-        expect(chart.querySelector('.animate-shimmer')).toHaveClass('absolute', 'pointer-events-none');
+        expect(chart).toHaveClass("overflow-hidden");
+        expect(chart.querySelector(".animate-shimmer")).toHaveClass(
+            "absolute",
+            "pointer-events-none",
+        );
 
         rerender(<PageLoader />);
         const routeLoader = container.firstElementChild!;
-        expect(routeLoader).toHaveClass('overflow-hidden');
-        expect(routeLoader.querySelector('.animate-shimmer')).toHaveClass('motion-reduce:hidden');
+        expect(routeLoader).toHaveClass("overflow-hidden");
+        expect(routeLoader.querySelector(".animate-shimmer")).toHaveClass(
+            "motion-reduce:hidden",
+        );
     });
 
     it("Skeleton is decorative by default", () => {
@@ -58,12 +65,16 @@ describe("loading surface a11y", () => {
         expect(statuses).toHaveLength(1);
         expect(statuses[0]).toHaveAttribute("aria-busy", "true");
         // …labelled from the locale dictionary once the async dict resolves
-        await waitFor(() => expect(statuses[0]).toHaveAccessibleName("Loading..."));
+        await waitFor(() =>
+            expect(statuses[0]).toHaveAccessibleName("Loading…"),
+        );
 
         // …and every bone inside it is hidden
         const bones = container.querySelectorAll(".animate-shimmer");
         expect(bones.length).toBeGreaterThan(1);
-        bones.forEach((bone) => expect(bone).toHaveAttribute("aria-hidden", "true"));
+        bones.forEach((bone) =>
+            expect(bone).toHaveAttribute("aria-hidden", "true"),
+        );
     });
 
     it("a lone Skeleton that IS the surface announces instead of hiding", async () => {
@@ -80,19 +91,23 @@ describe("loading surface a11y", () => {
         const status = screen.getByRole("status");
         expect(status).not.toHaveAttribute("aria-hidden");
         expect(status).toHaveAttribute("aria-busy", "true");
-        await waitFor(() => expect(status).toHaveAccessibleName("Loading..."));
+        await waitFor(() => expect(status).toHaveAccessibleName("Loading…"));
     });
 
     it("a real loading surface announces once for all of its bones", () => {
         // Arrange + Act — five bones in one early-return branch. Asserted
         // synchronously: the fetch resolves on a later tick, so this is the
         // loading frame.
-        const { container } = renderWithApp(<ResearchAnalystTab symbol="AAPL" enabled />);
+        const { container } = renderWithApp(
+            <ResearchAnalystTab symbol="AAPL" enabled />,
+        );
 
         // Assert
         expect(screen.getAllByRole("status")).toHaveLength(1);
         const bones = container.querySelectorAll(".animate-shimmer");
         expect(bones.length).toBe(5);
-        bones.forEach((bone) => expect(bone).toHaveAttribute("aria-hidden", "true"));
+        bones.forEach((bone) =>
+            expect(bone).toHaveAttribute("aria-hidden", "true"),
+        );
     });
 });

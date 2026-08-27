@@ -113,7 +113,7 @@ export function MergeAccountDialog({ source, open, onOpenChange }: {
                                         })}
                                     </p>
                                     {preview.data.stampsInterleaved && (
-                                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+                                        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
                                             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                                             {t('accounts.mergePreview.interleaved')}
                                         </p>
@@ -132,7 +132,7 @@ export function MergeAccountDialog({ source, open, onOpenChange }: {
                         </span>
                     </div>
                     {target && target.type !== source.type && (
-                        <p className="text-sm text-amber-600 dark:text-amber-500">
+                        <p className="text-sm text-warning">
                             {t('accounts.mergeTypeMismatch', {
                                 sourceType: t(`accounts.type.${source.type}`),
                                 targetType: t(`accounts.type.${target.type}`),

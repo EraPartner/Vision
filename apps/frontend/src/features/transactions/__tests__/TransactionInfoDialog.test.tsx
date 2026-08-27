@@ -47,7 +47,11 @@ describe("TransactionInfoDialog", () => {
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         // txPage.detailsTitle = "Transaction Details" — findByRole waits for async i18n load
-        expect(await screen.findByRole("heading", { name: /transaction details/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", {
+                name: /transaction details/i,
+            }),
+        ).toBeInTheDocument();
     });
 
     it("does not render dialog when infoTransaction is null", () => {
@@ -64,7 +68,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows transaction ID value", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -73,7 +81,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows memo (description) value", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -82,7 +94,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows recipient value", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -91,7 +107,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows category value", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -100,7 +120,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows comment value", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -109,7 +133,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows status as Active for an active transaction", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -121,7 +149,11 @@ describe("TransactionInfoDialog", () => {
         const inactiveTx = { ...TX, is_active: false };
 
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={inactiveTx} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={inactiveTx}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -131,12 +163,18 @@ describe("TransactionInfoDialog", () => {
 
     it("shows Edit pencil buttons for editable fields", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
         // common.edit = "Edit" — title attribute provides accessible name for icon buttons
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
         expect(editButtons.length).toBeGreaterThan(0);
     });
 
@@ -144,14 +182,20 @@ describe("TransactionInfoDialog", () => {
         const user = userEvent.setup();
 
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
 
         // Edit buttons in DOM order: date (index 0), memo (index 1), amount, currency, bank, comment
         // (balance is read-only — bank-stamped import data, ADR-094 — so it has no edit button)
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
         await user.click(editButtons[1]); // memo field uses editType="text"
 
         expect(screen.getByRole("textbox")).toBeInTheDocument();
@@ -159,32 +203,11 @@ describe("TransactionInfoDialog", () => {
 
     it("Cancel button in edit mode exits edit mode", async () => {
         const user = userEvent.setup();
-
-        renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
-        );
-
-        await screen.findByRole("dialog");
-
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
-        await user.click(editButtons[1]); // memo
-        expect(screen.getByRole("textbox")).toBeInTheDocument();
-
-        // common.cancel = "Cancel"
-        await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
-
-        expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    });
-
-    it("Save button calls PATCH /api/transactions/:id and onApplyLocal", async () => {
-        const user = userEvent.setup();
-        const onApplyLocal = vi.fn();
-        let patchCalled = false;
-
+        let patchCount = 0;
         server.use(
             http.patch(`${API_BASE}/api/transactions/42`, () => {
-                patchCalled = true;
-                return ok({ id: 42, memo: "New memo", amount: -25.5, currency: "EUR", is_active: true });
+                patchCount += 1;
+                return ok(TX);
             }),
         );
 
@@ -192,28 +215,113 @@ describe("TransactionInfoDialog", () => {
             <TransactionInfoDialog
                 infoTransaction={TX}
                 onClose={vi.fn()}
-                onApplyLocal={onApplyLocal}
+                onApplyLocal={vi.fn()}
             />,
         );
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
         await user.click(editButtons[1]); // memo
+        expect(screen.getByRole("textbox")).toBeInTheDocument();
 
-        const input = screen.getByRole("textbox");
-        await user.clear(input);
-        await user.type(input, "New memo");
-
-        // common.save = "Save"
-        await user.click(await screen.findByRole("button", { name: /^save$/i }));
-
-        await waitFor(() => expect(patchCalled).toBe(true));
-        await waitFor(() =>
-            expect(onApplyLocal).toHaveBeenCalledWith(42, "memo", "New memo"),
+        // common.cancel = "Cancel"
+        await user.click(
+            await screen.findByRole("button", { name: /^cancel$/i }),
         );
-        // Edit mode exits after save
+
         expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+        expect(patchCount).toBe(0);
+    });
+
+    it.each(["Enter", "save button"] as const)(
+        "%s submits an inline text editor",
+        async (submitMethod) => {
+            const user = userEvent.setup();
+            const onApplyLocal = vi.fn();
+            let patchCount = 0;
+
+            server.use(
+                http.patch(`${API_BASE}/api/transactions/42`, () => {
+                    patchCount += 1;
+                    return ok({
+                        id: 42,
+                        memo: "New memo",
+                        amount: -25.5,
+                        currency: "EUR",
+                        is_active: true,
+                    });
+                }),
+            );
+
+            renderWithApp(
+                <TransactionInfoDialog
+                    infoTransaction={TX}
+                    onClose={vi.fn()}
+                    onApplyLocal={onApplyLocal}
+                />,
+            );
+
+            await screen.findByRole("dialog");
+
+            const editButtons = await screen.findAllByRole("button", {
+                name: /^edit$/i,
+            });
+            await user.click(editButtons[1]); // memo
+
+            const input = screen.getByRole("textbox", { name: "Description" });
+            await user.clear(input);
+            await user.type(input, "New memo");
+
+            if (submitMethod === "Enter") {
+                await user.keyboard("{Enter}");
+            } else {
+                await user.click(screen.getByRole("button", { name: "Save" }));
+            }
+
+            await waitFor(() => expect(patchCount).toBe(1));
+            await waitFor(() =>
+                expect(onApplyLocal).toHaveBeenCalledWith(
+                    42,
+                    "memo",
+                    "New memo",
+                ),
+            );
+            // Edit mode exits after save
+            expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+        },
+    );
+
+    it("Enter on the date trigger opens the calendar without saving", async () => {
+        const user = userEvent.setup();
+        let patchCount = 0;
+        server.use(
+            http.patch(`${API_BASE}/api/transactions/42`, () => {
+                patchCount += 1;
+                return ok(TX);
+            }),
+        );
+        renderWithApp(
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
+        );
+        await screen.findByRole("dialog");
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
+        await user.click(editButtons[0]);
+
+        const dateTrigger = screen.getByRole("button", { name: "Date" });
+        dateTrigger.focus();
+        await user.keyboard("{Enter}");
+
+        expect(await screen.findByRole("grid")).toBeInTheDocument();
+        expect(patchCount).toBe(0);
     });
 
     it("Escape key closes dialog and calls onClose", async () => {
@@ -221,7 +329,11 @@ describe("TransactionInfoDialog", () => {
         const onClose = vi.fn();
 
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={onClose} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={onClose}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -235,7 +347,11 @@ describe("TransactionInfoDialog", () => {
 
     it("shows Attachments section", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
@@ -244,28 +360,44 @@ describe("TransactionInfoDialog", () => {
         // flushes through a microtask cycle, which under CI load was racing the
         // exact-match assertion below.
         await waitFor(() =>
-            expect(screen.queryByText(/^loading\.\.\.$/i)).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText(/^loading\.\.\.$/i),
+            ).not.toBeInTheDocument(),
         );
         // Match the section header exactly — `/attachments/i` would also catch
         // "No attachments yet" and trip the multiple-match guard.
-        expect(await screen.findByText(/^attachments$/i, undefined, { timeout: 3000 })).toBeInTheDocument();
+        expect(
+            await screen.findByText(/^attachments$/i, undefined, {
+                timeout: 3000,
+            }),
+        ).toBeInTheDocument();
     });
 
     it("shows no-attachments message when attachment list is empty", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
         // txPage.noAttachments = "No attachments yet"
-        expect(await screen.findByText(/no attachments yet/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no attachments yet/i),
+        ).toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
@@ -273,7 +405,11 @@ describe("TransactionInfoDialog", () => {
 
     it("first focusable element exists for keyboard nav", async () => {
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
         await screen.findByRole("dialog");
         const buttons = await screen.findAllByRole("button");
@@ -293,11 +429,20 @@ describe("TransactionInfoDialog", () => {
         let receivedAmount: number | undefined;
 
         server.use(
-            http.patch(`${API_BASE}/api/transactions/42`, async ({ request }) => {
-                const body = (await request.json()) as { amount?: number };
-                receivedAmount = body.amount;
-                return ok({ id: 42, memo: "x", amount: body.amount ?? 0, currency: "EUR", is_active: true });
-            }),
+            http.patch(
+                `${API_BASE}/api/transactions/42`,
+                async ({ request }) => {
+                    const body = (await request.json()) as { amount?: number };
+                    receivedAmount = body.amount;
+                    return ok({
+                        id: 42,
+                        memo: "x",
+                        amount: body.amount ?? 0,
+                        currency: "EUR",
+                        is_active: true,
+                    });
+                },
+            ),
         );
 
         renderWithApp(
@@ -310,7 +455,9 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
         // index order: date(0), memo(1), amount(2), currency(3), bank(4), comment(5)
         // (balance is read-only — no edit button — see ADR-094)
         await user.click(editButtons[2]);
@@ -318,7 +465,9 @@ describe("TransactionInfoDialog", () => {
         const input = screen.getByRole("spinbutton") as HTMLInputElement;
         fireEvent.change(input, { target: { value: "42.5" } });
 
-        await user.click(await screen.findByRole("button", { name: /^save$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^save$/i }),
+        );
 
         await waitFor(() => expect(receivedAmount).toBe(42.5));
         await waitFor(() =>
@@ -336,24 +485,49 @@ describe("TransactionInfoDialog", () => {
 
         const txWithTag: TableTransaction = {
             ...TX,
-            tags: [{ id: 1, slug: "travel", color: null, is_active: true, created_at: "", updated_at: "" }],
+            tags: [
+                {
+                    id: 1,
+                    slug: "travel",
+                    color: null,
+                    is_active: true,
+                    created_at: "",
+                    updated_at: "",
+                },
+            ],
         };
 
         server.use(
-            http.patch(`${API_BASE}/api/transactions/42`, async ({ request }) => {
-                const body = (await request.json()) as { tags?: unknown };
-                receivedTags = body.tags;
-                return ok({ id: 42, memo: "Test purchase", amount: -25.5, currency: "EUR", is_active: true, tags: [] });
-            }),
+            http.patch(
+                `${API_BASE}/api/transactions/42`,
+                async ({ request }) => {
+                    const body = (await request.json()) as { tags?: unknown };
+                    receivedTags = body.tags;
+                    return ok({
+                        id: 42,
+                        memo: "Test purchase",
+                        amount: -25.5,
+                        currency: "EUR",
+                        is_active: true,
+                        tags: [],
+                    });
+                },
+            ),
         );
 
         renderWithApp(
-            <TransactionInfoDialog infoTransaction={txWithTag} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+            <TransactionInfoDialog
+                infoTransaction={txWithTag}
+                onClose={vi.fn()}
+                onApplyLocal={vi.fn()}
+            />,
         );
 
         await screen.findByRole("dialog");
         // The chip is present before removal.
-        const removeButton = await screen.findByRole("button", { name: /remove tag travel/i });
+        const removeButton = await screen.findByRole("button", {
+            name: /remove tag travel/i,
+        });
 
         await user.click(removeButton);
 
@@ -361,7 +535,9 @@ describe("TransactionInfoDialog", () => {
         await waitFor(() => expect(receivedTags).toEqual([]));
         // The chip is gone from the dialog — the deletion is visible, not stuck.
         await waitFor(() =>
-            expect(screen.queryByRole("button", { name: /remove tag travel/i })).not.toBeInTheDocument(),
+            expect(
+                screen.queryByRole("button", { name: /remove tag travel/i }),
+            ).not.toBeInTheDocument(),
         );
     });
 
@@ -372,7 +548,13 @@ describe("TransactionInfoDialog", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/42`, () => {
                 patchCalled = true;
-                return ok({ id: 42, memo: "x", amount: -25.5, currency: "EUR", is_active: true });
+                return ok({
+                    id: 42,
+                    memo: "x",
+                    amount: -25.5,
+                    currency: "EUR",
+                    is_active: true,
+                });
             }),
         );
 
@@ -386,11 +568,15 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
         await user.click(editButtons[1]); // memo
 
         await user.type(screen.getByRole("textbox"), " (changed)");
-        await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^cancel$/i }),
+        );
 
         await new Promise((r) => setTimeout(r, 100));
         expect(patchCalled).toBe(false);

@@ -74,7 +74,9 @@ describe("MarkAsFiledDialog — Enter submits the form", () => {
         await renderAndOpen(user);
 
         await user.type(screen.getByLabelText("Reference"), "SHOULD-NOT-FILE");
-        await user.click(screen.getByRole("button", { name: /cancel/i }));
+        const cancel = screen.getByRole("button", { name: /cancel/i });
+        expect(cancel).toHaveClass("border", "border-input/70");
+        await user.click(cancel);
 
         await waitFor(() =>
             expect(screen.queryByText(`Mark ${YEAR} as filed`)).not.toBeInTheDocument(),

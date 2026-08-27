@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { KeyRound, CheckCircle2 } from 'lucide-react';
+import { useId, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { researchKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
     clearResearchProviderKey,
 } from '@/lib/api/research';
 import type { ProviderKeyStatus } from '@/types/research';
+import { SettingsGroup, SettingRow } from '@/features/settings/SettingsPrimitives';
 
 /**
  * Settings section for the keyed research providers (ADR-079). Self-contained:
@@ -46,28 +47,26 @@ export function ResearchKeysSection() {
     });
 
     return (
-        <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-primary" />
-                {t('settings.research.section')}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t('settings.research.hint')}</p>
-            <div className="rounded-lg border divide-y">
-                {(data?.items ?? []).map((status) => (
-                    <ProviderKeyRow
-                        key={status.provider}
-                        status={status}
-                        onSave={(apiKey) => saveMutation.mutate({ provider: status.provider, apiKey })}
-                        onClear={() => clearMutation.mutate(status.provider)}
-                        saving={saveMutation.isPending}
-                        clearing={clearMutation.isPending}
-                    />
-                ))}
-                {isLoading && (
-                    <div className="p-4 text-xs text-muted-foreground">{t('settings.research.loading')}</div>
-                )}
-            </div>
-        </div>
+        <SettingsGroup
+            label={t('settings.research.section')}
+            description={t('settings.research.hint')}
+        >
+            {(data?.items ?? []).map((status) => (
+                <ProviderKeyRow
+                    key={status.provider}
+                    status={status}
+                    onSave={(apiKey) => saveMutation.mutate({ provider: status.provider, apiKey })}
+                    onClear={() => clearMutation.mutate(status.provider)}
+                    saving={saveMutation.isPending}
+                    clearing={clearMutation.isPending}
+                />
+            ))}
+            {isLoading && (
+                <SettingRow title={t('settings.research.loading')}>
+                    <span className="text-xs text-muted-foreground">…</span>
+                </SettingRow>
+            )}
+        </SettingsGroup>
     );
 }
 
@@ -82,6 +81,7 @@ interface ProviderKeyRowProps {
 function ProviderKeyRow({ status, onSave, onClear, saving, clearing }: ProviderKeyRowProps) {
     const { t } = useLanguage();
     const [value, setValue] = useState('');
+    const inputId = useId();
 
     const sourceLabel =
         status.source === 'settings'
@@ -91,18 +91,24 @@ function ProviderKeyRow({ status, onSave, onClear, saving, clearing }: ProviderK
                 : t('settings.research.sourceNone');
 
     return (
-        <div className="p-4 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-foreground">{status.label}</span>
-                    {status.configured && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
-                </div>
-                <span className={cn('text-xs', status.configured ? 'text-success' : 'text-muted-foreground')}>
+        <SettingRow
+            title={(
+                <span className="flex min-w-0 items-center gap-2">
+                    {status.label}
+                    {status.configured && <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-success" />}
+                </span>
+            )}
+            description={(
+                <span className={cn(status.configured ? 'text-success' : 'text-muted-foreground')}>
                     {sourceLabel}{status.masked ? ` · ${status.masked}` : ''}
                 </span>
-            </div>
+            )}
+            htmlFor={inputId}
+            layout="stack"
+        >
             <div className="flex items-center gap-2">
                 <Input
+                    id={inputId}
                     type="password"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
@@ -124,7 +130,7 @@ function ProviderKeyRow({ status, onSave, onClear, saving, clearing }: ProviderK
                     </Button>
                 )}
             </div>
-            <p className="text-[11px] text-muted-foreground font-mono">{status.envVar}</p>
-        </div>
+            <p className="text-2xs text-muted-foreground font-mono">{status.envVar}</p>
+        </SettingRow>
     );
 }

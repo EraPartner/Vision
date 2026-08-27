@@ -1,23 +1,42 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
-import { Route, Routes } from "react-router";
+import { Link, Route, Routes, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ACCOUNT_STUB, RECIPIENT_STUB, err, ok } from "@/test/msw/handlers";
 import ImportReviewPage from "@/pages/ImportReviewPage";
+import ImportPage from "@/pages/ImportPage";
 
 const API_BASE = "http://localhost:3002";
 
 function renderReviewPage() {
     return renderWithApp(
         <Routes>
-            <Route path="/import/:batchId/review" element={<ImportReviewPage />} />
+            <Route
+                path="/import/:batchId/review"
+                element={<ImportReviewPage />}
+            />
         </Routes>,
         { initialEntries: ["/import/1/review"] },
+    );
+}
+
+function ImportRouteProbe() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    return (
+        <div>
+            <div data-testid="import-route-state">
+                {JSON.stringify(location.state)}
+            </div>
+            <button type="button" onClick={() => navigate(-1)}>
+                Test browser back
+            </button>
+        </div>
     );
 }
 
@@ -50,7 +69,9 @@ describe("ImportReviewPage (integration)", () => {
     });
 
     it("shows generic server copy and Back to Import button when preview API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 err(500, "preview unavailable"),
@@ -63,19 +84,29 @@ describe("ImportReviewPage (integration)", () => {
         // swallows it — this used to assert the raw backend string rendered.
         // apiRequest retries on 500, hence the extended timeout.
         expect(
-            await screen.findByText(/server ran into a problem/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /server ran into a problem/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
-        expect(screen.queryByText(/preview unavailable/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/preview unavailable/i),
+        ).not.toBeInTheDocument();
         expect(
             await screen.findByRole("button", { name: /back to import/i }),
         ).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });
 
     it("shows error message when preview API fails with 403", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 err(403, "Access denied"),
@@ -86,7 +117,9 @@ describe("ImportReviewPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /back to import/i }),
         ).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
@@ -101,7 +134,9 @@ describe("ImportReviewPage (integration)", () => {
     it("Approve & Import button shows 0 rows in label", async () => {
         renderReviewPage();
         expect(
-            await screen.findByRole("button", { name: /approve & import \(0 rows\)/i }),
+            await screen.findByRole("button", {
+                name: /approve & import \(0 rows\)/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -130,7 +165,13 @@ describe("ImportReviewPage (integration)", () => {
                             matched_pattern_text: null,
                         },
                     ],
-                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 1,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -155,7 +196,13 @@ describe("ImportReviewPage (integration)", () => {
                             matched_pattern_text: null,
                         },
                     ],
-                    totals: { exact: 3, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 3,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -163,7 +210,9 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         // importReview.rowCount = "{n} rows" — accordion shows "3 rows" next to group name
-        expect(await screen.findByText(/3 rows/i, { selector: "span" })).toBeInTheDocument();
+        expect(
+            await screen.findByText(/3 rows/i, { selector: "span" }),
+        ).toBeInTheDocument();
     });
 
     it("shows correct row count in Approve button label when preview has groups", async () => {
@@ -172,10 +221,28 @@ describe("ImportReviewPage (integration)", () => {
                 ok({
                     batch_id: 1,
                     groups: [
-                        { recipient_id: 1, recipient_name: "Lidl", row_count: 4, rows: [], matched_pattern_text: null },
-                        { recipient_id: 2, recipient_name: "Aldi", row_count: 2, rows: [], matched_pattern_text: null },
+                        {
+                            recipient_id: 1,
+                            recipient_name: "Lidl",
+                            row_count: 4,
+                            rows: [],
+                            matched_pattern_text: null,
+                        },
+                        {
+                            recipient_id: 2,
+                            recipient_name: "Aldi",
+                            row_count: 2,
+                            rows: [],
+                            matched_pattern_text: null,
+                        },
                     ],
-                    totals: { exact: 6, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 6,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -184,7 +251,9 @@ describe("ImportReviewPage (integration)", () => {
 
         // totalRows = 4 + 2 = 6
         expect(
-            await screen.findByRole("button", { name: /approve & import \(6 rows\)/i }),
+            await screen.findByRole("button", {
+                name: /approve & import \(6 rows\)/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -195,17 +264,95 @@ describe("ImportReviewPage (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () => {
                 commitCalled = true;
-                return ok({ batch_id: 1, imported: 0, duplicates: 0, errors: 0 });
+                return ok({
+                    batch_id: 1,
+                    imported: 0,
+                    duplicates: 0,
+                    errors: 0,
+                });
             }),
         );
 
         renderReviewPage();
 
-        const approveBtn = await screen.findByRole("button", { name: /approve & import/i });
+        const approveBtn = await screen.findByRole("button", {
+            name: /approve & import/i,
+        });
         await user.click(approveBtn);
 
         expect(commitCalled).toBe(true);
     });
+
+    it("replaces review history and consumes receipt route state after commit", async () => {
+        const user = userEvent.setup({ delay: null });
+        server.use(
+            http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
+                ok({ batch_id: 1, imported: 2, duplicates: 1, errors: 0 }),
+            ),
+            http.get(`${API_BASE}/api/import/parsers`, () =>
+                ok({ items: [], total: 0 }),
+            ),
+        );
+
+        renderWithApp(
+            <Routes>
+                <Route
+                    path="/before"
+                    element={
+                        <main>
+                            <h1>Before import</h1>
+                            <Link to="/import/1/review">
+                                Start import review
+                            </Link>
+                        </main>
+                    }
+                />
+                <Route
+                    path="/import/:batchId/review"
+                    element={<ImportReviewPage />}
+                />
+                <Route
+                    path="/import"
+                    element={
+                        <>
+                            <ImportPage />
+                            <ImportRouteProbe />
+                        </>
+                    }
+                />
+            </Routes>,
+            { initialEntries: ["/before"] },
+        );
+
+        await user.click(
+            await screen.findByRole("link", { name: /start import review/i }),
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /approve & import/i }),
+        );
+
+        const receipt = await screen.findByRole("status");
+        expect(
+            within(receipt).getByRole("img", { name: "2" }),
+        ).toBeInTheDocument();
+        expect(receipt).toHaveTextContent("transactions imported");
+        expect(receipt).toHaveTextContent("1 duplicate · 0 errors");
+        await waitFor(() =>
+            expect(screen.getByTestId("import-route-state")).toHaveTextContent(
+                "null",
+            ),
+        );
+
+        await user.click(
+            screen.getByRole("button", { name: /test browser back/i }),
+        );
+        expect(
+            await screen.findByRole("heading", { name: /before import/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("heading", { name: /review import/i }),
+        ).not.toBeInTheDocument();
+    }, 10_000);
 
     it("shows match source badges in summary area", async () => {
         server.use(
@@ -213,7 +360,13 @@ describe("ImportReviewPage (integration)", () => {
                 ok({
                     batch_id: 1,
                     groups: [],
-                    totals: { exact: 2, fuzzy: 1, pattern: 0, new: 3, unresolved: 0 },
+                    totals: {
+                        exact: 2,
+                        fuzzy: 1,
+                        pattern: 0,
+                        new: 3,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -255,7 +408,13 @@ describe("ImportReviewPage (integration)", () => {
                             matched_pattern_text: null,
                         },
                     ],
-                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 1,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -300,7 +459,13 @@ describe("ImportReviewPage (integration)", () => {
                             matched_pattern_text: "SPOTIFY*",
                         },
                     ],
-                    totals: { exact: 0, fuzzy: 0, pattern: 1, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 0,
+                        fuzzy: 0,
+                        pattern: 1,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -349,7 +514,13 @@ describe("ImportReviewPage (integration)", () => {
                             matched_pattern_text: null,
                         },
                     ],
-                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 1,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -369,7 +540,10 @@ describe("ImportReviewPage (integration)", () => {
 
     // ─── WP-B6: import disclosure (per-account summary + new-account nudge) ─
 
-    const disclosureRow = (id: number, bankAccount: string | null | undefined) => ({
+    const disclosureRow = (
+        id: number,
+        bankAccount: string | null | undefined,
+    ) => ({
         id,
         tx_date: "2026-07-01",
         amount: "-10.00",
@@ -393,14 +567,24 @@ describe("ImportReviewPage (integration)", () => {
                     matched_pattern_text: null,
                 },
             ],
-            totals: { exact: rows.length, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+            totals: {
+                exact: rows.length,
+                fuzzy: 0,
+                pattern: 0,
+                new: 0,
+                unresolved: 0,
+            },
         });
 
     it("shows per-account disclosure counts and flags only unknown labels as new (WP-B6)", async () => {
         server.use(
             // Existing account "KBC" — identity is case/whitespace-insensitive (D1).
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({ items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }], total: 1, links: [] }),
+                ok({
+                    items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }],
+                    total: 1,
+                    links: [],
+                }),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 previewWithRows([
@@ -416,21 +600,30 @@ describe("ImportReviewPage (integration)", () => {
         // "KBC" bucket: 2 rows, existing account → no badge on its line.
         const kbcLabel = await screen.findByText("KBC");
         expect(kbcLabel.parentElement).toHaveTextContent(/2 transactions/i);
-        expect(kbcLabel.parentElement).not.toHaveTextContent(/new account will be created/i);
+        expect(kbcLabel.parentElement).not.toHaveTextContent(
+            /new account will be created/i,
+        );
 
         // "Revolut" bucket: 1 row, unknown label → new-account badge.
         const revolutLabel = await screen.findByText("Revolut");
         expect(revolutLabel.parentElement).toHaveTextContent(/1 transactions/i);
-        expect(revolutLabel.parentElement).toHaveTextContent(/new account will be created/i);
+        expect(revolutLabel.parentElement).toHaveTextContent(
+            /new account will be created/i,
+        );
 
         // Exactly one badge in total.
-        expect(screen.getAllByText(/new account will be created/i)).toHaveLength(1);
+        expect(
+            screen.getAllByText(/new account will be created/i),
+        ).toHaveLength(1);
     });
 
     it("buckets rows without an account label under 'unspecified account' (WP-B6)", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                previewWithRows([disclosureRow(1, null), disclosureRow(2, "  ")]),
+                previewWithRows([
+                    disclosureRow(1, null),
+                    disclosureRow(2, "  "),
+                ]),
             ),
         );
 
@@ -439,7 +632,9 @@ describe("ImportReviewPage (integration)", () => {
         const unspecified = await screen.findByText(/unspecified account/i);
         expect(unspecified.parentElement).toHaveTextContent(/2 transactions/i);
         // An empty label is not "a new account" — no badge.
-        expect(screen.queryByText(/new account will be created/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/new account will be created/i),
+        ).not.toBeInTheDocument();
     });
 
     it("post-commit nudge links to the accounts hub when a new account was created (WP-B6)", async () => {
@@ -459,13 +654,17 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         await screen.findByText(/new account will be created/i);
-        await user.click(screen.getByRole("button", { name: /approve & import/i }));
+        await user.click(
+            screen.getByRole("button", { name: /approve & import/i }),
+        );
 
         await vi.waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
                 "This import created 1 new account(s)",
                 expect.objectContaining({
-                    action: expect.objectContaining({ label: "Review accounts" }),
+                    action: expect.objectContaining({
+                        label: "Review accounts",
+                    }),
                 }),
             ),
         );
@@ -479,7 +678,11 @@ describe("ImportReviewPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({ items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }], total: 1, links: [] }),
+                ok({
+                    items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }],
+                    total: 1,
+                    links: [],
+                }),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 previewWithRows([disclosureRow(1, "KBC")]),
@@ -492,7 +695,9 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         await screen.findByText("KBC");
-        await user.click(screen.getByRole("button", { name: /approve & import/i }));
+        await user.click(
+            screen.getByRole("button", { name: /approve & import/i }),
+        );
 
         // The plain success toast fires...
         await vi.waitFor(() => expect(toastSpy).toHaveBeenCalled());
@@ -514,7 +719,11 @@ describe("ImportReviewPage (integration)", () => {
     // and read exactly like a live combobox, and the per-group cost must stay
     // off until a popover actually opens.
 
-    const groupWithRecipient = (recipientId: number, name: string, rowId: number) => ({
+    const groupWithRecipient = (
+        recipientId: number,
+        name: string,
+        rowId: number,
+    ) => ({
         recipient_id: recipientId,
         recipient_name: name,
         row_count: 1,
@@ -557,7 +766,13 @@ describe("ImportReviewPage (integration)", () => {
                         groupWithRecipient(2, "Netflix", 11),
                         groupWithRecipient(3, "Spotify", 12),
                     ],
-                    totals: { exact: 3, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 3,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -565,7 +780,9 @@ describe("ImportReviewPage (integration)", () => {
 
     /** The recipient pickers, in group order. */
     async function findPickers() {
-        await vi.waitFor(() => expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0));
+        await vi.waitFor(() =>
+            expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0),
+        );
         return screen.getAllByRole("combobox");
     }
 
@@ -596,7 +813,9 @@ describe("ImportReviewPage (integration)", () => {
         expect(observers).toBe(1);
         // ...and it is a single cache entry, i.e. the page-level resolver reads
         // the very same query key a combobox opens against.
-        expect(queryClient.getQueryCache().findAll({ queryKey: ["recipients"] })).toHaveLength(1);
+        expect(
+            queryClient.getQueryCache().findAll({ queryKey: ["recipients"] }),
+        ).toHaveLength(1);
     });
 
     it("keeps the command list unmounted until a group's popover opens", async () => {
@@ -605,7 +824,9 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         const [trigger] = await findPickers();
-        expect(screen.queryByPlaceholderText(/search recipients/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByPlaceholderText(/search recipients/i),
+        ).not.toBeInTheDocument();
 
         await user.click(trigger);
         expect(
@@ -613,8 +834,12 @@ describe("ImportReviewPage (integration)", () => {
         ).toBeInTheDocument();
         // The page-level subscription warms the exact cache entry the popover
         // queries, so the list is populated on open — no empty-then-fill flash.
-        expect(screen.getByRole("option", { name: /amazon/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /spotify/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /amazon/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /spotify/i }),
+        ).toBeInTheDocument();
 
         await user.keyboard("{Escape}");
         await vi.waitFor(() =>
@@ -643,7 +868,13 @@ describe("ImportReviewPage (integration)", () => {
                 ok({
                     batch_id: 1,
                     groups: [groupWithRecipient(2, "Netflix", 11)],
-                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 1,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
         );
@@ -675,18 +906,29 @@ describe("ImportReviewPage (integration)", () => {
                             ],
                         },
                     ],
-                    totals: { exact: 2, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                    totals: {
+                        exact: 2,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
                 }),
             ),
             http.post(
                 `${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`,
                 async ({ params, request }) => {
-                    const body = (await request.json()) as { recipient_id: number | null };
+                    const body = (await request.json()) as {
+                        recipient_id: number | null;
+                    };
                     overrides.push({
                         rowId: String(params.rowId),
                         recipientId: body.recipient_id,
                     });
-                    return ok({ row_id: Number(params.rowId), user_override_recipient_id: body.recipient_id });
+                    return ok({
+                        row_id: Number(params.rowId),
+                        user_override_recipient_id: body.recipient_id,
+                    });
                 },
             ),
         );
@@ -696,14 +938,18 @@ describe("ImportReviewPage (integration)", () => {
         const [picker] = await findPickers();
         await vi.waitFor(() => expect(picker).toHaveTextContent("Amazon"));
         await user.click(picker);
-        await user.click(await screen.findByRole("option", { name: /netflix/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /netflix/i }),
+        );
 
         await vi.waitFor(() => expect(overrides).toHaveLength(2));
         expect(overrides.map((o) => o.rowId).sort()).toEqual(["10", "20"]);
         expect(overrides.every((o) => o.recipientId === 2)).toBe(true);
         // Trigger reflects the pick without waiting for the preview refetch.
         await vi.waitFor(() =>
-            expect(screen.getAllByRole("combobox")[0]).toHaveTextContent("Netflix"),
+            expect(screen.getAllByRole("combobox")[0]).toHaveTextContent(
+                "Netflix",
+            ),
         );
     });
 

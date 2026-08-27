@@ -1,23 +1,47 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { CardSheen } from "@/components/shared/CardSheen";
-import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { cashflowKeys } from "@/lib/queryKeys";
-import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrency,
+    formatCurrencyCompact,
+    numberFormatToLocale,
+} from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
-import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
+import {
+    AreaChart,
+    type AreaSeries,
+    ChartLegend,
+    type ChartLegendItem,
+} from "@/components/charts";
+import {
+    appLanguageToLocale,
+    CHART_DATE_PATTERNS,
+    formatDate,
+    parseISO,
+} from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
+import {
+    CompactValueDisclosure,
+    TouchDisclosure,
+} from "@/components/shared/TouchDisclosure";
 import { badgeVariants } from "@/components/ui/badge";
+import { TextLink } from "@/components/shared/TextLink";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -48,16 +72,8 @@ export function BankBalancesWidget() {
     const { t, language } = useLanguage();
     const monthLabelLocale = appLanguageToLocale(language);
     const loadingSurfaceProps = useLoadingSurfaceProps();
-    const navigate = useNavigate();
     const { appSettings } = useAppSettings();
 
-    // Clicking a per-account card opens the SAME account detail view the
-    // Accounts page uses — the /accounts/:id ledger route (WP-B4), deep-linked
-    // by entity id. One concept, one code path (Accounts-rewrite Phase D). The
-    // widget no longer keys on the retiring transactions.bank_account string.
-    const openAccountDetail = (accountId: number) => {
-        navigate(`/accounts/${accountId}`);
-    };
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -73,7 +89,9 @@ export function BankBalancesWidget() {
     // Load archived entities too: history/net-position aggregation is governed
     // by in_net_worth, so an inactive-but-counted account still needs its
     // display name in the chart. Cards stay active-only below.
-    const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "all" });
+    const { data: accountsData, isLoading: accountsLoading } = useAccounts({
+        active: "all",
+    });
     // Balance provenance subline (WP-B2) — the entity payload carries
     // anchor_date/post_anchor_count, same fields the Accounts hub cards read.
     const balanceProvenance = useBalanceProvenance();
@@ -101,7 +119,9 @@ export function BankBalancesWidget() {
         // (current 0, large past balances) must still appear in the 12-month chart.
         const chartAccounts = accounts.filter((acct) => {
             if (Math.abs(acct.balance) > 0.000001) return true;
-            return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
+            return (history[acct.bank_account] || []).some(
+                (h) => Math.abs(h.balance) > 0.000001,
+            );
         });
 
         // Index each account's history by date first — a per-entry .find() would
@@ -109,13 +129,20 @@ export function BankBalancesWidget() {
         const balancesByAccount = new Map<string, Map<string, number>>(
             chartAccounts.map((acct) => [
                 acct.bank_account,
-                new Map((history[acct.bank_account] || []).map((h) => [h.date, h.balance])),
+                new Map(
+                    (history[acct.bank_account] || []).map((h) => [
+                        h.date,
+                        h.balance,
+                    ]),
+                ),
             ]),
         );
         const chartData: BankChartDatum[] = total_history.map((entry) => {
             const values: Record<string, number> = {};
             for (const acct of chartAccounts) {
-                values[acct.bank_account] = balancesByAccount.get(acct.bank_account)?.get(entry.date) ?? 0;
+                values[acct.bank_account] =
+                    balancesByAccount.get(acct.bank_account)?.get(entry.date) ??
+                    0;
             }
             return {
                 date: parseISO(entry.date),
@@ -127,38 +154,52 @@ export function BankBalancesWidget() {
         // visx AreaStack cumulates band edges, which is meaningless/overlapping
         // once a series goes negative (overdraft/credit line). Stack only when
         // every value is ≥ 0; otherwise render truthful unstacked multi-lines.
-        const hasNegativeBalances = chartData.some((d) => Object.values(d.values).some((v) => v < 0));
+        const hasNegativeBalances = chartData.some((d) =>
+            Object.values(d.values).some((v) => v < 0),
+        );
 
-        const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
-            key: acct.bank_account,
-            // Keep the aggregation name as the data key, but label the series
-            // from the same account entity source as the cards above it.
-            label: displayLabelByAccountName.get(acct.bank_account) ?? shortAccountName(acct.bank_account),
-            accessor: (d) => d.values[acct.bank_account] ?? 0,
-            color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
-            strokeWidth: 2,
-        }));
+        const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map(
+            (acct, idx) => ({
+                key: acct.bank_account,
+                // Keep the aggregation name as the data key, but label the series
+                // from the same account entity source as the cards above it.
+                label:
+                    displayLabelByAccountName.get(acct.bank_account) ??
+                    shortAccountName(acct.bank_account),
+                accessor: (d) => d.values[acct.bank_account] ?? 0,
+                color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
+                strokeWidth: 2,
+            }),
+        );
 
         const legendItems: ChartLegendItem[] = accountSeries.map((s) => ({
             label: s.label ?? s.key,
             color: s.color ?? "hsl(var(--chart-1))",
         }));
 
-        return { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems };
+        return {
+            chartAccounts,
+            chartData,
+            hasNegativeBalances,
+            accountSeries,
+            legendItems,
+        };
     }, [accountsData, data]);
 
     if (isLoading || accountsLoading) {
         return (
-            <Card className="glass-regular">
-                <CardHeader className="flex flex-row items-center gap-2 pb-3">
-                    <Landmark className="h-5 w-5 text-primary" />
-                    <CardTitle>{t('bankWidget.title')}</CardTitle>
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle>{t("bankWidget.title")}</CardTitle>
                 </CardHeader>
                 <CardContent {...loadingSurfaceProps} className="space-y-4">
                     <Skeleton className="h-24 w-full rounded-xl" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {[...Array(3)].map((_, i) => (
-                            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                            <Skeleton
+                                key={i}
+                                className="h-20 w-full rounded-xl"
+                            />
                         ))}
                     </div>
                     <Skeleton className="h-48 w-full rounded-xl" />
@@ -169,15 +210,14 @@ export function BankBalancesWidget() {
 
     if (error || !data) {
         return (
-            <Card className="glass-regular">
+            <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Landmark className="h-5 w-5 text-primary" />
-                        {t('bankWidget.title')}
-                    </CardTitle>
+                    <CardTitle>{t("bankWidget.title")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">{t('bankWidget.unableToLoad')}</p>
+                    <p className="text-sm text-muted-foreground">
+                        {t("bankWidget.unableToLoad")}
+                    </p>
                 </CardContent>
             </Card>
         );
@@ -188,41 +228,76 @@ export function BankBalancesWidget() {
     // Transaction counts still come from the balances aggregation. Join them
     // to entity-backed cards by canonical account id so a stale or divergent
     // display key cannot silently hide the count.
-    const countByAccountId = new Map(accounts.map((acct) => [acct.account_id, acct.transaction_count]));
+    const countByAccountId = new Map(
+        accounts.map((acct) => [acct.account_id, acct.transaction_count]),
+    );
 
     // Balance CARDS come from the account ENTITY now: only accounts carrying a
     // non-zero computed balance (the shared source), so a card always maps 1:1
     // to a real account that opens in the detail sheet.
     const entityAccounts = accountsData?.items ?? [];
     const balanceCards = entityAccounts.filter(
-        (a) => a.is_active && a.computed_balance != null && Math.abs(a.computed_balance) > 0.000001,
+        (a) =>
+            a.is_active &&
+            a.computed_balance != null &&
+            Math.abs(a.computed_balance) > 0.000001,
     );
 
     // Memoized above (rebuilds when balance data or account labels change);
     // non-null once past the loading/error guards.
-    const { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems } = chartBundle!;
+    const {
+        chartAccounts,
+        chartData,
+        hasNegativeBalances,
+        accountSeries,
+        legendItems,
+    } = chartBundle!;
 
     const isPositive = total_net_position >= 0;
 
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card variant="interactive" className="glass-regular premium-frame group relative overflow-hidden">
+            <Card
+                variant="interactive"
+                className="group relative overflow-hidden"
+            >
                 <CardSheen />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground">
-                        {t('bankWidget.netPosition')}
+                    <CardTitle variant="label">
+                        {t("bankWidget.netPosition")}
                     </CardTitle>
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]">
-                        <Wallet className="h-5 w-5 text-primary" />
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 text-primary icon-tile-glow">
+                        <Wallet className="h-5 w-5" />
                     </div>
                 </CardHeader>
                 <CardContent>
                     <div className="text-3xl font-bold tabular-nums text-foreground">
-                        {(() => { const r = formatCurrencyCompact(total_net_position, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
+                        {(() => {
+                            const r = formatCurrencyCompact(
+                                total_net_position,
+                                defaultCurrency,
+                                locale,
+                            );
+                            return (
+                                <CompactValueDisclosure
+                                    display={r.display}
+                                    fullValue={r.isCompact ? r.full : undefined}
+                                />
+                            );
+                        })()}
                     </div>
-                    <p className={cn("text-xs font-medium mt-2 flex items-center gap-1", isPositive ? "amount-gain" : "amount-loss")}>
-                        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    <p
+                        className={cn(
+                            "text-xs font-medium mt-2 flex items-center gap-1",
+                            isPositive ? "text-gain" : "text-loss",
+                        )}
+                    >
+                        {isPositive ? (
+                            <TrendingUp className="h-3 w-3" />
+                        ) : (
+                            <TrendingDown className="h-3 w-3" />
+                        )}
                         {/* The count MUST describe the population summed into the
                             total right above it (§3 F3). `total_net_position` is
                             the sum over exactly `data.accounts` (server-side:
@@ -230,17 +305,20 @@ export function BankBalancesWidget() {
                             the count is that array's length — NOT the balance
                             cards below, which are a differently gated
                             (active-only, non-zero-balance) entity population. */}
-                        {t('bankWidget.acrossAccounts', { n: accounts.length.toString() })}
+                        {t("bankWidget.acrossAccounts", {
+                            n: accounts.length.toString(),
+                        })}
                     </p>
                 </CardContent>
             </Card>
 
-            {/* Per-Account Balance Cards — driven by the account entity; a single
-                click opens the shared account detail view. */}
+            {/* Per-Account Balance Cards — driven by the account entity; the
+                account-name link opens the shared account detail view. */}
             {balanceCards.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {balanceCards.map((a, idx) => {
-                        const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
+                        const color =
+                            ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const balance = a.computed_balance ?? 0;
                         const acctPositive = balance >= 0;
                         const label = a.display_name || a.name;
@@ -250,34 +328,38 @@ export function BankBalancesWidget() {
                         return (
                             <Card
                                 key={a.id}
-                                role="button"
-                                tabIndex={0}
-                                aria-label={t('accounts.openDetail', { name: label })}
-                                variant="interactive"
-                                className="glass-regular premium-frame group cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
-                                onClick={() => openAccountDetail(a.id)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        openAccountDetail(a.id);
-                                    }
-                                }}
-                                title={t('accounts.openDetailHint')}
+                                className="group transition-shadow hover:shadow-glass-soft"
                             >
-                                <CardContent className="pt-4 pb-4 px-4">
+                                <CardContent variant="compact">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div
-                                                className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-300 group-hover:scale-125"
-                                                style={{ backgroundColor: color, ['--tw-ring-color']: color } as React.CSSProperties}
+                                                className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-normal group-hover:scale-125"
+                                                style={
+                                                    {
+                                                        backgroundColor: color,
+                                                        ["--tw-ring-color"]:
+                                                            color,
+                                                    } as React.CSSProperties
+                                                }
                                             />
-                                            <span className="text-xs font-semibold tracking-tight text-muted-foreground truncate" title={label}>
+                                            <TextLink
+                                                to={`/accounts/${a.id}`}
+                                                className="min-w-0 truncate text-xs font-semibold tracking-tight text-muted-foreground"
+                                            >
                                                 {label}
-                                            </span>
+                                            </TextLink>
                                         </div>
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
-                                    <div className={cn("text-xl font-bold tabular-nums", acctPositive ? "text-foreground" : "text-loss")}>
+                                    <div
+                                        className={cn(
+                                            "text-xl font-bold tabular-nums",
+                                            acctPositive
+                                                ? "text-foreground"
+                                                : "text-loss",
+                                        )}
+                                    >
                                         {/* `computed_balance` is denominated in the ACCOUNT's currency
                                             (ADR-094: a multi-currency account's partitions are converted
                                             into `a.currency`, not into the app default), so it must be
@@ -287,26 +369,57 @@ export function BankBalancesWidget() {
                                             Labelling it `defaultCurrency` put a € sign on a $ figure. The
                                             total/chart above stay in `defaultCurrency` because the server
                                             converts THAT payload for the requested currency. */}
-                                        {(() => { const r = formatCurrencyCompact(balance, a.currency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
+                                        {(() => {
+                                            const r = formatCurrencyCompact(
+                                                balance,
+                                                a.currency,
+                                                locale,
+                                            );
+                                            return (
+                                                <CompactValueDisclosure
+                                                    display={r.display}
+                                                    fullValue={
+                                                        r.isCompact
+                                                            ? r.full
+                                                            : undefined
+                                                    }
+                                                />
+                                            );
+                                        })()}
                                     </div>
                                     {provenanceText && (
-                                        <div className="text-xs text-muted-foreground mt-1 truncate" title={provenanceText}>
-                                            {provenanceText}
+                                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                                            <TouchDisclosure
+                                                label={provenanceText}
+                                                content={provenanceText}
+                                                className="max-w-full truncate"
+                                            >
+                                                {provenanceText}
+                                            </TouchDisclosure>
                                         </div>
                                     )}
                                     {txCount != null && (
                                         <div className="text-xs text-muted-foreground mt-1">
-                                            {t('bankWidget.transactions', { n: integerLocaleFormatter.format(txCount) })}
+                                            {t("bankWidget.transactions", {
+                                                n: integerLocaleFormatter.format(
+                                                    txCount,
+                                                ),
+                                            })}
                                         </div>
                                     )}
                                     {drift && (
-                                        // Read-only chip: the card itself is the
-                                        // button (→ /accounts/:id), where the drift
-                                        // chip IS clickable and opens Reconcile.
+                                        // Read-only chip; reconciliation remains on
+                                        // the account detail page.
                                         <div className="mt-1.5">
-                                            <span className={badgeVariants({ variant: drift.variant })} title={drift.tooltip}>
+                                            <TouchDisclosure
+                                                label={drift.tooltip}
+                                                content={drift.tooltip}
+                                                className={badgeVariants({
+                                                    variant: drift.variant,
+                                                })}
+                                            >
                                                 {drift.label}
-                                            </span>
+                                            </TouchDisclosure>
                                         </div>
                                     )}
                                 </CardContent>
@@ -318,13 +431,12 @@ export function BankBalancesWidget() {
 
             {/* Historical Balance Chart */}
             {chartAccounts.length > 0 && chartData.length > 1 && (
-                <Card className="glass-regular">
+                <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Landmark className="h-5 w-5 text-primary" />
-                            {t('bankWidget.balanceHistory')}
-                        </CardTitle>
-                        <CardDescription>{t('bankWidget.balanceHistoryDesc')}</CardDescription>
+                        <CardTitle>{t("bankWidget.balanceHistory")}</CardTitle>
+                        <CardDescription>
+                            {t("bankWidget.balanceHistoryDesc")}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <AreaChart<BankChartDatum>
@@ -338,10 +450,26 @@ export function BankBalancesWidget() {
                             // Daily datapoints (~365) now outnumber the time-scale
                             // auto-ticks, so the width-derived tick spacing is fine —
                             // no more duplicated "MMM yy" labels between sparse points.
-                            xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
-                            yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(d.date, CHART_DATE_PATTERNS.detail, monthLabelLocale)}
-                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            xTickFormat={(v) =>
+                                formatDate(
+                                    v as Date,
+                                    CHART_DATE_PATTERNS.monthTick,
+                                    monthLabelLocale,
+                                )
+                            }
+                            yTickFormat={(v) =>
+                                formatCurrency(v, defaultCurrency, locale)
+                            }
+                            tooltipTitle={(d) =>
+                                formatDate(
+                                    d.date,
+                                    CHART_DATE_PATTERNS.detail,
+                                    monthLabelLocale,
+                                )
+                            }
+                            tooltipValueFormat={(v) =>
+                                formatCurrency(v, defaultCurrency, locale)
+                            }
                         />
                         <ChartLegend items={legendItems} align="center" />
                     </CardContent>

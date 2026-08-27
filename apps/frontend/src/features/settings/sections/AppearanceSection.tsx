@@ -87,37 +87,39 @@ export const AppearanceSection = memo(function AppearanceSection() {
             description={t('settings.section.appearance.desc')}
         >
             {/* Theme variant — selectable swatch cards */}
-            <div className="space-y-3">
-                <div className="space-y-0.5">
-                    <p className="text-sm font-medium text-foreground">{t('settings.appearance.variant')}</p>
-                    <p className="text-xs text-muted-foreground">{t('settings.appearance.variantHint')}</p>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                    {VARIANT_META.map((v) => {
-                        const active = variant === v.value;
-                        return (
-                            <button
-                                key={v.value}
-                                type="button"
-                                onClick={() => setVariant(v.value)}
-                                className={
-                                    'flex items-center justify-between rounded-lg border p-3 text-left transition-colors ' +
-                                    (active
-                                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                                        : 'border-border hover:bg-muted/60')
-                                }
-                                aria-pressed={active}
-                            >
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-medium">{t(v.labelKey)}</span>
-                                    <span className="text-xs text-muted-foreground">{t(v.descKey)}</span>
-                                </div>
-                                <VariantSwatch variant={v.value} mode={theme} />
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
+            <SettingsGroup>
+                <SettingRow
+                    title={t('settings.appearance.variant')}
+                    description={t('settings.appearance.variantHint')}
+                    layout="stack"
+                >
+                    <div className="grid grid-cols-1 gap-2">
+                        {VARIANT_META.map((v) => {
+                            const active = variant === v.value;
+                            return (
+                                <button
+                                    key={v.value}
+                                    type="button"
+                                    onClick={() => setVariant(v.value)}
+                                    className={
+                                        'flex items-center justify-between rounded-lg border p-3 text-left transition-colors ' +
+                                        (active
+                                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                                            : 'border-border hover:bg-muted/60')
+                                    }
+                                    aria-pressed={active}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium">{t(v.labelKey)}</span>
+                                        <span className="text-xs text-muted-foreground">{t(v.descKey)}</span>
+                                    </div>
+                                    <VariantSwatch variant={v.value} mode={theme} />
+                                </button>
+                            );
+                        })}
+                    </div>
+                </SettingRow>
+            </SettingsGroup>
 
             {/* Color mode */}
             <SettingsGroup label={t('settings.group.colorMode')}>
@@ -136,7 +138,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
 
                 {mode === 'schedule' && (
                     <SettingRow title={t('settings.appearance.modes.schedule')} layout="stack">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
                                 <Label htmlFor="schedule-light-from" className="text-xs">{t('settings.appearance.lightFrom')}</Label>
                                 <Input

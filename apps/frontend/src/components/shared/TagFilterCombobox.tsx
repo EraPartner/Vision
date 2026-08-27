@@ -1,20 +1,25 @@
-import { MultiCombobox } from '@/components/shared/MultiCombobox';
-import { useTags } from '@/hooks/useTags';
-import { useLanguage } from '@/contexts/LanguageContext';
-import type { Tag } from '@/types/api';
+import { MultiCombobox } from "@/components/shared/MultiCombobox";
+import { useTags } from "@/hooks/useTags";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Tag } from "@/types/api";
 
 interface TagFilterComboboxProps {
     value: string[];
     onChange: (slugs: string[]) => void;
     disabled?: boolean;
     className?: string;
+    id?: string;
 }
 
 const getSlug = (tag: Tag) => tag.slug;
 
 function renderTag(tag: Tag) {
     const chipStyle = tag.color
-        ? { backgroundColor: `color-mix(in srgb, ${tag.color} 14%, transparent)`, borderColor: tag.color, color: tag.color }
+        ? {
+              backgroundColor: `color-mix(in srgb, ${tag.color} 14%, transparent)`,
+              borderColor: tag.color,
+              color: tag.color,
+          }
         : {};
     return (
         <span
@@ -26,24 +31,32 @@ function renderTag(tag: Tag) {
     );
 }
 
-export function TagFilterCombobox({ value, onChange, disabled, className }: TagFilterComboboxProps) {
+export function TagFilterCombobox({
+    value,
+    onChange,
+    disabled,
+    className,
+    id,
+}: TagFilterComboboxProps) {
     const { t } = useLanguage();
     const { data } = useTags({ is_active: true });
 
-    const displayLabel = value.length === 0
-        ? t('filter.tags.label')
-        : t('combobox.tags.nSelected').replace('{n}', String(value.length));
+    const displayLabel =
+        value.length === 0
+            ? t("filter.tags.label")
+            : t("combobox.tags.nSelected").replace("{n}", String(value.length));
 
     return (
         <MultiCombobox
+            id={id}
             value={value}
             onChange={onChange}
             items={data?.items ?? []}
             getValue={getSlug}
             renderItem={renderTag}
             displayLabel={displayLabel}
-            searchPlaceholder={t('combobox.tags.search')}
-            emptyText={t('combobox.tags.empty')}
+            searchPlaceholder={t("combobox.tags.search")}
+            emptyText={t("combobox.tags.empty")}
             popoverClassName="w-[260px]"
             disabled={disabled}
             className={className}

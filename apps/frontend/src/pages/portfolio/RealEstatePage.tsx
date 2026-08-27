@@ -1,10 +1,26 @@
+import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
-import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
+import {
+    Building2,
+    Trash2,
+    Eye,
+    TrendingUp,
+    Banknote,
+    Home,
+    MapPin,
+    Percent,
+} from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
@@ -21,284 +37,564 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DeltaPill } from "@/components/shared/DeltaPill";
+import { Money } from "@/components/shared/Money";
+import { PageShell } from "@/components/shared/PageShell";
 
 export default function RealEstatePage() {
-  const { t } = useLanguage();
-  const loadingSurfaceProps = useLoadingSurfaceProps();
-  const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
-  const { confirm, ConfirmDialog } = useConfirmDialog();
-  const properties = byAssetClass('real_estate');
+    const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const {
+        byAssetClass,
+        deleteInvestment,
+        isLoading,
+        isError,
+        error,
+        refetch,
+    } = usePortfolio();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
+    const properties = byAssetClass("real_estate");
 
-  const { convertToTarget } = useCurrencyConverter(targetCurrency);
-  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
-  const fmt = useCurrencyFormatter(targetCurrency);
+    const { convertToTarget } = useCurrencyConverter(targetCurrency);
+    const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
-  // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
-  // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
-  // uses, widened to the `decimals` argument this page's call sites pass. The
-  // cache lives inside the memo, so a locale change replaces it wholesale.
-  const fmtNum = useMemo(() => {
-    const cache = new Map<number, Intl.NumberFormat>();
-    return (val: number, decimals = 2) => {
-      let formatter = cache.get(decimals);
-      if (!formatter) {
-        formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-        cache.set(decimals, formatter);
-      }
-      return formatter.format(val);
-    };
-  }, [locale]);
+    // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
+    // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
+    // uses, widened to the `decimals` argument this page's call sites pass. The
+    // cache lives inside the memo, so a locale change replaces it wholesale.
+    const fmtNum = useMemo(() => {
+        const cache = new Map<number, Intl.NumberFormat>();
+        return (val: number, decimals = 2) => {
+            let formatter = cache.get(decimals);
+            if (!formatter) {
+                formatter = new Intl.NumberFormat(locale, {
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals,
+                });
+                cache.set(decimals, formatter);
+            }
+            return formatter.format(val);
+        };
+    }, [locale]);
 
-  const totalValue = properties.reduce((s, p) => s + convertToTarget(p.currentValue, p.currency), 0);
-  const totalCost = properties.reduce((s, p) => s + convertToTarget(p.totalBuyCost, p.currency), 0);
-  const totalAppreciation = properties.reduce((s, p) => s + convertToTarget(p.totalAppreciation, p.currency), 0);
-  const totalRentIncome = properties.reduce((s, p) => s + convertToTarget(p.totalIncome, p.currency), 0);
-  const totalFees = properties.reduce((s, p) => s + convertToTarget(p.totalFees, p.currency), 0);
-  const totalTaxes = properties.reduce((s, p) => s + convertToTarget(p.totalTaxes, p.currency), 0);
-  
-  // Estimate monthly rent from most recent rent_income transactions
-  const estimatedMonthlyRent = properties.reduce((s, p) => {
-    const rentTxns = p.transactions.filter(t => t.type === 'rent_income');
-    if (rentTxns.length === 0) return s;
-    // Use most recent rent as monthly estimate
-    return s + convertToTarget(rentTxns[0]?.amount ?? 0, p.currency);
-  }, 0);
-  
-  const annualYield = totalValue > 0 ? (estimatedMonthlyRent * 12) / totalValue * 100 : 0;
-  const totalReturn = totalAppreciation + totalRentIncome - totalFees - totalTaxes;
-  const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
-
-  if (isLoading) {
-    return (
-      <div {...loadingSurfaceProps} className="space-y-6">
-        <PageHeader title={t('realestate.title')} icon={Building2} />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+    const totalValue = properties.reduce(
+        (s, p) => s + convertToTarget(p.currentValue, p.currency),
+        0,
     );
-  }
-  if (isError) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t('realestate.title')} icon={Building2} />
-        <PageError title={t('realestate.pageErrorTitle')} message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
-      </div>
+    const totalCost = properties.reduce(
+        (s, p) => s + convertToTarget(p.totalBuyCost, p.currency),
+        0,
     );
-  }
-
-  if (properties.length === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title={t('realestate.title')}
-          icon={Building2}
-          actions={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
-        />
-        <Card className="group relative overflow-hidden glass-regular premium-frame">
-          <CardContent className="pt-0">
-            <EmptyState
-              icon={Building2}
-              title={t('realestate.noProperties')}
-              description={t('realestate.noPropertiesDesc')}
-              action={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
-            />
-          </CardContent>
-        </Card>
-      </div>
+    const totalAppreciation = properties.reduce(
+        (s, p) => s + convertToTarget(p.totalAppreciation, p.currency),
+        0,
     );
-  }
+    const totalRentIncome = properties.reduce(
+        (s, p) => s + convertToTarget(p.totalIncome, p.currency),
+        0,
+    );
+    const totalFees = properties.reduce(
+        (s, p) => s + convertToTarget(p.totalFees, p.currency),
+        0,
+    );
+    const totalTaxes = properties.reduce(
+        (s, p) => s + convertToTarget(p.totalTaxes, p.currency),
+        0,
+    );
 
-  return (
-    <>
-    <div className="space-y-6">
-      <PageHeader
-        title={t('realestate.title')}
-        icon={Building2}
-        actions={<AddInvestmentDialog />}
-      />
+    // Estimate monthly rent from most recent rent_income transactions
+    const estimatedMonthlyRent = properties.reduce((s, p) => {
+        const rentTxns = p.transactions.filter((t) => t.type === "rent_income");
+        if (rentTxns.length === 0) return s;
+        // Use most recent rent as monthly estimate
+        return s + convertToTarget(rentTxns[0]?.amount ?? 0, p.currency);
+    }, 0);
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard size="compact" title={t('portfolio.totalValue')}
-          value={<RollingNumber parts={fmtParts(totalValue)} />}
-          icon={DollarSign} valueClassName="text-primary" />
-        <StatCard size="compact" title={t('portfolio.totalCost')}
-          value={<RollingNumber parts={fmtParts(totalCost)} />}
-          icon={Home} valueClassName="text-muted-foreground" />
-        <StatCard size="compact" title={t('portfolio.appreciation')}
-          value={<RollingNumber parts={fmtParts(totalAppreciation, { signed: true })} />}
-          icon={TrendingUp} trend={totalAppreciation >= 0 ? "income" : "expense"}
-          valueClassName={totalAppreciation >= 0 ? "amount-gain" : "amount-loss"} />
-        <StatCard size="compact" title={t('portfolio.rentalIncome')}
-          value={<RollingNumber parts={fmtParts(totalRentIncome, { signed: true })} />}
-          trend="income" valueClassName="text-gain"
-          subtitle={`~${fmt(estimatedMonthlyRent)}${t('realestate.perMonth')}`} />
-        <StatCard size="compact" title={t('portfolio.yield')} value={formatPercent(annualYield, { digits: 1 })}
-          icon={Percent} subtitle={t('portfolio.annual')} />
-        <StatCard size="compact" title={t('portfolio.totalReturn')}
-          value={<RollingNumber parts={fmtParts(totalReturn, { signed: true })} />}
-          trend={totalReturn >= 0 ? "income" : "expense"}
-          valueClassName={totalReturn >= 0 ? "amount-gain" : "amount-loss"}>
-          <div className="mt-1 flex items-center gap-1.5">
-            <DeltaPill value={roi} label={formatPercent(roi, { digits: 1, signed: true })} />
-            <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
-          </div>
-        </StatCard>
-      </div>
+    const annualYield =
+        totalValue > 0 ? ((estimatedMonthlyRent * 12) / totalValue) * 100 : 0;
+    const totalReturn =
+        totalAppreciation + totalRentIncome - totalFees - totalTaxes;
+    const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
-      {/* Property Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {properties.map((p) => {
-          const propertyCost = convertToTarget(p.totalBuyCost, p.currency);
-          const propertyReturn = convertToTarget(p.totalAppreciation + p.totalIncome - p.totalFees - p.totalTaxes, p.currency);
-          const propertyROI = propertyCost > 0
-            ? (propertyReturn / propertyCost) * 100
-            : 0;
-          const monthlyRent = convertToTarget(p.transactions.filter(t => t.type === 'rent_income')[0]?.amount ?? 0, p.currency);
-          const currentValueInTarget = convertToTarget(p.currentValue, p.currency);
-          const propertyYield = currentValueInTarget > 0 ? (monthlyRent * 12) / currentValueInTarget * 100 : 0;
-          
-          return (
-            <Card key={p.id} className="glass-regular overflow-hidden">
-              <CardHeader className="bg-muted/30">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Building2 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{p.name}</CardTitle>
-                      {p.location && (
-                        <CardDescription className="flex items-center gap-1 mt-0.5">
-                          <MapPin className="h-3 w-3" /> {p.location}
-                        </CardDescription>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <InvestmentDetailDialog 
-                      investment={p} 
-                      trigger={
-                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      }
+    if (isLoading) {
+        return (
+            <PageShell {...loadingSurfaceProps} className="">
+                <PageHeader title={t("realestate.title")} icon={PAGE_ICONS["/portfolio/real-estate"]} />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-64 w-full" />
+            </PageShell>
+        );
+    }
+    if (isError) {
+        return (
+            <PageShell className="">
+                <PageHeader title={t("realestate.title")} icon={PAGE_ICONS["/portfolio/real-estate"]} />
+                <PageError
+                    title={t("realestate.pageErrorTitle")}
+                    message={error?.message ?? t("common.error")}
+                    onRetry={() => refetch()}
+                />
+            </PageShell>
+        );
+    }
+
+    if (properties.length === 0) {
+        return (
+            <PageShell className="">
+                <PageHeader
+                    title={t("realestate.title")}
+                    icon={PAGE_ICONS["/portfolio/real-estate"]}
+                    actions={
+                        <AddInvestmentDialog
+                            allowedAssetClasses={["real_estate"]}
+                        />
+                    }
+                />
+                <Card className="group relative overflow-hidden">
+                    <CardContent>
+                        <EmptyState
+                            icon={PAGE_ICONS["/portfolio/real-estate"]}
+                            title={t("realestate.noProperties")}
+                            description={t("realestate.noPropertiesDesc")}
+                            action={
+                                <AddInvestmentDialog
+                                    allowedAssetClasses={["real_estate"]}
+                                />
+                            }
+                        />
+                    </CardContent>
+                </Card>
+            </PageShell>
+        );
+    }
+
+    return (
+        <>
+            <PageShell className="">
+                <PageHeader
+                    title={t("realestate.title")}
+                    icon={PAGE_ICONS["/portfolio/real-estate"]}
+                    actions={<AddInvestmentDialog />}
+                />
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.totalValue")}
+                        value={<RollingNumber parts={fmtParts(totalValue)} />}
+                        icon={Banknote}
+                        valueClassName="text-primary"
                     />
-                    <AddPortfolioTxnDialog investment={p} />
-                     <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      aria-label={t('realestate.deleteProperty')} title={t('realestate.deleteProperty')}
-                      onClick={async () => {
-                        const ok = await confirm({ 
-                          title: t('realestate.deleteProperty'), 
-                          description: t('realestate.deletePropertyDesc', { name: p.name }), 
-                          confirmLabel: t('common.delete'), 
-                          variant: "destructive" 
-                        }); 
-                        if (ok) deleteInvestment(p.id); 
-                      }}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.totalCost")}
+                        value={<RollingNumber parts={fmtParts(totalCost)} />}
+                        icon={Home}
+                        valueClassName="text-muted-foreground"
+                    />
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.appreciation")}
+                        value={
+                            <RollingNumber
+                                parts={fmtParts(totalAppreciation, {
+                                    signed: true,
+                                })}
+                            />
+                        }
+                        icon={TrendingUp}
+                        trend={totalAppreciation >= 0 ? "income" : "expense"}
+                        valueClassName={
+                            totalAppreciation >= 0 ? "text-gain" : "text-loss"
+                        }
+                    />
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.rentalIncome")}
+                        value={
+                            <RollingNumber
+                                parts={fmtParts(totalRentIncome, {
+                                    signed: true,
+                                })}
+                            />
+                        }
+                        trend="income"
+                        valueClassName="text-gain"
+                        subtitle={
+                            <>
+                                <span aria-hidden="true">~</span>
+                                <Money
+                                    amount={estimatedMonthlyRent}
+                                    currency={targetCurrency}
+                                />
+                                {t("realestate.perMonth")}
+                            </>
+                        }
+                    />
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.yield")}
+                        value={formatPercent(annualYield, { digits: 1 })}
+                        icon={Percent}
+                        subtitle={t("portfolio.annual")}
+                    />
+                    <StatCard
+                        size="compact"
+                        title={t("portfolio.totalReturn")}
+                        value={
+                            <RollingNumber
+                                parts={fmtParts(totalReturn, { signed: true })}
+                            />
+                        }
+                        trend={totalReturn >= 0 ? "income" : "expense"}
+                        valueClassName={
+                            totalReturn >= 0 ? "text-gain" : "text-loss"
+                        }
+                    >
+                        <div className="mt-1 flex items-center gap-1.5">
+                            <DeltaPill
+                                value={roi}
+                                label={formatPercent(roi, {
+                                    digits: 1,
+                                    signed: true,
+                                })}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                                {t("portfolio.totalROI")}
+                            </span>
+                        </div>
+                    </StatCard>
                 </div>
-              </CardHeader>
-              
-              <CardContent className="pt-4 space-y-4">
-                {/* Value Summary */}
-                  <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.purchasePrice')}</p>
-                     <p className="text-xl font-bold tabular-nums">{fmt(convertToTarget(p.totalBuyCost, p.currency))}</p>
-                   </div>
-                   <div className="text-right">
-                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.currentValue')}</p>
-                      <p className="text-xl font-bold text-primary tabular-nums">{fmt(convertToTarget(p.currentValue, p.currency))}</p>
-                   </div>
-                 </div>
 
-                  {/* Returns Breakdown */}
-                  <div className="grid grid-cols-2 gap-3">
-                   <div className="p-3 rounded-lg bg-muted/50">
-                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.appreciation')}</p>
-                     <p className={cn(
-                       "text-lg font-bold tabular-nums",
-                       p.totalAppreciation >= 0 ? "amount-gain" : "amount-loss"
-                     )}>
-                        {p.totalAppreciation >= 0 ? "+" : ""}{fmt(convertToTarget(p.totalAppreciation, p.currency))}
-                     </p>
-                  </div>
+                {/* Property Cards */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {properties.map((p) => {
+                        const propertyCost = convertToTarget(
+                            p.totalBuyCost,
+                            p.currency,
+                        );
+                        const propertyReturn = convertToTarget(
+                            p.totalAppreciation +
+                                p.totalIncome -
+                                p.totalFees -
+                                p.totalTaxes,
+                            p.currency,
+                        );
+                        const propertyROI =
+                            propertyCost > 0
+                                ? (propertyReturn / propertyCost) * 100
+                                : 0;
+                        const monthlyRent = convertToTarget(
+                            p.transactions.filter(
+                                (t) => t.type === "rent_income",
+                            )[0]?.amount ?? 0,
+                            p.currency,
+                        );
+                        const currentValueInTarget = convertToTarget(
+                            p.currentValue,
+                            p.currency,
+                        );
+                        const propertyYield =
+                            currentValueInTarget > 0
+                                ? ((monthlyRent * 12) / currentValueInTarget) *
+                                  100
+                                : 0;
 
-                  {/* Municipality / cadastral info for real estate */}
-                  {(p.municipality || p.cadastral_income || p.cadastral_income === 0 || p.municipality_tax_rate || p.municipality_tax_rate === 0) && (
-                    <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                      {p.municipality && (
-                        <div className="p-2 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">{t('invDetail.municipality')}</p>
-                          <p className="font-medium truncate">{p.municipality}</p>
-                        </div>
-                      )}
+                        return (
+                            <Card key={p.id} className="overflow-hidden">
+                                <CardHeader className="bg-muted/30">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                <Building2 className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div>
+                                                <CardTitle variant="sm">
+                                                    {p.name}
+                                                </CardTitle>
+                                                {p.location && (
+                                                    <CardDescription className="flex items-center gap-1 mt-0.5">
+                                                        <MapPin className="h-3 w-3" />{" "}
+                                                        {p.location}
+                                                    </CardDescription>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <InvestmentDetailDialog
+                                                investment={p}
+                                                trigger={
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="icon-touch-target"
+                                                        aria-label={t(
+                                                            "portfolio.viewDetails",
+                                                        )}
+                                                        title={t(
+                                                            "portfolio.viewDetails",
+                                                        )}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                }
+                                            />
+                                            <AddPortfolioTxnDialog
+                                                investment={p}
+                                            />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="icon-touch-target text-muted-foreground hover:text-destructive"
+                                                aria-label={t(
+                                                    "realestate.deleteProperty",
+                                                )}
+                                                title={t(
+                                                    "realestate.deleteProperty",
+                                                )}
+                                                onClick={async () => {
+                                                    const ok = await confirm({
+                                                        title: t(
+                                                            "realestate.deleteProperty",
+                                                        ),
+                                                        description: t(
+                                                            "realestate.deletePropertyDesc",
+                                                            { name: p.name },
+                                                        ),
+                                                        confirmLabel:
+                                                            t("common.delete"),
+                                                        variant: "destructive",
+                                                    });
+                                                    if (ok)
+                                                        deleteInvestment(p.id);
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardHeader>
 
-                      {(p.cadastral_income || p.cadastral_income === 0) && (
-                        <div className="p-2 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">{t('invDetail.cadastralIncome')}</p>
-                           <p className="font-medium tabular-nums">{fmt(convertToTarget(p.cadastral_income || 0, p.currency))}</p>
-                        </div>
-                      )}
+                                <CardContent className="pt-4 space-y-4">
+                                    {/* Value Summary */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-1">
+                                                {t("portfolio.purchasePrice")}
+                                            </p>
+                                            <p className="text-xl font-bold tabular-nums">
+                                                <Money
+                                                    amount={convertToTarget(
+                                                        p.totalBuyCost,
+                                                        p.currency,
+                                                    )}
+                                                    currency={targetCurrency}
+                                                />
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-muted-foreground mb-1">
+                                                {t("portfolio.currentValue")}
+                                            </p>
+                                            <p className="text-xl font-bold text-primary tabular-nums">
+                                                <Money
+                                                    amount={convertToTarget(
+                                                        p.currentValue,
+                                                        p.currency,
+                                                    )}
+                                                    currency={targetCurrency}
+                                                />
+                                            </p>
+                                        </div>
+                                    </div>
 
-                      {(p.municipality_tax_rate || p.municipality_tax_rate === 0) && (
-                        <div className="p-2 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">{t('invDetail.municipalityTaxRate')}</p>
-                          <p className="font-medium tabular-nums">{fmtNum(p.municipality_tax_rate || 0)}%</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                   <div className="p-3 rounded-lg bg-muted/50">
-                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.rentalIncome')}</p>
-                     <p className="text-lg font-bold text-gain tabular-nums">
-                       +{fmt(convertToTarget(p.totalIncome, p.currency))}
-                     </p>
-                     {monthlyRent > 0 && (
-                        <p className="text-xs text-muted-foreground">~{fmt(monthlyRent)}{t('realestate.perMonth')}</p>
-                     )}
-                   </div>
-                 </div>
+                                    {/* Returns Breakdown */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-3 rounded-lg bg-muted/50">
+                                            <p className="text-xs text-muted-foreground mb-1">
+                                                {t("portfolio.appreciation")}
+                                            </p>
+                                            <p
+                                                className={cn(
+                                                    "text-lg font-bold tabular-nums",
+                                                    p.totalAppreciation >= 0
+                                                        ? "text-gain"
+                                                        : "text-loss",
+                                                )}
+                                            >
+                                                <Money
+                                                    amount={convertToTarget(
+                                                        p.totalAppreciation,
+                                                        p.currency,
+                                                    )}
+                                                    currency={targetCurrency}
+                                                    signed
+                                                />
+                                            </p>
+                                        </div>
 
-                 {/* Yield & ROI */}
-                 <div className="flex items-center justify-between py-3 border-t border-border">
-                   <div>
-                     <p className="text-xs text-muted-foreground">{t('portfolio.yield')}</p>
-                     <p className="text-sm font-medium">{formatPercent(propertyYield, { digits: 1 })} {t('portfolio.annual')}</p>
-                   </div>
-                   <div className="flex flex-col items-end gap-1">
-                     <p className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</p>
-                     <DeltaPill value={propertyROI} label={formatPercent(propertyROI, { digits: 1, signed: true })} />
-                   </div>
-                 </div>
+                                        {/* Municipality / cadastral info for real estate */}
+                                        {(p.municipality ||
+                                            p.cadastral_income ||
+                                            p.cadastral_income === 0 ||
+                                            p.municipality_tax_rate ||
+                                            p.municipality_tax_rate === 0) && (
+                                            <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                                                {p.municipality && (
+                                                    <div className="p-2 rounded-lg bg-muted/50">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {t(
+                                                                "invDetail.municipality",
+                                                            )}
+                                                        </p>
+                                                        <p className="font-medium truncate">
+                                                            {p.municipality}
+                                                        </p>
+                                                    </div>
+                                                )}
 
-                 {/* Expenses */}
-                 {(p.totalFees > 0 || p.totalTaxes > 0) && (
-                   <div className="flex justify-between text-sm border-t border-border pt-3">
-                     <span className="text-muted-foreground">{t('portfolio.feesAndTaxes')}</span>
-                      <span className="font-medium text-loss">-{fmt(convertToTarget(p.totalFees + p.totalTaxes, p.currency))}</span>
-                   </div>
-                 )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                                                {(p.cadastral_income ||
+                                                    p.cadastral_income ===
+                                                        0) && (
+                                                    <div className="p-2 rounded-lg bg-muted/50">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {t(
+                                                                "invDetail.cadastralIncome",
+                                                            )}
+                                                        </p>
+                                                        <p className="font-medium tabular-nums">
+                                                            <Money
+                                                                amount={convertToTarget(
+                                                                    p.cadastral_income ||
+                                                                        0,
+                                                                    p.currency,
+                                                                )}
+                                                                currency={
+                                                                    targetCurrency
+                                                                }
+                                                            />
+                                                        </p>
+                                                    </div>
+                                                )}
 
-      {/* Info Card */}
-      <Card className="bg-muted/30 !border-dashed">
-        <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground">{t('realestate.howItWorks')}</p>
-        </CardContent>
-      </Card>
-    </div>
-    <ConfirmDialog />
-    </>
-  );
+                                                {(p.municipality_tax_rate ||
+                                                    p.municipality_tax_rate ===
+                                                        0) && (
+                                                    <div className="p-2 rounded-lg bg-muted/50">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {t(
+                                                                "invDetail.municipalityTaxRate",
+                                                            )}
+                                                        </p>
+                                                        <p className="font-medium tabular-nums">
+                                                            {fmtNum(
+                                                                p.municipality_tax_rate ||
+                                                                    0,
+                                                            )}
+                                                            %
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="p-3 rounded-lg bg-muted/50">
+                                            <p className="text-xs text-muted-foreground mb-1">
+                                                {t("portfolio.rentalIncome")}
+                                            </p>
+                                            <p className="text-lg font-bold text-gain tabular-nums">
+                                                <Money
+                                                    amount={convertToTarget(
+                                                        p.totalIncome,
+                                                        p.currency,
+                                                    )}
+                                                    currency={targetCurrency}
+                                                    signed
+                                                />
+                                            </p>
+                                            {monthlyRent > 0 && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    <span aria-hidden="true">
+                                                        ~
+                                                    </span>
+                                                    <Money
+                                                        amount={monthlyRent}
+                                                        currency={
+                                                            targetCurrency
+                                                        }
+                                                    />
+                                                    {t("realestate.perMonth")}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Yield & ROI */}
+                                    <div className="flex items-center justify-between py-3 border-t border-border">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {t("portfolio.yield")}
+                                            </p>
+                                            <p className="text-sm font-medium">
+                                                {formatPercent(propertyYield, {
+                                                    digits: 1,
+                                                })}{" "}
+                                                {t("portfolio.annual")}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <p className="text-xs text-muted-foreground">
+                                                {t("portfolio.totalROI")}
+                                            </p>
+                                            <DeltaPill
+                                                value={propertyROI}
+                                                label={formatPercent(
+                                                    propertyROI,
+                                                    { digits: 1, signed: true },
+                                                )}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Expenses */}
+                                    {(p.totalFees > 0 || p.totalTaxes > 0) && (
+                                        <div className="flex justify-between text-sm border-t border-border pt-3">
+                                            <span className="text-muted-foreground">
+                                                {t("portfolio.feesAndTaxes")}
+                                            </span>
+                                            <span className="font-medium text-loss">
+                                                <Money
+                                                    amount={
+                                                        -convertToTarget(
+                                                            p.totalFees +
+                                                                p.totalTaxes,
+                                                            p.currency,
+                                                        )
+                                                    }
+                                                    currency={targetCurrency}
+                                                    signed
+                                                />
+                                            </span>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </div>
+
+                {/* Info Card */}
+                <Card className="bg-muted/30 !border-dashed">
+                    <CardContent variant="row">
+                        <p className="text-sm text-muted-foreground">
+                            {t("realestate.howItWorks")}
+                        </p>
+                    </CardContent>
+                </Card>
+            </PageShell>
+            <ConfirmDialog />
+        </>
+    );
 }

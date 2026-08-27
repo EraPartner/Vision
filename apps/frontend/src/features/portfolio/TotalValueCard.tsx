@@ -9,69 +9,85 @@
  * All data is supplied by the parent; no hooks, no side effects.
  */
 
-import { type ReactNode } from 'react';
-import { Sparkline as ChartSparkline } from '@/components/charts';
+import { type ReactNode } from "react";
+import { Sparkline as ChartSparkline } from "@/components/charts";
 import { Money } from "@/components/shared/Money";
-import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendHue, type TrendTone } from '@/components/shared/TrendHue';
-import { cn } from '@/lib/utils';
-import { formatPercent } from '@/utils/currency';
+import {
+    ArrowDownRight,
+    ArrowUpRight,
+    Banknote,
+    TrendingDown,
+    TrendingUp,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
+import { CardSheen } from "@/components/shared/CardSheen";
+import { cn } from "@/lib/utils";
+import { formatPercent } from "@/utils/currency";
+import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 
-const SPARK_COLOR_POSITIVE = 'hsl(var(--gain))';
-const SPARK_COLOR_NEGATIVE = 'hsl(var(--loss))';
-const SPARK_COLOR_NEUTRAL = 'hsl(217, 91%, 60%)';
+const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
+const SPARK_COLOR_NEGATIVE = "hsl(var(--loss))";
+const SPARK_COLOR_NEUTRAL = "hsl(217, 91%, 60%)";
 
 export interface AllocationSlice {
-  name: string;
-  value: number;
+    name: string;
+    value: number;
 }
 
 export interface PerformerEntry {
-  id: number;
-  name: string;
-  symbol?: string;
-  gainLossPercent: number;
-  gainLossInTarget: number;
+    id: number;
+    name: string;
+    symbol?: string;
+    gainLossPercent: number;
+    gainLossInTarget: number;
 }
 
 export interface SparklinePoint {
-  t: number;
-  v: number;
+    t: number;
+    v: number;
 }
 
 export interface TotalValueCardProps {
-  /**
-   * Headline total. Pass a `<Money>` node so the hero carries the app's
-   * currency micro-typography (raised symbol, de-emphasized cents); a plain
-   * formatted string still renders as-is.
-   */
-  formattedTotal: ReactNode;
-  /** Raw numeric total — used for % splits. */
-  totalValue: number;
-  /** Labels. */
-  labels: {
-    title: string;
-    investments: string;
-    assetSplit: string;
-    bestPerformer: string;
-    worstPerformer: string;
-    sparkline: string;
-  };
-  /** Asset-class allocation slices in target currency. */
-  allocation: AllocationSlice[];
-  /** Best and worst performer (can be the same item for single-asset portfolios). */
-  bestPerformer?: PerformerEntry;
-  worstPerformer?: PerformerEntry;
-  /** Sparkline points, chronological. Omit/empty to hide. */
-  sparkline?: SparklinePoint[];
-  /** When the sparkline series is net contributions (no win/lose valence),
-   *  render the trend badge + line in a neutral colour, not green/red. */
-  neutralSparkline?: boolean;
-  /** Format numeric value as currency. */
-  formatCurrency: (value: number) => string;
-  /** Overall gain/loss sign — drives the card's gain/loss tint. Omit for a neutral wash. */
-  isGain?: boolean;
+    /**
+     * Headline total. Pass a `<Money>` node so the hero carries the app's
+     * currency micro-typography (raised symbol, de-emphasized cents); a plain
+     * formatted string still renders as-is.
+     */
+    formattedTotal: ReactNode;
+    /** Raw numeric total — used for % splits. */
+    totalValue: number;
+    /** Optional portfolio-specific facts rendered directly below the headline. */
+    headlineDetails?: ReactNode;
+    /** Labels. */
+    labels: {
+        title: string;
+        investments: string;
+        assetSplit: string;
+        bestPerformer: string;
+        worstPerformer: string;
+        sparkline: string;
+    };
+    /** Asset-class allocation slices in target currency. */
+    allocation: AllocationSlice[];
+    /** Optional denominator when the allocation represents only a subset of total value. */
+    allocationTotal?: number;
+    /** Show each slice's formatted value beside its percentage. */
+    showAllocationValues?: boolean;
+    /** Percentage precision for allocation rows. */
+    allocationFractionDigits?: number;
+    /** Best and worst performer (can be the same item for single-asset portfolios). */
+    bestPerformer?: PerformerEntry;
+    worstPerformer?: PerformerEntry;
+    /** Sparkline points, chronological. Omit/empty to hide. */
+    sparkline?: SparklinePoint[];
+    /** When the sparkline series is net contributions (no win/lose valence),
+     *  render the trend badge + line in a neutral colour, not green/red. */
+    neutralSparkline?: boolean;
+    /** Format numeric value as currency. */
+    formatCurrency: (value: number) => string;
+    /** Overall gain/loss sign — drives the card's gain/loss tint. Omit for a neutral wash. */
+    isGain?: boolean;
 }
 
 /**
@@ -81,199 +97,268 @@ export interface TotalValueCardProps {
  * passes no locale), not from a context read.
  */
 function formatDeltaPercent(pct: number): string {
-  return formatPercent(pct, { digits: 1, signed: true });
+    return formatPercent(pct, { digits: 1, signed: true });
 }
 
 function AssetSplitBars({
-  allocation,
-  total,
-  formatCurrency,
+    allocation,
+    total,
+    formatCurrency,
+    showValues,
+    fractionDigits,
 }: {
-  allocation: AllocationSlice[];
-  total: number;
-  formatCurrency: (v: number) => string;
+    allocation: AllocationSlice[];
+    total: number;
+    formatCurrency: (v: number) => string;
+    showValues: boolean;
+    fractionDigits: number;
 }) {
-  if (allocation.length === 0 || total <= 0) return null;
-  const palette = [
-    'hsl(217, 91%, 60%)',
-    'hsl(142, 76%, 36%)',
-    'hsl(45, 93%, 47%)',
-    'hsl(280, 87%, 65%)',
-    'hsl(340, 82%, 52%)',
-  ];
-  return (
-    <div className="space-y-2">
-      {allocation.map((slice, idx) => {
-        const pct = (slice.value / total) * 100;
-        const color = palette[idx % palette.length];
-        return (
-          <div key={slice.name} className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span
-                  className="inline-block h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: color }}
-                  aria-hidden
-                />
-                <span className="truncate text-muted-foreground">{slice.name}</span>
-              </div>
-              <span className="tabular-nums font-medium shrink-0 ml-2">
-                {formatPercent(pct, { digits: 0 })}
-              </span>
-            </div>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full transition-[width]"
-                style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: color }}
-                title={formatCurrency(slice.value)}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+    if (allocation.length === 0 || total <= 0) return null;
+    const palette = [
+        "hsl(217, 91%, 60%)",
+        "hsl(142, 76%, 36%)",
+        "hsl(45, 93%, 47%)",
+        "hsl(280, 87%, 65%)",
+        "hsl(340, 82%, 52%)",
+    ];
+    return (
+        <div className="space-y-2">
+            {allocation.map((slice, idx) => {
+                const pct = (slice.value / total) * 100;
+                const color = palette[idx % palette.length];
+                return (
+                    <div key={slice.name} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                    className="inline-block h-2 w-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: color }}
+                                    aria-hidden
+                                />
+                                <span className="truncate text-muted-foreground">
+                                    {slice.name}
+                                </span>
+                            </div>
+                            <span className="tabular-nums font-medium shrink-0 ml-2">
+                                {showValues ? (
+                                    `${formatCurrency(slice.value)} (${formatPercent(pct, { digits: fractionDigits })})`
+                                ) : (
+                                    <TouchDisclosure
+                                        label={`${slice.name}: ${formatCurrency(slice.value)}`}
+                                        content={formatCurrency(slice.value)}
+                                    >
+                                        {formatPercent(pct, {
+                                            digits: fractionDigits,
+                                        })}
+                                    </TouchDisclosure>
+                                )}
+                            </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-[width]"
+                                style={{
+                                    width: `${Math.max(pct, 2)}%`,
+                                    backgroundColor: color,
+                                }}
+                            />
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
 }
 
 function PerformerRow({
-  entry,
-  label,
-  kind,
+    entry,
+    label,
+    kind,
 }: {
-  entry?: PerformerEntry;
-  label: string;
-  kind: 'best' | 'worst';
-  formatCurrency: (v: number) => string;
+    entry?: PerformerEntry;
+    label: string;
+    kind: "best" | "worst";
+    formatCurrency: (v: number) => string;
 }) {
-  if (!entry) return null;
-  const positive = entry.gainLossPercent >= 0;
-  const Icon = kind === 'best' ? ArrowUpRight : ArrowDownRight;
-  const tone = positive ? 'amount-gain' : 'amount-loss';
-  return (
-    <div className="flex items-center justify-between gap-2 py-1.5">
-      <div className="flex items-center gap-2 min-w-0">
-        <Icon className={cn('h-3.5 w-3.5 shrink-0', tone)} aria-hidden />
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">
-            {label}
-          </p>
-          <p className="text-xs font-medium truncate">
-            {entry.symbol ? (
-              <span className="font-mono mr-1.5">{entry.symbol}</span>
-            ) : null}
-            <span className="text-muted-foreground">{entry.name}</span>
-          </p>
+    if (!entry) return null;
+    const positive = entry.gainLossPercent >= 0;
+    const Icon = kind === "best" ? ArrowUpRight : ArrowDownRight;
+    const tone = positive ? "text-gain" : "text-loss";
+    return (
+        <div className="flex items-center justify-between gap-2 py-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+                <Icon
+                    className={cn("h-3.5 w-3.5 shrink-0", tone)}
+                    aria-hidden
+                />
+                <div className="min-w-0">
+                    <p className="eyebrow leading-none">{label}</p>
+                    <p className="text-xs font-medium truncate">
+                        {entry.symbol ? (
+                            <span className="font-mono mr-1.5">
+                                {entry.symbol}
+                            </span>
+                        ) : null}
+                        <span className="text-muted-foreground">
+                            {entry.name}
+                        </span>
+                    </p>
+                </div>
+            </div>
+            <div className={cn("text-right shrink-0 tabular-nums", tone)}>
+                <p className="text-xs font-semibold leading-none">
+                    {formatDeltaPercent(entry.gainLossPercent)}
+                </p>
+                <p className="text-2xs leading-tight mt-0.5">
+                    <Money amount={entry.gainLossInTarget} signed />
+                </p>
+            </div>
         </div>
-      </div>
-      <div className={cn('text-right shrink-0 tabular-nums', tone)}>
-        <p className="text-xs font-semibold leading-none">
-          {formatDeltaPercent(entry.gainLossPercent)}
-        </p>
-        <p className="text-[10px] leading-tight mt-0.5">
-          {entry.gainLossInTarget >= 0 ? '+' : ''}
-          <Money amount={entry.gainLossInTarget} />
-        </p>
-      </div>
-    </div>
-  );
+    );
 }
 
-function Sparkline({ points, label, neutral = false }: { points: SparklinePoint[]; label: string; neutral?: boolean }) {
-  if (points.length < 2) return null;
-  const first = points[0].v;
-  const last = points[points.length - 1].v;
-  const delta = last - first;
-  // `neutral` = the series is net contributions (cost-basis flow), which has no
-  // win/lose valence — buying more isn't a "gain". Render it in a neutral colour
-  // so it isn't misread as 30-day performance (the Performance page uses value).
-  const color = neutral
-    ? SPARK_COLOR_NEUTRAL
-    : delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
-  const Trend = delta >= 0 ? TrendingUp : TrendingDown;
-  const pct = first > 0 ? (delta / first) * 100 : 0;
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-        <span>{label}</span>
-        <span
-          className={cn(
-            'flex items-center gap-1 tabular-nums',
-            neutral ? 'text-muted-foreground' : delta >= 0 ? 'amount-gain' : 'amount-loss'
-          )}
-        >
-          <Trend className="h-3 w-3" aria-hidden />
-          {formatDeltaPercent(pct)}
-        </span>
-      </div>
-      <ChartSparkline data={points.map((p) => p.v)} height={64} color={color} fillArea strokeWidth={2} />
-    </div>
-  );
+function Sparkline({
+    points,
+    label,
+    neutral = false,
+}: {
+    points: SparklinePoint[];
+    label: string;
+    neutral?: boolean;
+}) {
+    if (points.length < 2) return null;
+    const first = points[0].v;
+    const last = points[points.length - 1].v;
+    const delta = last - first;
+    // `neutral` = the series is net contributions (cost-basis flow), which has no
+    // win/lose valence — buying more isn't a "gain". Render it in a neutral colour
+    // so it isn't misread as 30-day performance (the Performance page uses value).
+    const color = neutral
+        ? SPARK_COLOR_NEUTRAL
+        : delta > 0
+          ? SPARK_COLOR_POSITIVE
+          : delta < 0
+            ? SPARK_COLOR_NEGATIVE
+            : SPARK_COLOR_NEUTRAL;
+    const Trend = delta >= 0 ? TrendingUp : TrendingDown;
+    const pct = first > 0 ? (delta / first) * 100 : 0;
+    return (
+        <div className="space-y-1">
+            <div className="flex items-center justify-between eyebrow">
+                <span>{label}</span>
+                <span
+                    className={cn(
+                        "flex items-center gap-1 tabular-nums",
+                        neutral
+                            ? "text-muted-foreground"
+                            : delta >= 0
+                              ? "text-gain"
+                              : "text-loss",
+                    )}
+                >
+                    <Trend className="h-3 w-3" aria-hidden />
+                    {formatDeltaPercent(pct)}
+                </span>
+            </div>
+            <ChartSparkline
+                data={points.map((p) => p.v)}
+                height={64}
+                color={color}
+                fillArea
+                strokeWidth={2}
+            />
+        </div>
+    );
 }
 
 export function TotalValueCard({
-  formattedTotal,
-  totalValue,
-  labels,
-  allocation,
-  bestPerformer,
-  worstPerformer,
-  sparkline = [],
-  neutralSparkline = false,
-  formatCurrency,
-  isGain,
+    formattedTotal,
+    totalValue,
+    headlineDetails,
+    labels,
+    allocation,
+    allocationTotal,
+    showAllocationValues = false,
+    allocationFractionDigits = 0,
+    bestPerformer,
+    worstPerformer,
+    sparkline = [],
+    neutralSparkline = false,
+    formatCurrency,
+    isGain,
 }: TotalValueCardProps) {
-  const hasSparkline = sparkline.length >= 2;
-  const hasAllocation = allocation.length > 0 && totalValue > 0;
-  const hasPerformers = Boolean(bestPerformer || worstPerformer);
-  const tone: TrendTone = isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
+    const hasSparkline = sparkline.length >= 2;
+    const resolvedAllocationTotal = allocationTotal ?? totalValue;
+    const hasAllocation = allocation.length > 0 && resolvedAllocationTotal > 0;
+    const hasPerformers = Boolean(bestPerformer || worstPerformer);
+    const tone: TrendTone =
+        isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
 
-  return (
-    <Card variant="interactive" className="liquid-glass border relative overflow-hidden h-full">
-      <TrendHue tone={tone} />
-      <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {labels.title}
-          </CardTitle>
-          <p className="text-3xl font-bold text-primary tabular-nums">{formattedTotal}</p>
-          <p className="text-xs text-muted-foreground">{labels.investments}</p>
-        </div>
-        <DollarSign className="h-4 w-4 text-primary shrink-0" aria-hidden />
-      </CardHeader>
+    return (
+        <Card
+            variant="interactive"
+            className="liquid-glass border relative overflow-hidden h-full"
+        >
+            <TrendHue tone={tone} />
+            <CardSheen tier="feature" />
+            <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">
+                <div className="space-y-1">
+                    <CardTitle variant="label">{labels.title}</CardTitle>
+                    <p className="text-3xl font-bold text-primary tabular-nums">
+                        {formattedTotal}
+                    </p>
+                    {labels.investments ? (
+                        <p className="text-xs text-muted-foreground">
+                            {labels.investments}
+                        </p>
+                    ) : null}
+                    {headlineDetails}
+                </div>
+                <Banknote
+                    className="h-4 w-4 text-primary shrink-0"
+                    aria-hidden
+                />
+            </CardHeader>
 
-      <CardContent className="space-y-4 pt-0">
-        {hasSparkline && <Sparkline points={sparkline} label={labels.sparkline} neutral={neutralSparkline} />}
+            <CardContent className="space-y-4">
+                {hasSparkline && (
+                    <Sparkline
+                        points={sparkline}
+                        label={labels.sparkline}
+                        neutral={neutralSparkline}
+                    />
+                )}
 
-        {hasAllocation && (
-          <div className="space-y-2">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {labels.assetSplit}
-            </p>
-            <AssetSplitBars
-              allocation={allocation}
-              total={totalValue}
-              formatCurrency={formatCurrency}
-            />
-          </div>
-        )}
+                {hasAllocation && (
+                    <div className="space-y-2">
+                        <p className="eyebrow">{labels.assetSplit}</p>
+                        <AssetSplitBars
+                            allocation={allocation}
+                            total={resolvedAllocationTotal}
+                            formatCurrency={formatCurrency}
+                            showValues={showAllocationValues}
+                            fractionDigits={allocationFractionDigits}
+                        />
+                    </div>
+                )}
 
-        {hasPerformers && (
-          <div className="border-t border-border/60 pt-2 divide-y divide-border/40">
-            <PerformerRow
-              entry={bestPerformer}
-              label={labels.bestPerformer}
-              kind="best"
-              formatCurrency={formatCurrency}
-            />
-            <PerformerRow
-              entry={worstPerformer}
-              label={labels.worstPerformer}
-              kind="worst"
-              formatCurrency={formatCurrency}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+                {hasPerformers && (
+                    <div className="border-t border-border/60 pt-2 divide-y divide-border/40">
+                        <PerformerRow
+                            entry={bestPerformer}
+                            label={labels.bestPerformer}
+                            kind="best"
+                            formatCurrency={formatCurrency}
+                        />
+                        <PerformerRow
+                            entry={worstPerformer}
+                            label={labels.worstPerformer}
+                            kind="worst"
+                            formatCurrency={formatCurrency}
+                        />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
 }

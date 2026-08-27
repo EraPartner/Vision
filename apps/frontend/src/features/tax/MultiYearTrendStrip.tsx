@@ -13,16 +13,21 @@
  * Uses `displayCalculationForYear` so filed/frozen years render their "as-filed"
  * numbers rather than today's live recomputation (engine-drift protection — ADR-059).
  */
-import { useMemo } from 'react';
-import { TrendingUp } from 'lucide-react';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { formatPercent } from '@/utils/currency';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
-import { TaxYearStatusIcon } from './TaxYearStatusIcon';
+import { useMemo } from "react";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { formatPercent } from "@/utils/currency";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
 
 interface MultiYearTrendStripProps {
     className?: string;
@@ -36,9 +41,13 @@ interface MultiYearTrendStripProps {
 
 const DEFAULT_MAX_YEARS = 8;
 
-export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }: MultiYearTrendStripProps) {
+export function MultiYearTrendStrip({
+    className,
+    maxYears = DEFAULT_MAX_YEARS,
+}: MultiYearTrendStripProps) {
     const { t } = useLanguage();
-    const { viewedYear, setViewedYear, displayCalculationForYear } = useBelgianTaxProfile();
+    const { viewedYear, setViewedYear, displayCalculationForYear } =
+        useBelgianTaxProfile();
     const years = useAvailableTaxYears();
     // Shared cached currency formatter; whole-euro tiles (decimals pinned to 0,
     // same rendering as the old maximumFractionDigits: 0 formatter).
@@ -66,18 +75,19 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
     if (tiles.length <= 1) return null;
 
     return (
-        <Card className={cn('glass-regular overflow-hidden', className)}>
+        <Card className={cn("overflow-hidden", className)}>
             <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    {t('tax.trendStrip.title')}
-                </CardTitle>
-                <CardDescription className="text-xs">{t('tax.trendStrip.description')}</CardDescription>
+                <CardTitle variant="sm">{t("tax.trendStrip.title")}</CardTitle>
+                <CardDescription className="text-xs">
+                    {t("tax.trendStrip.description")}
+                </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent>
                 <div
                     className="grid gap-2"
-                    style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}
+                    style={{
+                        gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`,
+                    }}
                 >
                     {tiles.map((tile) => {
                         const isActive = tile.year === viewedYear;
@@ -87,18 +97,20 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                 type="button"
                                 onClick={() => setViewedYear(tile.year)}
                                 className={cn(
-                                    'group flex flex-col items-stretch rounded-lg border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    "group flex flex-col items-stretch rounded-lg border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                     isActive
-                                        ? 'border-primary/60 bg-primary/5'
-                                        : 'border-border hover:border-primary/40 hover:bg-accent/40',
+                                        ? "border-primary/60 bg-primary/5"
+                                        : "border-border hover:border-primary/40 hover:bg-accent/40",
                                 )}
                                 aria-pressed={isActive}
                             >
                                 <span className="flex items-center justify-between gap-1">
                                     <span
                                         className={cn(
-                                            'text-xs font-semibold tabular-nums',
-                                            isActive ? 'text-primary' : 'text-foreground',
+                                            "text-xs font-semibold tabular-nums",
+                                            isActive
+                                                ? "text-primary"
+                                                : "text-foreground",
                                         )}
                                     >
                                         {tile.year}
@@ -106,7 +118,9 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                     <span className="flex items-center gap-0.5">
                                         <TaxYearStatusIcon
                                             isFiled={tile.isFiled}
-                                            hasFrozenCalculation={tile.hasFrozenCalculation}
+                                            hasFrozenCalculation={
+                                                tile.hasFrozenCalculation
+                                            }
                                             className="h-3 w-3"
                                         />
                                     </span>
@@ -114,16 +128,23 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                 <span className="mt-1 text-sm font-bold text-foreground tabular-nums">
                                     {fmtCurrency(tile.totalPIT)}
                                 </span>
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                    {formatPercent(tile.effectiveRate, { digits: 1 })} {t('tax.trendStrip.effective')}
+                                <span className="eyebrow">
+                                    {formatPercent(tile.effectiveRate, {
+                                        digits: 1,
+                                    })}{" "}
+                                    {t("tax.trendStrip.effective")}
                                 </span>
                                 <div className="mt-2 h-1 w-full rounded-full bg-muted">
                                     <div
                                         className={cn(
-                                            'h-full rounded-full transition-[width]',
-                                            isActive ? 'bg-primary' : 'bg-primary/40',
+                                            "h-full rounded-full transition-[width]",
+                                            isActive
+                                                ? "bg-primary"
+                                                : "bg-primary/40",
                                         )}
-                                        style={{ width: `${tile.barRatio * 100}%` }}
+                                        style={{
+                                            width: `${tile.barRatio * 100}%`,
+                                        }}
                                     />
                                 </div>
                             </button>

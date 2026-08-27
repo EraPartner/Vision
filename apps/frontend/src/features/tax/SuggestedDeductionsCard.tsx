@@ -104,7 +104,7 @@ export function SuggestedDeductionsCard() {
 
     if (!suggestions || suggestions.length === 0) {
         return (
-            <Card className="glass-regular">
+            <Card>
                 <CardHeader>
                     <CardTitle>{t('tax.suggestions.title')}</CardTitle>
                 </CardHeader>
@@ -118,7 +118,7 @@ export function SuggestedDeductionsCard() {
     }
 
     return (
-        <Card className="glass-regular">
+        <Card>
             <CardHeader>
                 <CardTitle>{t('tax.suggestions.title')}</CardTitle>
             </CardHeader>

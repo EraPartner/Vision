@@ -339,7 +339,7 @@ export function RecipientPatternsDialog({
                                                 </Button>
                                             </div>
                                             {previewCount != null && (
-                                                <p className={cn("text-xs", previewCount > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")}>
+                                                <p className={cn("text-xs", previewCount > 0 ? "text-info" : "text-muted-foreground")}>
                                                     {previewCount > 0
                                                         ? t("recipientPatterns.previewCount", { n: previewCount })
                                                         : t("recipientPatterns.previewZero")}

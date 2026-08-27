@@ -81,7 +81,7 @@ export function AccountFilterCombobox({ value, onChange }: AccountFilterCombobox
                                     )} />
                                     <span className="truncate">{account.display_name || account.name}</span>
                                     {!account.is_active && (
-                                        <Badge variant="outline" className="ml-auto text-[10px]">
+                                        <Badge variant="outline" className="ml-auto text-2xs">
                                             {t("accounts.archived")}
                                         </Badge>
                                     )}

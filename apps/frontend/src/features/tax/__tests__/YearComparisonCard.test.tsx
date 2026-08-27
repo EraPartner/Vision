@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 vi.mock('@/contexts/LanguageContext', () => ({
     useLanguage: () => ({
@@ -35,7 +35,14 @@ vi.mock('@/hooks/useAvailableTaxYears', () => ({
 }));
 
 vi.mock('@/hooks/useCurrencyFormatter', () => ({
-    useCurrencyFormatter: () => (value: number) => `€${value}`,
+    useCurrencyFormatter: () => (
+        value: number,
+        options?: string | { signed?: boolean },
+    ) => {
+        const signed = typeof options === 'object' && options.signed;
+        const sign = signed ? (value > 0 ? '+' : value < 0 ? '-' : '') : '';
+        return `${sign}€${signed ? Math.abs(value) : value}`;
+    },
 }));
 
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
@@ -81,5 +88,37 @@ describe('YearComparisonCard', () => {
         render(<YearComparisonCard />);
 
         expect(screen.getByRole('combobox', { name: 'Compare with year' })).toBeInTheDocument();
+    });
+
+    it('uses gain/loss DeltaPill tones with inverted tax semantics', () => {
+        render(<YearComparisonCard />);
+
+        const grossRow = screen.getByText('Gross income').closest('tr');
+        const taxRow = screen.getByText('Total PIT').closest('tr');
+        expect(grossRow).not.toBeNull();
+        expect(taxRow).not.toBeNull();
+
+        const grossPill = within(grossRow!).getAllByRole('cell')[3].firstElementChild;
+        const taxPill = within(taxRow!).getAllByRole('cell')[3].firstElementChild;
+        expect(grossPill).toHaveClass('text-gain', 'bg-gain/12');
+        expect(taxPill).toHaveClass('text-loss', 'bg-loss/12');
+        expect(grossPill).toHaveTextContent('+€5000 (+9.1%)');
+        expect(taxPill).toHaveTextContent('+€2000 (+15.4%)');
+    });
+
+    it('keeps a negative sign on money deltas', () => {
+        mockedProfile.mockReturnValue({
+            viewedYear: 2026,
+            displayCalculationForYear: (year: number) => ({
+                grossIncome: year === 2026 ? 50_000 : 55_000,
+                totalPIT: 13_000,
+                effectiveRate: 23.6,
+                netTakeHome: 38_000,
+            }),
+        } as unknown as ReturnType<typeof useBelgianTaxProfile>);
+
+        render(<YearComparisonCard />);
+        const grossRow = screen.getByText('Gross income').closest('tr');
+        expect(within(grossRow!).getAllByRole('cell')[3]).toHaveTextContent('-€5000');
     });
 });

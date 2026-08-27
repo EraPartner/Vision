@@ -11,6 +11,32 @@ import CategoriesPage from "@/pages/CategoriesPage";
 const API_BASE = "http://localhost:3002";
 
 describe("CategoriesPage (integration)", () => {
+    it("hydrates show-all and expanded groups from the URL", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/categories`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: false,
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+        );
+        renderWithApp(<CategoriesPage />, {
+            initialEntries: ["/categories?show_all=true&expanded=FOOD"],
+        });
+
+        expect(
+            await screen.findByRole("button", { name: /showing all/i }),
+        ).toBeInTheDocument();
+        expect(screen.getByText("GROCERIES")).toBeInTheDocument();
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<CategoriesPage />);
         await screen.findByRole("heading", { name: /^categories$/i });
@@ -22,15 +48,23 @@ describe("CategoriesPage (integration)", () => {
     });
 
     it("shows error state when the categories API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/categories`, () => err(500, "db unavailable")),
+            http.get(`${API_BASE}/api/categories`, () =>
+                err(500, "db unavailable"),
+            ),
         );
 
         renderWithApp(<CategoriesPage />);
 
         expect(
-            await screen.findByText(/error loading categories/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /error loading categories/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
@@ -43,7 +77,12 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/categories`, () => {
                 postCalled = true;
-                return ok({ id: 99, general: "FOOD", detail: "GROCERIES", is_active: true });
+                return ok({
+                    id: 99,
+                    general: "FOOD",
+                    detail: "GROCERIES",
+                    is_active: true,
+                });
             }),
         );
 
@@ -53,7 +92,9 @@ describe("CategoriesPage (integration)", () => {
         await screen.findByRole("heading", { name: /^categories$/i });
 
         // Open the Add Category dialog via the trigger button
-        const triggerBtn = await screen.findByRole("button", { name: /add category/i });
+        const triggerBtn = await screen.findByRole("button", {
+            name: /add category/i,
+        });
         await user.click(triggerBtn);
 
         // Dialog should be visible
@@ -81,7 +122,9 @@ describe("CategoriesPage (integration)", () => {
 
         await screen.findByRole("heading", { name: /^categories$/i });
 
-        const triggerBtn = await screen.findByRole("button", { name: /add category/i });
+        const triggerBtn = await screen.findByRole("button", {
+            name: /add category/i,
+        });
         await user.click(triggerBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -99,7 +142,9 @@ describe("CategoriesPage (integration)", () => {
 
         await screen.findByRole("heading", { name: /^categories$/i });
 
-        const triggerBtn = await screen.findByRole("button", { name: /add category/i });
+        const triggerBtn = await screen.findByRole("button", {
+            name: /add category/i,
+        });
         await user.click(triggerBtn);
 
         await screen.findByRole("dialog");
@@ -111,16 +156,16 @@ describe("CategoriesPage (integration)", () => {
     it("shows Category Tree section heading", async () => {
         renderWithApp(<CategoriesPage />);
         // categoriesPage.treeTitle = "Category Tree"
-        expect(
-            await screen.findByText(/category tree/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/category tree/i)).toBeInTheDocument();
     });
 
     it("shows empty categories message when category list is empty", async () => {
         renderWithApp(<CategoriesPage />);
         // Default MSW returns { items: [] }.
         expect(
-            await screen.findByText(/no categories yet.*import a categories csv/i),
+            await screen.findByText(
+                /no categories yet.*import a categories csv/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -146,7 +191,14 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "A VERY LONG GROCERY CATEGORY", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "A VERY LONG GROCERY CATEGORY",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -159,9 +211,19 @@ describe("CategoriesPage (integration)", () => {
         await user.click(groupBtn);
 
         // Detail row badge becomes visible after expand
-        const detail = await screen.findByText("A VERY LONG GROCERY CATEGORY");
+        const detail = await screen.findByRole("link", {
+            name: "A VERY LONG GROCERY CATEGORY",
+        });
         expect(detail).toHaveClass("truncate");
-        expect(detail.closest("[title]")).toHaveAttribute("title", "A VERY LONG GROCERY CATEGORY");
+        expect(detail).toHaveAttribute(
+            "href",
+            "/transactions?category_id=1&filter_label=FOOD%3AA%20VERY%20LONG%20GROCERY%20CATEGORY",
+        );
+        expect(
+            screen.getByRole("button", {
+                name: "A VERY LONG GROCERY CATEGORY",
+            }),
+        ).toBeInTheDocument();
     });
 
     it("shows category count subtitle when page loads", async () => {
@@ -179,7 +241,14 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -208,7 +277,14 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -235,7 +311,14 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -259,7 +342,9 @@ describe("CategoriesPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
 
-        const activeOnlyBtn = await screen.findByRole("button", { name: /active only/i });
+        const activeOnlyBtn = await screen.findByRole("button", {
+            name: /active only/i,
+        });
         await user.click(activeOnlyBtn);
 
         // categoriesPage.showingAll = "Showing All"
@@ -274,7 +359,14 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -283,7 +375,9 @@ describe("CategoriesPage (integration)", () => {
         renderWithApp(<CategoriesPage />);
 
         // Click Expand All — only enabled when groups exist
-        const expandAllBtn = await screen.findByRole("button", { name: /expand all/i });
+        const expandAllBtn = await screen.findByRole("button", {
+            name: /expand all/i,
+        });
         await user.click(expandAllBtn);
 
         // categoriesPage.collapseAll = "Collapse All" — button label flips
@@ -300,14 +394,26 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [
+                        {
+                            id: 1,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
             http.patch(`${API_BASE}/api/categories/:id`, ({ params }) => {
                 patchCalled = true;
                 patchedId = params.id as string;
-                return ok({ id: 1, general: "FOOD", detail: "ORGANIC", is_active: true });
+                return ok({
+                    id: 1,
+                    general: "FOOD",
+                    detail: "ORGANIC",
+                    is_active: true,
+                });
             }),
         );
 
@@ -335,6 +441,49 @@ describe("CategoriesPage (integration)", () => {
         expect(patchedId).toBe("1");
     });
 
+    it("names the category, explains unlinking, and deletes the confirmed category", async () => {
+        const user = userEvent.setup();
+        let deletedId: string | undefined;
+        server.use(
+            http.get(`${API_BASE}/api/categories`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 7,
+                            general: "FOOD",
+                            detail: "GROCERIES",
+                            is_active: true,
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+            http.delete(`${API_BASE}/api/categories/:id`, ({ params }) => {
+                deletedId = params.id as string;
+                return new Response(null, { status: 204 });
+            }),
+        );
+
+        renderWithApp(<CategoriesPage />);
+        await user.click(await screen.findByRole("button", { name: /food/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /delete category/i }),
+        );
+
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent('Delete "FOOD:GROCERIES"?');
+        expect(dialog).toHaveTextContent(
+            /linked transactions and planned payments will become uncategorized/i,
+        );
+        expect(dialog).toHaveTextContent(
+            /recipient default categories will be cleared/i,
+        );
+        expect(deletedId).toBeUndefined();
+
+        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await waitFor(() => expect(deletedId).toBe("7"));
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("does not crash when categories endpoint returns 404", async () => {
@@ -353,10 +502,21 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () => {
                 getCalls += 1;
-                return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                });
             }),
             http.post(`${API_BASE}/api/categories`, () =>
-                ok({ id: 99, general: "FOOD", detail: "GROCERIES", is_active: true }),
+                ok({
+                    id: 99,
+                    general: "FOOD",
+                    detail: "GROCERIES",
+                    is_active: true,
+                }),
             ),
         );
         const user = userEvent.setup();
@@ -364,7 +524,9 @@ describe("CategoriesPage (integration)", () => {
         await screen.findByRole("heading", { name: /^categories$/i });
         const initial = getCalls;
 
-        const triggerBtn = await screen.findByRole("button", { name: /add category/i });
+        const triggerBtn = await screen.findByRole("button", {
+            name: /add category/i,
+        });
         await user.click(triggerBtn);
         await screen.findByRole("dialog");
         const generalInput = screen.getByLabelText(/general/i);

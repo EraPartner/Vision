@@ -3,6 +3,7 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { CostBreakdownEntry } from "@/hooks/usePortfolioTaxData";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/shared/Money";
 
 interface TaxTypesBreakdownCardProps {
   taxBreakdown: CostBreakdownEntry[];
@@ -22,7 +23,7 @@ export function TaxTypesBreakdownCard({
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.widget.taxTypes")}</CardTitle>
         <CardDescription>{t("tax.taxTypesDesc")}</CardDescription>
@@ -59,14 +60,14 @@ export function TaxTypesBreakdownCard({
           <div className="space-y-2">
             <div className="flex justify-between items-center py-1.5">
               <span className="text-sm text-muted-foreground">{t("portfolio.realizedGains")}</span>
-              <span className={cn("text-sm font-semibold tabular-nums", totalRealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
-                {totalRealizedGain >= 0 ? "+" : ""}{fmt(totalRealizedGain)}
+              <span className={cn("text-sm font-semibold tabular-nums", totalRealizedGain >= 0 ? "text-gain" : "text-loss")}>
+                <Money amount={totalRealizedGain} signed />
               </span>
             </div>
             <div className="flex justify-between items-center py-1.5">
               <span className="text-sm text-muted-foreground">{t("portfolio.unrealizedGains")}</span>
-              <span className={cn("text-sm font-semibold tabular-nums", totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
-                {totalUnrealizedGain >= 0 ? "+" : ""}{fmt(totalUnrealizedGain)}
+              <span className={cn("text-sm font-semibold tabular-nums", totalUnrealizedGain >= 0 ? "text-gain" : "text-loss")}>
+                <Money amount={totalUnrealizedGain} signed />
               </span>
             </div>
           </div>

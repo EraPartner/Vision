@@ -15,7 +15,7 @@ export function YearlyCostTrendCard({ data, txYear }: YearlyCostTrendCardProps) 
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.yearlyTaxFeeTrendTitle", { year: String(txYear) })}</CardTitle>
         <CardDescription>{t("tax.yearlyTaxFeeTrendDesc")}</CardDescription>

@@ -5,6 +5,7 @@ import type {RecipientCreate, RecipientUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import {useLanguage} from '@/contexts/LanguageContext';
+import {useBackgroundQueryCue} from '@/components/shared/BackgroundQueryIndicator';
 
 export function useRecipients(params?: {
     limit?: number;
@@ -14,12 +15,14 @@ export function useRecipients(params?: {
     active?: boolean;
     search?: string;
 }) {
-    return useQuery({
+    const query = useQuery({
         queryKey: recipientKeys.list(params),
         queryFn: () => apiClient.getRecipients(params),
         staleTime: 2 * 60_000, // recipients rarely change - 2min stale
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useRecipient(id?: number | null) {
@@ -63,6 +66,7 @@ export function useUpdateRecipient() {
             apiClient.updateRecipient(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: recipientKeys.all});
+            toast.success(t('recipients.updated'));
         },
         onError: (error: Error) => {
             toast.error(t('recipients.updateFailedTitle'), { description: apiErrorToMessage(error, t) });

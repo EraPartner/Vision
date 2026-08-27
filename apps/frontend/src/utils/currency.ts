@@ -259,7 +259,9 @@ export function formatCurrencyCompact(
   amount: number,
   currencyCode?: string,
   locale?: string,
-  fractionDigits?: number
+  fractionDigits?: number,
+  /** Render a locale-correct sign for non-zero amounts. */
+  signed?: boolean,
 ): CompactFormatResult {
   const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
   const effectiveLocale = locale || currencyFormatDefaults.locale;
@@ -271,6 +273,7 @@ export function formatCurrencyCompact(
       currency: effectiveCurrency,
       minimumFractionDigits: effectiveFractionDigits,
       maximumFractionDigits: effectiveFractionDigits,
+      signDisplay: signed ? 'exceptZero' : 'auto',
     }).formatToParts(amount);
     const full = fullParts.map((p) => p.value).join('');
     if (full.length <= COMPACT_LENGTH_THRESHOLD) {
@@ -282,6 +285,7 @@ export function formatCurrencyCompact(
       currency: effectiveCurrency,
       notation: 'compact',
       maximumFractionDigits: 1,
+      signDisplay: signed ? 'exceptZero' : 'auto',
     }).formatToParts(amount);
     const compact = compactParts.map((p) => p.value).join('');
     const hasCompactNotation = compactParts.some((p) => p.type === 'compact');

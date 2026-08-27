@@ -1,5 +1,5 @@
+import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
@@ -8,9 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users, Regex } from "lucide-react";
+import {
+    Eye,
+    EyeOff,
+    ToggleLeft,
+    ToggleRight,
+    Trash2,
+    Link2,
+    Unlink,
+    Users,
+    Regex,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
+import {
+    useUpdateRecipient,
+    useDeleteRecipient,
+    useUnmergeRecipient,
+} from "@/hooks/useRecipients";
 import { AddRecipientDialog } from "@/features/recipients/AddRecipientDialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDialog";
@@ -26,6 +40,23 @@ import { parseCategoryName } from "@vision/shared-utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageError } from "@/components/shared/PageError";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import { PageShell } from "@/components/shared/PageShell";
+import { TextLink } from "@/components/shared/TextLink";
+import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
+import { useSearchParams } from "react-router";
+import {
+    booleanSearchParamCodec,
+    useSearchParamState,
+} from "@/hooks/useSearchParamState";
+
+const RECIPIENT_SORT_KEYS = new Set([
+    "name",
+    "primary_bank_account",
+    "default_category_name",
+    "notes",
+    "is_active",
+]);
 
 type TableRecipient = {
     id: number;
@@ -41,18 +72,33 @@ type TableRecipient = {
 };
 
 export default function RecipientsPage() {
-    const navigate = useNavigate();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const pageSize = appSettings.defaultPageSize;
-    const [showAll, setShowAll] = useState(false);
-    const [showUncategorized, setShowUncategorized] = useState(false);
-    const [search, setSearch] = useState("");
-    const [sortKey, setSortKey] = useState<string | null>(null);
-    const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
+    const [showAll, setShowAll] = useSearchParamState(
+        "show_all",
+        booleanSearchParamCodec,
+    );
+    const [showUncategorized, setShowUncategorized] = useSearchParamState(
+        "uncategorized",
+        booleanSearchParamCodec,
+    );
+    const [searchParams, setSearchParams] = useSearchParams();
+    const search = searchParams.get("search") ?? "";
+    const rawSortKey = searchParams.get("sort_key");
+    const rawSortDir = searchParams.get("sort_dir");
+    const validSort =
+        rawSortKey !== null &&
+        RECIPIENT_SORT_KEYS.has(rawSortKey) &&
+        (rawSortDir === "asc" || rawSortDir === "desc");
+    const sortKey = validSort ? rawSortKey : null;
+    const sortDir = validSort ? rawSortDir : null;
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-    const [patternsDialogRecipient, setPatternsDialogRecipient] = useState<{ id: number; name: string } | null>(null);
+    const [patternsDialogRecipient, setPatternsDialogRecipient] = useState<{
+        id: number;
+        name: string;
+    } | null>(null);
     const [allItems, setAllItems] = useState<Recipient[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -68,12 +114,35 @@ export default function RecipientsPage() {
     const unmergeMutation = useUnmergeRecipient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const { data: initialData, isLoading, error } = useQuery({
-        queryKey: recipientKeys.virtualList({ active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir, pageSize }),
-        queryFn: () => apiClient.getRecipients({ limit: pageSize, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
+    const {
+        data: initialData,
+        isLoading,
+        error,
+        isFetching,
+        isPlaceholderData,
+    } = useQuery({
+        queryKey: recipientKeys.virtualList({
+            active: !showAll,
+            search: search || undefined,
+            uncategorized: showUncategorized,
+            sortKey,
+            sortDir,
+            pageSize,
+        }),
+        queryFn: () =>
+            apiClient.getRecipients({
+                limit: pageSize,
+                offset: 0,
+                active: !showAll,
+                search: search || undefined,
+                uncategorized: showUncategorized,
+                sort_by: sortKey || undefined,
+                sort_dir: sortDir || undefined,
+            }),
         placeholderData: (prev) => prev, // keep previous list while a new filter/search/sort round-trips
         staleTime: 30_000,
     });
+    useBackgroundQueryCue(isFetching && isPlaceholderData);
 
     useEffect(() => {
         if (initialData) {
@@ -81,7 +150,9 @@ export default function RecipientsPage() {
             setAllItems(initialData.items);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
-            hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
+            hasMoreRef.current =
+                initialData.items.length <
+                (initialData.total ?? initialData.items.length);
         }
     }, [initialData]);
 
@@ -101,30 +172,67 @@ export default function RecipientsPage() {
                 sort_dir: sortDir || undefined,
             });
             if (generationRef.current !== gen) return;
-            setAllItems(prev => {
+            setAllItems((prev) => {
                 const existingIds = new Set(prev.map((r) => r.id));
-                const newItems = result.items.filter((r) => !existingIds.has(r.id));
+                const newItems = result.items.filter(
+                    (r) => !existingIds.has(r.id),
+                );
                 return [...prev, ...newItems];
             });
             offsetRef.current += result.items.length;
-            hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
+            hasMoreRef.current =
+                offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } catch (err) {
-            logger.error('Failed to load more recipients:', err);
+            logger.error("Failed to load more recipients:", err);
         } finally {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
     }, [showAll, search, showUncategorized, sortKey, sortDir, pageSize]);
 
-    const handleSortChange = useCallback((key: string | null, dir: "asc" | "desc" | null) => {
-        setSortKey(key);
-        setSortDir(dir);
-        setAllItems([]);
-        setTotalItems(0);
-        offsetRef.current = 0;
-        hasMoreRef.current = true;
-    }, []);
+    const handleSortChange = useCallback(
+        (key: string | null, dir: "asc" | "desc" | null) => {
+            setSearchParams(
+                (previous) => {
+                    const next = new URLSearchParams(previous);
+                    if (
+                        key &&
+                        RECIPIENT_SORT_KEYS.has(key) &&
+                        (dir === "asc" || dir === "desc")
+                    ) {
+                        next.set("sort_key", key);
+                        next.set("sort_dir", dir);
+                    } else {
+                        next.delete("sort_key");
+                        next.delete("sort_dir");
+                    }
+                    return next;
+                },
+                { replace: true },
+            );
+            setAllItems([]);
+            setTotalItems(0);
+            offsetRef.current = 0;
+            hasMoreRef.current = true;
+        },
+        [setSearchParams],
+    );
+
+    const setSearch = useCallback(
+        (value: string) => {
+            setSearchParams(
+                (previous) => {
+                    const next = new URLSearchParams(previous);
+                    if (value) next.set("search", value);
+                    else next.delete("search");
+                    return next;
+                },
+                { replace: true },
+            );
+        },
+        [setSearchParams],
+    );
 
     const handleUpdate = (sourceIndex: number, updated: TableRecipient) => {
         const originalRecipient = allItems[sourceIndex];
@@ -139,193 +247,287 @@ export default function RecipientsPage() {
         });
     };
 
-    const toggleActive = useCallback((id: number, currentActive: boolean) => {
-        updateMutation.mutate({ id, data: { is_active: !currentActive } });
-    }, [updateMutation]);
+    const toggleActive = useCallback(
+        (id: number, currentActive: boolean) => {
+            updateMutation.mutate({ id, data: { is_active: !currentActive } });
+        },
+        [updateMutation],
+    );
 
-    const recipients: TableRecipient[] = useMemo(() => allItems.map((r) => ({
-        id: r.id,
-        name: r.name,
-        primary_bank_account: r.primary_bank_account || t('recipientsPage.none'),
-        default_category_name: r.default_category_name,
-        default_category_id: r.default_category_id,
-        primary_recipient_id: r.primary_recipient_id,
-        primary_recipient_name: r.primary_recipient_name,
-        alias_count: r.alias_count,
-        is_active: r.is_active,
-        notes: r.notes || '',
-    })), [allItems, t]);
+    const recipients: TableRecipient[] = useMemo(
+        () =>
+            allItems.map((r) => ({
+                id: r.id,
+                name: r.name,
+                primary_bank_account:
+                    r.primary_bank_account || t("recipientsPage.none"),
+                default_category_name: r.default_category_name,
+                default_category_id: r.default_category_id,
+                primary_recipient_id: r.primary_recipient_id,
+                primary_recipient_name: r.primary_recipient_name,
+                alias_count: r.alias_count,
+                is_active: r.is_active,
+                notes: r.notes || "",
+            })),
+        [allItems, t],
+    );
 
-    const columns = useMemo(() => [
-        {
-            key: "name",
-            header: t('recipientsPage.col.recipient'),
-            editable: true,
-            render: (row: TableRecipient) => (
-                <div className="flex min-w-0 items-center gap-2">
+    const columns = useMemo(
+        () => [
+            {
+                key: "name",
+                header: t("recipientsPage.col.recipient"),
+                editable: true,
+                render: (row: TableRecipient) => (
+                    <div className="flex min-w-0 items-center gap-2">
+                        <TextLink
+                            to={`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`}
+                            className={cn(
+                                "min-w-0 truncate font-medium",
+                                row.is_active
+                                    ? "text-foreground"
+                                    : "text-muted-foreground line-through",
+                            )}
+                        >
+                            {row.name}
+                        </TextLink>
+                        <TouchDisclosure
+                            label={row.name}
+                            content={row.name}
+                            className="shrink-0 px-1 text-xs text-muted-foreground"
+                        >
+                            …
+                        </TouchDisclosure>
+                        {(row.alias_count ?? 0) > 0 && (
+                            <Badge
+                                variant="secondary"
+                                className="shrink-0 text-xs gap-1"
+                            >
+                                <Users className="h-3 w-3" />
+                                {row.alias_count}
+                            </Badge>
+                        )}
+                        {row.primary_recipient_id && (
+                            <Badge
+                                variant="outline"
+                                className="min-w-0 gap-1 text-xs text-muted-foreground"
+                                title={row.primary_recipient_name ?? undefined}
+                            >
+                                <Link2 className="h-3 w-3 shrink-0" />
+                                <span className="truncate">
+                                    → {row.primary_recipient_name}
+                                </span>
+                            </Badge>
+                        )}
+                    </div>
+                ),
+            },
+            {
+                key: "primary_bank_account",
+                header: t("recipientsPage.col.account"),
+                editable: false,
+                render: (row: TableRecipient) => (
                     <span
-                        className={cn('min-w-0 truncate font-medium', row.is_active ? 'text-foreground' : 'text-muted-foreground line-through')}
-                        title={row.name}
+                        className={cn(
+                            "text-muted-foreground font-mono text-sm",
+                            !row.is_active && "line-through",
+                        )}
                     >
-                        {row.name}
+                        {row.primary_bank_account}
                     </span>
-                    {(row.alias_count ?? 0) > 0 && (
-                        <Badge variant="secondary" className="shrink-0 text-xs gap-1">
-                            <Users className="h-3 w-3" />
-                            {row.alias_count}
-                        </Badge>
-                    )}
-                    {row.primary_recipient_id && (
+                ),
+            },
+            {
+                key: "default_category_name",
+                header: t("recipientsPage.col.category"),
+                editable: false,
+                render: (row: TableRecipient, isEditing: boolean) => {
+                    if (isEditing) {
+                        return (
+                            <CategoryCombobox
+                                value={row.default_category_id ?? null}
+                                onSelect={(catId) => {
+                                    // Cancel any ongoing queries to prevent refetch removing this row
+                                    // before the edit mode is properly cancelled
+                                    queryClient.cancelQueries({
+                                        queryKey: recipientKeys.all,
+                                    });
+                                    // Cancel edit mode first to avoid stale state
+                                    cancelEditingRef.current?.();
+                                    // Small delay to let the UI update before mutation
+                                    setTimeout(() => {
+                                        updateMutation.mutate({
+                                            id: row.id,
+                                            data: {
+                                                default_category_id: catId,
+                                            },
+                                        });
+                                    }, 0);
+                                }}
+                                className="w-full"
+                            />
+                        );
+                    }
+
+                    const formatCategoryName = (
+                        categoryName?: string,
+                    ): string => {
+                        if (!categoryName) return t("recipientsPage.none");
+                        // Shared GENERAL:DETAIL split (first ':' only, detail may
+                        // contain colons); sentence-case the detail for display.
+                        const { general, detail } =
+                            parseCategoryName(categoryName);
+                        const label = detail || general;
+                        return label.charAt(0) + label.slice(1).toLowerCase();
+                    };
+
+                    const displayName = formatCategoryName(
+                        row.default_category_name,
+                    );
+                    const isNone = !row.default_category_name;
+
+                    return (
                         <Badge
                             variant="outline"
-                            className="min-w-0 gap-1 text-xs text-muted-foreground"
-                            title={row.primary_recipient_name ?? undefined}
+                            className={cn(
+                                "font-medium",
+                                isNone && "text-muted-foreground",
+                            )}
                         >
-                            <Link2 className="h-3 w-3 shrink-0" />
-                            <span className="truncate">→ {row.primary_recipient_name}</span>
+                            {displayName}
                         </Badge>
-                    )}
-                </div>
-            ),
-        },
-        {
-            key: "primary_bank_account",
-            header: t('recipientsPage.col.account'),
-            editable: false,
-            render: (row: TableRecipient) => (
-                <span className={cn('text-muted-foreground font-mono text-sm', !row.is_active && 'line-through')}>{row.primary_bank_account}</span>
-            ),
-        },
-        {
-            key: "default_category_name",
-            header: t('recipientsPage.col.category'),
-            editable: false,
-            render: (row: TableRecipient, isEditing: boolean) => {
-                if (isEditing) {
-                    return (
-                        <CategoryCombobox
-                            value={row.default_category_id ?? null}
-                            onSelect={(catId) => {
-                                // Cancel any ongoing queries to prevent refetch removing this row
-                                // before the edit mode is properly cancelled
-                                queryClient.cancelQueries({ queryKey: recipientKeys.all });
-                                // Cancel edit mode first to avoid stale state
-                                cancelEditingRef.current?.();
-                                // Small delay to let the UI update before mutation
-                                setTimeout(() => {
-                                    updateMutation.mutate({
-                                        id: row.id,
-                                        data: { default_category_id: catId },
-                                    });
-                                }, 0);
-                            }}
-                            className="w-full"
-                        />
                     );
-                }
-
-                const formatCategoryName = (categoryName?: string): string => {
-                    if (!categoryName) return t('recipientsPage.none');
-                    // Shared GENERAL:DETAIL split (first ':' only, detail may
-                    // contain colons); sentence-case the detail for display.
-                    const { general, detail } = parseCategoryName(categoryName);
-                    const label = detail || general;
-                    return label.charAt(0) + label.slice(1).toLowerCase();
-                };
-
-                const displayName = formatCategoryName(row.default_category_name);
-                const isNone = !row.default_category_name;
-
-                return (
-                    <Badge variant="outline" className={cn('font-medium', isNone && 'text-muted-foreground')}>
-                        {displayName}
-                    </Badge>
-                );
+                },
             },
-        },
-        {
-            key: "notes",
-            header: t('recipientsPage.col.notes'),
-            editable: true,
-            render: (row: TableRecipient) => (
-                <span className={cn('text-sm text-muted-foreground', !row.is_active && 'line-through')}>{row.notes || '-'}</span>
-            ),
-        },
-        {
-            key: "is_active",
-            header: t('recipientsPage.col.status'),
-            editable: false,
-            render: (row: TableRecipient) => (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn('gap-1.5', row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50')}
-                    onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
-                    disabled={updateMutation.isPending}
-                >
-                    {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                    {row.is_active ? t('recipientsPage.statusActive') : t('recipientsPage.statusInactive')}
-                </Button>
-            ),
-        },
-        {
-            key: "actions",
-            header: "",
-            className: "w-32",
-            editable: false,
-            render: (row: TableRecipient) => (
-                <div className="flex items-center gap-1">
+            {
+                key: "notes",
+                header: t("recipientsPage.col.notes"),
+                editable: true,
+                render: (row: TableRecipient) => (
+                    <span
+                        className={cn(
+                            "text-sm text-muted-foreground",
+                            !row.is_active && "line-through",
+                        )}
+                    >
+                        {row.notes || "-"}
+                    </span>
+                ),
+            },
+            {
+                key: "is_active",
+                header: t("recipientsPage.col.status"),
+                editable: false,
+                render: (row: TableRecipient) => (
                     <Button
                         variant="ghost"
-                        size="icon"
-                        className="icon-touch-target text-muted-foreground hover:text-foreground"
-                        title={t('recipientPatterns.openBtn')}
+                        size="sm"
+                        className={cn(
+                            "gap-1.5",
+                            row.is_active
+                                ? "text-accent hover:text-accent"
+                                : "text-muted-foreground hover:text-muted-foreground opacity-50",
+                        )}
                         onClick={(e) => {
                             e.stopPropagation();
-                            setPatternsDialogRecipient({ id: row.id, name: row.name });
+                            toggleActive(row.id, row.is_active);
                         }}
+                        disabled={updateMutation.isPending}
                     >
-                        <Regex className="h-4 w-4" />
+                        {row.is_active ? (
+                            <ToggleRight className="h-4 w-4" />
+                        ) : (
+                            <ToggleLeft className="h-4 w-4" />
+                        )}
+                        {row.is_active
+                            ? t("recipientsPage.statusActive")
+                            : t("recipientsPage.statusInactive")}
                     </Button>
-                    {row.primary_recipient_id && (
+                ),
+            },
+            {
+                key: "actions",
+                header: "",
+                className: "w-32",
+                editable: false,
+                render: (row: TableRecipient) => (
+                    <div className="flex items-center gap-1">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="icon-touch-target text-muted-foreground hover:text-foreground"
-                            title={t('recipientsPage.unmergeTitle')}
-                            onClick={(e) => { e.stopPropagation(); unmergeMutation.mutate(row.id); }}
-                            disabled={unmergeMutation.isPending}
+                            title={t("recipientPatterns.openBtn")}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setPatternsDialogRecipient({
+                                    id: row.id,
+                                    name: row.name,
+                                });
+                            }}
                         >
-                            <Unlink className="h-4 w-4" />
+                            <Regex className="h-4 w-4" />
                         </Button>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        aria-label={t('aria.deleteRecipient')}
-                        onClick={async () => {
-                            const ok = await confirm({
-                                title: t('recipientsPage.delete.title'),
-                                description: t('recipientsPage.delete.desc', { name: row.name }),
-                                confirmLabel: t('recipientsPage.delete.confirm'),
-                                variant: "destructive",
-                            });
-                            if (ok) deleteMutation.mutate(row.id);
-                        }}
-                        disabled={deleteMutation.isPending}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                </div>
-            ),
-        },
-    ], [t, toggleActive, queryClient, cancelEditingRef, updateMutation, unmergeMutation, deleteMutation, confirm]);
+                        {row.primary_recipient_id && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="icon-touch-target text-muted-foreground hover:text-foreground"
+                                title={t("recipientsPage.unmergeTitle")}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    unmergeMutation.mutate(row.id);
+                                }}
+                                disabled={unmergeMutation.isPending}
+                            >
+                                <Unlink className="h-4 w-4" />
+                            </Button>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            aria-label={t("aria.deleteRecipient")}
+                            onClick={async () => {
+                                const ok = await confirm({
+                                    title: t("recipientsPage.delete.title"),
+                                    description: t(
+                                        "recipientsPage.delete.desc",
+                                        { name: row.name },
+                                    ),
+                                    confirmLabel: t(
+                                        "recipientsPage.delete.confirm",
+                                    ),
+                                    variant: "destructive",
+                                });
+                                if (ok) deleteMutation.mutate(row.id);
+                            }}
+                            disabled={deleteMutation.isPending}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                ),
+            },
+        ],
+        [
+            t,
+            toggleActive,
+            queryClient,
+            cancelEditingRef,
+            updateMutation,
+            unmergeMutation,
+            deleteMutation,
+            confirm,
+        ],
+    );
 
     if (isLoading) {
         return (
-            <div className="space-y-8">
-                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+            <PageShell className="">
+                <PageHeader
+                    title={t("recipientsPage.tableTitle")}
+                    icon={PAGE_ICONS["/recipients"]}
+                />
                 <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
                         <Skeleton className="h-6 w-44" />
@@ -336,20 +538,27 @@ export default function RecipientsPage() {
                         ))}
                     </CardContent>
                 </Card>
-            </div>
+            </PageShell>
         );
     }
 
     if (error) {
         return (
-            <div className="space-y-8">
-                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+            <PageShell className="">
+                <PageHeader
+                    title={t("recipientsPage.tableTitle")}
+                    icon={PAGE_ICONS["/recipients"]}
+                />
                 <Card>
-                    <CardContent className="pt-0">
-                        <PageError message={t('recipientsPage.error', { msg: apiErrorToMessage(error, t) })} />
+                    <CardContent>
+                        <PageError
+                            message={t("recipientsPage.error", {
+                                msg: apiErrorToMessage(error, t),
+                            })}
+                        />
                     </CardContent>
                 </Card>
-            </div>
+            </PageShell>
         );
     }
 
@@ -361,8 +570,14 @@ export default function RecipientsPage() {
                 onClick={() => setShowAll(!showAll)}
                 className="gap-1.5"
             >
-                {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                {showAll ? t('recipientsPage.showingAll') : t('recipientsPage.activeOnly')}
+                {showAll ? (
+                    <Eye className="h-4 w-4" />
+                ) : (
+                    <EyeOff className="h-4 w-4" />
+                )}
+                {showAll
+                    ? t("recipientsPage.showingAll")
+                    : t("recipientsPage.activeOnly")}
             </Button>
             <Button
                 variant={showUncategorized ? "secondary" : "outline"}
@@ -370,8 +585,15 @@ export default function RecipientsPage() {
                 onClick={() => setShowUncategorized(!showUncategorized)}
                 className="gap-1.5"
             >
-                <Badge variant={showUncategorized ? "default" : "outline"} className="h-4 w-4 p-0 flex items-center justify-center">?</Badge>
-                {showUncategorized ? t('recipientsPage.uncategorized') : t('recipientsPage.allCategories')}
+                <Badge
+                    variant={showUncategorized ? "default" : "outline"}
+                    className="h-4 w-4 p-0 flex items-center justify-center"
+                >
+                    ?
+                </Badge>
+                {showUncategorized
+                    ? t("recipientsPage.uncategorized")
+                    : t("recipientsPage.allCategories")}
             </Button>
             <Button
                 variant="outline"
@@ -380,7 +602,7 @@ export default function RecipientsPage() {
                 className="gap-1.5"
             >
                 <Link2 className="h-4 w-4" />
-                {t('merge.title')}
+                {t("merge.title")}
             </Button>
             <AddRecipientDialog />
         </div>
@@ -388,29 +610,34 @@ export default function RecipientsPage() {
 
     return (
         <>
-            <div className="space-y-8">
+            <PageShell className="">
                 <PageHeader
-                    title={t('recipientsPage.tableTitle')}
-                    subtitle={t('recipientsPage.tableSubtitle', { n: totalItems })}
-                    icon={Users}
+                    title={t("recipientsPage.tableTitle")}
+                    subtitle={t("recipientsPage.tableSubtitle", {
+                        n: totalItems,
+                    })}
+                    icon={PAGE_ICONS["/recipients"]}
                 />
 
                 <VirtualDataTable
                     columns={columns}
                     data={recipients}
                     onRowUpdate={handleUpdate}
-                    onRowDoubleClick={(row) => {
-                        navigate(`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`);
-                    }}
-                    emptyMessage={(
+                    emptyMessage={
                         <EmptyState
-                            icon={Users}
-                            title={t('recipientsPage.empty')}
-                            description={t('recipientsPage.tableSubtitle', { n: 0 })}
+                            icon={PAGE_ICONS["/recipients"]}
+                            title={t("recipientsPage.empty")}
+                            description={t("recipientsPage.tableSubtitle", {
+                                n: 0,
+                            })}
                         />
-                    )}
+                    }
                     serverMode={{
-                        sort: { onChange: handleSortChange, key: sortKey, dir: sortDir },
+                        sort: {
+                            onChange: handleSortChange,
+                            key: sortKey,
+                            dir: sortDir,
+                        },
                         search: { onChange: setSearch, value: search },
                         pagination: {
                             totalItems,
@@ -432,12 +659,14 @@ export default function RecipientsPage() {
                 {patternsDialogRecipient && (
                     <RecipientPatternsDialog
                         open={patternsDialogRecipient != null}
-                        onOpenChange={(o) => { if (!o) setPatternsDialogRecipient(null); }}
+                        onOpenChange={(o) => {
+                            if (!o) setPatternsDialogRecipient(null);
+                        }}
                         recipientId={patternsDialogRecipient.id}
                         recipientName={patternsDialogRecipient.name}
                     />
                 )}
-            </div>
+            </PageShell>
             <ConfirmDialog />
         </>
     );

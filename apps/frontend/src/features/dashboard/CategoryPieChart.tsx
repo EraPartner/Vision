@@ -6,15 +6,21 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { getCategoryChartColor } from "@/utils/categoryColors";
+import { useNavigate } from "react-router";
 
 interface CategoryPieChartProps {
-    readonly data: Array<{ name: string; value: number }>;
+    readonly data: Array<{ name: string; value: number; to?: string }>;
     readonly embedded?: boolean;
     readonly formatValue?: (v: number) => string;
 }
 
-export function CategoryPieChart({ data, embedded = false, formatValue }: CategoryPieChartProps) {
+export function CategoryPieChart({
+    data,
+    embedded = false,
+    formatValue,
+}: CategoryPieChartProps) {
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -26,7 +32,9 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
         [data],
     );
     const tooltipFmt = useMemo(
-        () => formatValue ?? ((v: number) => formatCurrency(v, defaultCurrency, locale)),
+        () =>
+            formatValue ??
+            ((v: number) => formatCurrency(v, defaultCurrency, locale)),
         [formatValue, defaultCurrency, locale],
     );
 
@@ -38,9 +46,13 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
                 innerRadiusRatio={0.6}
                 padAngle={0.025}
                 tooltipValueFormat={tooltipFmt}
+                onNavigate={navigate}
             />
             <ChartLegend
-                items={coloredData.map((d) => ({ label: d.name, color: d.color }))}
+                items={coloredData.map((d) => ({
+                    label: d.name,
+                    color: d.color,
+                }))}
                 align="center"
             />
         </div>
@@ -58,12 +70,10 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
         }
 
         return (
-            <Card className="relative overflow-hidden glass-regular premium-frame">
+            <Card className="relative overflow-hidden">
                 <CardSheen />
                 <CardHeader>
-                    <CardTitle className="text-lg font-semibold">
-                        {t("categoryPie.title")}
-                    </CardTitle>
+                    <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
                     <p className="text-sm text-muted-foreground">
                         {t("categoryPie.desc")}
                     </p>
@@ -78,13 +88,13 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
     }
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame">
+        <Card className="relative overflow-hidden">
             <CardSheen />
             <CardHeader>
-                <CardTitle className="text-lg font-semibold">
-                    {t("categoryPie.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{t("categoryPie.desc")}</p>
+                <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    {t("categoryPie.desc")}
+                </p>
             </CardHeader>
             <CardContent>{chartContent}</CardContent>
         </Card>

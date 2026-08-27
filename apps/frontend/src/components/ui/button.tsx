@@ -12,7 +12,7 @@ import {cn} from "@/lib/utils";
    load-bearing rule there; the hover lift rides `translate` and stays
    deliberately untransitioned. */
 const buttonVariants = cva(
-    "press-feedback [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),box-shadow_var(--duration-fast)_var(--ease-glide),color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "press-feedback [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),box-shadow_var(--duration-fast)_var(--ease-glide),color_var(--duration-fast)_var(--ease-glide),transform_var(--duration-press)_ease-out] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     {
         variants: {
             variant: {

@@ -4,94 +4,120 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 
 import {
-  getOllamaStatus,
-  getOllamaModels,
-  getConversations,
-  getConversation,
-  createConversation,
-  renameConversation,
-  deleteConversation,
-  streamChat,
+    getOllamaStatus,
+    getOllamaModels,
+    getConversations,
+    getConversation,
+    createConversation,
+    renameConversation,
+    deleteConversation,
+    streamChat,
+    CHAT_STREAM_STALL_TIMEOUT_MS,
 } from "@/lib/api/ai";
 
 const API_BASE = "http://localhost:3002";
 
 function ok<T>(data: T) {
-  return HttpResponse.json({ ok: true, data });
+    return HttpResponse.json({ ok: true, data });
 }
 
 afterEach(() => {
-  server.resetHandlers();
-  vi.unstubAllGlobals();
+    server.resetHandlers();
+    vi.unstubAllGlobals();
 });
 
 describe("ai conversation API client", () => {
-  it("getOllamaStatus fetches status", async () => {
-    server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, baseUrl: "x", defaultModel: "m", enabled: true })));
-    expect((await getOllamaStatus()).ok).toBe(true);
-  });
+    it("getOllamaStatus fetches status", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/ai/status`, () =>
+                ok({
+                    ok: true,
+                    baseUrl: "x",
+                    defaultModel: "m",
+                    enabled: true,
+                }),
+            ),
+        );
+        expect((await getOllamaStatus()).ok).toBe(true);
+    });
 
-  it("getOllamaModels unwraps the rows from { items, total }", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [{ name: "llama3" }], total: 1 })),
-    );
-    const models = await getOllamaModels();
-    expect(models).toHaveLength(1);
-    expect(models[0].name).toBe("llama3");
-  });
+    it("getOllamaModels unwraps the rows from { items, total }", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/ai/models`, () =>
+                ok({ items: [{ name: "llama3" }], total: 1 }),
+            ),
+        );
+        const models = await getOllamaModels();
+        expect(models).toHaveLength(1);
+        expect(models[0].name).toBe("llama3");
+    });
 
-  it("getOllamaModels defaults to [] when items is absent", async () => {
-    server.use(http.get(`${API_BASE}/api/ai/models`, () => ok({})));
-    expect(await getOllamaModels()).toEqual([]);
-  });
+    it("getOllamaModels defaults to [] when items is absent", async () => {
+        server.use(http.get(`${API_BASE}/api/ai/models`, () => ok({})));
+        expect(await getOllamaModels()).toEqual([]);
+    });
 
-  it("getConversations returns summaries", async () => {
-    server.use(http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items: [{ id: "a" }], total: 1 })));
-    expect((await getConversations())[0].id).toBe("a");
-  });
+    it("getConversations returns summaries", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/ai/conversations`, () =>
+                ok({ items: [{ id: "a" }], total: 1 }),
+            ),
+        );
+        expect((await getConversations())[0].id).toBe("a");
+    });
 
-  it("getConversation URL-encodes the id", async () => {
-    let url = "";
-    server.use(
-      http.get(`${API_BASE}/api/ai/conversations/:id`, ({ request }) => {
-        url = request.url;
-        return ok({ conversation: { id: "a b" }, messages: [] });
-      }),
-    );
-    await getConversation("a b");
-    expect(url).toContain("a%20b");
-  });
+    it("getConversation URL-encodes the id", async () => {
+        let url = "";
+        server.use(
+            http.get(`${API_BASE}/api/ai/conversations/:id`, ({ request }) => {
+                url = request.url;
+                return ok({ conversation: { id: "a b" }, messages: [] });
+            }),
+        );
+        await getConversation("a b");
+        expect(url).toContain("a%20b");
+    });
 
-  it("createConversation POSTs the body", async () => {
-    let body: unknown = null;
-    server.use(
-      http.post(`${API_BASE}/api/ai/conversations`, async ({ request }) => {
-        body = await request.json();
-        return ok({ conversation: { id: "new" }, messages: [] });
-      }),
-    );
-    const res = await createConversation({ title: "Hello" });
-    expect(body).toMatchObject({ title: "Hello" });
-    expect(res.conversation.id).toBe("new");
-  });
+    it("createConversation POSTs the body", async () => {
+        let body: unknown = null;
+        server.use(
+            http.post(
+                `${API_BASE}/api/ai/conversations`,
+                async ({ request }) => {
+                    body = await request.json();
+                    return ok({ conversation: { id: "new" }, messages: [] });
+                },
+            ),
+        );
+        const res = await createConversation({ title: "Hello" });
+        expect(body).toMatchObject({ title: "Hello" });
+        expect(res.conversation.id).toBe("new");
+    });
 
-  it("renameConversation PATCHes the title", async () => {
-    let body: unknown = null;
-    server.use(
-      http.patch(`${API_BASE}/api/ai/conversations/:id`, async ({ request }) => {
-        body = await request.json();
-        return ok({ id: "x", title: "Renamed" });
-      }),
-    );
-    await renameConversation("x", "Renamed");
-    expect(body).toMatchObject({ title: "Renamed" });
-  });
+    it("renameConversation PATCHes the title", async () => {
+        let body: unknown = null;
+        server.use(
+            http.patch(
+                `${API_BASE}/api/ai/conversations/:id`,
+                async ({ request }) => {
+                    body = await request.json();
+                    return ok({ id: "x", title: "Renamed" });
+                },
+            ),
+        );
+        await renameConversation("x", "Renamed");
+        expect(body).toMatchObject({ title: "Renamed" });
+    });
 
-  it("deleteConversation resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/ai/conversations/:id`, () => new HttpResponse(null, { status: 204 })));
-    await expect(deleteConversation("x")).resolves.toBeUndefined();
-  });
-
+    it("deleteConversation resolves on void", async () => {
+        server.use(
+            http.delete(
+                `${API_BASE}/api/ai/conversations/:id`,
+                () => new HttpResponse(null, { status: 204 }),
+            ),
+        );
+        await expect(deleteConversation("x")).resolves.toBeUndefined();
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -100,153 +126,281 @@ describe("ai conversation API client", () => {
 
 /** Build a Response whose body streams `text` as a single chunk. */
 function sseResponse(text: string, status = 200): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode(text));
-      controller.close();
-    },
-  });
-  return new Response(stream, { status, headers: { "Content-Type": "text/event-stream" } });
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(encoder.encode(text));
+            controller.close();
+        },
+    });
+    return new Response(stream, {
+        status,
+        headers: { "Content-Type": "text/event-stream" },
+    });
 }
 
 describe("streamChat SSE handling", () => {
-  it("parses token, user_message, tool_call, tool_result and done events", async () => {
-    const wire = [
-      "event: user_message\ndata: {\"message\":{\"role\":\"user\",\"content\":\"hi\"}}",
-      'event: token\ndata: "Hel"',
-      'event: token\ndata: "lo"',
-      'event: tool_call\ndata: {"name":"search","args":{"q":"x"}}',
-      'event: tool_result\ndata: {"message":{"role":"tool","content":"ok"}}',
-      'event: done\ndata: {"finishReason":"stop"}',
-    ].join("\n\n") + "\n\n";
+    it("times out a connection that stops producing SSE frames", async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockImplementation(
+                    (_input: RequestInfo | URL, init?: RequestInit) => {
+                        const signal = init?.signal;
+                        const stream = new ReadableStream<Uint8Array>({
+                            start(controller) {
+                                signal?.addEventListener(
+                                    "abort",
+                                    () =>
+                                        controller.error(
+                                            new DOMException(
+                                                "Aborted",
+                                                "AbortError",
+                                            ),
+                                        ),
+                                    { once: true },
+                                );
+                            },
+                        });
+                        return Promise.resolve(
+                            new Response(stream, {
+                                status: 200,
+                                headers: {
+                                    "Content-Type": "text/event-stream",
+                                },
+                            }),
+                        );
+                    },
+                ),
+        );
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        const rejection = expect(result).rejects.toThrow(
+            "Chat stream timed out",
+        );
+        await vi.advanceTimersByTimeAsync(CHAT_STREAM_STALL_TIMEOUT_MS);
+        await rejection;
+    });
 
-    const events: string[] = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
-    const terminal = await result;
+    it("restarts the inactivity window after each data-bearing SSE frame", async () => {
+        vi.useFakeTimers();
+        const encoder = new TextEncoder();
+        let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockImplementation(
+                    (_input: RequestInfo | URL, init?: RequestInit) => {
+                        const signal = init?.signal;
+                        const stream = new ReadableStream<Uint8Array>({
+                            start(controller) {
+                                bodyController = controller;
+                                signal?.addEventListener(
+                                    "abort",
+                                    () =>
+                                        controller.error(
+                                            new DOMException(
+                                                "Aborted",
+                                                "AbortError",
+                                            ),
+                                        ),
+                                    { once: true },
+                                );
+                            },
+                        });
+                        return Promise.resolve(
+                            new Response(stream, {
+                                status: 200,
+                                headers: {
+                                    "Content-Type": "text/event-stream",
+                                },
+                            }),
+                        );
+                    },
+                ),
+        );
 
-    expect(events).toEqual([
-      "user_message",
-      "token",
-      "token",
-      "tool_call",
-      "tool_result",
-      "done",
-    ]);
-    expect(terminal.type).toBe("done");
-  });
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (event) =>
+            events.push(event.type),
+        );
+        const rejection = expect(result).rejects.toThrow(
+            "Chat stream timed out",
+        );
 
-  it("passes the user_message payload's message object through unchanged", async () => {
-    const message = {
-      id: "m1",
-      conversationId: "c1",
-      role: "user",
-      content: "hi",
-      toolName: null,
-      toolArgs: null,
-      toolResult: null,
-      createdAt: "2026-07-18T00:00:00.000Z",
-    };
-    const wire =
-      `event: user_message\ndata: ${JSON.stringify({ message })}\n\n` +
-      "event: done\ndata: {}\n\n";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        await vi.advanceTimersByTimeAsync(CHAT_STREAM_STALL_TIMEOUT_MS - 1_000);
+        bodyController.enqueue(
+            encoder.encode('event: token\ndata: "still active"\n\n'),
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        expect(events).toEqual(["token"]);
 
-    const captured: Array<{ type: string; message?: unknown }> = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) =>
-      captured.push(e as { type: string; message?: unknown }),
-    );
-    await result;
+        await vi.advanceTimersByTimeAsync(CHAT_STREAM_STALL_TIMEOUT_MS - 1_000);
+        expect(events).toEqual(["token"]);
+        await vi.advanceTimersByTimeAsync(1_000);
+        await rejection;
+    });
 
-    const userEvent = captured.find((e) => e.type === "user_message");
-    expect(userEvent?.message).toEqual(message);
-  });
+    it("parses token, user_message, tool_call, tool_result and done events", async () => {
+        const wire =
+            [
+                'event: user_message\ndata: {"message":{"role":"user","content":"hi"}}',
+                'event: token\ndata: "Hel"',
+                'event: token\ndata: "lo"',
+                'event: tool_call\ndata: {"name":"search","args":{"q":"x"}}',
+                'event: tool_result\ndata: {"message":{"role":"tool","content":"ok"}}',
+                'event: done\ndata: {"finishReason":"stop"}',
+            ].join("\n\n") + "\n\n";
 
-  it("ignores unknown event names", async () => {
-    const wire = 'event: telemetry\ndata: {"x":1}\n\nevent: done\ndata: {}\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-    const events: string[] = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
-    await result;
-    expect(events).toEqual(["done"]);
-  });
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            events.push(e.type),
+        );
+        const terminal = await result;
 
-  it("decodes a non-JSON token payload as a raw string", async () => {
-    const wire = "event: token\ndata: plain text token\n\nevent: done\ndata: {}\n\n";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        expect(events).toEqual([
+            "user_message",
+            "token",
+            "token",
+            "tool_call",
+            "tool_result",
+            "done",
+        ]);
+        expect(terminal.type).toBe("done");
+    });
 
-    const captured: Array<{ type: string; delta?: string }> = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) =>
-      captured.push(e as { type: string; delta?: string }),
-    );
-    await result;
+    it("passes the user_message payload's message object through unchanged", async () => {
+        const message = {
+            id: "m1",
+            conversationId: "c1",
+            role: "user",
+            content: "hi",
+            toolName: null,
+            toolArgs: null,
+            toolResult: null,
+            createdAt: "2026-07-18T00:00:00.000Z",
+        };
+        const wire =
+            `event: user_message\ndata: ${JSON.stringify({ message })}\n\n` +
+            "event: done\ndata: {}\n\n";
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-    const tokenEvent = captured.find((e) => e.type === "token");
-    expect(tokenEvent?.delta).toBe("plain text token");
-  });
+        const captured: Array<{ type: string; message?: unknown }> = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            captured.push(e as { type: string; message?: unknown }),
+        );
+        await result;
 
-  it("drops a user_message event whose message is not an object", async () => {
-    const wire = 'event: user_message\ndata: {"message":"not-an-object"}\n\nevent: done\ndata: {}\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        const userEvent = captured.find((e) => e.type === "user_message");
+        expect(userEvent?.message).toEqual(message);
+    });
 
-    const events: string[] = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
-    await result;
-    expect(events).toEqual(["done"]);
-  });
+    it("ignores unknown event names", async () => {
+        const wire =
+            'event: telemetry\ndata: {"x":1}\n\nevent: done\ndata: {}\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-  it("drops a tool_call event without a string name", async () => {
-    const wire = 'event: tool_call\ndata: {"args":{"q":"x"}}\n\nevent: done\ndata: {}\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            events.push(e.type),
+        );
+        await result;
+        expect(events).toEqual(["done"]);
+    });
 
-    const events: string[] = [];
-    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
-    await result;
-    expect(events).toEqual(["done"]);
-  });
+    it("decodes a non-JSON token payload as a raw string", async () => {
+        const wire =
+            "event: token\ndata: plain text token\n\nevent: done\ndata: {}\n\n";
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-  it("drops a done event whose payload is not an object", async () => {
-    const wire = 'event: done\ndata: "finished"\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+        const captured: Array<{ type: string; delta?: string }> = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            captured.push(e as { type: string; delta?: string }),
+        );
+        await result;
 
-    const { result } = streamChat({ message: "hi" } as never, () => {});
-    await expect(result).rejects.toThrow(/Stream ended without terminal event/);
-  });
+        const tokenEvent = captured.find((e) => e.type === "token");
+        expect(tokenEvent?.delta).toBe("plain text token");
+    });
 
-  it("still surfaces a terminal error when the error payload is malformed", async () => {
-    const wire = 'event: error\ndata: {"detail":42,"code":7}\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+    it("drops a user_message event whose message is not an object", async () => {
+        const wire =
+            'event: user_message\ndata: {"message":"not-an-object"}\n\nevent: done\ndata: {}\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-    const { result } = streamChat({ message: "hi" } as never, () => {});
-    await expect(result).rejects.toThrow("AI chat error");
-  });
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            events.push(e.type),
+        );
+        await result;
+        expect(events).toEqual(["done"]);
+    });
 
-  it("throws with the detail from a terminal error event", async () => {
-    const wire = 'event: error\ndata: {"detail":"model unavailable","code":"E_MODEL"}\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+    it("drops a tool_call event without a string name", async () => {
+        const wire =
+            'event: tool_call\ndata: {"args":{"q":"x"}}\n\nevent: done\ndata: {}\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-    const { result } = streamChat({ message: "hi" } as never, () => {});
-    await expect(result).rejects.toThrow("model unavailable");
-  });
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (e) =>
+            events.push(e.type),
+        );
+        await result;
+        expect(events).toEqual(["done"]);
+    });
 
-  it("throws when the stream ends without a terminal event", async () => {
-    const wire = 'event: token\ndata: "partial"\n\n';
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+    it("drops a done event whose payload is not an object", async () => {
+        const wire = 'event: done\ndata: "finished"\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
-    const { result } = streamChat({ message: "hi" } as never, () => {});
-    await expect(result).rejects.toThrow(/Stream ended without terminal event/);
-  });
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        await expect(result).rejects.toThrow(
+            /Stream ended without terminal event/,
+        );
+    });
 
-  it("throws when the response is not ok", async () => {
-    server.use(
-      http.post(`${API_BASE}/api/ai/chat/stream`, () =>
-        HttpResponse.json({ ok: false, error: { message: "boom" } }, { status: 500 }),
-      ),
-    );
-    const { result } = streamChat({ message: "hi" } as never, () => {});
-    await expect(result).rejects.toBeTruthy();
-  });
+    it("still surfaces a terminal error when the error payload is malformed", async () => {
+        const wire = 'event: error\ndata: {"detail":42,"code":7}\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        await expect(result).rejects.toThrow("AI chat error");
+    });
+
+    it("throws with the detail from a terminal error event", async () => {
+        const wire =
+            'event: error\ndata: {"detail":"model unavailable","code":"E_MODEL"}\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        await expect(result).rejects.toThrow("model unavailable");
+    });
+
+    it("throws when the stream ends without a terminal event", async () => {
+        const wire = 'event: token\ndata: "partial"\n\n';
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        await expect(result).rejects.toThrow(
+            /Stream ended without terminal event/,
+        );
+    });
+
+    it("throws when the response is not ok", async () => {
+        server.use(
+            http.post(`${API_BASE}/api/ai/chat/stream`, () =>
+                HttpResponse.json(
+                    { ok: false, error: { message: "boom" } },
+                    { status: 500 },
+                ),
+            ),
+        );
+        const { result } = streamChat({ message: "hi" } as never, () => {});
+        await expect(result).rejects.toBeTruthy();
+    });
 });

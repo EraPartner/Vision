@@ -3,7 +3,7 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox, validate-locales, source-key-usage, placeholder-bug-fix, url-state, destructive-confirm]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). 2026-06-26 — validate-locales gains source key-usage checks (key-existence, dropped-vars, value-shape); closes 10 missing keys and fixes placeholder mismatches. 2026-08-10 (PR #156) adds 11 keys: txPage.loadMoreFailed/loadMoreFailedDesc/deleteAttachmentError (3), watchlist.removeTitle/removeDesc/removeConfirm (3), research.mapping.removeDesc, importReview.recipientPickerLabel, dbEditor.discardNewRow/nextPage/prevPage (3). Total key count last verified 2026-06-26 (3495); not re-verified since — run `bun run validate-locales` (see [[docs/reference/scripts|Scripts Reference]]) for a current count.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
@@ -16,10 +16,10 @@ Vision supports multiple languages with a comprehensive internationalization (i1
 
 ## Supported Languages
 
-| Language | Code | Status |
-|----------|------|--------|
-| **English** | `en` | Default |
-| **Dutch** | `nl` | Full support |
+| Language    | Code | Status       |
+| ----------- | ---- | ------------ |
+| **English** | `en` | Default      |
+| **Dutch**   | `nl` | Full support |
 
 ## Translation Files
 
@@ -40,6 +40,7 @@ apps/frontend/src/
 ### Source Files
 
 Edit source files in `i18n/source/`:
+
 - `i18n/source/en.json` - English (source of truth)
 - `i18n/source/nl.json` - Dutch
 
@@ -54,13 +55,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 function MyComponent() {
   const { t, language, setLanguage } = useLanguage();
-  
+
   return (
     <div>
-      <h1>{t('page.title')}</h1>
-      <button onClick={() => setLanguage('nl')}>
-        Switch to Dutch
-      </button>
+      <h1>{t("page.title")}</h1>
+      <button onClick={() => setLanguage("nl")}>Switch to Dutch</button>
     </div>
   );
 }
@@ -81,11 +80,11 @@ tc(key: string, count: number, vars?: Record<string, string | number>): string
 ```tsx
 // Translation: "Welcome, {name}!"
 // Usage:
-t('welcome', { name: 'John' }) // "Welcome, John!"
+t("welcome", { name: "John" }); // "Welcome, John!"
 
 // Translation: "Add {item}"
 // Usage:
-t('addItem', { item: 'Investment' }) // "Add Investment"
+t("addItem", { item: "Investment" }); // "Add Investment"
 ```
 
 ### With Plural Forms — `tc()` (June 2026)
@@ -106,28 +105,28 @@ t('addItem', { item: 'Investment' }) // "Add Investment"
 // }
 
 const { tc } = useLanguage();
-tc('table.items', 1)  // EN: "1 item"    / NL: "1 artikel"
-tc('table.items', 5)  // EN: "5 items"   / NL: "5 artikelen"
+tc("table.items", 1); // EN: "1 item"    / NL: "1 artikel"
+tc("table.items", 5); // EN: "5 items"   / NL: "5 artikelen"
 ```
 
 `count` is automatically injected as `{count}` in the template unless overridden in `vars`.
 
 **Keys using plural forms (en + nl):**
 
-| Key | one | other |
-|-----|-----|-------|
-| `table.items` | `{count} item` | `{count} items` |
-| `portfolio.investments` | `{count} investment` | `{count} investments` |
-| `performance.holdings` | `{count} holding` | `{count} holdings` |
-| `upcoming.count` | `{count} upcoming payment due this week` | `{count} upcoming payments due this week` |
+| Key                     | one                                      | other                                     |
+| ----------------------- | ---------------------------------------- | ----------------------------------------- |
+| `table.items`           | `{count} item`                           | `{count} items`                           |
+| `portfolio.investments` | `{count} investment`                     | `{count} investments`                     |
+| `performance.holdings`  | `{count} holding`                        | `{count} holdings`                        |
+| `upcoming.count`        | `{count} upcoming payment due this week` | `{count} upcoming payments due this week` |
 
 **Removed flat plural keys (migrate to `tc()`):**
 
-| Removed key | Replacement |
-|-------------|-------------|
+| Removed key                  | Replacement                         |
+| ---------------------------- | ----------------------------------- |
 | `performance.holdingsPlural` | `tc('performance.holdings', count)` |
-| `upcoming.countSingle` | `tc('upcoming.count', 1)` |
-| `upcoming.countPlural` | `tc('upcoming.count', count)` |
+| `upcoming.countSingle`       | `tc('upcoming.count', 1)`           |
+| `upcoming.countPlural`       | `tc('upcoming.count', count)`       |
 
 `upcoming.countSingle`/`countPlural` were replaced in June 2026 when the upcoming-payments banner's hand-rolled singular/plural logic was migrated to `tc()` for consistency with the rest of the app (at the time this was used by `SuggestionCard`, which has since been deleted; the `tc()` migration is retained).
 
@@ -155,25 +154,26 @@ addTransactionTitle
 ```
 
 Examples:
+
 - `nav.dashboard` - Navigation → Dashboard
 - `form.addTransaction.title` - Form → Add Transaction → Title
 - `errors.amount.required` - Errors → Amount → Required
 
 ### Categories
 
-| Prefix | Usage | Example |
-|--------|-------|---------|
-| `nav.*` | Navigation items | `nav.transactions` |
-| `form.*` | Form labels | `form.addTransaction.title` |
-| `errors.*` | Error messages | `errors.amount.required` |
-| `table.*` | Table headers | `table.actions` |
-| `dialog.*` | Dialog text | `dialog.confirm` |
-| `toast.*` | Toast messages | `toast.success` |
-| `settings.*` | Settings labels, tabs, and sections | `settings.language`, `settings.tab.appearance`, `settings.appearance.variant` |
-| `aria.*` | Icon-button accessible names | `aria.deleteTransaction`, `aria.save` |
-| `chart.aria.*` | Chart screen-reader summary fragments | `chart.aria.kind.bar`, `chart.aria.seriesOther` |
-| `splash.*` | Electron boot-splash phase labels (main-process only, not rendered in React) | `splash.checkingDocker`, `splash.waitingApp` |
-| `app.*` | Electron shell error page and watchdog messages (main-process only, not rendered in React) | `app.errorPageTitle`, `app.backendLost` |
+| Prefix         | Usage                                                                                      | Example                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `nav.*`        | Navigation items                                                                           | `nav.transactions`                                                            |
+| `form.*`       | Form labels                                                                                | `form.addTransaction.title`                                                   |
+| `errors.*`     | Error messages                                                                             | `errors.amount.required`                                                      |
+| `table.*`      | Table headers                                                                              | `table.actions`                                                               |
+| `dialog.*`     | Dialog text                                                                                | `dialog.confirm`                                                              |
+| `toast.*`      | Toast messages                                                                             | `toast.success`                                                               |
+| `settings.*`   | Settings labels, tabs, and sections                                                        | `settings.language`, `settings.tab.appearance`, `settings.appearance.variant` |
+| `aria.*`       | Icon-button accessible names                                                               | `aria.deleteTransaction`, `aria.save`                                         |
+| `chart.aria.*` | Chart screen-reader summary fragments                                                      | `chart.aria.kind.bar`, `chart.aria.seriesOther`                               |
+| `splash.*`     | Electron boot-splash phase labels (main-process only, not rendered in React)               | `splash.checkingDocker`, `splash.waitingApp`                                  |
+| `app.*`        | Electron shell error page and watchdog messages (main-process only, not rendered in React) | `app.errorPageTitle`, `app.backendLost`                                       |
 
 ## Adding New Translations
 
@@ -218,14 +218,14 @@ of repeating its navigation label. The Dutch copy was rewritten alongside the En
 
 New keys added in en + nl (no existing keys changed):
 
-| Key | Used for |
-|-----|---------|
-| `txPage.loadMoreFailed` / `txPage.loadMoreFailedDesc` | Toast title/description when infinite-scroll load-more fails on Transactions; toast carries a `common.retry` action |
-| `txPage.deleteAttachmentError` | Toast shown when `AttachmentPanel`'s delete mutation fails |
-| `watchlist.removeTitle` / `watchlist.removeDesc` / `watchlist.removeConfirm` | `useConfirmDialog` copy for the new destructive confirm on watchlist item removal |
-| `research.mapping.removeDesc` | `useConfirmDialog` description for the new destructive confirm on `ResearchMappingDialog` mapping removal |
-| `importReview.recipientPickerLabel` | Accessible name for the per-group recipient combobox on `ImportReviewPage` (now rendered via `AccordionTrigger`'s `trailing` prop) |
-| `dbEditor.discardNewRow`, `dbEditor.nextPage`, `dbEditor.prevPage` | `aria-label`s added to previously unlabeled icon-only buttons on `TableDataEditorPage` |
+| Key                                                                          | Used for                                                                                                                           |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `txPage.loadMoreFailed` / `txPage.loadMoreFailedDesc`                        | Toast title/description when infinite-scroll load-more fails on Transactions; toast carries a `common.retry` action                |
+| `txPage.deleteAttachmentError`                                               | Toast shown when `AttachmentPanel`'s delete mutation fails                                                                         |
+| `watchlist.removeTitle` / `watchlist.removeDesc` / `watchlist.removeConfirm` | `useConfirmDialog` copy for the new destructive confirm on watchlist item removal                                                  |
+| `research.mapping.removeDesc`                                                | `useConfirmDialog` description for the new destructive confirm on `ResearchMappingDialog` mapping removal                          |
+| `importReview.recipientPickerLabel`                                          | Accessible name for the per-group recipient combobox on `ImportReviewPage` (now rendered via `AccordionTrigger`'s `trailing` prop) |
+| `dbEditor.discardNewRow`, `dbEditor.nextPage`, `dbEditor.prevPage`           | `aria-label`s added to previously unlabeled icon-only buttons on `TableDataEditorPage`                                             |
 
 Also see [[docs/features/transactions#url-backed-search--sort-and-load-moreattachment-delete-failure-toasts-aug-2026|Transactions: URL-Backed Search + Sort]], [[docs/features/watchlist|Watchlist]], [[docs/features/research#isin-anchored-symbol-mapping|Research: Symbol Mapping]], [[docs/features/import#4-commit-commitbatch|Import: Commit]].
 
@@ -235,39 +235,39 @@ Motivated by the new source key-usage checks added to `validate-locales` (see [[
 
 **10 missing keys added to `en.json` + `nl.json`** (previously `t()` returned the raw key string at these call sites):
 
-| Key | Used for |
-|-----|---------|
-| `portfolio.addTransaction` | "Add transaction" button in portfolio investment detail |
-| `settings.app.updateAutoApply` | "Auto-apply updates" toggle in app settings |
-| `importPage.resultSummary` | Import result summary line on the import page |
-| `accounts.updateFailedTitle` | Error toast title when an account update fails |
-| `splits.createFailed` | Error toast when split creation fails |
-| `splits.paymentRecorded` | Success toast when a split payment is recorded |
-| `splits.paymentFailed` | Error toast when recording a split payment fails |
-| `splits.removeFailed` | Error toast when removing a split fails |
-| `tags.createFailed` | Error toast when tag creation fails |
-| `common.applied` | Generic "Applied" confirmation label |
+| Key                            | Used for                                                |
+| ------------------------------ | ------------------------------------------------------- |
+| `portfolio.addTransaction`     | "Add transaction" button in portfolio investment detail |
+| `settings.app.updateAutoApply` | "Auto-apply updates" toggle in app settings             |
+| `importPage.resultSummary`     | Import result summary line on the import page           |
+| `accounts.updateFailedTitle`   | Error toast title when an account update fails          |
+| `splits.createFailed`          | Error toast when split creation fails                   |
+| `splits.paymentRecorded`       | Success toast when a split payment is recorded          |
+| `splits.paymentFailed`         | Error toast when recording a split payment fails        |
+| `splits.removeFailed`          | Error toast when removing a split fails                 |
+| `tags.createFailed`            | Error toast when tag creation fails                     |
+| `common.applied`               | Generic "Applied" confirmation label                    |
 
 **Placeholder fixes — missing `{var}` tokens added to locale strings (value was rendered blank at runtime):**
 
-| Key | Token added | Component/context |
-|-----|-------------|------------------|
-| `invDetail.fee` | `{amount}` | Investment detail fee display |
-| `invDetail.tax` | `{amount}` | Investment detail tax display |
-| `tax.card.totalWithPropertyEstimate` | `{year}` | Tax card property estimate total |
+| Key                                  | Token added | Component/context                |
+| ------------------------------------ | ----------- | -------------------------------- |
+| `invDetail.fee`                      | `{amount}`  | Investment detail fee display    |
+| `invDetail.tax`                      | `{amount}`  | Investment detail tax display    |
+| `tax.card.totalWithPropertyEstimate` | `{year}`    | Tax card property estimate total |
 
 **Placeholder fixes — unfilled `{var}` tokens removed from locale strings (literal `{x}` was visible in UI):**
 
-| Key | Token removed | Fix detail |
-|-----|---------------|-----------|
-| `charts.deleteFailed` | `{msg}` | Error shown via toast description; `{msg}` was never passed |
-| `charts.saveFailed` | `{msg}` | Same; `WatchlistChartDialog.tsx` updated to capture error |
-| `charts.updateFailed` | `{msg}` | Same |
-| `watchlist.updateFailed` | `{msg}` | Same; `WatchlistChartDialog.tsx` now captures the catch error |
-| `cashflow.diagnostics.backtestNote` | `{n}`, `{currency}` | Now filled at the call site |
-| `statsPage.incomeAvg` | `{n}` | Now filled at the call site |
-| `statsPage.spendingAvg` | `{n}` | Now filled at the call site |
-| `tax.historical.filedLock.unfileCta` | `{year}` | Now filled at the call site |
+| Key                                  | Token removed       | Fix detail                                                    |
+| ------------------------------------ | ------------------- | ------------------------------------------------------------- |
+| `charts.deleteFailed`                | `{msg}`             | Error shown via toast description; `{msg}` was never passed   |
+| `charts.saveFailed`                  | `{msg}`             | Same; `WatchlistChartDialog.tsx` updated to capture error     |
+| `charts.updateFailed`                | `{msg}`             | Same                                                          |
+| `watchlist.updateFailed`             | `{msg}`             | Same; `WatchlistChartDialog.tsx` now captures the catch error |
+| `cashflow.diagnostics.backtestNote`  | `{n}`, `{currency}` | Now filled at the call site                                   |
+| `statsPage.incomeAvg`                | `{n}`               | Now filled at the call site                                   |
+| `statsPage.spendingAvg`              | `{n}`               | Now filled at the call site                                   |
+| `tax.historical.filedLock.unfileCta` | `{year}`            | Now filled at the call site                                   |
 
 Code links: [[scripts/validate-locales.js]], [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]]
 
@@ -279,11 +279,11 @@ Code links: [[scripts/validate-locales.js]], [[i18n/source/en.json]], [[i18n/sou
 
 **3 new `combobox.tags.*` keys** — used by `TagFilterCombobox` in the transaction-list filter toolbar and in the bulk-edit "Apply tags" dialog (`BulkTagDialog`):
 
-| Key | EN | NL |
-|-----|----|----|
-| `combobox.tags.empty` | "No tags found" | "Geen tags gevonden" |
-| `combobox.tags.nSelected` | "{n} tags" | "{n} tags" |
-| `combobox.tags.search` | "Search tags..." | "Tags zoeken..." |
+| Key                       | EN               | NL                   |
+| ------------------------- | ---------------- | -------------------- |
+| `combobox.tags.empty`     | "No tags found"  | "Geen tags gevonden" |
+| `combobox.tags.nSelected` | "{n} tags"       | "{n} tags"           |
+| `combobox.tags.search`    | "Search tags..." | "Tags zoeken..."     |
 
 Before this batch, `TagFilterCombobox` fell back to the raw key name as its display string (e.g., the search placeholder showed `"combobox.tags.search"` literally) because the keys never existed in either locale file. The component had always called `t('combobox.tags.*')` but the corresponding source entries were never committed.
 
@@ -300,24 +300,25 @@ Code links: [[apps/frontend/src/components/shared/TagFilterCombobox.tsx]], [[app
 
 **7 new `settings.appearance.*` keys** — visual effects tier Select + auto-adapt Switch (ADR-075 original):
 
-| Key | EN |
-|-----|----|
-| `settings.appearance.visualEffects` | "Visual effects" |
-| `settings.appearance.visualEffects.reduced` | "Reduced" |
-| `settings.appearance.visualEffects.standard` | "Standard" |
-| `settings.appearance.visualEffects.enhanced` | "Enhanced" |
-| `settings.appearance.visualEffectsHint` | Hint describing the three tiers |
-| `settings.appearance.autoAdaptDisplay` | "Auto-adapt to display" |
-| `settings.appearance.autoAdaptDisplayHint` | Hint describing the large-display heuristic |
+| Key                                          | EN                                          |
+| -------------------------------------------- | ------------------------------------------- |
+| `settings.appearance.visualEffects`          | "Visual effects"                            |
+| `settings.appearance.visualEffects.reduced`  | "Reduced"                                   |
+| `settings.appearance.visualEffects.standard` | "Standard"                                  |
+| `settings.appearance.visualEffects.enhanced` | "Enhanced"                                  |
+| `settings.appearance.visualEffectsHint`      | Hint describing the three tiers             |
+| `settings.appearance.autoAdaptDisplay`       | "Auto-adapt to display"                     |
+| `settings.appearance.autoAdaptDisplayHint`   | Hint describing the large-display heuristic |
 
 **2 new `settings.appearance.*` keys** — contextual notes under the Select (ADR-075 addendum, same day):
 
-| Key | EN | Shown when |
-|-----|----|------------|
-| `settings.appearance.visualEffectsAutoNote` | "Reduced automatically for this large display…" (styled `text-primary`) | `autoAdaptDisplay && isLargeDisplay` and no session override active |
-| `settings.appearance.visualEffectsOverrideNote` | "Session override for this device — automatic reduction resumes after the next launch" (styled `text-warning`) | Session override active |
+| Key                                             | EN                                                                                                             | Shown when                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `settings.appearance.visualEffectsAutoNote`     | "Reduced automatically for this large display…" (styled `text-primary`)                                        | `autoAdaptDisplay && isLargeDisplay` and no session override active |
+| `settings.appearance.visualEffectsOverrideNote` | "Session override for this device — automatic reduction resumes after the next launch" (styled `text-warning`) | Session override active                                             |
 
 **2 removed keys** — replaced by the tier model above:
+
 - `settings.general.enhancedEffects`
 - `settings.general.enhancedEffectsHint`
 
@@ -334,13 +335,13 @@ Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/f
 
 **5 new `settings.group.*` / `settings.appearance.*` keys** — Accessibility group in AppearanceSection:
 
-| Key | EN |
-|-----|----|
-| `settings.group.accessibility` | "Accessibility" |
-| `settings.appearance.gainLossColors` | "Gain & loss colors" |
-| `settings.appearance.gainLossColorsHint` | Hint describing colorblind-safe vs classic modes |
-| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
-| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
+| Key                                             | EN                                               |
+| ----------------------------------------------- | ------------------------------------------------ |
+| `settings.group.accessibility`                  | "Accessibility"                                  |
+| `settings.appearance.gainLossColors`            | "Gain & loss colors"                             |
+| `settings.appearance.gainLossColorsHint`        | Hint describing colorblind-safe vs classic modes |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)"                  |
+| `settings.appearance.gainLossColors.classic`    | "Classic (red loss)"                             |
 
 These keys back the Select in the new **Accessibility** `SettingsGroup` inside `AppearanceSection`. The setting it drives (`colorblindGainLoss`) toggles `.skin-v2` on `<html>` via `AppSettingsProvider`. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]] and [[docs/adr/104-skin-v2-dense-fintech-visual-redesign#addendum--2026-06-24-colorblind-palette-promoted-to-user-setting|ADR-104 addendum]].
 
@@ -354,24 +355,25 @@ Code links: [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx
 
 **5 new `splash.*` keys** — Electron boot-splash phase narration:
 
-| Key | EN |
-|-----|----|
-| `splash.checkingDocker` | `Checking Docker...` |
-| `splash.downloading` | `Downloading components...` |
-| `splash.starting` | `Starting Vision...` |
-| `splash.startingServices` | `Starting services...` |
-| `splash.waitingApp` | `Almost ready...` |
+| Key                       | EN                          |
+| ------------------------- | --------------------------- |
+| `splash.checkingDocker`   | `Checking Docker...`        |
+| `splash.downloading`      | `Downloading components...` |
+| `splash.starting`         | `Starting Vision...`        |
+| `splash.startingServices` | `Starting services...`      |
+| `splash.waitingApp`       | `Almost ready...`           |
 
 These are used only in the Electron main process (`setSplashStatus()`); they are not rendered inside React. They require the Electron i18n file to be regenerated via `generate-locales`.
 
 **2 new `upcoming.count` plural keys** (replace 2 removed):
 
-| Key | one | other |
-|-----|----|-------|
-| `upcoming.count.one` | `{count} upcoming payment due this week` | — |
-| `upcoming.count.other` | — | `{count} upcoming payments due this week` |
+| Key                    | one                                      | other                                     |
+| ---------------------- | ---------------------------------------- | ----------------------------------------- |
+| `upcoming.count.one`   | `{count} upcoming payment due this week` | —                                         |
+| `upcoming.count.other` | —                                        | `{count} upcoming payments due this week` |
 
 **2 removed keys** — replaced by `tc('upcoming.count', count)`:
+
 - `upcoming.countSingle`
 - `upcoming.countPlural`
 
@@ -381,13 +383,13 @@ These are used only in the Electron main process (`setSplashStatus()`); they are
 
 **5 new `app.*` keys** — Electron startup error page and runtime backend-lost watchdog (main process only, not rendered in React):
 
-| Key | EN | NL |
-|-----|----|----|
-| `app.errorPageTitle` | "Vision couldn't start" | "Vision kon niet starten" |
-| `app.errorPageMessage` | "Vision couldn't reach its backend. Try again, or check the logs to see what happened." | "Vision kon de backend niet bereiken. Probeer het opnieuw of bekijk de logboeken om te zien wat er gebeurde." |
-| `app.errorPageRetry` | "Try again" | "Opnieuw proberen" |
-| `app.errorPageOpenLogs` | "Open logs" | "Logboeken openen" |
-| `app.backendLost` | "Connection to the Vision backend was lost. Reconnecting…" | "Verbinding met de Vision-backend verbroken. Opnieuw verbinden…" |
+| Key                     | EN                                                                                      | NL                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `app.errorPageTitle`    | "Vision couldn't start"                                                                 | "Vision kon niet starten"                                                                                     |
+| `app.errorPageMessage`  | "Vision couldn't reach its backend. Try again, or check the logs to see what happened." | "Vision kon de backend niet bereiken. Probeer het opnieuw of bekijk de logboeken om te zien wat er gebeurde." |
+| `app.errorPageRetry`    | "Try again"                                                                             | "Opnieuw proberen"                                                                                            |
+| `app.errorPageOpenLogs` | "Open logs"                                                                             | "Logboeken openen"                                                                                            |
+| `app.backendLost`       | "Connection to the Vision backend was lost. Reconnecting…"                              | "Verbinding met de Vision-backend verbroken. Opnieuw verbinden…"                                              |
 
 > [!info] Implementation gap corrected
 > ADR-022 (section 6) documented these five keys at acceptance time but they were never committed to `i18n/source/`. From ADR-022's merge until today, `packaging/electron/main.js` called `t('app.errorPageTitle')` etc. and received the raw key name back as a fallback string (e.g., the error page title appeared as `"app.errorPageTitle"`). The gap went unnoticed because the error page only appears when the startup health poll times out. This batch closes the gap. See the correction note appended to [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] for full details.
@@ -402,15 +404,15 @@ Code links: [[packaging/electron/main.js]], [[i18n/source/en.json]], [[i18n/sour
 
 **4 `dashboard.*` / `suggestions.*` keys** — added by the SuggestionCard widget (V11):
 
-| Key | EN |
-|-----|----|
-| `dashboard.suggestions` | "Suggestions" (widget label in visibility dialog) |
-| `dashboard.widgetDescriptions.suggestions` | Widget description |
-| `suggestions.kicker` | "Suggested for you" |
-| `suggestions.review` | "Review" |
+| Key                                        | EN                                                |
+| ------------------------------------------ | ------------------------------------------------- |
+| `dashboard.suggestions`                    | "Suggestions" (widget label in visibility dialog) |
+| `dashboard.widgetDescriptions.suggestions` | Widget description                                |
+| `suggestions.kicker`                       | "Suggested for you"                               |
+| `suggestions.review`                       | "Review"                                          |
 
-> [!warning] 2026-06-24 — SuggestionCard deleted; these keys are now unused
-> `SuggestionCard` was removed as part of the upcoming-payments banner unification. The four keys above remain in the locale files but are no longer referenced by any component. They can be pruned in a future locale cleanup pass (`bun run validate-locales` still passes because unused keys are not an error).
+> [!note] 2026-08-27 — SuggestionCard residue removed
+> `SuggestionCard` was removed as part of the upcoming-payments banner unification. Its four orphaned keys were removed in the fixed-point unused-key cleanup. `bun run validate-locales` now fails when an exact source key has no static or dynamic-prefix consumer.
 
 > [!note] No new keys for V8, V9, V10
 > V8 (icon bounce) and V9 (sparkline scrub) are purely CSS/JS with no user-visible new strings. V10 (genie dialog exit) is also CSS/JS-only.
@@ -421,27 +423,28 @@ Code links: [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/fr
 
 #### Electron-Native Desktop Integration (June 2026, ADR-072)
 
-11 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Source total stays **2887 keys** — the V5-V7 count below was a working-tree snapshot that already included these 11 (then-uncommitted) V12 keys; the V5-V7 *commit* carried 2876.
+The original V12 integration added 11 keys. The cross-platform About follow-up adds `menu.about`, bringing the native group to 12 keys and the current locale source to **3,136 keys** per `generate-locales` on 2026-08-27.
 
-**9 new `menu.*` keys** — native macOS application menu labels:
+**10 `menu.*` keys** — native desktop application menu labels:
 
-| Key | EN |
-|-----|----|
-| `menu.settings` | "Settings…" |
-| `menu.file` | "File" |
-| `menu.newTransaction` | "New Transaction" |
-| `menu.importCsv` | "Import CSV…" |
-| `menu.edit` | "Edit" |
-| `menu.view` | "View" |
-| `menu.toggleSidebar` | "Toggle Sidebar" |
-| `menu.go` | "Go" |
+| Key                      | EN                   |
+| ------------------------ | -------------------- |
+| `menu.settings`          | "Settings…"          |
+| `menu.file`              | "File"               |
+| `menu.newTransaction`    | "New Transaction"    |
+| `menu.importCsv`         | "Import CSV…"        |
+| `menu.edit`              | "Edit"               |
+| `menu.view`              | "View"               |
+| `menu.toggleSidebar`     | "Toggle Sidebar"     |
+| `menu.go`                | "Go"                 |
 | `menu.keyboardShortcuts` | "Keyboard Shortcuts" |
+| `menu.about`             | "About {app}"        |
 
 **2 new `settings.appearance.*` keys** — system accent color toggle:
 
-| Key | EN | NL |
-|-----|----|----|
-| `settings.appearance.systemAccent` | "Use system accent color" | (Dutch equivalent) |
+| Key                                    | EN                                                        | NL                 |
+| -------------------------------------- | --------------------------------------------------------- | ------------------ |
+| `settings.appearance.systemAccent`     | "Use system accent color"                                 | (Dutch equivalent) |
 | `settings.appearance.systemAccentHint` | "Match buttons and highlights to your macOS accent color" | (Dutch equivalent) |
 
 **1 key reworded** — `settings.general.enhancedEffectsHint` updated to mention window translucency in addition to the WebGL aurora (en + nl). Note: this key was subsequently **removed** by ADR-075 (2026-06-12) along with `settings.general.enhancedEffects`.
@@ -456,32 +459,32 @@ Code links: [[packaging/electron/main.js]], [[apps/frontend/src/features/setting
 
 **8 new `contextMenu.*` keys** — transaction row right-click menu:
 
-| Key | EN |
-|-----|----|
-| `contextMenu.info` | "Show details" |
-| `contextMenu.quickLook` | "Quick Look" |
-| `contextMenu.editInline` | "Edit in row" |
-| `contextMenu.duplicate` | "Duplicate" |
+| Key                                | EN                     |
+| ---------------------------------- | ---------------------- |
+| `contextMenu.info`                 | "Show details"         |
+| `contextMenu.quickLook`            | "Quick Look"           |
+| `contextMenu.editInline`           | "Edit in row"          |
+| `contextMenu.duplicate`            | "Duplicate"            |
 | `contextMenu.showAllFromRecipient` | "Show all from {name}" |
-| `contextMenu.markActive` | "Mark as active" |
-| `contextMenu.markInactive` | "Mark as inactive" |
-| `contextMenu.delete` | "Delete…" |
+| `contextMenu.markActive`           | "Mark as active"       |
+| `contextMenu.markInactive`         | "Mark as inactive"     |
+| `contextMenu.delete`               | "Delete…"              |
 
 **2 new `quickLook.*` keys** — Quick Look dialog:
 
-| Key | EN |
-|-----|----|
-| `quickLook.title` | "Quick Look" |
-| `quickLook.hint` | "Press Space to close" |
+| Key               | EN                     |
+| ----------------- | ---------------------- |
+| `quickLook.title` | "Quick Look"           |
+| `quickLook.hint`  | "Press Space to close" |
 
 **4 new `shortcuts.*` keys** — ShortcutsOverlay table-interaction rows:
 
-| Key | EN |
-|-----|----|
-| `shortcuts.tableNav` | "Move between table rows" |
-| `shortcuts.tableOpen` | "Open transaction details" |
-| `shortcuts.quickLook` | "Quick Look the focused row" |
-| `shortcuts.rowMenu` | "Tip: right-click a transaction row for quick actions." |
+| Key                   | EN                                                      |
+| --------------------- | ------------------------------------------------------- |
+| `shortcuts.tableNav`  | "Move between table rows"                               |
+| `shortcuts.tableOpen` | "Open transaction details"                              |
+| `shortcuts.quickLook` | "Quick Look the focused row"                            |
+| `shortcuts.rowMenu`   | "Tip: right-click a transaction row for quick actions." |
 
 Code links: [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
 
@@ -493,25 +496,25 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionsTab
 
 **2 `settings.general.*` keys** — Enhanced visual effects toggle (original ADR-071 batch; **removed by ADR-075 on 2026-06-12** — replaced by `settings.appearance.visualEffects*` / `autoAdaptDisplay*`):
 
-| Key | EN | NL | Status |
-|-----|----|----|--------|
-| `settings.general.enhancedEffects` | "Enhanced visual effects" | (Dutch equivalent) | Removed 2026-06-12 |
+| Key                                    | EN                                                        | NL                 | Status             |
+| -------------------------------------- | --------------------------------------------------------- | ------------------ | ------------------ |
+| `settings.general.enhancedEffects`     | "Enhanced visual effects"                                 | (Dutch equivalent) | Removed 2026-06-12 |
 | `settings.general.enhancedEffectsHint` | "Enable WebGL aurora background (may increase GPU usage)" | (Dutch equivalent) | Removed 2026-06-12 |
 
 **4 new `shortcuts.*` keys** — ShortcutsOverlay (`?` key dialog):
 
-| Key | EN |
-|-----|----|
-| `shortcuts.title` | "Keyboard Shortcuts" |
-| `shortcuts.showHelp` | "Show keyboard shortcuts" |
-| `shortcuts.closeDialog` | "Close dialog" |
-| `shortcuts.chartScrub` | "Drag on a chart to compare a range" (2026-08-09: extended to mention the keyboard path — focus a chart, ←/→ steps points, Shift+←/→ compares) |
+| Key                     | EN                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shortcuts.title`       | "Keyboard Shortcuts"                                                                                                                           |
+| `shortcuts.showHelp`    | "Show keyboard shortcuts"                                                                                                                      |
+| `shortcuts.closeDialog` | "Close dialog"                                                                                                                                 |
+| `shortcuts.chartScrub`  | "Drag on a chart to compare a range" (2026-08-09: extended to mention the keyboard path — focus a chart, ←/→ steps points, Shift+←/→ compares) |
 
 **2 new `commandPalette.*` keys** — Palette v2 additions:
 
-| Key | EN |
-|-----|----|
-| `commandPalette.recent` | "Recent" |
+| Key                                 | EN                         |
+| ----------------------------------- | -------------------------- |
+| `commandPalette.recent`             | "Recent"                   |
 | `commandPalette.searchTransactions` | "Search transactions for…" |
 
 Code links: [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]], [[apps/frontend/src/features/settings/sections/GeneralSection.tsx]], [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
@@ -524,9 +527,9 @@ Code links: [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]], [[apps
 
 **2 new error-toast keys for `PlannedPaymentsPage`** (native `alert()` replaced with `toast.error`):
 
-| Key | EN | NL |
-|-----|----|----|
-| `plannedPage.toggleFailed` | "Failed to toggle planned payment" | "Geplande betaling kon niet worden gewijzigd" |
+| Key                        | EN                                 | NL                                             |
+| -------------------------- | ---------------------------------- | ---------------------------------------------- |
+| `plannedPage.toggleFailed` | "Failed to toggle planned payment" | "Geplande betaling kon niet worden gewijzigd"  |
 | `plannedPage.deleteFailed` | "Failed to delete planned payment" | "Geplande betaling kon niet worden verwijderd" |
 
 Code link: [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
@@ -570,6 +573,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 > `chart.aria.*` keys belong exclusively to the chart accessibility layer (`chartAria.ts`). `aria.*` keys are a flat namespace for icon-only interactive element labels across all surfaces. This separates charting-specific accessibility strings from the general interactive-element label set.
 
 **Phase 6 (2026-04-24):**
+
 - `export.title` — "Export PDF Report"
 - `export.description` — "Configure your report, then download it as a PDF."
 - `export.openDialog` — "Export PDF"
@@ -614,6 +618,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `export.downloading` — "Generating…"`
 
 **Phase C (2026-04-25):**
+
 - `cashflow.forecastTitle` — "Cash Flow Forecast" (chart title)
 - `cashflow.forecastDesc` — "7-method statistical forecast with confidence bands" (subtitle)
 - `cashflow.cumulative` — "Cumulative Balance" (view toggle tab)
@@ -628,6 +633,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `cashflow.diagnostics.ensembleWeights` — "Suggested Ensemble Weights"
 
 **Phase 9 (2026-04-20):**
+
 - `settings.tab.appearance` — Appearance settings tab label
 - `settings.appearance.variant` — Theme variant label
 - `settings.appearance.variantHint` — Theme variant selector hint text
@@ -651,20 +657,25 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `settings.appearance.darkFrom` — "Dark theme from" time input label
 
 **Phase 9 (2026-04-19):**
+
 - `onboarding.persist.failed` — Error toast shown when onboarding state fails to persist
 
 **Portfolio Performance Period (2026-04-25):**
+
 - `performance.period.5d` — "5 Days" (short-period chart view for daily data inspection)
 
 **Splits Settlement (2026-04-27):**
+
 - `splits.settled` — "Splits settled" (en) / "Splits verrekend" (nl) — Success toast shown when `useSettleSplit()` completes
 - `splits.settledFailed` — "Failed to settle splits" (en) / "Splits verrekenen mislukt" (nl) — Error toast shown when `useSettleSplit()` fails
 
 **Phase C Bug Fixes (2026-05-06):**
+
 - `txPage.deleteAttachment` — "Delete attachment" (en) / "Bijlage verwijderen" (nl) — Accessibility label for delete button
 - `upcoming.dismissAll` — "Dismiss all" (en) / "Alles negeren" (nl) — Accessibility label for dismiss-all button in upcoming payments notification
 
 **Encrypted Backup Restore Modal (2026-04-27, Phase 2):**
+
 - `settings.restore.passphraseTitle` — "Backup is encrypted" (modal header) — Shown when user attempts to restore encrypted `.visionbak.enc` file
 - `settings.restore.passphraseDesc` — "This backup was encrypted with a passphrase. Enter it to continue." (modal description)
 - `settings.restore.passphraseLabel` — "Passphrase" (input label)
@@ -673,6 +684,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `settings.restore.passphraseRequired` — "This backup is encrypted. Enter the passphrase to continue." (error when no passphrase provided)
 
 **Dutch terminology consistency (2026-08-25):**
+
 - Standardized investment surfaces on `portefeuille` and its compounds, including navigation, performance, import, and transaction labels.
 - Replaced the English calques `over tijd` and inconsistent all-time labels with `in de loop van de tijd` and `hele periode`.
 - Aligned portfolio failure and refresh messages with the existing noun `belegging`, and clarified the spouse/partner disability-exemption label.
@@ -681,6 +693,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - Preserved the single ellipsis glyph (`…`) through locale generation and replaced ASCII three-dot sequences in user-facing source strings.
 
 **Dutch i18n Bug Fixes (2026-04-28):**
+
 - Fixed corrupted `watchlist.empty` Dutch translation: contained ~80 escaped backslashes instead of newline character
   - Affected files: `i18n/source/nl.json`, `apps/frontend/src/locales/nl.ts`, `packaging/electron/i18n/nl.json`
 - Added missing Dutch translations:
@@ -689,6 +702,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - Note: Additional `*FailedTitle` keys in categories, recipients, and transactions remain untranslated as English fallback (known follow-up work)
 
 **Earlier phases:**
+
 - `addInv.desc.metals`
 - `addWatchlist.metals`
 - `metals.title`
@@ -709,7 +723,7 @@ Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/sr
 ```tsx
 const { t } = useLanguage();
 
-return <h1>{t('myComponent.greeting')}</h1>;
+return <h1>{t("myComponent.greeting")}</h1>;
 ```
 
 ## Language Context
@@ -721,7 +735,11 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
-  tc: (key: string, count: number, vars?: Record<string, string | number>) => string;
+  tc: (
+    key: string,
+    count: number,
+    vars?: Record<string, string | number>,
+  ) => string;
 }
 ```
 
@@ -729,22 +747,22 @@ interface LanguageContextType {
 
 ```tsx
 // Set to Dutch
-setLanguage('nl');
+setLanguage("nl");
 
 // Set to English
-setLanguage('en');
+setLanguage("en");
 ```
 
 ## Supported Parameters
 
 ### Common Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `{count}` | number | Count for plurals |
-| `{name}` | string | User/entity name |
-| `{amount}` | number | Currency amounts |
-| `{date}` | string | Date values |
+| Parameter  | Type   | Description       |
+| ---------- | ------ | ----------------- |
+| `{count}`  | number | Count for plurals |
+| `{name}`   | string | User/entity name  |
+| `{amount}` | number | Currency amounts  |
+| `{date}`   | string | Date values       |
 
 ## Translation Coverage
 
@@ -761,7 +779,7 @@ If a Dutch (`nl`) translation is missing, the English string is used as the fall
 ### Buttons
 
 ```tsx
-<Button>{t('form.submit')}</Button>
+<Button>{t("form.submit")}</Button>
 ```
 
 ### Forms
@@ -788,8 +806,8 @@ If a Dutch (`nl`) translation is missing, the English string is used as the fall
 ### Toasts
 
 ```tsx
-toast.success(t('toast.saved'));
-toast.error(t('toast.error'));
+toast.success(t("toast.saved"));
+toast.error(t("toast.error"));
 ```
 
 ## Currency & Number Formatting
@@ -801,11 +819,11 @@ Numbers are formatted based on locale:
 ```tsx
 import { numberFormatToLocale } from "@/utils/currency";
 
-const locale = numberFormatToLocale('en');
-new Intl.NumberFormat(locale, { 
-  style: 'currency', 
-  currency: 'EUR' 
-}).format(1000.50);
+const locale = numberFormatToLocale("en");
+new Intl.NumberFormat(locale, {
+  style: "currency",
+  currency: "EUR",
+}).format(1000.5);
 // "€1,000.50"
 ```
 
@@ -814,15 +832,15 @@ new Intl.NumberFormat(locale, {
 Vision uses native `Intl.DateTimeFormat` for date formatting (Phase 5 slim-down removed date-fns). The `dateUtils.ts` helper module provides thin wrappers for common patterns:
 
 ```tsx
-import { formatDate, formatDateTime } from '@/lib/dateUtils';
+import { formatDate, formatDateTime } from "@/lib/dateUtils";
 
 // Format a date in the current locale
-formatDate(new Date()); 
+formatDate(new Date());
 // English: "3/18/2025"
 // Dutch: "18-3-2025"
 
 // Format with day name
-formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
+formatDate(new Date(), { weekday: "long", month: "long", day: "numeric" });
 // English: "March 18, 2025"
 // Dutch: "18 maart 2025"
 ```
@@ -859,12 +877,12 @@ formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
 
 ```tsx
 // ✅ Consistent
-t('form.addTransaction.title')
-t('form.addCategory.title')
+t("form.addTransaction.title");
+t("form.addCategory.title");
 
 // ❌ Inconsistent
-t('form.addTransaction')
-t('addCategoryTitle')
+t("form.addTransaction");
+t("addCategoryTitle");
 ```
 
 ### 4. Test Both Languages
@@ -893,34 +911,36 @@ When adding new UI, verify both English and Dutch displays correctly.
 
 The script runs all checks sequentially; any failure sets exit code 1 and blocks CI.
 
-| Check | What it verifies |
-|-------|-----------------|
-| **en ↔ nl parity** | Every key in `en.json` exists in `nl.json` and vice versa. |
-| **Placeholder parity** | Every `{var}` placeholder in an en string also appears in the nl string for the same key. |
-| **Type consistency** | Values that are objects (plural containers) in one file are objects in the other. |
+| Check                           | What it verifies                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **en ↔ nl parity**              | Every key in `en.json` exists in `nl.json` and vice versa.                                                                                                                                                                                                                                                                            |
+| **Placeholder parity**          | Every `{var}` placeholder in an en string also appears in the nl string for the same key.                                                                                                                                                                                                                                             |
+| **Type consistency**            | Values that are objects (plural containers) in one file are objects in the other.                                                                                                                                                                                                                                                     |
 | **Key-existence** (source scan) | Every `t('a.b.c')` / `tc('a.b.c')` call in `apps/frontend/src/**/*.{ts,tsx}` whose first argument is a static, key-shaped string literal (`/^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9_]+)+$/`) must exist in `en.json`. Comments are stripped before scanning so JSDoc usage examples do not false-positive. Dynamic/computed keys are skipped. |
-| **Dropped-vars** (source scan) | For `t('k', { x })` / `tc('k', n, { x })` calls with a static object-literal vars argument, every passed variable must have a matching `{x}` placeholder in the en string. (`count` is always allowed for `tc()`.) Catches values that are silently discarded at runtime. |
-| **Value-shape** (source scan) | No locale value may itself be a dotted key-shaped string — e.g., `"foo.bar"` as a value is a sign of an untranslated key pasted in place of the real translation. |
-| **Generated-output drift** | Compares generated frontend locales and any present, gitignored `packaging/electron/i18n/*.json` output against `i18n/source`. A stale Electron output names the generated file and tells the operator to run `bun run generate-locales`. |
+| **Dropped-vars** (source scan)  | For `t('k', { x })` / `tc('k', n, { x })` calls with a static object-literal vars argument, every passed variable must have a matching `{x}` placeholder in the en string. (`count` is always allowed for `tc()`.) Catches values that are silently discarded at runtime.                                                             |
+| **Value-shape** (source scan)   | No locale value may itself be a dotted key-shaped string — e.g., `"foo.bar"` as a value is a sign of an untranslated key pasted in place of the real translation.                                                                                                                                                                     |
+| **Unused keys** (source scan)   | Every exact locale key must have a static source reference, match an inferred dynamic translation prefix, or belong to the narrow Electron `app.*` dynamic prefix. `--list-unused` prints the current dead-key set.                                                                                                                   |
+| **Generated-output drift**      | Compares generated frontend locales and any present, gitignored `packaging/electron/i18n/*.json` output against `i18n/source`. A stale Electron output names the generated file and tells the operator to run `bun run generate-locales`.                                                                                             |
 
 On a clean run the script prints:
 
 ```
-All parity, placeholders, types, source key-usage, and generated-output drift checks are all clean.
+Locale validation passed: parity, placeholders, types, source key-usage, unused-key, and generated-output drift checks are all clean.
 ```
 
 ### When a check fails
 
-| Failure | Fix |
-|---------|-----|
-| Key-existence error | Add the missing key to both `en.json` and `nl.json`, then `bun run generate-locales`. |
-| Dropped-vars error | Either add the `{var}` placeholder to the en/nl string, or remove the unused var from the call site. |
-| Value-shape error | Replace the dotted key string with the actual translated text. |
-| Drift error | Run `bun run generate-locales`; commit the regenerated frontend `.ts` files. Electron JSON is build output and remains untracked. |
-| Parity/placeholder error | Sync the missing key or placeholder to the other locale file. |
+| Failure                  | Fix                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key-existence error      | Add the missing key to both `en.json` and `nl.json`, then `bun run generate-locales`.                                                                         |
+| Dropped-vars error       | Either add the `{var}` placeholder to the en/nl string, or remove the unused var from the call site.                                                          |
+| Value-shape error        | Replace the dotted key string with the actual translated text.                                                                                                |
+| Unused-key error         | Remove the orphaned key from both source locales, or make the intended static/dynamic-prefix consumer explicit. Run `--list-unused` to inspect the exact set. |
+| Drift error              | Run `bun run generate-locales`; commit the regenerated frontend `.ts` files. Electron JSON is build output and remains untracked.                             |
+| Parity/placeholder error | Sync the missing key or placeholder to the other locale file.                                                                                                 |
 
-> [!info] Dynamic keys are not checked
-> Calls like `t(\`nav.${page}\`)` or `t(buildKey(x))` are skipped by the source scanner because the key cannot be statically resolved. Ensure dynamic call sites are tested manually or through E2E tests.
+> [!info] Dynamic key-existence checks are conservative
+> The key-existence pass skips template translation calls and fully computed translation calls because it cannot resolve one exact key. The unused-key pass separately infers static template-literal prefixes and conservatively keeps matching locale keys. Test fully computed call sites manually or through end-to-end tests.
 
 Code link: [[scripts/validate-locales.js]]
 

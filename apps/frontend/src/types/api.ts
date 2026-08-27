@@ -11,10 +11,10 @@
  * packages/shared-utils/src/money.js). Do not assume raw repository rows are
  * already numeric.
  */
-import type { AssetClass } from '@vision/types/assetClasses';
-import type { PortfolioTxnType } from '@vision/types/portfolioTxnTypes';
-import type { RecurrenceInterval } from '@vision/types/recurrence';
-import type { operations } from './generated';
+import type { AssetClass } from "@vision/types/assetClasses";
+import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
+import type { RecurrenceInterval } from "@vision/types/recurrence";
+import type { operations } from "./generated";
 
 export interface Link {
     rel: string;
@@ -61,16 +61,16 @@ export interface CategoryUpdate {
 // ==================== Account Types (ADR-088) ====================
 
 export type AccountType =
-    | 'checking'
-    | 'savings'
-    | 'brokerage'
-    | 'crypto_exchange'
-    | 'wallet'
-    | 'pension'
-    | 'liability';
-export type AccountLiquidityClass = 'liquid' | 'semi_liquid' | 'illiquid';
-export type AccountTaxWrapper = 'none' | 'pension' | 'tax_advantaged';
-export type AccountOwner = 'me' | 'partner' | 'joint';
+    | "checking"
+    | "savings"
+    | "brokerage"
+    | "crypto_exchange"
+    | "wallet"
+    | "pension"
+    | "liability";
+export type AccountLiquidityClass = "liquid" | "semi_liquid" | "illiquid";
+export type AccountTaxWrapper = "none" | "pension" | "tax_advantaged";
+export type AccountOwner = "me" | "partner" | "joint";
 
 export interface Account {
     id: number;
@@ -151,8 +151,16 @@ export interface AccountCreate {
 
 // On PATCH, explicit null clears the field (the backend maps it to SQL NULL);
 // undefined/omitted leaves it untouched.
-export interface AccountUpdate extends Partial<Omit<AccountCreate,
-    'display_name' | 'institution' | 'funding_account_id' | 'statement_balance' | 'statement_balance_date'>> {
+export interface AccountUpdate extends Partial<
+    Omit<
+        AccountCreate,
+        | "display_name"
+        | "institution"
+        | "funding_account_id"
+        | "statement_balance"
+        | "statement_balance_date"
+    >
+> {
     is_active?: boolean;
     display_name?: string | null;
     institution?: string | null;
@@ -279,7 +287,8 @@ export interface PlannedTransactionExecution {
     created_at: string;
 }
 
-export type PlannedLoanType = 'amortizing' | 'fixed_principal' | 'interest_only';
+export type PlannedLoanType =
+    "amortizing" | "fixed_principal" | "interest_only";
 
 export interface PlannedLoanScheduleEntry {
     installment_number: number;
@@ -403,7 +412,8 @@ export interface PlannedTransactionExecuteRequest {
 // hyphenated 'bi-weekly' spelling; planned transactions use a different,
 // unhyphenated one (see @vision/types/recurrence).
 export type { AssetClass, PortfolioTxnType, RecurrenceInterval };
-export type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
+export type PriceProvider =
+    "manual" | "binance" | "yahoo" | "custom" | "kinesis";
 
 export interface Investment {
     id: number;
@@ -548,7 +558,7 @@ export interface PortfolioTransactionCreate {
 }
 
 export type PortfolioTransactionUpdate =
-    operations['updatePortfolioTransaction']['requestBody']['content']['application/json'];
+    operations["updatePortfolioTransaction"]["requestBody"]["content"]["application/json"];
 
 // ==================== Tag Types ====================
 
@@ -603,12 +613,13 @@ export interface BulkTransactionFilter {
     bank_accounts?: string[];
     category_id?: number;
     category_ids?: number[];
+    uncategorised?: boolean;
     recipient_id?: number;
     recipient_group_id?: number;
     recipient_name?: string;
     search?: string;
     active?: boolean;
-    transaction_type?: 'income' | 'expense';
+    transaction_type?: "income" | "expense";
     amount_min?: number;
     amount_max?: number;
     amount_signed?: boolean;
@@ -617,7 +628,11 @@ export interface BulkTransactionFilter {
 
 export type BulkSelectionRequest =
     | { ids: number[]; filter?: never }
-    | { filter: BulkTransactionFilter; ids?: never };
+    | {
+          filter: BulkTransactionFilter;
+          expected_count: number;
+          ids?: never;
+      };
 
 export interface BulkUpdateFields {
     category_id?: number | null;
@@ -625,19 +640,30 @@ export interface BulkUpdateFields {
     is_active?: boolean;
 }
 
-export type BulkUpdateRequest = BulkSelectionRequest & { fields: BulkUpdateFields };
+export type BulkUpdateRequest = BulkSelectionRequest & {
+    fields: BulkUpdateFields;
+};
 
 export type BulkExportRequest = BulkSelectionRequest & {
-    format: 'csv' | 'json';
+    format: "csv" | "json";
     include_balance?: boolean;
 };
 
 export interface BulkDeleteResult {
     deleted: number;
+    requested: number;
+    matched: number;
 }
 
 export interface BulkUpdateResult {
     updated: number;
+    requested: number;
+    matched: number;
+}
+
+export interface BulkExportResult {
+    blob: Blob;
+    exported: number;
 }
 
 // ==================== Other Types ====================

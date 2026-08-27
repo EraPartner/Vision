@@ -149,7 +149,7 @@ export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamental
         if (visible.length === 0) return null;
         return (
           <div key={group.titleKey} className="space-y-1">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(group.titleKey)}</h4>
+            <h4 className="eyebrow">{t(group.titleKey)}</h4>
             <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
               {visible.map((m) => (
                 <div key={String(m.key)} className="flex items-center justify-between border-b border-border/50 py-1.5">

@@ -21,7 +21,7 @@ const SheetOverlay = React.forwardRef<
         className={cn(
             // modal-overlay (index.css): plain dim by default, frosted blur only
             // at the fx-enhanced visual-effects tier (ADR-075).
-            "modal-overlay fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "modal-overlay fixed inset-0 z-50 data-[state=open]:animate-in data-[state=open]:duration-[var(--duration-slow)] data-[state=closed]:animate-out data-[state=closed]:duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
             className,
         )}
         {...props}
@@ -31,7 +31,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-    "glass-thick !fixed z-50 gap-4 p-6 shadow-glass-elevated transition ease-[var(--ease-out-expo)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-[var(--duration-normal)] data-[state=open]:duration-[var(--duration-slow)]",
+    "glass-thick !fixed z-50 gap-4 p-6 shadow-glass-elevated transition ease-[var(--ease-out-expo)] data-[state=open]:animate-in data-[state=open]:duration-[var(--duration-slow)] data-[state=closed]:animate-out data-[state=closed]:duration-[var(--duration-normal)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
     {
         variants: {
             side: {

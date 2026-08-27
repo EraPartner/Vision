@@ -177,13 +177,12 @@
 
     .glass {
         position: relative;
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.46) 0%,
-                hsl(var(--glass-surface) / 0.62) 38%,
-                hsl(var(--glass-surface) / 0.42) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.46) 0%,
+            hsl(var(--glass-surface) / 0.62) 38%,
+            hsl(var(--glass-surface) / 0.42) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.12);
         color: hsl(var(--card-foreground));
         box-shadow:
@@ -193,18 +192,17 @@
     }
 
     .dark .glass {
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.05) 0%,
-                hsl(var(--glass-surface) / 0.7) 40%,
-                hsl(var(--glass-surface-deep) / 0.86) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.05) 0%,
+            hsl(var(--glass-surface) / 0.7) 40%,
+            hsl(var(--glass-surface-deep) / 0.86) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.08) inset,
-            0 -1px 0 hsl(0 0% 0% / 0.4) inset,
-            0 14px 40px hsl(0 0% 0% / 0.4);
+            0 -1px 0 hsl(var(--glass-shadow) / 0.4) inset,
+            0 14px 40px hsl(var(--glass-shadow) / 0.4);
     }
 
     /* Specular edge highlight — adds Apple-like depth */
@@ -239,12 +237,11 @@
     /* Thin — for top chrome, navigation */
     .glass-thin,
     .liquid-glass-soft {
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--glass-surface) / 0.72) 0%,
-                hsl(var(--glass-surface) / 0.56) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--glass-surface) / 0.72) 0%,
+            hsl(var(--glass-surface) / 0.56) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
@@ -253,15 +250,14 @@
 
     .dark .glass-thin,
     .dark .liquid-glass-soft {
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--glass-surface) / 0.64) 0%,
-                hsl(var(--glass-surface-deep) / 0.78) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--glass-surface) / 0.64) 0%,
+            hsl(var(--glass-surface-deep) / 0.78) 100%
+        );
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 1px 24px hsl(0 0% 0% / 0.35);
+            0 1px 24px hsl(var(--glass-shadow) / 0.35);
     }
 
     /* Regular — default card material */
@@ -269,13 +265,12 @@
     .liquid-glass,
     .surface-glass,
     .glass-effect {
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.38) 0%,
-                hsl(var(--glass-surface) / 0.7) 42%,
-                hsl(var(--glass-surface) / 0.52) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.38) 0%,
+            hsl(var(--glass-surface) / 0.7) 42%,
+            hsl(var(--glass-surface) / 0.52) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.1);
         box-shadow:
             inset 0 1px 0 hsl(var(--glass-highlight) / 0.6),
@@ -286,28 +281,26 @@
     .dark .liquid-glass,
     .dark .surface-glass,
     .dark .glass-effect {
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.04) 0%,
-                hsl(var(--glass-surface) / 0.78) 42%,
-                hsl(var(--glass-surface-deep) / 0.9) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.04) 0%,
+            hsl(var(--glass-surface) / 0.78) 42%,
+            hsl(var(--glass-surface-deep) / 0.9) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow:
             inset 0 1px 0 hsl(var(--glass-highlight) / 0.12),
-            0 8px 24px -8px hsl(0 0% 0% / 0.5);
+            0 8px 24px -8px hsl(var(--glass-shadow) / 0.5);
     }
 
     /* Thick — dialogs, popovers, important overlays */
     .glass-thick {
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.5) 0%,
-                hsl(var(--glass-surface) / 0.82) 40%,
-                hsl(var(--glass-surface-deep) / 0.7) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.5) 0%,
+            hsl(var(--glass-surface) / 0.82) 40%,
+            hsl(var(--glass-surface-deep) / 0.7) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.14);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.5) inset,
@@ -317,19 +310,18 @@
     }
 
     .dark .glass-thick {
-        background:
-            linear-gradient(
-                135deg,
-                hsl(var(--glass-highlight) / 0.06) 0%,
-                hsl(var(--glass-surface) / 0.86) 42%,
-                hsl(var(--glass-surface-deep) / 0.94) 100%
-            );
+        background: linear-gradient(
+            135deg,
+            hsl(var(--glass-highlight) / 0.06) 0%,
+            hsl(var(--glass-surface) / 0.86) 42%,
+            hsl(var(--glass-surface-deep) / 0.94) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.1);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.1) inset,
-            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
-            0 8px 16px hsl(0 0% 0% / 0.42),
-            0 32px 80px -28px hsl(0 0% 0% / 0.55);
+            0 -1px 0 hsl(var(--glass-shadow) / 0.35) inset,
+            0 8px 16px hsl(var(--glass-shadow) / 0.42),
+            0 32px 80px -28px hsl(var(--glass-shadow) / 0.55);
     }
 
     /* Chrome — sidebar rail, persistent toolbars.
@@ -339,12 +331,11 @@
        because the chrome blur + saturate veil averages whatever drifts behind;
        prefers-reduced-transparency falls back to near-opaque below. */
     .glass-chrome {
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--sidebar-background) / 0.55) 0%,
-                hsl(var(--sidebar-background) / 0.72) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--sidebar-background) / 0.55) 0%,
+            hsl(var(--sidebar-background) / 0.72) 100%
+        );
         border: 1px solid hsl(var(--sidebar-border) / 0.5);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.28) inset,
@@ -352,60 +343,58 @@
     }
 
     .dark .glass-chrome {
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--sidebar-background) / 0.55) 0%,
-                hsl(var(--sidebar-background) / 0.74) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--sidebar-background) / 0.55) 0%,
+            hsl(var(--sidebar-background) / 0.74) 100%
+        );
         border: 1px solid hsl(var(--sidebar-border) / 0.6);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 20px 56px hsl(0 0% 0% / 0.45);
+            0 20px 56px hsl(var(--glass-shadow) / 0.45);
     }
 
     /* No backdrop-filter support → translucency would show raw page behind
        the rail; keep the old near-opaque ramp there. */
-    @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @supports not (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
         .glass-chrome {
-            background:
-                linear-gradient(
-                    180deg,
-                    hsl(var(--sidebar-background) / 0.92) 0%,
-                    hsl(var(--sidebar-background) / 0.98) 100%
-                );
+            background: linear-gradient(
+                180deg,
+                hsl(var(--sidebar-background) / 0.92) 0%,
+                hsl(var(--sidebar-background) / 0.98) 100%
+            );
         }
     }
 
     /* Elevated — hero tiles and featured KPIs */
     .glass-elevated,
     .liquid-glass-hero {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--glass-highlight) / 0.62) 0%,
-                hsl(var(--glass-surface) / 0.78) 38%,
-                hsl(var(--glass-tint) / 0.08) 100%
-            );
+        background: linear-gradient(
+            138deg,
+            hsl(var(--glass-highlight) / 0.62) 0%,
+            hsl(var(--glass-surface) / 0.78) 38%,
+            hsl(var(--glass-tint) / 0.08) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.16);
         box-shadow:
             inset 0 1px 0 hsl(var(--glass-highlight) / 0.72),
-            0 18px 46px -16px hsl(var(--glass-shadow) / 0.30);
+            0 18px 46px -16px hsl(var(--glass-shadow) / 0.3);
     }
 
     .dark .glass-elevated,
     .dark .liquid-glass-hero {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--glass-highlight) / 0.1) 0%,
-                hsl(var(--glass-surface) / 0.84) 36%,
-                hsl(var(--glass-tint) / 0.22) 100%
-            );
+        background: linear-gradient(
+            138deg,
+            hsl(var(--glass-highlight) / 0.1) 0%,
+            hsl(var(--glass-surface) / 0.84) 36%,
+            hsl(var(--glass-tint) / 0.22) 100%
+        );
         border: 1px solid hsl(var(--glass-border) / 0.12);
         box-shadow:
             inset 0 1px 0 hsl(var(--glass-highlight) / 0.18),
-            0 22px 56px -18px hsl(0 0% 0% / 0.72);
+            0 22px 56px -18px hsl(var(--glass-shadow) / 0.72);
     }
 
     /* Frozen first column inside a glass card (e.g. the Category Pivot Table).
@@ -420,42 +409,54 @@
        adds the standard frost; fx-enhanced is the most translucent. */
     .glass-sticky-col {
         background: hsl(var(--card));
-        box-shadow: 7px 0 12px -9px hsl(0 0% 0% / 0.5);
+        box-shadow: 7px 0 12px -9px hsl(var(--glass-shadow) / 0.5);
     }
 
     /* Apply backdrop filters where supported, with saturation per material.
        Saturation is what makes blurred content glow through the material —
        blur alone reads as fog. */
-    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @supports (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
         .glass,
         .glass-regular,
         .liquid-glass,
         .surface-glass,
         .glass-effect {
-            -webkit-backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-regular-blur))
+                saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-regular-blur))
+                saturate(var(--glass-saturate));
         }
 
         .glass-thin,
         .liquid-glass-soft {
-            -webkit-backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-thin-blur))
+                saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thin-blur))
+                saturate(var(--glass-saturate));
         }
 
         .glass-thick {
-            -webkit-backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-thick-blur))
+                saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thick-blur))
+                saturate(var(--glass-saturate));
         }
 
         .glass-chrome {
-            -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-chrome-blur))
+                saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-chrome-blur))
+                saturate(var(--glass-saturate));
         }
 
         .glass-elevated,
         .liquid-glass-hero {
-            -webkit-backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-elevated-blur))
+                saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-elevated-blur))
+                saturate(var(--glass-saturate));
         }
 
         /* Standard tier — translucent enough to blend into the card glass,
@@ -495,7 +496,9 @@
         background: hsl(var(--background) / 0.6);
     }
 
-    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @supports (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
         /* Gated to no-preference so the frost yields to
            prefers-reduced-transparency, like the other fx-enhanced opt-ins. */
         @media (prefers-reduced-transparency: no-preference) {
@@ -527,12 +530,11 @@
         position: absolute;
         inset: 0;
         z-index: -1;
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--background) / 0.82) 0%,
-                hsl(var(--background) / 0.68) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--background) / 0.82) 0%,
+            hsl(var(--background) / 0.68) 100%
+        );
         border-bottom: 1px solid hsl(var(--border) / 0.5);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
@@ -546,19 +548,20 @@
     }
 
     .dark .app-topbar::before {
-        background:
-            linear-gradient(
-                180deg,
-                hsl(var(--background) / 0.7) 0%,
-                hsl(var(--background) / 0.56) 100%
-            );
+        background: linear-gradient(
+            180deg,
+            hsl(var(--background) / 0.7) 0%,
+            hsl(var(--background) / 0.56) 100%
+        );
         border-bottom: 1px solid hsl(var(--border) / 0.7);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 14px 32px hsl(0 0% 0% / 0.38);
+            0 14px 32px hsl(var(--glass-shadow) / 0.38);
     }
 
-    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @supports (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
         .app-topbar {
             -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
             backdrop-filter: blur(16px) saturate(var(--glass-saturate));
@@ -585,7 +588,9 @@
         -webkit-app-region: drag;
     }
 
-    html.electron-mac .app-topbar :is(button, a, input, [role="button"], [role="combobox"]) {
+    html.electron-mac
+        .app-topbar
+        :is(button, a, input, [role="button"], [role="combobox"]) {
         -webkit-app-region: no-drag;
     }
 
@@ -627,12 +632,11 @@
         z-index: -1;
         overflow: hidden;
         pointer-events: none;
-        background:
-            radial-gradient(
-                120rem 60rem at 70% -20%,
-                hsl(var(--primary) / var(--aurora-wash-alpha)),
-                transparent 60%
-            );
+        background: radial-gradient(
+            120rem 60rem at 70% -20%,
+            hsl(var(--primary) / var(--aurora-wash-alpha)),
+            transparent 60%
+        );
     }
 
     .liquid-canvas::before,
@@ -656,7 +660,8 @@
             hsl(var(--primary) / var(--aurora-primary-alpha)),
             transparent 72%
         );
-        animation: aurora-drift-a 64s var(--ease-in-out-quart) infinite alternate;
+        animation: aurora-drift-a 64s var(--ease-in-out-quart) infinite
+            alternate;
     }
 
     /* Champagne aurora — lower right, counter-drifts */
@@ -672,7 +677,8 @@
             hsl(var(--accent) / var(--aurora-accent-alpha)),
             transparent 72%
         );
-        animation: aurora-drift-b 76s var(--ease-in-out-quart) infinite alternate;
+        animation: aurora-drift-b 76s var(--ease-in-out-quart) infinite
+            alternate;
     }
 
     @keyframes aurora-drift-a {
@@ -741,7 +747,7 @@
     }
 
     .dark .surface-elevated {
-        box-shadow: 0 4px 12px hsl(0 0% 0% / 0.35);
+        box-shadow: 0 4px 12px hsl(var(--glass-shadow) / 0.35);
     }
 
     /* ------------------------------------------------------------------
@@ -778,6 +784,23 @@
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
     }
 
+    /* Icon tiles inherit their glow from their semantic text colour. A loss,
+       warning, or chart tile must never cast the primary emerald halo. */
+    .icon-tile-glow {
+        box-shadow: 0 2px 8px -2px
+            color-mix(in srgb, currentColor 25%, transparent);
+    }
+
+    .eyebrow {
+        font-family: var(--font-body);
+        font-size: 0.6875rem;
+        line-height: 0.875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: hsl(var(--muted-foreground) / 0.8);
+    }
+
     /* The hover half of premium-frame, gated behind the Card `interactive`
        variant.
 
@@ -802,7 +825,7 @@
     .premium-frame.premium-frame-interactive {
         transition:
             translate var(--duration-fast) var(--ease-glide),
-            transform 90ms ease-out;
+            transform var(--duration-press) ease-out;
     }
 
     /* The pre-rendered elevated shadow, rasterized at opacity 0 so the hover
@@ -834,11 +857,11 @@
     .dark .premium-frame {
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 14px 30px hsl(0 0% 0% / 0.38);
+            0 14px 30px hsl(var(--glass-shadow) / 0.38);
     }
 
     .dark .premium-frame-interactive::after {
-        box-shadow: 0 18px 40px hsl(0 0% 0% / 0.48);
+        box-shadow: 0 18px 40px hsl(var(--glass-shadow) / 0.48);
     }
 
     .dark .premium-frame-interactive:hover {
@@ -854,8 +877,8 @@
         will-change: transform;
     }
 
-    /* One decorative corner-orb motif for hero/KPI cards (ADR-105), in two
-       deliberate tiers. See <CardSheen/>. Both are token-driven (never raw
+    /* One decorative corner-orb motif for hero/KPI cards (ADR-105), in three
+       deliberate tiers. See <CardSheen/>. All three are token-driven (never raw
        white), so they adapt to light/dark and every theme variant.
 
        TIER POLICY — which card gets which:
@@ -863,6 +886,10 @@
          stat tile, chart card and panel header orb. 8rem, reads
          --glass-highlight, so it reads as a light sheen in both modes with the
          opacity dialed back in dark to keep it a whisper rather than a smear.
+       - `.card-sheen-feature` (tier="feature"): a prominent in-page feature
+         card. It keeps the default token and tone at 10rem; today this is the
+         PerformancePage total-value card. Name this tier instead of passing
+         local size classes so the hierarchy remains explicit.
        - `.card-sheen-hero` (tier="hero"): reserved for a page's single hero
          tile — today only the dashboard's NetSummaryCard. 12rem (1.5× the
          diameter) so the corner carries the weight the hero number needs, and
@@ -871,7 +898,8 @@
          that sinks the corner behind the hero figure instead of lighting it.
          Not drift — do not "unify" it onto the default tier.
        Plain content cards get neither. */
-    .card-sheen {
+    .card-sheen,
+    .card-sheen-feature {
         pointer-events: none;
         position: absolute;
         top: 0;
@@ -888,7 +916,15 @@
         );
     }
 
-    .dark .card-sheen {
+    .card-sheen-feature {
+        height: 10rem;
+        width: 10rem;
+        margin-top: -5rem;
+        margin-right: -5rem;
+    }
+
+    .dark .card-sheen,
+    .dark .card-sheen-feature {
         background-image: linear-gradient(
             to bottom right,
             hsl(var(--glass-highlight) / 0.12),
@@ -951,7 +987,7 @@
        `transform 90ms ease-out` press entry verbatim, exactly as
        `.premium-frame.premium-frame-interactive` above restates it:
 
-           [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out]
+           [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),transform_var(--duration-press)_ease-out]
 
        The var plays no specificity or ordering games: this stays the only
        `transition` declaration on `.press-feedback` (so the reduced-motion
@@ -964,7 +1000,10 @@
        interactive Card does not participate: its doubled-specificity rule
        above owns the whole shorthand and already restates the press entry. */
     .press-feedback {
-        transition: var(--press-compose, transform 90ms ease-out);
+        transition: var(
+            --press-compose,
+            transform var(--duration-press) ease-out
+        );
     }
 
     .press-feedback:active {
@@ -978,7 +1017,7 @@
             background-color var(--duration-fast) var(--ease-glide),
             border-color var(--duration-fast) var(--ease-glide),
             box-shadow var(--duration-normal) var(--ease-glide),
-            transform 120ms ease-out;
+            transform var(--duration-fast) ease-out;
     }
 
     .premium-icon-action:hover {
@@ -994,7 +1033,7 @@
         background-color: hsl(var(--primary) / 0.16);
         border-color: hsl(var(--primary) / 0.4);
         box-shadow:
-            0 2px 12px hsl(0 0% 0% / 0.4),
+            0 2px 12px hsl(var(--glass-shadow) / 0.4),
             0 1px 0 hsl(var(--glass-highlight) / 0.12) inset;
     }
 
@@ -1051,24 +1090,49 @@
         animation: animate-in var(--duration-slow) var(--ease-out-expo) both;
     }
 
-    .animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
-    .animate-stagger > *:nth-child(2) { animation-delay: 60ms; }
-    .animate-stagger > *:nth-child(3) { animation-delay: 120ms; }
-    .animate-stagger > *:nth-child(4) { animation-delay: 180ms; }
-    .animate-stagger > *:nth-child(5) { animation-delay: 240ms; }
-    .animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
-    .animate-stagger > *:nth-child(7) { animation-delay: 360ms; }
-    .animate-stagger > *:nth-child(8) { animation-delay: 420ms; }
-    .animate-stagger > *:nth-child(9) { animation-delay: 480ms; }
-    .animate-stagger > *:nth-child(10) { animation-delay: 540ms; }
-    .animate-stagger > *:nth-child(11) { animation-delay: 600ms; }
-    .animate-stagger > *:nth-child(12) { animation-delay: 660ms; }
+    .animate-stagger > *:nth-child(1) {
+        animation-delay: 0ms;
+    }
+    .animate-stagger > *:nth-child(2) {
+        animation-delay: 60ms;
+    }
+    .animate-stagger > *:nth-child(3) {
+        animation-delay: 120ms;
+    }
+    .animate-stagger > *:nth-child(4) {
+        animation-delay: 180ms;
+    }
+    .animate-stagger > *:nth-child(5) {
+        animation-delay: 240ms;
+    }
+    .animate-stagger > *:nth-child(6) {
+        animation-delay: 300ms;
+    }
+    .animate-stagger > *:nth-child(7) {
+        animation-delay: 360ms;
+    }
+    .animate-stagger > *:nth-child(8) {
+        animation-delay: 420ms;
+    }
+    .animate-stagger > *:nth-child(9) {
+        animation-delay: 480ms;
+    }
+    .animate-stagger > *:nth-child(10) {
+        animation-delay: 540ms;
+    }
+    .animate-stagger > *:nth-child(11) {
+        animation-delay: 600ms;
+    }
+    .animate-stagger > *:nth-child(12) {
+        animation-delay: 660ms;
+    }
 
     /* SF-Symbols-style success bounce: icon pops past full size and settles.
        Applied to inline success icons on mount and, globally below, to the
        icon slot of sonner success toasts (covers every toast.success). */
     .icon-success-bounce {
-        animation: icon-success-bounce 600ms var(--ease-out-expo) 100ms both;
+        animation: icon-success-bounce var(--duration-reveal)
+            var(--ease-out-expo) 100ms both;
     }
 
     @keyframes icon-success-bounce {
@@ -1093,7 +1157,67 @@
     }
 
     [data-sonner-toast][data-type="success"] [data-icon] {
-        animation: icon-success-bounce 600ms var(--ease-out-expo) 150ms both;
+        animation: icon-success-bounce var(--duration-reveal)
+            var(--ease-out-expo) 150ms both;
+    }
+
+    /* Sonner owns the toast geometry, while Vision owns its motion rhythm.
+       Arrival gets the entry curve; reflow uses the resting-state glide; and
+       dismiss/swipe use the shorter dismissal token. Keep active dragging
+       transition-free so the surface remains under the pointer. */
+    [data-sonner-toaster] {
+        transition-property: transform !important;
+        transition-duration: var(--duration-slow) !important;
+        transition-timing-function: var(--ease-glide) !important;
+    }
+
+    [data-sonner-toast] {
+        transition-property: transform, opacity, height, box-shadow !important;
+        transition-duration:
+            var(--duration-slow), var(--duration-normal), var(--duration-slow),
+            var(--duration-normal) !important;
+        transition-timing-function: var(--ease-glide) !important;
+    }
+
+    [data-sonner-toast][data-mounted="true"] {
+        transition-timing-function: var(--ease-out-expo) !important;
+    }
+
+    [data-sonner-toast][data-removed="true"],
+    [data-sonner-toast][data-removed="true"][data-front="false"][data-swipe-out="false"][data-expanded="false"] {
+        transition-duration: var(--duration-dismiss) !important;
+        transition-timing-function: var(--ease-glide) !important;
+    }
+
+    [data-sonner-toast] > *,
+    [data-sonner-toast][data-styled="true"] [data-button],
+    [data-sonner-toast][data-styled="true"] [data-close-button],
+    .sonner-loader {
+        transition-duration: var(--duration-normal) !important;
+        transition-timing-function: var(--ease-glide) !important;
+    }
+
+    [data-sonner-toast][data-promise="true"] [data-icon] > svg {
+        animation-duration: var(--duration-normal) !important;
+        animation-timing-function: var(--ease-out-expo) !important;
+    }
+
+    .sonner-loading-wrapper[data-visible="false"] {
+        animation-duration: var(--duration-dismiss) !important;
+        animation-timing-function: var(--ease-glide) !important;
+    }
+
+    .sonner-loading-bar {
+        animation-duration: calc(var(--duration-reveal) * 2) !important;
+    }
+
+    [data-sonner-toast][data-swiping="true"] {
+        transition: none !important;
+    }
+
+    [data-sonner-toast][data-swipe-out="true"][data-y-position] {
+        animation-duration: var(--duration-dismiss) !important;
+        animation-timing-function: var(--ease-glide) !important;
     }
 
     .gradient-bg {
@@ -1109,7 +1233,7 @@
     }
 
     .dark .card-elevated {
-        box-shadow: 0 4px 12px hsl(0 0% 0% / 0.3);
+        box-shadow: 0 4px 12px hsl(var(--glass-shadow) / 0.3);
     }
 
     .tabular-nums {
@@ -1129,18 +1253,10 @@
     /* Semantic gain/loss colors. Read the --gain/--loss tokens (tokens.css):
        legacy = variant-aware champagne-gold / red, skin-v2 = Okabe-Ito
        colorblind-safe (styles/skin-v2.css overrides the tokens). Routing
-       gain/loss through these semantic classes/tokens — instead of
+       gain/loss through semantic Tailwind utilities/tokens — instead of
        text-accent/text-destructive directly — lets the accessibility toggle
        swap the hue everywhere without recoloring unrelated accent or
        destructive (delete/error) UI, and with no per-component skin branch. */
-    .amount-gain {
-        color: hsl(var(--gain));
-    }
-
-    .amount-loss {
-        color: hsl(var(--loss));
-    }
-
     /* Expense color override — preserved for compat */
     .negative-amount {
         color: hsl(var(--expense)) !important;
@@ -1162,8 +1278,12 @@
        seamlessly. Duration is set per-instance via --ticker-duration so pixel
        speed stays constant as the holding count changes. */
     @keyframes ticker-scroll {
-        from { transform: translateX(0); }
-        to   { transform: translateX(-50%); }
+        from {
+            transform: translateX(0);
+        }
+        to {
+            transform: translateX(-50%);
+        }
     }
 
     .ticker-track {
@@ -1222,6 +1342,19 @@
         .animate-accordion-down,
         [data-sonner-toast][data-type="success"] [data-icon] {
             animation: none;
+        }
+
+        [data-sonner-toast],
+        [data-sonner-toast] > *,
+        [data-sonner-toast][data-styled="true"] [data-button],
+        [data-sonner-toast][data-styled="true"] [data-close-button],
+        [data-sonner-toast][data-promise="true"] [data-icon] > svg,
+        .sonner-loader,
+        .sonner-loading-wrapper,
+        .sonner-loading-bar,
+        [data-sonner-toaster] {
+            animation: none !important;
+            transition: none !important;
         }
 
         .liquid-canvas::before,
@@ -1385,5 +1518,83 @@
     :root.fx-idle-atmosphere .liquid-canvas::before,
     :root.fx-idle-atmosphere .liquid-canvas::after {
         animation-play-state: paused;
+    }
+
+    @media print {
+        @page {
+            margin: 12mm;
+        }
+
+        html[data-print-report="true"],
+        html[data-print-report="true"] body {
+            color-scheme: light;
+            background: #fff !important;
+            color: #111 !important;
+        }
+
+        html[data-print-report="true"] {
+            --background: 0 0% 100%;
+            --foreground: 210 12% 10%;
+            --card: 0 0% 100%;
+            --card-foreground: 210 12% 10%;
+            --muted: 40 12% 94%;
+            --muted-foreground: 210 8% 34%;
+            --border: 210 10% 76%;
+        }
+
+        [data-print-report] .app-sidebar,
+        [data-print-report] .app-topbar,
+        [data-print-report] .liquid-canvas,
+        [data-print-report] [data-print-chrome],
+        [data-print-report] [data-print-actions],
+        html[data-print-report="true"] [data-sonner-toaster],
+        html[data-print-report="true"] [role="dialog"],
+        html[data-print-report="true"] .modal-overlay {
+            display: none !important;
+        }
+
+        [data-print-report],
+        [data-print-report] > div,
+        [data-print-report] main,
+        [data-print-page] {
+            min-height: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+        }
+
+        [data-print-report] main {
+            padding: 0 !important;
+        }
+
+        [data-print-page] .premium-frame,
+        [data-print-page] .glass,
+        [data-print-page] .glass-thin,
+        [data-print-page] .glass-regular,
+        [data-print-page] .glass-thick,
+        [data-print-page] .glass-elevated {
+            background: #fff !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
+        [data-print-page] .premium-frame,
+        [data-print-page] table,
+        [data-print-page] svg {
+            break-inside: avoid;
+        }
+
+        [data-print-page] .cv-auto {
+            content-visibility: visible !important;
+            contain-intrinsic-size: none !important;
+        }
+
+        [data-print-page] *,
+        [data-print-page] *::before,
+        [data-print-page] *::after {
+            animation: none !important;
+            transition: none !important;
+        }
     }
 }

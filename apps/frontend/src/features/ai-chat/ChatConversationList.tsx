@@ -68,7 +68,7 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
         <>
             <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between px-3 py-2">
-                    <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <h2 className="eyebrow">
                         {t('aiChat.conversations')}
                     </h2>
                     <Button
@@ -137,7 +137,7 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
                                                     size="icon"
                                                     variant="ghost"
                                                     aria-label={t('aiChat.conversationActions')}
-                                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                                                    className="icon-touch-target opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 data-[state=open]:opacity-100"
                                                 >
                                                     <MoreVertical className="h-3.5 w-3.5" />
                                                 </Button>

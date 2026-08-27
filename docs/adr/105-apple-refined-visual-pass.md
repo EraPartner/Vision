@@ -141,3 +141,8 @@ Once "refined + jewel" was selected, the harness files were deleted and the winn
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — established the current glass material vocabulary and blur tiers
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — ShaderAurora and typography system that this ADR keeps intact
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-effects tiers]] — reduced/standard/enhanced tier system; composes cleanly with this ADR
+## Implementation note — 2026-08-27
+
+Material shadow geometry and alpha remain unchanged, but every dark and sticky-column shadow now reads its hue from `--glass-shadow` instead of literal black. This lets each theme variant preserve the same depth model with its own shadow hue. Warning and neutral-information surfaces likewise route through the existing `warning` token and the new theme-level `info` token; gain/loss remains governed only by `--gain` and `--loss`.
+
+The later semantic-color sweep removed the transitional `.amount-gain` and `.amount-loss` aliases. Production components now use `text-gain` and `text-loss` directly, while `VITE_SKIN_V2` still changes the underlying `--gain` and `--loss` token values. Custom charts also read their categorical colors from the shared chart-palette utility instead of local arrays.

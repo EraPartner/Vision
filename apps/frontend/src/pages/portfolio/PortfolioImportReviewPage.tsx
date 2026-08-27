@@ -223,7 +223,7 @@ export function PortfolioImportReviewPage() {
         return (
           <Card key={key} className={resolved ? "" : "border-warning/40"}>
             <CardHeader className="pb-2">
-              <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <CardTitle variant="sm" className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   {!resolved && <AlertTriangle className="h-4 w-4 text-warning" />}
                   {g.is_cash

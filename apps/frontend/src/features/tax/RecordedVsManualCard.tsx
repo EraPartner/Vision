@@ -22,7 +22,7 @@ export function RecordedVsManualCard({
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.recordedVsManual")}</CardTitle>
         <CardDescription>{t("tax.recordedVsManualDesc")}</CardDescription>

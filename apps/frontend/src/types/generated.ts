@@ -3262,10 +3262,13 @@ export interface components {
             removed: number;
             transactions_affected: number;
         };
-        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (a subset of the GET /api/transactions query filters); exactly one is resolved server-side. */
+        /** @description Selects transactions to act on. Explicit-id mode accepts only `ids`. Filter mode requires both `filter` and the `expected_count` shown when the user confirmed the action. */
         BulkSelection: {
-            ids?: number[];
-            filter?: components["schemas"]["BulkTransactionFilter"];
+            ids: number[];
+        } | {
+            filter: components["schemas"]["BulkTransactionFilter"];
+            /** @description Count shown when the user confirmed the action. */
+            expected_count: number;
         };
         /** @description Filter-mode selector. Every field is validated and an unknown key, a wrong type or a malformed value rejects the whole request with a 400 — these endpoints include a hard DELETE, and a filter field that was skipped rather than rejected made the action cover a WIDER set of rows than the caller named. Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field". Each field also accepts its camelCase spelling, but not both spellings at once. */
         BulkTransactionFilter: {
@@ -5274,12 +5277,14 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            deleted?: number;
+                            deleted: number;
+                            requested: number;
+                            matched: number;
                         };
                     };
                 };
             };
-            /** @description Invalid selector: neither/both of `ids` and `filter`, a malformed id, or an unknown/malformed filter field */
+            /** @description Invalid selector: neither/both of `ids` and `filter`, a malformed id, a missing or misplaced `expected_count`, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5323,12 +5328,14 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            updated?: number;
+                            updated: number;
+                            requested: number;
+                            matched: number;
                         };
                     };
                 };
             };
-            /** @description Invalid or missing fields, an invalid FK reference, or an unknown/malformed filter field */
+            /** @description Invalid selector or fields, including a missing or misplaced `expected_count`, an invalid FK reference, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5368,6 +5375,8 @@ export interface operations {
             /** @description Streamed export */
             200: {
                 headers: {
+                    /** @description Number of transactions written to the export stream */
+                    "X-Exported-Count"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5375,7 +5384,7 @@ export interface operations {
                     "application/x-ndjson": string;
                 };
             };
-            /** @description Invalid format, or an unknown/malformed filter field */
+            /** @description Invalid selector or format, including a missing or misplaced `expected_count`, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8164,7 +8173,18 @@ export interface operations {
             content: {
                 "application/json": {
                     message: string;
-                    conversation_id?: string;
+                    /** Format: uuid */
+                    conversationId?: string | null;
+                    model?: string | null;
+                    /** @default true */
+                    useTools?: boolean;
+                    /** @default false */
+                    insightsPreCall?: boolean;
+                    /**
+                     * @description Regenerate the latest incomplete turn without appending its user message again. Requires conversationId.
+                     * @default false
+                     */
+                    retryLastTurn?: boolean;
                 };
             };
         };
@@ -8200,7 +8220,18 @@ export interface operations {
             content: {
                 "application/json": {
                     message: string;
-                    conversation_id?: string;
+                    /** Format: uuid */
+                    conversationId?: string | null;
+                    model?: string | null;
+                    /** @default true */
+                    useTools?: boolean;
+                    /** @default false */
+                    insightsPreCall?: boolean;
+                    /**
+                     * @description Regenerate the latest incomplete turn without appending its user message again. Requires conversationId.
+                     * @default false
+                     */
+                    retryLastTurn?: boolean;
                 };
             };
         };

@@ -23,7 +23,7 @@ export function InsightsNavBadge() {
     if (count === 0) return null;
 
     return (
-        <Badge variant="secondary" className="ml-auto shrink-0 px-1.5 py-0 text-[10px] leading-4">
+        <Badge variant="secondary" className="ml-auto shrink-0 px-1.5 py-0 text-2xs leading-4">
             {count}
         </Badge>
     );

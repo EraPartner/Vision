@@ -150,4 +150,12 @@ describe("useCurrencyFormatter (string path) — malformed currency degrades lik
         expect(result.current(1234.56, "EUR")).toBe("1.234,56\u00a0€");
         expect(result.current(1234.56, "USD", 0)).toBe("1.235\u00a0$");
     });
+
+    it("supports the signed options form without changing the legacy call shape", () => {
+        const { result } = renderHook(() => useCurrencyFormatter("EUR"));
+        expect(result.current(12, { signed: true, decimals: 0 })).toBe("+12\u00a0€");
+        expect(result.current(-12, { signed: true, decimals: 0 })).toBe("-12\u00a0€");
+        expect(result.current(0, { signed: true, decimals: 0 })).toBe("0\u00a0€");
+        expect(result.current(12, "USD", 0)).toBe("12\u00a0$");
+    });
 });

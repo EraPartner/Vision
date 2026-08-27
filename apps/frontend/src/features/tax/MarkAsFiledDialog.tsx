@@ -78,7 +78,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
+                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                         {t('common.cancel')}
                     </Button>
                     <Button type="submit" className="gap-1">

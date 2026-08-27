@@ -3,8 +3,8 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-26
-last_modified: 2026-08-26
+updated: 2026-08-27
+last_modified: 2026-08-27
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
 related_code: ["apps/frontend/src/hooks"]
@@ -18,60 +18,61 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 
 ### Settings & State Store Hooks (Phase 4)
 
-| Hook | Description | File |
-|------|-------------|------|
-| `useSettingsStore()` | Zustand store access (full state) | [[apps/frontend/src/stores/settingsStore.ts\|settingsStore.ts]] |
-| `useAppSettings()` | App settings slice with shallow selection | [[apps/frontend/src/contexts/AppSettingsContext.tsx\|AppSettingsContext.tsx]] |
-| `useSettings()` | Dashboard/exclusion settings slice | [[apps/frontend/src/contexts/SettingsContext.tsx\|SettingsContext.tsx]] |
-| `useTheme()` | Theme settings slice | [[apps/frontend/src/contexts/ThemeContext.tsx\|ThemeContext.tsx]] |
+| Hook                 | Description                               | File                                                                          |
+| -------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `useSettingsStore()` | Zustand store access (full state)         | [[apps/frontend/src/stores/settingsStore.ts\|settingsStore.ts]]               |
+| `useAppSettings()`   | App settings slice with shallow selection | [[apps/frontend/src/contexts/AppSettingsContext.tsx\|AppSettingsContext.tsx]] |
+| `useSettings()`      | Dashboard/exclusion settings slice        | [[apps/frontend/src/contexts/SettingsContext.tsx\|SettingsContext.tsx]]       |
+| `useTheme()`         | Theme settings slice                      | [[apps/frontend/src/contexts/ThemeContext.tsx\|ThemeContext.tsx]]             |
 
 ### Data Fetching Hooks
 
-| Hook | Description | File |
-|------|-------------|------|
-| `useTransactions()` | Transaction CRUD | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]] |
-| `useCategories()` | Category management | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
-| `useAllCategories(enabled?)` | The full category list as ONE shared cache entry (`['categories','all']`) — used by `useExcludedIds` and the Settings → Statistics exclusion picker; adopts the boot preload (2026-08-11) | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
-| `useRecipients()` | Recipient management | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]] |
-| `useBankAccounts()` | Distinct bank account IBANs (Phase 13) | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]] |
-| `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
-| `usePlannedPayments()` | Planned transactions | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]] |
-| `useUpcomingPlannedPayments()` | Shared "due next 7 days" query + dismissed-ID store (V11) | [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts\|useUpcomingPlannedPayments.ts]] |
-| `useStatistics()` | Analytics data | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]] |
-| `useSplits()` | Debt tracking | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]] |
-| `useSavedCharts()` | Saved chart configs | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]] |
+| Hook                           | Description                                                                                                                                                                               | File                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `useTransactions()`            | Transaction CRUD                                                                                                                                                                          | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]]                       |
+| `useCategories()`              | Category management                                                                                                                                                                       | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]]                           |
+| `useAllCategories(enabled?)`   | The full category list as ONE shared cache entry (`['categories','all']`) — used by `useExcludedIds` and the Settings → Statistics exclusion picker; adopts the boot preload (2026-08-11) | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]]                           |
+| `useRecipients()`              | Recipient management                                                                                                                                                                      | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]]                           |
+| `useBankAccounts()`            | Distinct bank account IBANs (Phase 13)                                                                                                                                                    | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]]                       |
+| `usePortfolio()`               | Investment portfolio                                                                                                                                                                      | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]]                             |
+| `usePlannedPayments()`         | Planned transactions                                                                                                                                                                      | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]]                 |
+| `useUpcomingPlannedPayments()` | Shared "due next 7 days" query + dismissed-ID store (V11)                                                                                                                                 | [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts\|useUpcomingPlannedPayments.ts]] |
+| `useStatistics()`              | Analytics data                                                                                                                                                                            | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]]                           |
+| `useSplits()`                  | Debt tracking                                                                                                                                                                             | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]]                                   |
+| `useSavedCharts()`             | Saved chart configs                                                                                                                                                                       | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]]                         |
 
 ### UI State Hooks
 
-| Hook | Description | File |
-|------|-------------|------|
-| `useWidgetVisibility()` | Widget visibility | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]] |
-| `useFilteredDashboardStats()` | Filtered dashboard data | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
-| `useExcludedIds(scope)` | Single source of truth for excluded category/recipient IDs (2026-05-29) | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]] |
-| `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
-| `useFormState()` | Generic typed form state with dirty tracking (Phase 4) | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]] |
-| `useTabParam(tabs, defaultTab, paramKey?)` | Binds page-level `<Tabs>` to a `?tab=` URL param, allow-list validated, replace-writes (Aug 2026) | [[apps/frontend/src/hooks/useTabParam.ts\|useTabParam.ts]] |
-| `useTaxYearParam()` | Mirrors `BelgianTaxProfileContext`'s `viewedYear` into `?year=` on `/tax` and `/portfolio/tax` (Aug 2026) | [[apps/frontend/src/hooks/useTaxYearParam.ts\|useTaxYearParam.ts]] |
+| Hook                                       | Description                                                                                               | File                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `useWidgetVisibility()`                    | Widget visibility                                                                                         | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]]             |
+| `useFilteredDashboardStats()`              | Filtered dashboard data                                                                                   | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
+| `useExcludedIds(scope)`                    | Single source of truth for excluded category/recipient IDs (2026-05-29)                                   | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]]                       |
+| `useConfirmDialog()`                       | Confirmation dialogs                                                                                      | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]]                 |
+| `useFormState()`                           | Generic typed form state with dirty tracking (Phase 4)                                                    | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]]                           |
+| `useTabParam(tabs, defaultTab, paramKey?)` | Binds page-level `<Tabs>` to a `?tab=` URL param, allow-list validated, replace-writes (Aug 2026)         | [[apps/frontend/src/hooks/useTabParam.ts\|useTabParam.ts]]                             |
+| `useSearchParamState(key, codec)`          | Typed URL state with validated reads, default omission, unrelated-param preservation, and replace-writes  | [[apps/frontend/src/hooks/useSearchParamState.ts\|useSearchParamState.ts]]             |
+| `useTaxYearParam()`                        | Mirrors `BelgianTaxProfileContext`'s `viewedYear` into `?year=` on `/tax` and `/portfolio/tax` (Aug 2026) | [[apps/frontend/src/hooks/useTaxYearParam.ts\|useTaxYearParam.ts]]                     |
 
 ### Utility Hooks
 
-| Hook | Description | File |
-|------|-------------|------|
+| Hook            | Description                                                                                                 | File                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `useDebounce()` | Debounce value changes; exports `SEARCH_DEBOUNCE_MS = 300` — the shared constant all search inputs must use | [[apps/frontend/src/hooks/useDebounce.ts\|useDebounce.ts]] |
-| `useIsMobile()` | Responsive breakpoint check | `use-mobile.tsx` |
+| `useIsMobile()` | Responsive breakpoint check                                                                                 | `use-mobile.tsx`                                           |
 
 ### Portfolio Hooks
 
-| Hook | Description | File |
-|------|-------------|------|
-| `usePortfolioTaxAdjustments()` | Per-investment tax/fee adjustments by year | `usePortfolioTaxAdjustments.ts` |
-| `usePortfolioPrefetch()` | Prefetch portfolio performance data with corrected queryKey | [[apps/frontend/src/hooks/usePortfolioPrefetch.ts\|usePortfolioPrefetch.ts]] |
-| `useFxAwarePnl(targetCurrency)` | Computes FX-aware realized/unrealized P&L for a holding using EUR-pool accumulation; returns stable callback (2026-06-28) | [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts\|useFxAwarePnl.ts]] |
+| Hook                            | Description                                                                                                               | File                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `usePortfolioTaxAdjustments()`  | Per-investment tax/fee adjustments by year                                                                                | `usePortfolioTaxAdjustments.ts`                                              |
+| `usePortfolioPrefetch()`        | Prefetch portfolio performance data with corrected queryKey                                                               | [[apps/frontend/src/hooks/usePortfolioPrefetch.ts\|usePortfolioPrefetch.ts]] |
+| `useFxAwarePnl(targetCurrency)` | Computes FX-aware realized/unrealized P&L for a holding using EUR-pool accumulation; returns stable callback (2026-06-28) | [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts\|useFxAwarePnl.ts]]     |
 
 ### Chart & Formatting Hooks
 
-| Hook | Description | File |
-|------|-------------|------|
+| Hook                          | Description                              | File                           |
+| ----------------------------- | ---------------------------------------- | ------------------------------ |
 | `useChartCurrencyFormatter()` | Currency formatting for chart components | `useChartCurrencyFormatter.ts` |
 
 ---
@@ -112,16 +113,16 @@ Hook for managing transactions.
 
 ```typescript
 const {
-  data,              // Transaction list
-  isLoading,        // Loading state
-  error,            // Error state
-  refetch,          // Refetch data
+  data, // Transaction list
+  isLoading, // Loading state
+  error, // Error state
+  refetch, // Refetch data
 } = useTransactions(options);
 
 // Mutations
 const createMutation = useCreateTransaction();
-const updateMutation = useUpdateTransaction();   // optimistic since ADR-070
-const deleteMutation = useDeleteTransaction();   // optimistic since ADR-070
+const updateMutation = useUpdateTransaction(); // optimistic since ADR-070
+const deleteMutation = useDeleteTransaction(); // optimistic since ADR-070
 ```
 
 ### Options
@@ -157,7 +158,7 @@ const { data, isLoading } = useTransactions({
 const create = useCreateTransaction();
 create.mutate({
   transaction_date: "2025-03-18",
-  amount: -50.00,
+  amount: -50.0,
   recipient_id: 1,
 });
 ```
@@ -204,18 +205,18 @@ Hook for managing investment portfolio.
 
 ```typescript
 const {
-  summaries,              // Investment summaries
-  totalPortfolioValue,   // Total value
-  totalGainLoss,         // Total gain/loss
-  totalRealizedGain,     // Realized gains
-  totalUnrealizedGain,   // Unrealized gains
-  refreshPrices,         // Refresh all prices
-  isRefreshingPrices,    // Refreshing state
+  summaries, // Investment summaries
+  totalPortfolioValue, // Total value
+  totalGainLoss, // Total gain/loss
+  totalRealizedGain, // Realized gains
+  totalUnrealizedGain, // Unrealized gains
+  refreshPrices, // Refresh all prices
+  isRefreshingPrices, // Refreshing state
   // Query state (2026-05-29) — allows pages to distinguish loading/error from empty
-  isLoading,             // boolean — true while initial fetch is in flight
-  isError,               // boolean — true when the fetch has failed
-  error,                 // Error | null
-  refetch,               // () => void — re-trigger the failed query
+  isLoading, // boolean — true while initial fetch is in flight
+  isError, // boolean — true when the fetch has failed
+  error, // Error | null
+  refetch, // () => void — re-trigger the failed query
 } = usePortfolio();
 
 // Mutations
@@ -292,7 +293,7 @@ interface UsePlannedPaymentsOptions {
 
 ## useUpcomingPlannedPayments (V11)
 
-Shared hook for "planned payments due in the next 7 days" that backs `UpcomingPaymentsNotification` (the app-level banner rendered by `AppLayout` on all pages).
+Shared hook for "planned payments due in the next 7 days" that backs `UpcomingPaymentsNotification`. `AppLayout` keeps the component mounted on every route for native badge synchronization; the visible banner is dashboard-only.
 
 > [!info] 2026-06-24 — SuggestionCard removed
 > `SuggestionCard` (the former Siri-suggestion-style dashboard widget) was deleted. `UpcomingPaymentsNotification` is now the sole consumer of this hook. The hook's behavior and API are unchanged.
@@ -313,21 +314,21 @@ Previously, `UpcomingPaymentsNotification` owned its own `useQuery` call for upc
 
 ```typescript
 const {
-  upcoming,        // PlannedPayment[] — all non-dismissed payments due within 7 days
-  allUpcoming,     // PlannedPayment[] — all (including dismissed) due within 7 days
-  dismissedIds,    // Set<number>
-  dismiss,         // (id: number) => void — dismiss a single payment
-  dismissAll,      // () => void — dismiss all currently visible IDs
-  isLoading,       // boolean
-  countSingle,     // string — i18n'd "1 upcoming payment"
-  countPlural,     // string — i18n'd "N upcoming payments"
+  upcoming, // PlannedPayment[] — all non-dismissed payments due within 7 days
+  allUpcoming, // PlannedPayment[] — all (including dismissed) due within 7 days
+  dismissedIds, // Set<number>
+  dismiss, // (id: number) => void — dismiss a single payment
+  dismissAll, // () => void — dismiss all currently visible IDs
+  isLoading, // boolean
+  countSingle, // string — i18n'd "1 upcoming payment"
+  countPlural, // string — i18n'd "N upcoming payments"
 } = useUpcomingPlannedPayments();
 ```
 
 ### Consumers
 
-| Consumer | How it uses the hook |
-|----------|---------------------|
+| Consumer                       | How it uses the hook                                                        |
+| ------------------------------ | --------------------------------------------------------------------------- |
 | `UpcomingPaymentsNotification` | Reads `upcoming`, calls `dismiss(id)` per item, `dismissAll` for the banner |
 
 ### Query Key
@@ -346,15 +347,15 @@ Hook for analytics/statistics data with per-graph exclusion support.
 
 ```typescript
 const {
-  data,              // Filtered statistics data
-  unfilteredData,    // Statistics without exclusions
-  getGraphData,      // (key: string) => StatisticsData | null
-  graphExclusions,   // Record<string, boolean>
+  data, // Filtered statistics data
+  unfilteredData, // Statistics without exclusions
+  getGraphData, // (key: string) => StatisticsData | null
+  graphExclusions, // Record<string, boolean>
   toggleGraphExclusion, // (key: string) => void
-  exclusionsApply,   // boolean
-  isLoading,         // Loading state
-  isError,           // Error state
-  error,             // Error object
+  exclusionsApply, // boolean
+  isLoading, // Loading state
+  isError, // Error state
+  error, // Error object
 } = useStatistics();
 ```
 
@@ -362,21 +363,21 @@ const {
 
 ```typescript
 interface StatisticsData {
-  monthlyData: MonthlyData[];      // Monthly income/expense
+  monthlyData: MonthlyData[]; // Monthly income/expense
   categoryPivot: CategoryPivot[]; // Category spending breakdown (mode-dependent)
   topRecipients: RecipientSpending[]; // Top spending recipients
   topRecipientsByYear: Record<string, RecipientSpending[]>; // Year key (or all) -> recipients
   yearlyComparison: YearlyComparison[]; // Year-over-year data
-  allPeriods: string[];           // Available periods (YYYY-MM)
-  allYears: number[];             // Available years
-  totalIncome: number;            // Total income
-  totalSpending: number;          // Total spending
+  allPeriods: string[]; // Available periods (YYYY-MM)
+  allYears: number[]; // Available years
+  totalIncome: number; // Total income
+  totalSpending: number; // Total spending
   averageMonthlySpending: number; // Average monthly spending
-  averageMonthlyIncome: number;   // Average monthly income
+  averageMonthlyIncome: number; // Average monthly income
 }
 
 interface CategoryPivot {
-  categoryName: string;  // "GENERAL: DETAIL" format
+  categoryName: string; // "GENERAL: DETAIL" format
   categoryId: number;
   months: Record<string, number>; // period -> total
   total: number;
@@ -404,10 +405,10 @@ interface CategoryPivot {
 const { data, getGraphData, toggleGraphExclusion } = useStatistics();
 
 // Get data for a specific graph
-const pieData = getGraphData('categoryPie');
+const pieData = getGraphData("categoryPie");
 
 // Toggle exclusions for a graph
-toggleGraphExclusion('categoryPie');
+toggleGraphExclusion("categoryPie");
 ```
 
 ---
@@ -433,11 +434,11 @@ const removeSplit = useDeleteSplit();
 
 All mutations provide toast notifications via `useLanguage()` i18n hook:
 
-| Mutation | Success Toast | Error Toast |
-|----------|---|---|
-| `useSettleSplit()` | `splits.settled` | `splits.settledFailed` |
-| `useSettleAllSplitsByRecipient()` | `splits.allSettled` | `splits.allSettledFailed` |
-| `useRecordPayment()` | `splits.paymentRecorded` | `splits.paymentFailed` |
+| Mutation                          | Success Toast            | Error Toast               |
+| --------------------------------- | ------------------------ | ------------------------- |
+| `useSettleSplit()`                | `splits.settled`         | `splits.settledFailed`    |
+| `useSettleAllSplitsByRecipient()` | `splits.allSettled`      | `splits.allSettledFailed` |
+| `useRecordPayment()`              | `splits.paymentRecorded` | `splits.paymentFailed`    |
 
 See [[docs/i18n/translations]] for key definitions.
 
@@ -451,11 +452,11 @@ Hook for managing widget visibility on pages.
 
 ```typescript
 const {
-  isVisible,         // (id: string) => boolean
-  setWidgetVisible,  // (id: string, visible: boolean) => void
-  setAllVisible,     // () => void
-  resetToDefaults,   // () => void
-  widgets,           // WidgetDefinition[]
+  isVisible, // (id: string) => boolean
+  setWidgetVisible, // (id: string, visible: boolean) => void
+  setAllVisible, // () => void
+  resetToDefaults, // () => void
+  widgets, // WidgetDefinition[]
 } = useWidgetVisibility(pageId, widgetDefinitions);
 ```
 
@@ -463,17 +464,20 @@ const {
 
 ```tsx
 const WIDGETS = [
-  { id: 'stats', label: 'Statistics' },
-  { id: 'chart', label: 'Chart' },
+  { id: "stats", label: "Statistics" },
+  { id: "chart", label: "Chart" },
 ];
 
 function Page() {
-  const { isVisible, setWidgetVisible } = useWidgetVisibility('page-id', WIDGETS);
-  
+  const { isVisible, setWidgetVisible } = useWidgetVisibility(
+    "page-id",
+    WIDGETS,
+  );
+
   return (
     <>
-      {isVisible('stats') && <StatsWidget />}
-      {isVisible('chart') && <ChartWidget />}
+      {isVisible("stats") && <StatsWidget />}
+      {isVisible("chart") && <ChartWidget />}
     </>
   );
 }
@@ -489,9 +493,9 @@ Hook for fetching dashboard statistics with exclusions.
 
 ```typescript
 const {
-  data,              // Stats data
-  isLoading,         // Loading
-  error,             // Error
+  data, // Stats data
+  isLoading, // Loading
+  error, // Error
 } = useFilteredDashboardStats();
 ```
 
@@ -521,11 +525,11 @@ Previously, exclusion ID resolution was duplicated across three call sites (`use
 
 ```typescript
 const {
-  excludedCategoryIds,   // number[] — settings exclusions + hidden categories, sorted asc
-  excludedRecipientIds,  // number[] — settings recipient exclusions, sorted asc
-  exclusionsApply,       // boolean — false when scope doesn't include this surface
-  isReady,               // boolean — true once category data resolved (or not needed)
-} = useExcludedIds(scope);  // scope: 'dashboard' | 'statistics'
+  excludedCategoryIds, // number[] — settings exclusions + hidden categories, sorted asc
+  excludedRecipientIds, // number[] — settings recipient exclusions, sorted asc
+  exclusionsApply, // boolean — false when scope doesn't include this surface
+  isReady, // boolean — true once category data resolved (or not needed)
+} = useExcludedIds(scope); // scope: 'dashboard' | 'statistics'
 ```
 
 ### Behavior
@@ -537,16 +541,16 @@ const {
 
 ### Consumers
 
-| Consumer | Before | After |
-|----------|--------|-------|
-| `useFilteredDashboardStats` | Fetched categories with limit 500, own cache key | Calls `useExcludedIds('dashboard')` |
-| `useStatistics` | Fetched categories with limit 1000, own cache key | Calls `useExcludedIds('statistics')` |
-| `DashboardPage` | Inline `useMemo` over `categoriesData` from separate query | Calls `useExcludedIds('dashboard')` |
+| Consumer                    | Before                                                     | After                                |
+| --------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| `useFilteredDashboardStats` | Fetched categories with limit 500, own cache key           | Calls `useExcludedIds('dashboard')`  |
+| `useStatistics`             | Fetched categories with limit 1000, own cache key          | Calls `useExcludedIds('statistics')` |
+| `DashboardPage`             | Inline `useMemo` over `categoriesData` from separate query | Calls `useExcludedIds('dashboard')`  |
 
 ### Constants
 
 ```typescript
-export const CATEGORY_FETCH_LIMIT = 1000;  // shared across all consumers
+export const CATEGORY_FETCH_LIMIT = 1000; // shared across all consumers
 ```
 
 ---
@@ -587,10 +591,9 @@ All data hooks use [TanStack Query](https://tanstack.com/query) for:
 
 ```typescript
 // Example query keys
-['transactions', { limit: 50 }]
-['categories', 'all']
-['portfolio']
-['planned-payments', { upcoming: true }]
+["transactions", { limit: 50 }][("categories", "all")]["portfolio"][
+  ("planned-payments", { upcoming: true })
+];
 ```
 
 ---
@@ -634,14 +637,14 @@ Hook for managing per-investment tax and fee adjustments by tax year. Used by th
 
 ```typescript
 const {
-  isLoading,           // Loading state (waiting for preloaded setting)
-  adjustments,         // Full adjustment map: { "year:investmentId": { taxes, fees } }
-  getAdjustment,       // (taxYear, investmentId) => { taxes, fees }
-  setAdjustment,       // (taxYear, investmentId, { taxes, fees }) => void
-  setManyForYear,      // (taxYear, { investmentId: { taxes, fees } }) => void
-  saveManyForYear,     // (taxYear, { investmentId: { taxes, fees } }) => Promise<void>
-  saveAdjustments,     // (next?) => Promise<void>
-  byYear,              // (taxYear) => { investmentId: { taxes, fees } }
+  isLoading, // Loading state (waiting for preloaded setting)
+  adjustments, // Full adjustment map: { "year:investmentId": { taxes, fees } }
+  getAdjustment, // (taxYear, investmentId) => { taxes, fees }
+  setAdjustment, // (taxYear, investmentId, { taxes, fees }) => void
+  setManyForYear, // (taxYear, { investmentId: { taxes, fees } }) => void
+  saveManyForYear, // (taxYear, { investmentId: { taxes, fees } }) => Promise<void>
+  saveAdjustments, // (next?) => Promise<void>
+  byYear, // (taxYear) => { investmentId: { taxes, fees } }
 } = usePortfolioTaxAdjustments();
 ```
 
@@ -680,14 +683,14 @@ Input sanitization and XSS prevention utilities. These are pure functions (not R
 
 **Code**: [[apps/frontend/src/utils/sanitize.ts]]
 
-| Function | Description |
-|----------|-------------|
-| `escapeHtml(str: string)` | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) to prevent XSS when rendering user content as text |
-| `stripHtml(str: string)` | Removes all HTML tags from a string using regex |
-| `sanitizeFilename(filename: string)` | Sanitizes filenames: replaces non-alphanumeric chars with `_`, collapses dots, prevents leading dots, truncates to 255 chars |
-| `sanitizeInput(input: string, maxLength?: number)` | Validates and sanitizes string input: trims whitespace, strips HTML tags, limits to max length (default 1000) |
-| `isValidUrl(url: string)` | Validates that a string is a safe URL (http/https protocol only) |
-| `sanitizeNumber(value: string | number)` | Sanitizes numeric input: returns `NaN` for non-numeric strings, passes through valid numbers |
+| Function                                           | Description                                                                                                                  |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `escapeHtml(str: string)`                          | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) to prevent XSS when rendering user content as text                 |
+| `stripHtml(str: string)`                           | Removes all HTML tags from a string using regex                                                                              |
+| `sanitizeFilename(filename: string)`               | Sanitizes filenames: replaces non-alphanumeric chars with `_`, collapses dots, prevents leading dots, truncates to 255 chars |
+| `sanitizeInput(input: string, maxLength?: number)` | Validates and sanitizes string input: trims whitespace, strips HTML tags, limits to max length (default 1000)                |
+| `isValidUrl(url: string)`                          | Validates that a string is a safe URL (http/https protocol only)                                                             |
+| `sanitizeNumber(value: string                      | number)`                                                                                                                     | Sanitizes numeric input: returns `NaN` for non-numeric strings, passes through valid numbers |
 
 ### statisticsProcessing.ts
 
@@ -695,10 +698,10 @@ Shared processing module for statistics aggregation. `useStatistics` delegates p
 
 **Code**: [[apps/frontend/src/features/statistics/statisticsUtils.ts]]
 
-| Export | Description |
-|--------|-------------|
-| `aggregatePivotData()` | Computes pivot table aggregations for the Statistics page category/recipient breakdowns |
-| `aggregateRecipientYearly()` | Computes yearly aggregations per recipient for the Recipient Insights view |
+| Export                       | Description                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| `aggregatePivotData()`       | Computes pivot table aggregations for the Statistics page category/recipient breakdowns |
+| `aggregateRecipientYearly()` | Computes yearly aggregations per recipient for the Recipient Insights view              |
 
 ### currency.ts
 
@@ -706,17 +709,39 @@ Currency formatting and parsing utilities.
 
 **Code**: [[apps/frontend/src/utils/currency.ts]]
 
-| Function | Description |
-|----------|-------------|
-| `formatCurrency(amount, currency?, locale?)` | Formats a number as currency string using `Intl.NumberFormat` |
-| `getCurrencyFormatDefaults()` | Returns the configured default currency, locale, and fraction digits |
-| `numberFormatToLocale(appSettings)` | Derives the locale string from app settings for number formatting |
-| `parseLocaleNumber(input)` | Intelligently parses locale-aware numeric strings (comma or period decimal/thousands) back to a number (see [[docs/reference/code-patterns#Number Parsing Pattern|code-patterns]]) |
-| `getCurrencySymbol(currencyCode)` | Returns currency symbol for ISO currency code |
-| `formatCurrencyCompact(amount, currency?, locale?, digits?)` | Returns compact/full text, compaction state, and display parts |
-| `formatCurrencyAxisCompact(amount, currency, locale)` | Returns a width-bounded chart-axis currency label |
+| Function                                                              | Description                                                                                                                                                       |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `formatCurrency(amount, currency?, locale?, digits?, signed?)`        | Formats a currency string; `signed` uses the house `exceptZero` convention                                                                                        |
+| `getCurrencyFormatDefaults()`                                         | Returns the configured default currency, locale, and fraction digits                                                                                              |
+| `numberFormatToLocale(appSettings)`                                   | Derives the locale string from app settings for number formatting                                                                                                 |
+| `parseLocaleNumber(input)`                                            | Intelligently parses locale-aware numeric strings (comma or period decimal/thousands) back to a number (see [[docs/reference/code-patterns#Number Parsing Pattern | code-patterns]]) |
+| `getCurrencySymbol(currencyCode)`                                     | Returns currency symbol for ISO currency code                                                                                                                     |
+| `formatCurrencyCompact(amount, currency?, locale?, digits?, signed?)` | Returns compact/full text, compaction state, and display parts; the optional sign applies to both forms                                                           |
+| `formatCurrencyAxisCompact(amount, currency, locale)`                 | Returns a width-bounded chart-axis currency label                                                                                                                 |
 
 ---
+
+---
+
+## useCurrencyFormatter
+
+The string formatter keeps its legacy positional form for existing tables and
+also accepts an options object when a display needs an explicit sign:
+
+```typescript
+const fmt = useCurrencyFormatter("EUR");
+
+fmt(value); // app digits, unsigned
+fmt(value, "USD", 0); // legacy currency/digits override
+fmt(delta, { currency: "USD", decimals: 2, signed: true });
+```
+
+`signed: true` maps to `Intl.NumberFormat`'s `signDisplay: "exceptZero"`.
+Positive and negative non-zero values therefore receive a locale-correct sign,
+while exact or rounded zero remains unsigned. The formatter cache includes the
+sign mode, so signed and unsigned instances cannot alias each other.
+
+**Code**: [[apps/frontend/src/hooks/useCurrencyFormatter.ts]]
 
 ---
 
@@ -728,12 +753,12 @@ Shared hook for currency formatting in chart components. Eliminates duplicated `
 
 ```typescript
 const {
-  formatCurrency,     // (val: number) => string
-  formatCompact,      // (val: number) => CompactFormatResult
-  formatAxisCompact,  // (val: number) => string
-  currencySymbol,     // string (e.g. "€")
-  locale,             // string (e.g. "en-US")
-  currency,           // string (e.g. "EUR")
+  formatCurrency, // (val: number) => string
+  formatCompact, // (val: number, signed?: boolean) => CompactFormatResult
+  formatAxisCompact, // (val: number) => string
+  currencySymbol, // string (e.g. "€")
+  locale, // string (e.g. "en-US")
+  currency, // string (e.g. "EUR")
 } = useChartCurrencyFormatter();
 ```
 
@@ -742,7 +767,7 @@ const {
 - Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
 - Derives locale from `AppSettingsContext.numberFormat`
 - Returns `formatCurrency()` function formatted with user's decimal place preference
-- Returns compact headline and bounded axis-label formatters bound to the same settings
+- Returns compact headline and bounded axis-label formatters bound to the same settings; `formatCompact(value, true)` signs both compact and full text
 - Respects app-wide currency and locale settings
 - Degrades malformed formatter inputs to bare numeric text instead of throwing during render
 
@@ -753,7 +778,7 @@ import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
 function MyChart() {
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
-  
+
   return (
     <BarChart
       data={data}
@@ -767,6 +792,7 @@ function MyChart() {
 ### Used By
 
 All Statistics page sub-components:
+
 - `MonthlyChart`
 - `NetTrendChart`
 - `CategoryPieChart`
@@ -788,9 +814,9 @@ Generic typed form state hook for managing form field changes with dirty trackin
 
 ```typescript
 const { form, setField, setForm, reset, isDirty } = useFormState({
-  name: '',
-  email: '',
-  notes: '',
+  name: "",
+  email: "",
+  notes: "",
 });
 ```
 
@@ -798,11 +824,11 @@ const { form, setField, setForm, reset, isDirty } = useFormState({
 
 ```typescript
 interface UseFormStateReturn<T> {
-  form: T;                                          // Current form values
-  setField: <K extends keyof T>(field: K, value: T[K]) => void;  // Update single field
+  form: T; // Current form values
+  setField: <K extends keyof T>(field: K, value: T[K]) => void; // Update single field
   setForm: React.Dispatch<React.SetStateAction<T>>; // Replace entire form
-  reset: () => void;                                // Reset to initial values
-  isDirty: boolean;                                 // Shallow equality check vs. initial
+  reset: () => void; // Reset to initial values
+  isDirty: boolean; // Shallow equality check vs. initial
 }
 ```
 
@@ -817,15 +843,15 @@ interface UseFormStateReturn<T> {
 
 ```tsx
 const { form, setField, reset, isDirty } = useFormState({
-  name: '',
-  email: '',
+  name: "",
+  email: "",
 });
 
 return (
   <>
     <Input
       value={form.name}
-      onChange={(e) => setField('name', e.target.value)}
+      onChange={(e) => setField("name", e.target.value)}
     />
     <button onClick={reset} disabled={!isDirty}>
       Reset
@@ -858,17 +884,15 @@ const settings = useSettingsStore(
   useShallow((s) => ({
     appSettings: s.appSettings,
     isLoading: s.isAppSettingsLoading,
-  }))
+  })),
 );
 
 // Calling actions
-const { updateAppSettings, setTheme, toggleTheme } = useSettingsStore(
-  (s) => ({
-    updateAppSettings: s.updateAppSettings,
-    setTheme: s.setTheme,
-    toggleTheme: s.toggleTheme,
-  })
-);
+const { updateAppSettings, setTheme, toggleTheme } = useSettingsStore((s) => ({
+  updateAppSettings: s.updateAppSettings,
+  setTheme: s.setTheme,
+  toggleTheme: s.toggleTheme,
+}));
 ```
 
 ### Store Shape
@@ -887,8 +911,8 @@ interface SettingsStore {
   updateDashboardSettings: (updates: Partial<DashboardSettings>) => void;
 
   // Theme
-  theme: 'dark' | 'light';
-  themeMode: 'light' | 'dark' | 'system' | 'schedule';
+  theme: "dark" | "light";
+  themeMode: "light" | "dark" | "system" | "schedule";
   themeSchedule: { lightFrom: string; darkFrom: string };
   themeVariant: ThemeVariant;
   isThemeLoaded: boolean;
@@ -919,7 +943,10 @@ Shared hook for computing FX-aware realized/unrealized P&L on a portfolio holdin
 ### API
 
 ```typescript
-import { useFxAwarePnl, type FxAwarePnl } from '@/hooks/portfolio/useFxAwarePnl';
+import {
+  useFxAwarePnl,
+  type FxAwarePnl,
+} from "@/hooks/portfolio/useFxAwarePnl";
 
 const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
 const pnl: FxAwarePnl = computeFxAwarePnl(holding);
@@ -927,7 +954,7 @@ const pnl: FxAwarePnl = computeFxAwarePnl(holding);
 
 ```typescript
 interface FxAwarePnl {
-  realizedTarget: number;   // Realized P&L in targetCurrency
+  realizedTarget: number; // Realized P&L in targetCurrency
   unrealizedTarget: number; // Unrealized P&L in targetCurrency
   unrealizedPercent: number; // Unrealized return %
 }
@@ -954,7 +981,9 @@ const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
 const isForeign = holding.currency !== targetCurrency;
 const pnl = isForeign ? computeFxAwarePnl(holding) : undefined;
 
-{pnl && <FxAwarePnlRows pnl={pnl} currency={targetCurrency} />}
+{
+  pnl && <FxAwarePnlRows pnl={pnl} currency={targetCurrency} />;
+}
 ```
 
 Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
@@ -974,21 +1003,24 @@ Prefetches portfolio performance metrics and snapshots using React Query to popu
 Fixed queryKey mismatch that prevented proper cache reuse:
 
 **Before (Broken):**
+
 ```typescript
-queryKey: ["portfolio-performance", currency]
+queryKey: ["portfolio-performance", currency];
 // Missing the "all" period, mismatches Performance page query
 ```
 
 **After (Correct):**
+
 ```typescript
-queryKey: ["portfolio-performance", currency, "all"]
+queryKey: ["portfolio-performance", currency, "all"];
 queryFn: async () => {
-  const response = await getPortfolioPerformance(currency, { period: "all" })
-  return response.data
-}
+  const response = await getPortfolioPerformance(currency, { period: "all" });
+  return response.data;
+};
 ```
 
-**Impact:** 
+**Impact:**
+
 - Performance page makes same query with `queryKey: ["portfolio-performance", currency, "all"]`
 - Now shares cached data from prefetch instead of making duplicate API call
 - Reduces network traffic and improves perceived performance
@@ -1021,12 +1053,19 @@ function useTabParam<T extends string>(
 ### Usage
 
 ```tsx
-const TABS = ["overview", "categories", "recipients", "yearly", "flow", "custom"] as const;
+const TABS = [
+  "overview",
+  "categories",
+  "recipients",
+  "yearly",
+  "flow",
+  "custom",
+] as const;
 const [activeTab, setActiveTab] = useTabParam(TABS, "overview");
 
 <Tabs value={activeTab} onValueChange={setActiveTab}>
   ...
-</Tabs>
+</Tabs>;
 ```
 
 ### Adoption

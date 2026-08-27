@@ -3,12 +3,44 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-08-26
-last_modified: 2026-08-26
-tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
+updated: 2026-08-27
+last_modified: 2026-08-27
+tags:
+  [
+    feature,
+    ai,
+    chat,
+    ollama,
+    llm,
+    natural-language,
+    frontend,
+    backend,
+    phase-1,
+    phase-10,
+  ]
 description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
-aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
-related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/repositories/aiChatRepository.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/frontend/src/pages/AIChatPage.tsx", "apps/frontend/src/features/ai-chat/", "apps/frontend/src/hooks/useAIChat.ts", "apps/frontend/src/lib/aiChatStreamStore.ts", "apps/node-backend/tests/aiChatService.test.js", "apps/node-backend/tests/aiChatTools.test.js"]
+aliases:
+  [
+    ai-chat,
+    ai chat,
+    ollama-chat,
+    natural-language-queries,
+    financial chat,
+    llm chat,
+  ]
+related_code:
+  [
+    "apps/node-backend/src/routes/ai.js",
+    "apps/node-backend/src/services/aiChatService.js",
+    "apps/node-backend/src/repositories/aiChatRepository.js",
+    "apps/node-backend/src/integrations/ollama/client.js",
+    "apps/frontend/src/pages/AIChatPage.tsx",
+    "apps/frontend/src/features/ai-chat/",
+    "apps/frontend/src/hooks/useAIChat.ts",
+    "apps/frontend/src/lib/aiChatStreamStore.ts",
+    "apps/node-backend/tests/aiChatService.test.js",
+    "apps/node-backend/tests/aiChatTools.test.js",
+  ]
 ---
 
 # Feature: AI Chat
@@ -34,6 +66,8 @@ related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/serv
 - **URL-backed conversation selection** — conversation ID persists in URL search param `?c=<id>`, enabling deep-linking and restoring selection on page reload.
 - Accessible globally via a sidebar entry above the Budget/Portfolio workspace switcher.
 - SSE token streaming for progressive response display.
+- Interrupted, stopped, and stalled streams retain their partial answer, label
+  its state, and offer a one-click retry of the same request.
 - Graceful offline handling when Ollama is unreachable.
 
 ## Architecture
@@ -64,10 +98,10 @@ Backend /api/ai
 **aiChatStreamStore** — module-level singleton holding in-flight chat streams, keyed by conversation ID. Streams are **not tied to React component lifecycle**; navigating away does not abort the stream.
 
 - **subscribe(listener)** — for `useSyncExternalStore` subscriptions; triggers re-render on state changes.
-- **getState(conversationId)** — snapshot of a stream's state: `{isStreaming, assistantDraft, toolMessages, userMessage, error}`.
+- **getState(conversationId)** — snapshot of a stream's state: `{isStreaming, status, assistantDraft, toolMessages, userMessage, error, lastRequest}`. `status` distinguishes active, manually stopped, interrupted, and inactivity-timeout drafts.
 - **getActiveConversationIds()** — readonly list of conversation IDs with active streams; used by sidebar to show live indicators.
 - **send(body, queryClient, onError)** — orchestrates SSE request: starts stream, accumulates events, on completion invalidates TanStack Query cache so persisted messages hydrate.
-- **cancel(conversationId)** — aborts in-flight fetch and clears streaming flag.
+- **cancel(conversationId)** — aborts the in-flight fetch, marks the retained draft as stopped, and suppresses an error toast for this user-requested action.
 - **clear(conversationId)** — removes stream from store (called after completion when cache is hydrated).
 
 **useSendChatMessage(conversationId)** — thin subscriber on top of `aiChatStreamStore` via `useSyncExternalStore`; returns `{send, cancel, ...state}`.
@@ -76,28 +110,28 @@ Backend /api/ai
 
 ### Components Involved
 
-| Component | Type | Description |
-|-----------|------|-------------|
-| `AIChatPage` | Frontend Page | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount |
-| `ChatConversationList` | Frontend Component | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()` |
-| `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
-| `ChatBubble` | Frontend Component | User vs assistant styling |
-| `ChatComposer` | Frontend Component | Textarea, send, model selector, tools toggle (wrench icon) |
-| `ToolResultCard` | Frontend Component | Renders tool payload as table or Recharts (line/bar/pie) with semantic, tabular numeric axis labels |
-| `OllamaStatusBanner` | Frontend Component | Unreachable warning + setup guide link |
-| `aiChatStreamStore` | Frontend Store | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount |
-| `useAIChat` | Frontend Hooks | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useStreamingConversationIds` |
-| `useSendChatMessage` | Frontend Hook | Subscribes to stream state via `useSyncExternalStore`; returns `{send, cancel, isStreaming, assistantDraft, userMessage, toolMessages, error}` |
-| `useStreamingConversationIds` | Frontend Hook | Returns readonly list of conversation IDs with active streams; used by sidebar indicator |
-| `useOllamaStatus` | Frontend Hook | Health + model list |
-| `/api/ai/chat` | API Endpoint | SSE stream for chat exchanges; accepts optional `useTools` in body |
-| `/api/ai/conversations` | API Endpoint | Conversation CRUD; POST creates empty conversation before streaming (avoids PENDING bookkeeping) |
-| `/api/ai/status` | API Endpoint | Ollama reachability |
-| `/api/ai/models` | API Endpoint | Available models from Ollama |
-| `aiChatService.runChatTurn` | Backend Service | Prompt build, tool loop (respects `useTools`), persistence |
-| `ollamaClient` | Backend Integration | HTTP client, streaming, abort-aware |
-| `aiChat/tools/*` | Backend Tool Registry | Pre-built safe queries over existing repositories |
-| `aiChatRepository` | Backend Repository | `ai_conversations` + `ai_messages` CRUD |
+| Component                     | Type                  | Description                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AIChatPage`                  | Frontend Page         | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount                                                                                                                                                           |
+| `ChatConversationList`        | Frontend Component    | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()`                                                                                                                                                                                                                 |
+| `ChatMessageList`             | Frontend Component    | Renders ordered messages; shows thinking indicator when streaming w/no content yet; retains and labels stopped/interrupted/timed-out drafts with Retry; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
+| `ChatBubble`                  | Frontend Component    | User vs assistant styling                                                                                                                                                                                                                                                                                                                |
+| `ChatComposer`                | Frontend Component    | Textarea, send, model selector, tools toggle (wrench icon)                                                                                                                                                                                                                                                                               |
+| `ToolResultCard`              | Frontend Component    | Renders tool payload as table or Recharts (line/bar/pie) with semantic, tabular numeric axis labels                                                                                                                                                                                                                                      |
+| `OllamaStatusBanner`          | Frontend Component    | Unreachable warning + setup guide link                                                                                                                                                                                                                                                                                                   |
+| `aiChatStreamStore`           | Frontend Store        | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount                                                                                                                                                                                                                                    |
+| `useAIChat`                   | Frontend Hooks        | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useStreamingConversationIds`                                                                                                                                                                    |
+| `useSendChatMessage`          | Frontend Hook         | Subscribes to stream state via `useSyncExternalStore`; returns `{send, cancel, isStreaming, status, assistantDraft, userMessage, toolMessages, error, lastRequest}`                                                                                                                                                                      |
+| `useStreamingConversationIds` | Frontend Hook         | Returns readonly list of conversation IDs with active streams; used by sidebar indicator                                                                                                                                                                                                                                                 |
+| `useOllamaStatus`             | Frontend Hook         | Health + model list                                                                                                                                                                                                                                                                                                                      |
+| `/api/ai/chat`                | API Endpoint          | SSE stream for chat exchanges; accepts optional `useTools` in body                                                                                                                                                                                                                                                                       |
+| `/api/ai/conversations`       | API Endpoint          | Conversation CRUD; POST creates empty conversation before streaming (avoids PENDING bookkeeping)                                                                                                                                                                                                                                         |
+| `/api/ai/status`              | API Endpoint          | Ollama reachability                                                                                                                                                                                                                                                                                                                      |
+| `/api/ai/models`              | API Endpoint          | Available models from Ollama                                                                                                                                                                                                                                                                                                             |
+| `aiChatService.runChatTurn`   | Backend Service       | Prompt build, tool loop (respects `useTools`), persistence                                                                                                                                                                                                                                                                               |
+| `ollamaClient`                | Backend Integration   | HTTP client, streaming, abort-aware                                                                                                                                                                                                                                                                                                      |
+| `aiChat/tools/*`              | Backend Tool Registry | Pre-built safe queries over existing repositories                                                                                                                                                                                                                                                                                        |
+| `aiChatRepository`            | Backend Repository    | `ai_conversations` + `ai_messages` CRUD                                                                                                                                                                                                                                                                                                  |
 
 ## Data Model
 
@@ -110,13 +144,13 @@ Index: `ai_messages(conversation_id, created_at)` for ordered retrieval.
 
 ### API Endpoints
 
-| Endpoint | Methods | Description |
-|----------|---------|-------------|
-| `/api/ai/status` | GET | Ollama health + configured URL |
-| `/api/ai/models` | GET | List available models from the configured Ollama instance |
-| `/api/ai/conversations` | GET, POST | List conversations; create a new one |
-| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete |
-| `/api/ai/chat` | POST (SSE) | Stream events: `token`, `tool_call`, `tool_result`, `done`, `error` |
+| Endpoint                    | Methods            | Description                                                         |
+| --------------------------- | ------------------ | ------------------------------------------------------------------- |
+| `/api/ai/status`            | GET                | Ollama health + configured URL                                      |
+| `/api/ai/models`            | GET                | List available models from the configured Ollama instance           |
+| `/api/ai/conversations`     | GET, POST          | List conversations; create a new one                                |
+| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete                               |
+| `/api/ai/chat`              | POST (SSE)         | Stream events: `token`, `tool_call`, `tool_result`, `done`, `error` |
 
 ## Tool Registry (30 tools across 6 domains)
 
@@ -177,28 +211,29 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 ### Interactions
 
-| Action | Trigger | Result |
-|--------|---------|--------|
-| New conversation | Click "New chat" | POST `/api/ai/conversations` creates empty conversation; sets URL param `?c=<id>` and selects it |
-| Auto-title | Send first message to new conversation | Backend renames conversation from `"New conversation"` to first message (≤60 chars, truncated) |
-| Send message | Enter in composer (Shift+Enter = newline) | POST `/api/ai/conversations` if no selection; then POST `/api/ai/chat/stream` (SSE). Stream runs in background store and survives page navigation. Sidebar shows pulsing indicator on active conversation. On completion, TanStack Query cache invalidated so persisted messages hydrate. |
-| Abort generation | Click "Stop" during streaming | Calls `cancel()` on store; aborts fetch via stored abort controller; server stream ended but incomplete message persisted as aborted |
-| Rename conversation | Double-click title or pencil icon | PATCH `/api/ai/conversations/:id` |
-| Delete conversation | Trash icon + confirm | DELETE cascades messages; if selected, clears URL param and `selectedId` **before** mutation to prevent race-condition refetch 404s |
-| Switch model | Select in composer dropdown | Persists on conversation; next send uses new model |
-| Toggle tools | Click wrench icon in composer | Toggles `useTools` state; when OFF, next sends pass `useTools: false` to backend, disabling tool-calling |
-| Switch conversation | Click in list | Updates URL param `?c=<id>` (or removes if deselecting); re-subscribes to new conversation's stream state; prior stream continues running in background |
-| Navigate away & return | Browser back/forward or sidebar nav | URL param `?c=<id>` restored; if stream was in-flight, sidebar indicator still visible; auto-selects stream (effect watches `streamingIds`) so user can see it complete |
-| Deep-link to conversation | Open `?c=<id>` in new tab/bookmark | Page loads, hydrates URL state, fetches conversation detail, shows messages + any in-flight streaming |
+| Action                    | Trigger                                                        | Result                                                                                                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New conversation          | Click "New chat"                                               | POST `/api/ai/conversations` creates empty conversation; sets URL param `?c=<id>` and selects it                                                                                                                                                                                          |
+| Auto-title                | Send first message to new conversation                         | Backend renames conversation from `"New conversation"` to first message (≤60 chars, truncated)                                                                                                                                                                                            |
+| Send message              | Enter in composer (Shift+Enter = newline)                      | POST `/api/ai/conversations` if no selection; then POST `/api/ai/chat/stream` (SSE). Stream runs in background store and survives page navigation. Sidebar shows pulsing indicator on active conversation. On completion, TanStack Query cache invalidated so persisted messages hydrate. |
+| Abort generation          | Click "Stop" during streaming                                  | Calls `cancel()` on store; aborts fetch via stored abort controller; keeps the partial client draft, labels it stopped, and offers Retry without showing an error toast                                                                                                                   |
+| Retry incomplete response | Click "Retry" under a stopped, interrupted, or timed-out draft | Regenerates the latest incomplete turn with the same model and tool settings. The server reuses the persisted user row instead of appending the prompt again; the new generation replaces the retained draft.                                                                             |
+| Rename conversation       | Double-click title or pencil icon                              | PATCH `/api/ai/conversations/:id`                                                                                                                                                                                                                                                         |
+| Delete conversation       | Trash icon + confirm                                           | DELETE cascades messages; if selected, clears URL param and `selectedId` **before** mutation to prevent race-condition refetch 404s                                                                                                                                                       |
+| Switch model              | Select in composer dropdown                                    | Persists on conversation; next send uses new model                                                                                                                                                                                                                                        |
+| Toggle tools              | Click wrench icon in composer                                  | Toggles `useTools` state; when OFF, next sends pass `useTools: false` to backend, disabling tool-calling                                                                                                                                                                                  |
+| Switch conversation       | Click in list                                                  | Updates URL param `?c=<id>` (or removes if deselecting); re-subscribes to new conversation's stream state; prior stream continues running in background                                                                                                                                   |
+| Navigate away & return    | Browser back/forward or sidebar nav                            | URL param `?c=<id>` restored; if stream was in-flight, sidebar indicator still visible; auto-selects stream (effect watches `streamingIds`) so user can see it complete                                                                                                                   |
+| Deep-link to conversation | Open `?c=<id>` in new tab/bookmark                             | Page loads, hydrates URL state, fetches conversation detail, shows messages + any in-flight streaming                                                                                                                                                                                     |
 
 ## Configuration
 
 ### Settings
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `aiChat.defaultModel` | string | `llama3.1:8b` | Model pre-selected on new conversations |
-| `aiChat.ollamaUrl` | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
+| Setting               | Type   | Default                  | Description                                              |
+| --------------------- | ------ | ------------------------ | -------------------------------------------------------- |
+| `aiChat.defaultModel` | string | `llama3.1:8b`            | Model pre-selected on new conversations                  |
+| `aiChat.ollamaUrl`    | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
 
 ### Environment Variables
 
@@ -223,7 +258,11 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
 - **LLM emits invalid args** — `ToolValidationError` returned as a `tool` error `{code: 'VALIDATION_ERROR', field, message}` naming the field and the received value; LLM retries with corrected args (up to 2 retries before giving up).
 - **Tool failure without detail** — `ToolResultCard` uses the localized `aiChat.toolFailed` fallback instead of hardcoded English.
-- **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` handler detects the abort and marks the assistant message as aborted in the DB; client discards partial preview and clears streaming flag.
+- **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` stops provider work and does not persist an incomplete assistant row. The client retains any partial preview, labels the turn stopped, and offers Retry. Cancellation does not produce an error toast.
+- **Connection drops mid-stream** — the store retains the partial preview, labels it interrupted, shows the normal localized error toast, and offers Retry with the original request body.
+- **Hung-open connection** — a client watchdog aborts after 120 seconds without a data-bearing Server-Sent Events (SSE) frame. Every parsed data frame, including an unrecognized forward-compatible event, resets the inactivity window. The draft is labeled timed out and can be retried.
+- **Retry semantics** — `retryLastTurn: true` requires an existing conversation. Model turns are serialized per conversation, so a retry submitted while the original request is finishing waits and then re-reads persisted history. The service finds the latest persisted user row, rebuilds model context from before that turn, and does not append or re-emit the user row. If an assistant response exists by then, it rejects the retry with `TURN_ALREADY_COMPLETE`; the frontend refreshes the transcript and retires the frozen draft so the completed persisted answer is shown.
+- **Late completion after cancel or retry** — a per-conversation generation counter ignores events and promise rejection from an older request, so stale work cannot overwrite the newer stream state.
 - **Rate limit tripped** — 429 with `Retry-After`; composer shows cooldown hint.
 - **Long tool result** — capped to 500 rows; LLM informed in `tool_result.meta.truncated = true` so it can mention the cap.
 - **Schema drift** — tool integration tests in CI catch repository signature changes before merge.
@@ -234,11 +273,13 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 ## Debugging
 
 **Backend logs** (debug level):
+
 - `[aiChat] iteration start` — logged per tool-loop iteration; includes conversation ID, iteration count, model, message count, `useTools` flag, and tool schema count.
 - `[aiChat] iteration ollama returned` — after Ollama succeeds; includes ms elapsed, tool call count, and content length.
 - `[aiChat] iteration ollama failed` — on Ollama error; includes ms elapsed, error code, and message.
 
 **Frontend logs** (browser console, debug level):
+
 - `[ai] streamChat start` — sent when beginning SSE fetch.
 - `[ai] streamChat response` — logged on stream open with event target details.
 - `[ai] streamChat event` — per SSE event (user_message, token, tool_call, tool_result, done, error).

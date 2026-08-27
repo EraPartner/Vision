@@ -4,7 +4,7 @@ import {cva, type VariantProps} from "class-variance-authority";
 import {cn} from "@/lib/utils";
 
 const badgeVariants = cva(
-    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em] transition-[background-color,color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+"inline-flex items-center rounded-full border px-2.5 py-0.5 eyebrow transition-[background-color,color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
     {
         variants: {
             variant: {
@@ -22,7 +22,7 @@ const badgeVariants = cva(
                 // Amber "needs attention, not broken" tone — same palette the
                 // merge/close warning callouts already use (no new colours).
                 warning:
-                    "border-amber-500/40 bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 dark:text-amber-500",
+                    "border-warning/40 bg-warning/15 text-warning hover:bg-warning/20",
                 // Neutral "what kind of thing is this" pill on a solid muted
                 // ground — the flat counterpart to `secondary`'s translucent
                 // glass tone, for dense table/inspector rows.

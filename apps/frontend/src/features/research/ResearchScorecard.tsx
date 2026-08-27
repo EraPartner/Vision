@@ -64,7 +64,7 @@ export function ScorecardPanel({ scorecard }: { scorecard: ResearchScorecard }) 
         <div className="ml-auto flex gap-1.5">
           {(["risk", "warn", "caution"] as ScorecardSeverity[]).map((sev) =>
             scorecard.counts[sev] > 0 ? (
-              <Badge key={sev} variant="outline" className={cn("text-[10px]", SEVERITY_STYLE[sev])}>
+              <Badge key={sev} variant="outline" className={cn("text-2xs", SEVERITY_STYLE[sev])}>
                 {scorecard.counts[sev]} {t(`research.scorecard.severity.${sev}`)}
               </Badge>
             ) : null,

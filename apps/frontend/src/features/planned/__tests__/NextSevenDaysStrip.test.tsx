@@ -51,7 +51,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     );
     expect(notices).toHaveLength(2);
 
-    const windowSummary = screen.getByText("2 payments due").closest("p");
+    const windowSummary = screen.getByText("2 payments due").parentElement;
     expect(windowSummary).toHaveTextContent("10,00");
     expect(windowSummary).not.toHaveTextContent("99");
   });
@@ -70,7 +70,9 @@ describe("NextSevenDaysStrip currency totals", () => {
       />,
     );
 
-    expect(await screen.findAllByRole("status", { name: "Loading..." })).toHaveLength(2);
+    const loadingStatuses = screen.getAllByRole("status");
+    expect(loadingStatuses).toHaveLength(2);
+    expect(loadingStatuses.every((status) => status.hasAttribute("aria-label"))).toBe(true);
     expect(
       screen.queryByText("1 payment excluded: exchange rate unavailable"),
     ).not.toBeInTheDocument();

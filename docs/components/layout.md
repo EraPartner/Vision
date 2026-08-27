@@ -4,10 +4,31 @@ type: component
 status: active
 date: 2026-04-25
 updated: 2026-08-26
-tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
+tags:
+  [
+    components,
+    layout,
+    navigation,
+    design-system,
+    phase-9,
+    performance,
+    workspace,
+    liquid-glass-v2,
+    command-palette,
+    route-preload,
+    electron-native,
+    electron-bridge,
+    ipc,
+    macos,
+    june-2026,
+  ]
 description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI. 2026-06-24 — ActiveRail shape changed to flush full-height 2px bar; inset box-shadow removed from sidebar.tsx.
 aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
-related_code: ["apps/frontend/src/components/layout", "apps/frontend/src/components/layout/ElectronBridge.tsx"]
+related_code:
+  [
+    "apps/frontend/src/components/layout",
+    "apps/frontend/src/components/layout/ElectronBridge.tsx",
+  ]
 ---
 
 # Layout Components
@@ -22,13 +43,13 @@ Core layout components that structure the application shell.
 
 ## Component List
 
-| Component | Description | File |
-|-----------|-------------|------|
-| AppLayout | Main app wrapper with sidebar, atmosphere, topbar, CommandPalette, ElectronBridge | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
-| AppSidebar | Navigation sidebar with ActiveRail + route prefetch | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]] |
+| Component      | Description                                                                                                                          | File                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| AppLayout      | Main app wrapper with sidebar, atmosphere, topbar, CommandPalette, ElectronBridge                                                    | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]]           |
+| AppSidebar     | Navigation sidebar with ActiveRail + route prefetch                                                                                  | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]]         |
 | ElectronBridge | Electron IPC bridge — menu actions, CSV handoff, fullscreen, dock badge (Electron-only, mounted in AppLayout inside SidebarProvider) | [[apps/frontend/src/components/layout/ElectronBridge.tsx\|ElectronBridge.tsx]] |
-| PageTransition | Enter-only spring route wrapper (re-added June 2026) | [[apps/frontend/src/components/layout/PageTransition.tsx\|PageTransition.tsx]] |
-| CommandPalette | ⌘K global command palette | [[apps/frontend/src/components/shared/CommandPalette.tsx\|CommandPalette.tsx]] |
+| PageTransition | Enter-only spring route wrapper (re-added June 2026)                                                                                 | [[apps/frontend/src/components/layout/PageTransition.tsx\|PageTransition.tsx]] |
+| CommandPalette | ⌘K global command palette                                                                                                            | [[apps/frontend/src/components/shared/CommandPalette.tsx\|CommandPalette.tsx]] |
 
 ---
 
@@ -54,8 +75,11 @@ function App() {
 
 ```
 <AppLayout>
-  <AppSidebar />
-  <main className="flex-1">
+  <a href="#main">Skip to content</a>
+  <AppSidebar>
+    <nav aria-label="Primary navigation" />
+  </AppSidebar>
+  <main id="main" tabIndex={-1} className="flex-1">
     {/* Page content */}
   </main>
 </AppLayout>
@@ -72,6 +96,7 @@ function App() {
 - **Notification system integration**: Sonner toast notifications.
 - **Dark/light theme support**: Full theme switching via `ThemeContext` + `document.startViewTransition`.
 - **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element (flush 2px bar, sole active indicator). Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
+- **Keyboard structure**: A focus-visible skip link is the first shell control and moves focus to `main#main`. Route changes also focus that main landmark. The shared desktop/mobile sidebar menu is a localized `<nav>` landmark, and its trigger and rail use the localized sidebar-toggle name.
 
 ### Props
 
@@ -155,15 +180,9 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 function Layout() {
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        {/* Logo */}
-      </SidebarHeader>
-      <SidebarContent>
-        {/* Navigation groups */}
-      </SidebarContent>
-      <SidebarFooter>
-        {/* User info */}
-      </SidebarFooter>
+      <SidebarHeader>{/* Logo */}</SidebarHeader>
+      <SidebarContent>{/* Navigation groups */}</SidebarContent>
+      <SidebarFooter>{/* User info */}</SidebarFooter>
     </Sidebar>
   );
 }
@@ -194,14 +213,14 @@ setWorkspace("budgeting");
 
 ```typescript
 interface NavItem {
-  title: string;      // Display title
-  url: string;        // Route path
-  icon: LucideIcon;   // Icon component
+  title: string; // Display title
+  url: string; // Route path
+  icon: LucideIcon; // Icon component
 }
 
 interface NavGroup {
-  label: string;      // Group label
-  items: NavItem[];   // Group items
+  label: string; // Group label
+  items: NavItem[]; // Group items
 }
 ```
 
@@ -212,10 +231,10 @@ Navigation labels use the translation system:
 ```tsx
 const budgetingGroups = [
   {
-    label: t('nav.overview'),
+    label: t("nav.overview"),
     items: [
-      { title: t('nav.dashboard'), url: "/", icon: LayoutDashboard },
-      { title: t('nav.transactions'), url: "/transactions", icon: Receipt },
+      { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
+      { title: t("nav.transactions"), url: "/transactions", icon: Receipt },
     ],
   },
 ];
@@ -264,13 +283,16 @@ type Workspace = "budgeting" | "portfolio";
 ### Hook API
 
 ```ts
-function useWorkspace(): { workspace: Workspace; setWorkspace: (ws: Workspace) => void }
+function useWorkspace(): {
+  workspace: Workspace;
+  setWorkspace: (ws: Workspace) => void;
+};
 ```
 
-| Return | Type | Description |
-|--------|------|-------------|
-| `workspace` | `Workspace` | Current workspace: `"portfolio"` if path starts with `/portfolio`, otherwise `"budgeting"` |
-| `setWorkspace` | `(ws: Workspace) => void` | Navigate to the workspace root: `/portfolio` or `/` |
+| Return         | Type                      | Description                                                                                |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `workspace`    | `Workspace`               | Current workspace: `"portfolio"` if path starts with `/portfolio`, otherwise `"budgeting"` |
+| `setWorkspace` | `(ws: Workspace) => void` | Navigate to the workspace root: `/portfolio` or `/`                                        |
 
 ### Usage
 
@@ -282,7 +304,9 @@ function WorkspaceSwitcher() {
 
   return (
     <Button
-      onClick={() => setWorkspace(workspace === "portfolio" ? "budgeting" : "portfolio")}
+      onClick={() =>
+        setWorkspace(workspace === "portfolio" ? "budgeting" : "portfolio")
+      }
     >
       Switch to {workspace === "portfolio" ? "Budgeting" : "Portfolio"}
     </Button>
@@ -310,6 +334,7 @@ function WorkspaceSwitcher() {
 **Timing**: uses `durations.page` with `easings.outExpo` from `lib/motion.ts`; under `prefers-reduced-motion`, the wrapper is omitted and children render directly.
 
 **History**:
+
 - Added in ADR-017 (April 2026) as full enter + exit spring.
 - Removed in ADR-020 (April 2026) due to Electron M1 GPU regression.
 - Re-added in ADR-070 (June 2026) as enter-only — resolves the Suspense double-render issue that made full AnimatePresence unworkable.
@@ -323,6 +348,7 @@ Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
 `components/shared/CommandPalette.tsx` provides a ⌘K / Ctrl+K global command palette built on the `cmdk` library. Mounted by `AppLayout` with a topbar button trigger. `lib/commandPalette.ts` owns its pure FX, arithmetic, and ticker-query helpers plus the recent-route storage adapter.
 
 **Coverage**:
+
 - All budgeting pages (Dashboard, Transactions, Categories, Recipients, Statistics, Planned, Import, Owes, Tax)
 - All portfolio pages (Overview, Stocks, Crypto, Metals, Real Estate, Savings, Performance, Net Worth, Exchange Rates, Watchlist, Portfolio Tax)
 - Admin pages when `adminMode` is enabled
@@ -345,14 +371,14 @@ Code links: [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[apps/f
 
 **Responsibilities:**
 
-| Responsibility | Detail |
-|----------------|--------|
-| Ready handshake | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main |
-| Menu action routing | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
-| CSV drag-drop | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors |
-| CSV open-with | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import` |
-| Fullscreen class | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>` |
-| html class management | Adds `electron-mac` on mount; adds/removes `vibrancy` based on `appSettings.enhancedEffects` |
+| Responsibility        | Detail                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ready handshake       | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main                                                                                         |
+| Menu action routing   | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
+| CSV drag-drop         | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors                                                                  |
+| CSV open-with         | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import`                                                    |
+| Fullscreen class      | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>`                                                                                       |
+| html class management | Adds `electron-mac` on mount; adds/removes `vibrancy` when the effective ADR-075 visual-effects tier is `enhanced`                                                       |
 
 All IPC subscriptions are attached via stable refs (`useRef`) so React re-renders do not tear down and re-attach listeners. Unsubscribe functions are called in the effect cleanup.
 

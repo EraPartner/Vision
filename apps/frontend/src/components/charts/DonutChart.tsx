@@ -12,15 +12,19 @@ import { getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PieDatum } from "./PieChart";
+import { useChartKeyboardNav } from "./keyboardNav";
+
+type DonutDatum = PieDatum & { readonly to?: string };
 
 export interface DonutChartProps {
-    readonly data: ReadonlyArray<PieDatum>;
+    readonly data: ReadonlyArray<DonutDatum>;
     readonly height?: number;
     readonly innerRadiusRatio?: number;
     readonly padAngle?: number;
     readonly center?: ReactNode;
     readonly tooltipValueFormat?: (value: number) => string;
     readonly ariaLabel?: string;
+    readonly onNavigate?: (to: string) => void;
 }
 
 export function DonutChart(props: DonutChartProps) {
@@ -29,7 +33,9 @@ export function DonutChart(props: DonutChartProps) {
         <div style={{ width: "100%", height }}>
             <ParentSize>
                 {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? <Inner {...props} width={w} height={h} /> : null
+                    w > 0 && h > 0 ? (
+                        <Inner {...props} width={w} height={h} />
+                    ) : null
                 }
             </ParentSize>
         </div>
@@ -45,6 +51,7 @@ function Inner({
     width,
     height,
     ariaLabel,
+    onNavigate,
 }: DonutChartProps & { width: number; height: number }) {
     const { t } = useLanguage();
     const reduce = useReducedMotion();
@@ -53,17 +60,51 @@ function Inner({
     const cx = width / 2;
     const cy = height / 2;
 
-    const [hover, setHover] = useState<PieDatum | null>(null);
-    const handleLeave = useCallback(() => setHover(null), []);
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+    const safeHoverIndex =
+        hoverIndex != null && hoverIndex < data.length ? hoverIndex : null;
+    const hover =
+        safeHoverIndex == null
+            ? null
+            : {
+                  ...data[safeHoverIndex],
+                  color:
+                      data[safeHoverIndex].color ??
+                      getChartColor(safeHoverIndex),
+              };
+    const handleLeave = useCallback(() => setHoverIndex(null), []);
+    const keyboardNav = useChartKeyboardNav({
+        pointCount: data.length,
+        index: safeHoverIndex,
+        onIndexChange: setHoverIndex,
+        onClear: handleLeave,
+    });
 
-    const formatValue = (v: number) => (tooltipValueFormat ? tooltipValueFormat(v) : String(v));
+    const formatValue = (v: number) =>
+        tooltipValueFormat ? tooltipValueFormat(v) : String(v);
+    const hasLinks = data.some((datum) => Boolean(datum.to));
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart(t, 'chart.aria.kind.donut', data.map((d) => d.name))}>
+            <svg
+                width={width}
+                height={height}
+                role={hasLinks ? "group" : "img"}
+                aria-label={
+                    ariaLabel ??
+                    summarizeProportionChart(
+                        t,
+                        "chart.aria.kind.donut",
+                        data.map((d) => d.name),
+                    )
+                }
+                tabIndex={!hasLinks && data.length > 0 ? 0 : undefined}
+                onKeyDown={!hasLinks ? keyboardNav.onKeyDown : undefined}
+                onBlur={!hasLinks ? keyboardNav.onBlur : undefined}
+            >
                 <Group top={cy} left={cx}>
                     <Pie
-                        data={data as PieDatum[]}
+                        data={data as DonutDatum[]}
                         pieValue={(d) => d.value}
                         outerRadius={outer}
                         innerRadius={inner}
@@ -71,9 +112,10 @@ function Inner({
                     >
                         {(pie) =>
                             pie.arcs.map((arc, i) => {
-                                const color = arc.data.color ?? getChartColor(i);
+                                const color =
+                                    arc.data.color ?? getChartColor(i);
                                 const d = pie.path(arc) ?? "";
-                                return (
+                                const path = (
                                     <m.path
                                         key={`arc-${i}`}
                                         d={d}
@@ -86,16 +128,52 @@ function Inner({
                                                 : { opacity: 0, scale: 0.92 }
                                         }
                                         animate={{ opacity: 1, scale: 1 }}
-                                        whileHover={reduce ? undefined : { scale: 1.045 }}
+                                        whileHover={
+                                            reduce
+                                                ? undefined
+                                                : { scale: 1.045 }
+                                        }
                                         transition={{
-                                            duration: reduce ? 0 : durations.slow,
+                                            duration: reduce
+                                                ? 0
+                                                : durations.slow,
                                             ease: easings.outExpo,
                                             delay: i * 0.04,
                                         }}
-                                        onPointerEnter={() => setHover({ ...arc.data, color })}
+                                        onPointerEnter={() => setHoverIndex(i)}
                                         onPointerLeave={handleLeave}
-                                        style={{ cursor: "pointer", transformBox: "fill-box", transformOrigin: "center" }}
+                                        style={{
+                                            cursor: arc.data.to
+                                                ? "pointer"
+                                                : "default",
+                                            transformBox: "fill-box",
+                                            transformOrigin: "center",
+                                        }}
                                     />
+                                );
+                                return arc.data.to ? (
+                                    <a
+                                        key={`arc-${i}`}
+                                        href={arc.data.to}
+                                        aria-label={`${arc.data.name}: ${formatValue(arc.data.value)}`}
+                                        onClick={(event) => {
+                                            if (
+                                                event.button === 0 &&
+                                                !event.metaKey &&
+                                                !event.ctrlKey &&
+                                                !event.shiftKey &&
+                                                !event.altKey &&
+                                                onNavigate
+                                            ) {
+                                                event.preventDefault();
+                                                onNavigate(arc.data.to!);
+                                            }
+                                        }}
+                                    >
+                                        {path}
+                                    </a>
+                                ) : (
+                                    path
                                 );
                             })
                         }
@@ -121,10 +199,17 @@ function Inner({
                 <AnimatePresence mode="wait" initial={false}>
                     <m.div
                         key={hover ? `h-${hover.name}` : "default"}
-                        initial={reduce ? { opacity: 1 } : { opacity: 0, scale: 0.96 }}
+                        initial={
+                            reduce
+                                ? { opacity: 1 }
+                                : { opacity: 0, scale: 0.96 }
+                        }
                         animate={{ opacity: 1, scale: 1 }}
                         exit={reduce ? { opacity: 1 } : { opacity: 0 }}
-                        transition={{ duration: reduce ? 0 : durations.fast, ease: easings.outExpo }}
+                        transition={{
+                            duration: reduce ? 0 : durations.fast,
+                            ease: easings.outExpo,
+                        }}
                         style={{ maxWidth: inner * 1.7, textAlign: "center" }}
                     >
                         {hover ? (
@@ -133,16 +218,21 @@ function Inner({
                                     <span
                                         aria-hidden="true"
                                         className="inline-block h-2 w-2 shrink-0 rounded-full"
-                                        style={{ backgroundColor: hover.color ?? undefined }}
+                                        style={{
+                                            backgroundColor:
+                                                hover.color ?? undefined,
+                                        }}
                                     />
-                                    <span className="truncate">{hover.name}</span>
+                                    <span className="truncate">
+                                        {hover.name}
+                                    </span>
                                 </div>
                                 <div className="font-display text-lg font-semibold tabular-nums text-foreground">
                                     {formatValue(hover.value)}
                                 </div>
                             </div>
                         ) : (
-                            center ?? null
+                            (center ?? null)
                         )}
                     </m.div>
                 </AnimatePresence>

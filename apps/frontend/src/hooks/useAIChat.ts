@@ -11,24 +11,29 @@ import type {
     ConversationDetail,
     CreateConversationBody,
 } from '@/types/aiChat';
+import { useBackgroundQueryCue } from '@/components/shared/BackgroundQueryIndicator';
 
 export function useConversations() {
-    return useQuery({
+    const query = useQuery({
         queryKey: aiKeys.conversations,
         queryFn: () => apiClient.getConversations(),
         staleTime: 30_000,
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useConversation(id: string | null) {
-    return useQuery({
+    const query = useQuery({
         queryKey: aiKeys.conversation(id),
         queryFn: () => (id ? apiClient.getConversation(id) : Promise.resolve(null)),
         enabled: Boolean(id),
         staleTime: 10_000,
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export function useCreateConversation() {

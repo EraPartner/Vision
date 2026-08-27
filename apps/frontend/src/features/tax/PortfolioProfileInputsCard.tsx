@@ -15,7 +15,7 @@ export function PortfolioProfileInputsCard({ profile, calculation }: PortfolioPr
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.profile.currentInputs")}</CardTitle>
         <CardDescription>{t("tax.portfolioProfileInputsDesc")}</CardDescription>

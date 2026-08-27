@@ -228,7 +228,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                                         </span>
                                         <span className={cn(
                                             "text-xs font-semibold",
-                                            tickerQuote.changePercent >= 0 ? "amount-gain" : "amount-loss",
+                                            tickerQuote.changePercent >= 0 ? "text-gain" : "text-loss",
                                         )}>
                                             {formatPercent(tickerQuote.changePercent, { digits: 2, signed: true, locale })}
                                         </span>

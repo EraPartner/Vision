@@ -3,24 +3,42 @@ title: Form Dialogs
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
-aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog, settings-dialog]
-related_code: ["apps/frontend/src/features/transactions/", "apps/frontend/src/features/categories/", "apps/frontend/src/features/recipients/", "apps/frontend/src/features/settings/", "apps/frontend/src/features/tax/TaxProfileDialog.tsx", "apps/frontend/src/features/tax/profile-steps/ProfileNumberInput.tsx"]
+aliases:
+  [
+    form-dialogs,
+    modal-dialogs,
+    add-dialogs,
+    edit-dialogs,
+    create-dialog,
+    settings-dialog,
+  ]
+related_code:
+  [
+    "apps/frontend/src/features/transactions/",
+    "apps/frontend/src/features/categories/",
+    "apps/frontend/src/features/recipients/",
+    "apps/frontend/src/features/settings/",
+    "apps/frontend/src/features/tax/TaxProfileDialog.tsx",
+    "apps/frontend/src/features/tax/profile-steps/ProfileNumberInput.tsx",
+  ]
 ---
 
 # Form Dialogs
 
 Modal dialog components for creating, editing data, and configuring application settings throughout Vision.
 
+Every visible field label targets the actual input or trigger with matching `htmlFor` and `id`. Group headings are semantic text with an `id`; the radio, tab, or segmented-button group references it through `aria-labelledby`. Repeated row controls use explicit per-row accessible names.
+
 ## Component List
 
-| Component | Description | File |
-|-----------|-------------|------|
+| Component            | Description         | File                                                                                                      |
+| -------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
 | AddTransactionDialog | Add new transaction | [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx\|AddTransactionDialog.tsx]] |
-| AddCategoryDialog | Add new category | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]] |
-| AddRecipientDialog | Add new recipient | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]] |
+| AddCategoryDialog    | Add new category    | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]]                    |
+| AddRecipientDialog   | Add new recipient   | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]]                  |
 
 ---
 
@@ -36,16 +54,16 @@ Modal dialog for creating new transactions.
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `transaction_date` | date | Yes | Transaction date |
-| `bank_account` | string | Yes | Bank account name |
-| `recipient_id` | number | Yes | Recipient ID |
-| `category_id` | number | No | Category ID |
-| `amount` | number | Yes | Transaction amount |
-| `currency` | string | No | Currency code (default: EUR) |
-| `memo` | string | No | Description/memo |
-| `comment` | string | No | User comment |
+| Field              | Type   | Required | Description                  |
+| ------------------ | ------ | -------- | ---------------------------- |
+| `transaction_date` | date   | Yes      | Transaction date             |
+| `bank_account`     | string | Yes      | Bank account name            |
+| `recipient_id`     | number | Yes      | Recipient ID                 |
+| `category_id`      | number | No       | Category ID                  |
+| `amount`           | number | Yes      | Transaction amount           |
+| `currency`         | string | No       | Currency code (default: EUR) |
+| `memo`             | string | No       | Description/memo             |
+| `comment`          | string | No       | User comment                 |
 
 ### Usage
 
@@ -64,6 +82,9 @@ function TransactionsPage() {
 
 ### Features
 
+- Recipient selection uses the debounced server-search `RecipientCombobox`, so results are not limited to the first page.
+- Category selection uses the searchable complete-list `CategoryCombobox`; category creation remains a separate workflow.
+- Both combobox popovers mount in a dialog-owned portal container so Radix focus trapping and option interaction remain reliable.
 - Auto-populates today's date
 - Fetches recipients/categories from API
 - Validates required fields
@@ -85,11 +106,11 @@ Modal dialog for creating new categories.
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `general` | string | Yes | General category (e.g., "FOOD") |
-| `detail` | string | No | Detail category (e.g., "GROCERIES") |
-| `description` | string | No | Optional description |
+| Field         | Type   | Required | Description                         |
+| ------------- | ------ | -------- | ----------------------------------- |
+| `general`     | string | Yes      | General category (e.g., "FOOD")     |
+| `detail`      | string | No       | Detail category (e.g., "GROCERIES") |
+| `description` | string | No       | Optional description                |
 
 ### Category Format
 
@@ -125,11 +146,11 @@ Modal dialog for creating new recipients.
 
 ### Form Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Recipient/merchant name |
-| `default_category_id` | number | No | Default category for this recipient |
-| `notes` | string | No | Notes about the recipient |
+| Field                 | Type   | Required | Description                         |
+| --------------------- | ------ | -------- | ----------------------------------- |
+| `name`                | string | Yes      | Recipient/merchant name             |
+| `default_category_id` | number | No       | Default category for this recipient |
+| `notes`               | string | No       | Notes about the recipient           |
 
 ### Usage
 
@@ -166,7 +187,9 @@ All form dialogs follow a consistent pattern:
     <form onSubmit={handleSubmit}>
       {/* Form fields */}
       <DialogFooter>
-        <Button type="button" variant="secondary">Cancel</Button>
+        <Button type="button" variant="secondary">
+          Cancel
+        </Button>
         <Button type="submit">Save</Button>
       </DialogFooter>
     </form>
@@ -185,7 +208,7 @@ const [form, setForm] = useState({
 
 // Update field
 const updateField = (field, value) => {
-  setForm(prev => ({ ...prev, [field]: value }));
+  setForm((prev) => ({ ...prev, [field]: value }));
 };
 
 // Submit handler
@@ -195,6 +218,19 @@ const handleSubmit = (e) => {
   // Call mutation
 };
 ```
+
+### Unsaved-change protection
+
+Heavyweight forms call `useUnsavedChanges(isDirty)` with a comparison against
+their initial values. The application-level `UnsavedChangesProvider` aggregates
+all registrations, blocks pathname navigation, and shows one localized
+leave/stay dialog. It also protects browser refresh and window close through
+`beforeunload`. Query-parameter updates are not blocked because filters and
+shareable page state use replace-written search parameters during normal edits.
+
+Import flows call `bypassNextNavigation()` immediately before their successful
+review-page navigation. This is a one-shot exception for a persisted result; it
+must not be used for cancel or error paths.
 
 ### Error Handling
 
@@ -227,23 +263,25 @@ createMutation.mutate(data, {
 
 Form dialogs use these shared components:
 
-| Component | Usage |
-|-----------|-------|
-| `RecipientCombobox` | Searchable recipient selector |
-| `CategoryCombobox` | Searchable category selector |
-| `DatePicker` | Popover calendar date selector with optional clear action; month and weekday labels follow the active app language |
+| Component           | Usage                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `RecipientCombobox` | Searchable recipient selector                                                                                             |
+| `CategoryCombobox`  | Searchable category selector                                                                                              |
+| `DatePicker`        | Popover date input with strict typed entry, month/year dropdowns, optional clear action, and app-language calendar labels |
 
 For dialog-bound forms, comboboxes and date pickers can use a dialog-owned portal container to avoid overlay stacking issues:
 
 ```tsx
-const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
+  null,
+);
 
 <DialogContent>
   <div ref={setPortalContainer} />
   <DatePicker portalContainer={portalContainer} />
   <RecipientCombobox portalContainer={portalContainer} />
   <CategoryCombobox portalContainer={portalContainer} />
-</DialogContent>
+</DialogContent>;
 ```
 
 ### Example with Combobox
@@ -252,9 +290,14 @@ const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(nu
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 
 <RecipientCombobox
-  value={form.recipient_id}
-  onChange={(id) => setForm(prev => ({ ...prev, recipient_id: id }))}
-/>
+  value={form.recipient_id ? Number(form.recipient_id) : null}
+  onSelect={(id) =>
+    setForm((prev) => ({
+      ...prev,
+      recipient_id: id == null ? "" : String(id),
+    }))
+  }
+/>;
 ```
 
 ---
@@ -292,7 +335,7 @@ import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog
   transactionId={txn.id}
   transactionAmount={txn.amount}
   transactionCurrency={txn.currency}
-/>
+/>;
 ```
 
 ---
@@ -320,13 +363,13 @@ interface TaxProfileDialogProps {
 
 ### Steps
 
-| Step | Description | Fields |
-|------|-------------|--------|
-| **Employment** | Employment type selection | employee, civil_servant, self_employed, retired, other |
-| **Income** | Income and expense details | gross annual income, other taxable income, professional expense method (lump sum vs actual), cadastral income, additional residences |
-| **Income Sources** | Select transaction categories treated as taxable income | income category selection |
-| **Deductions** | Exemptions and dependents | dependent children, other dependents, alimony, pension contributions, life insurance, charitable donations, childcare costs, domestic help, mortgage interest, union dues, medical expenses, disability exemptions |
-| **Region** | Region and surcharge | Flanders/Wallonia/Brussels, communal surcharge percentage |
+| Step               | Description                                             | Fields                                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Employment**     | Employment type selection                               | employee, civil_servant, self_employed, retired, other                                                                                                                                                             |
+| **Income**         | Income and expense details                              | gross annual income, other taxable income, professional expense method (lump sum vs actual), cadastral income, additional residences                                                                               |
+| **Income Sources** | Select transaction categories treated as taxable income | income category selection                                                                                                                                                                                          |
+| **Deductions**     | Exemptions and dependents                               | dependent children, other dependents, alimony, pension contributions, life insurance, charitable donations, childcare costs, domestic help, mortgage interest, union dues, medical expenses, disability exemptions |
+| **Region**         | Region and surcharge                                    | Flanders/Wallonia/Brussels, communal surcharge percentage                                                                                                                                                          |
 
 ### Usage
 
@@ -336,7 +379,7 @@ import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 <TaxProfileDialog
   trigger={<Button>Configure Tax Profile</Button>}
   initialStep="income"
-/>
+/>;
 ```
 
 ### Integration
@@ -376,19 +419,19 @@ interface OnboardingWizardProps {
 
 ### Steps
 
-| Step | Description | Actions |
-|------|-------------|---------|
-| **Welcome** | Greeting and feature badges | Next |
-| **Overview** | Feature categories (Budgeting, Portfolio) | Next |
-| **Bank Setup** | Select a bank adapter from toggle buttons that expose the active choice with `aria-pressed` | Next |
-| **Import** | Upload CSV for selected bank | Import or skip |
-| **Categories** | Create suggested categories (15 pre-defined) | Create selected or skip |
-| **Feature Tour** | Navigate to any feature page | Navigate or next |
-| **Backup** | Backup/restore information, restore from file (Electron only) | Open settings or complete |
+| Step             | Description                                                                                 | Actions                   |
+| ---------------- | ------------------------------------------------------------------------------------------- | ------------------------- |
+| **Welcome**      | Greeting and feature badges                                                                 | Next                      |
+| **Overview**     | Feature categories (Budgeting, Portfolio)                                                   | Next                      |
+| **Bank Setup**   | Select a bank adapter from toggle buttons that expose the active choice with `aria-pressed` | Next                      |
+| **Import**       | Upload CSV for selected bank                                                                | Import or skip            |
+| **Categories**   | Create suggested categories (15 pre-defined)                                                | Create selected or skip   |
+| **Feature Tour** | Navigate to any feature page                                                                | Navigate or next          |
+| **Backup**       | Backup/restore information, restore from file (Electron only)                               | Open settings or complete |
 
 ### Features
 
-- **Persistence**: Completion state stored via `apiClient.getSetting/saveSetting` with key `onboarding_complete`
+- **Persistence**: Completion state is stored via `apiClient.getSetting/saveSetting` with key `onboarding_complete`; a versioned local draft restores resumable step input after reload and is cleared on completion/reset. Browser files are never persisted and must be selected again.
 - **Bank adapter discovery**: Fetches available adapters via `apiClient.getSupportedParsers()`
 - **Category bulk creation**: Creates selected categories with error handling for duplicates
 - **CSV import**: Integrated import flow using `apiClient.importCSV()`
@@ -411,24 +454,27 @@ Form state management for the Add Transaction dialog. This is a lightweight util
 
 ### Type: AddTransactionFormState
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `transaction_date` | `string` | ISO date string (YYYY-MM-DD), defaults to today |
-| `bank_account` | `string` | Bank account identifier |
-| `recipient_id` | `string` | Recipient ID (empty string if none) |
-| `category_id` | `string` | Category ID (empty string if none) |
-| `memo` | `string` | Transaction memo/description |
-| `amount` | `string` | Amount as string (positive for income, negative for expense) |
-| `currency` | `string` | Currency code, defaults to EUR |
-| `comment` | `string` | Additional comment field |
+| Field              | Type     | Description                                                  |
+| ------------------ | -------- | ------------------------------------------------------------ |
+| `transaction_date` | `string` | ISO date string (YYYY-MM-DD), defaults to today              |
+| `bank_account`     | `string` | Bank account identifier                                      |
+| `recipient_id`     | `string` | Recipient ID (empty string if none)                          |
+| `category_id`      | `string` | Category ID (empty string if none)                           |
+| `memo`             | `string` | Transaction memo/description                                 |
+| `amount`           | `string` | Amount as string (positive for income, negative for expense) |
+| `currency`         | `string` | Currency code, defaults to EUR                               |
+| `comment`          | `string` | Additional comment field                                     |
 
 ### Function: createAddTransactionFormState
 
 ```ts
-function createAddTransactionFormState(defaultCurrency?: string): AddTransactionFormState
+function createAddTransactionFormState(
+  defaultCurrency?: string,
+): AddTransactionFormState;
 ```
 
 Returns a fresh form state object with sensible defaults:
+
 - `transaction_date`: Current date (YYYY-MM-DD)
 - `bank_account`, `recipient_id`, `category_id`, `memo`, `amount`, `comment`: Empty strings
 - `currency`: Provided `defaultCurrency` or `'EUR'`
@@ -447,9 +493,9 @@ Two-step dialog for merging duplicate recipients. Users first select a primary r
 
 ### Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `open` | `boolean` | Dialog open state |
+| Prop           | Type             | Description               |
+| -------------- | ---------------- | ------------------------- |
+| `open`         | `boolean`        | Dialog open state         |
 | `onOpenChange` | `(open) => void` | Open state change handler |
 
 ### Flow
@@ -475,41 +521,41 @@ High-performance generic data table with virtual scrolling, inline editing, serv
 
 ### Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `title` | `string` | Table title displayed in card header |
-| `subtitle` | `string?` | Optional subtitle |
-| `columns` | `Column<T>[]` | Column definitions (key, header, editable, sortable, filterable, render) |
-| `data` | `T[]` | Array of row data |
-| `emptyMessage` | `ReactNode?` | Content shown when no data |
-| `actions` | `ReactNode?` | Action buttons rendered in header |
-| `onRowUpdate` | `(index, row) => void` | Callback when inline-edited row is saved |
-| `onRowDoubleClick` | `(row, index) => void` | Callback on double-click (e.g., deep link to Transactions) |
-| `totalItems` | `number?` | Total items on server (for infinite scroll) |
-| `isFetchingMore` | `boolean?` | Loading state for infinite scroll |
-| `onLoadMore` | `() => void` | Called when user scrolls near bottom |
-| `hasMore` | `boolean?` | Whether more items are available |
-| `onSearchChange` | `(query) => void` | Server-side search callback |
-| `searchValue` | `string?` | Controlled search value |
-| `onSortChange` | `(key, dir) => void` | Server-side sort callback (enables server-sort mode) |
-| `sortKeyProp` | `string?` | Controlled sort key |
-| `sortDirProp` | `SortDirection?` | Controlled sort direction |
-| `maxHeight` | `number?` | Virtual scroll container height (default: 600) |
-| `rowHeight` | `number?` | Estimated row height for virtualizer |
-| `cancelEditingRef` | `Ref?` | Ref to expose cancelEditing externally |
-| `onEditingChange` | `(editing) => void` | Callback when editing state changes |
+| Prop               | Type                   | Description                                                              |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------ |
+| `title`            | `string`               | Table title displayed in card header                                     |
+| `subtitle`         | `string?`              | Optional subtitle                                                        |
+| `columns`          | `Column<T>[]`          | Column definitions (key, header, editable, sortable, filterable, render) |
+| `data`             | `T[]`                  | Array of row data                                                        |
+| `emptyMessage`     | `ReactNode?`           | Content shown when no data                                               |
+| `actions`          | `ReactNode?`           | Action buttons rendered in header                                        |
+| `onRowUpdate`      | `(index, row) => void` | Callback when inline-edited row is saved                                 |
+| `onRowDoubleClick` | `(row, index) => void` | Callback on double-click (e.g., deep link to Transactions)               |
+| `totalItems`       | `number?`              | Total items on server (for infinite scroll)                              |
+| `isFetchingMore`   | `boolean?`             | Loading state for infinite scroll                                        |
+| `onLoadMore`       | `() => void`           | Called when user scrolls near bottom                                     |
+| `hasMore`          | `boolean?`             | Whether more items are available                                         |
+| `onSearchChange`   | `(query) => void`      | Server-side search callback                                              |
+| `searchValue`      | `string?`              | Controlled search value                                                  |
+| `onSortChange`     | `(key, dir) => void`   | Server-side sort callback (enables server-sort mode)                     |
+| `sortKeyProp`      | `string?`              | Controlled sort key                                                      |
+| `sortDirProp`      | `SortDirection?`       | Controlled sort direction                                                |
+| `maxHeight`        | `number?`              | Virtual scroll container height (default: 600)                           |
+| `rowHeight`        | `number?`              | Estimated row height for virtualizer                                     |
+| `cancelEditingRef` | `Ref?`                 | Ref to expose cancelEditing externally                                   |
+| `onEditingChange`  | `(editing) => void`    | Callback when editing state changes                                      |
 
 ### Column Definition
 
 ```ts
 interface Column<T> {
-  key: string;           // Data key
-  header: string;        // Display header
-  editable?: boolean;    // Enable inline editing
+  key: string; // Data key
+  header: string; // Display header
+  editable?: boolean; // Enable inline editing
   type?: "text" | "number" | "date";
-  render?: (row, editing, index) => ReactNode;  // Custom cell renderer
-  sortable?: boolean;    // Enable column sorting
-  filterable?: boolean;  // Enable column filter popover
+  render?: (row, editing, index) => ReactNode; // Custom cell renderer
+  sortable?: boolean; // Enable column sorting
+  filterable?: boolean; // Enable column filter popover
   minWidth?: number;
   defaultWidth?: number;
 }
@@ -570,10 +616,10 @@ Two-step dialog for merging duplicate recipients.
 
 ### Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `open` | `boolean` | Controls dialog visibility |
-| `onOpenChange` | `(open: boolean) => void` | Visibility change handler |
+| Prop           | Type                      | Description                |
+| -------------- | ------------------------- | -------------------------- |
+| `open`         | `boolean`                 | Controls dialog visibility |
+| `onOpenChange` | `(open: boolean) => void` | Visibility change handler  |
 
 ### Flow
 
@@ -637,15 +683,15 @@ Multi-tab settings dialog for configuring user preferences, display settings, da
 
 The dialog is split into a thin orchestrator and 6 focused tab/section components:
 
-| Component | Lines | Purpose |
-|-----------|-------|---------|
-| `DashboardSettingsDialog` | ~170 | Orchestrator, owns save logic and exclusion state |
-| `GeneralTab` | ~175 | Currency, date/number format, decimal places, start-of-week, page size, language |
-| `AppearanceTab` | (pre-existing) | Theme variant, color mode, schedule |
-| `DashboardTab` | ~240 | Category/recipient exclusion, exclusion scope |
-| `AppTab` | ~230 | Onboarding restart, update check, recurring reset, AI chat, reset-all |
-| `BackupTab` | ~310 | Backup dir, passphrase, encrypt, restore (Electron only) |
-| `AIChatSettingsSection` | ~92 | Ollama status + model selector |
+| Component                 | Lines          | Purpose                                                                          |
+| ------------------------- | -------------- | -------------------------------------------------------------------------------- |
+| `DashboardSettingsDialog` | ~170           | Orchestrator, owns save logic and exclusion state                                |
+| `GeneralTab`              | ~175           | Currency, date/number format, decimal places, start-of-week, page size, language |
+| `AppearanceTab`           | (pre-existing) | Theme variant, color mode, schedule                                              |
+| `DashboardTab`            | ~240           | Category/recipient exclusion, exclusion scope                                    |
+| `AppTab`                  | ~230           | Onboarding restart, update check, recurring reset, AI chat, reset-all            |
+| `BackupTab`               | ~310           | Backup dir, passphrase, encrypt, restore (Electron only)                         |
+| `AIChatSettingsSection`   | ~92            | Ollama status + model selector                                                   |
 
 ### Props
 
@@ -678,7 +724,11 @@ function SettingsButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>Settings</Button>
-      <DashboardSettingsDialog open={open} onOpenChange={setOpen} defaultTab="general" />
+      <DashboardSettingsDialog
+        open={open}
+        onOpenChange={setOpen}
+        defaultTab="general"
+      />
     </>
   );
 }
@@ -701,7 +751,7 @@ const handleSave = () => {
     apiClient.saveBackupSettings({ backupDir, backupOnQuit });
   }
   onOpenChange(false);
-  toast.success(t('settings.saved'));
+  toast.success(t("settings.saved"));
 };
 ```
 
@@ -718,9 +768,9 @@ const handleReset = () => {
   setLocalExcludedCategories([]);
   setLocalExcludedRecipients([]);
   setLocalExcludeHidden(true);
-  setLocalExclusionScope('everywhere');
+  setLocalExclusionScope("everywhere");
   setLocalAppSettings(defaultAppSettings);
-  toast.info(t('settings.resetToDefaults'));
+  toast.info(t("settings.resetToDefaults"));
 };
 ```
 

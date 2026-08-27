@@ -76,7 +76,7 @@ function AttachmentRow({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                className="icon-touch-target text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
                 onClick={() => onDelete(attachment.id)}
                 disabled={deleting}
                 title={t('txPage.deleteAttachment')}

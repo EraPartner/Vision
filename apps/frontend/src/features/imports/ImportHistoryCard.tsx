@@ -3,7 +3,11 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+    useQuery,
+    useQueryClient,
+    keepPreviousData,
+} from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -11,290 +15,324 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { History, Loader2, RefreshCw, Undo2 } from "lucide-react";
+import { Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
 const STATUS_VARIANT: Record<
-  ImportBatch["status"],
-  "default" | "secondary" | "destructive" | "outline"
+    ImportBatch["status"],
+    "default" | "secondary" | "destructive" | "outline"
 > = {
-  pending: "outline",
-  staging: "secondary",
-  validating: "secondary",
-  matching: "secondary",
-  awaiting_review: "secondary",
-  committing: "secondary",
-  complete: "default",
-  failed: "destructive",
-  aborted: "outline",
+    pending: "outline",
+    staging: "secondary",
+    validating: "secondary",
+    matching: "secondary",
+    awaiting_review: "secondary",
+    committing: "secondary",
+    complete: "default",
+    failed: "destructive",
+    aborted: "outline",
 };
 
 function BatchStatusBadge({ status }: { status: ImportBatch["status"] }) {
-  return (
-    <Badge variant={STATUS_VARIANT[status]} className="capitalize text-xs">
-      {status}
-    </Badge>
-  );
+    return (
+        <Badge variant={STATUS_VARIANT[status]} className="capitalize text-xs">
+            {status}
+        </Badge>
+    );
 }
 
 function RollbackButton({
-  batch,
-  onRolledBack,
+    batch,
+    onRolledBack,
 }: {
-  batch: ImportBatch;
-  onRolledBack: () => void;
+    batch: ImportBatch;
+    onRolledBack: () => void;
 }) {
-  const { t } = useLanguage();
-  const [rolling, setRolling] = useState(false);
+    const { t } = useLanguage();
+    const [rolling, setRolling] = useState(false);
 
-  const canRollback =
-    batch.status === "complete" &&
-    batch.transactions_remaining > 0;
+    const canRollback =
+        batch.status === "complete" && batch.transactions_remaining > 0;
 
-  if (!canRollback) return null;
+    if (!canRollback) return null;
 
-  const handleRollback = async () => {
-    setRolling(true);
-    try {
-      const { deleted } = await apiClient.rollbackImportBatch(batch.id);
-      toast.success(
-        t("importHistory.rollbackSuccess", { n: deleted, id: batch.id }),
-      );
-      onRolledBack();
-    } catch (err) {
-      toast.error(t("importHistory.rollbackFailed"), { description: apiErrorToMessage(err, t) });
-    } finally {
-      setRolling(false);
-    }
-  };
+    const handleRollback = async () => {
+        setRolling(true);
+        try {
+            const { deleted } = await apiClient.rollbackImportBatch(batch.id);
+            toast.success(
+                t("importHistory.rollbackSuccess", {
+                    n: deleted,
+                    id: batch.id,
+                }),
+            );
+            onRolledBack();
+        } catch (err) {
+            toast.error(t("importHistory.rollbackFailed"), {
+                description: apiErrorToMessage(err, t),
+            });
+        } finally {
+            setRolling(false);
+        }
+    };
 
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-          disabled={rolling}
-        >
-          {rolling ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Undo2 className="h-3.5 w-3.5" />
-          )}
-          <span className="ml-1 text-xs">{t("importHistory.rollback")}</span>
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t("importHistory.rollbackTitle")}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {t("importHistory.rollbackDesc", {
-              n: batch.transactions_remaining,
-              file: batch.source_filename ?? `batch #${batch.id}`,
-            })}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleRollback}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {t("importHistory.rollbackConfirm")}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+    return (
+        <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={rolling}
+                >
+                    {rolling ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                        <Undo2 className="h-3.5 w-3.5" />
+                    )}
+                    <span className="ml-1 text-xs">
+                        {t("importHistory.rollback")}
+                    </span>
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>
+                        {t("importHistory.rollbackTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {t("importHistory.rollbackDesc", {
+                            n: batch.transactions_remaining,
+                            file: batch.source_filename ?? `batch #${batch.id}`,
+                        })}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={handleRollback}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                        {t("importHistory.rollbackConfirm")}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
 }
 
 function BatchRow({
-  batch,
-  onRolledBack,
+    batch,
+    onRolledBack,
 }: {
-  batch: ImportBatch;
-  onRolledBack: () => void;
+    batch: ImportBatch;
+    onRolledBack: () => void;
 }) {
-  const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
-  return (
-    <div className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium truncate">
-            {batch.source_filename ?? `Batch #${batch.id}`}
-          </span>
-          <BatchStatusBadge status={batch.status} />
+    const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
+    return (
+        <div className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
+            <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium truncate">
+                        {batch.source_filename ?? `Batch #${batch.id}`}
+                    </span>
+                    <BatchStatusBadge status={batch.status} />
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    <span>{batch.adapter_name}</span>
+                    <span>{started}</span>
+                    {batch.rows_imported != null && (
+                        <>
+                            <span className="text-success">
+                                +{batch.rows_imported}
+                            </span>
+                            {(batch.rows_duplicate ?? 0) > 0 && (
+                                <span className="text-warning">
+                                    {batch.rows_duplicate} dup
+                                </span>
+                            )}
+                            {(batch.rows_error ?? 0) > 0 && (
+                                <span className="text-destructive">
+                                    {batch.rows_error} err
+                                </span>
+                            )}
+                        </>
+                    )}
+                    {batch.transactions_remaining > 0 && (
+                        <span className="text-muted-foreground">
+                            {batch.transactions_remaining} remaining
+                        </span>
+                    )}
+                </div>
+                {batch.error_summary && (
+                    <p className="text-xs text-destructive truncate max-w-xs">
+                        {batch.error_summary}
+                    </p>
+                )}
+            </div>
+            <RollbackButton batch={batch} onRolledBack={onRolledBack} />
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-          <span>{batch.adapter_name}</span>
-          <span>{started}</span>
-          {batch.rows_imported != null && (
-            <>
-              <span className="text-success">
-                +{batch.rows_imported}
-              </span>
-              {(batch.rows_duplicate ?? 0) > 0 && (
-                <span className="text-warning">
-                  {batch.rows_duplicate} dup
-                </span>
-              )}
-              {(batch.rows_error ?? 0) > 0 && (
-                <span className="text-destructive">
-                  {batch.rows_error} err
-                </span>
-              )}
-            </>
-          )}
-          {batch.transactions_remaining > 0 && (
-            <span className="text-muted-foreground">
-              {batch.transactions_remaining} remaining
-            </span>
-          )}
-        </div>
-        {batch.error_summary && (
-          <p className="text-xs text-destructive truncate max-w-xs">
-            {batch.error_summary}
-          </p>
-        )}
-      </div>
-      <RollbackButton batch={batch} onRolledBack={onRolledBack} />
-    </div>
-  );
+    );
 }
 
 export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
-  const { t } = useLanguage();
-  const queryClient = useQueryClient();
-  const [offset, setOffset] = useState(0);
+    const { t } = useLanguage();
+    const queryClient = useQueryClient();
+    const [offset, setOffset] = useState(0);
 
-  const { data, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: importKeys.batches(offset),
-    queryFn: () => apiClient.listImportBatches(PAGE_SIZE, offset),
-    placeholderData: keepPreviousData,
-  });
+    const { data, isLoading, isFetching, isPlaceholderData, isError, error } =
+        useQuery({
+            queryKey: importKeys.batches(offset),
+            queryFn: () => apiClient.listImportBatches(PAGE_SIZE, offset),
+            placeholderData: keepPreviousData,
+        });
+    useBackgroundQueryCue(isFetching && isPlaceholderData);
 
-  const batches = data?.items ?? [];
-  const total = data?.total ?? 0;
+    const batches = data?.items ?? [];
+    const total = data?.total ?? 0;
 
-  // Preserve the old catch-block behavior: surface a toast whenever a load
-  // fails. A fresh error object per failed fetch re-triggers this effect, so
-  // repeated failures still notify.
-  useEffect(() => {
-    if (!isError) return;
-    toast.error(t("importHistory.loadFailed"), { description: apiErrorToMessage(error, t) });
-  }, [isError, error, t]);
+    // Preserve the old catch-block behavior: surface a toast whenever a load
+    // fails. A fresh error object per failed fetch re-triggers this effect, so
+    // repeated failures still notify.
+    useEffect(() => {
+        if (!isError) return;
+        toast.error(t("importHistory.loadFailed"), {
+            description: apiErrorToMessage(error, t),
+        });
+    }, [isError, error, t]);
 
-  const invalidate = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: importKeys.batchesAll }),
-    [queryClient],
-  );
+    const invalidate = useCallback(
+        () =>
+            queryClient.invalidateQueries({ queryKey: importKeys.batchesAll }),
+        [queryClient],
+    );
 
-  // External refresh trigger: the parent bumps refreshKey after an import.
-  // Skip the initial mount (the query already fetches then) so we only refetch
-  // on an actual change, matching the old effect's behavior.
-  const lastRefreshKey = useRef(refreshKey);
-  useEffect(() => {
-    if (refreshKey === lastRefreshKey.current) return;
-    lastRefreshKey.current = refreshKey;
-    invalidate();
-  }, [refreshKey, invalidate]);
+    // External refresh trigger: the parent bumps refreshKey after an import.
+    // Skip the initial mount (the query already fetches then) so we only refetch
+    // on an actual change, matching the old effect's behavior.
+    const lastRefreshKey = useRef(refreshKey);
+    useEffect(() => {
+        if (refreshKey === lastRefreshKey.current) return;
+        lastRefreshKey.current = refreshKey;
+        invalidate();
+    }, [refreshKey, invalidate]);
 
-  const handleRolledBack = useCallback(() => {
-    invalidate();
-  }, [invalidate]);
+    const handleRolledBack = useCallback(() => {
+        invalidate();
+    }, [invalidate]);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <History className="h-5 w-5 text-primary" />
-              {t("importHistory.title")}
-            </CardTitle>
-            <CardDescription>{t("importHistory.desc")}</CardDescription>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => invalidate()}
-            disabled={isFetching}
-            title={t("common.refresh")}
-          >
-            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <SectionLoader />
-        ) : batches.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            {t("importHistory.empty")}
-          </p>
-        ) : (
-          <>
-            <div>
-              {batches.map((b) => (
-                <BatchRow key={b.id} batch={b} onRolledBack={handleRolledBack} />
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  {t("importHistory.page", { page: currentPage, total: totalPages })}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                    disabled={offset === 0 || isFetching}
-                  >
-                    {t("common.previous")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOffset(offset + PAGE_SIZE)}
-                    disabled={offset + PAGE_SIZE >= total || isFetching}
-                  >
-                    {t("common.next")}
-                  </Button>
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle>{t("importHistory.title")}</CardTitle>
+                        <CardDescription>
+                            {t("importHistory.desc")}
+                        </CardDescription>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => invalidate()}
+                        disabled={isFetching}
+                        title={t("common.refresh")}
+                    >
+                        <RefreshCw
+                            className={cn(
+                                "h-4 w-4",
+                                isFetching && "animate-spin",
+                            )}
+                        />
+                    </Button>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <SectionLoader />
+                ) : batches.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                        {t("importHistory.empty")}
+                    </p>
+                ) : (
+                    <>
+                        <div>
+                            {batches.map((b) => (
+                                <BatchRow
+                                    key={b.id}
+                                    batch={b}
+                                    onRolledBack={handleRolledBack}
+                                />
+                            ))}
+                        </div>
+
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between mt-4 pt-2">
+                                <p className="text-xs text-muted-foreground">
+                                    {t("importHistory.page", {
+                                        page: currentPage,
+                                        total: totalPages,
+                                    })}
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setOffset(
+                                                Math.max(0, offset - PAGE_SIZE),
+                                            )
+                                        }
+                                        disabled={offset === 0 || isFetching}
+                                    >
+                                        {t("common.previous")}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setOffset(offset + PAGE_SIZE)
+                                        }
+                                        disabled={
+                                            offset + PAGE_SIZE >= total ||
+                                            isFetching
+                                        }
+                                    >
+                                        {t("common.next")}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    );
 }

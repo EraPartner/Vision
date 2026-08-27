@@ -12,6 +12,8 @@ interface SegmentedButtonsProps<T> {
     className?: string;
     selectedVariant?: ButtonProps["variant"];
     unselectedVariant?: ButtonProps["variant"];
+    "aria-label"?: string;
+    "aria-labelledby"?: string;
 }
 
 /**
@@ -28,14 +30,23 @@ export function SegmentedButtons<T>({
     className = "flex gap-1",
     selectedVariant = "default",
     unselectedVariant = "ghost",
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
 }: SegmentedButtonsProps<T>) {
     return (
-        <div className={className}>
+        <div
+            className={className}
+            role="group"
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabelledBy}
+        >
             {options.map((option) => (
                 <Button
                     key={getKey(option)}
                     size="sm"
-                    variant={isSelected(option) ? selectedVariant : unselectedVariant}
+                    variant={
+                        isSelected(option) ? selectedVariant : unselectedVariant
+                    }
                     className={buttonClassName}
                     onClick={() => onSelect(option)}
                 >

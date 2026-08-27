@@ -3,8 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-updated: 2026-08-26
-last_modified: 2026-08-26
+updated: 2026-08-27
+last_modified: 2026-08-27
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -43,94 +43,94 @@ All 44 user-data tables are included in the `pg_dump` SQL artifact inside every 
 
 #### Aggregates
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `agg_recipient_totals` | Aggregates | ✅ Included | |
-| `agg_split_outstanding` | Aggregates | ✅ Included | |
+| Table                   | Domain     | Backup      | Notes |
+| ----------------------- | ---------- | ----------- | ----- |
+| `agg_recipient_totals`  | Aggregates | ✅ Included |       |
+| `agg_split_outstanding` | Aggregates | ✅ Included |       |
 
 #### AI & Conversations
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `ai_conversations` | AI Chat | ✅ Included | |
-| `ai_messages` | AI Chat | ✅ Included | |
+| Table              | Domain  | Backup      | Notes |
+| ------------------ | ------- | ----------- | ----- |
+| `ai_conversations` | AI Chat | ✅ Included |       |
+| `ai_messages`      | AI Chat | ✅ Included |       |
 
 #### Attachments & Reference
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `asset_price_history` | Portfolio | ✅ Included | Price cache |
-| `attachments` | Attachments | ✅ Included | Metadata rows |
+| Table                 | Domain      | Backup      | Notes         |
+| --------------------- | ----------- | ----------- | ------------- |
+| `asset_price_history` | Portfolio   | ✅ Included | Price cache   |
+| `attachments`         | Attachments | ✅ Included | Metadata rows |
 
 #### Raw Bank Import Tables
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `belfius_raw_transactions` | Import | ✅ Included | |
-| `belgian_inflation_rates` | Tax | ✅ Included | |
-| `cashflow_forecast_accuracy` | Forecasting | ✅ Included | Backtest metrics |
-| `cashflow_forecast_mc` | Forecasting | ✅ Included | Month-view Monte Carlo cache |
-| `cashflow_forecast_mc_rolling` | Forecasting | ✅ Included | Rolling-window Monte Carlo cache |
-| `categories` | Categorisation | ✅ Included | |
-| `custom_parser_configs` | Import | ✅ Included | Custom bank parser configs |
-| `custom_raw_transactions` | Import | ✅ Included | |
-| `exchange_rates` | FX | ✅ Included | Rate cache |
-| `import_batches` | Import | ✅ Included | Import batch records |
-| `import_staging_rows` | Import | ✅ Included | Staging rows before commit |
-| `investments` | Portfolio | ✅ Included | Holdings |
-| `kbc_raw_transactions` | Import | ✅ Included | |
-| `manual_raw_transactions` | Import | ✅ Included | |
+| Table                          | Domain         | Backup      | Notes                            |
+| ------------------------------ | -------------- | ----------- | -------------------------------- |
+| `belfius_raw_transactions`     | Import         | ✅ Included |                                  |
+| `belgian_inflation_rates`      | Tax            | ✅ Included |                                  |
+| `cashflow_forecast_accuracy`   | Forecasting    | ✅ Included | Backtest metrics                 |
+| `cashflow_forecast_mc`         | Forecasting    | ✅ Included | Month-view Monte Carlo cache     |
+| `cashflow_forecast_mc_rolling` | Forecasting    | ✅ Included | Rolling-window Monte Carlo cache |
+| `categories`                   | Categorisation | ✅ Included |                                  |
+| `custom_parser_configs`        | Import         | ✅ Included | Custom bank parser configs       |
+| `custom_raw_transactions`      | Import         | ✅ Included |                                  |
+| `exchange_rates`               | FX             | ✅ Included | Rate cache                       |
+| `import_batches`               | Import         | ✅ Included | Import batch records             |
+| `import_staging_rows`          | Import         | ✅ Included | Staging rows before commit       |
+| `investments`                  | Portfolio      | ✅ Included | Holdings                         |
+| `kbc_raw_transactions`         | Import         | ✅ Included |                                  |
+| `manual_raw_transactions`      | Import         | ✅ Included |                                  |
 
 #### Planning & Recurring
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `planned_transaction_executions` | Planning | ✅ Included | Execution history |
-| `planned_transaction_loan_schedule` | Planning | ✅ Included | Loan amortisation |
-| `planned_transaction_tags` | Planning | ✅ Included | |
-| `planned_transactions` | Planning | ✅ Included | Recurring rules |
-| `portfolio_performance_snapshots` | Portfolio | ✅ Included | Performance snapshots |
-| `portfolio_transactions` | Portfolio | ✅ Included | Buy/sell history |
-| `provider_health` | Observability | ✅ Included | Provider status history |
+| Table                               | Domain        | Backup      | Notes                   |
+| ----------------------------------- | ------------- | ----------- | ----------------------- |
+| `planned_transaction_executions`    | Planning      | ✅ Included | Execution history       |
+| `planned_transaction_loan_schedule` | Planning      | ✅ Included | Loan amortisation       |
+| `planned_transaction_tags`          | Planning      | ✅ Included |                         |
+| `planned_transactions`              | Planning      | ✅ Included | Recurring rules         |
+| `portfolio_performance_snapshots`   | Portfolio     | ✅ Included | Performance snapshots   |
+| `portfolio_transactions`            | Portfolio     | ✅ Included | Buy/sell history        |
+| `provider_health`                   | Observability | ✅ Included | Provider status history |
 
 #### Core Transactional Data
 
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `recipient_bank_accounts` | Recipients | ✅ Included | |
-| `recipient_match_patterns` | Recipients | ✅ Included | Auto-match rules |
-| `recipients` | Recipients | ✅ Included | |
-| `revolut_raw_transactions` | Import | ✅ Included | |
-| `sabb_raw_transactions` | Import | ✅ Included | |
-| `saved_charts` | Charts | ✅ Included | Chart configurations |
-| `split_audit` | Splits | ✅ Included | Split change audit log |
-| `split_payments` | Splits | ✅ Included | |
-| `tags` | Tags | ✅ Included | |
-| `transaction_raw_references` | Import | ✅ Included | Raw↔canonical links |
-| `transaction_splits` | Splits | ✅ Included | |
-| `transaction_tags` | Tags | ✅ Included | |
-| `transactions` | Transactions | ✅ Included | Primary ledger |
-| `user_settings` | Settings | ✅ Included | All app settings |
-| `vision_raw_transactions` | Import | ✅ Included | |
-| `watchlist` | Portfolio | ✅ Included | |
-| `wise_raw_transactions` | Import | ✅ Included | |
+| Table                        | Domain       | Backup      | Notes                  |
+| ---------------------------- | ------------ | ----------- | ---------------------- |
+| `recipient_bank_accounts`    | Recipients   | ✅ Included |                        |
+| `recipient_match_patterns`   | Recipients   | ✅ Included | Auto-match rules       |
+| `recipients`                 | Recipients   | ✅ Included |                        |
+| `revolut_raw_transactions`   | Import       | ✅ Included |                        |
+| `sabb_raw_transactions`      | Import       | ✅ Included |                        |
+| `saved_charts`               | Charts       | ✅ Included | Chart configurations   |
+| `split_audit`                | Splits       | ✅ Included | Split change audit log |
+| `split_payments`             | Splits       | ✅ Included |                        |
+| `tags`                       | Tags         | ✅ Included |                        |
+| `transaction_raw_references` | Import       | ✅ Included | Raw↔canonical links    |
+| `transaction_splits`         | Splits       | ✅ Included |                        |
+| `transaction_tags`           | Tags         | ✅ Included |                        |
+| `transactions`               | Transactions | ✅ Included | Primary ledger         |
+| `user_settings`              | Settings     | ✅ Included | All app settings       |
+| `vision_raw_transactions`    | Import       | ✅ Included |                        |
+| `watchlist`                  | Portfolio    | ✅ Included |                        |
+| `wise_raw_transactions`      | Import       | ✅ Included |                        |
 
 #### Excluded Tables
 
-| Table | Reason |
-|-------|--------|
-| `alembic_version` | Alembic internal — re-derived on restore via `alembic upgrade head` |
-| `agg_shadow_divergences` | Dropped in migration 0009 — no longer in schema |
-| `feature_flags` | Dropped in migration 0011 — no longer in schema |
-| `bank_statements` | Dropped in migration 0014 — bank reconciliation feature was removed |
+| Table                    | Reason                                                              |
+| ------------------------ | ------------------------------------------------------------------- |
+| `alembic_version`        | Alembic internal — re-derived on restore via `alembic upgrade head` |
+| `agg_shadow_divergences` | Dropped in migration 0009 — no longer in schema                     |
+| `feature_flags`          | Dropped in migration 0011 — no longer in schema                     |
+| `bank_statements`        | Dropped in migration 0014 — bank reconciliation feature was removed |
 | `reconciliation_entries` | Dropped in migration 0014 — bank reconciliation feature was removed |
 
 ---
 
 ### 2. Filesystem — Attachment Files
 
-| Surface | Path | Backup | Restore |
-|---------|------|--------|---------|
+| Surface       | Path                                             | Backup                            | Restore                                       |
+| ------------- | ------------------------------------------------ | --------------------------------- | --------------------------------------------- |
 | Receipt files | `$ATTACHMENTS_DIR/{transaction_id}/{uuid}.{ext}` | ✅ Bundled as `attachments/` tree | Extracted to `$ATTACHMENTS_DIR` after DB load |
 
 **Default `ATTACHMENTS_DIR`:** `./data/attachments` (env-configurable via `ATTACHMENTS_DIR`).
@@ -147,26 +147,28 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 
 **Source of truth:** `apps/frontend/src/lib/localStorage-keys.ts` → `LOCAL_STORAGE_KEYS`
 
-| Key | Purpose | Backup |
-|-----|---------|--------|
-| `vision_theme` | Active theme mode (`light`/`dark`/`system`) | ✅ Included |
-| `vision_theme_variant` | Color variant | ✅ Included |
-| `vision.backup.passphrase.reminder.dismissed` | Passphrase reminder dismissed flag | ✅ Included |
-| `dismissed_upcoming_planned_payments` | Dismissed upcoming-payment IDs | ✅ Included |
-| `dismissed_recurring_patterns` | Dismissed recurring-pattern keys | ✅ Included |
-| `vision_dashboardSettings` | Legacy dashboard layout | ❌ Excluded — SettingsContext migrates to DB and removes on read; no live value to back up |
-| `vision.palette.recents` | Command palette recent routes (last ~5 visited) | ❌ Excluded — Ephemeral navigation state; registered in `LOCAL_STORAGE_EXCLUDED_KEYS` (Premium v3, ADR-071) |
+| Key                                           | Purpose                                         | Backup                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `vision_theme`                                | Active theme mode (`light`/`dark`/`system`)     | ✅ Included                                                                                                 |
+| `vision_theme_variant`                        | Color variant                                   | ✅ Included                                                                                                 |
+| `vision.backup.passphrase.reminder.dismissed` | Passphrase reminder dismissed flag              | ✅ Included                                                                                                 |
+| `dismissed_upcoming_planned_payments`         | Dismissed upcoming-payment IDs                  | ✅ Included                                                                                                 |
+| `dismissed_recurring_patterns`                | Dismissed recurring-pattern keys                | ✅ Included                                                                                                 |
+| `vision.onboarding.draft.v1`                  | Resumable onboarding draft (no file bytes)      | ✅ Included                                                                                                 |
+| `vision.research.chartBuilder.layouts.v2`     | Chart Builder draft and named layouts           | ✅ Included                                                                                                 |
+| `vision_dashboardSettings`                    | Legacy dashboard layout                         | ❌ Excluded — SettingsContext migrates to DB and removes on read; no live value to back up                  |
+| `vision.palette.recents`                      | Command palette recent routes (last ~5 visited) | ❌ Excluded — Ephemeral navigation state; registered in `LOCAL_STORAGE_EXCLUDED_KEYS` (Premium v3, ADR-071) |
 
 ---
 
 ### 4. In-Memory / Derived State
 
-| Surface | Backup | Notes |
-|---------|--------|-------|
-| Materialised views | ❌ Excluded | Re-built at runtime by `materializedViewService.js` |
-| Price provider caches (HTTP) | ❌ Excluded | Re-fetched on demand |
+| Surface                           | Backup      | Notes                                                                                                                                                                                                         |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Materialised views                | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
+| Price provider caches (HTTP)      | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
-| `settings.json` (Electron-local) | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine |
+| `settings.json` (Electron-local)  | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
 
 ---
 
@@ -178,7 +180,7 @@ When the user configures backup encryption, the passphrase is encrypted via Elec
 
 Because Vision ships ad-hoc unsigned (no Developer ID certificate), macOS treats the code identity as unstable. Accessing `safeStorage` at every launch would trigger a login-password prompt even for users who have never configured a passphrase. The Electron main process avoids this:
 
-- **`getBackupPassphrase()`** reads `backupPassphraseEncrypted` from `settings.json` *before* calling any `safeStorage` API. If no blob is present and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns `undefined` without touching the keychain. Backup-on-quit therefore never prompts for users who have not configured encryption.
+- **`getBackupPassphrase()`** reads `backupPassphraseEncrypted` from `settings.json` _before_ calling any `safeStorage` API. If no blob is present and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns `undefined` without touching the keychain. Backup-on-quit therefore never prompts for users who have not configured encryption.
 - **`getBackupPassphraseStatus()`** (IPC: `backup:get-encryption-status`, used by the Backup settings tab) only calls `safeStorage.isEncryptionAvailable()` when a passphrase blob is already stored. With nothing stored, it reports availability from the API's mere presence (no actual keychain probe). The real check runs inside `setBackupPassphrase()` when the user actively opts in.
 
 ### Keychain Prompts on Unsigned Builds
@@ -187,14 +189,14 @@ Users who **do** store a passphrase will see macOS password prompts on an unsign
 
 **Workarounds:**
 
-| Option | Description |
-|--------|-------------|
-| **Always Allow** | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage |
+| Option                             | Description                                                                                                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Always Allow**                   | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage                                                                          |
 | `VISION_BACKUP_PASSPHRASE` env var | Bypasses `safeStorage` entirely; the shell reads the passphrase from the environment variable instead. Useful for automation, CI, or users who want no Keychain involvement |
-| No stored passphrase | If you do not configure backup encryption, no Keychain prompts occur at all |
+| No stored passphrase               | If you do not configure backup encryption, no Keychain prompts occur at all                                                                                                 |
 
 > [!note]
-> `safeStorage` only stores and retrieves the *passphrase text*. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
+> `safeStorage` only stores and retrieves the _passphrase text_. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
 
 ---
 
@@ -216,6 +218,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 ### Encryption Formats
 
 **v1 (Legacy, April 2026):** AES-256-CBC with static salt
+
 - **Magic:** `VISIONENC1` (9 bytes)
 - **Salt:** Static 12 bytes (hardcoded, same across all v1 backups)
 - **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
@@ -224,6 +227,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 - **Status:** Readable indefinitely; no longer written to (v2 used for new backups as of 2026-04-28)
 
 **v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
+
 - **Magic:** `VISIONENC2` (9 bytes)
 - **Salt:** Random 16 bytes per backup (generated at encryption time)
 - **IV:** Random 12 bytes per backup (GCM standard)
@@ -237,6 +241,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 **Backward Compatibility:** Auto-detection via magic header; v1 backups decrypt correctly; old passphrases work unchanged. No user action required. Restore process transparently dispatches to correct decoder.
 
 **Module:** `packaging/electron/backup/bundle.js` provides:
+
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
 - `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
 - `decryptToTemp(encPath, passphrase, tmpPath)` — Auto-detect v1 vs v2; dispatch to appropriate decoder
@@ -249,13 +254,13 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 **IPC Handlers** (in `packaging/electron/main.js`):
 
-| Handler | Signature | Purpose |
-|---------|-----------|---------|
-| `backup:run` | `(destDir, frontendStateJson?)` | Create and optionally encrypt bundle |
-| `backup:restore` | `(bundlePath, opts?)` | Restore from bundle with optional passphrase; `opts = { passphrase }` |
-| `backup:is-encrypted` | `(filePath)` | Detect if backup file is encrypted (returns boolean) |
-| `backup:select-file` | `()` | Dialog to select .visionbak file |
-| `backup:select-dir` | `()` | Dialog to choose backup directory |
+| Handler               | Signature                       | Purpose                                                               |
+| --------------------- | ------------------------------- | --------------------------------------------------------------------- |
+| `backup:run`          | `(destDir, frontendStateJson?)` | Create and optionally encrypt bundle                                  |
+| `backup:restore`      | `(bundlePath, opts?)`           | Restore from bundle with optional passphrase; `opts = { passphrase }` |
+| `backup:is-encrypted` | `(filePath)`                    | Detect if backup file is encrypted (returns boolean)                  |
+| `backup:select-file`  | `()`                            | Dialog to select .visionbak file                                      |
+| `backup:select-dir`   | `()`                            | Dialog to choose backup directory                                     |
 
 **Helper Functions** (Phase 2 + v2 Upgrade):
 
@@ -299,6 +304,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 - Fallback source resolution: If user does not enter passphrase in modal, restore attempts `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) before throwing `PASSPHRASE_REQUIRED`
 
 **Related Code:**
+
 - `runBundleRestore()` in `packaging/electron/main.js` — Main restore orchestrator
 - `FrontendStateSnapshot` type in `apps/frontend/src/lib/api/electron.ts`
 - Error handling in `BackupTab.tsx` — checks for BUNDLE_SCHEMA_NEWER prefix on error string
@@ -309,7 +315,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 `apps/node-backend/tests/backup-coverage.test.js` runs in CI and:
 
-1. **Table coverage** — parses all `alembic/versions/*.py` files, computes net table set (created minus dropped), and asserts exact match against `BACKUP_COVERED_TABLES`.  Fails if a new migration adds a table not in the registry.
+1. **Table coverage** — parses all `alembic/versions/*.py` files, computes net table set (created minus dropped), and asserts exact match against `BACKUP_COVERED_TABLES`. Fails if a new migration adds a table not in the registry.
 2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
 
 Adding a table or localStorage key without updating the registries causes a CI failure.

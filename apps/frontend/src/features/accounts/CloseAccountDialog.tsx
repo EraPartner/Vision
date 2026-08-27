@@ -60,7 +60,7 @@ export function CloseAccountDialog({ account, open, onOpenChange }: CloseAccount
         </DialogHeader>
 
         {residual !== 0 && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-500">
+          <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{t('accounts.close.residual', { balance: fmtCur(residual, account.currency) })}</span>
           </div>

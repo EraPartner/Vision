@@ -1,10 +1,10 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import {X} from "lucide-react";
+import { X } from "lucide-react";
 
-import {cn} from "@/lib/utils";
-import {composeRefs} from "@/lib/composeRefs";
-import {useGenieOrigin} from "@/hooks/useGenieOrigin";
+import { cn } from "@/lib/utils";
+import { composeRefs } from "@/lib/composeRefs";
+import { useGenieOrigin } from "@/hooks/useGenieOrigin";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -17,7 +17,7 @@ const DialogClose = DialogPrimitive.Close;
 const DialogOverlay = React.forwardRef<
     React.ElementRef<typeof DialogPrimitive.Overlay>,
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({className, ...props}, ref) => (
+>(({ className, ...props }, ref) => (
     <DialogPrimitive.Overlay
         ref={ref}
         className={cn(
@@ -34,53 +34,73 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
     React.ElementRef<typeof DialogPrimitive.Content>,
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({className, children, ...props}, ref) => {
+>(({ className, children, ...props }, ref) => {
     const genieRef = useGenieOrigin();
     return (
-    <DialogPortal>
-        <DialogOverlay />
-        <DialogPrimitive.Content
-            ref={composeRefs(ref, genieRef)}
-            className={cn(
-                // max-h/overflow live on the primitive so a tall dialog on a
-                // short viewport (landscape phone, on-screen keyboard open)
-                // scrolls inside itself instead of clipping both ends and
-                // putting the submit button out of reach. Dialogs that set
-                // their own max-h/overflow still win via tailwind-merge.
-                "glass-thick fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 overflow-y-auto rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
-                className,
-            )}
-            {...props}
-        >
-            {children}
-            <DialogPrimitive.Close
-                className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground opacity-70 ring-offset-background transition-[opacity,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
-        </DialogPrimitive.Content>
-    </DialogPortal>
+        <DialogPortal>
+            <DialogOverlay />
+            <DialogPrimitive.Content
+                ref={composeRefs(ref, genieRef)}
+                className={cn(
+                    // max-h/overflow live on the primitive so a tall dialog on a
+                    // short viewport (landscape phone, on-screen keyboard open)
+                    // scrolls inside itself instead of clipping both ends and
+                    // putting the submit button out of reach. Dialogs that set
+                    // their own max-h/overflow still win via tailwind-merge.
+                    "glass-thick fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 overflow-y-auto rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
+                    className,
+                )}
+                {...props}
+            >
+                {children}
+                <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground opacity-70 ring-offset-background transition-[opacity,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none">
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                </DialogPrimitive.Close>
+            </DialogPrimitive.Content>
+        </DialogPortal>
     );
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-const DialogHeader = ({className, ...props}: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+const DialogHeader = ({
+    className,
+    ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+    <div
+        className={cn(
+            "flex flex-col space-y-1.5 text-center sm:text-left",
+            className,
+        )}
+        {...props}
+    />
 );
 DialogHeader.displayName = "DialogHeader";
 
-const DialogFooter = ({className, ...props}: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+const DialogFooter = ({
+    className,
+    ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+    <div
+        className={cn(
+            "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2",
+            className,
+        )}
+        {...props}
+    />
 );
 DialogFooter.displayName = "DialogFooter";
 
 const DialogTitle = React.forwardRef<
     React.ElementRef<typeof DialogPrimitive.Title>,
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({className, ...props}, ref) => (
+>(({ className, ...props }, ref) => (
     <DialogPrimitive.Title
         ref={ref}
-        className={cn("font-display text-xl font-semibold leading-tight tracking-tight text-foreground", className)}
+        className={cn(
+            "font-display text-xl font-semibold leading-tight tracking-tight text-foreground",
+            className,
+        )}
         {...props}
     />
 ));
@@ -89,10 +109,13 @@ DialogTitle.displayName = DialogPrimitive.Title.displayName;
 const DialogDescription = React.forwardRef<
     React.ElementRef<typeof DialogPrimitive.Description>,
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
->(({className, ...props}, ref) => (
+>(({ className, ...props }, ref) => (
     <DialogPrimitive.Description
         ref={ref}
-        className={cn("text-sm text-muted-foreground/90 tracking-tight", className)}
+        className={cn(
+            "text-sm text-muted-foreground/90 tracking-tight",
+            className,
+        )}
         {...props}
     />
 ));

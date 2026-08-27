@@ -19,7 +19,7 @@ function gradeColor(grade: string): string {
   const g = grade.toLowerCase();
   if (/buy|outperform|overweight|accumulate/.test(g)) return "text-success";
   if (/sell|underperform|underweight|reduce/.test(g)) return "text-destructive";
-  return "text-yellow-500 dark:text-yellow-400";
+  return "text-warning";
 }
 
 export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps) {
@@ -61,7 +61,7 @@ export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps)
         : bearPct >= 0.6 ? t('market.strongSell')
           : bearPct >= 0.45 ? t('market.sell')
             : t('market.hold');
-  const verdictColor = bullPct >= 0.45 ? "text-success" : bearPct >= 0.45 ? "text-destructive" : "text-yellow-500 dark:text-yellow-400";
+  const verdictColor = bullPct >= 0.45 ? "text-success" : bearPct >= 0.45 ? "text-destructive" : "text-warning";
 
   return (
     <div className="space-y-4">
@@ -77,7 +77,7 @@ export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps)
           {([
             { label: t('market.strongBuy'), count: strongBuy, barClass: "bg-success" },
             { label: t('market.buy'), count: buy, barClass: "bg-success/60" },
-            { label: t('market.hold'), count: hold, barClass: "bg-yellow-400" },
+            { label: t('market.hold'), count: hold, barClass: "bg-warning" },
             { label: t('market.sell'), count: sell, barClass: "bg-destructive/60" },
             { label: t('market.strongSell'), count: strongSell, barClass: "bg-destructive" },
           ]).map(({ label, count, barClass }) => (
@@ -133,7 +133,7 @@ export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps)
 function TargetCell({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="eyebrow">{label}</p>
       <p className="text-sm font-semibold tabular-nums">{value != null ? value.toFixed(2) : "—"}</p>
     </div>
   );

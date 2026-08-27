@@ -3,7 +3,7 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -500,18 +500,18 @@ The gain/loss palette is now surfaced as two always-defined CSS custom propertie
 }
 ```
 
-`index.css` routes the amount classes through these tokens:
+Tailwind routes `text-gain`, `text-loss`, and the related opacity-aware utilities through these tokens:
 
-```css
-.amount-gain { color: hsl(var(--gain)); }
-.amount-loss { color: hsl(var(--loss)); }
+```ts
+gain: 'hsl(var(--gain) / <alpha-value>)',
+loss: 'hsl(var(--loss) / <alpha-value>)',
 ```
 
 The `.glass-trend-up` / `.glass-trend-down` (and `.liquid-glass-trend-*`) classes were re-pointed from `--success`/`--destructive` to `--gain`/`--loss` in the initial pass.
 
 > [!info] 2026-06-24 gain/loss consistency pass: `.glass-trend-up`, `.glass-trend-down`, `.liquid-glass-trend-up`, and `.liquid-glass-trend-down` have since been **deleted** from `index.css` — they became orphaned once `PerformancePage` migrated to `<TrendHue>` and no component referenced these classes anymore. Card hues are now delivered exclusively via the shared `TrendHue` component (see [[docs/components/shared-components#trendhue|TrendHue]]).
 
-New cards that need a gain/loss hue must use `<TrendHue variant="gain|loss|neutral" />` — not these deleted classes.
+New cards that need a gain/loss hue must use `<TrendHue tone="gain|loss|neutral" />` — not these deleted classes.
 
 ### `gain` / `loss` Tailwind Color Utilities
 
@@ -538,7 +538,6 @@ This enables opacity-aware utilities that follow the toggle automatically:
 
 > [!warning] Gain/loss color rule for contributors
 > Any gain/loss-semantic color MUST use one of:
-> - `.amount-gain` / `.amount-loss` CSS classes
 > - `text-gain` / `text-loss` (or other `gain`/`loss` Tailwind utilities with opacity variants)
 > - `hsl(var(--gain))` / `hsl(var(--loss))` inline/in CSS
 >
@@ -551,8 +550,8 @@ This enables opacity-aware utilities that follow the toggle automatically:
 - `lib/skin.ts` — `setSkinV2(flag: boolean)` toggles `.skin-v2` on `document.documentElement`; unchanged in behavior.
 - `AppearanceSection.tsx` — new `SettingsGroup` with `id="accessibility"`, containing a `SettingRow` stack wrapping a Select.
 - `styles/tokens.css` — adds `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` (always-defined legacy values).
-- `styles/skin-v2.css` — overrides only `--gain` and `--loss` tokens (Okabe-Ito values, light + dark); old per-class `.amount-gain`/`.amount-loss` rules removed as redundant.
-- `index.css` — `.amount-gain`/`.amount-loss` read `hsl(var(--gain))`/`hsl(var(--loss))`; `.glass-trend-up`/`.glass-trend-down` re-pointed from `--success`/`--destructive` to `--gain`/`--loss` (subsequently deleted in the 2026-06-24 gain/loss consistency pass — see TrendHue).
+- `styles/skin-v2.css` — overrides only `--gain` and `--loss` tokens (Okabe-Ito values, light + dark).
+- `tailwind.config.ts` — exposes `gain`/`loss` utilities; the old `.amount-gain`/`.amount-loss` aliases were removed after the source sweep.
 - `tailwind.config.ts` — `gain` and `loss` color entries added.
 
 ### Relationship to `VITE_SKIN_V2` build flag

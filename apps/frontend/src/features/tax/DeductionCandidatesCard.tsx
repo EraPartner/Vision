@@ -70,7 +70,7 @@ export function DeductionCandidatesCard() {
     };
 
     return (
-        <Card className="glass-regular">
+        <Card>
             <CardHeader className="pb-3">
                 <CardTitle>{t('tax.deductionCandidates.title')}</CardTitle>
                 <CardDescription>{t('tax.deductionCandidates.description')}</CardDescription>

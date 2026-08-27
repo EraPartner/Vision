@@ -150,7 +150,7 @@ export function TaxComputationFlow({
             id: "net",
             label: t("tax.card.netTakeHome"),
             value: calculation.netTakeHome,
-            tone: calculation.netTakeHome >= 0 ? "amount-gain" : "amount-loss",
+            tone: calculation.netTakeHome >= 0 ? "text-gain" : "text-loss",
             note: t("tax.card.netTakeHome.desc"),
             weight: 2,
         },
@@ -238,7 +238,7 @@ export function TaxComputationFlow({
                                                 <span className="text-xs text-muted-foreground">{stage.note}</span>
                                             )}
                                             {stage.chip && (
-                                                <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/50 px-2 py-0.5 text-[0.6875rem] font-medium tabular-nums text-muted-foreground">
+                                                <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/50 px-2 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
                                                     {stage.chip}
                                                 </span>
                                             )}
@@ -256,7 +256,7 @@ export function TaxComputationFlow({
                                     ) : stage.then ? (
                                         <div className="mt-3 rounded-[0.5rem] border border-border/50 bg-muted/25 px-3 py-2">
                                             {stage.then.heading && (
-                                                <p className="mb-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                                <p className="mb-1.5 eyebrow">
                                                     {stage.then.heading}
                                                 </p>
                                             )}
@@ -286,7 +286,7 @@ export function TaxComputationFlow({
 
                 {/* Coda: figures that sit outside the personal-income-tax chain. */}
                 <div className="mt-5 border-t border-border/60 pt-4">
-                    <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <p className="eyebrow">
                         {t("tax.flow.coda.title")}
                     </p>
                     <ul className="mt-2 space-y-1.5">

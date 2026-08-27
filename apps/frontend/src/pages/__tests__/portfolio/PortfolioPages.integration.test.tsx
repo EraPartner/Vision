@@ -6,7 +6,7 @@ import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import { err, INVESTMENT_STUB, ok } from "@/test/msw/handlers";
 import StocksPage from "@/pages/portfolio/StocksPage";
 import CryptoPage from "@/pages/portfolio/CryptoPage";
 import MetalsPage from "@/pages/portfolio/MetalsPage";
@@ -75,8 +75,32 @@ describe("Portfolio pages (integration)", () => {
     it("StocksPage shows Add Investment button", async () => {
         renderWithApp(<StocksPage />);
         // Multiple AddInvestmentDialog instances when investments = []
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    it("StocksPage exposes live-price freshness beside the total and on the Price header", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [INVESTMENT_STUB],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+
+        renderWithApp(<StocksPage />);
+
+        const freshnessCaptions = await screen.findAllByText(/prices as of/i);
+        expect(freshnessCaptions.length).toBeGreaterThan(0);
+        expect(
+            screen.getByRole("button", { name: /price: prices as of/i }),
+        ).toBeInTheDocument();
     });
 
     // ─── CryptoPage ───────────────────────────────────────────────────────────
@@ -97,7 +121,9 @@ describe("Portfolio pages (integration)", () => {
 
     it("CryptoPage shows Add Investment button", async () => {
         renderWithApp(<CryptoPage />);
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -113,13 +139,17 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<MetalsPage />);
         // metals.noMetals = "No metal investments yet"
         expect(
-            await screen.findByRole("heading", { name: /no metal investments yet/i }),
+            await screen.findByRole("heading", {
+                name: /no metal investments yet/i,
+            }),
         ).toBeInTheDocument();
     });
 
     it("MetalsPage shows Add Investment button", async () => {
         renderWithApp(<MetalsPage />);
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -141,7 +171,9 @@ describe("Portfolio pages (integration)", () => {
 
     it("RealEstatePage shows Add Investment button", async () => {
         renderWithApp(<RealEstatePage />);
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -157,13 +189,17 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<SavingsPage />);
         // savings.noAccounts = "No savings accounts or bonds"
         expect(
-            await screen.findByRole("heading", { name: /no savings accounts or bonds/i }),
+            await screen.findByRole("heading", {
+                name: /no savings accounts or bonds/i,
+            }),
         ).toBeInTheDocument();
     });
 
     it("SavingsPage shows Add Investment button", async () => {
         renderWithApp(<SavingsPage />);
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -171,6 +207,74 @@ describe("Portfolio pages (integration)", () => {
     it("PerformancePage renders heading", async () => {
         renderWithApp(<PerformancePage />);
         await screen.findByRole("heading", { name: /performance/i });
+    });
+
+    it("PerformancePage hydrates period and FX-neutral state from the URL", async () => {
+        const requestedPeriods: string[] = [];
+        server.use(
+            http.get(
+                `${API_BASE}/api/info/portfolio-performance`,
+                ({ request }) => {
+                    requestedPeriods.push(
+                        new URL(request.url).searchParams.get("period") ?? "",
+                    );
+                    return ok({
+                        currency: "EUR",
+                        start_date: "2026-07-01",
+                        end_date: "2026-08-01",
+                        snapshots: [
+                            {
+                                date: "2026-07-01",
+                                invested: 100,
+                                value: 110,
+                                value_fx_neutral: 108,
+                                stocks_etfs_value: 110,
+                                crypto_value: 0,
+                                metals_value: 0,
+                                stocks_etfs_invested: 100,
+                                crypto_invested: 0,
+                                metals_invested: 0,
+                                inflation_adjusted_value: 109,
+                                gain_loss: 10,
+                                return_pct: 10,
+                            },
+                            {
+                                date: "2026-08-01",
+                                invested: 100,
+                                value: 120,
+                                value_fx_neutral: 116,
+                                stocks_etfs_value: 120,
+                                crypto_value: 0,
+                                metals_value: 0,
+                                stocks_etfs_invested: 100,
+                                crypto_invested: 0,
+                                metals_invested: 0,
+                                inflation_adjusted_value: 118,
+                                gain_loss: 20,
+                                return_pct: 20,
+                            },
+                        ],
+                        metrics: null,
+                        heatmap: { years: [], data: {}, maxAbsPct: 0 },
+                        breakdownSummary: [],
+                    });
+                },
+            ),
+        );
+
+        renderWithApp(<PerformancePage />, {
+            initialEntries: [
+                "/portfolio/performance?period=3m&fx_neutral=true",
+            ],
+        });
+
+        expect(
+            await screen.findByRole("button", { name: "3 Months" }),
+        ).toHaveAttribute("aria-pressed", "true");
+        expect(
+            screen.getByRole("button", { name: /fx.?neutral/i }),
+        ).toHaveClass("bg-background");
+        expect(requestedPeriods).toContain("3m");
     });
 
     it("PerformancePage shows empty state when no snapshots", async () => {
@@ -190,11 +294,118 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("PerformancePage keeps its value, invested, FX, allocation, and return facts in the shared hero", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
+                ok({
+                    currency: "EUR",
+                    start_date: "2026-07-01",
+                    end_date: "2026-08-01",
+                    snapshots: [
+                        {
+                            date: "2026-07-01",
+                            invested: 1_000,
+                            value: 1_100,
+                            stocks_etfs_value: 800,
+                            crypto_value: 200,
+                            metals_value: 100,
+                            stocks_etfs_invested: 750,
+                            crypto_invested: 150,
+                            metals_invested: 100,
+                            inflation_adjusted_value: 1_080,
+                            gain_loss: 100,
+                            return_pct: 10,
+                        },
+                        {
+                            date: "2026-08-01",
+                            invested: 1_100,
+                            value: 1_500,
+                            stocks_etfs_value: 900,
+                            crypto_value: 220,
+                            metals_value: 130,
+                            stocks_etfs_invested: 800,
+                            crypto_invested: 180,
+                            metals_invested: 120,
+                            inflation_adjusted_value: 1_220,
+                            gain_loss: 150,
+                            return_pct: 13.64,
+                        },
+                    ],
+                    metrics: {
+                        currentValue: 1_500,
+                        totalInvested: 1_100,
+                        totalGainLoss: 150,
+                        totalReturnPct: 13.64,
+                        annualizedReturn: 8,
+                        realReturnPct: 11,
+                        cumulativeInflation: 2.2,
+                    },
+                    heatmap: { years: [], data: {}, maxAbsPct: 0 },
+                    breakdownSummary: [
+                        {
+                            id: 1,
+                            name: "World ETF",
+                            symbol: "IWDA",
+                            assetClass: "etf",
+                            currency: "USD",
+                            currentValue: 1_500,
+                            totalInvested: 1_100,
+                            gainLoss: 150,
+                            gainLossPercent: 13.64,
+                        },
+                    ],
+                    totals: {
+                        totalPortfolioValue: 1_500,
+                        totalInvested: 1_100,
+                        totalGainLoss: 150,
+                        totalRealizedGain: 0,
+                        totalUnrealizedGain: 150,
+                        totalGain: 150,
+                        totalIncome: 0,
+                        totalFees: 0,
+                        totalTaxes: 0,
+                        totalAssetGain: 125,
+                        totalFxGain: 25,
+                        totalReturnPct: 13.64,
+                        usedFallbackRate: false,
+                    },
+                }),
+            ),
+        );
+
+        renderWithApp(<PerformancePage />);
+
+        const heroHeading = await screen.findByRole("heading", {
+            name: "Portfolio Value",
+        });
+        const hero = heroHeading.closest(".premium-frame");
+        expect(hero).toHaveTextContent("Total Invested");
+        expect(hero).toHaveTextContent("Net P&L");
+        expect(hero).toHaveTextContent("Asset gain");
+        expect(hero).toHaveTextContent("FX effect");
+        expect(hero).toHaveTextContent("Asset allocation");
+        expect(hero).toHaveTextContent("900,00 € (72.0%)");
+        expect(hero).toHaveTextContent("220,00 € (17.6%)");
+        expect(hero).toHaveTextContent("130,00 € (10.4%)");
+        expect(
+            screen.getByRole("heading", { name: "Total Return" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Annualized Return" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: /real return/i }),
+        ).toBeInTheDocument();
+    }, 15_000);
+
     // ─── NetWorthPage ─────────────────────────────────────────────────────────
     it("NetWorthPage renders heading", async () => {
         renderWithApp(<NetWorthPage />);
         expect(
-            await screen.findByRole("heading", { name: /net worth/i, level: 1 }),
+            await screen.findByRole("heading", {
+                name: /net worth/i,
+                level: 1,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -215,7 +426,9 @@ describe("Portfolio pages (integration)", () => {
     });
 
     it("NetWorthPage shows error state when net-worth API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/info/net-worth`, () =>
                 err(500, "net worth unavailable"),
@@ -226,11 +439,137 @@ describe("Portfolio pages (integration)", () => {
 
         // networth.unableToLoad = "Unable to load net worth"
         expect(
-            await screen.findByText(/unable to load net worth/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /unable to load net worth/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });
+
+    it("NetWorthPage renders the conditional liabilities fact without stretching the hero", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/info/net-worth`, () =>
+                ok({
+                    current: {
+                        liquid: 5_000,
+                        liabilities: -1_000,
+                        investments: 7_000,
+                        netWorth: 11_000,
+                    },
+                    monthlyChange: 100,
+                    monthlyChangePercent: 0.92,
+                    snapshots: [
+                        {
+                            date: "2026-07-01",
+                            liquid: 5_000,
+                            liabilities: -1_000,
+                            investments: 6_500,
+                            netWorth: 10_500,
+                        },
+                        {
+                            date: "2026-08-01",
+                            liquid: 5_000,
+                            liabilities: -1_000,
+                            investments: 7_000,
+                            netWorth: 11_000,
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderWithApp(<NetWorthPage />);
+
+        expect(
+            await screen.findByRole("heading", { name: "Liquid Assets" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Investments" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Liabilities" }),
+        ).toBeInTheDocument();
+    }, 15_000);
+
+    it("NetWorthPage hydrates its visible period from the URL", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/info/net-worth`, () =>
+                ok({
+                    current: {
+                        liquid: 5_000,
+                        investments: 7_000,
+                        netWorth: 12_000,
+                    },
+                    monthlyChange: 100,
+                    monthlyChangePercent: 0.84,
+                    snapshots: [
+                        {
+                            date: "2026-07-01",
+                            liquid: 5_000,
+                            investments: 6_500,
+                            netWorth: 11_500,
+                        },
+                        {
+                            date: "2026-08-01",
+                            liquid: 5_000,
+                            investments: 7_000,
+                            netWorth: 12_000,
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderWithApp(<NetWorthPage />, {
+            initialEntries: ["/portfolio/net-worth?period=3m"],
+        });
+
+        expect(
+            await screen.findByRole("button", { name: "3 Months" }),
+        ).toHaveAttribute("aria-pressed", "true");
+    }, 15_000);
+
+    it("NetWorthPage identifies the live investment-price timestamp in its hero", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [INVESTMENT_STUB],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/net-worth`, () =>
+                ok({
+                    current: {
+                        liquid: 5_000,
+                        investments: 7_000,
+                        netWorth: 12_000,
+                    },
+                    monthlyChange: 100,
+                    monthlyChangePercent: 0.84,
+                    snapshots: [
+                        {
+                            date: "2026-08-01",
+                            liquid: 5_000,
+                            investments: 7_000,
+                            netWorth: 12_000,
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderWithApp(<NetWorthPage />);
+
+        expect(
+            await screen.findByText(/investment prices as of/i),
+        ).toBeInTheDocument();
+    }, 15_000);
 
     // ─── ExchangeRatesPage ────────────────────────────────────────────────────
     it("ExchangeRatesPage renders heading", async () => {
@@ -259,23 +598,33 @@ describe("Portfolio pages (integration)", () => {
     it("ExchangeRatesPage renders populated live and fallback rate tables", async () => {
         const user = userEvent.setup();
         server.use(
-            http.get(`${API_BASE}/api/info/exchange-rates`, () => ok({
-                total_rates: 1,
-                rates: [{
-                    currency: "USD",
-                    rate_to_eur: 0.92,
-                    rate_date: "2026-08-26",
-                    fetched_at: "2026-08-26T09:00:00Z",
-                }],
-                fallback_rates: { EUR: 1, GBP: 1.17 },
-            })),
+            http.get(`${API_BASE}/api/info/exchange-rates`, () =>
+                ok({
+                    total_rates: 1,
+                    rates: [
+                        {
+                            currency: "USD",
+                            rate_to_eur: 0.92,
+                            rate_date: "2026-08-26",
+                            fetched_at: "2026-08-26T09:00:00Z",
+                        },
+                    ],
+                    fallback_rates: { EUR: 1, GBP: 1.17 },
+                }),
+            ),
         );
 
         renderWithApp(<ExchangeRatesPage />);
 
         const liveTable = await screen.findByRole("table");
-        expect(within(liveTable).getByRole("columnheader", { name: "Currency" })).toBeInTheDocument();
-        expect(within(liveTable).getByRole("columnheader", { name: "1 unit → EUR" })).toBeInTheDocument();
+        expect(
+            within(liveTable).getByRole("columnheader", { name: "Currency" }),
+        ).toBeInTheDocument();
+        expect(
+            within(liveTable).getByRole("columnheader", {
+                name: "1 unit → EUR",
+            }),
+        ).toBeInTheDocument();
         expect(within(liveTable).getByText("USD")).toBeInTheDocument();
         expect(within(liveTable).getByText("0.920000")).toBeInTheDocument();
         expect(within(liveTable).getByText("1.0870")).toBeInTheDocument();
@@ -289,7 +638,9 @@ describe("Portfolio pages (integration)", () => {
     });
 
     it("ExchangeRatesPage shows error state when API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/info/exchange-rates`, () =>
                 err(500, "exchange rates unavailable"),
@@ -299,7 +650,11 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<ExchangeRatesPage />);
 
         expect(
-            await screen.findByText(/failed to load exchange rates/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /failed to load exchange rates/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
@@ -316,7 +671,9 @@ describe("Portfolio pages (integration)", () => {
     it("WatchlistPage shows Add to Watchlist button", async () => {
         renderWithApp(<WatchlistPage />);
         // Multiple instances when watchlist = [] — header + empty state action
-        const buttons = await screen.findAllByRole("button", { name: /add to watchlist/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add to watchlist/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -324,7 +681,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<WatchlistPage />);
         // Default MSW returns { items: [] } — EmptyState h3 first line of watchlist.empty
         expect(
-            await screen.findByRole("heading", { name: /no prospective investments yet/i }),
+            await screen.findByRole("heading", {
+                name: /no prospective investments yet/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -333,7 +692,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<WatchlistPage />);
 
         // Header button is the first Add to Watchlist button rendered
-        const buttons = await screen.findAllByRole("button", { name: /add to watchlist/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add to watchlist/i,
+        });
         await user.click(buttons[0]);
 
         // addWatchlist.title = "Add to Watchlist"
@@ -347,7 +708,9 @@ describe("Portfolio pages (integration)", () => {
     it("PortfolioTaxPage renders heading", async () => {
         renderWithApp(<PortfolioTaxPage />);
         expect(
-            await screen.findByRole("heading", { name: /investment tax & fees/i }),
+            await screen.findByRole("heading", {
+                name: /investment tax & fees/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -379,7 +742,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", {
+            name: /widgets/i,
+        });
         await user.click(widgetsBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -400,13 +765,17 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const adjustmentsBtn = await screen.findByRole("button", { name: /manual adjustments/i });
+        const adjustmentsBtn = await screen.findByRole("button", {
+            name: /manual adjustments/i,
+        });
         await user.click(adjustmentsBtn);
 
         // tax.manualAdjustmentsTitle = "Manual tax and fee adjustments ({year})"
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manual tax and fee adjustments/i }),
+            await screen.findByRole("heading", {
+                name: /manual tax and fee adjustments/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -430,7 +799,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<MarketLookupPage />);
         // market.searchTicker = "Search for a ticker"
         expect(
-            await screen.findByRole("heading", { name: /search for a ticker/i }),
+            await screen.findByRole("heading", {
+                name: /search for a ticker/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -505,7 +876,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<WatchlistPage />);
         // watchlist.subtitle = "Track prospective investments with target buy prices"
         expect(
-            await screen.findByText(/track prospective investments with target buy prices/i),
+            await screen.findByText(
+                /track prospective investments with target buy prices/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -513,7 +886,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<WatchlistPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add to watchlist/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add to watchlist/i,
+        });
         await user.click(buttons[0]);
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
@@ -526,7 +901,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
         // tax.portfolioDesc = "Overview of taxes paid and fees incurred across your portfolio."
         expect(
-            await screen.findByText(/overview of taxes paid and fees incurred/i),
+            await screen.findByText(
+                /overview of taxes paid and fees incurred/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -534,7 +911,9 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
         // tax.noDataDesc = "Add investments and transactions to see your tax overview."
         expect(
-            await screen.findByText(/add investments and transactions to see your tax overview/i),
+            await screen.findByText(
+                /add investments and transactions to see your tax overview/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -542,7 +921,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const adjustmentsBtn = await screen.findByRole("button", { name: /manual adjustments/i });
+        const adjustmentsBtn = await screen.findByRole("button", {
+            name: /manual adjustments/i,
+        });
         await user.click(adjustmentsBtn);
         await screen.findByRole("dialog");
 
@@ -554,7 +935,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", {
+            name: /widgets/i,
+        });
         await user.click(widgetsBtn);
         await screen.findByRole("dialog");
 
@@ -566,97 +949,147 @@ describe("Portfolio pages (integration)", () => {
     // These tests verify that a backend 500 never crashes the page UI.
 
     it("StocksPage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<StocksPage />);
         expect(
-            await screen.findByRole("heading", { name: /stocks & etfs/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /stocks & etfs/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("CryptoPage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<CryptoPage />);
         expect(
-            await screen.findByRole("heading", { name: /cryptocurrency/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /cryptocurrency/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("MetalsPage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<MetalsPage />);
         expect(
-            await screen.findByRole("heading", { name: /metals/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /metals/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("RealEstatePage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<RealEstatePage />);
         expect(
-            await screen.findByRole("heading", { name: /real estate/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /real estate/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("SavingsPage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<SavingsPage />);
         expect(
-            await screen.findByRole("heading", { name: /savings & bonds/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /savings & bonds/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("PerformancePage renders gracefully when portfolio-performance API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/info/portfolio-performance`, () => err(500, "db error")),
+            http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
+                err(500, "db error"),
+            ),
         );
         renderWithApp(<PerformancePage />);
         expect(
-            await screen.findByRole("heading", { name: /performance/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /performance/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("WatchlistPage renders heading gracefully when watchlist API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/watchlist`, () => err(500, "db error")),
         );
         renderWithApp(<WatchlistPage />);
         expect(
-            await screen.findByRole("heading", { name: /watchlist/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /watchlist/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("PortfolioTaxPage renders heading gracefully when investments API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
         );
         renderWithApp(<PortfolioTaxPage />);
         expect(
-            await screen.findByRole("heading", { name: /investment tax & fees/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /investment tax & fees/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
@@ -669,7 +1102,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<CryptoPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         // With a single allowed asset class, dialog skips the type selector
@@ -681,15 +1116,23 @@ describe("Portfolio pages (integration)", () => {
         const toastSpy = vi.spyOn(toast, "success");
         server.use(
             http.post(`${API_BASE}/api/investments`, () =>
-                ok({ id: 1, name: "Bitcoin", asset_class: "crypto", currency: "EUR",
-                     price_provider: "binance", created_at: "2025-01-01T00:00:00.000Z" }),
+                ok({
+                    id: 1,
+                    name: "Bitcoin",
+                    asset_class: "crypto",
+                    currency: "EUR",
+                    price_provider: "binance",
+                    created_at: "2025-01-01T00:00:00.000Z",
+                }),
             ),
         );
 
         const user = userEvent.setup();
         renderWithApp(<CryptoPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         const nameInput = await screen.findByLabelText(/name \*/i);
@@ -702,11 +1145,14 @@ describe("Portfolio pages (integration)", () => {
         const createBtn = screen.getByRole("button", { name: /^add$/i });
         await user.click(createBtn);
 
-        await vi.waitFor(() => {
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/bitcoin/i),
-            );
-        }, { timeout: 3000 });
+        await vi.waitFor(
+            () => {
+                expect(toastSpy).toHaveBeenCalledWith(
+                    expect.stringMatching(/bitcoin/i),
+                );
+            },
+            { timeout: 3000 },
+        );
 
         toastSpy.mockRestore();
     });
@@ -714,13 +1160,17 @@ describe("Portfolio pages (integration)", () => {
     it("CryptoPage Add Investment POST failure shows error toast", async () => {
         const toastSpy = vi.spyOn(toast, "error");
         server.use(
-            http.post(`${API_BASE}/api/investments`, () => err(500, "insert failed")),
+            http.post(`${API_BASE}/api/investments`, () =>
+                err(500, "insert failed"),
+            ),
         );
 
         const user = userEvent.setup();
         renderWithApp(<CryptoPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         const nameInput = await screen.findByLabelText(/name \*/i);
@@ -734,12 +1184,15 @@ describe("Portfolio pages (integration)", () => {
         await user.click(createBtn);
 
         // useInvestmentMutations onError fires: toast.error(t('portfolio.createInvestmentFailedTitle'), ...)
-        await vi.waitFor(() => {
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/failed to create investment/i),
-                expect.anything(),
-            );
-        }, { timeout: 5000 });
+        await vi.waitFor(
+            () => {
+                expect(toastSpy).toHaveBeenCalledWith(
+                    expect.stringMatching(/failed to create investment/i),
+                    expect.anything(),
+                );
+            },
+            { timeout: 5000 },
+        );
 
         toastSpy.mockRestore();
     });
@@ -753,15 +1206,23 @@ describe("Portfolio pages (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/investments`, () => {
                 postCalls += 1;
-                return ok({ id: 1, name: "Bitcoin", asset_class: "crypto", currency: "EUR",
-                     price_provider: "binance", created_at: "2025-01-01T00:00:00.000Z" });
+                return ok({
+                    id: 1,
+                    name: "Bitcoin",
+                    asset_class: "crypto",
+                    currency: "EUR",
+                    price_provider: "binance",
+                    created_at: "2025-01-01T00:00:00.000Z",
+                });
             }),
         );
 
         const user = userEvent.setup();
         renderWithApp(<CryptoPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         const nameInput = await screen.findByLabelText(/name \*/i);
@@ -769,9 +1230,12 @@ describe("Portfolio pages (integration)", () => {
 
         await user.click(screen.getByRole("button", { name: /^add$/i }));
 
-        await vi.waitFor(() => {
-            expect(toastSpy).toHaveBeenCalled();
-        }, { timeout: 3000 });
+        await vi.waitFor(
+            () => {
+                expect(toastSpy).toHaveBeenCalled();
+            },
+            { timeout: 3000 },
+        );
         expect(postCalls).toBe(0);
 
         toastSpy.mockRestore();
@@ -781,7 +1245,9 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<StocksPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         // StocksPage has 2 allowed types → type selector appears first
@@ -789,15 +1255,21 @@ describe("Portfolio pages (integration)", () => {
         await screen.findByRole("heading", { name: /choose asset type/i });
 
         // Both asset class buttons should be visible (accessible name starts with label, followed by description)
-        expect(screen.getByRole("button", { name: /^stock/i })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /^etf/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /^stock/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /^etf/i }),
+        ).toBeInTheDocument();
     });
 
     it("StocksPage Add Investment type selector → Stock → advances to details step", async () => {
         const user = userEvent.setup();
         renderWithApp(<StocksPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(addBtns[0]);
 
         await screen.findByRole("heading", { name: /choose asset type/i });
@@ -809,11 +1281,16 @@ describe("Portfolio pages (integration)", () => {
 
     // ─── WatchlistPage mutation tests ─────────────────────────────────────────
 
-    it("WatchlistPage truncates long company names while exposing the full title", async () => {
+    it("WatchlistPage truncates long company names and links them to market lookup", async () => {
         const mockItem = {
-            id: 1, name: "A very long watchlist company name", symbol: "LONG",
-            asset_class: "stock" as const, target_price: 150,
-            currency: "EUR", notes: null, price_provider_id: null,
+            id: 1,
+            name: "A very long watchlist company name",
+            symbol: "LONG",
+            asset_class: "stock" as const,
+            target_price: 150,
+            currency: "EUR",
+            notes: null,
+            price_provider_id: null,
         };
 
         server.use(
@@ -824,15 +1301,22 @@ describe("Portfolio pages (integration)", () => {
 
         renderWithApp(<WatchlistPage />);
 
-        expect(await screen.findByTitle(mockItem.name)).toHaveClass("truncate");
+        const link = await screen.findByRole("link", { name: mockItem.name });
+        expect(link).toHaveAttribute("href", "/research/market?symbol=LONG");
+        expect(link.closest("[class*='truncate']")).toBeInTheDocument();
     });
 
     it("WatchlistPage remove item shows success toast after DELETE", async () => {
         const toastSpy = vi.spyOn(toast, "success");
         const mockItem = {
-            id: 1, name: "Apple Watch", symbol: "AAPL",
-            asset_class: "stock" as const, target_price: 150,
-            currency: "EUR", notes: null, price_provider_id: null,
+            id: 1,
+            name: "Apple Watch",
+            symbol: "AAPL",
+            asset_class: "stock" as const,
+            target_price: 150,
+            currency: "EUR",
+            notes: null,
+            price_provider_id: null,
         };
 
         server.use(
@@ -860,11 +1344,14 @@ describe("Portfolio pages (integration)", () => {
         );
 
         // watchlist.removedSuccess = "Removed from watchlist"
-        await vi.waitFor(() => {
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/removed from watchlist/i),
-            );
-        }, { timeout: 3000 });
+        await vi.waitFor(
+            () => {
+                expect(toastSpy).toHaveBeenCalledWith(
+                    expect.stringMatching(/removed from watchlist/i),
+                );
+            },
+            { timeout: 3000 },
+        );
 
         toastSpy.mockRestore();
     });
@@ -874,42 +1361,68 @@ describe("Portfolio pages (integration)", () => {
         server.use(
             // Market search returns a result so the dialog can proceed past the guard
             http.get(`${API_BASE}/api/market/search`, () =>
-                ok({ items: [{ symbol: "AAPL", name: "Apple Inc.", type: "Equity", exchange: "NASDAQ" }] }),
+                ok({
+                    items: [
+                        {
+                            symbol: "AAPL",
+                            name: "Apple Inc.",
+                            type: "Equity",
+                            exchange: "NASDAQ",
+                        },
+                    ],
+                }),
             ),
-            http.post(`${API_BASE}/api/watchlist`, () => err(500, "insert failed")),
+            http.post(`${API_BASE}/api/watchlist`, () =>
+                err(500, "insert failed"),
+            ),
         );
 
         const user = userEvent.setup();
         renderWithApp(<WatchlistPage />);
 
-        const addBtns = await screen.findAllByRole("button", { name: /add to watchlist/i });
+        const addBtns = await screen.findAllByRole("button", {
+            name: /add to watchlist/i,
+        });
         await user.click(addBtns[0]);
 
         const dialog = await screen.findByRole("dialog");
 
         // Type in search box — debounce fires after 300ms, MSW responds, results appear
-        const searchInput = within(dialog).getByPlaceholderText(/search by name or symbol/i);
+        const searchInput = within(dialog).getByPlaceholderText(
+            /search by name or symbol/i,
+        );
         await user.type(searchInput, "AAPL");
 
         // Wait for debounced search result to appear (default findBy timeout covers 300ms debounce)
-        const appleResult = await screen.findByText("Apple Inc.", {}, { timeout: 2000 });
+        const appleResult = await screen.findByText(
+            "Apple Inc.",
+            {},
+            { timeout: 2000 },
+        );
         await user.click(appleResult);
 
         // Fill in target price — required by the submit guard
-        const targetPriceInput = await screen.findByLabelText(/target buy price/i);
+        const targetPriceInput =
+            await screen.findByLabelText(/target buy price/i);
         await user.type(targetPriceInput, "150");
 
         // Submit — now both selectedAsset and targetPrice are set
-        const submitBtn = within(screen.getByRole("dialog")).getByRole("button", { name: /add to watchlist/i });
+        const submitBtn = within(screen.getByRole("dialog")).getByRole(
+            "button",
+            { name: /add to watchlist/i },
+        );
         await user.click(submitBtn);
 
         // addWatchlist.error = "Error" / addWatchlist.failed = "Failed to add to watchlist"
-        await vi.waitFor(() => {
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/error/i),
-                expect.anything(),
-            );
-        }, { timeout: 5000 });
+        await vi.waitFor(
+            () => {
+                expect(toastSpy).toHaveBeenCalledWith(
+                    expect.stringMatching(/error/i),
+                    expect.anything(),
+                );
+            },
+            { timeout: 5000 },
+        );
 
         toastSpy.mockRestore();
     });
@@ -917,53 +1430,80 @@ describe("Portfolio pages (integration)", () => {
     // ─── AddPortfolioTxnDialog ────────────────────────────────────────────────
     describe("AddPortfolioTxnDialog", () => {
         it("renders 'Add Transaction' trigger button", async () => {
-            renderWithApp(<AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />);
+            renderWithApp(
+                <AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
             // form.addTransaction.title = "Add Transaction"
-            expect(await screen.findByRole("button", { name: /add transaction/i })).toBeInTheDocument();
+            expect(
+                await screen.findByRole("button", { name: /add transaction/i }),
+            ).toBeInTheDocument();
         });
 
         it("clicking trigger opens dialog with investment title", async () => {
             const user = userEvent.setup();
-            renderWithApp(<AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+            renderWithApp(
+                <AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /add transaction/i }),
+            );
             // addPortTxn.title = "Record Transaction -- {symbol}"
-            expect(await screen.findByRole("heading", { name: /record transaction.*iwda/i })).toBeInTheDocument();
+            expect(
+                await screen.findByRole("heading", {
+                    name: /record transaction.*iwda/i,
+                }),
+            ).toBeInTheDocument();
         });
 
         it("Cancel button closes dialog", async () => {
             const user = userEvent.setup();
-            renderWithApp(<AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+            renderWithApp(
+                <AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /add transaction/i }),
+            );
             await screen.findByRole("dialog");
             // addPortTxn.cancel = "Cancel"
-            await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
-            await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+            await user.click(
+                await screen.findByRole("button", { name: /^cancel$/i }),
+            );
+            await waitFor(() =>
+                expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+            );
         });
 
         it("submitting calls POST /api/investments/:id/transactions", async () => {
             let posted = false;
             server.use(
-                http.post(`${API_BASE}/api/investments/:investmentId/transactions`, () => {
-                    posted = true;
-                    return ok({
-                        id: 99,
-                        investment_id: 1,
-                        type: "buy",
-                        date: "2025-01-15",
-                        amount: 1000,
-                        units: 10,
-                        price_per_unit: 100,
-                        currency: "EUR",
-                        is_recurring: false,
-                        created_at: "2025-01-15T10:00:00.000Z",
-                        updated_at: "2025-01-15T10:00:00.000Z",
-                    });
-                }),
+                http.post(
+                    `${API_BASE}/api/investments/:investmentId/transactions`,
+                    () => {
+                        posted = true;
+                        return ok({
+                            id: 99,
+                            investment_id: 1,
+                            type: "buy",
+                            date: "2025-01-15",
+                            amount: 1000,
+                            units: 10,
+                            price_per_unit: 100,
+                            currency: "EUR",
+                            is_recurring: false,
+                            created_at: "2025-01-15T10:00:00.000Z",
+                            updated_at: "2025-01-15T10:00:00.000Z",
+                        });
+                    },
+                ),
             );
 
             const user = userEvent.setup();
-            renderWithApp(<AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+            renderWithApp(
+                <AddPortfolioTxnDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /add transaction/i }),
+            );
             await screen.findByRole("dialog");
 
             // ETF (unit-based): fill units + price per unit (any 2 of 3 satisfies validation)
@@ -983,62 +1523,92 @@ describe("Portfolio pages (integration)", () => {
     // ─── InvestmentDetailDialog ───────────────────────────────────────────────
     describe("InvestmentDetailDialog", () => {
         it("renders 'Details' trigger button", async () => {
-            renderWithApp(<InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />);
+            renderWithApp(
+                <InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
             // invDetail.trigger = "Details"
-            expect(await screen.findByRole("button", { name: /^details$/i })).toBeInTheDocument();
+            expect(
+                await screen.findByRole("button", { name: /^details$/i }),
+            ).toBeInTheDocument();
         });
 
         it("clicking trigger opens dialog", async () => {
             const user = userEvent.setup();
-            renderWithApp(<InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /^details$/i }));
+            renderWithApp(
+                <InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /^details$/i }),
+            );
             expect(await screen.findByRole("dialog")).toBeInTheDocument();
         });
 
         it("Performance tab is active by default and shows Current Value", async () => {
             const user = userEvent.setup();
-            renderWithApp(<InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /^details$/i }));
+            renderWithApp(
+                <InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /^details$/i }),
+            );
             await screen.findByRole("dialog");
             // invDetail.currentValue = "Current Value"
-            expect(await screen.findByText(/current value/i)).toBeInTheDocument();
+            expect(
+                await screen.findByText(/current value/i),
+            ).toBeInTheDocument();
         });
 
         it("Transactions tab shows no-transactions empty state", async () => {
             const user = userEvent.setup();
-            renderWithApp(<InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />);
-            await user.click(await screen.findByRole("button", { name: /^details$/i }));
+            renderWithApp(
+                <InvestmentDetailDialog investment={PORTFOLIO_INVESTMENT} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /^details$/i }),
+            );
             await screen.findByRole("dialog");
             // invDetail.tab.transactions = "Transactions ({n})" — n=0
-            const txnTab = await screen.findByRole("tab", { name: /transactions/i });
+            const txnTab = await screen.findByRole("tab", {
+                name: /transactions/i,
+            });
             await user.click(txnTab);
             // invDetail.noTransactions = "No transactions recorded yet"
-            expect(await screen.findByText(/no transactions recorded yet/i)).toBeInTheDocument();
+            expect(
+                await screen.findByText(/no transactions recorded yet/i),
+            ).toBeInTheDocument();
         });
 
         it("Transactions tab label reflects transaction count", async () => {
             const investmentWithTx = {
                 ...PORTFOLIO_INVESTMENT,
-                transactions: [{
-                    id: 1,
-                    investment_id: 1,
-                    type: "buy" as const,
-                    date: "2025-01-15",
-                    amount: 1000,
-                    units: 10,
-                    price_per_unit: 100,
-                    currency: "EUR",
-                    is_recurring: false,
-                    created_at: "2025-01-15T10:00:00.000Z",
-                    updated_at: "2025-01-15T10:00:00.000Z",
-                }],
+                transactions: [
+                    {
+                        id: 1,
+                        investment_id: 1,
+                        type: "buy" as const,
+                        date: "2025-01-15",
+                        amount: 1000,
+                        units: 10,
+                        price_per_unit: 100,
+                        currency: "EUR",
+                        is_recurring: false,
+                        created_at: "2025-01-15T10:00:00.000Z",
+                        updated_at: "2025-01-15T10:00:00.000Z",
+                    },
+                ],
             };
             const user = userEvent.setup();
-            renderWithApp(<InvestmentDetailDialog investment={investmentWithTx} />);
-            await user.click(await screen.findByRole("button", { name: /^details$/i }));
+            renderWithApp(
+                <InvestmentDetailDialog investment={investmentWithTx} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /^details$/i }),
+            );
             await screen.findByRole("dialog");
             // invDetail.tab.transactions = "Transactions ({n})" → "Transactions (1)"
-            expect(await screen.findByRole("tab", { name: /transactions \(1\)/i })).toBeInTheDocument();
+            expect(
+                await screen.findByRole("tab", { name: /transactions \(1\)/i }),
+            ).toBeInTheDocument();
         });
     });
 
@@ -1046,9 +1616,13 @@ describe("Portfolio pages (integration)", () => {
 
     describe("Page-level edge cases", () => {
         it("StocksPage does not crash on 4xx investments endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/investments`, () => err(404, "Not found")),
+                http.get(`${API_BASE}/api/investments`, () =>
+                    err(404, "Not found"),
+                ),
             );
             const { container } = renderWithApp(<StocksPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1057,7 +1631,9 @@ describe("Portfolio pages (integration)", () => {
         });
 
         it("PerformancePage does not crash on 4xx performance endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
                 http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
                     err(404, "Not found"),
@@ -1070,9 +1646,13 @@ describe("Portfolio pages (integration)", () => {
         });
 
         it("NetWorthPage does not crash on 4xx net-worth endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/info/net-worth`, () => err(404, "Not found")),
+                http.get(`${API_BASE}/api/info/net-worth`, () =>
+                    err(404, "Not found"),
+                ),
             );
             const { container } = renderWithApp(<NetWorthPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1081,9 +1661,13 @@ describe("Portfolio pages (integration)", () => {
         });
 
         it("WatchlistPage does not crash on 4xx watchlist endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/watchlist`, () => err(404, "Not found")),
+                http.get(`${API_BASE}/api/watchlist`, () =>
+                    err(404, "Not found"),
+                ),
             );
             const { container } = renderWithApp(<WatchlistPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1092,9 +1676,13 @@ describe("Portfolio pages (integration)", () => {
         });
 
         it("ExchangeRatesPage does not crash on 4xx exchange-rates endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/info/exchange-rates`, () => err(404, "Not found")),
+                http.get(`${API_BASE}/api/info/exchange-rates`, () =>
+                    err(404, "Not found"),
+                ),
             );
             const { container } = renderWithApp(<ExchangeRatesPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1103,9 +1691,13 @@ describe("Portfolio pages (integration)", () => {
         });
 
         it("WatchlistPage does not crash on 5xx watchlist endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/watchlist`, () => err(500, "Server error")),
+                http.get(`${API_BASE}/api/watchlist`, () =>
+                    err(500, "Server error"),
+                ),
             );
             const { container } = renderWithApp(<WatchlistPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1130,7 +1722,12 @@ describe("Portfolio pages (integration)", () => {
             server.use(
                 http.get(`${API_BASE}/api/watchlist`, () => {
                     getCalls += 1;
-                    return ok({ items: [item], total: 1, limit: 50, offset: 0 });
+                    return ok({
+                        items: [item],
+                        total: 1,
+                        limit: 50,
+                        offset: 0,
+                    });
                 }),
                 http.delete(`${API_BASE}/api/watchlist/:id`, () =>
                     ok({ message: "deleted" }),
@@ -1145,15 +1742,21 @@ describe("Portfolio pages (integration)", () => {
             const before = getCalls;
 
             // Click delete on the watchlist item
-            const trashBtn = await screen.findByRole("button", { name: /remove from watchlist/i });
+            const trashBtn = await screen.findByRole("button", {
+                name: /remove from watchlist/i,
+            });
             await user.click(trashBtn);
             await waitFor(() => expect(getCalls).toBeGreaterThan(before));
         });
 
         it("PortfolioTaxPage does not crash on 5xx investments endpoint", async () => {
-            const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            const errSpy = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
             server.use(
-                http.get(`${API_BASE}/api/investments`, () => err(500, "Server error")),
+                http.get(`${API_BASE}/api/investments`, () =>
+                    err(500, "Server error"),
+                ),
             );
             const { container } = renderWithApp(<PortfolioTaxPage />);
             await new Promise((r) => setTimeout(r, 200));
@@ -1166,7 +1769,13 @@ describe("Portfolio pages (integration)", () => {
             server.use(
                 http.get(`${API_BASE}/api/investments`, () => {
                     getCalls += 1;
-                    return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                    return ok({
+                        items: [],
+                        total: 0,
+                        limit: 200,
+                        offset: 0,
+                        links: [],
+                    });
                 }),
                 http.post(`${API_BASE}/api/investments`, () =>
                     ok({
@@ -1186,7 +1795,9 @@ describe("Portfolio pages (integration)", () => {
             await waitFor(() => expect(getCalls).toBeGreaterThan(0));
             const before = getCalls;
 
-            const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+            const addBtns = await screen.findAllByRole("button", {
+                name: /add investment/i,
+            });
             await user.click(addBtns[0]);
 
             const nameInput = await screen.findByLabelText(/name \*/i);
@@ -1194,7 +1805,9 @@ describe("Portfolio pages (integration)", () => {
 
             await user.click(screen.getByRole("button", { name: /^add$/i }));
 
-            await waitFor(() => expect(getCalls).toBeGreaterThan(before), { timeout: 4000 });
+            await waitFor(() => expect(getCalls).toBeGreaterThan(before), {
+                timeout: 4000,
+            });
         });
 
         it("StocksPage create investment invalidates investments list (stale refetch)", async () => {
@@ -1202,7 +1815,13 @@ describe("Portfolio pages (integration)", () => {
             server.use(
                 http.get(`${API_BASE}/api/investments`, () => {
                     getCalls += 1;
-                    return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                    return ok({
+                        items: [],
+                        total: 0,
+                        limit: 200,
+                        offset: 0,
+                        links: [],
+                    });
                 }),
                 http.post(`${API_BASE}/api/investments`, () =>
                     ok({
@@ -1222,7 +1841,9 @@ describe("Portfolio pages (integration)", () => {
             await waitFor(() => expect(getCalls).toBeGreaterThan(0));
             const before = getCalls;
 
-            const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+            const addBtns = await screen.findAllByRole("button", {
+                name: /add investment/i,
+            });
             await user.click(addBtns[0]);
 
             // StocksPage: type selector first → pick Stock
@@ -1238,7 +1859,9 @@ describe("Portfolio pages (integration)", () => {
 
             await user.click(screen.getByRole("button", { name: /^add$/i }));
 
-            await waitFor(() => expect(getCalls).toBeGreaterThan(before), { timeout: 4000 });
+            await waitFor(() => expect(getCalls).toBeGreaterThan(before), {
+                timeout: 4000,
+            });
         });
     });
 });

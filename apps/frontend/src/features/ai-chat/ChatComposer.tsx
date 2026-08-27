@@ -74,10 +74,10 @@ export function ChatComposer({
     };
 
     return (
-        <div className="border-t border-border/50 bg-background/40 px-4 py-3 backdrop-blur-sm">
+        <div className="glass-thin !border-x-0 !border-b-0 px-4 py-3">
             <div className="mx-auto flex max-w-3xl flex-col gap-2">
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span className="uppercase tracking-[0.14em]">
+                <div className="flex items-center gap-2 text-2xs text-muted-foreground">
+                    <span className="eyebrow">
                         {t('aiChat.model')}
                     </span>
                     <Select
@@ -103,7 +103,7 @@ export function ChatComposer({
                         aria-pressed={useTools}
                         title={useTools ? t('aiChat.toolsOn') : t('aiChat.toolsOff')}
                         className={cn(
-                            'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] uppercase tracking-[0.12em] transition-colors',
+                            'inline-flex h-7 items-center gap-1 rounded-md border px-2 eyebrow transition-colors',
                             useTools
                                 ? 'border-primary/40 bg-primary/10 text-primary'
                                 : 'border-border/60 bg-transparent text-muted-foreground hover:bg-muted/40',
@@ -148,7 +148,7 @@ export function ChatComposer({
                         </Button>
                     )}
                 </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground/80">
+                <div className="flex justify-between text-2xs text-muted-foreground/80">
                     <span>{t('aiChat.enterHint')}</span>
                     <span>{value.length}/{MAX_LEN}</span>
                 </div>

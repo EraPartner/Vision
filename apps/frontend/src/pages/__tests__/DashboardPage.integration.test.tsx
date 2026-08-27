@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok, TRANSACTION_STUB } from "@/test/msw/handlers";
+import { aggOk, err, ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
 
 const API_BASE = "http://localhost:3002";
@@ -19,6 +19,22 @@ describe("DashboardPage (integration)", () => {
                 name: /good\s+(morning|afternoon|evening)/i,
             }),
         ).toBeInTheDocument();
+    });
+
+    it("plays the full stat-card arrival only on the first dashboard visit", async () => {
+        window.sessionStorage.clear();
+        const first = renderWithApp(<DashboardPage />);
+        await screen.findByText(/last month.*income/i);
+        expect(
+            first.container.querySelector(".animate-stagger"),
+        ).toBeInTheDocument();
+
+        first.unmount();
+        const returning = renderWithApp(<DashboardPage />);
+        await screen.findByText(/last month.*income/i);
+        expect(
+            returning.container.querySelector(".animate-stagger"),
+        ).toBeNull();
     });
 
     it("renders without crashing when all data is empty", async () => {
@@ -47,7 +63,9 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        const widgetsButton = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsButton = await screen.findByRole("button", {
+            name: /widgets/i,
+        });
         await user.click(widgetsButton);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -95,6 +113,84 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("links stat cards to the exact transaction filters", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                aggOk({
+                    months: [
+                        {
+                            year: 2026,
+                            month: 2,
+                            total_income: 1000,
+                            total_spending: -400,
+                            transaction_count: 7,
+                        },
+                    ],
+                    summary: {
+                        total_spending: -400,
+                        total_income: 1000,
+                        net_amount: 600,
+                        transaction_count: 7,
+                        period_start: "2026-02-01",
+                        period_end: "2026-02-28",
+                    },
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/transaction-count`, () =>
+                ok({ total_transactions: 77 }),
+            ),
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({
+                    items: [
+                        ...Array.from({ length: 6 }, (_, index) => ({
+                            ...TRANSACTION_STUB,
+                            id: index + 1,
+                            category_id: index + 1,
+                            category_name: `GROUP:CATEGORY ${index + 1}`,
+                        })),
+                        {
+                            ...TRANSACTION_STUB,
+                            id: 7,
+                            category_id: null,
+                            category_name: null,
+                        },
+                    ],
+                    total: 7,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+
+        renderWithApp(<DashboardPage />);
+
+        const income = await screen.findByRole("link", {
+            name: /last month.*income/i,
+        });
+        const incomeUrl = new URL(income.getAttribute("href")!, "http://test");
+        expect(incomeUrl.pathname).toBe("/transactions");
+        expect(incomeUrl.searchParams.get("start_date")).toBe("2026-02-01");
+        expect(incomeUrl.searchParams.get("end_date")).toBe("2026-02-28");
+        expect(incomeUrl.searchParams.get("transaction_type")).toBe("income");
+
+        const spending = screen.getByRole("link", {
+            name: /last month.*spending/i,
+        });
+        const spendingUrl = new URL(
+            spending.getAttribute("href")!,
+            "http://test",
+        );
+        expect(spendingUrl.searchParams.get("start_date")).toBe("2026-02-01");
+        expect(spendingUrl.searchParams.get("end_date")).toBe("2026-02-28");
+        expect(spendingUrl.searchParams.get("transaction_type")).toBe(
+            "expense",
+        );
+        expect(
+            screen.getByRole("link", { name: /total transactions/i }),
+        ).toHaveAttribute("href", "/transactions");
+    });
+
     it("shows subtitle text after full page load", async () => {
         renderWithApp(<DashboardPage />);
         // Wait for full load — greeting heading appears only after API + locale
@@ -111,40 +207,54 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         // widgets.hideAll = "Hide All"
-        expect(screen.getByRole("button", { name: /hide all/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /hide all/i }),
+        ).toBeInTheDocument();
     });
 
     it("Manage Widgets dialog has Show All button", async () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         // widgets.showAll = "Show All"
-        expect(screen.getByRole("button", { name: /show all/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /show all/i }),
+        ).toBeInTheDocument();
     });
 
     it("Manage Widgets dialog has Reset button", async () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         // widgets.reset = "Reset"
-        expect(screen.getByRole("button", { name: /^reset$/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /^reset$/i }),
+        ).toBeInTheDocument();
     });
 
     it("closes Manage Widgets dialog via Escape key", async () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");
@@ -156,7 +266,9 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         // WidgetVisibilityDialog renders widgets as Switch toggles
@@ -165,7 +277,9 @@ describe("DashboardPage (integration)", () => {
     });
 
     it("shows full error state when stats API fails and no cached data exists", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
                 err(500, "db unavailable"),
@@ -180,15 +294,23 @@ describe("DashboardPage (integration)", () => {
         // partialError && !hasAnyData → renders errorLoading subtitle
         // dashboard.errorLoading = "Error loading dashboard: {msg}"
         expect(
-            await screen.findByText(/error loading dashboard/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /error loading dashboard/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });
 
     it("shows partial data warning when stats fail but transactions are available", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
                 err(500, "db unavailable"),
@@ -198,7 +320,13 @@ describe("DashboardPage (integration)", () => {
             ),
             // Return one transaction so hasAnyData = true → partial warning path
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({ items: [TRANSACTION_STUB], total: 1, limit: 50, offset: 0, links: [] }),
+                ok({
+                    items: [TRANSACTION_STUB],
+                    total: 1,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
@@ -224,7 +352,9 @@ describe("DashboardPage (integration)", () => {
         // (Was transaction-summary, a route Phase 9 deleted and the dashboard
         // never called. The dashboard's stat cards read monthly-summary.)
         server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                err(404, "Not found"),
+            ),
         );
         const { container } = renderWithApp(<DashboardPage />);
         await new Promise((r) => setTimeout(r, 200));

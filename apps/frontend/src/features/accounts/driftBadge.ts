@@ -114,7 +114,10 @@ export function useDriftBadge(): (account: Account) => DriftBadgeContent | null 
             // funded partition in a foreign currency), where stamping
             // `account.currency` puts the wrong symbol on the figure. The
             // fallback keeps every single-currency account byte-identical.
-            const amount = `${drift > 0 ? '+' : ''}${fmtCur(drift, account.reconcilable_currency ?? account.currency)}`;
+            const amount = fmtCur(drift, {
+                currency: account.reconcilable_currency ?? account.currency,
+                signed: true,
+            });
             const statementDate = statementYmd(account);
             const stale = isStatementStale(statementDate);
 

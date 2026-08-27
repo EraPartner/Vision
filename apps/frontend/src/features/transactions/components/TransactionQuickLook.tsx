@@ -45,7 +45,7 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                 {transaction && (
                     <div className="space-y-4">
                         <div className="space-y-1.5 text-center">
-                            <div className={cn("font-mono text-4xl font-semibold tracking-tight", transaction.amount >= 0 ? 'amount-gain' : 'amount-loss', !transaction.is_active && 'opacity-50')}>
+                            <div className={cn("text-4xl font-semibold tracking-tight", transaction.amount >= 0 ? 'text-gain' : 'text-loss', !transaction.is_active && 'opacity-50')}>
                                 <Money signed amount={transaction.amount} currency={transaction.currency} />
                             </div>
                             <div className="text-base font-medium">{transaction.recipient}</div>
@@ -73,7 +73,7 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                                 {transaction.comment && <p className="text-muted-foreground break-words">{transaction.comment}</p>}
                             </div>
                         )}
-                        <p className="text-center text-[11px] text-muted-foreground/70">{t('quickLook.hint')}</p>
+                        <p className="text-center text-2xs text-muted-foreground/70">{t('quickLook.hint')}</p>
                     </div>
                 )}
             </DialogContent>

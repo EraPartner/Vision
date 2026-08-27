@@ -4,16 +4,24 @@ import { screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { useState } from "react";
-import { VirtualDataTable, SERVER_SEARCH_MIN_LENGTH } from "@/components/shared/VirtualDataTable";
-import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
+import {
+    VirtualDataTable,
+    SERVER_SEARCH_MIN_LENGTH,
+} from "@/components/shared/VirtualDataTable";
+import {
+    ContextMenuContent,
+    ContextMenuItem,
+} from "@/components/ui/context-menu";
 import type { Column } from "@/types/dataTable";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
+import type { MemoryRouterProps } from "react-router";
 
 const measureElementMock = vi.hoisted(() => vi.fn());
 
 // Provide synchronous translations so tests don't depend on async locale loading.
 vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/contexts/LanguageContext")>();
+    const actual =
+        await importOriginal<typeof import("@/contexts/LanguageContext")>();
     const { default: enDict } = await import("@/locales/en");
     return {
         ...actual,
@@ -35,7 +43,13 @@ vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
 
 // Render all items regardless of DOM layout — no real scroll container needed in tests.
 vi.mock("@tanstack/react-virtual", () => ({
-    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    useVirtualizer: ({
+        count,
+        estimateSize,
+    }: {
+        count: number;
+        estimateSize: () => number;
+    }) => ({
         getVirtualItems: () =>
             Array.from({ length: count }, (_, i) => ({
                 key: i,
@@ -54,6 +68,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 // ---------------------------------------------------------------------------
 
 type TestRow = { id: number; name: string; value: number };
+type DateRow = { id: number; date: string };
 
 const COLUMNS: Column<TestRow>[] = [
     { key: "id", header: "ID" },
@@ -73,7 +88,10 @@ const DATA: TestRow[] = [
     { id: 3, name: "Gamma", value: 300 },
 ];
 
-function renderTable(props: Partial<Parameters<typeof VirtualDataTable<TestRow>>[0]> = {}) {
+function renderTable(
+    props: Partial<Parameters<typeof VirtualDataTable<TestRow>>[0]> = {},
+    initialEntries: MemoryRouterProps["initialEntries"] = ["/"],
+) {
     return renderWithApp(
         <VirtualDataTable<TestRow>
             title="My Table"
@@ -81,6 +99,7 @@ function renderTable(props: Partial<Parameters<typeof VirtualDataTable<TestRow>>
             data={DATA}
             {...props}
         />,
+        { initialEntries },
     );
 }
 
@@ -107,6 +126,9 @@ describe("VirtualDataTable — rendering", () => {
         const headers = screen.getAllByText("Name");
         expect(headers.length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText("Value").length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByRole("button", { name: "Filter Name" })).toHaveClass(
+            "icon-touch-target",
+        );
     });
 
     it("renders row data", () => {
@@ -116,31 +138,185 @@ describe("VirtualDataTable — rendering", () => {
         expect(screen.getByText("Gamma")).toBeInTheDocument();
     });
 
+    it("truncates prose cells with a native full-value title by default", () => {
+        renderTable();
+        expect(screen.getByText("Alpha").closest('[role="cell"]')).toHaveClass(
+            "truncate",
+        );
+        expect(
+            screen.getByText("Alpha").closest('[role="cell"]'),
+        ).toHaveAttribute("title", "Alpha");
+    });
+
+    it("allows raw identifier columns to opt into anywhere wrapping", () => {
+        renderTable({
+            columns: [{ key: "name", header: "Name", wrap: "anywhere" }],
+        });
+        expect(screen.getByText("Alpha").closest('[role="cell"]')).toHaveClass(
+            "[overflow-wrap:anywhere]",
+        );
+        expect(
+            screen.getByText("Alpha").closest('[role="cell"]'),
+        ).not.toHaveClass("truncate");
+    });
+
     it("shows default empty message when data is empty", () => {
         renderTable({ data: [] });
-        expect(screen.getByText("No data to display")).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "No data to display" }),
+        ).toHaveClass("font-display");
     });
 
     it("shows custom empty message when provided", () => {
         renderTable({ data: [], emptyMessage: "Nothing here yet" });
-        expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Nothing here yet" }),
+        ).toBeInTheDocument();
+    });
+
+    it("preserves non-element ReactNode empty messages without wrapping them in a heading", () => {
+        renderTable({
+            data: [],
+            emptyMessage: ["Nothing ", <strong key="nested">nested</strong>],
+        });
+        expect(screen.getByText("nested")).toBeInTheDocument();
+        expect(
+            screen.queryByRole("heading", { name: "Nothing nested" }),
+        ).not.toBeInTheDocument();
     });
 
     it("renders actions slot", () => {
         renderTable({ actions: <button>Add row</button> });
-        expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Add row" }),
+        ).toBeInTheDocument();
     });
 
     it("supports an action-only header without rendering an empty heading", () => {
         renderTable({ title: undefined, actions: <button>Add row</button> });
 
-        expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Add row" }),
+        ).toBeInTheDocument();
         expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     });
 
     it("footer shows loaded count", () => {
         renderTable();
         expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument();
+    });
+
+    it("restores scroll for the same browser history entry and table", async () => {
+        const entry = { pathname: "/transactions", key: "entry-a" };
+        const first = renderTable({ scrollRestorationKey: "transactions" }, [
+            entry,
+        ]);
+        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        Object.defineProperties(firstBody, {
+            scrollHeight: { configurable: true, value: 500 },
+            clientHeight: { configurable: true, value: 100 },
+        });
+        firstBody.scrollTop = 140;
+        fireEvent.scroll(firstBody);
+        first.unmount();
+
+        renderTable({ scrollRestorationKey: "transactions" }, [entry]);
+        const restoredBody = screen.getAllByRole("rowgroup").at(-1)!;
+        Object.defineProperties(restoredBody, {
+            scrollHeight: { configurable: true, value: 500 },
+            clientHeight: { configurable: true, value: 100 },
+        });
+
+        await waitFor(() => expect(restoredBody.scrollTop).toBe(140));
+    });
+
+    it("does not restore scroll into a different browser history entry", async () => {
+        const first = renderTable(
+            { scrollRestorationKey: "history-isolation" },
+            [{ pathname: "/transactions", key: "entry-one" }],
+        );
+        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        firstBody.scrollTop = 90;
+        fireEvent.scroll(firstBody);
+        first.unmount();
+
+        renderTable({ scrollRestorationKey: "history-isolation" }, [
+            { pathname: "/transactions", key: "entry-two" },
+        ]);
+
+        expect(screen.getAllByRole("rowgroup").at(-1)!.scrollTop).toBe(0);
+    });
+
+    it("loads more pages until a remembered offset is reachable", async () => {
+        const entry = { pathname: "/transactions", key: "paged-entry" };
+        const first = renderTable(
+            { scrollRestorationKey: "paged-restoration" },
+            [entry],
+        );
+        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        firstBody.scrollTop = 300;
+        fireEvent.scroll(firstBody);
+        first.unmount();
+
+        const onLoadMore = vi.fn();
+        const restored = renderTable(
+            {
+                scrollRestorationKey: "paged-restoration",
+                data: DATA.slice(0, 1),
+                serverMode: {
+                    pagination: {
+                        totalItems: 3,
+                        hasMore: true,
+                        onLoadMore,
+                    },
+                },
+            },
+            [entry],
+        );
+        const restoredBody = screen.getAllByRole("rowgroup").at(-1)!;
+        Object.defineProperties(restoredBody, {
+            scrollHeight: { configurable: true, value: 100 },
+            clientHeight: { configurable: true, value: 100 },
+        });
+        await waitFor(() => expect(onLoadMore).toHaveBeenCalledTimes(1));
+
+        restored.rerender(
+            <VirtualDataTable<TestRow>
+                title="My Table"
+                columns={COLUMNS}
+                data={DATA.slice(0, 2)}
+                serverMode={{
+                    pagination: {
+                        totalItems: 3,
+                        hasMore: true,
+                        onLoadMore,
+                    },
+                }}
+                scrollRestorationKey="paged-restoration"
+            />,
+        );
+        await waitFor(() => expect(onLoadMore).toHaveBeenCalledTimes(2));
+
+        Object.defineProperty(restoredBody, "scrollHeight", {
+            configurable: true,
+            value: 500,
+        });
+        restored.rerender(
+            <VirtualDataTable<TestRow>
+                title="My Table"
+                columns={COLUMNS}
+                data={DATA}
+                serverMode={{
+                    pagination: {
+                        totalItems: 3,
+                        hasMore: false,
+                        onLoadMore,
+                    },
+                }}
+                scrollRestorationKey="paged-restoration"
+            />,
+        );
+        await waitFor(() => expect(restoredBody.scrollTop).toBe(300));
     });
 });
 
@@ -159,7 +335,8 @@ describe("VirtualDataTable — column resizing", () => {
         fireEvent.keyDown(handle, { key: "ArrowRight" });
         expect(handle).toHaveAttribute("aria-valuenow", "130");
 
-        for (let i = 0; i < 8; i += 1) fireEvent.keyDown(handle, { key: "ArrowLeft" });
+        for (let i = 0; i < 8; i += 1)
+            fireEvent.keyDown(handle, { key: "ArrowLeft" });
         expect(handle).toHaveAttribute("aria-valuenow", "60");
     });
 
@@ -169,7 +346,9 @@ describe("VirtualDataTable — column resizing", () => {
 
         fireEvent.pointerDown(handle, { clientX: 100, pointerId: 7 });
         fireEvent.pointerMove(document, { clientX: 140, pointerId: 7 });
-        await waitFor(() => expect(handle).toHaveAttribute("aria-valuenow", "160"));
+        await waitFor(() =>
+            expect(handle).toHaveAttribute("aria-valuenow", "160"),
+        );
 
         fireEvent.pointerCancel(document, { pointerId: 7 });
         expect(document.body.style.cursor).toBe("");
@@ -182,7 +361,10 @@ describe("VirtualDataTable — column resizing", () => {
             columns: [{ key: "name", header: "Name", minWidth: 180 }],
         });
         const handle = screen.getByRole("separator", { name: "Name" });
-        vi.spyOn(handle.parentElement as HTMLElement, "getBoundingClientRect").mockReturnValue({
+        vi.spyOn(
+            handle.parentElement as HTMLElement,
+            "getBoundingClientRect",
+        ).mockReturnValue({
             width: 360,
             height: 40,
             top: 0,
@@ -233,7 +415,9 @@ describe("VirtualDataTable — local search", () => {
             "Alpha",
         );
         await waitFor(() =>
-            expect(screen.getByText(/1 of 3 shown \(filtered\)/)).toBeInTheDocument(),
+            expect(
+                screen.getByText(/1 of 3 shown \(filtered\)/),
+            ).toBeInTheDocument(),
         );
     });
 
@@ -256,12 +440,16 @@ describe("VirtualDataTable — local search", () => {
         renderTable();
         const input = screen.getByPlaceholderText("Search across all columns…");
         await user.type(input, "Alpha");
-        await waitFor(() => expect(screen.getByText(/1 of 3/)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/1 of 3/)).toBeInTheDocument(),
+        );
 
         // The X button appears next to the input when search is non-empty
         const clearBtn = input.parentElement!.querySelector("button")!;
         await user.click(clearBtn);
-        await waitFor(() => expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument(),
+        );
     });
 });
 
@@ -273,10 +461,15 @@ describe("VirtualDataTable — column filters", () => {
         await user.click(screen.getByRole("button", { name: "Filter Name" }));
         await user.type(screen.getByPlaceholderText("Filter name…"), "Alpha");
 
-        const clearButton = await screen.findByRole("button", { name: "Clear Name filter" });
+        const clearButton = await screen.findByRole("button", {
+            name: "Clear Name filter",
+        });
+        expect(clearButton).toHaveClass("p-3.5", "-m-3.5");
         await user.click(clearButton);
 
-        expect(screen.queryByRole("button", { name: "Clear Name filter" })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: "Clear Name filter" }),
+        ).not.toBeInTheDocument();
         expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument();
     });
 });
@@ -290,7 +483,9 @@ describe("VirtualDataTable — server-side search", () => {
 
     it("uses the localized search placeholder in server-search mode", () => {
         renderTable({ serverMode: { search: { onChange: vi.fn() } } });
-        expect(screen.getByPlaceholderText("Search database…")).toBeInTheDocument();
+        expect(
+            screen.getByPlaceholderText("Search database…"),
+        ).toBeInTheDocument();
     });
 
     it("does not re-render unchanged virtual rows on each server-search keystroke", () => {
@@ -306,10 +501,9 @@ describe("VirtualDataTable — server-side search", () => {
         });
         expect(renderName).toHaveBeenCalledTimes(DATA.length);
 
-        fireEvent.change(
-            screen.getByPlaceholderText("Search database…"),
-            { target: { value: "a" } },
-        );
+        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+            target: { value: "a" },
+        });
 
         expect(renderName).toHaveBeenCalledTimes(DATA.length);
     });
@@ -319,10 +513,9 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(
-            screen.getByPlaceholderText("Search database…"),
-            { target: { value: "test query" } },
-        );
+        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+            target: { value: "test query" },
+        });
         expect(onSearchChange).not.toHaveBeenCalled();
 
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
@@ -334,10 +527,9 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(
-            screen.getByPlaceholderText("Search database…"),
-            { target: { value: "partial" } },
-        );
+        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+            target: { value: "partial" },
+        });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
         expect(onSearchChange).not.toHaveBeenCalled();
     });
@@ -362,10 +554,9 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(
-            screen.getByPlaceholderText("Search database…"),
-            { target: { value: "  ab  " } },
-        );
+        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+            target: { value: "  ab  " },
+        });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
 
         expect(onSearchChange).toHaveBeenCalledWith("");
@@ -377,16 +568,15 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(
-            screen.getByPlaceholderText("Search database…"),
-            { target: { value: "  abc " } },
-        );
+        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+            target: { value: "  abc " },
+        });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
 
         expect(onSearchChange).toHaveBeenCalledWith("abc");
     });
 
-    it("resets the forwarded search to \"\" when a filtered query is shortened below the threshold, keeping the typed text", async () => {
+    it('resets the forwarded search to "" when a filtered query is shortened below the threshold, keeping the typed text', async () => {
         vi.useFakeTimers();
         // Controlled harness mirroring the real call sites (TransactionsPage /
         // RecipientsPage): the forwarded value loops back in as search.value.
@@ -400,7 +590,10 @@ describe("VirtualDataTable — server-side search", () => {
                     data={DATA}
                     serverMode={{
                         search: {
-                            onChange: (q) => { onSearchChange(q); setSearch(q); },
+                            onChange: (q) => {
+                                onSearchChange(q);
+                                setSearch(q);
+                            },
                             value: search,
                         },
                     }}
@@ -431,7 +624,11 @@ describe("VirtualDataTable — server-side sort", () => {
     it("first click calls onSortChange with asc", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ serverMode: { sort: { onChange: onSortChange, key: null, dir: null } } });
+        renderTable({
+            serverMode: {
+                sort: { onChange: onSortChange, key: null, dir: null },
+            },
+        });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith("name", "asc");
     });
@@ -439,7 +636,11 @@ describe("VirtualDataTable — server-side sort", () => {
     it("second click on same column calls onSortChange with desc", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ serverMode: { sort: { onChange: onSortChange, key: "name", dir: "asc" } } });
+        renderTable({
+            serverMode: {
+                sort: { onChange: onSortChange, key: "name", dir: "asc" },
+            },
+        });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith("name", "desc");
     });
@@ -447,7 +648,11 @@ describe("VirtualDataTable — server-side sort", () => {
     it("third click on same column calls onSortChange to clear sort", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ serverMode: { sort: { onChange: onSortChange, key: "name", dir: "desc" } } });
+        renderTable({
+            serverMode: {
+                sort: { onChange: onSortChange, key: "name", dir: "desc" },
+            },
+        });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith(null, null);
     });
@@ -474,11 +679,14 @@ describe("VirtualDataTable — inline editing", () => {
         // Find cancel button (X icon in the edit action cell)
         const actionButtons = screen.getAllByRole("button");
         const cancelBtn = actionButtons.find(
-            (b) => b.querySelector("svg") && b.className.includes("destructive"),
+            (b) =>
+                b.querySelector("svg") && b.className.includes("destructive"),
         );
         if (cancelBtn) await user.click(cancelBtn);
         // After cancel, plain text "Alpha" should be visible again
-        await waitFor(() => expect(screen.getByText("Alpha")).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText("Alpha")).toBeInTheDocument(),
+        );
         // 1 textbox remains: the always-visible search input (not the row edit input)
         expect(screen.queryAllByRole("textbox")).toHaveLength(1);
     });
@@ -492,7 +700,9 @@ describe("VirtualDataTable — inline editing", () => {
         await user.click(nameInput);
         await user.keyboard("{Escape}");
         // 1 textbox remains: the always-visible search input
-        await waitFor(() => expect(screen.queryAllByRole("textbox")).toHaveLength(1));
+        await waitFor(() =>
+            expect(screen.queryAllByRole("textbox")).toHaveLength(1),
+        );
     });
 
     it("saves edits and calls onRowUpdate", async () => {
@@ -549,6 +759,42 @@ describe("VirtualDataTable — inline editing", () => {
             expect(onRowUpdate).toHaveBeenCalledWith(
                 0,
                 expect.objectContaining({ value: 12.5 }),
+            ),
+        );
+    });
+
+    it("saves a typed DatePicker edit as YYYY-MM-DD", async () => {
+        const user = userEvent.setup();
+        const onRowUpdate = vi.fn();
+        renderWithApp(
+            <VirtualDataTable<DateRow>
+                title="Dates"
+                columns={[
+                    { key: "id", header: "ID" },
+                    {
+                        key: "date",
+                        header: "Date",
+                        editable: true,
+                        type: "date",
+                    },
+                ]}
+                data={[{ id: 1, date: "2025-01-15" }]}
+                onRowUpdate={onRowUpdate}
+            />,
+        );
+
+        await user.dblClick(screen.getByText("2025-01-15"));
+        await user.click(screen.getByRole("button", { name: "15/01/2025" }));
+        const input = screen.getByRole("textbox", { name: /enter date/i });
+        await user.clear(input);
+        await user.type(input, "24/03/2026");
+        await user.keyboard("{Enter}");
+        await user.click(screen.getByRole("button", { name: "Save" }));
+
+        await waitFor(() =>
+            expect(onRowUpdate).toHaveBeenCalledWith(
+                0,
+                expect.objectContaining({ date: "2026-03-24" }),
             ),
         );
     });
@@ -626,7 +872,9 @@ describe("VirtualDataTable — row context menu", () => {
         renderTable({
             rowContextMenu: (row) => (
                 <ContextMenuContent>
-                    <ContextMenuItem onSelect={() => onAction(row.id)}>Row action</ContextMenuItem>
+                    <ContextMenuItem onSelect={() => onAction(row.id)}>
+                        Row action
+                    </ContextMenuItem>
                 </ContextMenuContent>
             ),
         });
@@ -641,14 +889,18 @@ describe("VirtualDataTable — row context menu", () => {
             columns: EDITABLE_COLUMNS,
             rowContextMenu: (_row, _index, helpers) => (
                 <ContextMenuContent>
-                    <ContextMenuItem onSelect={helpers.startEditing}>Edit row</ContextMenuItem>
+                    <ContextMenuItem onSelect={helpers.startEditing}>
+                        Edit row
+                    </ContextMenuItem>
                 </ContextMenuContent>
             ),
         });
         fireEvent.contextMenu(getRow("Alpha"));
         fireEvent.click(await screen.findByText("Edit row"));
         // Row edit inputs appear in addition to the always-present search input.
-        await waitFor(() => expect(screen.getAllByRole("textbox").length).toBeGreaterThan(1));
+        await waitFor(() =>
+            expect(screen.getAllByRole("textbox").length).toBeGreaterThan(1),
+        );
     });
 });
 
@@ -664,12 +916,16 @@ describe("VirtualDataTable — clear all", () => {
             screen.getByPlaceholderText("Search across all columns…"),
             "X",
         );
-        const clearAll = await screen.findByRole("button", { name: /Clear all/i });
+        const clearAll = await screen.findByRole("button", {
+            name: /Clear all/i,
+        });
         expect(clearAll).toBeInTheDocument();
 
         await user.click(clearAll);
         await waitFor(() =>
-            expect(screen.queryByRole("button", { name: /Clear all/i })).not.toBeInTheDocument(),
+            expect(
+                screen.queryByRole("button", { name: /Clear all/i }),
+            ).not.toBeInTheDocument(),
         );
     });
 });

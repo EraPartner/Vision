@@ -11,13 +11,39 @@ import RecipientsPage from "@/pages/RecipientsPage";
 const API_BASE = "http://localhost:3002";
 
 describe("RecipientsPage (integration)", () => {
+    it("hydrates show-all, uncategorized, and search state from the URL", async () => {
+        renderWithApp(<RecipientsPage />, {
+            initialEntries: [
+                "/recipients?show_all=true&uncategorized=true&search=coffee",
+            ],
+        });
+
+        expect(
+            await screen.findByRole("button", { name: /showing all/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /uncategorized/i }),
+        ).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/search database/i)).toHaveValue(
+            "coffee",
+        );
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<RecipientsPage />);
-        const headings = await screen.findAllByRole("heading", { name: /all recipients/i });
+        const headings = await screen.findAllByRole("heading", {
+            name: /all recipients/i,
+        });
         expect(headings).toHaveLength(1);
-        expect(screen.getByRole("button", { name: /add recipient/i })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /merge recipients/i })).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/search database/i)).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /add recipient/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /merge recipients/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByPlaceholderText(/search database/i),
+        ).toBeInTheDocument();
     });
 
     it("renders without crashing when recipient list is empty", async () => {
@@ -26,16 +52,24 @@ describe("RecipientsPage (integration)", () => {
     });
 
     it("shows error state when the recipients API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/recipients`, () => err(500, "db unavailable")),
+            http.get(`${API_BASE}/api/recipients`, () =>
+                err(500, "db unavailable"),
+            ),
         );
 
         renderWithApp(<RecipientsPage />);
 
         // PageError renders the default "Couldn't load this page" h3 (no title prop passed here)
         expect(
-            await screen.findByRole("heading", { name: /couldn't load this page/i }, { timeout: 5000 }),
+            await screen.findByRole(
+                "heading",
+                { name: /couldn't load this page/i },
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
@@ -59,7 +93,9 @@ describe("RecipientsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const addBtn = await screen.findByRole("button", { name: /add recipient/i });
+        const addBtn = await screen.findByRole("button", {
+            name: /add recipient/i,
+        });
         await user.click(addBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -72,7 +108,9 @@ describe("RecipientsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const mergeBtn = await screen.findByRole("button", { name: /merge recipients/i });
+        const mergeBtn = await screen.findByRole("button", {
+            name: /merge recipients/i,
+        });
         await user.click(mergeBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -85,7 +123,9 @@ describe("RecipientsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const addBtn = await screen.findByRole("button", { name: /add recipient/i });
+        const addBtn = await screen.findByRole("button", {
+            name: /add recipient/i,
+        });
         await user.click(addBtn);
 
         await screen.findByRole("dialog");
@@ -109,7 +149,9 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
         // Default MSW returns { items: [] } → EmptyState title = recipientsPage.empty = "No recipients found"
         expect(
-            await screen.findByRole("heading", { name: /no recipients found/i }),
+            await screen.findByRole("heading", {
+                name: /no recipients found/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -121,23 +163,38 @@ describe("RecipientsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("truncates recipient and merge-target names while exposing their full titles", async () => {
-        const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-        const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 700 });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 1200 });
+    it("links recipient rows and exposes truncated names through a touch disclosure", async () => {
+        const heightDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetHeight",
+        );
+        const widthDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetWidth",
+        );
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+            configurable: true,
+            get: () => 700,
+        });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+            configurable: true,
+            get: () => 1200,
+        });
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
                 ok({
-                    items: [{
-                        id: 2,
-                        name: "A very long recipient name",
-                        primary_recipient_id: 1,
-                        primary_recipient_name: "A very long primary recipient name",
-                        is_active: true,
-                        alias_count: 0,
-                    }],
+                    items: [
+                        {
+                            id: 2,
+                            name: "A very long recipient name",
+                            primary_recipient_id: 1,
+                            primary_recipient_name:
+                                "A very long primary recipient name",
+                            is_active: true,
+                            alias_count: 0,
+                        },
+                    ],
                     total: 1,
                 }),
             ),
@@ -145,19 +202,43 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        expect(await screen.findByTitle("A very long recipient name")).toHaveClass("truncate");
-        const target = await screen.findByTitle("A very long primary recipient name");
+        const recipientLink = await screen.findByRole("link", {
+            name: "A very long recipient name",
+        });
+        expect(recipientLink).toHaveClass("truncate");
+        expect(recipientLink).toHaveAttribute(
+            "href",
+            "/transactions?recipient_id=2&filter_label=A%20very%20long%20recipient%20name",
+        );
+        expect(
+            screen.getByRole("button", { name: "A very long recipient name" }),
+        ).toBeInTheDocument();
+        const target = await screen.findByTitle(
+            "A very long primary recipient name",
+        );
         expect(target.querySelector("span")).toHaveClass("truncate");
 
-        if (heightDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightDescriptor);
-        if (widthDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthDescriptor);
+        if (heightDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetHeight",
+                heightDescriptor,
+            );
+        if (widthDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetWidth",
+                widthDescriptor,
+            );
     });
 
     it("closes Add Recipient dialog via Escape key", async () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const addBtn = await screen.findByRole("button", { name: /add recipient/i });
+        const addBtn = await screen.findByRole("button", {
+            name: /add recipient/i,
+        });
         await user.click(addBtn);
 
         await screen.findByRole("dialog");
@@ -171,10 +252,22 @@ describe("RecipientsPage (integration)", () => {
 
         // TanStack Virtual reads offsetHeight/offsetWidth (via getRect) to size the scroll container.
         // jsdom returns 0 for both. Mock to 700/1200 so the virtualizer computes visible rows.
-        const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-        const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 700 });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 1200 });
+        const heightDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetHeight",
+        );
+        const widthDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetWidth",
+        );
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+            configurable: true,
+            get: () => 700,
+        });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+            configurable: true,
+            get: () => 1200,
+        });
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -199,7 +292,9 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         // recipientPatterns.openBtn = "Patterns" — icon button title on each row
-        const patternsBtn = await screen.findByRole("button", { name: /^patterns$/i });
+        const patternsBtn = await screen.findByRole("button", {
+            name: /^patterns$/i,
+        });
         await user.click(patternsBtn);
 
         // recipientPatterns.title = "Match Patterns"
@@ -208,17 +303,39 @@ describe("RecipientsPage (integration)", () => {
             await screen.findByRole("heading", { name: /match patterns/i }),
         ).toBeInTheDocument();
 
-        if (heightDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightDescriptor);
-        if (widthDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthDescriptor);
+        if (heightDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetHeight",
+                heightDescriptor,
+            );
+        if (widthDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetWidth",
+                widthDescriptor,
+            );
     });
 
     it("Recipient Patterns dialog shows empty-patterns message when no patterns exist", async () => {
         const user = userEvent.setup();
 
-        const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-        const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 700 });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 1200 });
+        const heightDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetHeight",
+        );
+        const widthDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetWidth",
+        );
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+            configurable: true,
+            get: () => 700,
+        });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+            configurable: true,
+            get: () => 1200,
+        });
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -242,25 +359,37 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        const patternsBtn = await screen.findByRole("button", { name: /^patterns$/i });
+        const patternsBtn = await screen.findByRole("button", {
+            name: /^patterns$/i,
+        });
         await user.click(patternsBtn);
 
         await screen.findByRole("dialog");
 
         // recipientPatterns.empty = "No patterns yet. Add one to auto-match future imports."
-        expect(
-            await screen.findByText(/no patterns yet/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/no patterns yet/i)).toBeInTheDocument();
 
-        if (heightDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightDescriptor);
-        if (widthDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthDescriptor);
+        if (heightDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetHeight",
+                heightDescriptor,
+            );
+        if (widthDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetWidth",
+                widthDescriptor,
+            );
     });
 
     it("clicking Active Only toggles to Showing All mode", async () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("button", { name: /active only/i });
+        const activeOnlyBtn = await screen.findByRole("button", {
+            name: /active only/i,
+        });
         await user.click(activeOnlyBtn);
 
         // recipientsPage.showingAll = "Showing All"
@@ -277,8 +406,20 @@ describe("RecipientsPage (integration)", () => {
             http.get(`${API_BASE}/api/recipients`, () =>
                 ok({
                     items: [
-                        { id: 1, name: "Alice", is_active: true, alias_count: 0, primary_recipient_id: null },
-                        { id: 2, name: "Bob", is_active: true, alias_count: 0, primary_recipient_id: null },
+                        {
+                            id: 1,
+                            name: "Alice",
+                            is_active: true,
+                            alias_count: 0,
+                            primary_recipient_id: null,
+                        },
+                        {
+                            id: 2,
+                            name: "Bob",
+                            is_active: true,
+                            alias_count: 0,
+                            primary_recipient_id: null,
+                        },
                     ],
                     total: 2,
                 }),
@@ -286,7 +427,12 @@ describe("RecipientsPage (integration)", () => {
             http.post(`${API_BASE}/api/recipients/:primaryId/merge`, () => {
                 mergeCalled = true;
                 return ok({
-                    primary: { id: 1, name: "Alice", is_active: true, alias_count: 1 },
+                    primary: {
+                        id: 1,
+                        name: "Alice",
+                        is_active: true,
+                        alias_count: 1,
+                    },
                     merged_ids: [2],
                     aliases: [{ id: 2, name: "Bob" }],
                     patternSuggestion: null,
@@ -297,7 +443,9 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         // Open Merge dialog
-        await user.click(await screen.findByRole("button", { name: /merge recipients/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /merge recipients/i }),
+        );
         await screen.findByRole("dialog");
 
         // Step 1: pick primary — Alice appears in CommandList once data loads
@@ -307,7 +455,9 @@ describe("RecipientsPage (integration)", () => {
         await user.click(await screen.findByText("Bob"));
 
         // merge.mergeCount = "Merge {n} recipient(s)" → "Merge 1 recipient(s)"
-        await user.click(await screen.findByRole("button", { name: /merge 1 recipient/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /merge 1 recipient/i }),
+        );
 
         expect(mergeCalled).toBe(true);
     });
@@ -319,13 +469,20 @@ describe("RecipientsPage (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/recipients`, () => {
                 postCalled = true;
-                return ok({ id: 99, name: "Bob", is_active: true, alias_count: 0 });
+                return ok({
+                    id: 99,
+                    name: "Bob",
+                    is_active: true,
+                    alias_count: 0,
+                });
             }),
         );
 
         renderWithApp(<RecipientsPage />);
 
-        const addBtn = await screen.findByRole("button", { name: /add recipient/i });
+        const addBtn = await screen.findByRole("button", {
+            name: /add recipient/i,
+        });
         await user.click(addBtn);
 
         await screen.findByRole("dialog");
@@ -340,13 +497,95 @@ describe("RecipientsPage (integration)", () => {
         expect(postCalled).toBe(true);
     });
 
+    it("names the recipient, explains delete restrictions, and deletes the confirmed recipient", async () => {
+        const user = userEvent.setup();
+        let deletedId: string | undefined;
+        const heightDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetHeight",
+        );
+        const widthDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetWidth",
+        );
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+            configurable: true,
+            get: () => 700,
+        });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+            configurable: true,
+            get: () => 1200,
+        });
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 9,
+                            name: "Northwind Market",
+                            is_active: true,
+                            alias_count: 0,
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+            http.delete(`${API_BASE}/api/recipients/:id`, ({ params }) => {
+                deletedId = params.id as string;
+                return new Response(null, { status: 204 });
+            }),
+        );
+
+        renderWithApp(<RecipientsPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /delete recipient/i }),
+        );
+
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent('Delete "Northwind Market"?');
+        expect(dialog).toHaveTextContent(
+            /transactions, planned payments, or bank account links cannot be deleted/i,
+        );
+        expect(dialog).toHaveTextContent(/reassign or merge them first/i);
+        expect(deletedId).toBeUndefined();
+
+        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await waitFor(() => expect(deletedId).toBe("9"));
+
+        if (heightDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetHeight",
+                heightDescriptor,
+            );
+        if (widthDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetWidth",
+                widthDescriptor,
+            );
+    });
+
     it("Recipient Patterns dialog closes via Escape key", async () => {
         const user = userEvent.setup();
 
-        const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-        const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 700 });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 1200 });
+        const heightDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetHeight",
+        );
+        const widthDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLElement.prototype,
+            "offsetWidth",
+        );
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+            configurable: true,
+            get: () => 700,
+        });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+            configurable: true,
+            get: () => 1200,
+        });
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -370,7 +609,9 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        const patternsBtn = await screen.findByRole("button", { name: /^patterns$/i });
+        const patternsBtn = await screen.findByRole("button", {
+            name: /^patterns$/i,
+        });
         await user.click(patternsBtn);
 
         await screen.findByRole("dialog");
@@ -379,8 +620,18 @@ describe("RecipientsPage (integration)", () => {
 
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-        if (heightDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightDescriptor);
-        if (widthDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthDescriptor);
+        if (heightDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetHeight",
+                heightDescriptor,
+            );
+        if (widthDescriptor)
+            Object.defineProperty(
+                HTMLElement.prototype,
+                "offsetWidth",
+                widthDescriptor,
+            );
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
@@ -392,7 +643,11 @@ describe("RecipientsPage (integration)", () => {
         );
         renderWithApp(<RecipientsPage />);
         expect(
-            await screen.findByText(/error loading recipients/i, {}, { timeout: 4000 }),
+            await screen.findByText(
+                /error loading recipients/i,
+                {},
+                { timeout: 4000 },
+            ),
         ).toBeInTheDocument();
         errSpy.mockRestore();
     });
@@ -422,7 +677,9 @@ describe("RecipientsPage (integration)", () => {
         expect(
             await screen.findByRole("heading", { name: /recipients/i }),
         ).toBeInTheDocument();
-        expect(screen.queryByText(/error loading recipients/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/error loading recipients/i),
+        ).not.toBeInTheDocument();
     });
 
     it("after a successful create, the recipients list refetches (stale refetch)", async () => {
@@ -430,10 +687,24 @@ describe("RecipientsPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/recipients`, () => {
                 getCalls += 1;
-                return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                });
             }),
             http.post(`${API_BASE}/api/recipients`, () =>
-                ok({ id: 99, name: "Test", normalized_name: "test", is_active: true, created_at: "2025-01-01T00:00:00Z", updated_at: null, links: [] }),
+                ok({
+                    id: 99,
+                    name: "Test",
+                    normalized_name: "test",
+                    is_active: true,
+                    created_at: "2025-01-01T00:00:00Z",
+                    updated_at: null,
+                    links: [],
+                }),
             ),
         );
         const user = userEvent.setup();
@@ -441,11 +712,15 @@ describe("RecipientsPage (integration)", () => {
         await screen.findByRole("heading", { name: /recipients/i });
         const before = getCalls;
 
-        await user.click(await screen.findByRole("button", { name: /add recipient/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add recipient/i }),
+        );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Test Recipient");
         await user.click(screen.getByRole("button", { name: /^create$/i }));
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
         await waitFor(() => expect(getCalls).toBeGreaterThan(before));
     });
 
@@ -457,7 +732,13 @@ describe("RecipientsPage (integration)", () => {
             http.get(`${API_BASE}/api/recipients`, ({ request }) => {
                 const url = new URL(request.url);
                 limitsSeen.push(url.searchParams.get("limit"));
-                return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
         renderWithApp(<RecipientsPage />);
@@ -472,11 +753,19 @@ describe("RecipientsPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/recipients`, async () => {
                 await new Promise((r) => setTimeout(r, 80));
-                return ok({ items: [], total: 0, limit: 200, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
         renderWithApp(<RecipientsPage />);
-        const heading = await screen.findByRole("heading", { name: /recipients/i });
+        const heading = await screen.findByRole("heading", {
+            name: /recipients/i,
+        });
         expect(heading).toBeInTheDocument();
     });
 });

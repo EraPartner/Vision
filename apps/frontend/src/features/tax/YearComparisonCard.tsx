@@ -13,23 +13,28 @@
  * meaningful to compare. The page is responsible for wrapping in widget visibility
  * gating if applicable.
  */
-import { useMemo, useState, useEffect } from 'react';
-import { ArrowDownRight, ArrowUpRight, GitCompare, Minus } from 'lucide-react';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { formatPercent } from '@/utils/currency';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMemo, useState, useEffect } from "react";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { formatPercent } from "@/utils/currency";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { TaxYearStatusIcon } from './TaxYearStatusIcon';
+} from "@/components/ui/select";
+import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
 
 interface YearComparisonCardProps {
     className?: string;
@@ -44,6 +49,8 @@ interface MetricRow {
     valueB: number;
     /** Display formatter. */
     format: (val: number) => string;
+    /** Currency rows use the shared signed-money formatter for their delta. */
+    isCurrency?: boolean;
 }
 
 export function YearComparisonCard({ className }: YearComparisonCardProps) {
@@ -60,11 +67,17 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
         return other?.year ?? null;
     }, [years, viewedYear]);
 
-    const [compareYear, setCompareYear] = useState<number | null>(defaultCompareYear);
+    const [compareYear, setCompareYear] = useState<number | null>(
+        defaultCompareYear,
+    );
 
     // Keep `compareYear` valid when viewedYear or the available list shifts.
     useEffect(() => {
-        if (compareYear == null || compareYear === viewedYear || !years.some((y) => y.year === compareYear)) {
+        if (
+            compareYear == null ||
+            compareYear === viewedYear ||
+            !years.some((y) => y.year === compareYear)
+        ) {
             setCompareYear(defaultCompareYear);
         }
     }, [compareYear, viewedYear, years, defaultCompareYear]);
@@ -84,36 +97,39 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
         const calcB = displayCalculationForYear(compareYear);
         return [
             {
-                key: 'grossIncome',
-                label: t('tax.comparison.row.grossIncome'),
+                key: "grossIncome",
+                label: t("tax.comparison.row.grossIncome"),
                 higherIsBetter: true,
                 valueA: calcA.grossIncome,
                 valueB: calcB.grossIncome,
                 format: fmtCurrency,
+                isCurrency: true,
             },
             {
-                key: 'totalPIT',
-                label: t('tax.comparison.row.totalPIT'),
+                key: "totalPIT",
+                label: t("tax.comparison.row.totalPIT"),
                 higherIsBetter: false,
                 valueA: calcA.totalPIT,
                 valueB: calcB.totalPIT,
                 format: fmtCurrency,
+                isCurrency: true,
             },
             {
-                key: 'effectiveRate',
-                label: t('tax.comparison.row.effectiveRate'),
+                key: "effectiveRate",
+                label: t("tax.comparison.row.effectiveRate"),
                 higherIsBetter: false,
                 valueA: calcA.effectiveRate,
                 valueB: calcB.effectiveRate,
                 format: fmtPercent,
             },
             {
-                key: 'netTakeHome',
-                label: t('tax.comparison.row.netTakeHome'),
+                key: "netTakeHome",
+                label: t("tax.comparison.row.netTakeHome"),
                 higherIsBetter: true,
                 valueA: calcA.netTakeHome,
                 valueB: calcB.netTakeHome,
                 format: fmtCurrency,
+                isCurrency: true,
             },
         ];
         // fmtCurrency wraps the shared formatter, whose identity carries the
@@ -132,24 +148,25 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
             <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <GitCompare className="h-4 w-4 text-muted-foreground" />
-                            {t('tax.comparison.title', { year: String(viewedYear) })}
+                        <CardTitle variant="sm">
+                            {t("tax.comparison.title", {
+                                year: String(viewedYear),
+                            })}
                         </CardTitle>
                         <CardDescription className="text-xs mt-1">
-                            {t('tax.comparison.description')}
+                            {t("tax.comparison.description")}
                         </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">
-                            {t('tax.comparison.versus')}
+                            {t("tax.comparison.versus")}
                         </span>
                         <Select
                             value={String(compareYear)}
                             onValueChange={(v) => setCompareYear(Number(v))}
                         >
                             <SelectTrigger
-                                aria-label={t('tax.comparison.selectYear')}
+                                aria-label={t("tax.comparison.selectYear")}
                                 className="h-8 w-28 text-xs"
                             >
                                 <SelectValue />
@@ -158,12 +175,20 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                 {years
                                     .filter((y) => y.year !== viewedYear)
                                     .map((y) => (
-                                        <SelectItem key={y.year} value={String(y.year)} className="text-xs">
+                                        <SelectItem
+                                            key={y.year}
+                                            value={String(y.year)}
+                                            className="text-xs"
+                                        >
                                             <span className="flex items-center gap-1.5">
-                                                <span className="tabular-nums">{y.year}</span>
+                                                <span className="tabular-nums">
+                                                    {y.year}
+                                                </span>
                                                 <TaxYearStatusIcon
                                                     isFiled={y.isFiled}
-                                                    hasFrozenCalculation={y.hasFrozenCalculation}
+                                                    hasFrozenCalculation={
+                                                        y.hasFrozenCalculation
+                                                    }
                                                     className="h-2.5 w-2.5"
                                                 />
                                             </span>
@@ -180,7 +205,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                         <thead className="bg-muted/40">
                             <tr className="text-xs text-muted-foreground">
                                 <th className="text-left font-medium px-3 py-2">
-                                    {t('tax.comparison.header.metric')}
+                                    {t("tax.comparison.header.metric")}
                                 </th>
                                 <th className="text-right font-medium px-3 py-2 tabular-nums">
                                     <span className="flex items-center justify-end gap-1.5">
@@ -192,13 +217,15 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                         {compareYear}
                                         <TaxYearStatusIcon
                                             isFiled={compareEntry?.isFiled}
-                                            hasFrozenCalculation={compareEntry?.hasFrozenCalculation}
+                                            hasFrozenCalculation={
+                                                compareEntry?.hasFrozenCalculation
+                                            }
                                             className="h-3 w-3"
                                         />
                                     </span>
                                 </th>
                                 <th className="text-right font-medium px-3 py-2">
-                                    {t('tax.comparison.header.delta')}
+                                    {t("tax.comparison.header.delta")}
                                 </th>
                             </tr>
                         </thead>
@@ -206,45 +233,45 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                             {rows.map((row) => {
                                 const delta = row.valueA - row.valueB;
                                 const pct =
-                                    row.valueB === 0 ? null : ((row.valueA - row.valueB) / Math.abs(row.valueB)) * 100;
+                                    row.valueB === 0
+                                        ? null
+                                        : ((row.valueA - row.valueB) /
+                                              Math.abs(row.valueB)) *
+                                          100;
                                 const zero = Math.abs(delta) < 0.005;
-                                const favorable = zero
-                                    ? null
-                                    : row.higherIsBetter
-                                      ? delta > 0
-                                      : delta < 0;
-                                const DeltaIcon = zero
-                                    ? Minus
-                                    : delta > 0
-                                      ? ArrowUpRight
-                                      : ArrowDownRight;
+                                const pillValue = zero ? 0 : delta;
+                                const deltaAmount = row.isCurrency
+                                    ? fmtBase(delta, {
+                                          decimals: 0,
+                                          signed: true,
+                                      })
+                                    : row.format(Math.abs(delta));
+                                const deltaLabel = `${deltaAmount}${
+                                    pct != null && !zero
+                                        ? ` (${formatPercent(pct, { digits: 1, signed: true })})`
+                                        : ""
+                                }`;
 
                                 return (
-                                    <tr key={row.key} className="border-t border-border/60">
-                                        <td className="px-3 py-2">{row.label}</td>
+                                    <tr
+                                        key={row.key}
+                                        className="border-t border-border/60"
+                                    >
+                                        <td className="px-3 py-2">
+                                            {row.label}
+                                        </td>
                                         <td className="px-3 py-2 text-right font-medium tabular-nums">
                                             {row.format(row.valueA)}
                                         </td>
                                         <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                                             {row.format(row.valueB)}
                                         </td>
-                                        <td
-                                            className={cn(
-                                                'px-3 py-2 text-right tabular-nums font-medium',
-                                                zero && 'text-muted-foreground',
-                                                favorable === true && 'text-accent',
-                                                favorable === false && 'text-destructive',
-                                            )}
-                                        >
-                                            <span className="inline-flex items-center justify-end gap-1">
-                                                <DeltaIcon className="h-3 w-3" />
-                                                {row.format(Math.abs(delta))}
-                                                {pct != null && !zero && (
-                                                    <span className="text-[11px] opacity-70">
-                                                        ({formatPercent(pct, { digits: 1, signed: true })})
-                                                    </span>
-                                                )}
-                                            </span>
+                                        <td className="px-3 py-2 text-right">
+                                            <DeltaPill
+                                                value={pillValue}
+                                                invert={!row.higherIsBetter}
+                                                label={deltaLabel}
+                                            />
                                         </td>
                                     </tr>
                                 );

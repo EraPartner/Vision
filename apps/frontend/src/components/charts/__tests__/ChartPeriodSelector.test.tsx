@@ -31,6 +31,7 @@ describe("ChartPeriodSelector", () => {
         expect(oneMonth).toHaveAttribute("aria-pressed", "false");
         expect(threeMonths).toHaveAttribute("aria-pressed", "true");
         expect(all).toHaveAttribute("aria-pressed", "false");
+        expect(oneMonth).toHaveClass("min-h-10", "min-w-10");
 
         await user.click(all);
         expect(onChange).toHaveBeenCalledOnce();

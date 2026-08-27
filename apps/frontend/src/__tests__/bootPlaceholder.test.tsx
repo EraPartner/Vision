@@ -35,7 +35,9 @@ const ELECTRON_MAIN = readFileSync(
 
 /** The `#root` element's inner markup, as authored in index.html. */
 function rootMarkup(): string {
-    const match = INDEX_HTML.match(/<div id="root">([\s\S]*?)<\/div>\s*<script/);
+    const match = INDEX_HTML.match(
+        /<div id="root">([\s\S]*?)<\/div>\s*<script/,
+    );
     if (!match) throw new Error("Could not find #root in index.html");
     return match[1];
 }
@@ -81,7 +83,10 @@ describe("boot placeholder fidelity to the Electron splash", () => {
     const splashCss = (() => {
         const start = ELECTRON_MAIN.indexOf("function splashDataUrl()");
         expect(start).toBeGreaterThan(-1);
-        return ELECTRON_MAIN.slice(start, ELECTRON_MAIN.indexOf("function setSplashStatus"));
+        return ELECTRON_MAIN.slice(
+            start,
+            ELECTRON_MAIN.indexOf("function setSplashStatus"),
+        );
     })();
 
     const SHARED = [
@@ -130,7 +135,9 @@ describe("boot placeholder fidelity to the Electron splash", () => {
     });
 
     it("shows the same wordmark the splash shows", () => {
-        expect(ELECTRON_MAIN).toContain("const APP_NAME = __IS_DEMO ? 'Vision Demo' : 'Vision'");
+        expect(ELECTRON_MAIN).toMatch(
+            /const APP_NAME = __IS_DEMO \? ["']Vision Demo["'] : ["']Vision["']/,
+        );
         expect(rootMarkup()).toMatch(/boot-splash__name[^>]*>Vision</);
     });
 });

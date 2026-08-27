@@ -5,24 +5,31 @@ import {
     apiRequest,
     parseEnvelopeError,
     unwrapEnvelope,
-} from '@/lib/api/client';
+} from "@/lib/api/client";
 
 export type { QueryParams };
 
 export function buildQuery(params?: QueryParams): string {
-    if (!params) return '';
+    if (!params) return "";
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value !== undefined && value !== null && value !== "") {
             queryParams.append(key, String(value));
         }
     });
     return queryParams.toString();
 }
 
-export function requestWithQuery<T>(endpoint: string, params?: QueryParams, signal?: AbortSignal): Promise<T> {
+export function requestWithQuery<T>(
+    endpoint: string,
+    params?: QueryParams,
+    signal?: AbortSignal,
+): Promise<T> {
     const query = buildQuery(params);
-    return apiRequest<T>(`${endpoint}${query ? `?${query}` : ''}`, signal ? { signal } : {});
+    return apiRequest<T>(
+        `${endpoint}${query ? `?${query}` : ""}`,
+        signal ? { signal } : {},
+    );
 }
 
 export function buildExclusionQuery(params?: {
@@ -33,13 +40,17 @@ export function buildExclusionQuery(params?: {
     const queryParams = new URLSearchParams();
 
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => queryParams.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            queryParams.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => queryParams.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            queryParams.append("excluded_recipient_ids", String(id)),
+        );
     }
     if (params?.currency) {
-        queryParams.set('currency', params.currency);
+        queryParams.set("currency", params.currency);
     }
 
     return queryParams.toString();
@@ -51,17 +62,20 @@ export async function createWithStatus<TPayload, TData>(
 ): Promise<{ data: TData; wasCreated: boolean }> {
     const url = `${API_BASE_URL}${endpoint}`;
     const response = await rawFetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-        throw await parseEnvelopeError(response, 'Request failed');
+        throw await parseEnvelopeError(response, "Request failed");
     }
 
     const body = await response.json();
-    return { data: unwrapEnvelope<TData>(body), wasCreated: response.status === 201 };
+    return {
+        data: unwrapEnvelope<TData>(body),
+        wasCreated: response.status === 201,
+    };
 }
 
 export async function postMultipartImport<T>(
@@ -70,14 +84,14 @@ export async function postMultipartImport<T>(
     queryParams: URLSearchParams,
 ): Promise<T> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     const query = queryParams.toString();
-    const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ''}`;
-    const response = await rawFetch(url, { method: 'POST', body: formData });
+    const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ""}`;
+    const response = await rawFetch(url, { method: "POST", body: formData });
 
     if (!response.ok) {
-        throw await parseEnvelopeError(response, 'Request failed');
+        throw await parseEnvelopeError(response, "Request failed");
     }
 
     const body = await response.json();
@@ -91,13 +105,25 @@ export async function postMultipartImport<T>(
  * unwrapping a JSON envelope — used by CSV/NDJSON/PDF export endpoints. Pair with
  * `downloadBlob` to trigger the browser download.
  */
-export async function requestBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
-    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+export async function requestBlob(
+    endpoint: string,
+    options: RequestInit = {},
+): Promise<Blob> {
+    return (await requestBlobWithResponse(endpoint, options)).blob;
+}
+
+export async function requestBlobWithResponse(
+    endpoint: string,
+    options: RequestInit = {},
+): Promise<{ blob: Blob; response: Response }> {
+    const url = endpoint.startsWith("http")
+        ? endpoint
+        : `${API_BASE_URL}${endpoint}`;
     const response = await rawFetch(url, options);
 
     if (!response.ok) {
-        throw await parseEnvelopeError(response, 'Export failed');
+        throw await parseEnvelopeError(response, "Export failed");
     }
 
-    return response.blob();
+    return { blob: await response.blob(), response };
 }

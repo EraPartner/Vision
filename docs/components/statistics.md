@@ -3,8 +3,20 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-26
-tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance, phase-13, drillthrough]
+updated: 2026-08-27
+tags:
+  [
+    components,
+    statistics,
+    charts,
+    frontend,
+    refactoring,
+    lazy-loading,
+    memoization,
+    performance,
+    phase-13,
+    drillthrough,
+  ]
 description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization. Phase 13 adds pivot table drillthrough to transactions page.
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -28,25 +40,34 @@ The page acts as a thin orchestrator with lazy-loading and memoization:
 import { lazy, Suspense, useMemo } from "react";
 
 const MonthlyChart = lazy(() =>
-  import("@/features/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+  import("@/features/statistics/MonthlyChart").then((m) => ({
+    default: m.MonthlyChart,
+  })),
 );
 
 function StatisticsPage() {
   const { data, getGraphData, toggleGraphExclusion } = useStatistics();
   const { isVisible } = useWidgetVisibility("statistics", STATISTICS_WIDGETS);
-  
+
   // Memoize props to prevent unnecessary child re-renders
   const chartCardProps = useMemo(
-    () => ({ getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply }),
+    () => ({
+      getGraphData,
+      graphExclusions,
+      toggleGraphExclusion,
+      exclusionsApply,
+    }),
     [getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply],
   );
-  
+
   return (
     <Tabs>
       {isVisible("summaryCards") && <MonthlyRhythm data={data} />}
       {isVisible("monthly") && (
         <Suspense fallback={<ChartSkeleton />}>
-          <ChartCard {...chartCardProps}><MonthlyChart /></ChartCard>
+          <ChartCard {...chartCardProps}>
+            <MonthlyChart />
+          </ChartCard>
         </Suspense>
       )}
       {/* ... 9 more widgets across 4 tabs, each lazy-loaded ... */}
@@ -56,6 +77,7 @@ function StatisticsPage() {
 ```
 
 **Performance Features:**
+
 - **Lazy-loading**: 8 chart components deferred until tab is opened (reduces initial bundle)
 - **Memoization**: All charts wrapped with `React.memo()` to prevent unnecessary re-renders
 - **Prop memoization**: `chartCardProps` memoized to stabilize `ChartCard` children
@@ -106,7 +128,7 @@ interface ChartCardProps {
 ### MonthlyRhythm
 
 **File:** `MonthlyRhythm.tsx`  
-**Purpose:** The page's opening lede — the *shape* of the months. Replaced
+**Purpose:** The page's opening lede — the _shape_ of the months. Replaced
 `SummaryCards`, whose first three tiles restated the dashboard hero row (total
 income / total spending / net) and whose fourth ("Months tracked") was page
 metadata minted to complete a four-up grid.
@@ -121,20 +143,22 @@ interface MonthlyRhythmProps {
 
 **Anatomy:**
 
-| Slot | Value | Notes |
-|------|-------|-------|
-| Headline | `monthlyData[i].net` for the scrubbed month (latest by default) | Compact + `RollingNumber`; `DeltaPill` vs the month before |
-| Typical month in / out | `averageMonthlyIncome` / `averageMonthlySpending` | Exact (`Money`) |
-| Bar strip | `monthlyData[].net`, above/below a zero baseline | Pointer hover + ←/→ · Home/End · Escape via `useChartKeyboardNav` |
-| Strongest / Toughest month | max / min `net` with its period label | Exact (`Money`) |
-| Months in the black | count of `net >= 0` over `monthlyData.length` | — |
+| Slot                       | Value                                                           | Notes                                                             |
+| -------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Headline                   | `monthlyData[i].net` for the scrubbed month (latest by default) | Compact + `RollingNumber`; `DeltaPill` vs the month before        |
+| Typical month in / out     | `averageMonthlyIncome` / `averageMonthlySpending`               | Exact (`Money`)                                                   |
+| Bar strip                  | `monthlyData[].net`, above/below a zero baseline                | Pointer hover + ←/→ · Home/End · Escape via `useChartKeyboardNav` |
+| Strongest / Toughest month | max / min `net` with its period label                           | Exact (`Money`)                                                   |
+| Months in the black        | count of `net >= 0` over `monthlyData.length`                   | —                                                                 |
 
 Only the hero abbreviates; every detail figure renders exact.
 
 **Usage:**
 
 ```tsx
-{isVisible("summaryCards") && <MonthlyRhythm data={data} />}
+{
+  isVisible("summaryCards") && <MonthlyRhythm data={data} />;
+}
 ```
 
 > [!note] Widget id
@@ -154,14 +178,14 @@ Only the hero abbreviates; every detail figure renders exact.
 
 ```typescript
 interface MonthlyChartProps {
-  data: StatisticsData;  // Non-null; parent handles loading/error states
+  data: StatisticsData; // Non-null; parent handles loading/error states
 }
 ```
 
-**Chart Type:** Grouped bar chart with optional line overlay  
-**Dimensions:** Income (emerald) vs Spending (red) by month  
-**Overlay:** 3-month rolling average (toggle button)  
-**Interaction:** Hover tooltip shows currency values
+**Chart Type:** Grouped bar chart with optional line overlay
+**Dimensions:** Income (emerald) vs Spending (red) by month
+**Overlay:** 3-month rolling average (toggle button)
+**Interaction:** Pointer hover or chart keyboard navigation shows currency values
 
 **Performance:**
 
@@ -188,7 +212,7 @@ Wrapped with `React.memo()` to prevent re-renders when parent props change. Uses
 
 ```typescript
 interface NetTrendChartProps {
-  data: StatisticsData;  // Non-null; parent handles loading/error states
+  data: StatisticsData; // Non-null; parent handles loading/error states
 }
 ```
 
@@ -214,7 +238,7 @@ Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 ### CategoryPieChart
 
-**File:** `CategoryPieChart.tsx` (64 lines)  
+**File:** `CategoryPieChart.tsx`
 **Purpose:** Category spending donut chart (top 10, year-filterable)
 
 **Props:**
@@ -230,7 +254,7 @@ interface CategoryPieChartProps {
 
 - Donut chart showing top 10 spending categories
 - Year filter: "All Years" or specific year
-- Shows category name + percentage on hover
+- Shows category name + currency amount through pointer hover or keyboard slice navigation
 
 **Performance:**
 
@@ -261,9 +285,9 @@ interface CategoryTrendChartProps {
 }
 ```
 
-**Chart Type:** Multi-line chart  
-**Dimensions:** Top 5 categories by spending, tracked over all months  
-**Interaction:** Click legend to toggle category visibility
+**Chart Type:** Multi-line chart
+**Dimensions:** Top 5 categories by spending, tracked over all months
+**Interaction:** Pointer hover or chart keyboard navigation shows each month's values
 
 **Performance:**
 
@@ -283,7 +307,7 @@ Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 ### CategoryPivotTable
 
-**File:** `CategoryPivotTable.tsx` (240 lines, Phase 13)  
+**File:** `CategoryPivotTable.tsx` (Phase 13)
 **Purpose:** Hierarchical category × month pivot table with mode/year filters and clickable drillthrough
 
 **Props:**
@@ -307,31 +331,36 @@ interface CategoryPivotTableProps {
 5. **Sorting:** By total descending
 6. **Sticky columns:** Category name stays visible during horizontal scroll
 7. **Column totals:** Footer row with per-period and grand totals
-8. **Accessibility:** Tab through rows; chevron buttons expose `aria-expanded`/`aria-controls`, activated via Enter or Space
-9. **Drillthrough (Phase 13):** Clickable cells navigate to `/transactions` with pre-populated filters
+8. **Accessibility:** Chevron buttons expose `aria-expanded` and a space-separated `aria-controls` list whose unique child-row ids remain mounted while hidden. Non-zero drill cells contain native links. Compact totals place their exact-value disclosure beside, never inside, the link.
+9. **Drillthrough (Phase 13):** Non-zero group/detail cells and footer totals navigate to `/transactions` with pre-populated filters; zero cells remain plain table cells.
 
 **Drillthrough Behavior (Phase 13):**
 
-All pivot cells are clickable and drill through to the TransactionsPage with pre-populated filters:
+Non-zero group/detail cells and footer totals drill through to the TransactionsPage with pre-populated filters:
 
-| Cell Type | URL Query Params | Notes |
-|-----------|------------------|-------|
-| Detail row × month | `category_id={id}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | Single category detail |
-| Detail row × total | `category_id={id}`, `transaction_type` (if income/expense mode) | Entire detail across all periods |
-| Group header × month | `category_ids={id1,id2,...}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | All children in month |
-| Group header × total | `category_ids={id1,id2,...}`, `transaction_type` (if income/expense mode) | All children across all periods |
-| Footer × month | `category_ids={all}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | All categories in month |
-| Footer × grand total | `category_ids={all}`, `transaction_type` (if income/expense mode) | All categories across all periods |
+| Cell Type            | URL Query Params                                                                                    | Notes                             |
+| -------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Detail row × month   | `category_id={id}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode)           | Single category detail            |
+| Detail row × total   | `category_id={id}`, `transaction_type` (if income/expense mode)                                     | Entire detail across all periods  |
+| Group header × month | `category_ids={id1,id2,...}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | All children in month             |
+| Group header × total | `category_ids={id1,id2,...}`, `transaction_type` (if income/expense mode)                           | All children across all periods   |
+| Footer × month       | `category_ids={all}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode)         | All categories in month           |
+| Footer × grand total | `category_ids={all}`, `transaction_type` (if income/expense mode)                                   | All categories across all periods |
 
 **Collapse/Expand Detail:**
+
 - Each parent group with at least one child whose `detailName` differs from the parent name renders a `ChevronRight` (collapsed) / `ChevronDown` (expanded) button.
 - The CardHeader master button label is "Collapse all" when any group is expanded; "Expand all" when all are collapsed. Hidden when no group is expandable.
 - State is `useState<Set<string>>` (session-only); not persisted to localStorage or URL. Survives Year/Metric/Exclusion filter changes — collapsed keys remain stable across filter changes.
 - Flat categories (no `:` in name, `detailName === general`) do not receive a chevron.
+- Controlled child rows stay mounted with `hidden` while collapsed, so every `aria-controls` id remains valid without exposing collapsed content.
+
+Accessibility coverage lives in `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.a11y.test.tsx]]` and pins href-backed keyboard drill-through, non-interactive zero cells, modifier-click behavior, and unique controlled row ids.
 
 **URL Construction:**
+
 - `lastDayOfMonth(period)` helper computes the last day of a month (e.g., `2026-03` → `2026-03-31`)
-- `buildDrillUrl()` helper constructs the drill URL with params; zero-value cells remain non-clickable ([[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]])
+- Shared `buildTransactionDrillUrl()` constructs the drill URL with params; zero-value cells remain non-clickable ([[apps/frontend/src/lib/transactionDrillUrl.ts]])
 - `filter_label` param contains a human-readable label for UX context
 
 **Usage:**
@@ -362,7 +391,7 @@ interface TopRecipientsChartProps {
 
 - Horizontal bar chart showing top 20 recipients by total spending
 - Year filter: "All Years" or specific year
-- Recipient name + currency amount on hover
+- Recipient name + currency amount through pointer hover or chart keyboard navigation
 
 **Performance:**
 
@@ -428,12 +457,12 @@ interface YearlySummaryTableProps {
 
 **Columns:**
 
-| Column | Computed From |
-|--------|---------------|
-| Year | `yearlyComparison[].year` |
-| Income | `yearlyComparison[].totalIncome` |
-| Spending | `yearlyComparison[].totalSpending` |
-| Net | Income - Spending |
+| Column       | Computed From                         |
+| ------------ | ------------------------------------- |
+| Year         | `yearlyComparison[].year`             |
+| Income       | `yearlyComparison[].totalIncome`      |
+| Spending     | `yearlyComparison[].totalSpending`    |
+| Net          | Income - Spending                     |
 | Transactions | `yearlyComparison[].transactionCount` |
 
 **Features:**
@@ -530,14 +559,14 @@ interface SankeyChartProps {
 
 interface SankeyFlowData {
   nodes: Array<{
-    id: string;      // Must be string: "__income__", "cat:{name}", "__savings__"
-    label: string;   // Display name
-    value: number;   // Total amount
+    id: string; // Must be string: "__income__", "cat:{name}", "__savings__"
+    label: string; // Display name
+    value: number; // Total amount
   }>;
   links: Array<{
-    source: string;  // Source node ID
-    target: string;  // Target node ID
-    value: number;   // Flow amount
+    source: string; // Source node ID
+    target: string; // Target node ID
+    value: number; // Flow amount
   }>;
   year: number;
 }
@@ -633,7 +662,11 @@ SankeyTab
 ```typescript
 // Widget definitions
 export const STATISTICS_WIDGETS: WidgetDefinition[] = [
-  { id: "summaryCards", labelKey: "statsPage.widget.summaryCards", defaultVisible: true },
+  {
+    id: "summaryCards",
+    labelKey: "statsPage.widget.summaryCards",
+    defaultVisible: true,
+  },
   { id: "monthly", labelKey: "statsPage.widget.monthly", defaultVisible: true },
   // ... 7 more widgets
 ];
@@ -643,10 +676,10 @@ export type PivotValueMode = "absolute" | "net" | "income" | "expense";
 
 // Period formatting
 export function formatPeriodLabel(period: string): string;
-  // "2026-03" → "Mar 2026"
+// "2026-03" → "Mar 2026"
 
 export function formatPeriodShort(period: string): string;
-  // "2026-03" → "Mar 26"
+// "2026-03" → "Mar 26"
 
 // Collapse/Expand helpers (Phase 13)
 export interface ExpandableGroupInput {
@@ -655,15 +688,15 @@ export interface ExpandableGroupInput {
 }
 
 export function isExpandableGroup(group: ExpandableGroupInput): boolean;
-  // Returns true if any child's detailName differs from parent general
-  // Flat categories (detailName === general) return false
+// Returns true if any child's detailName differs from parent general
+// Flat categories (detailName === general) return false
 
 export function computeMasterToggleState(
   expandableGroupNames: ReadonlyArray<string>,
-  collapsedGroups: ReadonlySet<string>
+  collapsedGroups: ReadonlySet<string>,
 ): { hasExpandable: boolean; allCollapsed: boolean };
-  // Returns { hasExpandable, allCollapsed } for master toggle button state
-  // allCollapsed = true when all expandable groups are in collapsedGroups set
+// Returns { hasExpandable, allCollapsed } for master toggle button state
+// allCollapsed = true when all expandable groups are in collapsedGroups set
 ```
 
 ---
@@ -688,7 +721,7 @@ export interface ChartCurrencyFormatter {
   currency: string;
 }
 
-export function useChartCurrencyFormatter(): ChartCurrencyFormatter
+export function useChartCurrencyFormatter(): ChartCurrencyFormatter;
 ```
 
 (`CompactFormatResult` is `{ display: string; full: string; isCompact: boolean }` from `utils/currency.ts`.)
@@ -711,11 +744,13 @@ import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 function MyChart() {
   const { formatCurrency, formatCompact } = useChartCurrencyFormatter();
   const r = formatCompact(1_253_632);
-  
+
   return (
     <div>
       <p>Income: {formatCurrency(5000)}</p>
-      <p>Large: <span title={r.isCompact ? r.full : undefined}>{r.display}</span></p>
+      <p>
+        Large: <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
+      </p>
     </div>
   );
 }

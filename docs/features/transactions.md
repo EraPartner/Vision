@@ -22,17 +22,17 @@ Transactions represent any financial movement - from grocery shopping to salary 
 
 ### Core Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `date` | date | Transaction date (YYYY-MM-DD) |
-| `bank_account` | string | Source/destination bank account |
-| `recipient_id` | number | Linked recipient |
-| `amount` | number | Transaction amount |
-| `memo` | string | Transaction description |
-| `currency` | string | Currency code (ISO 4217) |
-| `balance` | number | Running balance after transaction (**read-only** — written exclusively by the import pipeline; `NULL` on manual rows; see note below) |
-| `category_id` | number | Assigned category |
-| `comment` | user_note | User-added comment |
+| Field          | Type      | Description                                                                                                                           |
+| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `date`         | date      | Transaction date (YYYY-MM-DD)                                                                                                         |
+| `bank_account` | string    | Source/destination bank account                                                                                                       |
+| `recipient_id` | number    | Linked recipient                                                                                                                      |
+| `amount`       | number    | Transaction amount                                                                                                                    |
+| `memo`         | string    | Transaction description                                                                                                               |
+| `currency`     | string    | Currency code (ISO 4217)                                                                                                              |
+| `balance`      | number    | Running balance after transaction (**read-only** — written exclusively by the import pipeline; `NULL` on manual rows; see note below) |
+| `category_id`  | number    | Assigned category                                                                                                                     |
+| `comment`      | user_note | User-added comment                                                                                                                    |
 
 ### Amount Convention
 
@@ -41,10 +41,14 @@ Transactions represent any financial movement - from grocery shopping to salary 
 
 ```javascript
 // Expense
-{ amount: -45.50 }
+{
+  amount: -45.5;
+}
 
-// Income  
-{ amount: 2500.00 }
+// Income
+{
+  amount: 2500.0;
+}
 ```
 
 ### Balance Field — Write-Protected (2026-06-25)
@@ -56,6 +60,7 @@ Transactions represent any financial movement - from grocery shopping to salary 
 > intentional.
 >
 > **What changed:**
+>
 > - `PATCH /api/transactions/:id` rejects any body that contains `balance` (`ALLOWED_COLUMNS.transactions` no longer includes it).
 > - `POST /api/transactions` (create) does not accept or forward `balance`; the repository `create()` method ignores it.
 > - `TransactionInfoDialog` renders the `balance` field as a read-only display value; the edit affordance is removed (`'balance'` removed from `InfoEditableField` in `types.ts`).
@@ -86,6 +91,7 @@ Categories can be inherited from recipients if not explicitly set.
 Transactions can be tagged with freeform labels (e.g., `rome-2020`, `home-renovation`) to enable cross-cutting groupings that span categories. Tags are a second, orthogonal classification dimension — a single transaction can have both a category and multiple tags simultaneously.
 
 Key capabilities:
+
 - Create tags on first use with auto-slug normalisation
 - Attach tags to individual transactions via the info dialog
 - Bulk-tag multiple transactions via checkbox selection + toolbar
@@ -110,6 +116,7 @@ See [[docs/features/tags]] for the complete tagging feature spec.
 ### Recipient Association
 
 Every transaction is linked to a recipient (payee/payer). Recipients can have:
+
 - Default category preferences
 - Associated bank accounts
 - Notes and metadata
@@ -119,6 +126,7 @@ Every transaction is linked to a recipient (payee/payer). Recipients can have:
 ### CSV Import
 
 Transactions can be imported from bank CSV exports. The import process includes:
+
 1. Text normalization (cleaning descriptions)
 2. Deduplication (preventing duplicates)
 3. Recurring detection (identifying subscription payments)
@@ -145,16 +153,17 @@ Transactions support rich filtering:
 
 Optional query params control amount filtering. By default they match on magnitude (sign-agnostic — both income and expenses of a given absolute value are matched):
 
-| Param | Description |
-|-------|-------------|
-| `amount_min` | Inclusive lower bound: `ABS(amount) >= amount_min` |
-| `amount_max` | Inclusive upper bound: `ABS(amount) <= amount_max` |
-| `amount_exact` | Shorthand for min == max (single amount match) |
+| Param           | Description                                                                             |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `amount_min`    | Inclusive lower bound: `ABS(amount) >= amount_min`                                      |
+| `amount_max`    | Inclusive upper bound: `ABS(amount) <= amount_max`                                      |
+| `amount_exact`  | Shorthand for min == max (single amount match)                                          |
 | `amount_signed` | When true, `amount_min`/`amount_max` compare the SIGNED amount instead of `ABS(amount)` |
 
 `amount_exact` takes precedence over `amount_min`/`amount_max` when all three are supplied. By default the sign convention (`income`/`expense`) is controlled separately by `transaction_type`; alternatively `amount_signed=true` makes the amount bounds themselves sign-aware. In the search-suggestion UI a bare number (`50`) matches the magnitude, while a `+50` / `-50` prefix sends `amount_signed=true` for an exact signed match.
 
 These params are threaded through the full stack:
+
 - `parseTransactionListQuery` in [[apps/node-backend/src/routes/transactions.js]] parses all three and forwards `amountMin`/`amountMax` to `buildTransactionWhere`.
 - `buildTransactionWhere` in [[apps/node-backend/src/lib/filterBuilder.js]] emits `ABS(t.amount) >= $n` / `ABS(t.amount) <= $n` clauses.
 - `getAllWithCount` in [[apps/node-backend/src/repositories/transactionRepository.js]] accepts and forwards `amountMin`/`amountMax`.
@@ -166,19 +175,19 @@ These params are threaded through the full stack:
 
 The free-text `search` parameter (`ILIKE %term%`) now matches across **all** of the following columns (extended from the previous set):
 
-| Column | Notes |
-|--------|-------|
-| `t.memo` | Transaction description |
-| `t.comment` | User note |
-| `t.bank_account` | IBAN / account identifier |
-| `t.currency` | ISO 4217 code |
-| `CAST(t.amount AS TEXT)` | Amount as string |
-| `CAST(t.date AS TEXT)` | ISO date string (e.g., `2026-01`) — **new** |
-| `r.name` / `pr.name` | Recipient / primary recipient |
-| `c.general` / `c.detail` | Category general/detail |
-| `rc.general` / `rc.detail` | Recipient default category |
-| `pc.general` / `pc.detail` | Primary recipient category |
-| Tag slugs (EXISTS subquery) | Active tags on the row — **new** |
+| Column                      | Notes                                       |
+| --------------------------- | ------------------------------------------- |
+| `t.memo`                    | Transaction description                     |
+| `t.comment`                 | User note                                   |
+| `t.bank_account`            | IBAN / account identifier                   |
+| `t.currency`                | ISO 4217 code                               |
+| `CAST(t.amount AS TEXT)`    | Amount as string                            |
+| `CAST(t.date AS TEXT)`      | ISO date string (e.g., `2026-01`) — **new** |
+| `r.name` / `pr.name`        | Recipient / primary recipient               |
+| `c.general` / `c.detail`    | Category general/detail                     |
+| `rc.general` / `rc.detail`  | Recipient default category                  |
+| `pc.general` / `pc.detail`  | Primary recipient category                  |
+| Tag slugs (EXISTS subquery) | Active tags on the row — **new**            |
 
 The tag match uses `EXISTS (SELECT 1 FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = t.id AND tg.is_active AND tg.slug ILIKE $n)`, so a search for `rome` will surface rows tagged `rome-2025`.
 
@@ -209,11 +218,12 @@ The list reads a `bank_account` URL search param (single value) and threads it t
 
 This powers **double-click navigation from the accounts hub**: double-clicking an account card in
 `AccountsPage` navigates to `/transactions?bank_account=<account.name>&filter_label=<display>`. The
-account *name* is the filter key because the ADR-088 dual-write trigger (migration `0051`) keeps
+account _name_ is the filter key because the ADR-088 dual-write trigger (migration `0051`) keeps
 `transactions.bank_account` equal to `accounts.name`. Strings shown via the `accounts.openTransactions`
 hint (en/nl).
 
 Implementation note:
+
 - Backend route parsing/normalization for list filters is centralized in `parseTransactionListQuery`, preserving existing defaults and coercion behavior while reducing duplicate parsing logic ([[apps/node-backend/src/routes/transactions.js]]).
 - Backend non-`uncategorised` list path now uses repository one-query pagination (`getAllWithCount`) instead of separate list and count queries, reducing DB round-trips while preserving filters/totals/response shape ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - Backend `uncategorised=true` list path now uses dedicated repository one-query pagination (`getUncategorisedWithCount`) instead of route-level dual queries, reducing route round-trips ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -283,15 +293,15 @@ The transaction table rows gained a full interaction layer in the premium-v3 V5-
 
 Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` — see [[docs/components/ui-components#per-row-context-menu|VirtualDataTable context-menu gotcha]]) with these actions:
 
-| Action | Key hint | Condition |
-|--------|----------|-----------|
-| Show details | ↵ | Always |
-| Quick Look | ␣ | Always |
-| Edit in row | — | Always |
-| Duplicate | — | `recipient_id` + `date` + `bank_account` all present |
-| Show all from {recipient} | — | Recipient known |
-| Mark active / inactive | — | Always |
-| Delete… | — | Always (destructive style) |
+| Action                    | Key hint | Condition                                            |
+| ------------------------- | -------- | ---------------------------------------------------- |
+| Show details              | ↵        | Always                                               |
+| Quick Look                | ␣        | Always                                               |
+| Edit in row               | —        | Always                                               |
+| Duplicate                 | —        | `recipient_id` + `date` + `bank_account` all present |
+| Show all from {recipient} | —        | Recipient known                                      |
+| Mark active / inactive    | —        | Always                                               |
+| Delete…                   | —        | Always (destructive style)                           |
 
 #### Keyboard Row Navigation
 
@@ -320,6 +330,7 @@ Gate: `recipient_id`, `transaction_date`, and `bank_account` must all be present
 #### Filter by Recipient
 
 "Show all from {recipient}" in the context menu calls `handleFilterByRecipient`, which:
+
 1. Clears the local search string.
 2. Sets `?recipient_id=<id>&filter_label=<name>` in `searchParams`, replacing all previously active URL filters.
 
@@ -334,6 +345,7 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionsTab
 - In the transaction extra information dialog, existing detail rows can now be edited inline using a per-row pencil action.
 - Transaction ID is displayed for reference and remains non-editable.
 - Inline row editing provides save/cancel controls and persists through the existing transaction update flow (`PATCH /api/transactions/:id`).
+- Text and number editors submit with Enter or the named Save button. The date editor keeps native button behavior: Enter opens the calendar and does not save until the user chooses Save.
 
 Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
@@ -346,6 +358,7 @@ Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 Navigating to `/transactions?new=1` immediately opens `AddTransactionDialog`. The dialog's mounting hook reads the `new` search param and, if present, opens the dialog and then strips the param from the URL (using `replace` navigation so the browser Back button does not re-trigger it).
 
 This deep link is used by:
+
 - The **native macOS menu** (File → New Transaction ⌘N via `ElectronBridge` `menu:action` dispatch)
 - The **dock menu** (New Transaction item)
 
@@ -365,6 +378,7 @@ GET /api/transactions/export/json?start_date=2025-01-01&end_date=2025-03-18
 ```
 
 **Streaming Response (Phase 5+):**
+
 - Response uses chunked `res.write()` streaming instead of `res.send()` to support large exports without memory overhead.
 - Pagination happens internally via `CSV_EXPORT_CHUNK_SIZE` (1000 rows per chunk).
 - Running balance (CSV only) is computed in JavaScript across chunks using an accumulator so balance stays correct when sorted by date.
@@ -372,6 +386,7 @@ GET /api/transactions/export/json?start_date=2025-01-01&end_date=2025-03-18
 - 404 probe query runs before streaming starts, so error responses still return JSON.
 
 Implementation note:
+
 - CSV escaping, row construction, and filename generation use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
 - CSV export neutralizes spreadsheet-formula-leading values (`=`, `+`, `-`, `@`) before writing cells to reduce formula-injection risk in spreadsheet tools.
 - Export and PATCH error responses avoid leaking internal exception details and return sanitized generic `detail` payloads.
@@ -418,15 +433,15 @@ Transactions feed into various analytics views:
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/transactions` | List transactions (paginated) |
-| POST | `/api/transactions` | Create transaction |
-| GET | `/api/transactions/:id` | Get single transaction |
-| PATCH | `/api/transactions/:id` | Update transaction |
-| DELETE | `/api/transactions/:id` | Delete transaction |
-| GET | `/api/transactions/export/csv` | Export to CSV |
-| PATCH | `/api/transactions/batch` | Batch update |
+| Method | Endpoint                       | Description                   |
+| ------ | ------------------------------ | ----------------------------- |
+| GET    | `/api/transactions`            | List transactions (paginated) |
+| POST   | `/api/transactions`            | Create transaction            |
+| GET    | `/api/transactions/:id`        | Get single transaction        |
+| PATCH  | `/api/transactions/:id`        | Update transaction            |
+| DELETE | `/api/transactions/:id`        | Delete transaction            |
+| GET    | `/api/transactions/export/csv` | Export to CSV                 |
+| PATCH  | `/api/transactions/batch`      | Batch update                  |
 
 ---
 
@@ -448,6 +463,7 @@ Heavy operations (export, batch updates) are rate-limited to protect database pe
 ## Bulk Operations
 
 Transactions support multi-row selection and bulk operations for efficiency:
+
 - **Bulk delete** — Permanently delete many rows at once
 - **Bulk recategorize** — Apply a new category to many rows
 - **Bulk reassign recipient** — Change payee/payer for many rows

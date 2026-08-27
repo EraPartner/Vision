@@ -38,7 +38,7 @@ import { BulkRecipientDialog } from "./BulkRecipientDialog";
 import { BulkTagDialog } from "./BulkTagDialog";
 import { BulkExportDialog } from "./BulkExportDialog";
 
-export type BulkSelectionMode = 'ids' | 'filter';
+export type BulkSelectionMode = "ids" | "filter";
 
 interface BulkActionsBarProps {
     selectedIds: Set<number>;
@@ -73,27 +73,27 @@ export function BulkActionsBar({
     const [exportOpen, setExportOpen] = useState(false);
 
     const idCount = selectedIds.size;
-    const effectiveCount = selectionMode === 'filter' ? totalMatching : idCount;
+    const effectiveCount = selectionMode === "filter" ? totalMatching : idCount;
 
     if (idCount === 0) return null;
 
     const showSelectAllMatching =
-        selectionMode === 'ids' &&
+        selectionMode === "ids" &&
         idCount === visibleItemCount &&
         totalMatching > visibleItemCount;
 
     function buildSelector(): BulkSelectionRequest {
-        if (selectionMode === 'filter') {
-            return { filter };
+        if (selectionMode === "filter") {
+            return { filter, expected_count: totalMatching };
         }
         return { ids: Array.from(selectedIds) };
     }
 
     async function handleDelete() {
         const ok = await confirm({
-            title: tc('txPage.bulk.confirmDeleteTitle', effectiveCount),
-            description: tc('txPage.bulk.confirmDeleteBody', effectiveCount),
-            confirmLabel: t('txPage.bulk.delete'),
+            title: tc("txPage.bulk.confirmDeleteTitle", effectiveCount),
+            description: tc("txPage.bulk.confirmDeleteBody", effectiveCount),
+            confirmLabel: t("txPage.bulk.delete"),
             variant: "destructive",
         });
         if (!ok) return;
@@ -105,9 +105,13 @@ export function BulkActionsBar({
     async function handleSetActive(active: boolean) {
         if (!active) {
             const ok = await confirm({
-                title: t('txPage.bulk.confirmDeactivateTitle', { n: effectiveCount }),
-                description: t('txPage.bulk.confirmDeactivateBody', { n: effectiveCount }),
-                confirmLabel: t('txPage.bulk.deactivate'),
+                title: t("txPage.bulk.confirmDeactivateTitle", {
+                    n: effectiveCount,
+                }),
+                description: t("txPage.bulk.confirmDeactivateBody", {
+                    n: effectiveCount,
+                }),
+                confirmLabel: t("txPage.bulk.deactivate"),
             });
             if (!ok) return;
         }
@@ -144,7 +148,7 @@ export function BulkActionsBar({
         });
     }
 
-    function handleExport(format: 'csv' | 'json') {
+    function handleExport(format: "csv" | "json") {
         const request: BulkExportRequest = { ...buildSelector(), format };
         bulkExport.mutate(request, {
             onSuccess: () => setExportOpen(false),
@@ -154,10 +158,7 @@ export function BulkActionsBar({
     function handleTagApply(addSlugs: string[], removeSlugs: string[]) {
         // Bulk tag uses the legacy id-only contract. For filter-mode, fall back to
         // the resolved selection: backend ids endpoint expects an array.
-        const ids =
-            selectionMode === 'filter'
-                ? null
-                : Array.from(selectedIds);
+        const ids = selectionMode === "filter" ? null : Array.from(selectedIds);
         if (ids === null) {
             // Filter-mode tagging is intentionally unsupported until the bulk-tag
             // route accepts a filter selector — keep selection-mode-aware UX honest.
@@ -186,7 +187,7 @@ export function BulkActionsBar({
         <>
             <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium">
-                    {t('txPage.bulk.nSelected', { n: effectiveCount })}
+                    {t("txPage.bulk.nSelected", { n: effectiveCount })}
                 </span>
 
                 {showSelectAllMatching && (
@@ -197,43 +198,58 @@ export function BulkActionsBar({
                         onClick={onPromoteToFilterMode}
                         disabled={anyBusy}
                     >
-                        {t('txPage.bulk.selectAllMatching', { n: totalMatching })}
+                        {t("txPage.bulk.selectAllMatching", {
+                            n: totalMatching,
+                        })}
                     </Button>
                 )}
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button size="sm" className="h-7 text-xs gap-1" disabled={anyBusy}>
-                            {t('txPage.bulk.actions')}
+                        <Button
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            disabled={anyBusy}
+                        >
+                            {t("txPage.bulk.actions")}
                             <ChevronDown className="h-3 w-3" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                        <DropdownMenuLabel>{t('txPage.bulk.menuLabel')}</DropdownMenuLabel>
+                        <DropdownMenuLabel>
+                            {t("txPage.bulk.menuLabel")}
+                        </DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setTagOpen(true)} disabled={selectionMode === 'filter'}>
+                        <DropdownMenuItem
+                            onClick={() => setTagOpen(true)}
+                            disabled={selectionMode === "filter"}
+                        >
                             <Tag className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.tag')}
+                            {t("txPage.bulk.tag")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setCategoryOpen(true)}>
                             <FolderTree className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.recategorize')}
+                            {t("txPage.bulk.recategorize")}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setRecipientOpen(true)}>
+                        <DropdownMenuItem
+                            onClick={() => setRecipientOpen(true)}
+                        >
                             <UserCog className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.reassignRecipient')}
+                            {t("txPage.bulk.reassignRecipient")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleSetActive(true)}>
                             <ToggleRight className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.activate')}
+                            {t("txPage.bulk.activate")}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleSetActive(false)}>
+                        <DropdownMenuItem
+                            onClick={() => handleSetActive(false)}
+                        >
                             <ToggleLeft className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.deactivate')}
+                            {t("txPage.bulk.deactivate")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setExportOpen(true)}>
                             <Download className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.export')}
+                            {t("txPage.bulk.export")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -241,7 +257,7 @@ export function BulkActionsBar({
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
                         >
                             <Trash2 className="h-4 w-4 mr-2" />
-                            {t('txPage.bulk.delete')}
+                            {t("txPage.bulk.delete")}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -253,7 +269,7 @@ export function BulkActionsBar({
                     onClick={onClearSelection}
                     disabled={anyBusy}
                 >
-                    {t('common.clear')}
+                    {t("common.clear")}
                 </Button>
             </div>
 

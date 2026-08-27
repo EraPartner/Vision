@@ -4,13 +4,29 @@ type: feature
 status: active
 date: 2026-04-10
 updated: 2026-08-27
-tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026, portfolio-ticker]
+tags:
+  [
+    feature,
+    views,
+    pages,
+    frontend,
+    ui,
+    liquid-glass-v2,
+    june-2026,
+    portfolio-ticker,
+  ]
 description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
 ---
 
 # Views & Pages
+
+## List URL state
+
+- Recipients persists `show_all`, `uncategorized`, `search`, and an atomic `sort_key`/`sort_dir` pair.
+- Categories persists `show_all` and repeated `expanded` group names; stale group names are ignored.
+- Defaults are omitted, invalid values fall back safely, and updates preserve unrelated query parameters while replacing the current history entry.
 
 Vision provides a comprehensive set of views for managing your finances. This document details each view, its purpose, and the actions you can perform.
 
@@ -53,15 +69,15 @@ The main landing page providing a quick overview of your finances.
 
 ### Widgets Available
 
-| Widget | Description |
-|--------|-------------|
-| **Suggestions** | Contextual suggestion card — appears only when planned payments are due within 7 days (replaces the global upcoming-payments banner on the dashboard) |
-| **Stat Cards** | Total income, expenses, net worth summary |
-| **Bank Balances** | Current balance per bank account |
-| **Monthly Trends** | Income vs expenses over time (bar chart) |
-| **Category Distribution** | Spending by category (pie chart) |
-| **Cashflow Comparison** | Current vs previous period |
-| **Recent Transactions** | Latest transactions table |
+| Widget                    | Description                                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Suggestions**           | Contextual suggestion card — appears only when planned payments are due within 7 days (replaces the global upcoming-payments banner on the dashboard) |
+| **Stat Cards**            | Total income, expenses, net worth summary                                                                                                             |
+| **Bank Balances**         | Current balance per bank account                                                                                                                      |
+| **Monthly Trends**        | Income vs expenses over time (bar chart)                                                                                                              |
+| **Category Distribution** | Transaction count by category for the latest 50 active transactions (pie chart)                                                                       |
+| **Cashflow Comparison**   | Current vs previous period                                                                                                                            |
+| **Recent Transactions**   | Latest transactions table                                                                                                                             |
 
 ### Features
 
@@ -129,6 +145,8 @@ Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps
 
 ## Categories (`/categories`)
 
+Category detail names are native links to the category-filtered Transactions view. Expand/collapse, edit, activation, and delete remain buttons because they mutate in-page state.
+
 Manage transaction categorization with hierarchical categories.
 
 ### Features
@@ -173,6 +191,8 @@ UTILITIES
 ---
 
 ## Recipients (`/recipients`)
+
+The primary recipient name is a native link to its filtered Transactions view. Inline editing and recipient actions remain independent controls; the virtual row no longer relies on double-click navigation.
 
 Manage payees and payers (merchants, employers, etc.).
 
@@ -257,19 +277,19 @@ Comprehensive analytics and reporting dashboard.
 
 ### Tabs & Widgets
 
-| Widget | Description |
-|--------|-------------|
-| **Summary Cards** | Total income, expenses, savings rate |
-| **Monthly** | Monthly income/expense breakdown |
-| **Net Trend** | Net worth trend over time |
-| **Category Pie** | Spending by category (top 10) |
-| **Category Trend** | Category spending over time (top 5) |
-| **Pivot Table** | Category × Month matrix with hierarchical grouping |
-| **Top Recipients** | Biggest spending recipients |
-| **Yearly Comparison** | Year-over-year analysis |
-| **Yearly Summary** | Annual totals |
-| **Custom Charts** | User-configurable category charts |
-| **Saved Charts** | Reusable saved chart configurations |
+| Widget                | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| **Summary Cards**     | Total income, expenses, savings rate               |
+| **Monthly**           | Monthly income/expense breakdown                   |
+| **Net Trend**         | Net worth trend over time                          |
+| **Category Pie**      | Spending by category (top 10)                      |
+| **Category Trend**    | Category spending over time (top 5)                |
+| **Pivot Table**       | Category × Month matrix with hierarchical grouping |
+| **Top Recipients**    | Biggest spending recipients                        |
+| **Yearly Comparison** | Year-over-year analysis                            |
+| **Yearly Summary**    | Annual totals                                      |
+| **Custom Charts**     | User-configurable category charts                  |
+| **Saved Charts**      | Reusable saved chart configurations                |
 
 ### Features
 
@@ -295,10 +315,12 @@ Comprehensive analytics and reporting dashboard.
 ### Category Name Formatting
 
 Categories follow the `GENERAL: DETAIL` format:
+
 - **GENERAL**: Main category (e.g., FOOD, TRANSPORT, UTILITIES)
 - **DETAIL**: Specific subcategory (e.g., GROCERIES, GAS, ELECTRICITY)
 
 The statistics page normalizes all category names to ensure consistent formatting across:
+
 - Pie chart labels
 - Trend chart legends
 - Pivot table rows
@@ -369,12 +391,12 @@ Track shared expenses and debts between people.
 - **Per-Person View**: Detailed breakdown per person
 - **Bulk Settle (Per Person)**: Settle all currently listed outstanding splits for the selected person from the per-person view (with confirmation)
 - **Split Source Context**: Per-person rows show both original transaction recipient and memo
-- **Jump to Source Transaction**: Double-click a split row to open Transactions filtered to the source `transaction_id`
+- **Jump to Source Transaction**: The split description is a real link to Transactions filtered to the source `transaction_id`
 - **Recent Recipient Transactions Table**: Per-person detail now includes a bottom `VirtualDataTable` listing recent transactions for that recipient
 - **Infinite Scroll (Recipient Detail)**: Loads an initial 10 rows and fetches 10 more as you scroll
 - **Recipient Table Columns**: Date, Description, Category, Amount, Bank Account
 - **Recipient Table Empty State**: Shows localized empty state text when no recent transactions exist for the recipient
-- **Jump to Source Transaction (Recent Table)**: Double-click a recent transaction row to open Transactions filtered by that row's `transaction_id`
+- **Jump to Source Transaction (Recent Table)**: The recent transaction description is a real link to Transactions filtered by that row's `transaction_id`
 
 Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/features/splits/owes/RecipientOwesDetail.tsx]], [[apps/frontend/src/features/splits/owes/RecentRecipientTransactionsTable.tsx]], [[apps/frontend/src/features/splits/owes/useRecentRecipientTransactions.ts]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
@@ -426,20 +448,20 @@ Investment portfolio management across multiple asset classes.
 
 ### Portfolio Views
 
-| View | Path | Description |
-|------|------|-------------|
-| **Overview** | `/portfolio` | Summary of all investments |
-| **Stocks** | `/portfolio/stocks` | Equity holdings |
-| **Crypto** | `/portfolio/crypto` | Cryptocurrency holdings |
-| **Real Estate** | `/portfolio/real-estate` | Property investments |
-| **Savings** | `/portfolio/savings` | Savings accounts |
-| **Metals** | `/portfolio/metals` | Precious metals holdings |
-| **Performance** | `/portfolio/performance` | Performance analytics |
-| **Net Worth** | `/portfolio/net-worth` | Total net worth |
-| **Exchange Rates** (admin mode) | `/admin/exchange-rates` | Currency rates |
-| **Watchlist** | `/portfolio/watchlist` | Track symbols |
-| **Market Lookup** | `/portfolio/market` | Search & lookup |
-| **Tax** | `/portfolio/tax` | Investment tax info |
+| View                            | Path                     | Description                |
+| ------------------------------- | ------------------------ | -------------------------- |
+| **Overview**                    | `/portfolio`             | Summary of all investments |
+| **Stocks**                      | `/portfolio/stocks`      | Equity holdings            |
+| **Crypto**                      | `/portfolio/crypto`      | Cryptocurrency holdings    |
+| **Real Estate**                 | `/portfolio/real-estate` | Property investments       |
+| **Savings**                     | `/portfolio/savings`     | Savings accounts           |
+| **Metals**                      | `/portfolio/metals`      | Precious metals holdings   |
+| **Performance**                 | `/portfolio/performance` | Performance analytics      |
+| **Net Worth**                   | `/portfolio/net-worth`   | Total net worth            |
+| **Exchange Rates** (admin mode) | `/admin/exchange-rates`  | Currency rates             |
+| **Watchlist**                   | `/portfolio/watchlist`   | Track symbols              |
+| **Market Lookup**               | `/portfolio/market`      | Search & lookup            |
+| **Tax**                         | `/portfolio/tax`         | Investment tax info        |
 
 ### Portfolio Overview Features
 
@@ -568,7 +590,7 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 
 - **Currency + number format**: `defaultCurrency` and `numberFormat` now propagate across add-transaction defaults and major displays (dashboard, owes, planned payments, portfolio, statistics)
 - **Decimal places**: `showDecimalPlaces` is respected by statistics/custom category currency formatters, tax overview displays, suggested deductions, portfolio tax adjustments, and watchlist target/current price displays
-- **Dates + calendar week start**: `dateFormat` is used across shared date pickers and transaction/date-heavy pages, plus update release dates (notification + settings), investment transaction/maturity dates, exchange-rate timestamps, market lookup chart/news/analyst labels, recurring-detection labels, watchlist chart labels, and add-from-market default note date; `startOfWeek` is used by calendar pickers
+- **Dates + calendar week start**: `dateFormat` is used across shared date pickers and transaction/date-heavy pages, plus update release dates (notification + settings), investment transaction/maturity dates, exchange-rate timestamps, market lookup chart/news/analyst labels, recurring-detection labels, watchlist chart labels, and add-from-market default note date. Shared pickers accept strict typed input in that format and expose month/year jumps; `startOfWeek` controls their calendar grid.
 - **Pagination defaults**: `defaultPageSize` now drives Transactions, Recipients, and Recipient Insights load-more pagination
 - **Reset behavior**: `Reset all` now resets both general app settings and dashboard exclusions
 - **Strict date-format enforcement complete (frontend month labels)**: After the latest pass, no `toLocaleDateString(` remains under `apps/frontend/src`; month labels route through app helpers including `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)` in [[apps/frontend/src/components/shared/dateUtils.ts]]
@@ -609,7 +631,7 @@ Cross-page premium polish follows shared UI primitives and utility classes for c
 - **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages. `EmptyState` upgraded in June 2026 (glass icon tile, display-serif title).
 - **Touch ergonomics**: Icon-only actions now use `icon-touch-target` (`2.5rem` hit area) across table rows, dialogs, and detail action bars.
 - **Surface recipes**: Ad-hoc elevated card class chains replaced with sanctioned recipes. As of June 2026 the canonical recipe is `glass-regular` (not `surface-elevated`) for KPI/chart cards.
-- **Responsive forms**: Remaining narrow fixed two-column filter grids were upgraded to `grid-cols-1 sm:grid-cols-2` in Planned Payments link flow and related import/filter touchpoints.
+- **Responsive forms**: Dialog field groups use a one-column phone baseline and restore paired or tripled layouts at the `sm` breakpoint. Choice grids such as direction toggles and report-type cards retain their deliberate compact layouts.
 - **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API. Toasts use `glass-thick` material as of June 2026.
 - **Toast cleanup completion**: Legacy Radix toast bridge/hook wrappers were removed; Sonner is now the only toast stack in frontend code.
 
@@ -650,8 +672,10 @@ Many pages use a **widget visibility system** that allows users to:
 - Show/hide specific widgets
 - Reset to default layout
 - Persist preferences per page
+- Expand the remaining widget across its desktop row when an independently hideable sibling is absent
 
 This is available on:
+
 - Dashboard
 - Statistics
 - Portfolio Overview
@@ -664,33 +688,33 @@ The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors 
 
 ### General
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl/Cmd + K` | Open command palette |
-| `Ctrl/Cmd + ,` | Open Settings |
-| `Ctrl/Cmd + B` | Toggle sidebar |
-| `[` / `]` | Cycle backward / forward through the three workspace sections (Budgeting → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
-| `Ctrl/Cmd + Z` | Undo last delete |
-| `↑` / `↓` | Navigate table rows |
-| `↵` | Open selected row |
-| `Space` | Quick-look selected row |
-| `?` | Show keyboard shortcuts help |
-| `Esc` | Close dialog |
+| Shortcut       | Action                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ctrl/Cmd + K` | Open command palette                                                                                                                                          |
+| `Ctrl/Cmd + ,` | Open Settings                                                                                                                                                 |
+| `Ctrl/Cmd + B` | Toggle sidebar                                                                                                                                                |
+| `[` / `]`      | Cycle backward / forward through the three workspace sections (Budgeting → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
+| `Ctrl/Cmd + Z` | Undo last delete                                                                                                                                              |
+| `↑` / `↓`      | Navigate table rows                                                                                                                                           |
+| `↵`            | Open selected row                                                                                                                                             |
+| `Space`        | Quick-look selected row                                                                                                                                       |
+| `?`            | Show keyboard shortcuts help                                                                                                                                  |
+| `Esc`          | Close dialog                                                                                                                                                  |
 
 ### Go-to sequences (`g`, then destination key)
 
-| Shortcut | Destination |
-|----------|-------------|
-| `g d` | Dashboard (`/`) |
-| `g t` | Transactions (`/transactions`) |
-| `g s` | Statistics (`/statistics`) |
-| `g c` | Categories (`/categories`) |
-| `g r` | Recipients (`/recipients`) |
-| `g i` | Import (`/import`) |
-| `g p` | Portfolio (`/portfolio`) |
-| `g n` | Net Worth (`/portfolio/net-worth`) |
-| `g m` | Markets Overview (`/research/markets`) |
-| `g a` | AI Chat (`/ai-chat`) |
+| Shortcut | Destination                            |
+| -------- | -------------------------------------- |
+| `g d`    | Dashboard (`/`)                        |
+| `g t`    | Transactions (`/transactions`)         |
+| `g s`    | Statistics (`/statistics`)             |
+| `g c`    | Categories (`/categories`)             |
+| `g r`    | Recipients (`/recipients`)             |
+| `g i`    | Import (`/import`)                     |
+| `g p`    | Portfolio (`/portfolio`)               |
+| `g n`    | Net Worth (`/portfolio/net-worth`)     |
+| `g m`    | Markets Overview (`/research/markets`) |
+| `g a`    | AI Chat (`/ai-chat`)                   |
 
 ### Command palette ticker lookup
 
@@ -703,6 +727,7 @@ Typing a bare ticker symbol (`AAPL`, `BRK-B`, `ASML.AS`, `BTC-USD`) or a `$`-cas
 Natural-language chat against the user's financial data — purely local (Ollama, no data egress).
 
 ### Features
+
 - Conversation persistence via URL (`?c=<id>`) — share / resume by URL
 - Module-level streaming store (ADR-048) keeps streams alive across navigation and component unmount
 - Sidebar live indicator for active streams
@@ -723,6 +748,7 @@ header does not repeat the same failure. Loading and ready states remain visible
 Post-upload review screen for ambiguous import rows.
 
 ### Features
+
 - Per-row recipient override picker (driven by recipientClusterService suggestions)
 - Per-row category override (ADR-046 — staged before commit, not inferred at parse-time)
 - Cancel returns to ImportPage without committing
@@ -738,12 +764,12 @@ Post-upload review screen for ambiguous import rows.
 
 Workspace-agnostic observability hub (gated by Settings → App → Developer toggle, ADR-034). All admin routes preserve last active workspace.
 
-| Route | Page | Purpose |
-|-------|------|---------|
-| `/admin` | `AdminOverviewPage` | Summary tiles + links into the detail pages |
-| `/admin/db` | `DbMaintenancePage` | Per-table row/size statistics + bulk/single VACUUM ANALYZE |
-| `/admin/providers` | `ProviderHealthPage` | Rolling-window health metrics + on-demand probes for the 7 external data sources |
-| `/admin/endpoints` | `EndpointLivenessPage` | Route manifest + p50/p95 request metrics from the in-memory rolling window |
+| Route              | Page                   | Purpose                                                                          |
+| ------------------ | ---------------------- | -------------------------------------------------------------------------------- |
+| `/admin`           | `AdminOverviewPage`    | Summary tiles + links into the detail pages                                      |
+| `/admin/db`        | `DbMaintenancePage`    | Per-table row/size statistics + bulk/single VACUUM ANALYZE                       |
+| `/admin/providers` | `ProviderHealthPage`   | Rolling-window health metrics + on-demand probes for the 7 external data sources |
+| `/admin/endpoints` | `EndpointLivenessPage` | Route manifest + p50/p95 request metrics from the in-memory rolling window       |
 
 **Code**: [[apps/frontend/src/pages/admin/]], [[apps/frontend/src/pages/DbMaintenancePage.tsx]]
 

@@ -2,31 +2,32 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
 import { useEffect } from "react";
 import { formatCurrency } from "@/utils/currency";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
-import { isElectronMac, setDockBadge } from "@/lib/api/electron";
+import { setDockBadge } from "@/lib/api/electron";
 import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
 
 export function UpcomingPaymentsNotification() {
   const { t, tc } = useLanguage();
+  const { pathname } = useLocation();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { upcoming, visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
 
-  // macOS dock badge mirrors the visible (non-dismissed) due count.
+  // Native dock/taskbar badge mirrors the visible (non-dismissed) due count.
   const badgeCount = upcoming !== undefined ? visibleUpcoming.length : null;
   useEffect(() => {
-    if (!isElectronMac() || badgeCount === null) return;
+    if (badgeCount === null) return;
     setDockBadge(badgeCount);
   }, [badgeCount]);
   useEffect(() => {
-    return () => { if (isElectronMac()) setDockBadge(0); };
+    return () => { setDockBadge(0); };
   }, []);
 
-  if (visibleUpcoming.length === 0) return null;
+  if (visibleUpcoming.length === 0 || pathname !== "/") return null;
 
   return (
     <Alert className="relative border-primary/30 bg-primary/5 mb-4">

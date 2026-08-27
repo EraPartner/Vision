@@ -3,7 +3,7 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
@@ -13,6 +13,10 @@ related_code:
   - apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx
   - apps/node-backend/src/routes/marketLookup.js
 ---
+
+The live quote header presents absolute and percentage movement through the shared `DeltaPill`.
+Its label uses the app number-format locale, an explicit sign for non-zero changes, and an unsigned
+neutral zero, matching Research Home, Watchlist, and comparison results.
 
 # Market Lookup Feature
 
@@ -68,10 +72,12 @@ Fetches a live quote for one or more symbols. Called with `detail=basic` on Mark
 Searches for securities matching a query string.
 
 **Query parameters:**
+
 - `q` — Search query (required)
 - `type` — Filter by security type (optional)
 
 **Response:**
+
 ```json
 {
   "results": [
@@ -100,7 +106,7 @@ The market-lookup routes use Yahoo Finance as their primary provider (keyless, u
 - **Binance**: For cryptocurrency symbols (portfolio holdings only — free symbol search goes through Yahoo).
 - **Kinesis**: For metals holdings (stored price history path).
 
-> **Upstream resilience (`validateResult: false`):** every market-route Yahoo call — search, quote, quoteSummary, chart, and news — passes `{ validateResult: false }` to yahoo-finance2. The library validates each upstream payload against its own schema and *throws* on any mismatch; Yahoo's responses drift (new `quoteType`s, non-Yahoo search entries missing `name`/`permalink`, null chart `meta`) and vary by IP/geo, so otherwise-fine requests intermittently 502. We read only a small subset of well-known fields, so the routes opt out of the throw and degrade to whatever data came back. Note: yahoo-finance2 v3.14.1 is behind latest; bumping it may reduce (but won't eliminate) these drifts.
+> **Upstream resilience (`validateResult: false`):** every market-route Yahoo call — search, quote, quoteSummary, chart, and news — passes `{ validateResult: false }` to yahoo-finance2. The library validates each upstream payload against its own schema and _throws_ on any mismatch; Yahoo's responses drift (new `quoteType`s, non-Yahoo search entries missing `name`/`permalink`, null chart `meta`) and vary by IP/geo, so otherwise-fine requests intermittently 502. We read only a small subset of well-known fields, so the routes opt out of the throw and degrade to whatever data came back. Note: yahoo-finance2 v3.14.1 is behind latest; bumping it may reduce (but won't eliminate) these drifts.
 
 ### Quote Header Actions (Yahoo symbols)
 
@@ -116,6 +122,7 @@ When viewing a **Yahoo symbol**, the quote header exposes action buttons:
 ### Adding to Portfolio
 
 When a user selects a security from search results:
+
 1. The `AddInvestmentFromMarketDialog` component opens.
 2. Pre-fills the investment form with symbol, name, and provider.
 3. User confirms or modifies details.
@@ -123,13 +130,13 @@ When a user selects a security from search results:
 
 ## Deep-linking and Routing
 
-| Incoming URL | Resolution |
-|---|---|
-| `/research/market?symbol=AAPL` | Market Lookup page; search pre-filled with `AAPL` |
-| `/research/market?symbol=AAPL&investmentId=42` | Market Lookup; holding #42's provider pre-seeded in Map-provider dialog |
-| `/research/market?symbol=AAPL&tab=analyst` | Market Lookup; Details card opens on the Analyst tab |
-| `/research/symbol/AAPL` | `RedirectSymbolToMarket` in `App.tsx` → 301 to `/research/market?symbol=AAPL` |
-| `/research/symbol/AAPL?investmentId=42` | Same redirect; `investmentId` preserved |
+| Incoming URL                                   | Resolution                                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- |
+| `/research/market?symbol=AAPL`                 | Market Lookup page; search pre-filled with `AAPL`                             |
+| `/research/market?symbol=AAPL&investmentId=42` | Market Lookup; holding #42's provider pre-seeded in Map-provider dialog       |
+| `/research/market?symbol=AAPL&tab=analyst`     | Market Lookup; Details card opens on the Analyst tab                          |
+| `/research/symbol/AAPL`                        | `RedirectSymbolToMarket` in `App.tsx` → 301 to `/research/market?symbol=AAPL` |
+| `/research/symbol/AAPL?investmentId=42`        | Same redirect; `investmentId` preserved                                       |
 
 ## isActiveRoute Fix (AppSidebar)
 

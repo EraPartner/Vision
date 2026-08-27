@@ -78,7 +78,7 @@ export function PitBreakdownCard({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm">{row.label}</span>
                     {row.bracket && (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-2xs">
                         {row.bracket}
                       </Badge>
                     )}
@@ -92,8 +92,7 @@ export function PitBreakdownCard({
                     row.type === "grand" && "text-primary font-bold"
                   )}
                 >
-                  {row.type === "reduction" ? "+" : ""}
-                  {fmt(row.value)}
+                  {row.type === "reduction" ? fmt(row.value, { signed: true }) : fmt(row.value)}
                 </TableCell>
               </TableRow>
             ))}

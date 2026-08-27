@@ -22,9 +22,27 @@ function ymdDaysAgo(n: number): string {
 // including one whose CURRENT balance nets to zero, which is precisely why the
 // widget's card list is not the same population.
 const PAYLOAD_ACCOUNTS = [
-    { account_id: 1, bank_account: "KBC Checking", display_name: "KBC Checking", balance: 2450.75, transaction_count: 120 },
-    { account_id: 2, bank_account: "Argenta Savings", display_name: "Argenta Savings", balance: 8100.2, transaction_count: 14 },
-    { account_id: 3, bank_account: "Old Joint", display_name: "Old Joint", balance: 0, transaction_count: 31 },
+    {
+        account_id: 1,
+        bank_account: "KBC Checking",
+        display_name: "KBC Checking",
+        balance: 2450.75,
+        transaction_count: 120,
+    },
+    {
+        account_id: 2,
+        bank_account: "Argenta Savings",
+        display_name: "Argenta Savings",
+        balance: 8100.2,
+        transaction_count: 14,
+    },
+    {
+        account_id: 3,
+        bank_account: "Old Joint",
+        display_name: "Old Joint",
+        balance: 0,
+        transaction_count: 31,
+    },
 ];
 const TOTAL = 2450.75 + 8100.2 + 0; // 10.550,95 €
 
@@ -85,7 +103,11 @@ function mockWidgetApi({
             }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>
-            ok({ items: entityAccounts, total: entityAccounts.length, links: [] }),
+            ok({
+                items: entityAccounts,
+                total: entityAccounts.length,
+                links: [],
+            }),
         ),
     );
 }
@@ -102,18 +124,28 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // de-DE has no compact suffix at this magnitude, so the full value stays
         // visible and does not get a redundant title tooltip.
         expect(within(totalCard).getByText(/10\.550,95/)).toBeInTheDocument();
-        expect(within(totalCard).getByText(/10\.550,95/).parentElement).toHaveClass("text-foreground");
-        expect(within(totalCard).getByText(/10\.550,95/).parentElement).not.toHaveClass("text-transparent");
-        expect(within(totalCard).queryByTitle(/10\.550,95/)).not.toBeInTheDocument();
+        expect(
+            within(totalCard).getByText(/10\.550,95/).parentElement,
+        ).toHaveClass("text-foreground");
+        expect(
+            within(totalCard).getByText(/10\.550,95/).parentElement,
+        ).not.toHaveClass("text-transparent");
+        expect(
+            within(totalCard).queryByTitle(/10\.550,95/),
+        ).not.toBeInTheDocument();
         // …so the count beside it must be 3, NOT the 2 balance cards rendered
         // below (the zero-balance account is summed but has no card).
-        expect(within(totalCard).getByText("Across 3 account(s)")).toBeInTheDocument();
-        expect(within(totalCard).queryByText("Across 2 account(s)")).not.toBeInTheDocument();
+        expect(
+            within(totalCard).getByText("Across 3 account(s)"),
+        ).toBeInTheDocument();
+        expect(
+            within(totalCard).queryByText("Across 2 account(s)"),
+        ).not.toBeInTheDocument();
 
-        const cards = screen.getAllByRole("button", { name: /open details for/i });
-        expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual([
-            "Open details for KBC Checking",
-            "Open details for Argenta Savings",
+        const links = screen.getAllByRole("link");
+        expect(links.map((link) => link.textContent)).toEqual([
+            "KBC Checking",
+            "Argenta Savings",
         ]);
     });
 
@@ -127,8 +159,12 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const heading = await screen.findByText("Total Net Liquid Position");
         const totalCard = heading.closest(".glass-regular") as HTMLElement;
         expect(within(totalCard).getByText(/2\.450,75/)).toBeInTheDocument();
-        expect(within(totalCard).queryByTitle(/2\.450,75/)).not.toBeInTheDocument();
-        expect(within(totalCard).getByText("Across 1 account(s)")).toBeInTheDocument();
+        expect(
+            within(totalCard).queryByTitle(/2\.450,75/),
+        ).not.toBeInTheDocument();
+        expect(
+            within(totalCard).getByText("Across 1 account(s)"),
+        ).toBeInTheDocument();
     });
 
     it("keeps the transaction count visible when aggregation and entity names diverge", async () => {
@@ -145,7 +181,9 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         });
         renderWithApp(<BankBalancesWidget />);
 
-        const card = await screen.findByRole("button", { name: "Open details for KBC Checking" });
+        const card = (
+            await screen.findByRole("link", { name: "KBC Checking" })
+        ).closest(".glass-regular") as HTMLElement;
         expect(within(card).getByText("73 transactions")).toBeInTheDocument();
     });
 
@@ -153,7 +191,9 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         mockWidgetApi();
         renderWithApp(<BankBalancesWidget />);
 
-        const drifting = await screen.findByRole("button", { name: "Open details for KBC Checking" });
+        const drifting = (
+            await screen.findByRole("link", { name: "KBC Checking" })
+        ).closest(".glass-regular") as HTMLElement;
         // Same wording + statement date as the Accounts hub badge.
         const chip = within(drifting).getByText(/^Drift/);
         expect(chip.textContent).toMatch(/-49,25/);
@@ -162,7 +202,9 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         expect(chip.className).toMatch(/text-destructive/);
         expect(chip.className).not.toMatch(/amber/);
 
-        const clean = screen.getByRole("button", { name: "Open details for Argenta Savings" });
+        const clean = screen
+            .getByRole("link", { name: "Argenta Savings" })
+            .closest(".glass-regular") as HTMLElement;
         expect(within(clean).queryByText(/^Drift/)).not.toBeInTheDocument();
     });
 
@@ -173,7 +215,17 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
     it("labels each card's computed balance in the account's own currency, not the app default", async () => {
         mockWidgetApi({
             entityAccounts: [
-                { ...ENTITY_ACCOUNTS[0], id: 4, name: "Wise USD", display_name: "Wise USD", currency: "USD", computed_balance: 1234.5, statement_balance: null, statement_balance_date: null, drift: null },
+                {
+                    ...ENTITY_ACCOUNTS[0],
+                    id: 4,
+                    name: "Wise USD",
+                    display_name: "Wise USD",
+                    currency: "USD",
+                    computed_balance: 1234.5,
+                    statement_balance: null,
+                    statement_balance_date: null,
+                    drift: null,
+                },
                 ENTITY_ACCOUNTS[1],
             ],
         });
@@ -181,13 +233,19 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         // de-DE has no compact suffix at this magnitude, so the full figure is
         // visible and there is no redundant full-value tooltip.
-        const usdCard = await screen.findByRole("button", { name: "Open details for Wise USD" });
+        const usdCard = (
+            await screen.findByRole("link", { name: "Wise USD" })
+        ).closest(".glass-regular") as HTMLElement;
         expect(within(usdCard).getByText(/1\.234,50\s*\$/)).toBeInTheDocument();
-        expect(within(usdCard).queryByTitle(/1\.234,50/)).not.toBeInTheDocument();
+        expect(
+            within(usdCard).queryByTitle(/1\.234,50/),
+        ).not.toBeInTheDocument();
         expect(usdCard.textContent).not.toMatch(/€/);
 
         // The EUR account beside it still reads in euro — nothing global changed.
-        const eurCard = screen.getByRole("button", { name: "Open details for Argenta Savings" });
+        const eurCard = screen
+            .getByRole("link", { name: "Argenta Savings" })
+            .closest(".glass-regular") as HTMLElement;
         expect(eurCard.textContent).toMatch(/€/);
         expect(eurCard.textContent).not.toMatch(/\$/);
     });
@@ -266,12 +324,22 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const heading = await screen.findByText("Balance History");
         const historyCard = heading.closest(".glass-regular") as HTMLElement;
         expect(within(historyCard).getByText("KBC Daily")).toBeInTheDocument();
-        expect(within(historyCard).queryByText("Aggregation label must not win")).not.toBeInTheDocument();
-        expect(within(historyCard).queryByText("···07547034")).not.toBeInTheDocument();
+        expect(
+            within(historyCard).queryByText("Aggregation label must not win"),
+        ).not.toBeInTheDocument();
+        expect(
+            within(historyCard).queryByText("···07547034"),
+        ).not.toBeInTheDocument();
         expect(within(historyCard).getByText(nameOnlyIban)).toBeInTheDocument();
-        expect(within(historyCard).getByText("···34567890")).toBeInTheDocument();
-        expect(within(historyCard).queryByText(unmatchedIban)).not.toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: "Open details for KBC Daily" })).not.toBeInTheDocument();
+        expect(
+            within(historyCard).getByText("···34567890"),
+        ).toBeInTheDocument();
+        expect(
+            within(historyCard).queryByText(unmatchedIban),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("link", { name: "KBC Daily" }),
+        ).not.toBeInTheDocument();
     });
 
     it("renders a stale drift chip in warning tone once the statement reading ages past the threshold", async () => {
@@ -286,9 +354,14 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         });
         renderWithApp(<BankBalancesWidget />);
 
-        const card = await screen.findByRole("button", { name: "Open details for KBC Checking" });
+        const card = (
+            await screen.findByRole("link", { name: "KBC Checking" })
+        ).closest(".glass-regular") as HTMLElement;
         const chip = within(card).getByText(/^Drift/);
-        expect(chip.className).toMatch(/amber/);
+        expect(chip.className).toMatch(
+            /border-warning\/40 bg-warning\/15 text-warning/,
+        );
+        expect(chip.className).not.toMatch(/amber/);
         expect(chip.className).not.toMatch(/text-destructive/);
     });
 });

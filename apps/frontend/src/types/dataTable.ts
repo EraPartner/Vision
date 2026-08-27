@@ -25,6 +25,10 @@ export interface Column<T> {
   render?: (row: T, isEditing: boolean, index?: number) => React.ReactNode;
   /** Extra className applied to every cell in this column. */
   className?: string;
+  /** Text overflow policy. Prose truncates by default; raw identifiers may opt into anywhere wrapping. */
+  wrap?: "truncate" | "anywhere";
+  /** Optional tooltip text when the rendered value differs from the raw row field. */
+  cellTitle?: (row: T) => string | undefined;
   /** Minimum resizable width in pixels. */
   minWidth?: number;
   /** Initial width in pixels before the user resizes. */

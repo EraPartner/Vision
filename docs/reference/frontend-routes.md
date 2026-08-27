@@ -11,64 +11,70 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 
 # Frontend Routes Reference
 
+## Shareable page state
+
+Portfolio Net Worth and Performance, Portfolio Rebalance, Planned Payments, Categories, Recipients, and Research Compare keep meaningful page state in validated query parameters. These surfaces omit their own defaults where supported, preserve unrelated parameters, and use replace-writes for high-frequency controls. Research Compare's shared tab helper still writes the selected tab, including its default. Rebalance uses repeated `target` values so partially completed allocation drafts survive reload; its URL can disclose the plan id, draft name, target percentages, and optional cash cap, but not account, holding, or transaction records.
+
+Settings remain a dialog rather than a page route, but its section is deep-linkable as `?settings=general|appearance|statistics|behavior|ai|backup|about`. Opening from the app adds one history entry so Back closes the dialog. Section switches replace that entry; closing a directly loaded deep link removes only `settings` and preserves other query parameters.
+
 > [!abstract] Overview
 > All frontend routes in the Vision application. Organized by workspace for easy navigation.
 
 ## Budgeting Workspace
 
-| Route | Component | Layout | Description | Code |
-|-------|-----------|--------|-------------|------|
-| `/` | `DashboardPage` | AppLayout | Financial overview dashboard | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]] |
-| `/transactions` | `TransactionsPage` | AppLayout | Transaction CRUD with virtual table | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]] |
-| `/categories` | `CategoriesPage` | AppLayout | Category management | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]] |
-| `/recipients` | `RecipientsPage` | AppLayout | Recipient management | [[apps/frontend/src/pages/RecipientsPage.tsx\|RecipientsPage.tsx]] |
-| `/planned` | `PlannedPaymentsPage` | AppLayout | Planned and recurring payments | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx\|PlannedPaymentsPage.tsx]] |
-| `/statistics` | `StatisticsPage` | AppLayout | Analytics and reporting | [[apps/frontend/src/pages/StatisticsPage.tsx\|StatisticsPage.tsx]] |
-| `/import` | `ImportPage` | AppLayout | CSV import | [[apps/frontend/src/pages/ImportPage.tsx\|ImportPage.tsx]] |
-| `/owes` | `OwesPage` | AppLayout | Transaction splits and debt tracking | [[apps/frontend/src/pages/OwesPage.tsx\|OwesPage.tsx]] |
-| `/tax` | `TaxOverviewPage` | AppLayout | Belgian tax overview | [[apps/frontend/src/pages/TaxOverviewPage.tsx\|TaxOverviewPage.tsx]] |
+| Route           | Component             | Layout    | Description                          | Code                                                                         |
+| --------------- | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------- |
+| `/`             | `DashboardPage`       | AppLayout | Financial overview dashboard         | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]]             |
+| `/transactions` | `TransactionsPage`    | AppLayout | Transaction CRUD with virtual table  | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]]       |
+| `/categories`   | `CategoriesPage`      | AppLayout | Category management                  | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]]           |
+| `/recipients`   | `RecipientsPage`      | AppLayout | Recipient management                 | [[apps/frontend/src/pages/RecipientsPage.tsx\|RecipientsPage.tsx]]           |
+| `/planned`      | `PlannedPaymentsPage` | AppLayout | Planned and recurring payments       | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx\|PlannedPaymentsPage.tsx]] |
+| `/statistics`   | `StatisticsPage`      | AppLayout | Analytics and reporting              | [[apps/frontend/src/pages/StatisticsPage.tsx\|StatisticsPage.tsx]]           |
+| `/import`       | `ImportPage`          | AppLayout | CSV import                           | [[apps/frontend/src/pages/ImportPage.tsx\|ImportPage.tsx]]                   |
+| `/owes`         | `OwesPage`            | AppLayout | Transaction splits and debt tracking | [[apps/frontend/src/pages/OwesPage.tsx\|OwesPage.tsx]]                       |
+| `/tax`          | `TaxOverviewPage`     | AppLayout | Belgian tax overview                 | [[apps/frontend/src/pages/TaxOverviewPage.tsx\|TaxOverviewPage.tsx]]         |
 
 ## Portfolio Workspace
 
-| Route | Component | Layout | Description | Code |
-|-------|-----------|--------|-------------|------|
-| `/portfolio` | `PortfolioOverviewPage` | AppLayout | Portfolio overview | [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx\|PortfolioOverviewPage.tsx]] |
-| `/portfolio/stocks` | `StocksPage` | AppLayout | Stocks and ETFs | [[apps/frontend/src/pages/portfolio/StocksPage.tsx\|StocksPage.tsx]] |
-| `/portfolio/crypto` | `CryptoPage` | AppLayout | Cryptocurrency holdings | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx\|CryptoPage.tsx]] |
-| `/portfolio/metals` | `MetalsPage` | AppLayout | Precious metals | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx\|MetalsPage.tsx]] |
-| `/portfolio/real-estate` | `RealEstatePage` | AppLayout | Real estate holdings | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx\|RealEstatePage.tsx]] |
-| `/portfolio/savings` | `SavingsPage` | AppLayout | Savings accounts | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]] |
-| `/portfolio/performance` | `PerformancePage` | AppLayout | Portfolio performance charts | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx\|PerformancePage.tsx]] |
-| `/portfolio/net-worth` | `NetWorthPage` | AppLayout | Net worth tracking | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]] |
-| `/admin/exchange-rates` | `ExchangeRatesPage` | AppLayout + RequireAdmin | Exchange rate management (admin mode; old `/portfolio/exchange-rates` redirects) | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]] |
-| `/portfolio/watchlist` | `WatchlistPage` | AppLayout | Investment watchlist | [[apps/frontend/src/pages/research/WatchlistPage.tsx\|WatchlistPage.tsx]] |
-| `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/research/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
-| `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
+| Route                    | Component               | Layout                   | Description                                                                      | Code                                                                                       |
+| ------------------------ | ----------------------- | ------------------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `/portfolio`             | `PortfolioOverviewPage` | AppLayout                | Portfolio overview                                                               | [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx\|PortfolioOverviewPage.tsx]] |
+| `/portfolio/stocks`      | `StocksPage`            | AppLayout                | Stocks and ETFs                                                                  | [[apps/frontend/src/pages/portfolio/StocksPage.tsx\|StocksPage.tsx]]                       |
+| `/portfolio/crypto`      | `CryptoPage`            | AppLayout                | Cryptocurrency holdings                                                          | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx\|CryptoPage.tsx]]                       |
+| `/portfolio/metals`      | `MetalsPage`            | AppLayout                | Precious metals                                                                  | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx\|MetalsPage.tsx]]                       |
+| `/portfolio/real-estate` | `RealEstatePage`        | AppLayout                | Real estate holdings                                                             | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx\|RealEstatePage.tsx]]               |
+| `/portfolio/savings`     | `SavingsPage`           | AppLayout                | Savings accounts                                                                 | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]]                     |
+| `/portfolio/performance` | `PerformancePage`       | AppLayout                | Portfolio performance charts                                                     | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx\|PerformancePage.tsx]]             |
+| `/portfolio/net-worth`   | `NetWorthPage`          | AppLayout                | Net worth tracking                                                               | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]]         |
+| `/admin/exchange-rates`  | `ExchangeRatesPage`     | AppLayout + RequireAdmin | Exchange rate management (admin mode; old `/portfolio/exchange-rates` redirects) | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]]             |
+| `/portfolio/watchlist`   | `WatchlistPage`         | AppLayout                | Investment watchlist                                                             | [[apps/frontend/src/pages/research/WatchlistPage.tsx\|WatchlistPage.tsx]]                  |
+| `/portfolio/market`      | `MarketLookupPage`      | AppLayout                | Market data lookup                                                               | [[apps/frontend/src/pages/research/MarketLookupPage.tsx\|MarketLookupPage.tsx]]            |
+| `/portfolio/tax`         | `PortfolioTaxPage`      | AppLayout                | Portfolio tax calculations                                                       | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]       |
 
 ## Admin Routes
 
 Admin routes are workspace-agnostic and preserve the active workspace when navigating between them.
 
-| Route | Component | Layout | Description | Code |
-|-------|-----------|--------|-------------|------|
-| `/admin` | `AdminOverviewPage` | AppLayout | Admin overview with summary tiles | [[apps/frontend/src/pages/admin/AdminOverviewPage.tsx\|AdminOverviewPage.tsx]] |
-| `/admin/db` | `DbMaintenancePage` | AppLayout | Database table stats and VACUUM operations | [[apps/frontend/src/pages/DbMaintenancePage.tsx\|DbMaintenancePage.tsx]] |
-| `/admin/providers` | `ProviderHealthPage` | AppLayout | Data source health tracking (7 providers) | [[apps/frontend/src/pages/admin/ProviderHealthPage.tsx\|ProviderHealthPage.tsx]] |
+| Route              | Component              | Layout    | Description                                | Code                                                                                 |
+| ------------------ | ---------------------- | --------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `/admin`           | `AdminOverviewPage`    | AppLayout | Admin overview with summary tiles          | [[apps/frontend/src/pages/admin/AdminOverviewPage.tsx\|AdminOverviewPage.tsx]]       |
+| `/admin/db`        | `DbMaintenancePage`    | AppLayout | Database table stats and VACUUM operations | [[apps/frontend/src/pages/DbMaintenancePage.tsx\|DbMaintenancePage.tsx]]             |
+| `/admin/providers` | `ProviderHealthPage`   | AppLayout | Data source health tracking (7 providers)  | [[apps/frontend/src/pages/admin/ProviderHealthPage.tsx\|ProviderHealthPage.tsx]]     |
 | `/admin/endpoints` | `EndpointLivenessPage` | AppLayout | Route liveness matrix with rolling metrics | [[apps/frontend/src/pages/admin/EndpointLivenessPage.tsx\|EndpointLivenessPage.tsx]] |
 
 ## Global Routes
 
-| Route | Component | Layout | Description | Code |
-|-------|-----------|--------|-------------|------|
+| Route      | Component    | Layout    | Description                                | Code                                                       |
+| ---------- | ------------ | --------- | ------------------------------------------ | ---------------------------------------------------------- |
 | `/ai-chat` | `AIChatPage` | AppLayout | Local AI chat for natural-language queries | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]] |
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
 ## Special Routes
 
-| Route | Component | Layout | Description | Code |
-|-------|-----------|--------|-------------|------|
-| `*` (404) | `NotFound` | None | 404 page for unmatched routes | [[apps/frontend/src/pages/NotFound.tsx\|NotFound.tsx]] |
+| Route     | Component  | Layout | Description                   | Code                                                   |
+| --------- | ---------- | ------ | ----------------------------- | ------------------------------------------------------ |
+| `*` (404) | `NotFound` | None   | 404 page for unmatched routes | [[apps/frontend/src/pages/NotFound.tsx\|NotFound.tsx]] |
 
 ## Route Configuration
 
@@ -77,13 +83,41 @@ Routes are defined in [[apps/frontend/src/App.tsx\|App.tsx]] using React Router 
 ```tsx
 <Routes>
   {/* Budgeting workspace */}
-  <Route path="/" element={<AppLayout><DashboardPage /></AppLayout>} />
-  <Route path="/transactions" element={<AppLayout><TransactionsPage /></AppLayout>} />
+  <Route
+    path="/"
+    element={
+      <AppLayout>
+        <DashboardPage />
+      </AppLayout>
+    }
+  />
+  <Route
+    path="/transactions"
+    element={
+      <AppLayout>
+        <TransactionsPage />
+      </AppLayout>
+    }
+  />
   {/* ... more routes ... */}
 
   {/* Portfolio workspace */}
-  <Route path="/portfolio" element={<AppLayout><PortfolioOverviewPage /></AppLayout>} />
-  <Route path="/portfolio/stocks" element={<AppLayout><StocksPage /></AppLayout>} />
+  <Route
+    path="/portfolio"
+    element={
+      <AppLayout>
+        <PortfolioOverviewPage />
+      </AppLayout>
+    }
+  />
+  <Route
+    path="/portfolio/stocks"
+    element={
+      <AppLayout>
+        <StocksPage />
+      </AppLayout>
+    }
+  />
   {/* ... more routes ... */}
 
   {/* 404 */}
@@ -94,6 +128,7 @@ Routes are defined in [[apps/frontend/src/App.tsx\|App.tsx]] using React Router 
 ## Workspace Switching
 
 Workspace switching is handled by the [[apps/frontend/src/contexts/WorkspaceContext.tsx\|useWorkspace]] hook, which derives the workspace from the current route path:
+
 - `/portfolio/*` → `"portfolio"` workspace
 - `/admin/*` → preserves the last active workspace from `sessionStorage` (workspace-agnostic routes)
 - Everything else → `"budgeting"` workspace

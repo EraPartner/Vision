@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export function TaxAutomationCard() {
   const { t } = useLanguage();
   return (
-    <Card className="glass-regular border-border/70">
+    <Card className="border-border/70">
         <CardHeader>
-        <CardTitle className="text-base">{t('tax.automation.title')}</CardTitle>
+        <CardTitle variant="sm">{t('tax.automation.title')}</CardTitle>
         </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground">

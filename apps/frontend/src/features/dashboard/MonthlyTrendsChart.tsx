@@ -7,7 +7,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { TrendingUp } from "lucide-react";
 import { BarChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -38,19 +37,30 @@ interface ChartRow {
     readonly spending: number;
 }
 
-export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChartProps) {
+export function MonthlyTrendsChart({
+    data,
+    embedded = false,
+}: MonthlyTrendsChartProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     // Shared chart formatter (SIMP-67): locale/currency resolution and the
     // length-aware compact tick format come from useChartCurrencyFormatter.
-    const { formatCompact, locale, currency: defaultCurrency } = useChartCurrencyFormatter();
+    const {
+        formatCompact,
+        locale,
+        currency: defaultCurrency,
+    } = useChartCurrencyFormatter();
 
     const chartData: ReadonlyArray<ChartRow> = useMemo(
         () =>
             data.map((monthData) => {
                 const date = new Date(monthData.year, monthData.month - 1, 1);
                 return {
-                    month: formatMonthYearWithAppSettings(date, appSettings.dateFormat, locale),
+                    month: formatMonthYearWithAppSettings(
+                        date,
+                        appSettings.dateFormat,
+                        locale,
+                    ),
                     income: monthData.total_income,
                     spending: Math.abs(monthData.total_spending),
                 };
@@ -76,8 +86,14 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             <div className="flex flex-col gap-2">
                 <ChartLegend
                     items={[
-                        { label: t("monthlyTrends.income"), color: incomeColor },
-                        { label: t("monthlyTrends.spending"), color: spendingColor },
+                        {
+                            label: t("monthlyTrends.income"),
+                            color: incomeColor,
+                        },
+                        {
+                            label: t("monthlyTrends.spending"),
+                            color: spendingColor,
+                        },
                     ]}
                     align="start"
                 />
@@ -102,7 +118,9 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                     barRadius={8}
                     maxBarSize={40}
                     valueTickFormat={(v) => formatCompact(v).display}
-                    tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                    tooltipValueFormat={(v) =>
+                        formatCurrency(v, defaultCurrency, locale)
+                    }
                 />
             </div>
 
@@ -114,7 +132,10 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                             {t("monthlyTrends.totalIncome")}
                         </p>
                         <p className="text-sm font-bold text-gain">
-                            <Money amount={totalIncome} currency={defaultCurrency} />
+                            <Money
+                                amount={totalIncome}
+                                currency={defaultCurrency}
+                            />
                         </p>
                     </div>
                 </div>
@@ -125,7 +146,10 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                             {t("monthlyTrends.totalSpending")}
                         </p>
                         <p className="text-sm font-bold text-loss">
-                            <Money amount={totalSpending} currency={defaultCurrency} />
+                            <Money
+                                amount={totalSpending}
+                                currency={defaultCurrency}
+                            />
                         </p>
                     </div>
                 </div>
@@ -138,19 +162,16 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
     }
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame">
+        <Card className="relative overflow-hidden">
             <CardSheen />
             <CardHeader className="space-y-3">
-                <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] text-primary">
-                        <TrendingUp className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1">
-                        <CardTitle className="text-xl">{t("monthlyTrends.title")}</CardTitle>
-                        <CardDescription className="text-base">
-                            {t("monthlyTrends.desc")}
-                        </CardDescription>
-                    </div>
+                <div>
+                    <CardTitle variant="sm">
+                        {t("monthlyTrends.title")}
+                    </CardTitle>
+                    <CardDescription className="text-base">
+                        {t("monthlyTrends.desc")}
+                    </CardDescription>
                 </div>
             </CardHeader>
             <CardContent>{chartContent}</CardContent>

@@ -20,8 +20,7 @@ import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/lib/api/
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
-
-const CHART_COLORS = Array.from({ length: 16 }, (_, i) => `hsl(var(--chart-${(i % 8) + 1}))`);
+import { getChartColor } from "@/components/charts/palette";
 
 type ChartCombo = { type: ChartType; variant: ChartVariant; label: string };
 
@@ -249,7 +248,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
             )}
 
             {/* Date range */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">{t('customChart.dateFrom')}</label>
                 <Input type="date" value={state.dateRangeStart} onChange={(e) => update('dateRangeStart', e.target.value)} />
@@ -309,7 +308,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       key={cat.id}
                       variant="secondary"
                       className="gap-1 pr-1"
-                      style={{ borderLeftColor: CHART_COLORS[i % CHART_COLORS.length], borderLeftWidth: 3 }}
+                      style={{ borderLeftColor: getChartColor(i), borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">{cat.name}</span>
                       <button type="button" onClick={() => toggleCategory(cat.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
@@ -371,7 +370,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       key={rec.id}
                       variant="secondary"
                       className="gap-1 pr-1"
-                      style={{ borderLeftColor: CHART_COLORS[(selectedCats.length + i) % CHART_COLORS.length], borderLeftWidth: 3 }}
+                      style={{ borderLeftColor: getChartColor(selectedCats.length + i), borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">{rec.name}</span>
                       <button type="button" onClick={() => toggleRecipient(rec.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
@@ -433,7 +432,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       key={tag.id}
                       variant="secondary"
                       className="gap-1 pr-1"
-                      style={{ borderLeftColor: CHART_COLORS[(selectedCats.length + selectedRecs.length + i) % CHART_COLORS.length], borderLeftWidth: 3 }}
+                      style={{ borderLeftColor: getChartColor(selectedCats.length + selectedRecs.length + i), borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">#{tag.slug}</span>
                       <button type="button" onClick={() => toggleTag(tag.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">

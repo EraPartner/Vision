@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 import type {
     ChatDoneEvent,
     ChatMessage,
@@ -11,10 +11,17 @@ import type {
     OllamaModelsResponse,
     OllamaStatus,
     SendChatBody,
-} from '@/types/aiChat';
-import { API_BASE_URL, apiRequest, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
-import { readSseFrames } from '@/lib/api/sse';
-import logger from '@/lib/logger';
+} from "@/types/aiChat";
+import {
+    API_BASE_URL,
+    apiRequest,
+    generateRequestId,
+    parseEnvelopeError,
+} from "@/lib/api/client";
+import { readSseFrames } from "@/lib/api/sse";
+import logger from "@/lib/logger";
+
+export const CHAT_STREAM_STALL_TIMEOUT_MS = 120_000;
 
 /**
  * Runtime guards for the chat SSE stream payloads (ZOD-10). Loose objects
@@ -44,24 +51,27 @@ const doneEventSchema = z.looseObject({});
 
 const errorEventSchema = z
     .looseObject({
-        detail: z.string().catch('AI chat error'),
+        detail: z.string().catch("AI chat error"),
         code: z.string().optional().catch(undefined),
     })
-    .catch({ detail: 'AI chat error', code: undefined });
+    .catch({ detail: "AI chat error", code: undefined });
 
 export function getOllamaStatus(): Promise<OllamaStatus> {
-    return apiRequest('/api/ai/status');
+    return apiRequest("/api/ai/status");
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getOllamaModels(): Promise<OllamaModel[]> {
-    const response = await apiRequest<OllamaModelsResponse>('/api/ai/models');
+    const response = await apiRequest<OllamaModelsResponse>("/api/ai/models");
     return response.items ?? [];
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getConversations(): Promise<ConversationSummary[]> {
-    const { items } = await apiRequest<{ items: ConversationSummary[]; total: number }>('/api/ai/conversations');
+    const { items } = await apiRequest<{
+        items: ConversationSummary[];
+        total: number;
+    }>("/api/ai/conversations");
     return items;
 }
 
@@ -69,37 +79,53 @@ export function getConversation(id: string): Promise<ConversationDetail> {
     return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`);
 }
 
-export function createConversation(body: CreateConversationBody = {}): Promise<ConversationDetail> {
-    return apiRequest('/api/ai/conversations', { method: 'POST', body: JSON.stringify(body) });
+export function createConversation(
+    body: CreateConversationBody = {},
+): Promise<ConversationDetail> {
+    return apiRequest("/api/ai/conversations", {
+        method: "POST",
+        body: JSON.stringify(body),
+    });
 }
 
-export function renameConversation(id: string, title: string): Promise<Conversation> {
+export function renameConversation(
+    id: string,
+    title: string,
+): Promise<Conversation> {
     return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({ title }),
     });
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-    await apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+    });
 }
 
 export function streamChat(
     body: SendChatBody,
     onEvent: (event: ChatStreamEvent) => void,
-): { abort: () => void; result: Promise<ChatStreamEvent & { type: 'done' }> } {
+): { abort: () => void; result: Promise<ChatStreamEvent & { type: "done" }> } {
     const controller = new AbortController();
     const url = `${API_BASE_URL}/api/ai/chat/stream`;
 
-    const decodeEvent = (eventName: string, dataRaw: string): ChatStreamEvent | undefined => {
-        if (eventName === 'token') {
+    const decodeEvent = (
+        eventName: string,
+        dataRaw: string,
+    ): ChatStreamEvent | undefined => {
+        if (eventName === "token") {
             let delta: string;
             try {
                 delta = JSON.parse(dataRaw);
             } catch {
                 delta = dataRaw;
             }
-            return { type: 'token', delta: typeof delta === 'string' ? delta : String(delta) };
+            return {
+                type: "token",
+                delta: typeof delta === "string" ? delta : String(delta),
+            };
         }
         let payload: unknown;
         try {
@@ -108,85 +134,135 @@ export function streamChat(
             return undefined;
         }
         switch (eventName) {
-            case 'user_message': {
+            case "user_message": {
                 const parsed = chatMessageEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
-                return { type: 'user_message', message: parsed.data.message as unknown as ChatMessage };
+                return {
+                    type: "user_message",
+                    message: parsed.data.message as unknown as ChatMessage,
+                };
             }
-            case 'tool_call': {
+            case "tool_call": {
                 const parsed = toolCallEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
-                return { type: 'tool_call', name: parsed.data.name, args: (parsed.data.args as Record<string, unknown> | undefined) ?? {} };
+                return {
+                    type: "tool_call",
+                    name: parsed.data.name,
+                    args:
+                        (parsed.data.args as
+                            Record<string, unknown> | undefined) ?? {},
+                };
             }
-            case 'tool_result': {
+            case "tool_result": {
                 const parsed = chatMessageEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
-                return { type: 'tool_result', message: parsed.data.message as unknown as ChatMessage };
+                return {
+                    type: "tool_result",
+                    message: parsed.data.message as unknown as ChatMessage,
+                };
             }
-            case 'done': {
+            case "done": {
                 const parsed = doneEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
-                return { type: 'done', payload: parsed.data as unknown as ChatDoneEvent };
+                return {
+                    type: "done",
+                    payload: parsed.data as unknown as ChatDoneEvent,
+                };
             }
-            case 'error': {
+            case "error": {
                 // `.catch(...)` at both levels: this parse never throws, so a
                 // malformed error payload still surfaces as a terminal error.
                 const parsed = errorEventSchema.parse(payload);
-                return { type: 'error', detail: parsed.detail, code: parsed.code };
+                return {
+                    type: "error",
+                    detail: parsed.detail,
+                    code: parsed.code,
+                };
             }
             default:
                 return undefined;
         }
     };
 
-    const result = (async (): Promise<ChatStreamEvent & { type: 'done' }> => {
+    const result = (async (): Promise<ChatStreamEvent & { type: "done" }> => {
         const start = Date.now();
-        logger.debug('[ai] streamChat start', { conversationId: body.conversationId, model: body.model, useTools: body.useTools, msgLen: body.message.length });
+        let timedOut = false;
+        let watchdog: ReturnType<typeof setTimeout> | undefined;
+        const armWatchdog = () => {
+            if (watchdog) clearTimeout(watchdog);
+            watchdog = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, CHAT_STREAM_STALL_TIMEOUT_MS);
+        };
+        armWatchdog();
+        logger.debug("[ai] streamChat start", {
+            conversationId: body.conversationId,
+            model: body.model,
+            useTools: body.useTools,
+            msgLen: body.message.length,
+        });
         try {
             const response = await fetch(url, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-Request-Id': generateRequestId(),
+                    "Content-Type": "application/json",
+                    "X-Request-Id": generateRequestId(),
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,
             });
-            logger.debug('[ai] streamChat response', { status: response.status, ms: Date.now() - start });
+            logger.debug("[ai] streamChat response", {
+                status: response.status,
+                ms: Date.now() - start,
+            });
 
             if (!response.ok) {
-                throw await parseEnvelopeError(response, 'Chat stream failed');
+                throw await parseEnvelopeError(response, "Chat stream failed");
             }
 
-            let terminal: (ChatStreamEvent & { type: 'done' }) | null = null;
+            let terminal: (ChatStreamEvent & { type: "done" }) | null = null;
             let terminalError: { detail: string; code?: string } | null = null;
 
             for await (const frame of readSseFrames(response)) {
+                armWatchdog();
                 const event = decodeEvent(frame.eventName, frame.dataRaw);
                 if (!event) continue;
-                logger.debug('[ai] streamChat event', { type: event.type, ms: Date.now() - start });
+                logger.debug("[ai] streamChat event", {
+                    type: event.type,
+                    ms: Date.now() - start,
+                });
                 onEvent(event);
-                if (event.type === 'done') terminal = event;
-                if (event.type === 'error') terminalError = { detail: event.detail, code: event.code };
+                if (event.type === "done") terminal = event;
+                if (event.type === "error")
+                    terminalError = { detail: event.detail, code: event.code };
             }
 
             if (terminalError) {
                 const te = terminalError as { detail: string; code?: string };
                 throw Object.assign(new Error(te.detail), { code: te.code });
             }
-            if (!terminal) throw new Error('Stream ended without terminal event');
+            if (!terminal)
+                throw new Error("Stream ended without terminal event");
             return terminal;
         } catch (err) {
-            if ((err as Error).name === 'AbortError') {
-                throw new Error('Chat cancelled', { cause: err });
+            if ((err as Error).name === "AbortError") {
+                if (timedOut)
+                    throw new Error("Chat stream timed out", { cause: err });
+                throw new Error("Chat cancelled", { cause: err });
             }
             throw err;
+        } finally {
+            if (watchdog) clearTimeout(watchdog);
         }
     })();
 
     return {
         abort: () => {
-            logger.warn('[ai] streamChat abort() called', new Error('abort stack').stack);
+            logger.warn(
+                "[ai] streamChat abort() called",
+                new Error("abort stack").stack,
+            );
             controller.abort();
         },
         result,

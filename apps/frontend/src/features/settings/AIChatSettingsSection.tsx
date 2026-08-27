@@ -1,9 +1,9 @@
-import { Bot } from 'lucide-react';
-import { Label } from '@/components/ui/label';
+import { useId } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useOllamaStatus, useOllamaModels } from '@/hooks/useOllamaStatus';
 import { cn } from '@/lib/utils';
+import { SettingsGroup, SettingRow } from '@/features/settings/SettingsPrimitives';
 
 interface AIChatSettingsSectionProps {
     value: string | undefined;
@@ -14,6 +14,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const { t } = useLanguage();
     const { data: status, isLoading: statusLoading } = useOllamaStatus();
     const { data: models, isLoading: modelsLoading } = useOllamaModels(Boolean(status?.ok));
+    const modelLabelId = useId();
 
     const statusDotClass = statusLoading
         ? 'bg-muted-foreground/50'
@@ -30,46 +31,43 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const modelOptions = models ?? [];
     const hasModels = modelOptions.length > 0;
     const selectValue = value ?? status?.defaultModel ?? '';
+    const statusDescription = (
+        <span className="block space-y-1">
+            {(status?.displayUrl || status?.baseUrl) && (
+                <span className="block break-all font-mono text-muted-foreground">
+                    {status.displayUrl || status.baseUrl}
+                </span>
+            )}
+            {!status?.ok && !statusLoading && status?.error && (
+                <span className="block text-destructive">{status.error}</span>
+            )}
+            {!status?.ok && !statusLoading && status?.hint && (
+                <span className="block text-muted-foreground">{status.hint}</span>
+            )}
+        </span>
+    );
 
     return (
-        <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Bot className="h-4 w-4 text-primary" />
-                {t('settings.aiChat.section')}
-            </h3>
-
-            <div className="rounded-lg border p-4 space-y-4">
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-muted-foreground">
-                        {t('settings.aiChat.status')}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                        <span className={cn('inline-block h-2 w-2 rounded-full', statusDotClass)} />
-                        <span className="text-sm text-foreground">{statusLabel}</span>
-                    </div>
-                    {(status?.displayUrl || status?.baseUrl) && (
-                        <p className="text-xs font-mono text-muted-foreground break-all">
-                            {status.displayUrl || status.baseUrl}
-                        </p>
-                    )}
-                    {!status?.ok && !statusLoading && status?.error && (
-                        <p className="text-xs text-destructive">{status.error}</p>
-                    )}
-                    {!status?.ok && !statusLoading && status?.hint && (
-                        <p className="text-xs text-muted-foreground">{status.hint}</p>
-                    )}
+        <SettingsGroup label={t('settings.aiChat.section')}>
+            <SettingRow title={t('settings.aiChat.status')} description={statusDescription}>
+                <div className="flex items-center gap-2">
+                    <span aria-hidden="true" className={cn('inline-block h-2 w-2 rounded-full', statusDotClass)} />
+                    <span className="text-sm text-foreground">{statusLabel}</span>
                 </div>
-
+            </SettingRow>
+            <SettingRow
+                title={t('settings.aiChat.defaultModel')}
+                description={t('settings.aiChat.defaultModelHint')}
+                labelId={modelLabelId}
+                layout="stack"
+            >
                 <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-muted-foreground">
-                        {t('settings.aiChat.defaultModel')}
-                    </Label>
                     <Select
                         value={selectValue || undefined}
                         onValueChange={onChange}
                         disabled={!status?.ok || modelsLoading || !hasModels}
                     >
-                        <SelectTrigger>
+                        <SelectTrigger aria-labelledby={modelLabelId}>
                             <SelectValue
                                 placeholder={
                                     !status?.ok
@@ -90,11 +88,8 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
                             ))}
                         </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                        {t('settings.aiChat.defaultModelHint')}
-                    </p>
                 </div>
-            </div>
-        </div>
+            </SettingRow>
+        </SettingsGroup>
     );
 }

@@ -1,13 +1,31 @@
-import { forwardRef, useCallback, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import {
+    forwardRef,
+    useCallback,
+    useMemo,
+    useState,
+    type ComponentPropsWithoutRef,
+} from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { useRecipient, useRecipients } from "@/hooks/useRecipients";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { Recipient } from "@/types/api";
+import type { FieldErrorAria } from "@/hooks/useFieldErrors";
 
 /**
  * The unsearched page a closed combobox resolves its label against. Kept as one
@@ -18,7 +36,7 @@ import type { Recipient } from "@/types/api";
  */
 const BASE_PAGE = { limit: 100, active: false, search: undefined } as const;
 
-interface RecipientComboboxProps {
+interface RecipientComboboxProps extends FieldErrorAria {
     /** Put on the trigger, so a <Label htmlFor> can reach it. */
     id?: string;
     /**
@@ -26,10 +44,15 @@ interface RecipientComboboxProps {
      * so a picker with no visible <Label htmlFor> (a per-row picker in a list,
      * say) is nameless to assistive tech unless this is set.
      */
-    'aria-label'?: string;
+    "aria-label"?: string;
     value?: number | null;
-    onSelect: (recipientId: number | null, recipientName: string | null) => void;
+    onSelect: (
+        recipientId: number | null,
+        recipientName: string | null,
+    ) => void;
     disabled?: boolean;
+    /** Filter to active recipients. Defaults to existing include-inactive behavior. */
+    active?: boolean;
     className?: string;
     portalContainer?: HTMLElement | null;
 }
@@ -43,20 +66,21 @@ interface RecipientComboboxTriggerProps extends ComponentPropsWithoutRef<"button
  * The combobox's closed face. Shared by every variant below so the rendered
  * button — classes, children, chevron — can never drift between them.
  */
-const RecipientComboboxTrigger = forwardRef<HTMLButtonElement, RecipientComboboxTriggerProps>(
-    ({ label, className, ...props }, ref) => (
-        <Button
-            ref={ref}
-            variant="outline"
-            role="combobox"
-            className={cn("justify-between font-normal h-8 text-sm", className)}
-            {...props}
-        >
-            <span className="truncate">{label}</span>
-            <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-        </Button>
-    ),
-);
+const RecipientComboboxTrigger = forwardRef<
+    HTMLButtonElement,
+    RecipientComboboxTriggerProps
+>(({ label, className, ...props }, ref) => (
+    <Button
+        ref={ref}
+        variant="outline"
+        role="combobox"
+        className={cn("justify-between font-normal h-8 text-sm", className)}
+        {...props}
+    >
+        <span className="truncate">{label}</span>
+        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+    </Button>
+));
 RecipientComboboxTrigger.displayName = "RecipientComboboxTrigger";
 
 interface RecipientComboboxItemsProps {
@@ -73,25 +97,38 @@ interface RecipientComboboxItemsProps {
  * mounted by a control that owns its query up front (`RecipientCombobox`) or by
  * one that only fetches while open (`DeferredRecipientCombobox`).
  */
-function RecipientComboboxItems({ value, recipients, search, onSearchChange, onPick }: RecipientComboboxItemsProps) {
+function RecipientComboboxItems({
+    value,
+    recipients,
+    search,
+    onSearchChange,
+    onPick,
+}: RecipientComboboxItemsProps) {
     const { t } = useLanguage();
 
     return (
         <Command shouldFilter={false}>
             <CommandInput
-                placeholder={t('combobox.recipient.search')}
+                placeholder={t("combobox.recipient.search")}
                 value={search}
                 onValueChange={onSearchChange}
             />
             <CommandList>
-                <CommandEmpty>{t('combobox.recipient.empty')}</CommandEmpty>
+                <CommandEmpty>{t("combobox.recipient.empty")}</CommandEmpty>
                 <CommandGroup>
                     <CommandItem
                         value="__none__"
                         onSelect={() => onPick(null, null)}
                     >
-                        <Check className={cn("mr-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
-                        <span className="text-muted-foreground italic">{t('combobox.recipient.none')}</span>
+                        <Check
+                            className={cn(
+                                "mr-2 h-4 w-4",
+                                !value ? "opacity-100" : "opacity-0",
+                            )}
+                        />
+                        <span className="text-muted-foreground italic">
+                            {t("combobox.recipient.none")}
+                        </span>
                     </CommandItem>
                     {recipients.map((recipient) => {
                         const label = recipient.name;
@@ -101,7 +138,14 @@ function RecipientComboboxItems({ value, recipients, search, onSearchChange, onP
                                 value={`${label} ${recipient.id}`}
                                 onSelect={() => onPick(recipient.id, label)}
                             >
-                                <Check className={cn("mr-2 h-4 w-4", value === recipient.id ? "opacity-100" : "opacity-0")} />
+                                <Check
+                                    className={cn(
+                                        "mr-2 h-4 w-4",
+                                        value === recipient.id
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                    )}
+                                />
                                 {label}
                             </CommandItem>
                         );
@@ -115,33 +159,56 @@ function RecipientComboboxItems({ value, recipients, search, onSearchChange, onP
 /** Server-side search page size. Only paid once a search is actually typed. */
 const SEARCH_PAGE_LIMIT = 1000;
 
-function useSearchedRecipients(search: string): Recipient[] {
+function useSearchedRecipients(
+    search: string,
+    active: boolean = BASE_PAGE.active,
+): Recipient[] {
     const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
 
     const { data } = useRecipients({
         // The server search is the filter; keep the unsearched fetch small so
         // opening the popover doesn't mount ~1000 CommandItems at once.
         limit: debouncedSearch ? SEARCH_PAGE_LIMIT : BASE_PAGE.limit,
-        active: BASE_PAGE.active,
+        active,
         search: debouncedSearch || undefined,
     });
 
     return useMemo(() => data?.items ?? [], [data?.items]);
 }
 
-export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
+export function RecipientCombobox({
+    id,
+    "aria-label": ariaLabel,
+    "aria-invalid": ariaInvalid,
+    "aria-describedby": ariaDescribedBy,
+    value,
+    onSelect,
+    disabled,
+    active = BASE_PAGE.active,
+    className,
+    portalContainer,
+}: RecipientComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
-    const recipients = useSearchedRecipients(search);
+    const recipients = useSearchedRecipients(search, active);
     const { data: selectedRecipient } = useRecipient(value);
-    const selectedInResults = useMemo(() => recipients.find((r) => r.id === value), [recipients, value]);
-    const [pickedLabel, setPickedLabel] = useState<{ id: number; name: string }>();
-    const displayLabel = selectedRecipient?.name
-        ?? selectedInResults?.name
-        ?? (pickedLabel && pickedLabel.id === value ? pickedLabel.name : undefined)
-        ?? t('combobox.recipient.placeholder');
+    const selectedInResults = useMemo(
+        () => recipients.find((r) => r.id === value),
+        [recipients, value],
+    );
+    const [pickedLabel, setPickedLabel] = useState<{
+        id: number;
+        name: string;
+    }>();
+    const displayLabel =
+        selectedRecipient?.name ??
+        selectedInResults?.name ??
+        (pickedLabel && pickedLabel.id === value
+            ? pickedLabel.name
+            : undefined) ??
+        t("combobox.recipient.placeholder");
 
     const handleOpenChange = (nextOpen: boolean) => {
         setOpen(nextOpen);
@@ -154,22 +221,30 @@ export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect
                 <RecipientComboboxTrigger
                     id={id}
                     aria-label={ariaLabel}
+                    aria-invalid={ariaInvalid}
+                    aria-describedby={ariaDescribedBy}
                     aria-expanded={open}
                     disabled={disabled}
                     className={className}
                     label={displayLabel}
                 />
             </PopoverTrigger>
-            <PopoverContent container={portalContainer} className="w-[280px] p-0 z-[200]" align="start">
+            <PopoverContent
+                container={portalContainer}
+                className="w-[280px] p-0 z-[200]"
+                align="start"
+            >
                 <RecipientComboboxItems
                     value={value}
                     recipients={recipients}
                     search={search}
                     onSearchChange={setSearch}
                     onPick={(recipientId, recipientName) => {
-                        setPickedLabel(recipientId != null && recipientName != null
-                            ? { id: recipientId, name: recipientName }
-                            : undefined);
+                        setPickedLabel(
+                            recipientId != null && recipientName != null
+                                ? { id: recipientId, name: recipientName }
+                                : undefined,
+                        );
                         onSelect(recipientId, recipientName);
                         handleOpenChange(false);
                     }}
@@ -194,16 +269,18 @@ export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect
 export function useRecipientComboboxLabel(): (value?: number | null) => string {
     const { t } = useLanguage();
     const { data } = useRecipients(BASE_PAGE);
-    const placeholder = t('combobox.recipient.placeholder');
+    const placeholder = t("combobox.recipient.placeholder");
 
     const namesById = useMemo(() => {
         const map = new Map<number, string>();
-        for (const recipient of data?.items ?? []) map.set(recipient.id, recipient.name);
+        for (const recipient of data?.items ?? [])
+            map.set(recipient.id, recipient.name);
         return map;
     }, [data?.items]);
 
     return useCallback(
-        (value?: number | null) => (value == null ? undefined : namesById.get(value)) ?? placeholder,
+        (value?: number | null) =>
+            (value == null ? undefined : namesById.get(value)) ?? placeholder,
         [namesById, placeholder],
     );
 }
@@ -220,10 +297,11 @@ interface DeferredRecipientComboboxProps extends RecipientComboboxProps {
 function DeferredRecipientComboboxItems({
     value,
     search,
+    active,
     onSearchChange,
     onPick,
-}: Omit<RecipientComboboxItemsProps, "recipients">) {
-    const recipients = useSearchedRecipients(search);
+}: Omit<RecipientComboboxItemsProps, "recipients"> & { active?: boolean }) {
+    const recipients = useSearchedRecipients(search, active);
     return (
         <RecipientComboboxItems
             value={value}
@@ -256,10 +334,13 @@ function DeferredRecipientComboboxItems({
  */
 export function DeferredRecipientCombobox({
     id,
-    'aria-label': ariaLabel,
+    "aria-label": ariaLabel,
+    "aria-invalid": ariaInvalid,
+    "aria-describedby": ariaDescribedBy,
     value,
     onSelect,
     disabled,
+    active = BASE_PAGE.active,
     className,
     portalContainer,
     label,
@@ -276,16 +357,23 @@ export function DeferredRecipientCombobox({
                 <RecipientComboboxTrigger
                     id={id}
                     aria-label={ariaLabel}
+                    aria-invalid={ariaInvalid}
+                    aria-describedby={ariaDescribedBy}
                     aria-expanded={open}
                     disabled={disabled}
                     className={className}
                     label={label}
                 />
             </PopoverTrigger>
-            <PopoverContent container={portalContainer} className="w-[280px] p-0 z-[200]" align="start">
+            <PopoverContent
+                container={portalContainer}
+                className="w-[280px] p-0 z-[200]"
+                align="start"
+            >
                 <DeferredRecipientComboboxItems
                     value={value}
                     search={search}
+                    active={active}
                     onSearchChange={setSearch}
                     onPick={(recipientId, recipientName) => {
                         onSelect(recipientId, recipientName);

@@ -100,7 +100,7 @@ function SankeyInner({
               stroke={color}
               strokeWidth={Math.max(1, link.width ?? 1)}
               strokeOpacity={isHovered ? 0.6 : 0.25}
-              style={{ cursor: "default", transition: "stroke-opacity 150ms" }}
+              style={{ cursor: "default", transition: "stroke-opacity var(--duration-fast)" }}
               onMouseEnter={() => setHoveredLinkIndex(i)}
               onMouseLeave={() => setHoveredLinkIndex(null)}
             />
@@ -133,7 +133,7 @@ function SankeyInner({
                 fill={color}
                 opacity={isHovered ? 1 : 0.85}
                 rx={3}
-                style={{ transition: "opacity 150ms" }}
+                style={{ transition: "opacity var(--duration-fast)" }}
               />
               {/* Label */}
               <text

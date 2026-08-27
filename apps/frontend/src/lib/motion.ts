@@ -40,10 +40,13 @@ export const easings = {
 // ---------- Durations (seconds for Framer) ----------
 
 export const durations = {
+    press: 0.09,
+    dismiss: 0.2,
     fast: 0.15,
     normal: 0.26,
     slow: 0.42,
     page: 0.52,
+    reveal: 0.6,
 } as const;
 
 // ---------- Springs ----------

@@ -16,7 +16,7 @@ export function TaxCurrentInputsCard({ profile, calculation }: TaxCurrentInputsC
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
             <CardTitle>{t('tax.profile.currentInputs')}</CardTitle>
          <CardDescription>{t('tax.profile.currentInputs.desc')}</CardDescription>

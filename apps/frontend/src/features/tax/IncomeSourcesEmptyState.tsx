@@ -2,6 +2,7 @@ import { ListChecks } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 interface IncomeSourcesEmptyStateProps {
   viewedYear: number;
@@ -14,15 +15,13 @@ interface IncomeSourcesEmptyStateProps {
 export function IncomeSourcesEmptyState({ viewedYear }: IncomeSourcesEmptyStateProps) {
   const { t } = useLanguage();
   return (
-    <div className="flex flex-col items-center justify-center text-center py-10 px-4">
-      <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
-      <h4 className="text-sm font-semibold text-foreground mb-1">
-        {t('tax.incomeBreakdown.emptyTitle')}
-      </h4>
-      <p className="text-xs text-muted-foreground max-w-xs mb-4">
-        {t('tax.incomeBreakdown.emptyDesc')}
-      </p>
-      <TaxProfileDialog
+    <EmptyState
+      size="compact"
+      headingLevel={4}
+      icon={ListChecks}
+      title={t('tax.incomeBreakdown.emptyTitle')}
+      description={t('tax.incomeBreakdown.emptyDesc')}
+      action={<TaxProfileDialog
         initialStep="incomeSources"
         targetYear={viewedYear}
         trigger={
@@ -31,7 +30,7 @@ export function IncomeSourcesEmptyState({ viewedYear }: IncomeSourcesEmptyStateP
             {t('tax.incomeBreakdown.emptyCta')}
           </Button>
         }
-      />
-    </div>
+      />}
+    />
   );
 }

@@ -1,26 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
-import { Menu, Sparkles } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { useOllamaStatus } from '@/hooks/useOllamaStatus';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
+import { Menu, Sparkles } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useOllamaStatus } from "@/hooks/useOllamaStatus";
 import {
     useConversation,
     useCreateConversation,
     useSendChatMessage,
     useStreamingConversationIds,
-} from '@/hooks/useAIChat';
-import { aiChatStreamStore } from '@/lib/aiChatStreamStore';
-import { ChatConversationList } from '@/features/ai-chat/ChatConversationList';
-import { ChatMessageList } from '@/features/ai-chat/ChatMessageList';
-import { ChatComposer } from '@/features/ai-chat/ChatComposer';
-import { OllamaStatusBanner } from '@/features/ai-chat/OllamaStatusBanner';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import type { ChatMessage } from '@/types/aiChat';
-import { cn } from '@/lib/utils';
+} from "@/hooks/useAIChat";
+import { aiChatStreamStore } from "@/lib/aiChatStreamStore";
+import { ChatConversationList } from "@/features/ai-chat/ChatConversationList";
+import { ChatMessageList } from "@/features/ai-chat/ChatMessageList";
+import { ChatComposer } from "@/features/ai-chat/ChatComposer";
+import { OllamaStatusBanner } from "@/features/ai-chat/OllamaStatusBanner";
+import { Button } from "@/components/ui/button";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import type { ChatMessage } from "@/types/aiChat";
+import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { PAGE_ICONS } from "@/lib/pageIcons";
 
-const SELECTED_PARAM = 'c';
+const SELECTED_PARAM = "c";
 
 export default function AIChatPage() {
     const { t } = useLanguage();
@@ -55,6 +63,8 @@ export default function AIChatPage() {
         cancel,
         isStreaming,
         assistantDraft,
+        status: streamStatus,
+        lastRequest,
         userMessage: streamingUserMessage,
         toolMessages: streamingToolMessages,
     } = useSendChatMessage(selectedId);
@@ -68,7 +78,10 @@ export default function AIChatPage() {
         }
     }, [selectedId, streamingIds, setSelectedId]);
 
-    const messages: ChatMessage[] = useMemo(() => detail?.messages ?? [], [detail]);
+    const messages: ChatMessage[] = useMemo(
+        () => detail?.messages ?? [],
+        [detail],
+    );
 
     // Defensive sweep: if the conversation cache picks up an assistant message
     // (via refetch or done-merge) while the streaming entry still claims to be
@@ -78,17 +91,17 @@ export default function AIChatPage() {
     useEffect(() => {
         if (!selectedId || !isStreaming) return;
         const lastMessage = messages[messages.length - 1];
-        if (lastMessage && lastMessage.role === 'assistant') {
+        if (lastMessage && lastMessage.role === "assistant") {
             aiChatStreamStore.clear(selectedId);
         }
     }, [selectedId, isStreaming, messages]);
 
     const activeModel =
-        modelOverride
-        ?? detail?.conversation.model
-        ?? appSettings.aiDefaultModel
-        ?? status?.defaultModel
-        ?? null;
+        modelOverride ??
+        detail?.conversation.model ??
+        appSettings.aiDefaultModel ??
+        status?.defaultModel ??
+        null;
 
     const ensureConversation = async (): Promise<string | null> => {
         if (selectedId) return selectedId;
@@ -114,6 +127,12 @@ export default function AIChatPage() {
         });
     };
 
+    const handleRetry = () => {
+        if (lastRequest) {
+            void send({ ...lastRequest, retryLastTurn: true });
+        }
+    };
+
     // Canned insights-digest turn. Forces tools on regardless of the composer
     // toggle (the digest is meaningless without the insights tool) and sets
     // `insightsPreCall` so the backend pre-runs the insights tool.
@@ -122,7 +141,7 @@ export default function AIChatPage() {
         if (!conversationId) return;
         await send({
             conversationId,
-            message: t('aiChat.insightsDigestPrompt'),
+            message: t("aiChat.insightsDigestPrompt"),
             model: activeModel ?? undefined,
             useTools: true,
             insightsPreCall: true,
@@ -130,38 +149,38 @@ export default function AIChatPage() {
     };
 
     const statusLabel = statusLoading
-        ? t('aiChat.checkingOllama')
+        ? t("aiChat.checkingOllama")
         : status?.ok
-            ? t('aiChat.ollamaReady')
-            : t('aiChat.ollamaUnreachable');
+          ? t("aiChat.ollamaReady")
+          : t("aiChat.ollamaUnreachable");
 
     const statusDotClass = statusLoading
-        ? 'bg-muted-foreground/50'
+        ? "bg-muted-foreground/50"
         : status?.ok
-            ? 'bg-success'
-            : 'bg-destructive';
+          ? "bg-success"
+          : "bg-destructive";
 
     const composerDisabled = !status?.ok;
 
     const emptyState = (
-        <div className="glass-regular mx-auto max-w-2xl rounded-2xl border !border-dashed border-border/50 px-6 py-10 text-center">
-            <Sparkles className="mx-auto h-6 w-6 text-primary" />
-            <h3 className="mt-3 text-sm font-semibold tracking-tight">
-                {t('aiChat.emptyTitle')}
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-                {t('aiChat.emptyState')}
-            </p>
-            <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={handleInsightsDigest}
-                disabled={composerDisabled}
-            >
-                <Sparkles className="h-4 w-4 text-primary" />
-                {t('aiChat.insightsDigestButton')}
-            </Button>
+        <div className="glass-regular mx-auto max-w-2xl rounded-2xl border !border-dashed border-border/50">
+            <EmptyState
+                size="compact"
+                icon={PAGE_ICONS["/ai-chat"]}
+                title={t("aiChat.emptyTitle")}
+                description={t("aiChat.emptyState")}
+                action={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleInsightsDigest}
+                        disabled={composerDisabled}
+                    >
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        {t("aiChat.insightsDigestButton")}
+                    </Button>
+                }
+            />
         </div>
     );
 
@@ -185,14 +204,16 @@ export default function AIChatPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="md:hidden"
-                                    aria-label={t('aiChat.conversations')}
+                                    aria-label={t("aiChat.conversations")}
                                 >
                                     <Menu className="h-5 w-5" />
                                 </Button>
                             </SheetTrigger>
                             <SheetContent side="left" className="w-72 p-0">
                                 <SheetHeader className="sr-only">
-                                    <SheetTitle>{t('aiChat.conversations')}</SheetTitle>
+                                    <SheetTitle>
+                                        {t("aiChat.conversations")}
+                                    </SheetTitle>
                                 </SheetHeader>
                                 <ChatConversationList
                                     selectedId={selectedId}
@@ -204,15 +225,21 @@ export default function AIChatPage() {
                             </SheetContent>
                         </Sheet>
                         <div className="min-w-0">
-                        <h1 className="truncate text-lg font-semibold tracking-tight">
-                            {detail?.conversation.title || t('aiChat.title')}
-                        </h1>
-                        {(statusLoading || status?.ok) && (
-                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span className={cn('inline-block h-1.5 w-1.5 rounded-full', statusDotClass)} />
-                                {statusLabel}
-                            </p>
-                        )}
+                            <h1 className="truncate text-lg font-semibold tracking-tight">
+                                {detail?.conversation.title ||
+                                    t("aiChat.title")}
+                            </h1>
+                            {(statusLoading || status?.ok) && (
+                                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <span
+                                        className={cn(
+                                            "inline-block h-1.5 w-1.5 rounded-full",
+                                            statusDotClass,
+                                        )}
+                                    />
+                                    {statusLabel}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </header>
@@ -226,6 +253,8 @@ export default function AIChatPage() {
                     streamingToolMessages={streamingToolMessages}
                     assistantDraft={assistantDraft}
                     isStreaming={isStreaming}
+                    streamStatus={streamStatus}
+                    onRetry={lastRequest ? handleRetry : undefined}
                     emptyState={emptyState}
                 />
 

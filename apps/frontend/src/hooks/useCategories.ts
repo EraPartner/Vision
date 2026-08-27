@@ -9,6 +9,7 @@ import type {CategoryCreate, CategoryUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import {useLanguage} from '@/contexts/LanguageContext';
+import {useBackgroundQueryCue} from '@/components/shared/BackgroundQueryIndicator';
 
 export function useCategories(params?: {
     limit?: number;
@@ -18,12 +19,14 @@ export function useCategories(params?: {
     active?: boolean;
     search?: string;
 }) {
-    return useQuery({
+    const query = useQuery({
         queryKey: categoryKeys.list(params),
         queryFn: () => apiClient.getCategories(params),
         staleTime: 2 * 60_000, // categories rarely change - 2min stale
         placeholderData: (prev) => prev,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 /**
@@ -86,6 +89,7 @@ export function useUpdateCategory() {
             apiClient.updateCategory(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: categoryKeys.all});
+            toast.success(t('categories.updated'));
         },
         onError: (error: Error) => {
             toast.error(t('categories.updateFailedTitle'), { description: apiErrorToMessage(error, t) });

@@ -13,18 +13,24 @@ const API_BASE = "http://localhost:3002";
 describe("PortfolioOverviewPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<PortfolioOverviewPage />);
-        expect(await screen.findByRole("heading", { name: /portfolio overview/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /portfolio overview/i }),
+        ).toBeInTheDocument();
     });
 
     it("renders empty state when no investments exist", async () => {
         renderWithApp(<PortfolioOverviewPage />);
-        expect(await screen.findByRole("heading", { name: /no investments yet/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /no investments yet/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows Add Investment button", async () => {
         renderWithApp(<PortfolioOverviewPage />);
         // Multiple AddInvestmentDialog instances render when investments = []
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -46,7 +52,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -59,7 +67,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         await screen.findByRole("dialog");
@@ -72,7 +82,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
@@ -84,7 +96,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /widgets/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");
@@ -96,7 +110,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         await screen.findByRole("dialog");
@@ -109,7 +125,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         await screen.findByRole("dialog");
@@ -122,7 +140,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         await screen.findByRole("dialog");
@@ -132,14 +152,18 @@ describe("PortfolioOverviewPage (integration)", () => {
 
         // After selecting asset type, dialog title changes to "Add Stock" (addInv.assetTitle)
         // and a "Back" button appears (addInv.back = "Back")
-        expect(await screen.findByRole("button", { name: /^back$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /^back$/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows empty state description text when no investments exist", async () => {
         renderWithApp(<PortfolioOverviewPage />);
         // portfolio.noInvestmentsDesc = "Add your first investment to start tracking stocks, ETFs, crypto..."
         expect(
-            await screen.findByText(/add your first investment to start tracking/i),
+            await screen.findByText(
+                /add your first investment to start tracking/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -147,7 +171,9 @@ describe("PortfolioOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioOverviewPage />);
 
-        const buttons = await screen.findAllByRole("button", { name: /add investment/i });
+        const buttons = await screen.findAllByRole("button", {
+            name: /add investment/i,
+        });
         await user.click(buttons[0]);
 
         await screen.findByRole("dialog");
@@ -159,30 +185,64 @@ describe("PortfolioOverviewPage (integration)", () => {
 
     it("renders empty state without crashing when investments API fails", async () => {
         server.use(
-            http.get(`${API_BASE}/api/investments`, () => err(500, "Server error")),
+            http.get(`${API_BASE}/api/investments`, () =>
+                err(500, "Server error"),
+            ),
         );
         renderWithApp(<PortfolioOverviewPage />);
-        expect(await screen.findByRole("heading", { name: /portfolio overview/i })).toBeInTheDocument();
-        expect(await screen.findByRole("heading", { name: /no investments yet/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /portfolio overview/i }),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /no investments yet/i }),
+        ).toBeInTheDocument();
     });
 
     it("still shows investment list when portfolio summary API fails", async () => {
         server.use(
             http.get(`${API_BASE}/api/investments`, () =>
-                ok({ items: [INVESTMENT_STUB], total: 1, limit: 500, offset: 0, links: [] }),
+                ok({
+                    items: [INVESTMENT_STUB],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
             ),
             http.get(`${API_BASE}/api/investments/transactions`, () =>
                 ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
             ),
-            http.get(`${API_BASE}/api/info/portfolio-summary`, () => err(500, "Server error")),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                err(500, "Server error"),
+            ),
         );
         renderWithApp(<PortfolioOverviewPage />);
         expect(await screen.findByText(/msci world etf/i)).toBeInTheDocument();
     });
 
+    it("shows the live-price as-of caption with the portfolio total", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [INVESTMENT_STUB],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+
+        renderWithApp(<PortfolioOverviewPage />);
+
+        expect(await screen.findByText(/prices as of/i)).toBeInTheDocument();
+    });
+
     it("disables Refresh Prices button when offline", async () => {
         renderWithApp(<PortfolioOverviewPage />);
-        const refreshBtn = await screen.findByRole("button", { name: /refresh prices/i });
+        const refreshBtn = await screen.findByRole("button", {
+            name: /refresh prices/i,
+        });
 
         await act(async () => {
             window.dispatchEvent(new Event("offline"));
@@ -196,7 +256,9 @@ describe("PortfolioOverviewPage (integration)", () => {
     it("does not crash when investments endpoint returns 404", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/investments`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/investments`, () =>
+                err(404, "Not found"),
+            ),
         );
         const { container } = renderWithApp(<PortfolioOverviewPage />);
         await new Promise((r) => setTimeout(r, 200));

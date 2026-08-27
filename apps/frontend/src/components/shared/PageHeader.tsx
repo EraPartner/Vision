@@ -23,7 +23,7 @@ export function PageHeader({ title, subtitle, icon: Icon, iconColor = "from-prim
         <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="flex items-center gap-4">
                 {Icon && (
-                    <div className={cn("hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br", iconColor, "items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]")}>
+                    <div className={cn("hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br", iconColor, "items-center justify-center icon-tile-glow")}>
                         <Icon className="h-6 w-6" />
                     </div>
                 )}

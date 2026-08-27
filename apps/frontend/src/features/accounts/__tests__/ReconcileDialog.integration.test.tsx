@@ -209,6 +209,16 @@ beforeEach(() => {
 });
 
 describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", () => {
+    it("uses the outline Cancel convention", async () => {
+        mockAccountApi();
+        await renderDialog(DRIFTING);
+
+        expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass(
+            "border",
+            "border-input/70",
+        );
+    });
+
     it("previews the drift the entered reading would produce, live, as the user types", async () => {
         mockAccountApi();
         const user = userEvent.setup();

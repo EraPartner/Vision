@@ -37,7 +37,7 @@ export function BelgianPortfolioRulesCard({
   const fmt = useCurrencyFormatter();
 
   return (
-    <Card className="glass-regular">
+    <Card>
       <CardHeader>
         <CardTitle>{t("tax.widget.belgianRules")}</CardTitle>
         <CardDescription>{t("tax.belgianRulesDesc")}</CardDescription>

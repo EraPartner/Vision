@@ -81,7 +81,7 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
 
                 {!filed && !hasFrozen && (
                     <DropdownMenuItem onSelect={() => freezeCalculation(year)} className="gap-2">
-                        <Snowflake className="h-3.5 w-3.5 text-sky-600" />
+                        <Snowflake className="h-3.5 w-3.5 text-info" />
                         {t('tax.yearActions.freeze')}
                     </DropdownMenuItem>
                 )}

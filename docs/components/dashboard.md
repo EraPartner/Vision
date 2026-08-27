@@ -3,9 +3,9 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-26
+updated: 2026-08-27
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image. 2026-08-27: its gain/loss card wash is the shared TrendHue motif.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/features/dashboard/"]
 ---
@@ -30,24 +30,29 @@ Dashboard statistics, transactions, both monthly-summary variants, and the filte
 
 Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] with:
 
-- **StatCard**: `glass-regular` surface with semi-transparent gradient icon tile background
+- **StatCard**: `glass-elevated` surface with a neutral material sheen and a semantic icon tile
+- **Chart sections**: bare title and description headers. Metric tiles keep semantic icons, while charts do not repeat their subject with decorative heading icons.
 - **Chart containers**: `premium-frame` + `micro-lift` for elevated depth
 - **Spacing**: Responsive via clamp-based token system
-- **Motion**: Hover states use micro-lift; chart entry uses Framer Motion stagger (if not reduced-motion)
+- **Motion**: Hover states use micro-lift. The full stat-card stagger and number reels run on the
+  first Dashboard visit in a browser session, then return visits stay static behind the normal
+  quiet route fade. Completing onboarding explicitly reserves one more full reveal so the motion
+  is visible after the modal handoff rather than being spent behind it. Reduced-motion users keep
+  static values throughout.
 
 ## Component List
 
-| Component | Description | File |
-|-----------|-------------|------|
-| StatCard | Shared summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/shared/StatCard.tsx\|StatCard.tsx]] |
-| NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) and a localized accessible income/spending proportion summary | [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
-| MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
-| CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
-| CashFlowForecastChart | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
-| ForecastInner | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel | [[apps/frontend/src/features/dashboard/ForecastInner.tsx\|ForecastInner.tsx]] |
-| ForecastInnerRolling | Rolling-window forecast rendering with preset duration chips and "today" reference line | [[apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]] |
-| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
-| BankBalancesWidget | Bank account balance cards and history chart with entity display names | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
+| Component                   | Description                                                                                                                                 | File                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| StatCard                    | Shared summary stat card with trend and gradient icon tile                                                                                  | [[apps/frontend/src/components/shared/StatCard.tsx\|StatCard.tsx]]                                        |
+| NetSummaryCard              | Hero net-worth summary with sparkline scrub (V9) and a localized accessible income/spending proportion summary                              | [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]]                           |
+| MonthlyTrendsChart          | Monthly income vs expenses bar chart (visx)                                                                                                 | [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]]                   |
+| CategoryPieChart            | Spending by category pie chart (visx)                                                                                                       | [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]]                       |
+| CashFlowForecastChart       | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]]             |
+| ForecastInner               | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel                                                       | [[apps/frontend/src/features/dashboard/ForecastInner.tsx\|ForecastInner.tsx]]                             |
+| ForecastInnerRolling        | Rolling-window forecast rendering with preset duration chips and "today" reference line                                                     | [[apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]]               |
+| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F)                                                              | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
+| BankBalancesWidget          | Bank account balance cards and history chart with entity display names                                                                      | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]]                   |
 
 ---
 
@@ -59,13 +64,13 @@ Displays a single statistic with optional trend indicator.
 
 ```typescript
 interface StatCardProps {
-  title: string;           // Card title
-  value: string;           // Main value to display
-  titleValue?: string;     // Full value for tooltip (e.g., "€5,234.56" when display is "€5.2K")
-  change?: string;         // Delta text (e.g., "+12%")
+  title: string; // Card title
+  value: string; // Main value to display
+  titleValue?: string; // Full value for tap/click/keyboard disclosure
+  change?: string; // Delta text (e.g., "+12%")
   changeType?: "positive" | "negative" | "neutral";
-  subtitle?: string;       // Subtitle when no change
-  icon: LucideIcon;        // Icon component
+  subtitle?: string; // Subtitle when no change
+  icon: LucideIcon; // Icon component
   trend?: "income" | "expense" | "up" | "down" | "neutral";
   /** Override the headline value colour class. Defaults to "text-foreground". Pass "text-primary" for featured-total cards. */
   valueClassName?: string;
@@ -75,21 +80,21 @@ interface StatCardProps {
 ### Usage
 
 ```tsx
-import { DollarSign } from "lucide-react";
+import { Banknote } from "lucide-react";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
 function MyCard() {
   const { formatCompact } = useChartCurrencyFormatter();
   const { display, full, isCompact } = formatCompact(5234.56);
-  
+
   return (
     <StatCard
       title="Total Income"
       value={display}
-      titleValue={isCompact ? full : undefined}  // Tooltip shows full value
+      titleValue={isCompact ? full : undefined} // Disclosure shows full value
       change="+12% vs last month"
       changeType="positive"
-      icon={DollarSign}
+      icon={Banknote}
       trend="income"
     />
   );
@@ -103,13 +108,11 @@ function MyCard() {
 - Animated hover effect (lift + shadow)
 - Color-coded change indicator via `DeltaPill`
 - Large formatted value via `RollingNumber` (odometer reels; plain span under `prefers-reduced-motion`)
-- **Compact currency display** — `formatCurrencyCompact` uses the locale's compact form only when `Intl.NumberFormat` emits a real compact-notation part and the result is shorter than the full value. Locale outputs that merely drop grouping or decimals stay fully formatted. Optional `titleValue` enables a tooltip with the full value when compaction is active (e.g., "€5.2K" with "€5,234.56" on hover).
+- **Compact currency display** — `formatCurrencyCompact` uses the locale's compact form only when `Intl.NumberFormat` emits a real compact-notation part and the result is shorter than the full value. Locale outputs that merely drop grouping or decimals stay fully formatted. Optional `titleValue` uses `CompactValueDisclosure` so the exact value is available by tap, click, and keyboard as well as to assistive technology.
 
-### Surface Consistency (April 2026)
+### Surface Consistency
 
-- Dashboard stat cards and chart wrapper cards are standardized on sanctioned premium surface recipes:
-  - `surface-elevated premium-frame micro-lift`
-- This replaces ad-hoc elevated class chains (`border-none shadow-lg ... hover:-translate-y-*`) for consistent depth/motion behavior.
+Dashboard stat cards use the shared interactive `Card` recipe with a `glass-elevated` surface. Chart wrapper cards use the standard `Card` surface. Depth, focus treatment, and reduced-motion behavior come from those shared primitives rather than page-local class recipes.
 
 Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/index.css]]
 
@@ -125,7 +128,8 @@ Hero card showing net balance trend for the current period. As of V9, the sparkl
 - **Pointer capture (`pointerdown`)**: enables drag scrubbing on desktop and touch (with `touch-action: pan-y` so vertical scroll is preserved).
 - **While scrubbing**: the hero `RollingNumber` value, its accent/destructive color tint, and the trend caption text all update to reflect the selected `netHistory[i]` entry; the caption swaps to the scrubbed month label.
 - **On leave / pointerup / pointercancel**: resets to the live current value.
-- **Card-level gradient and header icon**: deliberately stay on the live value (no strobing).
+- **Card-level gradient and header icon**: deliberately stay on the live value (no strobing). The
+  gradient is the shared `<TrendHue>` overlay rather than a local gain/loss wash.
 - **Out-of-range guard**: if a `netHistory` refetch causes the scrubbed index to become out of range, resets to live value.
 - **Reduced motion**: pointer events still fire; the `RollingNumber` switches to a plain span so there is no rolling animation during scrub.
 - **Keyboard (2026-08-09)**: the scrub div is focusable (`tabIndex={0}`, `role="group"` labelled with the trend caption) and uses the shared chart key map from `useChartKeyboardNav` ([[docs/components/charts#keyboard-navigation-2026-08-09-keyboardnavts|Chart Primitives — Keyboard Navigation]]): ←/→ step months, Home/End jump, Escape/blur reset to the live value. Only rendered (hence only focusable) when there are ≥2 history points. Tests: `apps/frontend/src/features/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
@@ -135,6 +139,7 @@ Hero card showing net balance trend for the current period. As of V9, the sparkl
 
 - `Sparkline` `activeIndex` prop (see [[docs/components/charts#sparkline|Chart Primitives — Sparkline]]).
 - `RollingNumber` for hero value display.
+- `TrendHue` for the live-value gain/loss card wash.
 - `useUpcomingPlannedPayments` is not consumed here (it backs `UpcomingPaymentsNotification` in AppLayout).
 
 Code links: [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/components/charts/Sparkline.tsx]]
@@ -181,18 +186,19 @@ interface MonthlyTrendsChartProps {
 
 ## CategoryPieChart
 
-Donut/pie chart showing spending distribution by category.
+Donut chart showing transaction-count distribution by category over the latest 50 active transactions.
 
 ### Props
 
 ```typescript
 interface CategoryPieChartProps {
   data: Array<{
-    category: string;
-    amount: number;
+    name: string;
+    value: number;
+    to?: string;
     color?: string;
   }>;
-  currency?: string;
+  formatValue?: (value: number) => string;
 }
 ```
 
@@ -201,11 +207,10 @@ interface CategoryPieChartProps {
 ```tsx
 <CategoryPieChart
   data={[
-    { category: "Food", amount: 450 },
-    { category: "Transport", amount: 200 },
-    { category: "Utilities", amount: 150 },
+    { name: "Food", value: 12, to: "/transactions?category_id=4" },
+    { name: "Transport", value: 8, to: "/transactions?category_id=7" },
   ]}
-  currency="EUR"
+  formatValue={String}
 />
 ```
 
@@ -215,6 +220,9 @@ interface CategoryPieChartProps {
 - Legend with category colors
 - Animated transitions
 - Custom colors per category
+- SVG slices with real hrefs. The top five categorized identities, uncategorised transactions, and the combined Other category-ID set retain exact filter destinations.
+
+Dashboard Income and Spending `StatCard`s link to the exact latest non-empty month used for their displayed values and carry the matching transaction type. Total Transactions links to the default transaction list. The shared `transactionDrillUrl` builder also serves Statistics pivot links and handles leap-month boundaries.
 
 ---
 
@@ -280,15 +288,16 @@ Multi-method cash flow forecast visualization with 8 statistical forecasting met
 
 ```typescript
 interface CashFlowForecastChartProps {
-  excludedCategoryIds?: number[];      // Categories to exclude from forecast
-  excludedRecipientIds?: number[];     // Recipients to exclude from forecast
-  currency?: string;                   // Target currency (default: EUR)
+  excludedCategoryIds?: number[]; // Categories to exclude from forecast
+  excludedRecipientIds?: number[]; // Recipients to exclude from forecast
+  currency?: string; // Target currency (default: EUR)
 }
 ```
 
 ### Features
 
 #### Month View (Default)
+
 - **Multi-method ensemble** — Displays all 8 forecasting methods: 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods (Parametric, Block Bootstrap) + 1 ensemble method (inverse-MSE weighted combination)
 - **Default visibility** — Shows 6 methods by default: 5 point methods + ensemble inv-MSE. Monte Carlo methods hidden by default but can be toggled on via pill controls
 - **View modes** — Tabs toggle between cumulative balance and daily net views
@@ -299,6 +308,7 @@ interface CashFlowForecastChartProps {
 - **Diagnostics button** — Icon button to open/close sheet
 
 #### Rolling Window View (Phase H + v2)
+
 - **Flexible window duration** — Preset chip row: 30, 60, 90, 180 days; selected window determines forecast horizon and historical lookback
 - **Full 8-method ensemble** — All 8 forecasting methods available (5 point + 2 MC + 1 ensemble), same as month view
 - **MC confidence bands** — Toggleable P25/P75 bands for Monte Carlo methods
@@ -309,6 +319,7 @@ interface CashFlowForecastChartProps {
 - **URL state persistence** — `forecastMode=rolling&rollingDays=90` saved to URL via `useSearchParams()` with replace history; users can bookmark and share preferred views
 
 #### Shared
+
 - **Tab segmented control** — `[Current month | Rolling window]` at top of card
 - **Self-contained data loading** — Internal query logic with params derived from props and local state
 
@@ -325,7 +336,9 @@ interface CashFlowForecastChartProps {
 ### Data Fetching
 
 #### Month View
+
 Component calls `getCashflowForecastMethods()` with parameters:
+
 - `currency` (from props)
 - `excluded_category_ids[]`, `excluded_recipient_ids[]` (from props)
 - `history_months` (default 36)
@@ -337,7 +350,9 @@ Component calls `getCashflowForecastMethods()` with parameters:
 Query refetches when `includePlanned` toggle changes or props change.
 
 #### Rolling Window View
+
 Component calls `getCashflowForecastRolling()` with parameters:
+
 - `currency` (from props)
 - `days_forward` (30, 60, 90, or 180 from preset chips, matching selected `rollingDays`)
 - `days_back` (same as `days_forward`, symmetric window)
@@ -350,6 +365,7 @@ Component calls `getCashflowForecastRolling()` with parameters:
 Query refetches when window preset changes (chip selection) or props change.
 
 **State Persistence:**
+
 - `forecastMode` and `rollingDays` stored in URL query params via `useSearchParams()`
 - Setters use `{ replace: true }` to prevent building browser history
 - Page initialization derives mode/rollingDays from URL on mount
@@ -357,6 +373,7 @@ Query refetches when window preset changes (chip selection) or props change.
 ### Default Visibility
 
 Component maintains two method ID constants:
+
 - `ALL_METHOD_IDS`: All 8 methods (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap)
 - `DEFAULT_VISIBLE_METHOD_IDS`: 6 methods (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse) — excludes Monte Carlo methods
 
@@ -388,9 +405,9 @@ Right-side diagnostics sheet panel for forecast accuracy metrics, persisted accu
 
 ```typescript
 interface CashFlowForecastDiagnosticsProps {
-  diagnostics: ForecastDiagnostics | null;  // Backtest results from API (Phase C)
-  open: boolean;                             // Sheet open state
-  onOpenChange: (open: boolean) => void;    // Callback when sheet open state changes
+  diagnostics: ForecastDiagnostics | null; // Backtest results from API (Phase C)
+  open: boolean; // Sheet open state
+  onOpenChange: (open: boolean) => void; // Callback when sheet open state changes
 }
 ```
 
@@ -431,16 +448,18 @@ const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   diagnostics={diagnostics}
   open={diagnosticsOpen}
   onOpenChange={setDiagnosticsOpen}
-/>
+/>;
 ```
 
 ### Data Sources
 
 **Phase C:** Receives `ForecastDiagnostics` object from parent chart's API response:
+
 - `history_months` — Training window (e.g., 36)
 - `backtest[]` — Per-method accuracy metrics (MAE, RMSE, MAPE) + per-month breakdown
 
 **Phase D:** Lazily fetches `getCashflowForecastAccuracy()` when sheet opens:
+
 - Per-method latest accuracy record with full history array (24 months)
 - Used to construct MAE sparklines for visual trend analysis
 - Persisted data allows tracking method stability across nightly batch updates
@@ -469,11 +488,11 @@ Rolling-window cash-flow forecast rendering component — displays actual transa
 
 ```typescript
 interface ForecastInnerRollingProps {
-  data: CashflowForecastRollingData;  // Merged daily entries from API
-  currency: string;                    // Display currency
-  isLoading: boolean;                  // Data loading state
-  daysForward: 30 | 60 | 90 | 180;    // Active window duration preset
-  onDaysForwardChange: (days: 30 | 60 | 90 | 180) => void;  // Preset changed
+  data: CashflowForecastRollingData; // Merged daily entries from API
+  currency: string; // Display currency
+  isLoading: boolean; // Data loading state
+  daysForward: 30 | 60 | 90 | 180; // Active window duration preset
+  onDaysForwardChange: (days: 30 | 60 | 90 | 180) => void; // Preset changed
 }
 ```
 
@@ -501,14 +520,14 @@ interface CashflowForecastRollingData {
   currency: string;
   days_forward: number;
   days_back: number;
-  today: string;          // YYYY-MM-DD
-  window_start: string;   // today - days_back
-  window_end: string;     // today + days_forward
+  today: string; // YYYY-MM-DD
+  window_start: string; // today - days_back
+  window_end: string; // today + days_forward
   merged: Array<{
-    date: string;                        // YYYY-MM-DD
-    net: number;                         // Daily net amount
-    cumulative: number;                  // Cumulative from window start
-    source: 'actual' | 'planned' | 'forecast';
+    date: string; // YYYY-MM-DD
+    net: number; // Daily net amount
+    cumulative: number; // Cumulative from window start
+    source: "actual" | "planned" | "forecast";
   }>;
 }
 ```
@@ -568,8 +587,8 @@ The component loads chart history and the net-position total from `GET /api/aggr
     bank_account: string;
     balance: number;
     transaction_count: number;
-    first_transaction: string;   // YYYY-MM-DD
-    last_transaction: string;    // YYYY-MM-DD
+    first_transaction: string; // YYYY-MM-DD
+    last_transaction: string; // YYYY-MM-DD
   }>;
   total_net_position: number;
   // One entry per calendar day over the last 12 months (daily since 2026-06-11).
@@ -586,10 +605,10 @@ The component loads chart history and the net-position total from `GET /api/aggr
 - Total net-position hero card
 - The net-position amount uses a solid foreground color so the full financial figure keeps consistent contrast.
 - Per-account balance cards (accounts with a current non-zero balance)
-- **Shared account-detail navigation:** Clicking a per-account card, or activating it with Enter or Space, opens `/accounts/:id`, the same account ledger used by the Accounts page.
+- **Shared account-detail navigation:** Each per-account card exposes its account name as a real `/accounts/:id` link. The card itself stays a container because exact-value, provenance, and drift disclosures are independent controls.
 - Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)
 - Chart series and legend labels use the matching account entity's `display_name`, falling back to its canonical `name`; an unmatched aggregation row keeps the shortened bank-account label. The aggregation `bank_account` remains the series and history key.
-- Currency formatting — large balances use locale-native compact notation (`formatCurrencyCompact`) only when it genuinely abbreviates the value; otherwise they retain full grouping and decimals. Compacted values expose the full value in a `title` tooltip.
+- Currency formatting — large balances use locale-native compact notation (`formatCurrencyCompact`) only when it genuinely abbreviates the value; otherwise they retain full grouping and decimals. Compacted values expose the full value through the shared touch-accessible disclosure. Truncated account names, provenance, and drift explanations use the same disclosure inside the account link surface.
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 - `premium-frame` treatment on the net-position and per-account cards for consistent visual hierarchy
 
@@ -657,12 +676,12 @@ const DASHBOARD_WIDGETS = [
 
 function Dashboard() {
   const { isVisible, setWidgetVisible } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
-  
+
   return (
     <>
       {isVisible('statCards') && <StatCard ... />}
       {isVisible('monthlyTrends') && <MonthlyTrendsChart ... />}
-      
+
       <WidgetVisibilityDialog
         widgets={DASHBOARD_WIDGETS}
         visibility={isVisible}
@@ -692,16 +711,16 @@ function Dashboard() {
 
 Dashboard Page (`DashboardPage.tsx`) uses `useMemo` to stabilize frequently-recomputed values and prevent unnecessary child re-renders:
 
-| Value | Dependencies | Purpose |
-|-------|--------------|---------|
-| `integerLocaleFormatter` | `locale` | Reusable `Intl.NumberFormat` for transaction count formatting |
-| `DASHBOARD_WIDGETS` | `t` (translation function) | Widget definition array with i18n labels |
-| `filteredExclusionParams` | `excludedCategoryIds`, `excludedRecipientIds` | Stable query params object for API calls — values now sourced from `useExcludedIds('dashboard')` (2026-05-29) |
-| `transactions` | Transaction query key | Memoized transaction list result |
-| `monthlyData` | Monthly summary query keys | Memoized filtered/unfiltered monthly summaries |
-| `categoryBreakdown` | Category query key | Memoized category spending breakdown |
-| `categoryData` | `categoryBreakdown` | Processed category data for chart rendering |
-| `recentTransactionsSource` | `recentFilteredTransactions` | Memoized recent transaction array |
+| Value                      | Dependencies                                  | Purpose                                                                                                       |
+| -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `integerLocaleFormatter`   | `locale`                                      | Reusable `Intl.NumberFormat` for transaction count formatting                                                 |
+| `DASHBOARD_WIDGETS`        | `t` (translation function)                    | Widget definition array with i18n labels                                                                      |
+| `filteredExclusionParams`  | `excludedCategoryIds`, `excludedRecipientIds` | Stable query params object for API calls — values now sourced from `useExcludedIds('dashboard')` (2026-05-29) |
+| `transactions`             | Transaction query key                         | Memoized transaction list result                                                                              |
+| `monthlyData`              | Monthly summary query keys                    | Memoized filtered/unfiltered monthly summaries                                                                |
+| `categoryBreakdown`        | Category query key                            | Memoized category spending breakdown                                                                          |
+| `categoryData`             | `categoryBreakdown`                           | Processed category data for chart rendering                                                                   |
+| `recentTransactionsSource` | `recentFilteredTransactions`                  | Memoized recent transaction array                                                                             |
 
 > [!info] Memoization Strategy
 > These `useMemo` wraps replace previous inline-IIFE patterns and unstable object/array literals. By memoizing derived data and stable references, child components (charts, stat cards) remain stable across exclusion toggling and settings changes, reducing unnecessary chart re-renders and improving perceived responsiveness.
@@ -721,14 +740,15 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 **Phase 2 Update:** Dashboard stat cards now fetch from `/api/aggregations/monthly-summary`, a server-computed aggregation endpoint with materialized-view/live source distinction. Category and recipient exclusions are applied server-side; no client-side re-filtering. The hook resolves hidden category IDs (if enabled) and passes `excluded_category_ids[]` and `excluded_recipient_ids[]` as query parameters.
 
 **Source Heuristic:**
+
 - `meta.source === 'mv'` when no exclusions (fast, from materialized view)
 - `meta.source === 'live'` when exclusions are applied (dynamic scan, current data)
 
 ### Related Hooks
 
-- `useFilteredDashboardStats()` - Fetches `/api/aggregations/monthly-summary` with server-side exclusions (Phase 2)
+- `useFilteredDashboardStats()` - Fetches `/api/aggregations/monthly-summary` with server-side exclusions and returns the `latestPeriod` used by linked income/spending cards.
 - `useExcludedIds('dashboard')` — Single source of truth for excluded category/recipient IDs; consumed by `useFilteredDashboardStats` and `DashboardPage` (2026-05-29) — see [[docs/components/hooks#useexcludedids-2026-05-29|Custom Hooks — useExcludedIds]]
-- `useUpcomingPlannedPayments()` — Shared hook for "due in next 7 days" payments + module-level dismissed-ID store; backs `UpcomingPaymentsNotification` banner (shown on all pages via AppLayout) — see [[docs/components/hooks#useupcomingplannedpayments-v11|Custom Hooks — useUpcomingPlannedPayments]]
+- `useUpcomingPlannedPayments()` — Shared hook for "due in next 7 days" payments + module-level dismissed-ID store; AppLayout keeps its native badge effect active on all routes while the visible `UpcomingPaymentsNotification` is dashboard-only — see [[docs/components/hooks#useupcomingplannedpayments-v11|Custom Hooks — useUpcomingPlannedPayments]]
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
 

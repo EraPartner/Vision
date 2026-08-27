@@ -14,7 +14,13 @@ import type { InvestmentSummary } from "@/types/portfolio";
 // same stand-in VirtualDataTable's tests use, so these keep asserting the row
 // markup and behaviour rather than the virtual window.
 vi.mock("@tanstack/react-virtual", () => ({
-    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    useVirtualizer: ({
+        count,
+        estimateSize,
+    }: {
+        count: number;
+        estimateSize: () => number;
+    }) => ({
         getVirtualItems: () =>
             Array.from({ length: count }, (_, i) => ({
                 key: i,
@@ -89,9 +95,7 @@ afterEach(() => {
 describe("InvestmentDetailDialog", () => {
     it("renders trigger button (Eye/Details button)", async () => {
         // Arrange + Act
-        renderWithApp(
-            <InvestmentDetailDialog investment={INVESTMENT} />,
-        );
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
         // Assert — default trigger is an Eye icon "Details" button (invDetail.trigger = "Details")
         const trigger = await screen.findByRole("button", { name: /details/i });
@@ -101,12 +105,12 @@ describe("InvestmentDetailDialog", () => {
     it("opens dialog on trigger click and shows investment name", async () => {
         // Arrange
         const user = userEvent.setup();
-        renderWithApp(
-            <InvestmentDetailDialog investment={INVESTMENT} />,
-        );
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
 
         // Assert — dialog is open and investment name appears inside it
         const dialog = await screen.findByRole("dialog");
@@ -114,17 +118,23 @@ describe("InvestmentDetailDialog", () => {
         // The name appears in both the dialog title and the sr-only description; use getAllByText
         const nameMatches = screen.getAllByText("MSCI World ETF");
         expect(nameMatches.length).toBeGreaterThan(0);
+        expect(
+            screen.getByRole("link", { name: "MSCI World ETF" }),
+        ).toHaveAttribute(
+            "href",
+            "/research/market?symbol=IWDA&investmentId=1",
+        );
     });
 
     it("shows Performance tab content by default", async () => {
         // Arrange
         const user = userEvent.setup();
-        renderWithApp(
-            <InvestmentDetailDialog investment={INVESTMENT} />,
-        );
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
         // Assert — "Performance" tab is selected by default (tab panel visible)
@@ -137,15 +147,17 @@ describe("InvestmentDetailDialog", () => {
     it("switching to Transactions tab shows transaction list", async () => {
         // Arrange
         const user = userEvent.setup();
-        renderWithApp(
-            <InvestmentDetailDialog investment={INVESTMENT} />,
-        );
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
-        const txnTab = await screen.findByRole("tab", { name: /transactions/i });
+        const txnTab = await screen.findByRole("tab", {
+            name: /transactions/i,
+        });
         await user.click(txnTab);
 
         // Assert — transaction note text appears in the list
@@ -155,12 +167,12 @@ describe("InvestmentDetailDialog", () => {
     it("close button closes dialog", async () => {
         // Arrange
         const user = userEvent.setup();
-        renderWithApp(
-            <InvestmentDetailDialog investment={INVESTMENT} />,
-        );
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
         // DialogContent provides a Close button — accessible via its sr-only "Close" label
@@ -187,7 +199,9 @@ describe("InvestmentDetailDialog", () => {
         );
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
         // The add-transaction button renders the translated "Add Transaction" label.
@@ -214,7 +228,9 @@ describe("InvestmentDetailDialog", () => {
         );
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
         // common.edit = "Edit"
@@ -239,13 +255,19 @@ describe("InvestmentDetailDialog", () => {
         );
 
         // Act — navigate to Transactions tab first
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
-        const txnTab = await screen.findByRole("tab", { name: /transactions/i });
+        const txnTab = await screen.findByRole("tab", {
+            name: /transactions/i,
+        });
         await user.click(txnTab);
 
-        const editBtn = await screen.findByRole("button", { name: /edit transaction/i });
+        const editBtn = await screen.findByRole("button", {
+            name: /edit transaction/i,
+        });
         await user.click(editBtn);
 
         // Assert
@@ -255,9 +277,8 @@ describe("InvestmentDetailDialog", () => {
     it("delete transaction shows confirmation, then calls DELETE API on confirm", async () => {
         // Arrange
         server.use(
-            http.delete(
-                `${API_BASE}/api/investments/transactions/:id`,
-                () => ok({ message: "deleted" }),
+            http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
+                ok({ message: "deleted" }),
             ),
         );
         const user = userEvent.setup();
@@ -271,13 +292,19 @@ describe("InvestmentDetailDialog", () => {
         );
 
         // Act — open dialog, switch to Transactions tab
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
-        const txnTab = await screen.findByRole("tab", { name: /transactions/i });
+        const txnTab = await screen.findByRole("tab", {
+            name: /transactions/i,
+        });
         await user.click(txnTab);
 
-        const deleteBtn = await screen.findByRole("button", { name: /delete transaction/i });
+        const deleteBtn = await screen.findByRole("button", {
+            name: /delete transaction/i,
+        });
         await user.click(deleteBtn);
 
         // Assert — confirmation AlertDialog appears (useConfirmDialog renders AlertDialog)
@@ -285,7 +312,9 @@ describe("InvestmentDetailDialog", () => {
         expect(confirmDialog).toBeInTheDocument();
 
         // invDetail.delete.confirm = "Delete"
-        const confirmBtn = await screen.findByRole("button", { name: /^delete$/i });
+        const confirmBtn = await screen.findByRole("button", {
+            name: /^delete$/i,
+        });
         await user.click(confirmBtn);
 
         // Assert — AlertDialog closes after confirmation
@@ -306,10 +335,14 @@ describe("InvestmentDetailDialog", () => {
                 onEditTransaction={vi.fn()}
             />,
         );
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
@@ -322,7 +355,9 @@ describe("InvestmentDetailDialog", () => {
                 onEditTransaction={vi.fn()}
             />,
         );
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
@@ -336,10 +371,16 @@ describe("InvestmentDetailDialog", () => {
     // and driven by its state, which is what these pin.
 
     /** Open the detail dialog, then its embedded Add-transaction dialog. */
-    async function openNestedAddDialog(user: ReturnType<typeof userEvent.setup>) {
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+    async function openNestedAddDialog(
+        user: ReturnType<typeof userEvent.setup>,
+    ) {
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
-        const opener = await screen.findByRole("button", { name: /^add transaction$/i });
+        const opener = await screen.findByRole("button", {
+            name: /^add transaction$/i,
+        });
         await user.click(opener);
         // addPortTxn.note = "Optional note..." — a field of the nested dialog only.
         return { opener, note: await screen.findByLabelText(/optional note/i) };
@@ -356,10 +397,14 @@ describe("InvestmentDetailDialog", () => {
         // deliberate exit (no Cancel, no submit), so nothing may be reset.
         await user.keyboard("{Escape}");
         await waitFor(() =>
-            expect(screen.queryByLabelText(/optional note/i)).not.toBeInTheDocument(),
+            expect(
+                screen.queryByLabelText(/optional note/i),
+            ).not.toBeInTheDocument(),
         );
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
 
         // Reopen both: the draft is still there.
         const reopened = await openNestedAddDialog(user);
@@ -370,20 +415,32 @@ describe("InvestmentDetailDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
 
         // These controls used to be the nested dialogs' own DialogTriggers.
         await user.click(screen.getByRole("button", { name: /^edit$/i }));
-        expect((await screen.findAllByText("Edit Investment")).length).toBeGreaterThan(0);
+        expect(
+            await screen.findByRole("dialog", { name: /edit investment/i }),
+        ).toBeInTheDocument();
         await user.keyboard("{Escape}");
         await waitFor(() =>
-            expect(screen.queryByText("Edit Investment")).not.toBeInTheDocument(),
+            expect(
+                screen.queryByRole("dialog", { name: /edit investment/i }),
+            ).not.toBeInTheDocument(),
         );
 
-        await user.click(await screen.findByRole("tab", { name: /transactions/i }));
-        await user.click(await screen.findByRole("button", { name: /edit transaction/i }));
-        expect((await screen.findAllByText("Edit Transaction")).length).toBeGreaterThan(0);
+        await user.click(
+            await screen.findByRole("tab", { name: /transactions/i }),
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /edit transaction/i }),
+        );
+        expect(
+            await screen.findByRole("dialog", { name: /edit transaction/i }),
+        ).toBeInTheDocument();
     });
 
     it("returns focus to the control that opened a nested dialog", async () => {
@@ -403,9 +460,8 @@ describe("InvestmentDetailDialog", () => {
             http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
                 ok({ items: [TXN], total: 1 }),
             ),
-            http.delete(
-                `${API_BASE}/api/investments/transactions/:id`,
-                () => err(500, "delete failed"),
+            http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
+                err(500, "delete failed"),
             ),
         );
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -419,17 +475,25 @@ describe("InvestmentDetailDialog", () => {
             />,
         );
 
-        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
         await screen.findByRole("dialog");
-        const txnTab = await screen.findByRole("tab", { name: /transactions/i });
+        const txnTab = await screen.findByRole("tab", {
+            name: /transactions/i,
+        });
         await user.click(txnTab);
 
-        const deleteBtn = await screen.findByRole("button", { name: /delete transaction/i });
+        const deleteBtn = await screen.findByRole("button", {
+            name: /delete transaction/i,
+        });
         await user.click(deleteBtn);
 
         const confirmDialog = await screen.findByRole("alertdialog");
         expect(confirmDialog).toBeInTheDocument();
-        const confirmBtn = await screen.findByRole("button", { name: /^delete$/i });
+        const confirmBtn = await screen.findByRole("button", {
+            name: /^delete$/i,
+        });
         await user.click(confirmBtn);
 
         // Investment dialog stays open on error

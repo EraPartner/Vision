@@ -6,8 +6,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
+import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { Link } from "react-router";
 
 /**
  * The app's shared stat tile. Every KPI/summary card composes this — page-specific
@@ -29,20 +31,10 @@ const statHeaderVariants = cva(
     },
 );
 
-const statTitleVariants = cva("text-muted-foreground", {
-    variants: {
-        size: {
-            default: "text-sm font-semibold",
-            compact: "text-xs font-medium",
-        },
-    },
-    defaultVariants: { size: "default" },
-});
-
 const statChipVariants = cva("flex items-center justify-center shrink-0", {
     variants: {
         size: {
-            default: "h-10 w-10 rounded-xl shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]",
+            default: "h-10 w-10 rounded-xl icon-tile-glow",
             compact: "h-6 w-6 rounded-md",
         },
     },
@@ -73,6 +65,8 @@ type StatCardSize = NonNullable<VariantProps<typeof statValueVariants>["size"]>;
 
 interface StatCardProps {
     title: string;
+    /** Optional drill-down destination exposed as a full-surface native link. */
+    to?: string;
     /** Formatted display value. Strings get the odometer treatment; nodes (e.g. <Money/>) render as-is. */
     value?: ReactNode;
     /** Raw numeric value for the count-up animation. If omitted, value is shown statically. */
@@ -85,7 +79,7 @@ interface StatCardProps {
     trend?: "income" | "expense" | "up" | "down" | "neutral";
     /** Format function that turns numeric → display string (e.g. currency formatter) */
     formatValue?: (n: number) => string;
-    /** Full unabbreviated value shown as tooltip when the displayed value is compact */
+    /** Full unabbreviated value shown in a tap/click/keyboard disclosure. */
     titleValue?: string;
     /**
      * Whether string values get the odometer (digit-reel) treatment. Defaults to
@@ -104,68 +98,144 @@ interface StatCardProps {
 }
 
 export function StatCard({
-    title, value, numericValue, change, changeType = "neutral", subtitle,
-    icon: Icon, trend = "neutral", formatValue, titleValue, odometer = true,
-    valueClassName = "text-foreground", size = "default", loading = false,
-    className, children,
+    title,
+    to,
+    value,
+    numericValue,
+    change,
+    changeType = "neutral",
+    subtitle,
+    icon: Icon,
+    trend = "neutral",
+    formatValue,
+    titleValue,
+    odometer = true,
+    valueClassName = "text-foreground",
+    size = "default",
+    loading = false,
+    className,
+    children,
 }: StatCardProps) {
-    const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
+    const normalisedTrend =
+        trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
-    const tone: TrendTone = normalisedTrend === "income" ? "gain" : normalisedTrend === "expense" ? "loss" : "neutral";
+    const tone: TrendTone =
+        normalisedTrend === "income"
+            ? "gain"
+            : normalisedTrend === "expense"
+              ? "loss"
+              : "neutral";
 
-    const iconBg = {
-        income: "bg-gradient-to-br from-gain/20 to-gain/10 text-gain",
-        expense: "bg-gradient-to-br from-loss/20 to-loss/10 text-loss",
-        neutral: "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
-    }[normalisedTrend] ?? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
+    const iconBg =
+        {
+            income: "bg-gradient-to-br from-gain/20 to-gain/10 text-gain",
+            expense: "bg-gradient-to-br from-loss/20 to-loss/10 text-loss",
+            neutral:
+                "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
+        }[normalisedTrend] ??
+        "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
 
-    const displayValue = numericValue !== undefined && formatValue
-        ? formatValue(numericValue)
-        : value;
+    const displayValue =
+        numericValue !== undefined && formatValue
+            ? formatValue(numericValue)
+            : value;
 
     return (
-        <Card variant="interactive" className={cn("glass-elevated premium-frame group relative overflow-hidden h-full", className)}>
+        <Card
+            variant="interactive"
+            className={cn(
+                "glass-elevated group relative overflow-hidden h-full",
+                className,
+            )}
+        >
+            {to && (
+                <Link
+                    to={to}
+                    aria-label={title}
+                    className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                />
+            )}
             <TrendHue tone={tone} />
             <CardSheen animated />
-            <CardHeader className={statHeaderVariants({ size })}>
-                <CardTitle className={statTitleVariants({ size })}>{title}</CardTitle>
-                {Icon && (
-                    <div className={cn(statChipVariants({ size }), iconBg)}>
-                        <Icon className={size === "compact" ? "h-3.5 w-3.5" : "h-5 w-5"} />
-                    </div>
-                )}
-            </CardHeader>
-            <CardContent className={statContentVariants({ size })}>
-                {/* aria-busy, not role="status": stat cards come in rows of
+            <div className={cn(to && "pointer-events-none relative z-20")}>
+                <CardHeader className={statHeaderVariants({ size })}>
+                    <CardTitle variant="label">{title}</CardTitle>
+                    {Icon && (
+                        <div className={cn(statChipVariants({ size }), iconBg)}>
+                            <Icon
+                                className={
+                                    size === "compact"
+                                        ? "h-3.5 w-3.5"
+                                        : "h-5 w-5"
+                                }
+                            />
+                        </div>
+                    )}
+                </CardHeader>
+                <CardContent className={statContentVariants({ size })}>
+                    {/* aria-busy, not role="status": stat cards come in rows of
                     four that all flip to `loading` together, and one live
                     region per card would announce "Loading" four times. The
                     page's stat grid carries the useLoadingSurfaceProps()
                     props and announces
                     once for the row. */}
-                <div aria-busy={loading || undefined} className={cn(statValueVariants({ size }), valueClassName)}>
-                    {loading ? (
-                        <Skeleton className={size === "compact" ? "h-6 w-20" : "h-9 w-28"} />
-                    ) : typeof displayValue === "string" ? (
-                        <span title={titleValue}>
-                            {odometer ? <RollingNumber value={displayValue} /> : displayValue}
-                        </span>
-                    ) : (
-                        <span title={titleValue}>{displayValue}</span>
-                    )}
-                </div>
-                {change && (
-                    <div className={size === "compact" ? "mt-1" : "mt-2"}>
-                        <DeltaPill
-                            value={changeType === "positive" ? 1 : changeType === "negative" ? -1 : 0}
-                            label={change}
-                        />
+                    <div
+                        aria-busy={loading || undefined}
+                        className={cn(
+                            statValueVariants({ size }),
+                            valueClassName,
+                        )}
+                    >
+                        {loading ? (
+                            <Skeleton
+                                className={
+                                    size === "compact" ? "h-6 w-20" : "h-9 w-28"
+                                }
+                            />
+                        ) : (
+                            <CompactValueDisclosure
+                                fullValue={titleValue}
+                                className={
+                                    to ? "pointer-events-auto" : undefined
+                                }
+                                display={
+                                    typeof displayValue === "string" &&
+                                    odometer ? (
+                                        <RollingNumber value={displayValue} />
+                                    ) : (
+                                        displayValue
+                                    )
+                                }
+                            />
+                        )}
                     </div>
-                )}
-                {subtitle && (
-                    <p className={cn("text-xs text-muted-foreground", size === "compact" ? "mt-0.5" : "mt-2")}>{subtitle}</p>
-                )}
-                {children}
-            </CardContent>
+                    {change && (
+                        <div className={size === "compact" ? "mt-1" : "mt-2"}>
+                            <DeltaPill
+                                value={
+                                    changeType === "positive"
+                                        ? 1
+                                        : changeType === "negative"
+                                          ? -1
+                                          : 0
+                                }
+                                label={change}
+                            />
+                        </div>
+                    )}
+                    {subtitle && (
+                        <p
+                            className={cn(
+                                "text-xs text-muted-foreground",
+                                size === "compact" ? "mt-0.5" : "mt-2",
+                            )}
+                        >
+                            {subtitle}
+                        </p>
+                    )}
+                    {children}
+                </CardContent>
+            </div>
         </Card>
     );
 }

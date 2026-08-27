@@ -25,7 +25,12 @@ const EXPENSE: PlannedPayment = {
     created_at: "2025-01-01T00:00:00.000Z",
 };
 
-const INCOME: PlannedPayment = { ...EXPENSE, id: 2, name: "Salary", amount: 2500 };
+const INCOME: PlannedPayment = {
+    ...EXPENSE,
+    id: 2,
+    name: "Salary",
+    amount: 2500,
+};
 
 const LOAN: PlannedPayment = {
     ...EXPENSE,
@@ -50,9 +55,14 @@ const LOAN: PlannedPayment = {
 async function renderForm(initial?: PlannedPayment) {
     const onSubmit = vi.fn();
     renderWithApp(
-        <PlannedPaymentForm open onOpenChange={vi.fn()} onSubmit={onSubmit} initial={initial} />,
+        <PlannedPaymentForm
+            open
+            onOpenChange={vi.fn()}
+            onSubmit={onSubmit}
+            initial={initial}
+        />,
     );
-    await screen.findByText(initial ? "Edit Payment" : "New Planned Payment");
+    await screen.findByText(initial ? "Edit payment" : "New planned payment");
     return { onSubmit };
 }
 
@@ -73,7 +83,10 @@ function submitButton() {
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText("Name *"), "Rent");
     await user.click(screen.getByLabelText(/bank account/i));
-    await user.type(screen.getByPlaceholderText(/search or type a new account/i), "Main");
+    await user.type(
+        screen.getByPlaceholderText(/search or type a new account/i),
+        "Main",
+    );
     await user.click(await screen.findByText(/create account "Main"/i));
 }
 
@@ -199,10 +212,15 @@ describe("PlannedPaymentForm — amount direction", () => {
 
         await fillRequired(user);
         await user.type(amountInput(), "150");
-        await user.type(screen.getByLabelText(/notes/i), "line one{Enter}line two");
+        await user.type(
+            screen.getByLabelText(/notes/i),
+            "line one{Enter}line two",
+        );
 
         expect(onSubmit).not.toHaveBeenCalled();
-        expect(screen.getByLabelText(/notes/i)).toHaveValue("line one\nline two");
+        expect(screen.getByLabelText(/notes/i)).toHaveValue(
+            "line one\nline two",
+        );
     });
 
     it("cancel closes without submitting", async () => {
@@ -210,9 +228,13 @@ describe("PlannedPaymentForm — amount direction", () => {
         const onSubmit = vi.fn();
         const onOpenChange = vi.fn();
         renderWithApp(
-            <PlannedPaymentForm open onOpenChange={onOpenChange} onSubmit={onSubmit} />,
+            <PlannedPaymentForm
+                open
+                onOpenChange={onOpenChange}
+                onSubmit={onSubmit}
+            />,
         );
-        await screen.findByText("New Planned Payment");
+        await screen.findByText("New planned payment");
 
         await user.type(amountInput(), "150");
         await user.click(screen.getByRole("button", { name: /cancel/i }));
@@ -224,9 +246,14 @@ describe("PlannedPaymentForm — amount direction", () => {
     it("disables submit while the caller's save is in flight", async () => {
         const onSubmit = vi.fn();
         renderWithApp(
-            <PlannedPaymentForm open onOpenChange={vi.fn()} onSubmit={onSubmit} loading />,
+            <PlannedPaymentForm
+                open
+                onOpenChange={vi.fn()}
+                onSubmit={onSubmit}
+                loading
+            />,
         );
-        await screen.findByText("New Planned Payment");
+        await screen.findByText("New planned payment");
 
         expect(submitButton()).toBeDisabled();
     });

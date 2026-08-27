@@ -16,7 +16,7 @@ import {
 
 export interface ChartCurrencyFormatter {
   formatCurrency: (val: number) => string;
-  formatCompact: (val: number) => CompactFormatResult;
+  formatCompact: (val: number, signed?: boolean) => CompactFormatResult;
   formatAxisCompact: (val: number) => string;
   currencySymbol: string;
   locale: string;
@@ -55,7 +55,7 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
   );
 
   const formatCompact = useCallback(
-    (val: number) => formatCurrencyCompact(val, currency, locale, fractionDigits),
+    (val: number, signed = false) => formatCurrencyCompact(val, currency, locale, fractionDigits, signed),
     [currency, locale, fractionDigits],
   );
 
