@@ -82,20 +82,20 @@ Egress is enforced in two layers by the root entrypoint on every start:
    IPv6 is default-deny; denied egress is rate-limited-logged
    (`dmesg | grep egress-deny`).
 
-Allowlist (in `allowlist.txt`, copied to `/etc/squid/allowlist.txt`; `squid.conf`
-only *references* it): Anthropic + Claude Code, `registry.npmjs.org`, GitHub,
-PyPI, Yahoo Finance, `*.visualstudio.com`. **No Debian/PostgreSQL apt hosts are
-allowlisted** — `apt-get` does not work inside the container, which is why the
-Playwright system-deps install fails here (see Known limitations).
+Allowlist (generated as `allowlist.txt`, copied to `/etc/squid/allowlist.txt`;
+`squid.conf` only *references* it): Anthropic, Claude Code, OpenAI Codex, npm,
+GitHub, PyPI, Yahoo Finance, safe-chain, and Context7. **No Debian/PostgreSQL apt
+hosts are allowlisted**, so `apt-get` does not work inside the container.
 
 > **Everything routes through the proxy.** `HTTP(S)_PROXY` is set, and
 > `NODE_USE_ENV_PROXY=1` makes Node ≥24's global `fetch` honor it too — so
 > `claude`, `bun`, `npm`, `git`, `gh`, `pip`, and app `fetch` all egress via
 > squid. The backend's yahoo-finance calls **work inside the container** now
-> (those hosts are allowlisted). To change the allowlist, edit `allowlist.txt`
-> and **rebuild** (it's baked into the image by `COPY allowlist.txt
-> /etc/squid/allowlist.txt`). The launcher warns when a running container's copy
-> has drifted from the file in the workspace.
+> (those hosts are allowlisted). To change Vision's additions, edit
+> `.devcontainer/allowlist.extra.txt`, regenerate the effective file with
+> `LockBox/sync.sh`, and **rebuild** (the result is baked into the image by
+> `COPY allowlist.txt /etc/squid/allowlist.txt`). The launcher warns when a
+> running container's copy has drifted from the file in the workspace.
 
 squid is supervised by the entrypoint: if it crashes, it's restarted
 (egress stays denied while down — fail-closed).
@@ -364,15 +364,18 @@ set up.
 - **App `fetch` to non-allowlisted hosts** — works for allowlisted hosts
   via `NODE_USE_ENV_PROXY=1` (e.g. yahoo-finance reaches `*.finance.yahoo.com`
   through the proxy); anything not in `allowlist.txt` is denied.
-- **Puppeteer (PDF rendering)** — Chromium isn't preinstalled. If you
-  need PDF rendering in dev, run `bunx playwright install chromium --with-deps`
-  once and set `PUPPETEER_EXECUTABLE_PATH`.
+- **Browser workloads (Playwright and Puppeteer)** — Chromium and its system
+  libraries are not installed, and their download hosts are not allowlisted.
+  Run E2E tests and PDF-rendering development on the host. The scheduled E2E
+  workflow remains the supported Linux browser environment.
 - **Electron `.dmg` build (`bun run dist`)** — needs macOS native tools;
   run on the host, not in this container.
-- **Changing the egress allowlist** — edit `allowlist.txt` and rebuild
-  (it's baked into the image, not read from the workspace).
-- **Host Ollama** — blocked; add the host's address to `allowlist.txt` and
-  rebuild if you want it through.
+- **Changing the egress allowlist** — edit `.devcontainer/allowlist.extra.txt`,
+  regenerate with `LockBox/sync.sh`, and rebuild (the generated file is baked
+  into the image, not read live from the workspace).
+- **Host Ollama** — blocked; add the host's address to
+  `.devcontainer/allowlist.extra.txt`, regenerate, and rebuild if you want it
+  through.
 
 ## Verified isolation + functionality
 

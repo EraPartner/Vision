@@ -2,7 +2,7 @@
   "name": "@vision/shared-utils",
   "private": true,
   "version": "0.1.0",
-  "description": "Pure utility helpers (money, slugify, portfolio) shared by the Vision backend and frontend to avoid hand-mirrored drift.",
+  "description": "Shared cross-workspace financial calculations and utility helpers for the Vision backend and frontend.",
   "type": "module",
   "main": "./src/index.js",
   "exports": {

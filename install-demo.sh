@@ -55,7 +55,7 @@ cd "$ELECTRON_DIR"
 # --frozen-lockfile: see install.sh — build from the committed bun.lock.
 bun install --frozen-lockfile
 echo "==> Generating locales..."
-GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js
+node ../../scripts/generate-locales.js
 echo "==> Building $APP_NAME.app (takes a couple of minutes)..."
 ./node_modules/.bin/electron-builder --config electron-builder-demo.json --mac --arm64
 

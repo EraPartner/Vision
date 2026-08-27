@@ -55,8 +55,8 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: release tag '$TAG' must be vMAJOR.MINOR.PATCH (e.g. v1.2.3)"
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "ERROR: release tag '$TAG' must be canonical vMAJOR.MINOR.PATCH (e.g. v1.2.3; no leading zeros)"
             exit 1
           fi
           echo "Release tag OK: $TAG"
