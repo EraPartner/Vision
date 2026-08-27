@@ -1,28 +1,35 @@
 :root {
-  --bg: #0f1115;
-  --surface: #171a21;
-  --border: #2a2f3a;
-  --text: #e6e8ee;
-  --text-muted: #9aa3b2;
-  --accent: #5b8cff;
-  --accent-hover: #779eff;
+  color-scheme: dark;
+  --theme-base: 158 45% 6%;
+  --theme-glow: 158 64% 52%;
+  --theme-foreground: 158 24% 88%;
+  --champagne: 43 71% 66%;
+  --surface: hsl(var(--theme-foreground) / 0.055);
+  --border: hsl(var(--theme-foreground) / 0.15);
+  --text: hsl(var(--theme-foreground));
+  --text-muted: hsl(var(--theme-foreground) / 0.68);
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f7f8fa;
-    --surface: #ffffff;
-    --border: #e2e6ee;
-    --text: #1a1d24;
-    --text-muted: #5c6777;
-    --accent: #2c5cff;
-    --accent-hover: #1e4ae0;
-  }
-}
-html, body { height: 100%; margin: 0; }
+html,
 body {
-  background: var(--bg);
+  height: 100%;
+  margin: 0;
+}
+body {
+  background:
+    radial-gradient(
+      85% 60% at 50% 35%,
+      hsl(var(--theme-glow) / 0.18),
+      transparent 70%
+    ),
+    radial-gradient(
+      45% 35% at 76% 78%,
+      hsl(var(--champagne) / 0.08),
+      transparent 75%
+    ),
+    hsl(var(--theme-base));
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   display: grid;
   place-items: center;
   -webkit-font-smoothing: antialiased;
@@ -33,7 +40,8 @@ main {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
 }
 /* Brand mark — see the note on the inline <svg> in error.html. */
 .mark {
@@ -52,7 +60,11 @@ p {
   line-height: 1.55;
   margin: 0 0 1.5rem;
 }
-.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
 button {
   appearance: none;
   border: 1px solid var(--border);
@@ -62,13 +74,26 @@ button {
   border-radius: 8px;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
-button:hover { background: var(--border); }
+button:hover {
+  background: var(--border);
+}
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--theme-glow)),
+    hsl(var(--champagne))
+  );
+  border-color: hsl(var(--theme-glow) / 0.75);
+  color: hsl(var(--theme-base));
 }
-button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary:hover {
+  filter: brightness(1.08);
+}
+button:focus-visible {
+  outline: 2px solid hsl(var(--theme-glow));
+  outline-offset: 2px;
+}

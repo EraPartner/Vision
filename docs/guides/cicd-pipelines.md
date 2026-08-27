@@ -4,10 +4,56 @@ type: guide
 status: active
 date: 2026-04-28
 updated: 2026-08-27
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, auto-merge, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
+tags:
+  [
+    guide,
+    cicd,
+    github-actions,
+    testing,
+    linting,
+    docker,
+    release,
+    packaging,
+    automation,
+    auto-merge,
+    april-2026,
+    may-2026,
+    security,
+    secrets-scan,
+    deps-audit,
+    trivy-scan,
+    quality-gate,
+    verify-compose-sync,
+    verify-destructive-migrations,
+    ci-complete,
+    live-api-contracts,
+    branch-protection,
+  ]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, native pull-request auto-merge, supply chain security scanning, quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
-aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
-related_code: [".github/workflows/ci.yml", ".github/workflows/auto-merge.yml", ".github/workflows/release.yml", ".agents/skills/implement-todo-batch/SKILL.md", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
+aliases:
+  [
+    github-actions,
+    ci-cd,
+    pipelines,
+    release-workflow,
+    testing-automation,
+    security-scanning,
+    quality-gates,
+    branch-protection,
+  ]
+related_code:
+  [
+    ".github/workflows/ci.yml",
+    ".github/workflows/auto-merge.yml",
+    ".github/workflows/release.yml",
+    ".agents/skills/implement-todo-batch/SKILL.md",
+    "config/gitleaks.toml",
+    ".githooks/pre-commit",
+    "packaging/electron/main.js",
+    "packaging/electron/assets/error.html",
+    "packaging/electron/resources/docker-compose.yml",
+    "docker-compose.yml",
+  ]
 ---
 
 # CI/CD Pipelines
@@ -26,6 +72,7 @@ The CI workflow runs on every push to `main` and PR. It validates code quality, 
 ### Workflow Definition
 
 **Trigger:**
+
 ```yaml
 on:
   push:
@@ -64,13 +111,14 @@ secrets-scan:
   steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full history scan on PR
+        fetch-depth: 0 # Full history scan on PR
     - uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 **What it detects:**
+
 - AWS credentials, GitHub tokens, private keys
 - API keys (Stripe, AWS, custom services)
 - Database connection strings
@@ -103,6 +151,7 @@ deps-audit:
 ```
 
 **What it checks:**
+
 - npm packages in `package.json` and `bun.lock`
 - Backend packages in Bun lockfile
 - Frontend packages via npm
@@ -111,11 +160,13 @@ deps-audit:
 **Policy:** Blocks merge if vulnerability found
 
 **Dependency Overrides:**
+
 - `basic-ftp: 5.3.1` — HIGH CVE (race condition)
 - `ip-address: ^10.1.1` — CRITICAL CVE
 - `postcss: >=8.5.10` — HIGH parsing vulnerability
 
 **Mitigation Strategy:** When audit finds a vulnerability:
+
 1. Check if override exists in root `package.json`
 2. If not, upgrade or find alternative package
 3. Add override to `package.json` `overrides` and `resolutions` fields
@@ -139,7 +190,7 @@ pip-audit:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: "3.12"
     - run: pip install pip-audit && pip-audit -r config/requirements.txt
 ```
 
@@ -223,6 +274,7 @@ lint:
 ```
 
 **What it checks:**
+
 - Unused variables and imports
 - Code style consistency
 - Common anti-patterns
@@ -299,11 +351,11 @@ test-frontend:
   steps:
     - uses: actions/checkout@v4
     - run: bun run generate-locales
-    - run: bun run test:coverage   # enforces the ratchet gate
+    - run: bun run test:coverage # enforces the ratchet gate
 ```
 
 **Coverage gate (NOT a flat 80%):** the frontend uses a **ratchet** configured
-in `apps/frontend/vite.config.ts` — thresholds track the *current measured*
+in `apps/frontend/vite.config.ts` — thresholds track the _current measured_
 coverage with a small buffer (as of 2026-05-29: `statements 50 / branches 41 /
 functions 42 / lines 52`, against ~52/44/44/55 actual) and are only ever
 raised. The job fails if coverage drops below the ratchet, catching regressions
@@ -321,7 +373,7 @@ test-backend:
   runs-on: ubuntu-24.04
   steps:
     - uses: actions/checkout@v4
-    - run: bun run test          # vitest, backend workspace
+    - run: bun run test # vitest, backend workspace
 ```
 
 **What it tests:** service-layer logic, repository data access, Express route
@@ -400,7 +452,7 @@ trivy-scan:
     - uses: ./.github/actions/build-ci-image
       with: { load: "true" }
     - uses: aquasecurity/trivy-action@v0.36.0
-      with: { image-ref: vision:ci, severity: HIGH,CRITICAL, exit-code: '1' }
+      with: { image-ref: vision:ci, severity: HIGH, CRITICAL, exit-code: "1" }
 ```
 
 **Policy:** scans the same image that ships to GHCR; blocks if HIGH/CRITICAL
@@ -418,12 +470,12 @@ docker-verify:
   runs-on: ubuntu-24.04
   needs: [build-image]
   env:
-    COMPOSE_PROJECT_NAME: vision_ci   # never touch the real `vision` volumes
+    COMPOSE_PROJECT_NAME: vision_ci # never touch the real `vision` volumes
   steps:
     - uses: actions/checkout@v4
     - uses: ./.github/actions/build-ci-image
       with: { load: "true" }
-    - uses: ./.github/actions/compose-up       # stub .env, up -d, poll /health
+    - uses: ./.github/actions/compose-up # stub .env, up -d, poll /health
       with: { vision-image: "vision:ci" }
     - name: Verify migration reversibility (downgrade -1, upgrade head)
       run: |
@@ -452,6 +504,7 @@ the base file's named volumes and project name, and the overlay declares
 neither.
 
 **What it verifies:**
+
 - The built image boots: PostgreSQL starts, the backend responds on `/health`
 - Migrations are reversible (`downgrade -1` → `upgrade head` round-trip)
 - All services are reachable on expected ports
@@ -472,7 +525,7 @@ test-live-api-contracts:
     - uses: ./.github/actions/build-ci-image
       with: { load: "true" }
     - uses: ./.github/actions/compose-up
-      with: { vision-image: "vision:ci" }   # → adds docker-compose.ci.yml
+      with: { vision-image: "vision:ci" } # → adds docker-compose.ci.yml
     - name: Run live API contract tests
       run: cd apps/frontend && bun run vitest run src/test/live-contracts/live-contracts.test.ts
     - name: Tear down
@@ -481,6 +534,7 @@ test-live-api-contracts:
 ```
 
 **What it tests:**
+
 - Frontend MSW fixtures against real backend responses
 - All API endpoint contracts (GET, POST, PUT, DELETE)
 - Response shape, status codes, and error handling
@@ -533,6 +587,7 @@ quality-gate:
 ```
 
 **Checks:**
+
 - All fourteen prerequisite jobs must avoid failure or cancellation: `changes`, `commitlint`, `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`, `verify-destructive-migrations`
 - Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
 - Blocks expensive Docker image build until quality gates are green
@@ -561,17 +616,20 @@ ci-complete:
 ```
 
 **Why separate from quality-gate?**
+
 - Quality-gate runs early, gates expensive Docker build, saves CI time
 - ci-complete runs after Docker build, aggregates all Docker results
 - Branch protection should require only ci-complete, not individual job names
 - If ci-complete passes, entire CI pipeline succeeded
 
 **What it aggregates:**
+
 1. **trivy-scan** — Container image CVE report
 2. **docker-verify** — Image builds + backend health check
 3. **test-live-api-contracts** — API contracts validated against live backend
 
 **Setting as required check:**
+
 1. Go to GitHub repository → Settings → Branches
 2. Under "Branch protection rules", edit rule for "main"
 3. Set "ci-complete" as the single required status check
@@ -622,11 +680,12 @@ The release workflow publishes new versions of Vision to Docker Container Regist
 ### Workflow Definition
 
 **Trigger:**
+
 ```yaml
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 ```
 
 Runs when a Git tag matching `v*` (e.g., `v1.2.3`) is pushed.
@@ -656,8 +715,9 @@ verify:
         TAG="${{ github.event.inputs.tag || github.ref_name }}"
         TAG_VERSION="${TAG#v}"
         ROOT_VERSION=$(node -p "require('./package.json').version")
+        FRONTEND_VERSION=$(node -p "require('./apps/frontend/package.json').version")
         PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
-        if [ "$TAG_VERSION" != "$ROOT_VERSION" ] || [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+        if [ "$TAG_VERSION" != "$ROOT_VERSION" ] || [ "$TAG_VERSION" != "$FRONTEND_VERSION" ] || [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
           echo "ERROR: Version mismatch"
           exit 1
         fi
@@ -666,9 +726,10 @@ verify:
 ```
 
 **Checks:**
+
 1. **Secrets scan:** gitleaks over the whole tree the tag ships (pinned version + SHA256, run before `bun install` so vendored fixtures can't flag)
 2. **Compose sync:** project name + named volumes in `docker-compose.yml` must match `packaging/electron/resources/docker-compose.yml`
-3. **Version alignment:** Tag (e.g., `v1.2.3`) must match both `package.json` and `packaging/electron/package.json`
+3. **Version alignment:** Tag (e.g., `v1.2.3`) must match `package.json`, `apps/frontend/package.json`, and `packaging/electron/package.json`
 4. **Dependency audit:** No HIGH or CRITICAL vulnerabilities (JS + Python) in release
 5. **Lint + type-check:** frontend ESLint/`tsc`, backend ESLint, backend JSDoc `tsc --checkJs` **and** the `noImplicitAny` ratchet
 6. **Generated artifacts:** `validate-locales`, locale drift, OpenAPI type drift, endpoint-matrix count — the same four assertions as CI's `verify-generated`
@@ -691,23 +752,30 @@ docker:
       uses: docker/build-push-action@v7
       with:
         platforms: linux/amd64,linux/arm64
-        tags: ghcr.io/erapartner/vision            # repository only
+        tags: ghcr.io/erapartner/vision # repository only
         outputs: type=image,push-by-digest=true,name-canonical=true,push=true
         provenance: mode=max
         sbom: true
-    - uses: aquasecurity/trivy-action@v0.36.0      # HIGH/CRITICAL, exit-code 1
-      with: { image-ref: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}" }
-    - run: docker pull "$IMAGE_REF"                # candidate, by digest
-    - uses: ./.github/actions/compose-up           # boot the candidate
-      with: { vision-image: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}" }
-    - run: alembic downgrade -1 && alembic upgrade head   # migration round-trip
+    - uses: aquasecurity/trivy-action@v0.36.0 # HIGH/CRITICAL, exit-code 1
+      with:
+        {
+          image-ref: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}",
+        }
+    - run: docker pull "$IMAGE_REF" # candidate, by digest
+    - uses: ./.github/actions/compose-up # boot the candidate
+      with:
+        {
+          vision-image: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}",
+        }
+    - run: alembic downgrade -1 && alembic upgrade head # migration round-trip
     - run: docker buildx imagetools create -t <semver> -t <major.minor> -t latest "$IMAGE_REF"
     - run: <assert every promoted tag resolves to the scanned digest>
 ```
 
-**Why by digest first:** the image used to be pushed with all of its tags — including `latest` — *before* Trivy ran, so a HIGH/CRITICAL finding failed the job with the vulnerable image already serving `latest`. `push: false` + `load: true` is not an option: buildx cannot load a multi-platform index into the local docker daemon. An untagged candidate is reachable only by digest, so nothing users pull moves until the scan and the migration round-trip pass. `imagetools create` copies the index by digest, so the semver tags and `latest` point at the *same* index — attestations included — that was scanned and that the release asset names; the final step asserts exactly that.
+**Why by digest first:** the image used to be pushed with all of its tags — including `latest` — _before_ Trivy ran, so a HIGH/CRITICAL finding failed the job with the vulnerable image already serving `latest`. `push: false` + `load: true` is not an option: buildx cannot load a multi-platform index into the local docker daemon. An untagged candidate is reachable only by digest, so nothing users pull moves until the scan and the migration round-trip pass. `imagetools create` copies the index by digest, so the semver tags and `latest` point at the _same_ index — attestations included — that was scanned and that the release asset names; the final step asserts exactly that.
 
 **Publishes:**
+
 - Image tags: `ghcr.io/erapartner/vision:1.2.3`, `:1.2`, and `:latest` (only when the tag is the highest release)
 - Immutable reference: `ghcr.io/erapartner/vision@sha256:…`, recorded in the `docker-image-tag.txt` release asset and consumed by the Electron updater as `APP_IMAGE_REF`
 - Used by: Electron Docker mode updates, containerized deployments
@@ -762,6 +830,7 @@ package-mac:
    - See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for verification logic
 
 **Artifacts:**
+
 - `Vision-x.y.z-arm64-mac.zip` — Installer ZIP
 - `Vision-x.y.z-arm64-mac.zip.sha256` — SHA256 checksum
 - `Vision-x.y.z-arm64.dmg` — Native macOS installer
@@ -788,6 +857,7 @@ release:
 ```
 
 **Result:**
+
 - Release page published at `https://github.com/erapartner/vision/releases/tag/v1.2.3`
 - Contains all artifacts (Docker image reference, `.zip`, `.sha256`)
 - Announces availability to users and integrators
@@ -831,20 +901,21 @@ When a user runs Vision in **docker mode**:
 Monitor workflow runs at: `https://github.com/erapartner/vision/actions`
 
 **Status checks:**
+
 - Green checkmark (✓) — All jobs passed
 - Red X (✗) — One or more jobs failed
 - Yellow (◐) — Job in progress
 
 ### Common Failure Causes
 
-| Failure | Cause | Fix |
-|---------|-------|-----|
-| Lint fails | Code style violation | Run `bun run lint --fix` locally, commit |
-| Typecheck fails | Type mismatch | Fix TypeScript errors, ensure all imports typed |
-| Test fails | Logic bug or test issue | Run `bun run test` locally, debug and fix |
-| Docker verify fails | Backend startup issue | Check logs, verify Dockerfile, test locally |
-| Security scan flagged | Known CVE in dependency | Update vulnerable package, test, re-release |
-| Version tag mismatch | Forgot to update `packaging/electron/package.json` | Ensure tag matches package version, re-tag |
+| Failure               | Cause                                              | Fix                                                                                           |
+| --------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Lint fails            | Code style violation                               | Run `bun run lint --fix` locally, commit                                                      |
+| Typecheck fails       | Type mismatch                                      | Fix TypeScript errors, ensure all imports typed                                               |
+| Test fails            | Logic bug or test issue                            | Run `bun run test` locally, debug and fix                                                     |
+| Docker verify fails   | Backend startup issue                              | Check logs, verify Dockerfile, test locally                                                   |
+| Security scan flagged | Known CVE in dependency                            | Update vulnerable package, test, re-release                                                   |
+| Version tag mismatch  | One of the three package manifests was not updated | Run `bun run version:bump <version>`, ensure the tag matches all three manifests, then re-tag |
 
 ### Re-Running Failed Workflows
 
@@ -869,8 +940,8 @@ git push origin v1.2.3     # Push again (triggers release workflow)
 
 (Configure in repository settings → Secrets and variables → Actions)
 
-| Secret | Purpose | Example |
-|--------|---------|---------|
+| Secret          | Purpose                                     | Example                       |
+| --------------- | ------------------------------------------- | ----------------------------- |
 | (None required) | All credentials use GitHub's built-in token | `${{ secrets.GITHUB_TOKEN }}` |
 
 ### GHCR Authentication
@@ -884,22 +955,22 @@ Workflow files use minimal required permissions:
 ```yaml
 permissions:
   contents: read
-  security-events: write  # For security scan SARIF upload
+  security-events: write # For security scan SARIF upload
 ```
 
 ---
 
 ## Best Practices
 
-### 1. Always Update Both Version Sources
+### 1. Always Update All Version Sources
 
-Before tagging a release, ensure **both** sources are in sync:
+Before tagging a release, keep the root, frontend, and Electron manifests in sync:
 
 ```bash
-# Update both enforced manifests together (no leading v or numeric leading zeros)
+# Update all three enforced manifests together (no leading v or numeric leading zeros)
 bun run version:bump 1.2.3
 
-# Review the two-file diff, then tag v1.2.3 only after the release checks pass.
+# Review the three-file diff, then tag v1.2.3 only after the release checks pass.
 ```
 
 ### 2. Test Locally Before Publishing
@@ -916,6 +987,7 @@ docker build .     # Docker build
 ### 3. Review Release Notes
 
 After the release job completes, verify the GitHub Release page:
+
 - Check that all artifacts are attached
 - Confirm `.sha256` file is present (for shell installer verification)
 - Add human-readable release notes (optional but recommended)

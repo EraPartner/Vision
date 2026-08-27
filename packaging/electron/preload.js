@@ -133,7 +133,7 @@ contextBridge.exposeInMainWorld('electronServices', {
 });
 
 /**
- * Expose the macOS-native integration surface (menu bar actions, dock badge,
+ * Expose the native desktop integration surface (menu actions, dock/taskbar badge,
  * CSV open-with handoff, system accent color, fullscreen state). Subscription
  * helpers return an unsubscribe function. The renderer must call ready() once
  * its listeners are mounted — main queues messages until then.
@@ -146,10 +146,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ready: () => ipcRenderer.invoke('app:renderer-ready'),
 
   /**
-   * Set the dock badge to a count of due planned payments (0 clears it).
+   * Set the native dock/taskbar badge to a count of due planned payments (0 clears it).
    * @param {number} count
    */
   setDockBadge: (count) => ipcRenderer.invoke('app:set-badge', count),
+
+  /** Keep native menus and dialogs aligned with the persisted in-app language. */
+  setLanguage: (language) => ipcRenderer.invoke('app:set-language', language),
 
   /** macOS accent color as RRGGBBAA hex, or null when unavailable. */
   getAccentColor: () => ipcRenderer.invoke('app:get-accent-color'),

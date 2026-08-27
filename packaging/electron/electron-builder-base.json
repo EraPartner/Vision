@@ -11,6 +11,7 @@
   },
   "files": [
     "main.js",
+    "badge-image.js",
     "compose.js",
     "updater.js",
     "preload.js",

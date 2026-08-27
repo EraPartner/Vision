@@ -3,8 +3,68 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-08-26
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
+updated: 2026-08-27
+tags:
+  [
+    architecture,
+    electron,
+    desktop,
+    packaging,
+    security,
+    sandbox,
+    health-monitoring,
+    async-io,
+    csp-headers,
+    dev-rebuild,
+    phase-0,
+    phase-1,
+    phase-2,
+    phase-6,
+    phase-7,
+    backup,
+    restore,
+    bundle,
+    ipc,
+    encryption,
+    schema-migration,
+    bun,
+    docker-compose,
+    pre-pull,
+    startup,
+    troubleshooting,
+    alembic-migration-fixes,
+    deployment-modes,
+    shell-installer,
+    docker-pull,
+    update-system,
+    checksum-verification,
+    backup-before-update,
+    cicd,
+    april-2026,
+    bug-hunt,
+    recovery-hardening,
+    concurrent-backup-guard,
+    timeout,
+    watchdog-pause,
+    electron-native,
+    macos,
+    hiddeninset,
+    vibrancy,
+    system-accent,
+    native-menu,
+    dock-badge,
+    csv-open-with,
+    electronapi,
+    renderer-ready-queue,
+    compose-stop,
+    window-bounds,
+    splash-localized,
+    shutdown-idle-connections,
+    accelerator-hardening,
+    before-input-event,
+    did-start-navigation,
+    june-2026,
+  ]
 description: >-
   Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
   Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application
@@ -18,8 +78,42 @@ description: >-
   did-start-navigation+isSameDocument guard (eliminates sendToApp queue jam on React Router navigations);
   handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu
   key-equivalent redispatch.
-aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/features/settings/sections/AboutSection.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
+aliases:
+  [
+    electron,
+    desktop app,
+    packaging,
+    IPC,
+    main process,
+    sandbox,
+    watchdog,
+    backup,
+    bundle,
+    update system,
+    deployment modes,
+    electronAPI,
+    native menu,
+    dock badge,
+    system accent,
+    vibrancy,
+  ]
+related_code:
+  [
+    "packaging/electron/",
+    "packaging/electron/backup/bundle.js",
+    "packaging/electron/main.js",
+    "packaging/electron/preload.js",
+    "apps/frontend/src/lib/api/electron.ts",
+    "apps/frontend/src/components/layout/ElectronBridge.tsx",
+    "apps/frontend/src/lib/importHandoff.ts",
+    "apps/frontend/src/lib/accentColor.ts",
+    "apps/frontend/src/components/notifications/UpdateNotification.tsx",
+    "apps/frontend/src/features/settings/sections/AboutSection.tsx",
+    "apps/node-backend/src/main.js",
+    "alembic/versions/0001_initial_database_schema.py",
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+  ]
 ---
 
 # Electron Desktop Architecture
@@ -75,6 +169,7 @@ Renderer (React) ──HTTP──▶ Express Backend (localhost:3002)
 ```
 
 This design choice means:
+
 - The backend is a standard Express app (testable independently)
 - The frontend is a standard React app (deployable to web)
 - Electron is just the packaging layer
@@ -89,11 +184,11 @@ Electron configuration is in `packaging/electron/`.
 
 ### Key Settings
 
-| Setting | Value | Description |
-|---------|-------|-------------|
-| `contextIsolation` | true | Security: isolate preload from renderer |
-| `nodeIntegration` | false | Security: no Node.js in renderer |
-| `sandbox` | true | Security: sandboxed renderer |
+| Setting            | Value | Description                             |
+| ------------------ | ----- | --------------------------------------- |
+| `contextIsolation` | true  | Security: isolate preload from renderer |
+| `nodeIntegration`  | false | Security: no Node.js in renderer        |
+| `sandbox`          | true  | Security: sandboxed renderer            |
 
 ---
 
@@ -191,11 +286,11 @@ Vision packages into native macOS formats via `electron-builder`:
 
 #### Output Artifacts
 
-| Format | Purpose | Location |
-|--------|---------|----------|
-| `.app` bundle | Native macOS application | `dist/mac-arm64/Vision.app` |
-| `.dmg` | Drag-to-install disk image | `dist/Vision-1.0.0-arm64.dmg` |
-| `.zip` | Compressed bundle for archival | `dist/Vision-1.0.0-arm64-mac.zip` |
+| Format        | Purpose                        | Location                          |
+| ------------- | ------------------------------ | --------------------------------- |
+| `.app` bundle | Native macOS application       | `dist/mac-arm64/Vision.app`       |
+| `.dmg`        | Drag-to-install disk image     | `dist/Vision-1.0.0-arm64.dmg`     |
+| `.zip`        | Compressed bundle for archival | `dist/Vision-1.0.0-arm64-mac.zip` |
 
 **Build:** `cd packaging/electron && npm run dist`
 
@@ -211,7 +306,15 @@ Electron-builder configuration in `packaging/electron/package.json`:
     "directories": {
       "buildResources": "build"
     },
-    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"],
+    "files": [
+      "main.js",
+      "badge-image.js",
+      "compose.js",
+      "updater.js",
+      "preload.js",
+      "backup/**/*",
+      "assets/**/*"
+    ],
     "extraResources": [
       { "from": "i18n", "to": "i18n" },
       { "from": "resources", "to": "resources" }
@@ -277,7 +380,7 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 
 ## Native Features
 
-### macOS Native Integration (V12, June 2026 — ADR-072)
+### Native Desktop Integration (V12, June 2026 — ADR-072)
 
 > [!info] Added in ADR-072
 > This section documents the third contextBridge surface (`window.electronAPI`), native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record.
@@ -286,18 +389,19 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 
 The new surface sits alongside the existing `window.electronUpdater` and `window.electronBackup`. All subscriptions return an unsubscribe function for clean teardown.
 
-| Method | Description |
-|--------|-------------|
-| `platform` | `'darwin'` or other platform string |
-| `ready()` | Invoke `app:renderer-ready` — drains the pending send queue |
-| `setDockBadge(count)` | Push integer badge count (0 clears); clamped 0–999 in main |
-| `getAccentColor()` | Return current macOS system accent color as RRGGBBAA hex |
-| `onAccentColorChanged(cb)` | Subscribe to `AppleColorPreferencesChangedNotification` pushes |
-| `onMenuAction(cb)` | Subscribe to `menu:action` — receives `{action, payload}` objects |
-| `onCsvOpen(cb)` | Subscribe to `app:csv-opened` — receives `{name, content}` (no path) |
-| `onFullScreenChange(cb)` | Subscribe to `window:fullscreen` with `{isFullScreen: boolean}` |
+| Method                     | Description                                                              |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `platform`                 | `'darwin'` or other platform string                                      |
+| `ready()`                  | Invoke `app:renderer-ready` — drains the pending send queue              |
+| `setDockBadge(count)`      | Push integer badge count (0 clears); clamped 0–999 in main               |
+| `setLanguage(language)`    | Persist `en`/`nl`, reload the shell dictionary, and rebuild native menus |
+| `getAccentColor()`         | Return current macOS system accent color as RRGGBBAA hex                 |
+| `onAccentColorChanged(cb)` | Subscribe to `AppleColorPreferencesChangedNotification` pushes           |
+| `onMenuAction(cb)`         | Subscribe to `menu:action` — receives `{action, payload}` objects        |
+| `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
+| `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with `{isFullScreen: boolean}`          |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `getSystemAccentColor()`. Types: `ElectronMenuAction`, `ElectronCsvFile`.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. Types: `ElectronMenuAction`, `ElectronCsvFile`.
 
 **IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. No handler ever accepts a filesystem path from the renderer.
 
@@ -337,12 +441,12 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 
 `createWindow()` applies these options only on macOS:
 
-| Option | Value | Effect |
-|--------|-------|--------|
-| `titleBarStyle` | `'hiddenInset'` | Hides the title bar; traffic lights stay in the frame |
-| `trafficLightPosition` | `{x:20, y:20}` | Centers traffic lights in the 56px topbar |
-| `vibrancy` | `'under-window'` | NSVisualEffectView behind the window content |
-| `visualEffectState` | `'followWindow'` | Active/inactive vibrancy follows window focus |
+| Option                 | Value            | Effect                                                |
+| ---------------------- | ---------------- | ----------------------------------------------------- |
+| `titleBarStyle`        | `'hiddenInset'`  | Hides the title bar; traffic lights stay in the frame |
+| `trafficLightPosition` | `{x:20, y:20}`   | Centers traffic lights in the 56px topbar             |
+| `vibrancy`             | `'under-window'` | NSVisualEffectView behind the window content          |
+| `visualEffectState`    | `'followWindow'` | Active/inactive vibrancy follows window focus         |
 
 `enter-full-screen` and `leave-full-screen` Electron events push `{isFullScreen: boolean}` over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
 
@@ -350,30 +454,37 @@ The same lights also overlap the **sidebar's** top-left corner (the rail reaches
 
 #### Native Application Menu
 
-Built via `Menu.setApplicationMenu` **after** `await initI18n()` inside `launch()`, so all labels come from the same flat JSON the shell dialogs use (`menu.*` i18n keys, en + nl).
+Built via `Menu.setApplicationMenu` after the shell loads the language persisted in Electron `settings.json`. The renderer republishes the hydrated in-app language over `app:set-language`; last-write-wins sequencing prevents rapid changes from applying out of order, and both application and dock menus rebuild after a change. Native labels and dialogs use the same flat JSON (`menu.*`, en + nl).
 
 **Menu structure:**
 
-| Menu | Items |
-|------|-------|
-| App | Settings… (⌘,) |
-| File | New Transaction (⌘N), Import CSV… (⇧⌘I) |
-| Edit | System role (undo, cut, copy, paste, …) |
-| View | Toggle Sidebar (⌃⌘S), Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only) |
-| Go | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `hooks/useGoToShortcuts.ts`) |
-| Window | System role (minimise, zoom, …) |
-| Help | Keyboard Shortcuts (opens overlay via `menu:action`) |
+| Menu   | Items                                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| App    | Settings… (⌘,)                                                                                                 |
+| File   | New Transaction (⌘N), Import CSV… (⇧⌘I)                                                                        |
+| Edit   | System role (undo, cut, copy, paste, …)                                                                        |
+| View   | Toggle Sidebar (⌃⌘S), Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only)      |
+| Go     | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `hooks/useGoToShortcuts.ts`)            |
+| Window | System role (minimise, zoom, …)                                                                                |
+| Help   | About Vision (Windows/Linux), Keyboard Shortcuts (opens overlay via `menu:action`), Source Code, Documentation |
+
+`setAboutPanelOptions` supplies the application name, running version, copyright,
+and AGPL-3.0 license identity on every supported platform. Electron displays the
+configured project website in Linux's native About panel; macOS and Windows still
+receive the same metadata but do not expose Electron's `website` field there.
+The repository and documentation Help items use fixed HTTPS destinations from
+the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
 
 > [!warning] Manual sync point
 > `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging this dependency.
 
 Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`.
 
-#### Dock Menu and Dock Badge
+#### Dock Menu and Desktop Badge
 
-The dock menu is set once on startup: **New Transaction** and **Dashboard**. Both dispatch the same `menu:action` channel.
+The macOS dock menu contains **New Transaction** and **Dashboard**. Both dispatch the same `menu:action` channel, and their labels rebuild when the in-app language changes.
 
-The **dock badge** reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
+The desktop badge reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. Main maps that count to the macOS dock badge, Linux launcher badge count, or a generated 32px PNG Windows taskbar overlay. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
 
 #### CSV Import Handoff — Two Paths
 
@@ -426,16 +537,16 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 
 **IPC Handlers** for bundle-based backup/restore:
 
-| Handler | Signature | Purpose | Status |
-|---------|-----------|---------|--------|
-| `backup:run` | `(destDir, frontendStateJson?)` → Promise | Create and optionally encrypt `.visionbak` bundle; returns `{ success, file, encrypted?, cleanupRemoved?, warning?, error? }` | ✅ Phase 1+2 |
-| `backup:restore` | `(bundlePath)` → Promise | Restore from `.visionbak` bundle; schema-checks, drops DB, loads SQL, swaps attachments, restores frontend state; returns `{ success, file?, frontendState?, error? }` | ✅ Phase 1+2 |
-| `backup:select-file` | `()` → Promise<string> | Show file picker for `.visionbak` or `.visionbak.enc` selection | ✅ Phase 1+2 |
-| `backup:select-dir` | `()` → Promise<string> | Show folder picker for backup directory | ✅ Phase 1+2 |
-| `backup:save-settings` | `({ backupDir, backupOnQuit })` → Promise | Persist backup settings to `settings.json` | ✅ Phase 1+2 |
-| `backup:load-settings` | `()` → Promise | Load backup settings (directory, onQuit flag, encryption status) | ✅ Phase 1+2 |
-| `backup:get-encryption-status` | `()` → Promise | Return `{ hasStoredPassphrase }` | ✅ Phase 1+2 |
-| `backup:set-passphrase` | `(passphrase)` → Promise | Set or update backup encryption passphrase (stored encrypted in `settings.json`) | ✅ Phase 1+2 |
+| Handler                        | Signature                                 | Purpose                                                                                                                                                                | Status       |
+| ------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `backup:run`                   | `(destDir, frontendStateJson?)` → Promise | Create and optionally encrypt `.visionbak` bundle; returns `{ success, file, encrypted?, cleanupRemoved?, warning?, error? }`                                          | ✅ Phase 1+2 |
+| `backup:restore`               | `(bundlePath)` → Promise                  | Restore from `.visionbak` bundle; schema-checks, drops DB, loads SQL, swaps attachments, restores frontend state; returns `{ success, file?, frontendState?, error? }` | ✅ Phase 1+2 |
+| `backup:select-file`           | `()` → Promise<string>                    | Show file picker for `.visionbak` or `.visionbak.enc` selection                                                                                                        | ✅ Phase 1+2 |
+| `backup:select-dir`            | `()` → Promise<string>                    | Show folder picker for backup directory                                                                                                                                | ✅ Phase 1+2 |
+| `backup:save-settings`         | `({ backupDir, backupOnQuit })` → Promise | Persist backup settings to `settings.json`                                                                                                                             | ✅ Phase 1+2 |
+| `backup:load-settings`         | `()` → Promise                            | Load backup settings (directory, onQuit flag, encryption status)                                                                                                       | ✅ Phase 1+2 |
+| `backup:get-encryption-status` | `()` → Promise                            | Return `{ hasStoredPassphrase }`                                                                                                                                       | ✅ Phase 1+2 |
+| `backup:set-passphrase`        | `(passphrase)` → Promise                  | Set or update backup encryption passphrase (stored encrypted in `settings.json`)                                                                                       | ✅ Phase 1+2 |
 
 **Frontend Integration:**
 
@@ -456,11 +567,12 @@ Vision is ad-hoc unsigned (no Developer ID certificate), so macOS treats the cod
 
 > [!info] Keychain prompts on unsigned builds
 > Users who store a passphrase will still see macOS password prompts on an unsigned build because macOS re-challenges an unstable code identity each time. Workarounds:
+>
 > - Click **Always Allow** in the Keychain prompt to suppress future challenges for this app.
 > - Set the `VISION_BACKUP_PASSPHRASE` environment variable — this bypasses `safeStorage` entirely and is useful for automation or CI.
 > - Do not configure a backup passphrase if prompts are unwanted; unencrypted backups work without keychain access.
 >
-> Note: `safeStorage` only *stores/retrieves the passphrase*. The backup encryption key itself is always scrypt-derived from the passphrase and never touches the keychain.
+> Note: `safeStorage` only _stores/retrieves the passphrase_. The backup encryption key itself is always scrypt-derived from the passphrase and never touches the keychain.
 
 **Bundle Format:**
 
@@ -471,26 +583,31 @@ See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for `.visionba
 Three critical issues discovered during bug hunt phase were hardened:
 
 **Issue 1: HTTP Connection Hang**
+
 - **Problem:** `httpGet()` helper (used for fetching backup settings, triggering backup) had no timeout, causing indefinite hangs if backend became unresponsive mid-operation
 - **Fix:** Added `req.setTimeout(10000, ...)` to destroy hung connections after 10 seconds
 - **Impact:** Prevents UI freeze; timeout is generous enough for slow systems but short enough to show feedback quickly
 
 **Issue 2: Concurrent Backup Operations**
+
 - **Problem:** Renderer could rapid-click the backup button, spawning multiple concurrent `pg_dump` processes that overloaded the system or corrupted backup bundles
 - **Fix:** Module-scope `let backupInFlight = false;` guard in `backup:run` IPC handler; first backup sets flag, subsequent calls rejected with clear message, flag reset in `finally` block
 - **Impact:** Prevents data corruption, system overload, and user confusion from multiple simultaneous backups
 
 **Issue 3: Pre-Restore Data Loss Risk**
+
 - **Problem:** `backup:restore` IPC handler silently overwrote live database without user confirmation, making accidental restore from stale backups a critical data-loss vector
 - **Fix:** Added `dialog.showMessageBox()` confirmation dialog before restore attempt, with warning message and filename display; "Cancel" is default button (index 1) to prevent Enter-key accidents
 - **Impact:** User must explicitly confirm they're about to lose all current data, preventing accidents
 
 **Issue 4: Restore ↔ Watchdog Race Condition**
+
 - **Problem:** Health watchdog polled `GET /health` continuously, even during restore operations. When database was stopped, dropped, and recreated, watchdog would see backend-offline, increment failure counter, and potentially emit spurious `backend:lost` events while restore was still in progress
 - **Fix:** Call `stopHealthWatchdog()` before restore attempt, guarantee `startHealthWatchdog()` in `finally` block; watchdog remains paused until restore completes
 - **Impact:** Prevents spurious recovery alerts mid-restore, eliminates race condition between restore cleanup and watchdog recovery logic
 
 **Issue 5: Excessive Memory Buffering**
+
 - **Problem:** `run()` helper (used for shell commands) defaulted to 200 MB `maxBuffer`, intended for capturing full command output in memory. However, `pg_dump` uses `spawn()` with stream piping (not buffered), so the default wasted 200 MB per backup
 - **Fix:** Reduced default `maxBuffer` from 200 MB to 10 MB; sufficient for typical Docker CLI output, signals errors if commands exceed it
 - **Impact:** Memory footprint on typical commands drops by 190 MB per operation
@@ -503,24 +620,25 @@ Vision supports **three deployment modes**, each with a distinct update path. Se
 
 #### Deployment Modes
 
-| Mode | Condition | Update Method | Artifacts |
-|------|-----------|----------------|-----------|
-| **dev** | `app.isPackaged === false && !useRepoMode` | File watcher → Docker rebuild | (automatic via file system) |
+| Mode       | Condition                                           | Update Method                      | Artifacts                                            |
+| ---------- | --------------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| **dev**    | `app.isPackaged === false && !useRepoMode`          | File watcher → Docker rebuild      | (automatic via file system)                          |
 | **source** | `app.isPackaged === true && useRepoMode === 'true'` | Shell script installer from GitHub | `vision-source-launcher-x.y.z-arm64.zip` + `.sha256` |
-| **docker** | `app.isPackaged === true` (default) | `docker-compose pull` → restart | Docker image at `ghcr.io/erapartner/vision:<tag>` |
+| **docker** | `app.isPackaged === true` (default)                 | `docker-compose pull` → restart    | Docker image at `ghcr.io/erapartner/vision:<tag>`    |
 
 #### IPC Handlers
 
-| Handler | Purpose | Modes |
-|---------|---------|-------|
-| `update:get-mode` | Return deployment mode (`'dev'` \| `'source'` \| `'docker'`) | All |
-| `update:pre-update-backup` | Create timestamped snapshot in `userData/pre-update-backups/` | source, docker |
-| `update:install-shell` | Download, verify SHA256, extract, install shell update | source only |
-| `update:check-release` | Check GitHub for new release; return `{ available, version, update_mode }` | source, docker |
+| Handler                    | Purpose                                                                    | Modes          |
+| -------------------------- | -------------------------------------------------------------------------- | -------------- |
+| `update:get-mode`          | Return deployment mode (`'dev'` \| `'source'` \| `'docker'`)               | All            |
+| `update:pre-update-backup` | Create timestamped snapshot in `userData/pre-update-backups/`              | source, docker |
+| `update:install-shell`     | Download, verify SHA256, extract, install shell update                     | source only    |
+| `update:check-release`     | Check GitHub for new release; return `{ available, version, update_mode }` | source, docker |
 
 #### Shell Installer (Source Mode)
 
 The shell installer script (`install.sh`) included in release ZIPs:
+
 - **Rollback strategy:** BAK_DIR snapshot created before rsync, restored on failure
 - **Quarantine removal:** `xattr -rd com.apple.quarantine` applied to entire DEST_ROOT and launcher scripts
 - **Usage:** `./install.sh --dest-root /path/to/app --backup-dir /tmp/backup`
@@ -528,6 +646,7 @@ The shell installer script (`install.sh`) included in release ZIPs:
 #### Checksum Verification (ADR-023)
 
 When updating via shell installer:
+
 1. Download sibling `.sha256` file from GitHub release
 2. Compute SHA256 of downloaded ZIP
 3. **Hard verification:** If `.sha256` exists but is malformed or mismatches, abort immediately
@@ -539,6 +658,7 @@ See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for rational
 #### Docker Pre-Pull Optimization (Phase 0)
 
 During Electron startup, if Docker image is missing locally:
+
 1. Pre-pull `ghcr.io/erapartner/vision:<tag>` in parallel with other init steps
 2. If pre-pull succeeds, skip `--build` flag in `docker-compose up`
 3. If pre-pull fails (network, GHCR unavailable), fallback to inline pull during compose up
@@ -575,11 +695,13 @@ On failure at any step: error toast shown, user can manually restore from `pre-u
 #### Frontend UI
 
 **UpdateNotification component:**
+
 - Phases: idle → backing-up → downloading/pulling → restarting → done
 - Mode-aware routing: Docker shows "Pulling Docker image…", source shows "Downloading installer…"
 - Localized labels via i18n: `update.backingUp`, `update.downloadingUpdate`, `update.pullingImage`, etc.
 
 **AppTab (Settings → App):**
+
 - Shows current update mode
 - Manual "Check for Updates" button
 - Displays latest available version if newer
@@ -587,9 +709,10 @@ On failure at any step: error toast shown, user can manually restore from `pre-u
 #### CI/CD Integration (April–May 2026)
 
 **release.yml** (May 2026):
+
 - `verify` job checks:
   - Named volumes in `docker-compose.yml` match `packaging/electron/resources/docker-compose.yml`
-  - Version tag matches both package.json files
+  - Version tag matches the root, frontend, and Electron package manifests
   - JS dependencies audit passes
   - Blocks all other jobs until checks pass
 
@@ -598,6 +721,7 @@ On failure at any step: error toast shown, user can manually restore from `pre-u
 - Both artifacts uploaded to GitHub release
 
 **ci.yml** (May 2026):
+
 - Early stage:
   - `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `build-frontend`, `test-frontend`, `test-backend`
   - `verify-compose-sync` — compares named volumes between root and embedded compose files
@@ -625,11 +749,11 @@ Vision uses a three-layer isolation model:
 ```javascript
 const mainWindow = new BrowserWindow({
   webPreferences: {
-    sandbox: true,           // Layer 1: Renderer sandbox (OS-level)
-    contextIsolation: true,  // Layer 2: Isolate preload from renderer context
-    nodeIntegration: false,  // Layer 3: No Node.js in renderer
-    preload: path.join(__dirname, 'preload.js'),
-  }
+    sandbox: true, // Layer 1: Renderer sandbox (OS-level)
+    contextIsolation: true, // Layer 2: Isolate preload from renderer context
+    nodeIntegration: false, // Layer 3: No Node.js in renderer
+    preload: path.join(__dirname, "preload.js"),
+  },
 });
 ```
 
@@ -639,13 +763,13 @@ const mainWindow = new BrowserWindow({
 
 ```javascript
 // preload.js - the only Node-accessible code
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld('electronRecovery', {
-  retry: () => ipcRenderer.invoke('recovery:retry'),
-  openLogs: () => ipcRenderer.invoke('recovery:open-logs'),
-  onBackendLost: (cb) => ipcRenderer.on('backend:lost', cb),
-  onBackendRestored: (cb) => ipcRenderer.on('backend:restored', cb),
+contextBridge.exposeInMainWorld("electronRecovery", {
+  retry: () => ipcRenderer.invoke("recovery:retry"),
+  openLogs: () => ipcRenderer.invoke("recovery:open-logs"),
+  onBackendLost: (cb) => ipcRenderer.on("backend:lost", cb),
+  onBackendRestored: (cb) => ipcRenderer.on("backend:restored", cb),
 });
 ```
 
@@ -656,6 +780,7 @@ contextBridge.exposeInMainWorld('electronRecovery', {
 ### Error Page (Sandbox-Safe)
 
 `packaging/electron/assets/error.html` is sandbox-compliant:
+
 - Static HTML (no inline scripts)
 - CSP: `default-src 'self'`
 - Localized via query params
@@ -664,6 +789,7 @@ contextBridge.exposeInMainWorld('electronRecovery', {
 ### CSP Headers
 
 The backend sets Content-Security-Policy headers appropriate for Electron:
+
 - `img-src` includes `https:` for remote news thumbnails
 - `script-src` restricts script sources
 - `default-src` limits resource loading
@@ -699,7 +825,7 @@ In dev mode, a file watcher monitors source files and triggers automatic Docker 
 fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
   // Kill in-flight build with SIGTERM to signal cancellation
   if (activeBuildChild) {
-    activeBuildChild.kill('SIGTERM');
+    activeBuildChild.kill("SIGTERM");
   }
   // Queue new rebuild from updated sources
 });
@@ -710,6 +836,7 @@ fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
 Previously only the two `apps/` directories were watched, so edits to `packages/shared-utils` or locale strings in `i18n/source` never triggered an auto-rebuild in dev mode — the container kept serving stale code until the next manual relaunch. This was confusing because `DOCKER_PATHS` (the skip-build cache check) already tracked those paths.
 
 **Behavior:**
+
 - File edit detected → signal SIGTERM to any in-flight build
 - In-flight build catches SIGTERM, marks error as `.cancelled = true`, rejects promise
 - Cancelled build swallows error (expected), does not log failure
@@ -732,6 +859,7 @@ The `will-quit` handler runs `docker compose stop` (not `down`) to stop containe
 **Why this matters:** `compose down` removes containers and the Docker network on every quit. The launcher's warm-boot fast path (`compose start`) requires containers to exist in a stopped state — if they were removed, every boot pays full container/network recreation. With `compose stop`, containers survive in the `exited` state and the next launch completes the `compose start` sub-second path rather than a full `compose up`.
 
 `compose down` is still used by:
+
 - The explicit clean-slate rebuild path (`docker-compose.clean.yml`)
 - Manual maintenance flows
 
@@ -742,6 +870,7 @@ The `will-quit` handler runs `docker compose stop` (not `down`) to stop containe
 Window size and position are persisted to `settings.json` under the `windowBounds` key and restored on the next launch.
 
 **Behavior:**
+
 - On `resize` and `move` events, `getNormalBounds()` is written via a debounced handler.
 - On quit, bounds are written synchronously before the process exits.
 - On `createWindow()`, stored bounds are read and clamped to the active display's `workArea` (handles unplugged external monitors). Minimum enforced size: 800×600.
@@ -749,12 +878,13 @@ Window size and position are persisted to `settings.json` under the `windowBound
 
 This is baseline macOS window-state behavior and removes the most visible "not a real Mac app" tell alongside the V12 native-chrome work.
 
-### Boot Splash — Localized and Theme-Aware (June 2026 — P5/U3 fix)
+### Boot Splash — Localized, Branded, and Theme-Aware (June 2026 — P5/U3 fix; branded August 2026)
 
 The boot splash (`setSplashStatus()`) is now:
 
 - **Localized** — uses the `splash.*` i18n keys loaded at startup via `initI18n()` (available before the window opens).
-- **Theme-aware** — reads `prefers-color-scheme` to pick between the dark/light background color, rather than hardcoding `#0f172a`.
+- **Theme-aware** — derives the near-black base, glow, and foreground from the persisted primary palette. First launch uses the canonical emerald primary instead of the previous generic slate fallback.
+- **Branded** — the Vision mark appears above the spinner. The backend recovery page uses the same validated palette variables plus the champagne accent, so startup and failure states share one identity without weakening the error page Content Security Policy.
 - **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
   - `splash.checkingDocker` — Docker socket probe
   - `splash.downloading` — image pre-pull / build phase
@@ -787,6 +917,21 @@ If backend is unavailable at startup, `error.html` displays (strings localized v
 └───────────────────────────────────────────────────┘
 ```
 
+`loadErrorPage()` passes only HSL component strings that satisfy the same strict
+validator used by the splash. `error.js` re-validates those query values before
+setting the three palette custom properties. The page ships its own emerald and
+champagne defaults, so malformed or missing palette input still remains branded.
+
+### Demo Application Identity
+
+The Demo builder overrides the production icon with
+`resources-demo/icon-demo.icns`, derived from the canonical mark and carrying a
+high-contrast champagne `DEMO` badge. The production and Demo apps therefore
+remain distinguishable in Applications, the Dock, and system dialogs. The
+committed SVG is the editable source; `scripts/pack-iconset.cjs` packs validated
+PNG representations into the ICNS container without changing the production
+icon.
+
 **Try again** → Re-runs health poll from current state (`recovery:retry` IPC)
 **Open logs** → Opens app logs directory (`recovery:open-logs` IPC)
 
@@ -796,6 +941,7 @@ If backend is unavailable at startup, `error.html` displays (strings localized v
 ### Runtime Watchdog
 
 After startup succeeds, a watchdog monitors backend health:
+
 - Polls `/health` every 10 seconds
 - 3 consecutive failures → `backend:lost` IPC event
 - Renderer can show user-facing error banner
@@ -812,6 +958,7 @@ database-recovery controller.
 ### Corrupt Settings Recovery
 
 If `settings.json` is unparsable:
+
 - App quarantines corrupted file as `settings.json.corrupt-<timestamp>`
 - Returns application defaults
 - User can manually fix or let defaults reset settings
@@ -824,19 +971,21 @@ If `settings.json` is unparsable:
 
 Two poll functions cover distinct use cases:
 
-| Function | Endpoint | Purpose |
-|----------|----------|---------|
-| `pollReady(maxAttempts)` | `GET /health/detailed` | Gates the **initial page navigation** on materialized-view warmup. Navigate when `status === 'ready'` OR `caches.materializedViews === true`. 404/unparseable responses fall back to ready. Boot mark: `poll_ready`. |
-| `pollHealth(maxAttempts)` | `GET /health` | Used by watchdog, restart, update, and dev-rebuild flows. Only tests that Express is listening. |
+| Function                  | Endpoint               | Purpose                                                                                                                                                                                                              |
+| ------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pollReady(maxAttempts)`  | `GET /health/detailed` | Gates the **initial page navigation** on materialized-view warmup. Navigate when `status === 'ready'` OR `caches.materializedViews === true`. 404/unparseable responses fall back to ready. Boot mark: `poll_ready`. |
+| `pollHealth(maxAttempts)` | `GET /health`          | Used by watchdog, restart, update, and dev-rebuild flows. Only tests that Express is listening.                                                                                                                      |
 
 ### Startup Readiness Poll
 
 **Env vars:**
+
 - `VISION_HEALTH_POLL_ATTEMPTS` (default: 200) — warm-boot budget; triggers the slow-start modal on expiry
 - `VISION_HEALTH_POLL_BUILD_ATTEMPTS` (default: 600) — cold/build-launch budget; ≈3 min, no modal on expiry
 - `VISION_HEALTH_POLL_INTERVAL_MS` (default: 300) — poll cadence in ms
 
 **Examples:**
+
 - Warm boot: 200 attempts × 300ms ≈ 56-second timeout (modal fires)
 - Cold/build launch: 600 attempts × 300ms ≈ 3-minute timeout (no modal; falls to error page)
 
@@ -856,10 +1005,12 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 **Symptom:** Packaged app boots, launches Docker container, but migration fails with FK constraint violation or string truncation error on revision `0003_import_batch_id_on_transactions`.
 
 **Root cause:** Two pre-ADR-027 squash oversights:
+
 1. Baseline migration 0001 was missing `import_batches` and `import_staging_rows` tables; migration 0003 tried to FK to non-existent tables.
 2. If DB is truly fresh (no `alembic_version` table), alembic auto-creates it at `VARCHAR(32)`, but revision name `0003_import_batch_id_on_transactions` (38 chars) causes string truncation.
 
 **Fix:** Implemented in 2026-04-27 release:
+
 1. Ported import staging tables from legacy 0030 into 0001 baseline.
 2. Preflight-created `alembic_version` table at `VARCHAR(64)` before alembic runs.
 
@@ -872,15 +1023,25 @@ See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-
 **Cause:** `backup/` directory not in electron-builder `files` array.
 
 **Fix:** Ensure `packaging/electron/package.json` build config includes:
+
 ```json
 {
   "build": {
-    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"]
+    "files": [
+      "main.js",
+      "badge-image.js",
+      "compose.js",
+      "updater.js",
+      "preload.js",
+      "backup/**/*",
+      "assets/**/*"
+    ]
   }
 }
 ```
 
 **Verification:** After build, inspect asar contents:
+
 ```bash
 file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 ```
@@ -890,6 +1051,7 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 **Cause:** The Electron dependency tree or packaged asar is incomplete. See [[#package-manager-bun|Package Manager (Bun)]] above.
 
 **Fix:**
+
 1. Confirm `packaging/electron/bun.lock` is present and unchanged.
 2. Reinstall with `bun install --frozen-lockfile --cwd packaging/electron`.
 3. Rebuild with `npm run dist` from `packaging/electron/` and inspect the resulting asar before changing dependency declarations.
@@ -899,6 +1061,7 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 **Cause:** Embedded `resources/docker-compose.yml` not copied to app bundle via `extraResources`.
 
 **Fix:** Ensure `packaging/electron/package.json` includes:
+
 ```json
 {
   "build": {
@@ -911,6 +1074,7 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 ```
 
 **Verification:** After build, check asar not corrupted:
+
 ```bash
 ls -la dist/mac-arm64/Vision.app/Contents/Resources/resources/docker-compose.yml
 ```
@@ -934,10 +1098,11 @@ await preLoadDockerImage();
 services:
   app:
     image: ghcr.io/erapartner/vision:latest
-    pull_policy: missing  # Use local image if available; skip registry pull
+    pull_policy: missing # Use local image if available; skip registry pull
 ```
 
 **Manual pre-pull (if needed):**
+
 1. Build locally: `docker compose build` (creates `vision-app:latest`)
 2. Retag: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
 3. Rebuild packaged app: `npm run dist`

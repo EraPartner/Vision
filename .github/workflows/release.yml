@@ -2,7 +2,7 @@ name: Release
 
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
-#   0. Verify: version tag matches packaging/electron/package.json + full quality gate
+#   0. Verify: version tag matches root, frontend, and Electron package manifests + full quality gate
 #   1. Build a multi-arch image (linux/amd64 + linux/arm64), push it to GHCR by
 #      DIGEST ONLY, scan + smoke-test that candidate, and only then promote the
 #      digest to the semver tags and `latest`
@@ -101,9 +101,11 @@ jobs:
         run: |
           TAG_VERSION="${TAG#v}"
           ROOT_VERSION=$(node -p "require('./package.json').version")
+          FRONTEND_VERSION=$(node -p "require('./apps/frontend/package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
           echo "Tag version              : $TAG_VERSION"
           echo "Root package.json        : $ROOT_VERSION"
+          echo "Frontend package.json    : $FRONTEND_VERSION"
           echo "Electron package.json    : $PKG_VERSION"
           if [ "$TAG_VERSION" != "$ROOT_VERSION" ]; then
             echo "ERROR: git tag ($TAG_VERSION) does not match root package.json version ($ROOT_VERSION)"
@@ -113,8 +115,12 @@ jobs:
             echo "ERROR: git tag ($TAG_VERSION) does not match packaging/electron/package.json version ($PKG_VERSION)"
             exit 1
           fi
-          if [ "$ROOT_VERSION" != "$PKG_VERSION" ]; then
-            echo "ERROR: root package.json ($ROOT_VERSION) and packaging/electron/package.json ($PKG_VERSION) are out of sync"
+          if [ "$TAG_VERSION" != "$FRONTEND_VERSION" ]; then
+            echo "ERROR: git tag ($TAG_VERSION) does not match apps/frontend/package.json version ($FRONTEND_VERSION)"
+            exit 1
+          fi
+          if [ "$ROOT_VERSION" != "$FRONTEND_VERSION" ] || [ "$ROOT_VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: root ($ROOT_VERSION), frontend ($FRONTEND_VERSION), and Electron ($PKG_VERSION) package versions are out of sync"
             exit 1
           fi
           echo "Version check passed."
@@ -127,7 +133,7 @@ jobs:
       - name: Setup Python (for pip-audit)
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Audit Python dependencies
         run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt
@@ -207,7 +213,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      packages: write  # required to push to GHCR with GITHUB_TOKEN
+      packages: write # required to push to GHCR with GITHUB_TOKEN
 
     # Isolate the smoke-test stack from the `vision` project the compose files
     # pin via `name:`, exactly as ci.yml's docker-verify does, so the `down -v`
@@ -307,7 +313,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
           format: table
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: "1"
 
       # The migration round-trip ci.yml's docker-verify job runs, which this
       # pipeline had no equivalent of. `docker-entrypoint.sh` runs `alembic
@@ -555,7 +561,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write  # required to create releases and upload assets
+      contents: write # required to create releases and upload assets
       packages: read
     steps:
       - name: Download mac release artifacts

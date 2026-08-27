@@ -3,10 +3,26 @@ title: Deployment Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-08-26
-tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening, packaging, bun, troubleshooting]
+updated: 2026-08-27
+tags:
+  [
+    guide,
+    deployment,
+    production,
+    docker,
+    electron,
+    phase-1,
+    security,
+    admin-auth,
+    port-binding,
+    container-hardening,
+    packaging,
+    bun,
+    troubleshooting,
+  ]
 description: Production deployment instructions including port binding and admin endpoints security
-aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
+aliases:
+  [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
 ---
 
@@ -18,11 +34,15 @@ This guide covers deploying Vision in production environments.
 
 Vision supports multiple deployment methods:
 
-| Method | Use Case | Complexity |
-|--------|----------|------------|
-| Docker Compose | Single server production | Medium |
-| Electron Desktop | Local desktop app | Low |
-| Manual | Custom infrastructure | High |
+| Method           | Use Case                 | Complexity |
+| ---------------- | ------------------------ | ---------- |
+| Docker Compose   | Single server production | Medium     |
+| Electron Desktop | Local desktop app        | Low        |
+| Manual           | Custom infrastructure    | High       |
+
+Browser deployments expose a minimal Web App Manifest, so a supporting browser can install the
+site with Vision branding and standalone window metadata. This does not add a service worker or an
+offline cache; the backend remains required for application data and operations.
 
 ## Docker Compose (Recommended)
 
@@ -113,9 +133,10 @@ server {
 The backend's admin API (`/api/admin/*`) is protected by:
 
 1. **Port binding to localhost only**: `docker-compose.yml` binds the host port to `127.0.0.1`, ensuring only the host machine can reach the container directly:
+
    ```yaml
    ports:
-     - "127.0.0.1:${PORT:-3002}:3002"  # Loopback bind (recommended)
+     - "127.0.0.1:${PORT:-3002}:3002" # Loopback bind (recommended)
    ```
 
 2. **Private network allowlist fallback**: When `ADMIN_AUTH_TOKEN` is unset, admin endpoints allow requests from:
@@ -136,20 +157,21 @@ The backend's admin API (`/api/admin/*`) is protected by:
 
 Vision's `docker-compose.yml` includes defense-in-depth hardening:
 
-| Control | Status | Details |
-|---------|--------|---------|
-| Non-root user | Enabled | `USER bun` (UID 1000) in Dockerfile; `user: "1000:1000"` in compose |
-| Dropped capabilities | Enabled | `cap_drop: [ALL]` prevents privilege escalation |
-| No-new-privileges | Enabled | `security_opt: [no-new-privileges:true]` |
+| Control              | Status  | Details                                                                    |
+| -------------------- | ------- | -------------------------------------------------------------------------- |
+| Non-root user        | Enabled | `USER bun` (UID 1000) in Dockerfile; `user: "1000:1000"` in compose        |
+| Dropped capabilities | Enabled | `cap_drop: [ALL]` prevents privilege escalation                            |
+| No-new-privileges    | Enabled | `security_opt: [no-new-privileges:true]`                                   |
 | Read-only filesystem | Enabled | `read_only: true` with selective writable surfaces (`/tmp`, named volumes) |
-| Resource limits | Enabled | `mem_limit: 4g`, `cpus: 4.0` |
-| Healthcheck | Enabled | Automatic health probe on `HEALTHCHECK` interval |
+| Resource limits      | Enabled | `mem_limit: 4g`, `cpus: 4.0`                                               |
+| Healthcheck          | Enabled | Automatic health probe on `HEALTHCHECK` interval                           |
 
 For complete details, rationale, and path-to-production hardening checklist, see [[docs/adr/039-docker-container-hardening|ADR-039]] and [[docs/security/container-hardening|Container Hardening Policy]].
 
 ## Database Migrations in Production
 
 Startup logic runs automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
+
 1. Waits for the PostgreSQL database to be ready
 2. Runs `alembic upgrade head` to bootstrap or migrate the schema
    - On a fresh DB: baseline migration `0001_initial_database_schema` creates all 27 tables, enums, indexes, and triggers
@@ -220,14 +242,14 @@ not a backup.
 
 ## Docker Commands Reference
 
-| Command | Description |
-|---------|-------------|
-| `docker compose up -d` | Start services in background |
-| `docker compose down` | Stop services |
-| `docker compose restart` | Restart all services |
-| `docker compose logs -f` | Follow logs |
-| `docker compose exec app sh` | Shell into app container |
-| `docker compose exec db psql` | Database shell |
+| Command                       | Description                  |
+| ----------------------------- | ---------------------------- |
+| `docker compose up -d`        | Start services in background |
+| `docker compose down`         | Stop services                |
+| `docker compose restart`      | Restart all services         |
+| `docker compose logs -f`      | Follow logs                  |
+| `docker compose exec app sh`  | Shell into app container     |
+| `docker compose exec db psql` | Database shell               |
 
 ## Electron Desktop App
 
@@ -270,6 +292,7 @@ npm run dist
 ```
 
 This produces three artifacts in `packaging/electron/dist/`:
+
 - `Vision.app/` — Standalone macOS application bundle
 - `Vision-1.0.0-arm64.dmg` — Disk image for distribution/installation
 - `Vision-1.0.0-arm64-mac.zip` — Compressed bundle for archival
@@ -301,18 +324,21 @@ Their transitive graph is pinned in `packaging/electron/bun.lock`; do not add a 
 Electron-builder's `files` and `extraResources` arrays control what gets packed inside `app.asar` vs. kept outside at `Contents/Resources/`.
 
 **Files inside asar** (`files` array in `package.json`):
+
 - `main.js` — Electron main process
 - `preload.js` — Security preload bridge
 - `backup/**/*` — Backup/restore bundle utilities
 - `assets/**/*` — Frontend build output
 
 **Files outside asar** (`extraResources` array):
+
 - `i18n/` → `Contents/Resources/i18n` — Runtime i18n locale files
 - `resources/` → `Contents/Resources/resources` — Additional static resources (e.g., docker-compose.yml)
 
 **Rationale:** `main.js` references i18n and resources via `process.resourcesPath` (lines 22, 204, 234). Packing them inside `app.asar` causes runtime path lookups to fail (`Cannot find module './i18n/...'`). Placing them at `Contents/Resources/` ensures they're accessible via the `process.resourcesPath` reference at runtime.
 
 **Configuration example:**
+
 ```json
 {
   "build": {
@@ -328,11 +354,13 @@ Electron-builder's `files` and `extraResources` arrays control what gets packed 
 #### Installation & Launch
 
 **From DMG:**
+
 1. Open `Vision-1.0.0-arm64.dmg`
 2. Drag `Vision.app` to `/Applications` folder
 3. Open Applications, right-click `Vision.app`, select "Open" (first launch only — macOS Gatekeeper check)
 
 **From .app bundle directly:**
+
 ```bash
 # If you have the Vision.app bundle, either:
 # 1. Drag to /Applications and launch from Launchpad
@@ -367,51 +395,58 @@ For now, the Gatekeeper prompt on first launch is expected.
 
 #### Application Metadata
 
-| Property | Value |
-|----------|-------|
-| App ID | `com.vaultvoyager.vision` |
-| Product Name | `Vision` |
-| Category | Finance |
-| Icon | `packaging/electron/build/icon.icns` (stylized "V eye" logo, 1024px) |
+| Property     | Value                                                                |
+| ------------ | -------------------------------------------------------------------- |
+| App ID       | `com.vaultvoyager.vision`                                            |
+| Product Name | `Vision`                                                             |
+| Category     | Finance                                                              |
+| Icon         | `packaging/electron/build/icon.icns` (stylized "V eye" logo, 1024px) |
 
 The icon is located at `packaging/electron/build/icon.svg` (source vector) and compiled to `.icns` format for macOS.
 
 #### Troubleshooting
 
 **"Vision" cannot be opened because the developer cannot be verified:**
+
 - Expected on unsigned builds
 - Right-click the app, select "Open"
 - Or use `xattr -dr com.apple.quarantine /Applications/Vision.app`
 
 **Backend service unavailable:**
+
 - Ensure Docker Desktop is running
 - Check app logs: Settings → App → Developer → Open Logs
 - Verify Docker image is built: `cd apps/node-backend && docker build -t vision-app .`
 - Check that local Docker image is tagged: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest` (see [[#docker-composeyml-pull-policy|Docker Compose Pull Policy]] below)
 
 **Icon not showing in Finder:**
+
 - Ensure `build/icon.icns` exists
 - Rebuild: `npm run dist`
 - Clear Finder cache: `rm -rf ~/Library/Caches/com.apple.finder`
 
 **"Cannot find module './backup/bundle'" at startup:**
+
 - Cause: `backup/` directory not included in electron-builder `files` array
 - Fix: Add `backup/**/*` to `files` in `package.json` build config
 - Verify: `ls -la packaging/electron/dist/mac-arm64/Vision.app/Contents/Resources/app.asar` should contain `backup/bundle.js`
 
 **"Cannot find module 'archiver-utils'" or other missing transitives:**
+
 - Cause: The frozen Electron dependency tree was not installed or the packaged asar is incomplete
 - Fix: Confirm `packaging/electron/bun.lock`, then run `bun install --frozen-lockfile --cwd packaging/electron` from the repository root
 - Rebuild with `npm run dist` from `packaging/electron/` and inspect the asar before changing dependency declarations
 
 **"ENOENT docker-compose.yml" in Contents/Resources/resources/:**
+
 - Cause: `resources/docker-compose.yml` not copied to `extraResources`
 - Fix: Ensure `extraResources` config includes `{ "from": "resources", "to": "resources" }`
 - Verify: `ls -la /path/to/Vision.app/Contents/Resources/resources/` shows `docker-compose.yml`
 
 **"registry unauthorized" on first launch (GHCR private image):**
+
 - Cause: Packaged app attempts to pull from private GHCR registry without auth
-- Fix: 
+- Fix:
   1. Build locally: `docker compose build` in project root
   2. Retag image: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
   3. Verify `packaging/electron/resources/docker-compose.yml` has `pull_policy: missing` (uses local image instead of attempting registry pull)
@@ -431,12 +466,14 @@ services:
 **Pull policy: missing** — Docker uses a local image if it exists; only pulls from registry if not found locally. This avoids GHCR auth failures on first install.
 
 **Workflow for packaged app:**
+
 1. In development or CI, build the image: `docker compose build` (creates `vision-app:latest`)
 2. Retag for embedded config: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
 3. Package the app: `cd packaging/electron && npm run dist` (embeds `docker-compose.yml` with `pull_policy: missing`)
 4. User installs and launches the app — compose finds local `ghcr.io/erapartner/vision:latest` image without registry access
 
 If you need users to pull from GHCR (e.g., published release), either:
+
 - Ensure the image is public, or
 - Document Docker login steps for users
 
@@ -444,18 +481,18 @@ If you need users to pull from GHCR (e.g., published release), either:
 
 ### Required Variables
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `POSTGRES_PASSWORD` | Database password |
+| Variable            | Description                  |
+| ------------------- | ---------------------------- |
+| `DATABASE_URL`      | PostgreSQL connection string |
+| `POSTGRES_PASSWORD` | Database password            |
 
 ### Optional Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 3002 | Server port |
-| `LOG_LEVEL` | info | Logging level (debug, info, warn, error) |
-| `CORS_ORIGINS` | http://localhost:5173 | Allowed origins |
+| Variable       | Default               | Description                              |
+| -------------- | --------------------- | ---------------------------------------- |
+| `PORT`         | 3002                  | Server port                              |
+| `LOG_LEVEL`    | info                  | Logging level (debug, info, warn, error) |
+| `CORS_ORIGINS` | http://localhost:5173 | Allowed origins                          |
 
 ## Security Checklist
 

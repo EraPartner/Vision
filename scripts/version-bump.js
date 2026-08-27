@@ -1,18 +1,23 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 const VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const MANIFESTS = ['package.json', 'packaging/electron/package.json'];
+const MANIFESTS = [
+  "package.json",
+  "apps/frontend/package.json",
+  "packaging/electron/package.json",
+];
 
 function readManifest(repoRoot, relativePath, fileSystem) {
   const filePath = path.join(repoRoot, relativePath);
-  const originalText = fileSystem.readFileSync(filePath, 'utf8');
+  const originalText = fileSystem.readFileSync(filePath, "utf8");
   return { filePath, originalText, manifest: JSON.parse(originalText) };
 }
 
 function cleanup(fileSystem, filePath) {
-  if (fileSystem.existsSync(filePath)) fileSystem.rmSync(filePath, { force: true });
+  if (fileSystem.existsSync(filePath))
+    fileSystem.rmSync(filePath, { force: true });
 }
 
 function bumpVersions(repoRoot, nextVersion, fileSystem = fs) {
@@ -31,15 +36,23 @@ function bumpVersions(repoRoot, nextVersion, fileSystem = fs) {
       stagedPath: `${entry.filePath}${suffix}.tmp`,
     };
   });
-  const currentVersions = new Set(entries.map(({ manifest }) => manifest.version));
+  const currentVersions = new Set(
+    entries.map(({ manifest }) => manifest.version),
+  );
   if (currentVersions.size !== 1) {
-    throw new Error(`Refusing to hide an existing version mismatch: ${[...currentVersions].join(', ')}`);
+    throw new Error(
+      `Refusing to hide an existing version mismatch: ${[...currentVersions].join(", ")}`,
+    );
   }
 
   try {
     for (const { manifest, stagedPath } of entries) {
       manifest.version = nextVersion;
-      fileSystem.writeFileSync(stagedPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      fileSystem.writeFileSync(
+        stagedPath,
+        `${JSON.stringify(manifest, null, 2)}\n`,
+        "utf8",
+      );
     }
 
     for (const { backupPath, filePath, stagedPath } of entries) {
@@ -67,15 +80,17 @@ function bumpVersions(repoRoot, nextVersion, fileSystem = fs) {
 function main() {
   const nextVersion = process.argv[2];
   if (!nextVersion || process.argv.length !== 3) {
-    console.error('Usage: bun run version:bump <x.y.z>');
+    console.error("Usage: bun run version:bump <x.y.z>");
     process.exitCode = 1;
     return;
   }
 
   try {
-    const changed = bumpVersions(path.resolve(__dirname, '..'), nextVersion);
+    const changed = bumpVersions(path.resolve(__dirname, ".."), nextVersion);
     for (const filePath of changed) {
-      console.log(`Updated ${path.relative(path.resolve(__dirname, '..'), filePath)} to ${nextVersion}`);
+      console.log(
+        `Updated ${path.relative(path.resolve(__dirname, ".."), filePath)} to ${nextVersion}`,
+      );
     }
   } catch (error) {
     console.error(`Version bump failed: ${error.message}`);
