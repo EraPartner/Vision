@@ -36,6 +36,7 @@ import { computeRecipientPivot } from '../services/calculations/aggregation/reci
 import { computeTagPivot } from '../services/calculations/aggregation/tagPivot.js';
 import { getTargetCurrency, parseBoolQueryParam } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
+import { assertYmd } from '../lib/validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { validateIntArray } from '../middleware/validation.js';
 
@@ -92,6 +93,21 @@ function parseNumericArrayQueryParam(raw) {
   return values
     .map((v) => Number(v))
     .filter((n) => Number.isFinite(n));
+}
+
+/**
+ * Normalize the pivots' legacy `start`/`end` aliases onto the API-wide
+ * `start_date`/`end_date` contract. The canonical spelling wins when callers
+ * send both, including when its value is empty (which means no bound).
+ * @param {ExpressRequest['query']} query
+ */
+function parsePivotDateRange(query) {
+  const start = query.start_date !== undefined ? query.start_date : query.start;
+  const end = query.end_date !== undefined ? query.end_date : query.end;
+  return {
+    startDate: assertYmd(start, 'start_date'),
+    endDate: assertYmd(end, 'end_date'),
+  };
 }
 
 router.get('/monthly-summary', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
@@ -273,8 +289,7 @@ router.get('/recipient-by-year', /** @param {ExpressRequest} req @param {Express
 
 router.get('/recipient-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
-  const startDate = req.query.start || null;
-  const endDate = req.query.end || null;
+  const { startDate, endDate } = parsePivotDateRange(req.query);
   const recipientIds = parseIdArrayQueryParam(req.query.recipient_ids, 'recipient_ids');
   const { data, meta } = await computeRecipientPivot({
     targetCurrency: getTargetCurrency(req),
@@ -289,8 +304,7 @@ router.get('/recipient-pivot', /** @param {ExpressRequest} req @param {ExpressRe
 
 router.get('/tag-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
-  const startDate = req.query.start || null;
-  const endDate = req.query.end || null;
+  const { startDate, endDate } = parsePivotDateRange(req.query);
   const tagIds = parseIdArrayQueryParam(req.query.tag_ids, 'tag_ids');
   const allTags = req.query.all === 'true' || req.query.all_tags === 'true';
   const { data, meta } = await computeTagPivot({

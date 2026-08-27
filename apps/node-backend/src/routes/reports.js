@@ -83,13 +83,15 @@ const precomputedPITSchema = z.object({
   })).optional(),
 }).optional();
 
+const int4Id = z.number().int().positive().max(2147483647);
+
 const reportBodySchema = z.object({
   currency:             z.string().regex(/^[A-Z]{3}$/, 'currency must be a 3-letter ISO code').default('EUR'),
   period:               periodSchema,
   sections:             z.array(z.string()).default([]),
   theme:                themeSchema,
-  excludedCategoryIds:  z.array(z.number().int().positive()).default([]),
-  excludedRecipientIds: z.array(z.number().int().positive()).default([]),
+  excludedCategoryIds:  z.array(int4Id).default([]),
+  excludedRecipientIds: z.array(int4Id).default([]),
   taxProfile:           taxProfileSchema,
   precomputedPIT:       precomputedPITSchema,
 });
@@ -106,21 +108,37 @@ function parseReportBody(body) {
   return result.data;
 }
 
+export { parseReportBody as __parseReportBody };
+
+/**
+ * Generate and send one PDF response while keeping Express concerns in the
+ * route layer.
+ * @param {ExpressResponse} res
+ * @param {Parameters<typeof generateReport>[0]} options
+ */
+async function sendReport(res, options) {
+  const { pdf, filename } = await generateReport(options);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', pdf.length);
+  res.end(pdf);
+}
+
 /* ── POST endpoints ──────────────────────────────────────────────────────── */
 
 router.post('/financial', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
-  await generateReport({ type: 'financial', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
+  await sendReport(res, { type: 'financial', currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds });
 });
 
 router.post('/portfolio', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
-  await generateReport({ type: 'portfolio', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
+  await sendReport(res, { type: 'portfolio', currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds });
 });
 
 router.post('/tax', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT } = parseReportBody(req.body);
-  await generateReport({ type: 'tax', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT });
+  await sendReport(res, { type: 'tax', currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT });
 });
 
 

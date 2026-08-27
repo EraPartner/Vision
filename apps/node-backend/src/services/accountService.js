@@ -8,13 +8,13 @@
 import { z } from 'zod';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError, ConflictError } from '../middleware/errorHandler.js';
-import { assertCurrency, validateNumber, validateId } from '../middleware/validation.js';
+import { assertCurrency, validateNumber, validateId } from '../lib/validation.js';
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = ['checking', 'savings', 'brokerage', 'crypto_exchange', 'wallet', 'pension', 'liability'];
-export const LIQUIDITY_CLASSES = ['liquid', 'semi_liquid', 'illiquid'];
+const LIQUIDITY_CLASSES = ['liquid', 'semi_liquid', 'illiquid'];
 export const TAX_WRAPPERS = ['none', 'pension', 'tax_advantaged'];
-export const ACCOUNT_OWNERS = ['me', 'partner', 'joint'];
+const ACCOUNT_OWNERS = ['me', 'partner', 'joint'];
 
 // Matches the 12-integer-digit ceiling of the money columns (NUMERIC(18,6)).
 const MAX_STATEMENT_BALANCE = 1e12;

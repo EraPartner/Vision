@@ -36,13 +36,11 @@ export { ApiErrorCode } from './errors.js';
 
 /**
  * Optional response metadata. Every response may carry `requestId` (stamped by
- * the correlation middleware); `extra` is a free-form escape hatch for facts
- * about the response itself, e.g. `{ source: 'mv' }`. Pagination does NOT
- * belong here — see the note above.
+ * the correlation middleware), while route-specific facts such as `source`,
+ * `provider`, or `computedAt` live beside it at the top level. Pagination does
+ * NOT belong here — see the note above.
  *
- * @typedef {object} ResponseMeta
- * @property {string} [requestId]
- * @property {Record<string, unknown>} [extra]
+ * @typedef {Record<string, unknown> & { requestId?: string }} ResponseMeta
  */
 
 /**

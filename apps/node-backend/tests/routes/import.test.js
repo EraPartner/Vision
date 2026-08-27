@@ -127,6 +127,7 @@ import {
 } from '../../src/repositories/importBatchRepository.js';
 import multer from 'multer';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
+import { refreshAggregations } from '../../src/services/aggregationRefresh.js';
 
 const { default: importRouter } = await import('../../src/routes/importRoutes.js');
 
@@ -140,6 +141,13 @@ const api = routeAgent(importRouter, { mountPath: BASE });
 const apiProd = routeAgent(importRouter, { mountPath: BASE, isProduction: () => true });
 
 const FILE = { path: '/tmp/test.csv', originalname: 'test.csv', size: 100 };
+
+function routeHandler(method, path) {
+  const layer = importRouter.stack.find((candidate) =>
+    candidate.route?.path === path && candidate.route.methods[method]);
+  if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
+  return layer.route.stack.at(-1).handle;
+}
 
 /** Split a buffered `text/event-stream` body into `{ name, data }` frames. */
 function parseSseFrames(rawText) {
@@ -552,12 +560,12 @@ describe('Import Routes', () => {
   describe('DELETE /batches/:id', () => {
     it('rolls back complete batch and returns deleted count', async () => {
       getBatch.mockResolvedValue({ id: 3, status: 'complete' });
-      rollbackBatch.mockResolvedValue({ deleted: 15 });
+      rollbackBatch.mockResolvedValue({ deleted: 15, recipientsRemoved: 2 });
 
       const res = await api.delete(`${BASE}/batches/3`).expect(200);
 
       expect(rollbackBatch).toHaveBeenCalledWith(3);
-      expect(res.body.data.deleted).toBe(15);
+      expect(res.body.data).toEqual({ deleted: 15, recipientsRemoved: 2 });
     });
 
     it('throws ValidationError for non-numeric id', async () => {
@@ -600,6 +608,46 @@ describe('Import Routes', () => {
       const res = await api.delete(`${BASE}/batches/8`).expect(200);
 
       expect(res.body.data.deleted).toBe(0);
+    });
+  });
+
+  describe('DELETE /batches/:id rollback callback parity (listener-free)', () => {
+    const handler = routeHandler('delete', '/batches/:id');
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      getBatch.mockResolvedValue({ id: 3, status: 'complete' });
+      refreshAggregations.mockResolvedValue(undefined);
+    });
+
+    it('refreshes aggregations when recipient cleanup is the only side effect', async () => {
+      rollbackBatch.mockResolvedValue({ deleted: 0, recipientsRemoved: 2 });
+      const res = { ok: vi.fn() };
+
+      await handler({ params: { id: '3' } }, res);
+
+      expect(refreshAggregations).toHaveBeenCalledOnce();
+      expect(res.ok).toHaveBeenCalledWith({ deleted: 0, recipientsRemoved: 2 });
+    });
+
+    it('skips refresh when both side-effect counts are zero', async () => {
+      rollbackBatch.mockResolvedValue({ deleted: 0, recipientsRemoved: 0 });
+      const res = { ok: vi.fn() };
+
+      await handler({ params: { id: '3' } }, res);
+
+      expect(refreshAggregations).not.toHaveBeenCalled();
+      expect(res.ok).toHaveBeenCalledWith({ deleted: 0, recipientsRemoved: 0 });
+    });
+
+    it('still returns the rollback body when aggregation refresh fails', async () => {
+      rollbackBatch.mockResolvedValue({ deleted: 1, recipientsRemoved: 0 });
+      refreshAggregations.mockRejectedValue(new Error('refresh failed'));
+      const res = { ok: vi.fn() };
+
+      await handler({ params: { id: '3' } }, res);
+
+      expect(res.ok).toHaveBeenCalledWith({ deleted: 1, recipientsRemoved: 0 });
     });
   });
 

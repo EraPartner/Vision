@@ -4,7 +4,7 @@
  * Monthly grouped bar chart of taxes vs fees + mini-table.
  */
 
-import { fmtCurrency, fmtMonthLabel, svgGenericGroupedBarChart } from '../sectionHelpers.js';
+import { emptySection, fmtCurrency, fmtMonthLabel, sectionPage, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -15,13 +15,7 @@ export function renderTaxMonthlyTrend(data, { currency }) {
   const byMonth = data?.byMonth ?? [];
 
   if (!byMonth.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Monthly Tax Trend</div>
-        <div class="section-subtitle">Taxes and fees over time</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No monthly data</strong>No tax transactions found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Monthly Tax Trend', subtitle: 'Taxes and fees over time', heading: 'No monthly data', message: 'No tax transactions found for the selected period.' });
   }
 
   const sorted = [...byMonth].sort((a, b) => {
@@ -55,11 +49,10 @@ export function renderTaxMonthlyTrend(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Monthly Tax Trend</div>
-      <div class="section-subtitle">Taxes and fees across ${sorted.length} month${sorted.length === 1 ? '' : 's'}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Monthly Tax Trend',
+    subtitle: `Taxes and fees across ${sorted.length} month${sorted.length === 1 ? '' : 's'}`,
+    content: `
       <div class="chart-wrap">${chart}</div>
       <table class="data-table">
         <thead><tr>
@@ -69,6 +62,6 @@ export function renderTaxMonthlyTrend(data, { currency }) {
           <th class="num">Total</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

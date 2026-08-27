@@ -20,7 +20,7 @@ import {
   assertYmd,
   validateIntArray,
   validateNumber,
-} from '../middleware/validation.js';
+} from '../lib/validation.js';
 import { EXPORT_JOINS_SQL } from './transactionExport.js';
 
 const DEFAULT_ID_CAP = 500;

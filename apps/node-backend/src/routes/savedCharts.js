@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import savedChartsService from '../services/savedChartsService.js';
-import { validateIntArray, validateIdParam } from '../middleware/validation.js';
+import { validateIntArray, validateIdParam, assertIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
@@ -172,7 +172,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   // Only fields present in the body reach the repository — buildSetClauses
   // skips absent/undefined fields, so partial updates stay partial.
   const data = parseChartBody(updateChartSchema, req.body);
@@ -182,7 +182,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const deleted = await savedChartsService.delete(id);
   if (!deleted) throw new NotFoundError('Saved chart not found');
   res.status(204).send();

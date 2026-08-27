@@ -6,8 +6,12 @@
  */
 
 import {
+  comparisonChartPair,
+  emptySection,
   escapeHtml,
+  filterNotice,
   fmtCurrency,
+  sectionPage,
   svgHorizontalBars,
 } from '../sectionHelpers.js';
 
@@ -25,13 +29,7 @@ export function renderCategoryBreakdown(data, { currency }) {
   const hasExclusions = excludedCategoryIds.length > 0;
 
   if (!cats.length) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Category Breakdown</div>
-        <div class="section-subtitle">Spending by category</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No category data available.</div>
-      </div>`;
+    return emptySection({ title: 'Category Breakdown', subtitle: 'Spending by category', message: 'No category data available.', pageBreak: true });
   }
 
   // Sort by absolute total (largest spend first)
@@ -56,17 +54,12 @@ export function renderCategoryBreakdown(data, { currency }) {
       value: Math.abs(c.total),
       fmtValue: fmtCurrency(Math.abs(c.total), currency),
     }));
-    chartHtml = `
-      <div class="chart-pair">
-        <div>
-          <div class="chart-pair-label">With active filters (${filteredSorted.length} categor${filteredSorted.length === 1 ? 'y' : 'ies'})</div>
-          ${svgHorizontalBars(filteredItems)}
-        </div>
-        <div>
-          <div class="chart-pair-label">All data (${sorted.length} categor${sorted.length === 1 ? 'y' : 'ies'})</div>
-          ${svgHorizontalBars(allItems)}
-        </div>
-      </div>`;
+    chartHtml = comparisonChartPair({
+      filteredLabel: `With active filters (${filteredSorted.length} categor${filteredSorted.length === 1 ? 'y' : 'ies'})`,
+      filteredChart: svgHorizontalBars(filteredItems),
+      allLabel: `All data (${sorted.length} categor${sorted.length === 1 ? 'y' : 'ies'})`,
+      allChart: svgHorizontalBars(allItems),
+    });
   } else {
     const chartItems = sorted.slice(0, MAX_CHART_ITEMS).map(c => ({
       label: c.name ?? 'Uncategorised',
@@ -98,16 +91,10 @@ export function renderCategoryBreakdown(data, { currency }) {
     : '';
 
   const filterNoticeHtml = hasExclusions
-    ? `<div class="filter-notice">Table shows ${filteredSorted?.length ?? 0} categories matching active filters. ${excludedCategoryIds.length} categor${excludedCategoryIds.length === 1 ? 'y' : 'ies'} excluded — see "All data" chart above.</div>`
+    ? filterNotice({ filteredCount: filteredSorted?.length ?? 0, excludedCount: excludedCategoryIds.length, singular: 'category', plural: 'categories' })
     : '';
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Category Breakdown</div>
-      <div class="section-subtitle">Top spending categories (all time)</div>
-      <hr class="section-divider">
-      ${chartHtml}
-    </div>
+  return `${sectionPage({ title: 'Category Breakdown', subtitle: 'Top spending categories (all time)', content: chartHtml, pageBreak: true })}
     <div class="page-continuation">
       ${filterNoticeHtml}
       <table class="data-table">

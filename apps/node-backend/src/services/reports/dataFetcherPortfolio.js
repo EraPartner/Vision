@@ -29,23 +29,9 @@ import { logger } from '../../config/logger.js';
  * A row of `getBreakdownSummary`'s resolved array
  * (services/portfolio/portfolioSummaryService.js, re-exported here).
  *
- * Several section renderers (assetClassDetail, portfolioAllocation,
- * portfolioExecutiveSummary, topHoldings) defensively read EITHER a camelCase
- * or a snake_case field name for the same value (`assetClass ?? asset_class`,
- * `totalInvested ?? total_invested`, `gainLoss ?? gain_loss`,
- * `gainLossPercent ?? gain_loss_pct`) — apparent defense against an
- * older/alternate row shape. `getBreakdownSummary` only ever emits the
- * camelCase fields (see portfolioSummaryService.js), so every snake_case
- * branch is dead code today; kept as always-`undefined` optional fields here
- * (rather than removed) to stay behavior-preserving — flagged for the
- * orchestrator as a probable-dead-code finding. (The `current_value` fallback
- * was already removed.)
- * @typedef {Awaited<ReturnType<typeof getBreakdownSummary>>[number] & {
- *   asset_class?: undefined,
- *   total_invested?: undefined,
- *   gain_loss?: undefined,
- *   gain_loss_pct?: undefined,
- * }} BreakdownRow
+ * Compatibility aliases are normalized once at the fetch boundary so section
+ * renderers consume one camelCase shape.
+ * @typedef {Awaited<ReturnType<typeof getBreakdownSummary>>[number]} BreakdownRow
  */
 
 /** @typedef {{ year: number; month: number; amount: number }} DividendMonthRow */
@@ -83,6 +69,29 @@ function unwrap(result, label) {
   if (result.status === 'fulfilled') return result.value;
   logger.warn(`[dataFetcherPortfolio] ${label} failed — section will be skipped`, { reason: result.reason?.message });
   return null;
+}
+
+/**
+ * Normalize the historical snake_case breakdown aliases at one boundary.
+ *
+ * @param {Partial<BreakdownRow> & {
+ *   asset_class?: string,
+ *   current_value?: number,
+ *   total_invested?: number,
+ *   gain_loss?: number,
+ *   gain_loss_pct?: number,
+ * }} row
+ * @returns {BreakdownRow}
+ */
+export function normalizeBreakdownRow(row) {
+  return /** @type {BreakdownRow} */ ({
+    ...row,
+    assetClass: row.assetClass ?? row.asset_class ?? 'other',
+    currentValue: row.currentValue ?? row.current_value ?? 0,
+    totalInvested: row.totalInvested ?? row.total_invested ?? 0,
+    gainLoss: row.gainLoss ?? row.gain_loss ?? 0,
+    gainLossPercent: row.gainLossPercent ?? row.gain_loss_pct ?? 0,
+  });
 }
 
 /**
@@ -195,9 +204,11 @@ export async function fetchPortfolioData(currency, period) {
     fetchDividends(currency, startDate, endDate),
   ]);
 
+  const breakdown = unwrap(breakdownResult, 'getBreakdownSummary');
+
   return {
     snapshots: unwrap(snapshotsResult, 'getSnapshots'),
-    breakdown: unwrap(breakdownResult, 'getBreakdownSummary'),
+    breakdown: breakdown?.map(normalizeBreakdownRow) ?? breakdown,
     dividends: unwrap(dividendsResult, 'fetchDividends'),
     period,
     currency,

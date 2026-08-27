@@ -5,7 +5,7 @@
  * dividends YTD, return %, inflation-adjusted value; plus top-holdings mini-table.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtPct, kpiGrid, sectionPage, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -14,13 +14,12 @@ import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionH
  */
 export function renderPortfolioExecutiveSummary(data, { currency }) {
   if (!data?.breakdown?.length && !data?.snapshots?.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Portfolio Overview</div>
-        <div class="section-subtitle">Key performance indicators</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No portfolio data</strong>Add investments to see the executive summary.</div>
-      </div>`;
+    return emptySection({
+      title: 'Portfolio Overview',
+      subtitle: 'Key performance indicators',
+      heading: 'No portfolio data',
+      message: 'Add investments to see the executive summary.',
+    });
   }
 
   // Derive totals from breakdown (per-investment summaries)
@@ -31,8 +30,8 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
 
   for (const inv of breakdown) {
     totalValue    += Number(inv.currentValue ?? 0);
-    totalInvested += Number(inv.totalInvested   ?? inv.total_invested   ?? 0);
-    totalGainLoss += Number(inv.gainLoss        ?? inv.gain_loss        ?? 0);
+    totalInvested += Number(inv.totalInvested ?? 0);
+    totalGainLoss += Number(inv.gainLoss ?? 0);
   }
 
   // Use latest snapshot for return % and inflation-adjusted value
@@ -68,7 +67,7 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
 
   const rows = top5.map(inv => {
     const val = Number(inv.currentValue ?? 0);
-    const gl  = Number(inv.gainLoss ?? inv.gain_loss ?? 0);
+    const gl  = Number(inv.gainLoss ?? 0);
     const cls = signClass(gl);
     return `<tr>
       <td>${escapeHtml(inv.name ?? '—')}</td>
@@ -78,11 +77,10 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Portfolio Overview</div>
-      <div class="section-subtitle">Key performance indicators for the selected period</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Portfolio Overview',
+    subtitle: 'Key performance indicators for the selected period',
+    content: `
       ${kpiCards}
       ${kpiCards2}
       ${top5.length ? `
@@ -93,6 +91,6 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
             <th class="num">Unrealised P/L</th>
           </tr></thead>
           <tbody>${rows}</tbody>
-        </table>` : ''}
-    </div>`;
+        </table>` : ''}`,
+  });
 }

@@ -26,8 +26,7 @@ Legend:
 | `splits.js` | `roundToCents` | indirect | — | — | used everywhere; covered by every split fixture |
 | `normalization.js` | `normalizeForMatching` (re-export) | 10 | — | — | see `textNormalization.js` goldens |
 | `normalization.js` | `findBestRecipientMatches` | — | — | — | DB-bound (pg_trgm); tested in `rawTransactionImportService.test.js` |
-| `currency.js` | `convertToEur` (re-export) | — | yes | — | round-trip within rounding |
-| `currency.js` | `convertToCurrency` (re-export) | — | yes | — | round-trip within rounding |
+| `currencyConversionService.js` | `convertToCurrency` | — | yes | — | round-trip within rounding |
 | `dedup` (`services/deduplication.js`) | `createTransactionHash` | 8 | — | — | backward-compat hash lock (Phase 7) |
 | `dedup` (`services/deduplication.js`) | `createManualTransactionHash` | 8 | — | — | backward-compat hash lock (Phase 7) |
 

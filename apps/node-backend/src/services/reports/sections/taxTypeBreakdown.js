@@ -4,7 +4,7 @@
  * svgHorizontalBars of TOB / dividend WHT / sell taxes / fees / other; table with absolute + %.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -21,13 +21,7 @@ export function renderTaxTypeBreakdown(data, { currency }) {
   ].filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
 
   if (!components.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Tax Type Breakdown</div>
-        <div class="section-subtitle">Distribution of taxes and fees by type</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No tax data</strong>No tax transactions found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Tax Type Breakdown', subtitle: 'Distribution of taxes and fees by type', heading: 'No tax data', message: 'No tax transactions found for the selected period.' });
   }
 
   const total = components.reduce((s, c) => s + c.amount, 0);
@@ -46,11 +40,10 @@ export function renderTaxTypeBreakdown(data, { currency }) {
   </tr>`).join('');
   /* eslint-enable vision-local-money/no-raw-money-arithmetic */
 
-  return `
-    <div class="page">
-      <div class="section-title">Tax Type Breakdown</div>
-      <div class="section-subtitle">Total cost: ${fmtCurrency(total, currency)} across ${components.length} categories</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Tax Type Breakdown',
+    subtitle: `Total cost: ${fmtCurrency(total, currency)} across ${components.length} categories`,
+    content: `
       <div class="chart-wrap">${svgHorizontalBars(barItems, { maxItems: 8 })}</div>
       <table class="data-table">
         <thead><tr>
@@ -59,6 +52,6 @@ export function renderTaxTypeBreakdown(data, { currency }) {
           <th class="num">Share</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

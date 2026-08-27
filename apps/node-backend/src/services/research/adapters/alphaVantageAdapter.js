@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { getJson, num } from './httpClient.js';
-import { providerKey } from '../providerKeys.js';
+import { requireProviderKey } from '../providerKeys.js';
 import { parseOr } from './schemas.js';
 
 const BASE = 'https://www.alphavantage.co/query';
@@ -31,11 +31,7 @@ const RANGE_TO_DAYS = Object.freeze({
   '1d': 2, '5d': 7, '1mo': 31, '3mo': 93, '6mo': 186, '1y': 366, '2y': 731, '5y': 1827, max: 100000,
 });
 
-function key() {
-  const k = providerKey('alpha_vantage');
-  if (!k) throw new Error('ALPHA_VANTAGE_API_KEY not configured');
-  return k;
-}
+const key = () => requireProviderKey('alpha_vantage');
 
 // Rate-limit / info responses carry no data — surface them as errors so the
 // aggregator falls through instead of caching an empty result.

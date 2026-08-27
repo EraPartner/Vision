@@ -6,10 +6,9 @@ import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { todayAppDateString, firstOfMonthYmd, addDaysYmd } from '../lib/timezone.js';
 import { nextOccurrenceYmd, fastForwardYmd } from '../lib/calculations/recurrence.js';
-import { addAll, toDecimal, toNumber } from '../lib/money.js';
+import { addAll, toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import {
-  roundToCents,
-  formatDateToYmd,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -102,7 +101,7 @@ export const plannedRepository = {
     const [nextMonthYear, nextMonthMonth] = startYmd.split('-').map((s) => parseInt(s, 10));
 
     const sql = `
-      SELECT pt.*, r.name AS recipient_name,
+      SELECT pt.*, COALESCE(pr.name, r.name) AS recipient_name,
              -- Same 3-level resolution as plannedTransactionRepository (and as
              -- transactionRepository's CATEGORY_NAME_SQL): own (c) → recipient
              -- default (rc) → PRIMARY recipient default (pc). This site

@@ -13,17 +13,15 @@
  */
 
 import { query } from '../database/connection.js';
-import { buildExclusionClauses } from '../lib/filterBuilder.js';
+import { buildExclusionClauses, validateInt4Ids } from '../lib/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
+import { formatDateToYmd, toWireDate } from '../lib/dateFormat.js';
+import { formatYearMonthKey } from '../lib/dateKeys.js';
 import { todayAppDateString, firstOfMonthYmd } from '../lib/timezone.js';
 import {
   mvAvailable,
-  roundToCents,
-  formatDateToYmd,
-  toWireDate,
-  formatYearMonthKey,
   buildMonthlySummary,
   mapRowsForAmountConversion,
   getIncludeTransfers,
@@ -41,8 +39,8 @@ export async function getMonthlyFinancialSummary(
   excludedRecipientIds = [],
   allTime = false,
 ) {
-  const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-  const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+  const validIds = validateInt4Ids(excludedCategoryIds, 'excludedCategoryIds');
+  const validRecipientIds = validateInt4Ids(excludedRecipientIds, 'excludedRecipientIds');
   logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
   // The single clock for this call (ADR-009). Read ONCE, bound into whichever
   // path runs (MV filter or live generate_series) and reused for the JS

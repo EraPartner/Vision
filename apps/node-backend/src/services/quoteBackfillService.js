@@ -15,7 +15,7 @@
 
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
-import { getDayKeyUtc } from '../repositories/infoRepositoryHelpers.js';
+import { getDayKeyUtc } from '../lib/dateKeys.js';
 import { madReturnStats, isRobustNeedle } from '../lib/math.js';
 import { forEachConcurrent } from '../lib/concurrency.js';
 import {

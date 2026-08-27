@@ -2,9 +2,9 @@
  * Portfolio import batch service — the route-facing seam over
  * portfolioImportBatchRepository (eslint vision-local/no-repo-direct-from-route).
  *
- * Pure data access (history, review preview, per-row override) is re-exported
- * straight from the repository. The two operations that coordinate multiple
- * repositories — creating a holding from a row, and rollback — live here.
+ * Pure history and per-row override access is re-exported from the repository.
+ * Preview assembly and the operations that coordinate multiple repositories —
+ * creating a holding from a row and rollback — live here.
  */
 
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
@@ -12,6 +12,7 @@ import investmentRepository from '../repositories/investmentRepository.js';
 import { query, withTransaction } from '../database/connection.js';
 import {
   getRowForInvestmentCreation,
+  getPreviewRows,
   lockBatchForUpdate,
   lockInvestmentResolutionRows,
   overrideInvestment,
@@ -24,10 +25,80 @@ import {
 export {
   listBatches,
   getBatch,
-  getPreviewRows,
   overrideInvestment,
   setBatchAccount,
 } from '../repositories/portfolioImportBatchRepository.js';
+
+/**
+ * Build the portfolio-import preview consumed by the review page.
+ * @param {any[]} rows
+ */
+function buildPortfolioImportBatchPreview(rows) {
+  /** @type {Map<string, any>} */
+  const groupMap = new Map();
+  for (const row of rows) {
+    const key = row.route === 'cash'
+      ? 'cash'
+      : (row.effective_investment_id != null
+        ? `inv:${row.effective_investment_id}`
+        : `raw:${(row.symbol_raw || row.name_raw || '?').toLowerCase()}`);
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        is_cash: row.route === 'cash',
+        investment_id: row.effective_investment_id,
+        investment_name: row.investment_name,
+        investment_symbol: row.investment_symbol,
+        investment_asset_class: row.investment_asset_class,
+        raw_symbol: row.route === 'cash' ? null : row.symbol_raw,
+        raw_name: row.route === 'cash' ? null : row.name_raw,
+        rows: [],
+      });
+    }
+    groupMap.get(key).rows.push({
+      id: row.id,
+      row_index: row.row_index,
+      status: row.status,
+      route: row.route,
+      tx_date: row.tx_date,
+      type: row.type,
+      type_raw: row.type_raw,
+      symbol_raw: row.symbol_raw,
+      name_raw: row.name_raw,
+      units: row.units,
+      price_per_unit: row.price_per_unit,
+      amount: row.amount,
+      fees: row.fees,
+      taxes: row.taxes,
+      currency: row.currency,
+      fx_rate_to_eur: row.fx_rate_to_eur,
+      note: row.note,
+      match_source: row.match_source,
+      error_message: row.error_message,
+      user_override_investment_id: row.user_override_investment_id,
+    });
+  }
+
+  const groups = [...groupMap.values()].map((group) => ({
+    ...group,
+    row_count: group.rows.length,
+  }));
+  /** @type {Record<string, number>} */
+  const totals = { symbol: 0, name_exact: 0, unresolved: 0, error: 0 };
+  for (const row of rows) {
+    if (row.status === 'error') {
+      totals.error += 1;
+      continue;
+    }
+    const source = row.match_source ?? 'unresolved';
+    totals[source] = (totals[source] || 0) + 1;
+  }
+  return { groups, totals };
+}
+
+/** @param {number} batchId */
+export async function getPortfolioImportBatchPreview(batchId) {
+  return buildPortfolioImportBatchPreview(await getPreviewRows(batchId));
+}
 
 /**
  * Create a new investment from a staging row's symbol/name and the batch's

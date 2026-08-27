@@ -28,6 +28,53 @@ describe('mockTxConnection — ambient transaction routing', () => {
     expect(result).toEqual({ rows: [{ id: 1 }], rowCount: 1 });
   });
 
+  it('models ambient savepoint success and failure while preserving the original error', async () => {
+    const original = new Error('insert failed');
+    const client = { query: vi.fn(async (sql) => {
+      if (sql === 'ROLLBACK TO SAVEPOINT sp_fail') throw new Error('rollback failed');
+      return { rows: [] };
+    }) };
+    const conn = mockTxConnection(client);
+
+    await conn.withTransaction(async () => {
+      await expect(conn.withSavepointIfInTransaction('sp_ok', async () => 42)).resolves.toBe(42);
+      await expect(conn.withSavepointIfInTransaction('sp_fail', async () => {
+        throw original;
+      })).rejects.toBe(original);
+    });
+
+    expect(client.query.mock.calls.map(([sql]) => sql)).toEqual([
+      'SAVEPOINT sp_ok',
+      'RELEASE SAVEPOINT sp_ok',
+      'SAVEPOINT sp_fail',
+      'ROLLBACK TO SAVEPOINT sp_fail',
+    ]);
+  });
+
+  it('runs savepoint callbacks directly outside an ambient transaction', async () => {
+    const client = { query: vi.fn() };
+    const conn = mockTxConnection(client);
+
+    await expect(conn.withSavepointIfInTransaction('sp_outside', async () => 'ok')).resolves.toBe('ok');
+    expect(client.query).not.toHaveBeenCalled();
+  });
+
+  it('models savepoints inside a transaction without an explicit client', async () => {
+    const conn = mockTxConnection();
+
+    await conn.withTransaction(async () => {
+      await conn.withSavepointIfInTransaction('sp_shared', async () => {
+        await conn.query('UPDATE inside_savepoint');
+      });
+    });
+
+    expect(conn.query.mock.calls.map(([sql]) => sql)).toEqual([
+      'SAVEPOINT sp_shared',
+      'UPDATE inside_savepoint',
+      'RELEASE SAVEPOINT sp_shared',
+    ]);
+  });
+
   it('does NOT route outside a transaction — module query falls back to the pool', async () => {
     const client = { query: vi.fn() };
     const conn = mockTxConnection(client);

@@ -14,39 +14,26 @@
  */
 
 import { query } from '../database/connection.js';
-import { toDecimal, toNumber, addAll } from '../lib/money.js';
+import { toDecimal, toNumber, addAll, roundMoney as roundToCents } from '../lib/money.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
+import { extractYearMonth } from '../lib/dateKeys.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
-  roundToCents,
-  formatDateToYmd,
-  extractYearMonth,
   mapRowsForAmountConversion,
   getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
+import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.js';
 
 /** Lookback length: N complete, already-elapsed calendar months. */
 const WINDOW_MONTHS = 6;
 
-/**
- * 'YYYY-MM' month key for a pg DATE column (a JS Date via node-postgres, or a
- * string on some paths), or null when the column was NULL/absent.
- * @param {unknown} value
- * @returns {string|null}
- */
-function monthKeyFromDbDate(value) {
-  if (value == null) return null;
-  const ymd = value instanceof Date ? formatDateToYmd(value) : String(value).slice(0, 10);
-  return /^\d{4}-\d{2}/.test(ymd) ? ymd.slice(0, 7) : null;
-}
-
-/**
- * Denominator for the historical averages — the SAME counting rule
- * `infoRepositoryForecast.countObservedMonths` uses (elapsed months from the
- * ledger's first in-window transaction through the last complete month),
- * applied to this card's 6-month window. Note the forecast card's window is
- * 24 months, so the two cards' divisors legitimately differ for ledgers older
- * than 6 months — what is shared is the rule, not the number. Two failure
+/*
+ * Denominator for the historical averages — the shared observed-month rule
+ * counts elapsed months from the ledger's first in-window transaction through
+ * the last complete month, applied here to this card's 6-month window. The
+ * forecast card's window is 24 months, so the two cards' divisors differ for
+ * ledgers older than 6 months — what is shared is the rule, not the number. Two failure
  * modes bracket the right answer:
  *
  *  - Dividing by "months that happen to carry rows" (the old behaviour here)
@@ -69,23 +56,9 @@ function monthKeyFromDbDate(value) {
  * ADR-083 transfer predicate empty the oldest months and silently re-base the
  * divisor.
  *
- * @param {string|null} ledgerStartMonth 'YYYY-MM' of the ledger's first
- *   in-window transaction, or null when it has none.
- * @param {number} lastCompleteMonthIdx Absolute month index (year*12 + month-1)
- *   of the last complete month.
- * @returns {number} Months to divide by; always in [1, WINDOW_MONTHS].
+ * The implementation lives in lib/observedMonths.js; this caller passes
+ * its own six-month window while the forecast caller passes 24 months.
  */
-function countObservedMonths(ledgerStartMonth, lastCompleteMonthIdx) {
-  if (!ledgerStartMonth) return 1;
-  const startIdx = Number(ledgerStartMonth.slice(0, 4)) * 12 + (Number(ledgerStartMonth.slice(5, 7)) - 1);
-  const span = lastCompleteMonthIdx - startIdx + 1;
-  // Both inputs come off the same APP_TIMEZONE clock now (see the file header):
-  // `ledgerStartMonth` is probed from a window anchored on the bound app date,
-  // `lastCompleteMonthIdx` is derived from that same date. The clamp is here
-  // for its own job — keeping the span out of 0 and off the far end.
-  return Math.min(WINDOW_MONTHS, Math.max(1, span));
-}
-
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // The single clock for this call (ADR-009). Read ONCE, bound into all three
   // queries as $1 and reused for the month/day arithmetic further down, so the
@@ -189,6 +162,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   const monthsCount = countObservedMonths(
     monthKeyFromDbDate(ledgerStartResult.rows[0]?.first_date),
     lastCompleteMonthIdx,
+    WINDOW_MONTHS,
   );
   const avgMonthlySpending = totalMonthlySpending / monthsCount;
 

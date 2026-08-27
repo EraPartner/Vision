@@ -4,7 +4,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { sanitizeUpdateFields } from '../middleware/validation.js';
+import { sanitizeUpdateFields } from '../lib/validation.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 import { stampAccountIdForUpdate } from './transactionRepository.js';
@@ -54,6 +54,11 @@ const PLANNED_CATEGORY_NAME_SQL = `CASE
                 ELSE NULL
               END`;
 
+// Display the recipient cluster root, matching transactionRepository. Keep
+// pt.recipient_id unchanged so edit/match behavior still targets the stored
+// recipient row; this expression is presentation-only.
+const PLANNED_RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
+
 // `acct.name AS bank_account` is selected AFTER `pt.*` so the projected
 // `bank_account` key resolves to the canonical accounts.name over the FK
 // (node-postgres keeps the LAST duplicate field) — ADR-088 contract phase:
@@ -61,7 +66,7 @@ const PLANNED_CATEGORY_NAME_SQL = `CASE
 // byte-identical pre-drop under the dual-write parity invariant.
 const PLANNED_SELECT_FIELDS = `pt.*,
              acct.name AS bank_account,
-             r.name AS recipient_name,
+             ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name,
              ${PLANNED_CATEGORY_NAME_SQL} AS category_name`;
 
 const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
@@ -150,6 +155,7 @@ function buildPlannedTransactionWhereClause({
       pt.memo ILIKE $${paramIdx} OR
       pt.comment ILIKE $${paramIdx} OR
       acct.name ILIKE $${paramIdx} OR
+      ${PLANNED_RECIPIENT_NAME_SQL} ILIKE $${paramIdx} OR
       r.name ILIKE $${paramIdx} OR
       -- Match the RESOLVED label the row displays, not each candidate level in
       -- turn. ORing c/rc separately both missed rows categorised through the
@@ -389,9 +395,10 @@ export const plannedTransactionRepository = {
               pt.is_recurring,
               pt.recurrence_pattern,
               pt.memo,
-              r.name AS recipient_name
+              ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name
          FROM planned_transactions pt
          LEFT JOIN recipients r ON pt.recipient_id = r.id
+         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
         WHERE pt.is_active = true
           AND pt.is_executed = false
           AND pt.recipient_id IS NOT NULL
@@ -657,7 +664,7 @@ export const plannedTransactionRepository = {
     const sql = `
       SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
              pt.memo, pt.is_recurring, pt.recurrence_pattern,
-             r.name AS recipient_name,
+             ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name,
              ${PLANNED_CATEGORY_NAME_SQL} AS category_name
       FROM planned_transactions pt
       ${PLANNED_JOINS}

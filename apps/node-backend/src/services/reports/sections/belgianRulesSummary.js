@@ -4,7 +4,7 @@
  * Static bracket table for the tax year + PIT summary block when supplied.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -18,13 +18,7 @@ export function renderBelgianRulesSummary(data, { currency }) {
   const taxProfile     = data?.taxProfile     ?? null;
 
   if (!taxTables && !precomputedPIT) {
-    return `
-      <div class="page">
-        <div class="section-title">Belgian Tax Rules</div>
-        <div class="section-subtitle">Tax year ${taxYear} bracket reference</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No tax table data</strong>Belgian tax bracket data unavailable for year ${taxYear}.</div>
-      </div>`;
+    return emptySection({ title: 'Belgian Tax Rules', subtitle: `Tax year ${taxYear} bracket reference`, heading: 'No tax table data', message: `Belgian tax bracket data unavailable for year ${taxYear}.` });
   }
 
   const tob = taxTables?.tob ?? {};
@@ -46,12 +40,10 @@ export function renderBelgianRulesSummary(data, { currency }) {
 
   const pitHtml = precomputedPIT ? renderPITBlock(precomputedPIT, taxProfile, currency) : '';
 
-  return `
-    <div class="page">
-      <div class="section-title">Belgian Tax Rules — ${taxYear}</div>
-      <div class="section-subtitle">Reference bracket data for tax year ${taxYear}</div>
-      <hr class="section-divider">
-
+  return sectionPage({
+    title: `Belgian Tax Rules — ${taxYear}`,
+    subtitle: `Reference bracket data for tax year ${taxYear}`,
+    content: `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
         <div>
           <div style="font-size:11px;font-weight:600;color:hsl(var(--muted));text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Dividend Tax</div>
@@ -70,9 +62,8 @@ export function renderBelgianRulesSummary(data, { currency }) {
           </table>
         </div>
       </div>
-
-      ${pitHtml}
-    </div>`;
+      ${pitHtml}`,
+  });
 }
 
 /**

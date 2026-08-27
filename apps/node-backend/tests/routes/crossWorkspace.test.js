@@ -66,6 +66,14 @@ describe('POST /rebalance validation', () => {
   it('ignores a truthy non-object targetWeights and falls through to the model branch', async () => {
     const res = await rebalance({ targetWeights: 'garbage' }).expect(400);
     expect(res.body.error.message).toMatch(/Provide either/);
+
+    const withModel = await rebalance({ targetWeights: 'garbage', model: 'sixty_forty' }).expect(200);
+    expect(withModel.body.data.targetWeights).toEqual({ stocks: 0.6, bonds: 0.4 });
+  });
+
+  it('gives explicit object targetWeights precedence over a model', async () => {
+    const res = await rebalance({ targetWeights: {}, model: 'sixty_forty' }).expect(400);
+    expect(res.body.error.message).toBe('targetWeights must include at least one positive weight');
   });
 
   it('coerces numeric-string weights and normalizes them to sum to 1', async () => {

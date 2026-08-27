@@ -32,6 +32,17 @@ const { default: settingsRouter } = await import('../../src/routes/settings.js')
 const api = routeAgent(settingsRouter, { mountPath: '/api/settings' });
 const BASE = '/api/settings';
 
+function registeredHandler(path, method) {
+  const layer = settingsRouter.stack.find(
+    (entry) => entry.route?.path === path && entry.route.methods[method],
+  );
+  if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path} route`);
+  return layer.route.stack.at(-1).handle;
+}
+
+const putSingleSetting = registeredHandler('/:key', 'put');
+const putSettings = registeredHandler('/', 'put');
+
 describe('Settings Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,6 +132,36 @@ describe('Settings Routes', () => {
   });
 
   describe('PUT /:key', () => {
+    it('passes coerced exclusion ids from the registered route handler to the single writer', async () => {
+      const stored = {
+        excludedCategoryIds: [7],
+        excludedRecipientIds: [8],
+      };
+      settingsRepository.set.mockResolvedValue({ key: 'dashboard_settings', value: stored });
+      const res = { ok: vi.fn() };
+
+      await putSingleSetting({
+        params: { key: 'dashboard_settings' },
+        body: { value: { excludedCategoryIds: ['7'], excludedRecipientIds: ['8'] } },
+      }, res);
+
+      expect(settingsRepository.set).toHaveBeenCalledWith('dashboard_settings', stored);
+      expect(res.ok).toHaveBeenCalledWith({ key: 'dashboard_settings', value: stored });
+    });
+
+    it.each([
+      ['excludedCategoryIds', ['abc']],
+      ['excludedRecipientIds', ['abc']],
+      ['excludedCategoryIds', '7'],
+    ])('rejects malformed %s before the single writer runs', async (field, value) => {
+      await expect(putSingleSetting({
+        params: { key: 'dashboard_settings' },
+        body: { value: { [field]: value } },
+      }, { ok: vi.fn() })).rejects.toThrow();
+
+      expect(settingsRepository.set).not.toHaveBeenCalled();
+    });
+
     it('returns a 400 VALIDATION_ERROR envelope when key length exceeds maximum', async () => {
       const res = await api.put(`${BASE}/${'k'.repeat(101)}`).send({ value: true }).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
@@ -244,6 +285,36 @@ describe('Settings Routes', () => {
   });
 
   describe('PUT /', () => {
+    it('passes coerced exclusion ids from the registered route handler to the bulk writer', async () => {
+      settingsRepository.setMany.mockResolvedValue(undefined);
+      const res = { ok: vi.fn() };
+
+      await putSettings({
+        body: {
+          dashboard_settings: {
+            excludedCategoryIds: ['7'],
+            excludedRecipientIds: ['8'],
+          },
+        },
+      }, res);
+
+      expect(settingsRepository.setMany).toHaveBeenCalledWith({
+        dashboard_settings: {
+          excludedCategoryIds: [7],
+          excludedRecipientIds: [8],
+        },
+      });
+      expect(res.ok).toHaveBeenCalledWith({ saved: 1 });
+    });
+
+    it('rejects malformed exclusions before the bulk writer runs', async () => {
+      await expect(putSettings({
+        body: { dashboard_settings: { excludedRecipientIds: ['abc'] } },
+      }, { ok: vi.fn() })).rejects.toThrow();
+
+      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+    });
+
     it('returns a 400 VALIDATION_ERROR envelope when body is an array', async () => {
       const res = await api.put(BASE).send([]).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));

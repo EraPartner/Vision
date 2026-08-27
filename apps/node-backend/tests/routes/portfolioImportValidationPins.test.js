@@ -52,6 +52,7 @@ vi.mock('../../src/services/portfolioImportBatchService.js', () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPreviewRows: vi.fn(),
+  getPortfolioImportBatchPreview: vi.fn(),
   overrideInvestment: vi.fn(),
   createInvestmentForRow: vi.fn(),
   rollbackBatch: vi.fn(),

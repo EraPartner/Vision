@@ -798,6 +798,9 @@ describe('InfoRepository', () => {
         expect(result.summary.transaction_count).toBe(2);
         // The SQL must exclude already-executed planned transactions.
         expect(query.mock.calls[0][0]).toContain('is_executed = false');
+        expect(query.mock.calls[0][0]).toContain(
+          'COALESCE(pr.name, r.name) AS recipient_name',
+        );
       } finally {
         vi.useRealTimers();
       }
@@ -1094,6 +1097,10 @@ describe('InfoRepository', () => {
       // re-base the divisor (see infoRepositoryForecast's sqlLedgerStart).
       const probeSql = query.mock.calls[2][0];
       expect(probeSql).toContain('MIN(t.date)');
+      expect(probeSql).toContain('t.is_active = true');
+      expect(probeSql).toContain(
+        "t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)",
+      );
       expect(probeSql).not.toMatch(/is_transfer/);
       expect(probeSql).not.toMatch(/LIMIT/i);
     });

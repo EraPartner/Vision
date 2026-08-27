@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import { getJson } from './httpClient.js';
-import { providerKey } from '../providerKeys.js';
+import { requireProviderKey } from '../providerKeys.js';
 import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
 const BASE = 'https://api.twelvedata.com';
@@ -58,11 +58,7 @@ const RANGE_TO_OUTPUTSIZE = Object.freeze({
   '1d': 2, '5d': 7, '1mo': 23, '3mo': 66, '6mo': 130, '1y': 260, '2y': 520, '5y': 1300, max: 5000,
 });
 
-function key() {
-  const k = providerKey('twelve_data');
-  if (!k) throw new Error('TWELVE_DATA_API_KEY not configured');
-  return k;
-}
+const key = () => requireProviderKey('twelve_data');
 
 /**
  * @param {unknown} payload raw JSON body — upstream shape is undocumented outside

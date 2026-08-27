@@ -4,7 +4,7 @@
  * Monthly bar chart of dividend income + top dividend-paying investments table.
  */
 
-import { escapeHtml, fmtCurrency, fmtMonthLabel, svgGenericGroupedBarChart } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtMonthLabel, sectionPage, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -16,13 +16,7 @@ export function renderDividendIncome(data, { currency }) {
   const byInvestment = data?.dividends?.byInvestment ?? [];
 
   if (!byMonth.length && !byInvestment.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Dividend Income</div>
-        <div class="section-subtitle">Dividend cash flows over the selected period</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No dividend data</strong>No dividend transactions found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Dividend Income', subtitle: 'Dividend cash flows over the selected period', heading: 'No dividend data', message: 'No dividend transactions found for the selected period.' });
   }
 
   const totalDividends = byMonth.reduce((s, m) => s + m.amount, 0);
@@ -44,11 +38,10 @@ export function renderDividendIncome(data, { currency }) {
     <td class="num">${fmtCurrency(inv.total, currency)}</td>
   </tr>`).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Dividend Income</div>
-      <div class="section-subtitle">Total: ${fmtCurrency(totalDividends, currency)} across ${byMonth.length} month${byMonth.length === 1 ? '' : 's'}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Dividend Income',
+    subtitle: `Total: ${fmtCurrency(totalDividends, currency)} across ${byMonth.length} month${byMonth.length === 1 ? '' : 's'}`,
+    content: `
       <div class="chart-wrap">${chart}</div>
       ${tableRows ? `
         <table class="data-table">
@@ -57,6 +50,6 @@ export function renderDividendIncome(data, { currency }) {
             <th class="num">Total Dividends</th>
           </tr></thead>
           <tbody>${tableRows}</tbody>
-        </table>` : ''}
-    </div>`;
+        </table>` : ''}`,
+  });
 }

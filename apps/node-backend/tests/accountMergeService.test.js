@@ -49,9 +49,17 @@ beforeEach(() => {
 });
 
 describe('mergeAccounts (ADR-088)', () => {
-  it('rejects an empty / self-only source set', async () => {
+  it('rejects an empty source set or any self-reference before opening a transaction', async () => {
     await expect(mergeAccounts(2, [])).rejects.toThrow(ValidationError);
     await expect(mergeAccounts(2, [2])).rejects.toThrow(ValidationError);
+    await expect(mergeAccounts(2, [1, 2])).rejects.toThrow(/must not include the survivor/);
+    expect(mockClient.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than 500 sources before opening a transaction', async () => {
+    await expect(mergeAccounts(2, Array.from({ length: 501 }, (_, index) => index + 3)))
+      .rejects.toThrow(/at most 500/);
+    expect(mockClient.query).not.toHaveBeenCalled();
   });
 
   it('throws NotFound when the survivor is missing', async () => {
@@ -88,6 +96,14 @@ describe('mergeAccounts (ADR-088)', () => {
     expect(calls.some((s) => s.includes('DELETE FROM accounts'))).toBe(true);
 
     // transactions repoint carries the survivor's name (so the dual-write trigger keeps it merged)
+    const txCall = mockClient.query.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
+    expect(txCall[1]).toEqual([2, 'TARGET', [1]]);
+  });
+
+  it('filters invalid direct-call ids and duplicates without coercing strings', async () => {
+    happyPath();
+    await mergeAccounts(2, /** @type {any} */ ([1, 1, 0, -1, 1.5, '1', null]));
+
     const txCall = mockClient.query.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
     expect(txCall[1]).toEqual([2, 'TARGET', [1]]);
   });

@@ -19,9 +19,14 @@ import {
   clearKey,
   hydrate,
 } from '../../src/services/research/researchProviderKeyService.js';
-import { providerKey, keySource, loadKeyOverrides } from '../../src/services/research/providerKeys.js';
+import {
+  providerKey,
+  requireProviderKey,
+  keySource,
+  loadKeyOverrides,
+} from '../../src/services/research/providerKeys.js';
 
-const PROVIDER_ENV = ['TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY'];
+const PROVIDER_ENV = ['TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY', 'FRED_API_KEY'];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,6 +67,24 @@ describe('setKey', () => {
   it('rejects an empty key', async () => {
     await expect(setKey('fmp', '   ')).rejects.toThrow(/non-empty/);
     expect(keyRepo.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireProviderKey', () => {
+  it('returns the same effective settings-over-env key as providerKey', () => {
+    process.env.FMP_API_KEY = 'env-value';
+    loadKeyOverrides([{ provider: 'fmp', api_key: 'settings-value' }]);
+    expect(requireProviderKey('fmp')).toBe('settings-value');
+  });
+
+  it.each([
+    ['twelve_data', 'TWELVE_DATA_API_KEY'],
+    ['finnhub', 'FINNHUB_API_KEY'],
+    ['fmp', 'FMP_API_KEY'],
+    ['alpha_vantage', 'ALPHA_VANTAGE_API_KEY'],
+    ['fred', 'FRED_API_KEY'],
+  ])('names the missing %s environment variable', (provider, variable) => {
+    expect(() => requireProviderKey(provider)).toThrow(`${variable} not configured`);
   });
 });
 

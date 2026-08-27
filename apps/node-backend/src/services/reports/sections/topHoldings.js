@@ -4,19 +4,7 @@
  * Renders a table of the top 15 investments by current value.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, signClass } from '../sectionHelpers.js';
-
-/** @type {Record<string, string>} */
-const ASSET_CLASS_LABELS = {
-  stock:       'Stock',
-  etf:         'ETF',
-  crypto:      'Crypto',
-  metals:      'Metals',
-  savings:     'Savings',
-  bond:        'Bond',
-  real_estate: 'Real Estate',
-  other:       'Other',
-};
+import { assetClassLabel, emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -27,13 +15,12 @@ export function renderTopHoldings(data, { currency }) {
   const breakdown = data?.breakdown ?? [];
 
   if (!breakdown.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Top Holdings</div>
-        <div class="section-subtitle">Largest positions by current value</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No holdings data</strong>Add investments to see the top holdings.</div>
-      </div>`;
+    return emptySection({
+      title: 'Top Holdings',
+      subtitle: 'Largest positions by current value',
+      heading: 'No holdings data',
+      message: 'Add investments to see the top holdings.',
+    });
   }
 
   const sorted = [...breakdown]
@@ -44,18 +31,18 @@ export function renderTopHoldings(data, { currency }) {
 
   const rows = sorted.map((inv, idx) => {
     const val      = Number(inv.currentValue ?? 0);
-    const invested = Number(inv.totalInvested   ?? inv.total_invested   ?? 0);
-    const gl       = Number(inv.gainLoss        ?? inv.gain_loss        ?? 0);
-    const glPct    = Number(inv.gainLossPercent ?? inv.gain_loss_pct    ?? (invested > 0 ? (gl / invested) * 100 : 0));
+    const invested = Number(inv.totalInvested ?? 0);
+    const gl       = Number(inv.gainLoss ?? 0);
+    const glPct    = Number(inv.gainLossPercent ?? (invested > 0 ? (gl / invested) * 100 : 0));
     const share    = totalValue > 0 ? (val / totalValue) * 100 : 0;
-    const ac       = inv.assetClass ?? inv.asset_class ?? 'other';
+    const ac       = inv.assetClass;
     const glCls    = signClass(gl);
 
     return `<tr>
       <td style="color:hsl(var(--muted));font-size:10px;">${idx + 1}</td>
       <td>${escapeHtml(inv.name ?? '—')}</td>
       <td>${escapeHtml(inv.symbol ?? '—')}</td>
-      <td><span class="badge badge-neutral">${escapeHtml(ASSET_CLASS_LABELS[ac] ?? ac)}</span></td>
+      <td><span class="badge badge-neutral">${escapeHtml(assetClassLabel(ac))}</span></td>
       <td class="num">${fmtCurrency(invested, currency)}</td>
       <td class="num">${fmtCurrency(val, currency)}</td>
       <td class="num ${glCls}">${fmtCurrency(gl, currency)}</td>
@@ -64,11 +51,10 @@ export function renderTopHoldings(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Top Holdings</div>
-      <div class="section-subtitle">Largest positions by current value (top ${sorted.length} of ${breakdown.length})</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Top Holdings',
+    subtitle: `Largest positions by current value (top ${sorted.length} of ${breakdown.length})`,
+    content: `
       <table class="data-table">
         <thead><tr>
           <th>#</th>
@@ -82,6 +68,6 @@ export function renderTopHoldings(data, { currency }) {
           <th class="num">Share</th>
         </tr></thead>
         <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

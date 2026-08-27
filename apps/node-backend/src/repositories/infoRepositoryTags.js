@@ -14,6 +14,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { validateInt4Ids } from '../lib/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   buildPeriodPivot,
@@ -21,14 +22,29 @@ import {
 } from './infoRepositoryHelpers.js';
 
 export const tagInsightsRepository = {
-  async getTagPivot(targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, tagIds = null, allTags = false } = {}) {
+  /**
+   * @param {{
+   *   targetCurrency?: string,
+   *   bucket?: string,
+   *   startDate?: string|null,
+   *   endDate?: string|null,
+   *   tagIds?: number[]|null,
+   *   allTags?: boolean,
+   * }} [options]
+   */
+  async getTagPivot({
+    targetCurrency = 'EUR',
+    bucket = 'monthly',
+    startDate = null,
+    endDate = null,
+    tagIds = null,
+    allTags = false,
+  } = {}) {
     // Tag pivot is rendered either for an explicit selection on a saved chart or
     // for an "all tags" dynamic source. With no selection and no all-flag there
     // is nothing to chart, so short-circuit instead of scanning every tagged
     // expense row.
-    const validTagIds = Array.isArray(tagIds)
-      ? tagIds.filter((id) => Number.isInteger(id) && id > 0 && id < 2147483647)
-      : [];
+    const validTagIds = validateInt4Ids(tagIds, 'tagIds');
     if (!allTags && validTagIds.length === 0) return { tagPivot: {} };
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";

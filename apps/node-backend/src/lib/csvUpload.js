@@ -28,7 +28,7 @@ import { ValidationError } from '../middleware/errorHandler.js';
  * @param {MulterFile|null|undefined} file
  * @returns {boolean}
  */
-export function isLikelyCsvFile(file) {
+function isLikelyCsvFile(file) {
   const originalName = file?.originalname?.toLowerCase() || '';
   const mimeType = file?.mimetype?.toLowerCase() || '';
   const hasCsvExtension = originalName.endsWith('.csv');

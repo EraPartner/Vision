@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import categoryService from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertIdParam } from '../middleware/validation.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 // mv_monthly_summary / mv_category_totals embed the category name and the
 // recipient default-category mapping, so category mutations must schedule a
@@ -75,13 +75,13 @@ router.post('/assign', /** @param {ExpressRequest} req @param {ExpressResponse} 
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const category = await categoryService.getById(parseInt(req.params.id, 10));
+  const category = await categoryService.getById(assertIdParam(req));
   if (!category) throw new NotFoundError(`Category ${req.params.id} not found`);
   res.ok({ ...category, links: [] });
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const updated = await categoryService.update(id, req.body);
   if (!updated) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
@@ -89,7 +89,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const deleted = await categoryService.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
@@ -98,7 +98,7 @@ router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {E
 });
 
 router.post('/:id/assign', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const categoryId = parseInt(req.params.id, 10);
+  const categoryId = assertIdParam(req);
   let { recipient_ids } = req.body;
   if (!recipient_ids) throw new ValidationError('Missing recipient_ids');
   if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];

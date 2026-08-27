@@ -9,7 +9,7 @@
  */
 
 /** Type-aware TTLs in milliseconds. */
-export const TTL_BY_TYPE = Object.freeze({
+const TTL_BY_TYPE = Object.freeze({
   search: 10 * 60_000, //        10 min
   quote: 10 * 60_000, //         10 min
   chart: 12 * 60 * 60_000, //    12 h

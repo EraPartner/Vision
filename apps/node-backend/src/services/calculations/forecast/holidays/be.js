@@ -51,7 +51,7 @@ function addDays(date, days) {
 }
 
 /** @param {number} year */
-export function belgianHolidays(year) {
+function belgianHolidays(year) {
   const easter = easterSunday(year);
   const easterMonday = addDays(easter, 1);
   const ascension = addDays(easter, 39);

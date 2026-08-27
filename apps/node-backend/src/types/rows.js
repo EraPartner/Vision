@@ -543,9 +543,10 @@
  * @property {string|null} recurrence_interval `recurrence_interval` enum.
  * @property {string|null} recurrence_end_date 'YYYY-MM-DD'
  * @property {number|null} [account_id] Owning account for the lot (ADR-091).
- * @property {number|null} [import_batch_id] The portfolio import batch that created
+ * @property {string|null} [import_batch_id] The portfolio import batch that created
  *           this lot (migration 0086); NULL for manual entry and for lots committed
- *           before 0086 applied. Rollback bulk-deletes on it.
+ *           before 0086 applied. BIGINT remains a node-postgres string on the wire;
+ *           rollback bulk-deletes on it.
  * @property {Date} [created_at]
  * @property {Date} [updated_at]
  * @property {string} [asset_class] Not a column — only present when a caller merged the investment's class in.

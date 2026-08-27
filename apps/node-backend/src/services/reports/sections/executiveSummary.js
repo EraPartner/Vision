@@ -6,11 +6,13 @@
  */
 
 import {
+  emptyNotice,
   escapeHtml,
   fmtCurrency,
   fmtMonthLabel,
   fmtPct,
   kpiGrid,
+  sectionPage,
   signClass,
 } from '../sectionHelpers.js';
 import { filterMonthsByPeriod } from '../dataFetcher.js';
@@ -68,7 +70,7 @@ export function renderExecutiveSummary(data, { currency, period }) {
         </tr>
       </thead>
       <tbody>${tableRows}</tbody>
-    </table>` : '<div class="empty-notice">No transactions in selected period.</div>';
+    </table>` : emptyNotice('No transactions in selected period.');
 
   // Filter impact block — shown only when exclusions produced a filtered dataset
   let filterImpactHtml = '';
@@ -132,14 +134,13 @@ export function renderExecutiveSummary(data, { currency, period }) {
       </div>`;
   }
 
-  return `
-    <div class="page">
-      <div class="section-title">Executive Summary</div>
-      <div class="section-subtitle">Period overview — income, expenses &amp; net position</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Executive Summary',
+    subtitle: 'Period overview — income, expenses & net position',
+    content: `
       ${kpiHtml}
       ${avgHtml}
       ${tableHtml}
-      ${filterImpactHtml}
-    </div>`;
+      ${filterImpactHtml}`,
+  });
 }

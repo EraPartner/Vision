@@ -33,9 +33,9 @@
  */
 
 import { query } from '../database/connection.js';
+import { roundMoney as roundToCents } from '../lib/money.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import {
-  roundToCents,
-  formatDateToYmd,
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
@@ -43,6 +43,7 @@ import {
 import { todayAppDateString } from '../lib/timezone.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { buildExclusionClauses } from '../lib/filterBuilder.js';
+import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.js';
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 /**
@@ -59,17 +60,7 @@ function aggregateByDate(rows) {
   return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Absolute month index for a 'YYYY-MM' key, so month spans are plain integer
-// subtraction (year * 12 + zero-based month).
-/**
- * @param {string} monthKey 'YYYY-MM'
- * @returns {number}
- */
-function monthIndex(monthKey) {
-  return Number(monthKey.slice(0, 4)) * 12 + (Number(monthKey.slice(5, 7)) - 1);
-}
-
-/**
+/*
  * Denominator for the historical monthly average.
  *
  * The lookback is N *complete, already-elapsed* calendar months ending with the
@@ -94,37 +85,9 @@ function monthIndex(monthKey) {
  * — see the comment on that query for why, and for why a planned row cannot
  * establish it.
  *
- * @param {string|null} ledgerStartMonth 'YYYY-MM' of the ledger's first
- *   in-window transaction, or null when it has none.
- * @param {number} lastCompleteMonthIdx {@link monthIndex} of the last complete month.
- * @param {number} windowMonths Lookback length in months.
- * @returns {number} Months to divide by; always >= 1.
+ * The shared implementation lives in lib/observedMonths.js so this 24-month
+ * report and the six-month average-vs-current card cannot drift apart.
  */
-function countObservedMonths(ledgerStartMonth, lastCompleteMonthIdx, windowMonths) {
-  if (!ledgerStartMonth) return 1;
-  const span = lastCompleteMonthIdx - monthIndex(ledgerStartMonth) + 1;
-  // Both inputs now come off the SAME clock: `ledgerStartMonth` is probed from
-  // a window anchored on the bound APP_TIMEZONE date, and `lastCompleteMonthIdx`
-  // is derived from that same date string (convention 1 at the top of this
-  // file). They used to disagree by a month for ~2h around each month
-  // rollover, and this clamp caught only the extremes. It remains for its own
-  // job: keeping the divisor in [1, windowMonths] so it can never be 0
-  // (divide-by-zero) or exceed the lookback.
-  return Math.min(windowMonths, Math.max(1, span));
-}
-
-/**
- * 'YYYY-MM' month key for a pg DATE column (a JS Date via node-postgres, or a
- * string on some paths), or null when the column was NULL/absent.
- * @param {unknown} value
- * @returns {string|null}
- */
-function monthKeyFromDbDate(value) {
-  if (value == null) return null;
-  const ymd = value instanceof Date ? formatDateToYmd(value) : String(value).slice(0, 10);
-  return /^\d{4}-\d{2}/.test(ymd) ? ymd.slice(0, 7) : null;
-}
-
 // Average, across months, of the running cumulative day-of-month net (SIMP-50).
 // `monthDayNet` is { monthKey: { dayOfMonth: net } }. `monthCount` is the
 // divisor from countObservedMonths — NOT Object.keys(monthDayNet).length, see

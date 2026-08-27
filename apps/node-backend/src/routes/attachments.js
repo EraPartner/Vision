@@ -11,13 +11,13 @@ import { Router } from 'express';
 import multer from 'multer';
 import { attachmentRepository } from '../services/attachmentRecordService.js';
 import {
-  attachmentUpload,
   storeAttachment,
   resolveAbsolutePath,
   removeAttachmentFile,
   verifyAttachmentContent,
 } from '../services/attachmentService.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { attachmentUpload } from '../middleware/attachmentUpload.js';
+import { validateIdParam, assertIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 import { logger } from '../config/logger.js';
@@ -57,15 +57,14 @@ router.post(
   },
   /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
-    const transactionId = parseInt(req.params.id, 10);
+    const transactionId = assertIdParam(req);
 
     if (!req.file) {
       throw new ValidationError('No file uploaded. Send a file as multipart/form-data with field name "file".');
     }
     // ExpressRequest.file's members are individually optional (it also
     // describes multer's diskStorage shape, used by other routes) but this
-    // route configures multer's memoryStorage (see attachmentUpload in
-    // services/attachmentService.js), which always populates
+    // The upload middleware uses multer memoryStorage, which always populates
     // originalname/buffer/mimetype together — the `!req.file` guard above is
     // the real runtime check; this narrows to the shape verifyAttachmentContent/
     // storeAttachment declare.
@@ -123,7 +122,7 @@ router.post(
  * limit/offset every attachment is returned, as before.
  */
 router.get('/transaction/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const transactionId = parseInt(req.params.id, 10);
+  const transactionId = assertIdParam(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const attachments = await attachmentRepository.listByTransaction(transactionId, page ?? {});
   const total = page
@@ -144,7 +143,7 @@ router.get('/transaction/:id', validateIdParam, /** @param {ExpressRequest} req 
 // attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
 router.get('/:id/download', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ async (req, res, next) => {
-  const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
+  const attachment = await attachmentRepository.findById(assertIdParam(req));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
   const absPath = await resolveAbsolutePath(attachment.stored_path);
@@ -181,7 +180,7 @@ router.get('/:id/download', validateIdParam, /** @param {ExpressRequest} req @pa
 // attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
+  const attachment = await attachmentRepository.findById(assertIdParam(req));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
   // Delete DB row first — if that fails the file is still present and recoverable.

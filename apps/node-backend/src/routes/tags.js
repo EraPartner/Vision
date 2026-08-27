@@ -12,7 +12,7 @@
 
 import { Router } from 'express';
 import tagService from '../services/tagService.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertIdParam } from '../middleware/validation.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 /**
@@ -45,7 +45,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const updated = await tagService.update(id, req.body);
   res.ok({ ...updated, links: [] });
 });
@@ -54,7 +54,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses").
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const deactivated = await tagService.softDelete(id);
   res.ok({ ...deactivated, links: [] });
 });

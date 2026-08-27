@@ -263,10 +263,15 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryStatistics (real
       ]);
 
       // Excluding the PRIMARY recipient also removes rows recorded under its alias.
-      const exclRecipient = await statisticsRepository.getCategoryPivot([], 'EUR', [rec.aldi]);
+      const exclRecipient = await statisticsRepository.getCategoryPivot({
+        targetCurrency: 'EUR',
+        excludedRecipientIds: [rec.aldi],
+      });
       expect(exclRecipient.categoryPivot['2024-02'].map((c) => c.categoryId)).toEqual([cat.Bills]);
 
-      const exclCategory = await statisticsRepository.getCategoryPivot([cat.Bills]);
+      const exclCategory = await statisticsRepository.getCategoryPivot({
+        excludedCategoryIds: [cat.Bills],
+      });
       expect(exclCategory.categoryPivot['2024-02'].map((c) => c.categoryId)).toEqual([cat.Food]);
     });
 

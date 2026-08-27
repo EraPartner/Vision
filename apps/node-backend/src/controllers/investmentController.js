@@ -25,7 +25,8 @@ import {
   assertYmd,
   validateId,
   validateIntArray,
-} from '../middleware/validation.js';
+} from '../lib/validation.js';
+import { assertIdParam } from '../middleware/validation.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
@@ -308,19 +309,11 @@ export function clearInvestmentsCaches() {
 // ── Request parsers ──────────────────────────────────────────────────────────
 
 /**
- * @param {unknown} value
- * @returns {number}
- */
-function parseInteger(value) {
-  return parseInt(/** @type {string} */ (value), 10);
-}
-
-/**
  * @param {ExpressRequest} req
  * @returns {number}
  */
 export function parseRequestId(req) {
-  return parseInteger(req.params.id);
+  return assertIdParam(req);
 }
 
 /**

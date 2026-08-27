@@ -24,7 +24,7 @@
  * callers can append further predicates.
  */
 
-import { validateIntArray } from '../middleware/validation.js';
+import { validateIntArray } from './validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
 const MAX_LIST_SIZE = 50;

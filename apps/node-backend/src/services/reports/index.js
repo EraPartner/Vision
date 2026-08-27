@@ -3,7 +3,7 @@
  *
  * Entry point for all PDF report types. Each report type (financial, portfolio,
  * tax) builds an HTML document from theme tokens + data, then Puppeteer renders
- * it to a PDF buffer that is piped to the HTTP response.
+ * it to a PDF buffer returned to the HTTP route.
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
@@ -68,25 +68,12 @@ import investmentRepository from '../../repositories/investmentRepository.js';
  */
 
 /**
- * The slice of an Express `Response` this module actually calls. Structural,
- * not `import('express').Response` — express ships no type declarations and
- * `@types/express` is not a workspace dependency, so referencing its types
- * resolves to an implicit `any` (TS7016) under `noImplicitAny` (same
- * reasoning as `ExpressResponse` in transactionExport.js and `ExpressApp` in
- * routeManifest.js).
- * @typedef {object} ExpressResponse
- * @property {(name: string, value: string | number) => void} setHeader
- * @property {(chunk: Buffer) => void} end
- */
-
-/**
  * @typedef {{
  *   type: 'financial' | 'portfolio' | 'tax';
  *   currency: string;
  *   period: Period;
  *   sections: string[];
  *   theme: ThemeTokens;
- *   res: ExpressResponse;
  *   excludedCategoryIds?: number[];
  *   excludedRecipientIds?: number[];
  *   taxProfile?: TaxProfile;
@@ -612,11 +599,12 @@ ${body}
 }
 
 /**
- * Generate a PDF report and pipe it to the HTTP response.
+ * Generate a PDF report for the HTTP route to send.
  *
  * @param {GenerateReportOpts} opts
+ * @returns {Promise<{ pdf: Buffer; filename: string }>}
  */
-export async function generateReport({ type, currency, period, sections, theme, res, excludedCategoryIds = [], excludedRecipientIds = [], taxProfile, precomputedPIT }) {
+export async function generateReport({ type, currency, period, sections, theme, excludedCategoryIds = [], excludedRecipientIds = [], taxProfile, precomputedPIT }) {
   const generatedAt = new Date().toISOString();
   const mode = theme.mode ?? 'light';
 
@@ -655,8 +643,5 @@ export async function generateReport({ type, currency, period, sections, theme, 
   const date = toAppDateString(new Date(generatedAt));
   const filename = `vision-${type}-${date}.pdf`;
 
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Length', pdf.length);
-  res.end(pdf);
+  return { pdf, filename };
 }

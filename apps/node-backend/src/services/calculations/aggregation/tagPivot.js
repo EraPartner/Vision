@@ -24,7 +24,8 @@ export async function computeTagPivot({
   const key = `tag|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`
     + `|ti:${statsKeyPart(tagIds)}|all:${allTags ? 1 : 0}`;
   return withStatisticsCache(key, async () => {
-    const data = await tagInsightsRepository.getTagPivot(targetCurrency, {
+    const data = await tagInsightsRepository.getTagPivot({
+      targetCurrency,
       bucket,
       startDate,
       endDate,

@@ -88,6 +88,63 @@ describe('statistics pivot cache', () => {
     expect(infoRepository.getRecipientByYear).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards named pivot options to every repository boundary', async () => {
+    const common = {
+      targetCurrency: 'USD',
+      bucket: 'yearly',
+      startDate: '2025-01-02',
+      endDate: '2025-12-30',
+    };
+
+    await computeCategoryPivot({
+      targetCurrency: common.targetCurrency,
+      excludedCategoryIds: [11],
+      excludedRecipientIds: [22],
+    });
+    await computeRecipientByYear({
+      targetCurrency: common.targetCurrency,
+      excludedRecipientIds: [22],
+      excludedCategoryIds: [11],
+    });
+    await computeRecipientPivot({
+      ...common,
+      excludedRecipientIds: [22],
+      recipientIds: [33],
+    });
+    await computeTagPivot({
+      ...common,
+      tagIds: [44],
+      allTags: true,
+    });
+
+    expect(infoRepository.getCategoryPivot).toHaveBeenCalledWith({
+      excludedCategoryIds: [11],
+      targetCurrency: 'USD',
+      excludedRecipientIds: [22],
+    });
+    expect(infoRepository.getRecipientByYear).toHaveBeenCalledWith({
+      targetCurrency: 'USD',
+      excludedRecipientIds: [22],
+      excludedCategoryIds: [11],
+    });
+    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledWith({
+      excludedRecipientIds: [22],
+      targetCurrency: 'USD',
+      bucket: 'yearly',
+      startDate: '2025-01-02',
+      endDate: '2025-12-30',
+      recipientIds: [33],
+    });
+    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledWith({
+      targetCurrency: 'USD',
+      bucket: 'yearly',
+      startDate: '2025-01-02',
+      endDate: '2025-12-30',
+      tagIds: [44],
+      allTags: true,
+    });
+  });
+
   it('an in-flight call is deduped (concurrent identical requests share one load)', async () => {
     let resolveLoad;
     infoRepository.getCategoryPivot.mockReturnValue(new Promise((r) => { resolveLoad = r; }));

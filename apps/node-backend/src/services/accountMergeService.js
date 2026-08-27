@@ -33,6 +33,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { filterValidatedIdNumbers } from '../lib/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
 import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBalanceSql.js';
@@ -41,6 +42,8 @@ import { accountRepository } from '../repositories/accountRepository.js';
 import { transactionRepository } from '../repositories/transactionRepository.js';
 import { plannedTransactionRepository } from '../repositories/plannedTransactionRepository.js';
 import { portfolioTransactionRepository } from '../repositories/portfolioTransactionRepository.js';
+
+export const MAX_ACCOUNT_MERGE_SOURCES = 500;
 
 /**
  * Do the stamped-balance histories of >1 original account overlap in time?
@@ -102,12 +105,21 @@ export function collidingAnchorCurrencies(anchors) {
 
 /**
  * @param {number} targetId  the survivor
- * @param {number[]} sourceIds  accounts to merge into the target and delete
+ * @param {number[]} sourceIds  accounts to merge into the target and delete.
+ *   The HTTP boundary rejects malformed arrays. For direct internal calls this
+ *   service drops invalid numeric ids and deduplicates. Self-reference and
+ *   oversized lists are rejected rather than silently narrowed.
  * @returns {Promise<{ into:number, merged:number[], reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, stampsInterleaved:boolean }>}
  */
 export async function mergeAccounts(targetId, sourceIds) {
   if (!Number.isInteger(targetId)) throw new ValidationError('target account id must be an integer');
-  const ids = [...new Set((sourceIds || []).filter((id) => Number.isInteger(id) && id !== targetId))];
+  if (!Array.isArray(sourceIds) || sourceIds.length > MAX_ACCOUNT_MERGE_SOURCES) {
+    throw new ValidationError(`source_ids must contain at most ${MAX_ACCOUNT_MERGE_SOURCES} accounts`);
+  }
+  if (sourceIds.includes(targetId)) {
+    throw new ValidationError('source_ids must not include the survivor account');
+  }
+  const ids = [...new Set(filterValidatedIdNumbers(sourceIds))];
   if (!ids.length) throw new ValidationError('Provide at least one distinct source account to merge');
 
   // Composed from repository methods: the ambient transaction context routes

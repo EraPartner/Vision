@@ -4,8 +4,8 @@
 
 import { query } from '../database/connection.js';
 import { coerceNumericFields } from '../lib/money.js';
-import { toYmd } from '../utils/portfolioMath.js';
-import { validateId } from '../middleware/validation.js';
+import { toYmd } from '../lib/dateFormat.js';
+import { validateId } from '../lib/validation.js';
 import { buildListWhereClause } from './portfolioTxRepo.common.js';
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */

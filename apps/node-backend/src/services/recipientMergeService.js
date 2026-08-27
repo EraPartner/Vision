@@ -20,6 +20,7 @@
  *   5. recipients.primary_recipient_id    → primary (aliases now officially point at it)
  */
 import { withTransaction } from '../database/connection.js';
+import { filterValidatedIdNumbers } from '../lib/validation.js';
 import { recipientRepository } from '../repositories/recipientRepository.js';
 import { transactionRepository } from '../repositories/transactionRepository.js';
 import { splitRepository } from '../repositories/splitRepository.js';
@@ -30,7 +31,10 @@ import { recipientBankAccountRepository } from '../repositories/recipientBankAcc
  * Merge a set of alias recipients into a primary recipient.
  *
  * @param {number} primaryId
- * @param {number[]} aliasIds  — ids to merge *into* primary. primaryId is filtered out if present.
+ * @param {number[]} aliasIds  — ids to merge *into* primary. The HTTP boundary
+ *   rejects malformed arrays. For direct internal calls this service drops
+ *   invalid numeric ids and primaryId but deliberately preserves duplicates;
+ *   PostgreSQL ANY predicates make duplicates behaviorally inert.
  * @returns {Promise<{ mergedAliasIds: number[], reassigned: {
  *   transactions: number,
  *   splits: number,
@@ -42,8 +46,8 @@ export async function mergeRecipients(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId)) {
     throw new Error('mergeRecipients: primaryId must be an integer');
   }
-  const ids = (aliasIds || [])
-    .filter((id) => Number.isInteger(id) && id !== primaryId);
+  const ids = filterValidatedIdNumbers(aliasIds)
+    .filter((id) => id !== primaryId);
   if (!ids.length) {
     return { mergedAliasIds: [], reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 } };
   }

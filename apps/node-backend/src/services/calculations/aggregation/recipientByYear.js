@@ -20,7 +20,7 @@ export async function computeRecipientByYear({
 } = {}) {
   const key = `rby|${targetCurrency}|r:${statsKeyPart(excludedRecipientIds)}|c:${statsKeyPart(excludedCategoryIds)}`;
   return withStatisticsCache(key, async () => {
-    const data = await infoRepository.getRecipientByYear(targetCurrency, excludedRecipientIds, excludedCategoryIds);
+    const data = await infoRepository.getRecipientByYear({ targetCurrency, excludedRecipientIds, excludedCategoryIds });
     assertNoNaN(data, 'computeRecipientByYear');
     return buildEnvelope(data, { source: 'live' });
   });

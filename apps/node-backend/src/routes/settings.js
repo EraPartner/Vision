@@ -83,13 +83,16 @@ const themeSettingsSchema = z.looseObject({
   }).optional(),
 });
 
-// Shares validateIntArray with savedCharts.js's chart filter lists so accepted
-// shapes stay identical (scalar wrapped to array, then validateId per element:
-// a plain digit string or integer number, 1..2^31-1 — no trailing garbage,
-// decimals or exponents); the coerced ints replace the raw input in the stored
-// value, as before.
+// Shares validateIntArray with savedCharts.js's chart filter lists for element
+// validation, but settings keep their documented array shape instead of
+// accepting the helper's scalar-to-array convenience. The coerced ints replace
+// the raw input in the stored value.
 /** @param {string} field */
 const intArrayField = (field) => z.unknown().transform((value, ctx) => {
+  if (!Array.isArray(value)) {
+    ctx.addIssue({ code: 'custom', message: `${field} must be an array` });
+    return z.NEVER;
+  }
   const result = validateIntArray(value, field);
   if (!result.valid) {
     ctx.addIssue({ code: 'custom', message: result.error });
@@ -116,7 +119,7 @@ const rebalancePlanSchema = z.looseObject({
   name: z.string().max(80).refine((s) => s.trim().length > 0, 'name must not be blank'),
   // Weights and cashCap are validated through Number() coercion but stored as
   // sent (numeric strings are accepted, not rewritten) — pre-zod behavior.
-  // Deliberately not shared with crossWorkspace.js's targetWeightsSchema,
+  // Deliberately not shared with portfolio/rebalanceTargets.js's request schema,
   // which COERCES weights for computation and handles {} differently.
   targetWeights: z.record(z.string(), z.unknown()).superRefine((weights, ctx) => {
     const entries = Object.entries(weights);

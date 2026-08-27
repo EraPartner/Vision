@@ -7,14 +7,14 @@
  * Directory is created on demand (mkdirSync recursive) so no boot-time
  * setup is required.
  *
- * Multer uses memoryStorage so the service controls the final path.
+ * Upload middleware uses memoryStorage so the service receives a buffer and
+ * controls the final path.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { mkdirSync, promises as fsPromises } from 'fs';
 import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
-import multer from 'multer';
 import { env } from '../config/env.js';
 import { sniffMime, extensionMime } from '../lib/fileSniff.js';
 
@@ -24,10 +24,10 @@ import { sniffMime, extensionMime } from '../lib/fileSniff.js';
  */
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf'];
-const MAX_SIZE_BYTES = env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
+export const ATTACHMENT_MAX_SIZE_BYTES = env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
 
 /** Absolute path to the attachment root directory. */
-export function getAttachmentsRoot() {
+function getAttachmentsRoot() {
   return resolve(env.ATTACHMENTS_DIR);
 }
 
@@ -35,12 +35,12 @@ export function getAttachmentsRoot() {
  * Absolute path to the per-transaction directory.
  * @param {number|string} transactionId
  */
-export function getTransactionDir(transactionId) {
+function getTransactionDir(transactionId) {
   return join(getAttachmentsRoot(), String(transactionId));
 }
 
 /** @param {string} mimeType */
-function isAllowedMime(mimeType) {
+export function isAllowedAttachmentMime(mimeType) {
   return ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
 }
 
@@ -58,7 +58,7 @@ export function verifyAttachmentContent(file) {
   if (!sniffed) {
     throw new Error('Unsupported or unrecognised file content. Allowed: PNG, JPEG, GIF, WEBP, PDF.');
   }
-  if (!isAllowedMime(sniffed)) {
+  if (!isAllowedAttachmentMime(sniffed)) {
     throw new Error(`Unsupported file type: ${sniffed}. Allowed: images and PDF.`);
   }
   const ext = extname(file.originalname).toLowerCase();
@@ -74,23 +74,6 @@ export function verifyAttachmentContent(file) {
   }
   return sniffed;
 }
-
-/** Multer instance configured with in-memory storage + MIME / size guards. */
-export const attachmentUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_SIZE_BYTES },
-  fileFilter: (
-    /** @type {unknown} */ _req,
-    /** @type {MulterFile} */ file,
-    /** @type {(error: Error|null, acceptFile?: boolean) => void} */ cb,
-  ) => {
-    if (!isAllowedMime(file.mimetype)) {
-      cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: images and PDF.`));
-    } else {
-      cb(null, true);
-    }
-  },
-});
 
 /**
  * Write an uploaded file (multer memoryStorage buffer) to disk.

@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { parsedDateToYmd } from '../../lib/importDates.js';
-import { toYmd } from '../../utils/portfolioMath.js';
+import { toYmd } from '../calculations/portfolioMath.js';
 import { todayAppDateString } from '../../lib/timezone.js';
 import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.common.js';
 import { normalizeType } from './portfolioTypeNormalizer.js';

@@ -72,7 +72,7 @@ const patternCache = makeLruCache(512);
  * @param {{ id: number, pattern: string, pattern_kind: string, case_sensitive: boolean, updated_at: string }} row
  * @returns {RegExp}
  */
-export function compilePattern(row) {
+function compilePattern(row) {
   const cacheKey = `${row.id}:${row.updated_at}:${row.pattern_kind}:${row.case_sensitive ? '1' : '0'}:${row.pattern}`;
   const cached = patternCache.get(cacheKey);
   if (cached) return cached;
@@ -138,7 +138,7 @@ function hasRedosRisk(pattern) {
  * @param {{ pattern: string, pattern_kind: string, case_sensitive?: boolean }} row
  * @returns {{ valid: boolean, error?: string }}
  */
-export function validatePattern(row) {
+function validatePattern(row) {
   if (!row.pattern || !row.pattern.trim()) {
     return { valid: false, error: 'Pattern must not be empty' };
   }

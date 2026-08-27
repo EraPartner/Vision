@@ -28,6 +28,7 @@ describe('plannedTransactionRepository.getDueSoon / getForForecast — one clock
     // The two-clock split (and the string-concat interval) must not come back.
     expect(sql).not.toContain('CURRENT_DATE');
     expect(sql).not.toContain("|| ' days'");
+    expect(sql).toContain('COALESCE(pr.name, r.name) AS recipient_name');
   });
 
   it('getForForecast anchors its horizon on the same bound app date', async () => {
@@ -39,6 +40,7 @@ describe('plannedTransactionRepository.getDueSoon / getForForecast — one clock
     expect(params).toEqual([3, todayAppDateString()]);
     expect(sql).toContain('$2::date + make_interval(months => $1::int)');
     expect(sql).not.toContain('CURRENT_DATE');
+    expect(sql).toContain('COALESCE(pr.name, r.name) AS recipient_name');
   });
 });
 
@@ -61,6 +63,7 @@ describe('plannedTransactionRepository.getAll', () => {
       expect.stringContaining('COUNT(*) OVER() AS total_count'),
       [25, 1000]
     );
+    expect(query.mock.calls[0][0]).toContain('COALESCE(pr.name, r.name) AS recipient_name');
     expect(query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('SELECT count(*)'),
@@ -78,6 +81,21 @@ describe('plannedTransactionRepository.getAll', () => {
     const sqlCalls = query.mock.calls.map(([sql]) => String(sql));
     expect(sqlCalls.some((sql) => sql.includes('FROM planned_transaction_executions'))).toBe(false);
     expect(sqlCalls.some((sql) => sql.includes('FROM planned_transaction_loan_schedule'))).toBe(false);
+  });
+
+  it('searches both the displayed primary name and the stored alias name', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] });
+
+    await plannedTransactionRepository.getAll({ search: 'needle' });
+
+    for (const [sql] of query.mock.calls) {
+      expect(sql).toContain('COALESCE(pr.name, r.name) ILIKE $1');
+      expect(sql).toContain('r.name ILIKE $1');
+    }
+    expect(query.mock.calls[0][1]).toEqual(['%needle%', 50, 0]);
+    expect(query.mock.calls[1][1]).toEqual(['%needle%']);
   });
 
   it('attaches executions and loan schedules when planned rows are returned', async () => {
@@ -133,6 +151,23 @@ describe('plannedTransactionRepository.getAll', () => {
   });
 });
 
+describe('plannedTransactionRepository.listActiveUnexecuted', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('projects the primary recipient name while retaining the alias cluster id', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await plannedTransactionRepository.listActiveUnexecuted();
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('COALESCE(pr.name, r.name) AS recipient_name');
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id');
+  });
+});
+
 describe('plannedTransactionRepository.getById', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,6 +181,7 @@ describe('plannedTransactionRepository.getById', () => {
     expect(result).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('WHERE pt.id = $1'), [404]);
+    expect(query.mock.calls[0][0]).toContain('COALESCE(pr.name, r.name) AS recipient_name');
   });
 
   it('attaches executions and loan schedule for loan rows', async () => {

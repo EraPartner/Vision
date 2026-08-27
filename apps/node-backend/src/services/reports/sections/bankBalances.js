@@ -5,9 +5,11 @@
  */
 
 import {
+  emptySection,
   escapeHtml,
   fmtCurrency,
   fmtDate,
+  sectionPage,
   signClass,
 } from '../sectionHelpers.js';
 
@@ -21,13 +23,7 @@ export function renderBankBalances(data, { currency }) {
   const totalNetPosition = data.banks?.total_net_position ?? 0;
 
   if (!accounts.length) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Bank Balances</div>
-        <div class="section-subtitle">Current balance per account</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No bank balance data available.</div>
-      </div>`;
+    return emptySection({ title: 'Bank Balances', subtitle: 'Current balance per account', message: 'No bank balance data available.', pageBreak: true });
   }
 
   // Sort accounts: highest absolute balance first
@@ -47,15 +43,15 @@ export function renderBankBalances(data, { currency }) {
 
   const netSc = signClass(totalNetPosition);
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Bank Balances</div>
-      <div class="section-subtitle">Current balance per account</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Bank Balances',
+    subtitle: 'Current balance per account',
+    pageBreak: true,
+    content: `
       <div class="account-grid">${accountCards}</div>
       <div class="stat-row" style="border-top:1px solid hsl(var(--border));padding-top:12px;margin-top:4px">
         <span class="stat-label" style="font-weight:700;color:hsl(var(--text))">Total Net Position</span>
         <span class="stat-value ${netSc}" style="font-size:18px">${escapeHtml(fmtCurrency(totalNetPosition, currency))}</span>
-      </div>
-    </div>`;
+      </div>`,
+  });
 }

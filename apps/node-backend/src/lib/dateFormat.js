@@ -7,7 +7,7 @@
  * server east of UTC (Brussels: all day, every day) — despite this file's old
  * doc comment claiming UTC extraction was "correct for pg-read DATE values".
  * Local extraction matches the reference implementation the portfolio code
- * already uses (utils/portfolioMath.js toYmd).
+ * already uses (services/calculations/portfolioMath.js toYmd).
  *
  * Callers must pass pg-read or locally-constructed dates (new Date(y, m, d)).
  * Do NOT pass UTC-constructed values (new Date(Date.UTC(…)) or new Date('YYYY-MM-DD'))
@@ -21,6 +21,19 @@ export function formatDateToYmd(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+/**
+ * Normalize a date-like database value to its calendar-day wire form.
+ * PostgreSQL DATE values arrive as local-midnight Date objects; local getters
+ * preserve that day while strings are already safe to truncate.
+ *
+ * @param {string|Date} value
+ * @returns {string}
+ */
+export function toYmd(value) {
+  if (value instanceof Date) return formatDateToYmd(value);
+  return String(value).slice(0, 10);
 }
 
 /**

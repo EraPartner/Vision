@@ -4,19 +4,7 @@
  * Shows asset-class breakdown via horizontal bars + a legend table.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
-
-/** @type {Record<string, string>} */
-const ASSET_CLASS_LABELS = {
-  stock:       'Stocks',
-  etf:         'ETFs',
-  crypto:      'Crypto',
-  metals:      'Metals',
-  savings:     'Savings',
-  bond:        'Bonds',
-  real_estate: 'Real Estate',
-  other:       'Other',
-};
+import { buildAssetClassBuckets, emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -28,48 +16,15 @@ export function renderPortfolioAllocation(data, { currency }) {
   const latest    = snapshots.length ? snapshots[snapshots.length - 1] : null;
 
   if (!latest && !data?.breakdown?.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Asset Allocation</div>
-        <div class="section-subtitle">Distribution across asset classes</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No allocation data</strong>Add investments to see the allocation breakdown.</div>
-      </div>`;
+    return emptySection({
+      title: 'Asset Allocation',
+      subtitle: 'Distribution across asset classes',
+      heading: 'No allocation data',
+      message: 'Add investments to see the allocation breakdown.',
+    });
   }
 
-  // Build asset-class buckets from latest snapshot fields
-  /** @type {Array<{ label: string; value: number; invested: number }>} */
-  const classes = [];
-
-  if (latest) {
-    /**
-     * @param {string} label
-     * @param {string} value
-     * @param {string} invested
-     */
-    const add = (label, value, invested) => {
-      const v = Number(value ?? 0);
-      const i = Number(invested ?? 0);
-      if (v > 0 || i > 0) classes.push({ label, value: v, invested: i });
-    };
-    add('Stocks & ETFs', latest.stocks_etfs_value, latest.stocks_etfs_invested);
-    add('Crypto',        latest.crypto_value,      latest.crypto_invested);
-    add('Metals',        latest.metals_value,      latest.metals_invested);
-    if (Number(latest.cash_value ?? 0) > 0) classes.push({ label: 'Cash / Savings', value: Number(latest.cash_value), invested: Number(latest.cash_value) });
-  } else {
-    // Fall back to breakdown summaries
-    /** @type {Map<string, { label: string; value: number; invested: number }>} */
-    const grouped = new Map();
-    for (const inv of (data.breakdown ?? [])) {
-      const ac = inv.assetClass ?? inv.asset_class ?? 'other';
-      const label = ASSET_CLASS_LABELS[ac] ?? ac;
-      if (!grouped.has(label)) grouped.set(label, { label, value: 0, invested: 0 });
-      grouped.get(label).value    += Number(inv.currentValue ?? 0);
-      grouped.get(label).invested += Number(inv.totalInvested ?? inv.total_invested ?? 0);
-    }
-    classes.push(...grouped.values());
-  }
-
+  const classes = buildAssetClassBuckets(latest, data?.breakdown ?? []);
   classes.sort((a, b) => b.value - a.value);
   const total = classes.reduce((s, c) => s + c.value, 0);
 
@@ -92,11 +47,10 @@ export function renderPortfolioAllocation(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Asset Allocation</div>
-      <div class="section-subtitle">Distribution of portfolio value across asset classes</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Asset Allocation',
+    subtitle: 'Distribution of portfolio value across asset classes',
+    content: `
       <div class="chart-wrap">${svgHorizontalBars(barItems, { maxItems: 8 })}</div>
       <table class="data-table">
         <thead><tr>
@@ -107,6 +61,6 @@ export function renderPortfolioAllocation(data, { currency }) {
           <th class="num">Unrealised P/L</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

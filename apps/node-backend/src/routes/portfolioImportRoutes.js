@@ -27,7 +27,7 @@ import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 import {
   listBatches,
   getBatch,
-  getPreviewRows,
+  getPortfolioImportBatchPreview,
   overrideInvestment,
   createInvestmentForRow,
   resolveInvestmentRows,
@@ -37,7 +37,7 @@ import {
 import accountService from '../services/accountService.js';
 import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
 import { registerParserRoutes } from './parserConfigRoutes.js';
-import { parsePagination } from '../lib/pagination.js';
+import { registerImportBatchRoutes } from './importBatchRoutes.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -355,44 +355,26 @@ registerParserRoutes(router, {
 
 // Canonical collection shape `{items, total, limit, offset}` — the service
 // keeps its `batches` key internally, only the wire key is normalised.
-router.get('/batches', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
-  const { batches, total } = await listBatches({ limit, offset });
-  res.ok({ items: batches, total, limit, offset });
-});
-
-router.get('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseBatchIdParam(req);
-  const batch = await getBatch(id);
-  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
-  res.ok(batch);
-});
-
-router.delete('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseBatchIdParam(req);
-  const batch = await getBatch(id);
-  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
-  if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
-  if (['pending', 'staging', 'validating', 'matching', 'committing'].includes(batch.status)) {
-    throw new ValidationError('Cannot rollback a batch that is still in progress');
-  }
-  let deleted;
-  try {
-    ({ deleted } = await rollbackBatch(id));
-  } catch (err) {
-    if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
-      throw new ValidationError(/** @type {Error} */ (err).message);
+registerImportBatchRoutes(router, {
+  listBatches,
+  getBatch,
+  inProgressStatuses: ['pending', 'staging', 'validating', 'matching', 'committing'],
+  rollback: async (batchId) => {
+    let deleted;
+    try {
+      ({ deleted } = await rollbackBatch(batchId));
+    } catch (err) {
+      if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
+        throw new ValidationError(/** @type {Error} */ (err).message);
+      }
+      if (/** @type {any} */ (err)?.code === 'NOT_FOUND') {
+        throw new NotFoundError(/** @type {Error} */ (err).message);
+      }
+      throw err;
     }
-    if (/** @type {any} */ (err)?.code === 'NOT_FOUND') {
-      throw new NotFoundError(/** @type {Error} */ (err).message);
-    }
-    throw err;
-  }
-  logger.info('[portfolio-import] batch rolled back', { batchId: id, deleted });
-  // Not a plain delete: a rollback reports the side-effect count the caller
-  // surfaces, so it keeps a 200 body (docs/reference/code-patterns.md,
-  // "DELETE responses").
-  res.ok({ deleted });
+    logger.info('[portfolio-import] batch rolled back', { batchId, deleted });
+    return { deleted };
+  },
 });
 
 // --- Review -------------------------------------------------------------------
@@ -402,68 +384,8 @@ router.get('/batches/:id/preview', /** @param {ExpressRequest} req @param {Expre
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
-  const rows = await getPreviewRows(batchId);
-
-  // Group by effective investment. Unresolved rows (no investment yet) group by
-  // their raw symbol/name so each distinct unmatched instrument is its own group
-  // — never lump different unmatched instruments together.
-  /** @type {Map<string, any>} */
-  const groupMap = new Map();
-  for (const row of rows) {
-    // Brokerage cash rows (ADR-095) carry no instrument — collect them in one
-    // dedicated cash group so the review never prompts to resolve a holding for them.
-    const key = row.route === 'cash'
-      ? 'cash'
-      : (row.effective_investment_id != null
-        ? `inv:${row.effective_investment_id}`
-        : `raw:${(row.symbol_raw || row.name_raw || '?').toLowerCase()}`);
-    if (!groupMap.has(key)) {
-      groupMap.set(key, {
-        is_cash: row.route === 'cash',
-        investment_id: row.effective_investment_id,
-        investment_name: row.investment_name,
-        investment_symbol: row.investment_symbol,
-        investment_asset_class: row.investment_asset_class,
-        raw_symbol: row.route === 'cash' ? null : row.symbol_raw,
-        raw_name: row.route === 'cash' ? null : row.name_raw,
-        rows: [],
-      });
-    }
-    groupMap.get(key).rows.push({
-      id: row.id,
-      row_index: row.row_index,
-      status: row.status,
-      route: row.route,
-      tx_date: row.tx_date,
-      type: row.type,
-      type_raw: row.type_raw,
-      symbol_raw: row.symbol_raw,
-      name_raw: row.name_raw,
-      units: row.units,
-      price_per_unit: row.price_per_unit,
-      amount: row.amount,
-      fees: row.fees,
-      taxes: row.taxes,
-      currency: row.currency,
-      fx_rate_to_eur: row.fx_rate_to_eur,
-      note: row.note,
-      match_source: row.match_source,
-      error_message: row.error_message,
-      user_override_investment_id: row.user_override_investment_id,
-    });
-  }
-
-  const groups = [...groupMap.values()].map((g) => ({ ...g, row_count: g.rows.length }));
-
-  /** @type {Record<string, number>} */
-  const totals = { symbol: 0, name_exact: 0, unresolved: 0, error: 0 };
-  for (const row of rows) {
-    if (row.status === 'error') { totals.error += 1; continue; }
-    const src = row.match_source ?? 'unresolved';
-    totals[src] = (totals[src] || 0) + 1;
-  }
-
-  res.ok({ batch_id: batchId, groups, totals });
+  const preview = await getPortfolioImportBatchPreview(batchId);
+  res.ok({ batch_id: batchId, ...preview });
 });
 
 // POST /api/portfolio/import/batches/:id/rows/investment-override

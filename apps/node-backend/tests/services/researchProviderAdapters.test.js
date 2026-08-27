@@ -35,6 +35,16 @@ afterEach(() => {
   delete globalThis.fetch;
 });
 
+it.each([
+  ['Twelve Data', twelveData, 'TWELVE_DATA_API_KEY'],
+  ['Finnhub', finnhub, 'FINNHUB_API_KEY'],
+  ['FMP', fmp, 'FMP_API_KEY'],
+  ['Alpha Vantage', alphaVantage, 'ALPHA_VANTAGE_API_KEY'],
+])('%s adapter requires its own configured key', async (_name, adapter, variable) => {
+  delete process.env[variable];
+  await expect(adapter.quote('AAPL')).rejects.toThrow(`${variable} not configured`);
+});
+
 describe('twelveDataAdapter', () => {
   it('normalizes a quote', async () => {
     mockFetch([['/quote', {

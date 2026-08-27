@@ -13,7 +13,7 @@
  */
 
 import { query, queryPrepared, withTransaction } from '../database/connection.js';
-import { sanitizeUpdateFields } from '../middleware/validation.js';
+import { sanitizeUpdateFields } from '../lib/validation.js';
 import { buildTransactionWhere } from '../lib/filterBuilder.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 import { accountRepository } from './accountRepository.js';

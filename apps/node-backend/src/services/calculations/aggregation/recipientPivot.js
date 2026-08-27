@@ -25,11 +25,14 @@ export async function computeRecipientPivot({
   const key = `rpv|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`
     + `|ri:${statsKeyPart(recipientIds)}|xr:${statsKeyPart(excludedRecipientIds)}`;
   return withStatisticsCache(key, async () => {
-    const data = await recipientInsightsRepository.getRecipientPivot(
+    const data = await recipientInsightsRepository.getRecipientPivot({
       excludedRecipientIds,
       targetCurrency,
-      { bucket, startDate, endDate, recipientIds }
-    );
+      bucket,
+      startDate,
+      endDate,
+      recipientIds,
+    });
     assertNoNaN(data, 'computeRecipientPivot');
     return buildEnvelope(data, { source: 'live' });
   });

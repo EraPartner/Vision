@@ -6,9 +6,10 @@
  * implementations in frontend hooks.
  */
 
-import { toDecimal, toNumber, roundToCents, addAll } from '../lib/money.js';
-import { appDateStringToUtc, toAppDateString } from '../lib/timezone.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
+import { toDecimal, toNumber } from '../../lib/money.js';
+import { sanitizeIsolatedValueSpikes } from '../../lib/calculations/valueSpikeSanitizer.js';
+import { appDateStringToUtc, toAppDateString } from '../../lib/timezone.js';
+import { toYmd } from '../../lib/dateFormat.js';
 import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vision/shared-utils/portfolio';
 
 // Cost-basis accounting and interest accrual live in the shared workspace
@@ -19,167 +20,9 @@ import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vis
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-/**
- * Smooth isolated one-day value needles (e.g. kinesis price spikes) on an array
- * of rows, replacing a needle with the geometric mean of its neighbors. Pure —
- * lives here (not the repository layer) so route helpers can use it too.
- *
- * The single implementation behind both the route layer and the snapshot
- * pipeline (sanitizeSnapshotSpikes below): two copies previously coexisted
- * with drifted needle rules, so the same series smoothed differently per path.
- *
- * Detection runs on `field`. Needle detection is bridge-guarded: the two
- * neighbors must agree with each other (|log(next/prev)| small) so a genuine
- * sustained repricing is never smoothed away. When a needle is found, every
- * entry in `options.extraFields` is replaced with the mean of ITS neighbors
- * (geometric when both are positive, arithmetic fallback otherwise) and `field`
- * itself with the geometric mean of its neighbors. All replacements are rounded
- * to cents (money values).
- *
- * `options.sumFields` names an exact decomposition of `field` (Σ parts ==
- * total). When supplied AND the needle day and both neighbors actually satisfy
- * it in the input, `field` is instead reconciled to the post-smoothing sum of
- * those parts, so the row still decomposes afterwards. Parts listed in
- * `sumFields` but not in `extraFields` are carried through untouched — that is
- * how a ledger-derived leg (cash) survives smoothing: a needle in a total that
- * came from real cash movement is preserved rather than being smoothed into a
- * balance the user never held, while price-feed legs are still cleaned. Rows
- * that do not decompose in the input (legacy/partial series) keep the plain
- * geometric-mean rule.
- *
- * `options.parallelTotals` names totals that track `field` but are not part of
- * its decomposition — each `{ field, sharedFields }` is a total that carries the
- * same `sharedFields` legs verbatim and re-values the rest. Because
- * reconciliation moves `field` off its own geometric mean, a parallel total left
- * on its geometric mean would drift away from it and manufacture a difference
- * the two totals never had. Each is instead rebuilt from the reconciled total at
- * the ratio its neighbors show, so a series where the two totals are equal every
- * day stays exactly equal. Only applied when `field` itself was reconciled, and
- * skipped entirely (leaving the `extraFields` geometric mean) when the parallel
- * field is missing or non-finite on either neighbor — which is how a series
- * predating the column degrades to the old behaviour. A neighbor whose non-
- * shared part is empty contributes no ratio sample rather than voiding the
- * reconciliation, since it carries no information about the split.
- *
- * @param {Array<Record<string, unknown>>} rows
- * @param {string} [field]
- * @param {{ extraFields?: string[], sumFields?: string[], parallelTotals?: Array<{field: string, sharedFields?: string[]}> }} [options]
- */
-export function sanitizeIsolatedValueSpikes(rows, field = 'value', { extraFields = [], sumFields = [], parallelTotals = [] } = {}) {
-  if (!Array.isArray(rows) || rows.length < 3) return Array.isArray(rows) ? rows : [];
-  const out = rows.map((s) => ({ ...s }));
-  const minJump = Math.log(1.18);
-  const neighborTolerance = Math.log(1.12);
-  const localNeedleRatio = 1.8;
-  // Each leg and the total are rounded to cents independently upstream, so an
-  // exact decomposition can still show a few cents of drift.
-  const decompositionTolerance = 0.05;
+export { sanitizeIsolatedValueSpikes } from '../../lib/calculations/valueSpikeSanitizer.js';
 
-  /**
-   * @param {unknown} a
-   * @param {unknown} b
-   */
-  const smoothedMean = (a, b) => {
-    const va = Number(a) || 0;
-    const vb = Number(b) || 0;
-    const mean = va > 0 && vb > 0 ? Math.sqrt(va * vb) : (va + vb) / 2;
-    return toNumber(roundToCents(mean));
-  };
-
-  /**
-   * @param {Record<string, unknown>} row
-   * @param {string[]} fields
-   */
-  const sumOf = (row, fields) => {
-    const legs = [];
-    for (const part of fields) {
-      const leg = Number(row?.[part]);
-      if (!Number.isFinite(leg)) return undefined;
-      legs.push(leg);
-    }
-    return addAll(legs);
-  };
-
-  /** @param {Record<string, unknown>} row */
-  const partsSum = (row) => sumOf(row, sumFields);
-
-  /** @param {Record<string, unknown>} row */
-  const decomposes = (row) => {
-    const total = Number(row?.[field]);
-    const parts = partsSum(row);
-    if (parts === undefined || !Number.isFinite(total)) return false;
-    return parts.minus(toDecimal(total)).abs().lte(decompositionTolerance);
-  };
-
-  for (let i = 1; i < out.length - 1; i += 1) {
-    const prev = Number(out[i - 1]?.[field]);
-    const current = Number(out[i]?.[field]);
-    const next = Number(out[i + 1]?.[field]);
-    if (!Number.isFinite(prev) || !Number.isFinite(current) || !Number.isFinite(next)) continue;
-    if (prev <= 0 || current <= 0 || next <= 0) continue;
-    const jump = Math.log(current / prev);
-    const revert = Math.log(next / current);
-    const bridge = Math.log(next / prev);
-    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
-    const largeMove = Math.abs(jump) >= minJump && Math.abs(revert) >= minJump;
-    const bridgeLooksNormal = Math.abs(bridge) <= neighborTolerance;
-    const maxNeighbor = Math.max(prev, next);
-    const minNeighbor = Math.min(prev, next);
-    const localNeedlePeak = current >= maxNeighbor * localNeedleRatio && bridgeLooksNormal;
-    const localNeedleTrough = current * localNeedleRatio <= minNeighbor && bridgeLooksNormal;
-    if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
-      const reconcilable = sumFields.length > 0
-        && decomposes(out[i - 1]) && decomposes(out[i]) && decomposes(out[i + 1]);
-      for (const extra of extraFields) {
-        out[i][extra] = smoothedMean(out[i - 1]?.[extra], out[i + 1]?.[extra]);
-      }
-      const reconciled = reconcilable ? partsSum(out[i]) : undefined;
-      out[i][field] = toNumber(roundToCents(reconciled ?? Math.sqrt(prev * next)));
-
-      if (reconciled === undefined) continue;
-      for (const { field: parallelField, sharedFields = [] } of parallelTotals) {
-        const shared = sumOf(out[i], sharedFields);
-        const prevShared = sumOf(out[i - 1], sharedFields);
-        const nextShared = sumOf(out[i + 1], sharedFields);
-        if (shared === undefined || prevShared === undefined || nextShared === undefined) continue;
-        const prevParallel = Number(out[i - 1]?.[parallelField]);
-        const nextParallel = Number(out[i + 1]?.[parallelField]);
-        if (!Number.isFinite(prevParallel) || !Number.isFinite(nextParallel)) continue;
-        const ratios = [];
-        for (const [parallelTotal, mainTotal, rowShared] of /** @type {const} */ ([
-          [prevParallel, prev, prevShared],
-          [nextParallel, next, nextShared],
-        ])) {
-          const exclusive = toDecimal(mainTotal).minus(rowShared);
-          if (!exclusive.gt(0)) continue;
-          const rowRatio = toDecimal(parallelTotal).minus(rowShared).div(exclusive).toNumber();
-          if (Number.isFinite(rowRatio) && rowRatio > 0) ratios.push(rowRatio);
-        }
-        // A neighbor holding nothing outside the shared legs carries no ratio.
-        // With neither neighbor usable the exclusive part is degenerate — it
-        // reconciles to zero — so the factor it is multiplied by is moot, and 1
-        // keeps a shared-only total (an all-cash portfolio) exactly on `field`.
-        const ratio = ratios.length === 2 ? Math.sqrt(ratios[0] * ratios[1]) : (ratios[0] ?? 1);
-        out[i][parallelField] = toNumber(roundToCents(reconciled.minus(shared).times(ratio).plus(shared)));
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Normalise a date-ish value to a `YYYY-MM-DD` string. Accepts a plain
- * date string (snapshot/txn rows) or a JS `Date` — the `pg` driver returns
- * `DATE` columns as a Date at local midnight, so the local getters recover
- * the exact calendar day.
- *
- * @param {string|Date} value
- * @returns {string}
- */
-export function toYmd(value) {
-  if (value instanceof Date) return formatDateToYmd(value);
-  return String(value).slice(0, 10);
-}
+export { toYmd };
 
 /**
  * Whole-day count between two calendar dates, evaluated in APP_TIMEZONE

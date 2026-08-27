@@ -397,11 +397,14 @@ describe('ADR-083 transfer exclusion', () => {
     expect(probeSql).not.toContain('NOT IN');
     expect(probeSql).not.toContain('LEFT JOIN');
     expect(probeSql).not.toContain('planned_transactions');
+    expect(probeSql).toContain('t.is_active = true');
     // "Unfiltered" is about predicates, not parameters: the only two values it
     // binds are its own window (the anchor date and the lookback length).
     expect(probeParams).toEqual(['2025-04-15', 24]);
     // Still window-clamped: a row older than the lookback cannot lengthen it.
-    expect(probeSql).toContain('make_interval(months => $2::int)');
+    expect(probeSql).toContain(
+      "t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)",
+    );
   });
 });
 

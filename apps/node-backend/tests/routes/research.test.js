@@ -211,6 +211,15 @@ describe('Research route parameter guards', () => {
       expect(listKeyStatuses).not.toHaveBeenCalled();
       expect(res.text).toBe('');
     });
+
+    it('answers 204 when the provider key was already unset', async () => {
+      clearKey.mockResolvedValue(false);
+      const res = await api.delete(`${BASE}/provider-keys/finnhub`).expect(204);
+
+      expect(clearKey).toHaveBeenCalledWith('finnhub');
+      expect(listKeyStatuses).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
+    });
   });
 
   // The route has no body schema, so an unknown key is ignored rather than

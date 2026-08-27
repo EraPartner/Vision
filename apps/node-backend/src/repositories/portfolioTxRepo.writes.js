@@ -6,11 +6,11 @@
 
 import { query } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
+import { makeValidationError } from '../lib/repositoryErrors.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
   hasPortfolioTransactionImportBatchIdColumn,
   UNIT_BASED_ASSET_CLASSES,
-  makeValidationError,
   normalizeTransactionPayload,
   validateSellUnitsAvailability,
 } from './portfolioTxRepo.common.js';

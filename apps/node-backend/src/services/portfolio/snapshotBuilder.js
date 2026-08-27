@@ -10,7 +10,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
-import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../../utils/portfolioMath.js';
+import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../calculations/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
 import { todayAppDateString } from '../../lib/timezone.js';
 

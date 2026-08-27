@@ -159,7 +159,7 @@ function unwrap(result, label) {
  * @param {Period} period
  * @returns {{ taxYear: number; startDate: string; endDate: string; periodNote: string | null }}
  */
-export function periodToTaxContext(period) {
+function periodToTaxContext(period) {
   // APP_TIMEZONE calendar day + pure string math (see periodToDateRange in
   // dataFetcherPortfolio.js — same day-shift class).
   const today = todayAppDateString();

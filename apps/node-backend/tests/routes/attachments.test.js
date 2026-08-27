@@ -3,8 +3,8 @@
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed. The
- * multer upload middleware (`attachmentUpload.single`) stays mocked (as
- * before) since it does real disk I/O; the mock now drives `req.file` /
+ * multer upload middleware (`attachmentUpload.single`) stays mocked because
+ * the route test does not need to parse multipart bodies; the mock drives `req.file` /
  * upload errors through the real middleware chain instead of the test
  * hand-building a `req.file`.
  */
@@ -25,7 +25,7 @@ vi.mock('../../src/services/attachmentRecordService.js', () => ({
   },
 }));
 
-vi.mock('../../src/services/attachmentService.js', () => ({
+vi.mock('../../src/middleware/attachmentUpload.js', () => ({
   attachmentUpload: {
     single: () => (req, _res, cb) => {
       if (uploadState.error) return cb(uploadState.error);
@@ -33,6 +33,9 @@ vi.mock('../../src/services/attachmentService.js', () => ({
       cb();
     },
   },
+}));
+
+vi.mock('../../src/services/attachmentService.js', () => ({
   storeAttachment: vi.fn(),
   resolveAbsolutePath: vi.fn(),
   removeAttachmentFile: vi.fn(),

@@ -180,20 +180,6 @@ describe('recipientRepository', () => {
       expect(await recipientRepository.hardDelete(2)).toBe(false);
     });
 
-    it('mergeRecipients short-circuits with no aliases', async () => {
-      expect(await recipientRepository.mergeRecipients(1, [])).toEqual([]);
-      expect(query).not.toHaveBeenCalled();
-    });
-
-    it('mergeRecipients updates aliases and returns their ids', async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 2 }, { id: 3 }] });
-      const ids = await recipientRepository.mergeRecipients(1, [2, 3]);
-      expect(ids).toEqual([2, 3]);
-      const [sql, params] = query.mock.calls[0];
-      expect(sql).toContain('id IN ($2,$3)');
-      expect(params).toEqual([1, 2, 3]);
-    });
-
     it('unmergeRecipient returns boolean', async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 5 }] });
       expect(await recipientRepository.unmergeRecipient(5)).toBe(true);

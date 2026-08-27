@@ -114,4 +114,4 @@ export function createAdapter(bankName, customConfig = null) {
   return (/** @type {string} */ filePath) => adapter.parse(filePath);
 }
 
-export { ADAPTERS, REGISTRY };
+export { ADAPTERS };

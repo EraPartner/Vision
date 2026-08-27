@@ -115,7 +115,7 @@ function computeNetUnits(txns) {
     if (UNIT_CREDIT_TYPES.has(t.type)) net = net.plus(units);
     else if (UNIT_DEBIT_TYPES.has(t.type)) net = net.minus(units);
     // A 'split' row carries `units` = the new TOTAL post-split (the established
-    // convention in portfolioMath.calculateCostBasis / snapshotBuilder). Skipping
+    // convention in shared portfolio cost-basis math and snapshotBuilder). Skipping
     // it left the chat reporting pre-split units at post-split prices — roughly
     // half the real value after a 2:1 split.
     else if (t.type === 'split' && units.gt(0) && net.gt(0)) net = units;

@@ -1,7 +1,7 @@
 /**
  * Helpers for /portfolio-performance payload shaping:
  *   - snapshot row → client-facing shape
- *   - period filter + LTTB downsample
+ *   - period filter at full daily resolution
  *   - final payload assembly (metrics + heatmap + breakdown summary)
  */
 
@@ -9,7 +9,7 @@ import { computeMetrics, computeHeatmap } from '../portfolioPerformanceSnapshotS
 import { toWireDate } from '../../lib/dateFormat.js';
 import { getPortfolioSummary } from '../portfolio/portfolioSummaryService.js';
 import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
-import { toYmd } from '../../utils/portfolioMath.js';
+import { toYmd } from '../calculations/portfolioMath.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 import {
   portfolioSummaryCache,

@@ -16,7 +16,6 @@ vi.mock('../src/config/logger.js', () => ({
 
 import {
   clearMemoryCache,
-  convertToEur,
   convertRowsToEur,
   convertToCurrency,
   warmCache,
@@ -45,28 +44,28 @@ describe('Currency Conversion Service', () => {
 
   // ── EUR identity ──────────────────────────────────────────
   it('should return same amount for EUR to EUR', async () => {
-    const result = await convertToEur(100.00, 'EUR');
+    const result = await convertToCurrency(100.00, 'EUR', 'EUR');
     expect(result).toBe(100.00);
   });
 
   it('should return same amount for null currency', async () => {
-    const result = await convertToEur(100.00, null);
+    const result = await convertToCurrency(100.00, null, 'EUR');
     expect(result).toBe(100.00);
   });
 
   it('should return same amount for undefined currency', async () => {
-    const result = await convertToEur(100.00, undefined);
+    const result = await convertToCurrency(100.00, undefined, 'EUR');
     expect(result).toBe(100.00);
   });
 
   // ── Zero / edge amounts ───────────────────────────────────
   it('should return 0 for zero amount', async () => {
-    const result = await convertToEur(0.0, 'USD');
+    const result = await convertToCurrency(0.0, 'USD', 'EUR');
     expect(result).toBe(0);
   });
 
   it('should handle negative amounts (preserve sign)', async () => {
-    const result = await convertToEur(-100.00, 'USD');
+    const result = await convertToCurrency(-100.00, 'USD', 'EUR');
     expect(result).toBeLessThan(0);
     expect(typeof result).toBe('number');
   });
@@ -74,31 +73,31 @@ describe('Currency Conversion Service', () => {
   // ── Fallback rates ───────────────────────────────────────
   it('should convert USD to EUR using fallback rates', async () => {
     // DB returns nothing, API will fail in test → fallback
-    const result = await convertToEur(109.00, 'USD');
+    const result = await convertToCurrency(109.00, 'USD', 'EUR');
     expect(typeof result).toBe('number');
     expect(result).toBeGreaterThan(50); // reasonable range
     expect(result).toBeLessThan(200);
   });
 
   it('should convert GBP to EUR using fallback rates', async () => {
-    const result = await convertToEur(100.00, 'GBP');
+    const result = await convertToCurrency(100.00, 'GBP', 'EUR');
     expect(typeof result).toBe('number');
     expect(result).toBeGreaterThan(80);
   });
 
   it('should use 1:1 for unsupported currency', async () => {
-    const result = await convertToEur(100.00, 'XYZ');
+    const result = await convertToCurrency(100.00, 'XYZ', 'EUR');
     expect(result).toBe(100.00);
   });
 
   // ── Case insensitivity ────────────────────────────────────
   it('should handle lowercase currency codes', async () => {
-    const result = await convertToEur(100.00, 'eur');
+    const result = await convertToCurrency(100.00, 'eur', 'EUR');
     expect(result).toBe(100.00);
   });
 
   it('should handle mixed-case currency codes', async () => {
-    const result = await convertToEur(100.00, 'Eur');
+    const result = await convertToCurrency(100.00, 'Eur', 'EUR');
     expect(result).toBe(100.00);
   });
 
@@ -111,7 +110,7 @@ describe('Currency Conversion Service', () => {
       ],
     });
 
-    const result = await convertToEur(100.00, 'USD', '2026-02-17');
+    const result = await convertToCurrency(100.00, 'USD', 'EUR');
     expect(typeof result).toBe('number');
     // Should use the DB rate (100 * 0.917 ≈ 91.7)
     expect(result).toBeCloseTo(91.7, 0);
@@ -119,9 +118,9 @@ describe('Currency Conversion Service', () => {
 
   // ── Multiple currencies ───────────────────────────────────
   it('should convert multiple currencies correctly', async () => {
-    const usd = await convertToEur(100.00, 'USD');
-    const gbp = await convertToEur(100.00, 'GBP');
-    const jpy = await convertToEur(10000.00, 'JPY');
+    const usd = await convertToCurrency(100.00, 'USD', 'EUR');
+    const gbp = await convertToCurrency(100.00, 'GBP', 'EUR');
+    const jpy = await convertToCurrency(10000.00, 'JPY', 'EUR');
 
     expect(typeof usd).toBe('number');
     expect(typeof gbp).toBe('number');
@@ -196,7 +195,7 @@ describe('Currency Conversion Service', () => {
 
   it('should fall back to EUR row conversion when target currency is unsupported', async () => {
     const [row] = await convertRowsToEur([{ amount: 50, currency: 'USD' }], 'ZZZ');
-    const expectedEur = await convertToEur(50, 'USD');
+    const expectedEur = await convertToCurrency(50, 'USD', 'EUR');
 
     expect(row.amount_eur).toBeCloseTo(expectedEur, 6);
   });

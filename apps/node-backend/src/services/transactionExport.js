@@ -9,7 +9,7 @@ import { query as dbQuery } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toDecimal } from '../lib/money.js';
-import { toYmd } from '../utils/portfolioMath.js';
+import { toYmd } from './calculations/portfolioMath.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
 /**
@@ -66,11 +66,11 @@ function buildExportTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 }
 
-export function buildCsvFilename() {
+function buildCsvFilename() {
   return `transactions_export_${buildExportTimestamp()}.csv`;
 }
 
-export function buildNdjsonFilename() {
+function buildNdjsonFilename() {
   return `transactions_export_${buildExportTimestamp()}.ndjson`;
 }
 

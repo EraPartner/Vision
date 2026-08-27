@@ -34,6 +34,7 @@ import {
   _resetForTests,
 } from '../../src/services/calculations/forecast/accuracyStore.js';
 import { fnv1aHash, makeRng, gaussian } from '../../src/services/calculations/forecast/prng.js';
+import { monthKey, orderedMonthKeys } from '../../src/services/calculations/forecast/months.js';
 
 // accuracyStore silently degrades to an in-memory Map when its table is missing
 // OR when Postgres is simply unreachable (ECONNREFUSED). The `accuracyStore`
@@ -150,6 +151,19 @@ describe('simpleAverage', () => {
       forecastDates: ['2026-04-15'],
     });
     expect(out[0].value).toBe(0);
+  });
+});
+
+describe('forecast month helpers', () => {
+  it('extracts, deduplicates, and sorts represented months', () => {
+    const history = [
+      { date: '2025-03-01' },
+      { date: '2024-12-31' },
+      { date: '2025-03-19' },
+      { date: '2025-01-02' },
+    ];
+    expect(monthKey(history[0].date)).toBe('2025-03');
+    expect(orderedMonthKeys(history)).toEqual(['2024-12', '2025-01', '2025-03']);
   });
 });
 

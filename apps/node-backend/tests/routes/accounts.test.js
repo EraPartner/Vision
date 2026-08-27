@@ -23,6 +23,7 @@ vi.mock('../../src/services/accountService.js', () => ({
 }));
 
 vi.mock('../../src/services/accountMergeService.js', () => ({
+  MAX_ACCOUNT_MERGE_SOURCES: 500,
   mergeAccounts: vi.fn(),
   previewMerge: vi.fn(),
 }));
@@ -54,6 +55,47 @@ const { default: accountsRouter } = await import('../../src/routes/accounts.js')
 
 const api = routeAgent(accountsRouter, { mountPath: '/api/accounts' });
 const BASE = '/api/accounts';
+
+function mergeRouteHandler() {
+  const layer = accountsRouter.stack.find((entry) => entry.route?.path === '/:id/merge' && entry.route.methods.post);
+  return layer.route.stack.at(-1).handle;
+}
+
+describe('POST /:id/merge — listener-free boundary guards', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects a mixed self-reference before calling the service', async () => {
+    const handler = mergeRouteHandler();
+    await expect(handler(
+      /** @type {any} */ ({ params: { id: '1' }, body: { source_ids: [2, 1] } }),
+      /** @type {any} */ ({}),
+    )).rejects.toThrow(/must not include the survivor/);
+    expect(mergeAccounts).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than 500 sources before validating or calling the service', async () => {
+    const handler = mergeRouteHandler();
+    const sourceIds = Array.from({ length: 501 }, (_, index) => index + 2);
+    await expect(handler(
+      /** @type {any} */ ({ params: { id: '1' }, body: { source_ids: sourceIds } }),
+      /** @type {any} */ ({}),
+    )).rejects.toThrow(/at most 500/);
+    expect(mergeAccounts).not.toHaveBeenCalled();
+  });
+
+  it('accepts and forwards exactly 500 sources', async () => {
+    const handler = mergeRouteHandler();
+    const sourceIds = Array.from({ length: 500 }, (_, index) => index + 2);
+    mergeAccounts.mockResolvedValue({ into: 1, merged: sourceIds });
+    const res = { ok: vi.fn() };
+    await handler(
+      /** @type {any} */ ({ params: { id: '1' }, body: { source_ids: sourceIds } }),
+      /** @type {any} */ (res),
+    );
+    expect(mergeAccounts).toHaveBeenCalledWith(1, sourceIds);
+    expect(res.ok).toHaveBeenCalledOnce();
+  });
+});
 
 describe('Account Routes — portfolio cache invalidation', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -117,6 +159,21 @@ describe('POST /:id/merge — source_ids are rejected, not filtered', () => {
   it('rejects with 400 when one source id of several is not an integer, merging nothing', async () => {
     const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, 'abc', 3] }).expect(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mergeAccounts).not.toHaveBeenCalled();
+    expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
+  });
+
+  it('rejects a mixed self-reference instead of silently merging the other sources', async () => {
+    const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, 1] }).expect(400);
+    expect(res.body.error.message).toMatch(/must not include the survivor/);
+    expect(mergeAccounts).not.toHaveBeenCalled();
+    expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than 500 sources before calling the merge service', async () => {
+    const sourceIds = Array.from({ length: 501 }, (_, index) => index + 2);
+    const res = await api.post(`${BASE}/1/merge`).send({ source_ids: sourceIds }).expect(400);
+    expect(res.body.error.message).toMatch(/at most 500/);
     expect(mergeAccounts).not.toHaveBeenCalled();
     expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
   });

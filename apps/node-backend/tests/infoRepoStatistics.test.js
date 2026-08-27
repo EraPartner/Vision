@@ -135,7 +135,11 @@ describe('statisticsRepository.getCategoryPivot', () => {
   it('binds category and recipient exclusions', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await statisticsRepository.getCategoryPivot([1, 2], 'EUR', [9]);
+    await statisticsRepository.getCategoryPivot({
+      excludedCategoryIds: [1, 2],
+      targetCurrency: 'EUR',
+      excludedRecipientIds: [9],
+    });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('NOT IN ($1, $2)');
     expect(sql).toContain('NOT IN ($3)');
@@ -150,11 +154,11 @@ describe('statisticsRepository.getCategoryPivot', () => {
   // Was: asserted to bind as [5, 7] — the pivot silently included the
   // categories the caller asked to exclude. See the note in filterBuilder.test.js.
   it('rejects malformed exclusion lists instead of dropping the bad ids', async () => {
-    await expect(statisticsRepository.getCategoryPivot(
-      [0, -1, 'evil', 1.5, 2147483647, 5],
-      'EUR',
-      [null, undefined, 7],
-    )).rejects.toThrow(/excludedCategoryIds contains invalid value/);
+    await expect(statisticsRepository.getCategoryPivot({
+      excludedCategoryIds: [0, -1, 'evil', 1.5, 2147483647, 5],
+      targetCurrency: 'EUR',
+      excludedRecipientIds: [null, undefined, 7],
+    })).rejects.toThrow(/excludedCategoryIds contains invalid value/);
 
     expect(query).not.toHaveBeenCalled();
   });
@@ -162,7 +166,11 @@ describe('statisticsRepository.getCategoryPivot', () => {
   it('binds an exclusion id at the int4 ceiling instead of dropping it', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await statisticsRepository.getCategoryPivot([2147483647, 5], 'EUR', [7]);
+    await statisticsRepository.getCategoryPivot({
+      excludedCategoryIds: [2147483647, 5],
+      targetCurrency: 'EUR',
+      excludedRecipientIds: [7],
+    });
     expect(query.mock.calls[0][1]).toEqual([2147483647, 5, 7]);
   });
 
@@ -179,4 +187,3 @@ describe('statisticsRepository.getCategoryPivot', () => {
     });
   });
 });
-

@@ -14,12 +14,12 @@
 
 import { Router } from 'express';
 import accountService from '../services/accountService.js';
-import { mergeAccounts, previewMerge } from '../services/accountMergeService.js';
+import { MAX_ACCOUNT_MERGE_SOURCES, mergeAccounts, previewMerge } from '../services/accountMergeService.js';
 import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
-import { validateIdParam, validateId } from '../middleware/validation.js';
+import { validateIdParam, validateId, assertIdParam } from '../middleware/validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
@@ -41,7 +41,7 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const account = await accountService.get(id);
   res.ok({ ...account, links: [] });
 });
@@ -57,7 +57,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const updated = await accountService.update(id, req.body);
   // rename / in_net_worth / is_active / statement_balance all shift the
   // net-worth + bank-balances response caches; bust them (shared seam).
@@ -66,7 +66,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   await accountService.remove(id);
   invalidatePortfolioCaches();
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
@@ -80,7 +80,7 @@ router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {E
 // balance histories (§1 F2 — the guard that clears the survivor's statement
 // anchor). No mutation, so no cache invalidation.
 router.get('/:id/merge-preview', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const sourceId = parseInt(req.params.id, 10);
+  const sourceId = assertIdParam(req);
   // Strict id parse, not `Number(...)`: previewMerge only checks that what it
   // receives is a positive integer, so `?into=1e3` arrived as a well-formed
   // 1000 and previewed a merge into an account nobody named. previewMerge
@@ -107,8 +107,11 @@ router.get('/:id/merge-preview', validateIdParam, /** @param {ExpressRequest} re
 // repointing its rows onto the survivor. A digit string is still accepted, so
 // a valid body merges exactly what it did before.
 router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const targetId = parseInt(req.params.id, 10);
+  const targetId = assertIdParam(req);
   const rawSourceIds = Array.isArray(req.body?.source_ids) ? req.body.source_ids : [];
+  if (rawSourceIds.length > MAX_ACCOUNT_MERGE_SOURCES) {
+    throw new ValidationError(`source_ids must contain at most ${MAX_ACCOUNT_MERGE_SOURCES} accounts`);
+  }
   /** @type {number[]} */
   const sourceIds = [];
   /** @type {string[]} */
@@ -120,6 +123,9 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
   });
   if (rejected.length > 0) {
     throw new ValidationError(`source_ids must contain only integers, no accounts were merged: ${rejected.join('; ')}`);
+  }
+  if (sourceIds.includes(targetId)) {
+    throw new ValidationError('source_ids must not include the survivor account');
   }
   const result = await mergeAccounts(targetId, sourceIds);
   // Merge deletes the source accounts and repoints their references, changing
@@ -133,7 +139,7 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
 // The single sanctioned exception to the balance write-protection: it stamps one
 // system anchor row (amount=0, transfer_source='opening') per account+currency.
 router.post('/:id/opening-balance', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const result = await setOpeningBalance(id, req.body);
   // The anchor row feeds the aggregation MVs + the forecast MC caches; refresh
   // them like every transaction mutation route does, else dashboards serve stale
@@ -151,7 +157,7 @@ router.post('/:id/opening-balance', validateIdParam, /** @param {ExpressRequest}
 // 'adjustment' stamps one server-side 'adjustment' ledger row so the computed
 // balance rises to meet the statement (balance-free — descriptive-only preserved).
 router.post('/:id/reconcile', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const result = await reconcileAccount(id, req.body);
   // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;
   // both change the aggregation MVs + forecast caches, so refresh like the mutation

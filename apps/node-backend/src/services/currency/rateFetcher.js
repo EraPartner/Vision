@@ -85,7 +85,7 @@ export function normalizeDateInput(dateValue) {
   // pg returns DATE columns as a local-midnight JS Date, whose String() form is
   // "Sun Jun 01 2025 …" — the regex below never matched it, so historical-FX
   // conversion silently fell back to today's rate at every DB-row call site.
-  // Recover the local calendar day (mirrors toYmd in utils/portfolioMath.js).
+  // Recover the local calendar day (mirrors services/calculations/portfolioMath.js).
   if (dateValue instanceof Date) {
     if (isNaN(dateValue.getTime())) return null;
     return formatDateToYmd(dateValue);

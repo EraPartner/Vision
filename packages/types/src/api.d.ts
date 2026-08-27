@@ -14,7 +14,7 @@ export type { ApiErrorCodeValue } from './errors.js';
  */
 export interface ResponseMeta {
   requestId?: string;
-  extra?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface ApiError {

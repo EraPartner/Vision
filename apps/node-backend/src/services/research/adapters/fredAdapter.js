@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { getJson } from './httpClient.js';
-import { providerKey } from '../providerKeys.js';
+import { requireProviderKey } from '../providerKeys.js';
 import { trimToRange } from './macroRange.js';
 import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
@@ -43,11 +43,7 @@ const metaResponseSchema = z.looseObject({
   })),
 });
 
-function key() {
-  const k = providerKey('fred');
-  if (!k) throw new Error('FRED_API_KEY not configured');
-  return k;
-}
+const key = () => requireProviderKey('fred');
 
 const fredAdapter = {
   key: 'fred',

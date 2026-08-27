@@ -145,7 +145,7 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
       { year: 2025, recipient_id: 1, name: 'Alice', amount_eur: -10, cnt: 1 },
     ]);
 
-    const r = await recipientInsightsRepository.getRecipientByYear('EUR');
+    const r = await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
     expect(r.recipientsByYear['2024']).toEqual([
       { recipientId: 1, name: 'Alice', totalSpend: 125, transactionCount: 2 },
       { recipientId: 2, name: 'Bob', totalSpend: 50, transactionCount: 1 },
@@ -158,7 +158,7 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
     convertRowsToEur.mockResolvedValueOnce(
       Array.from({ length: 25 }, (_, i) => ({ year: 2025, recipient_id: i + 1, name: `R${i}`, amount_eur: -(100 - i) })),
     );
-    const r = await recipientInsightsRepository.getRecipientByYear('EUR');
+    const r = await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
     expect(r.recipientsByYear['2025']).toHaveLength(20);
     expect(r.recipientsByYear['2025'][0].totalSpend).toBe(100);
   });
@@ -166,15 +166,10 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
   // Was: asserted to bind as [7, 99] — the excluded recipients silently came
   // back into the result. See the note in filterBuilder.test.js.
   it('rejects malformed recipient exclusion ids instead of dropping them', async () => {
-    await expect(recipientInsightsRepository.getRecipientByYear('EUR', [
-      0,
-      -1,
-      2147483647,
-      1.5,
-      'string',
-      7,
-      99,
-    ])).rejects.toThrow(/excludedRecipientIds contains invalid value/);
+    await expect(recipientInsightsRepository.getRecipientByYear({
+      targetCurrency: 'EUR',
+      excludedRecipientIds: [0, -1, 2147483647, 1.5, 'string', 7, 99],
+    })).rejects.toThrow(/excludedRecipientIds contains invalid value/);
 
     expect(query).not.toHaveBeenCalled();
   });
@@ -182,7 +177,10 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
   it('binds a recipient exclusion id at the int4 ceiling instead of dropping it', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear('EUR', [2147483647, 7]);
+    await recipientInsightsRepository.getRecipientByYear({
+      targetCurrency: 'EUR',
+      excludedRecipientIds: [2147483647, 7],
+    });
     const [, params] = query.mock.calls[0];
     expect(params).toEqual([2147483647, 7]);
   });
@@ -190,7 +188,7 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
   it('omits the NOT IN clause when no valid ids', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear('EUR', []);
+    await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
     const [sql] = query.mock.calls[0];
     expect(sql).not.toContain('NOT IN');
   });
@@ -198,7 +196,10 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
   it('applies category exclusions (3-level alias-aware COALESCE) when provided', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear('EUR', [], [5, 7]);
+    await recipientInsightsRepository.getRecipientByYear({
+      targetCurrency: 'EUR',
+      excludedCategoryIds: [5, 7],
+    });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN');
     expect(params).toEqual([5, 7]);
@@ -209,7 +210,7 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
   it('uses monthly bucket by default (TO_CHAR YYYY-MM)', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot([], 'EUR');
+    await recipientInsightsRepository.getRecipientPivot({ targetCurrency: 'EUR' });
     const [sql] = query.mock.calls[0];
     expect(sql).toContain("TO_CHAR(t.date, 'YYYY-MM')");
   });
@@ -217,7 +218,10 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
   it('uses yearly bucket when requested', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot([], 'EUR', { bucket: 'yearly' });
+    await recipientInsightsRepository.getRecipientPivot({
+      targetCurrency: 'EUR',
+      bucket: 'yearly',
+    });
     const [sql] = query.mock.calls[0];
     expect(sql).toContain("TO_CHAR(t.date, 'YYYY')");
   });
@@ -228,7 +232,10 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
       .mockResolvedValueOnce({ rows: [] }); // pivot
     convertRowsToEur.mockResolvedValueOnce([]);
 
-    await recipientInsightsRepository.getRecipientPivot([], 'EUR', { recipientIds: [5] });
+    await recipientInsightsRepository.getRecipientPivot({
+      targetCurrency: 'EUR',
+      recipientIds: [5],
+    });
 
     // First query resolves the selected ids' alias members…
     expect(query.mock.calls[0][0]).toContain('primary_recipient_id = ANY');
@@ -238,10 +245,36 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
     expect(query.mock.calls[1][1]).toContainEqual([5, 9]);
   });
 
+  it('rejects malformed recipient selections before querying', async () => {
+    await expect(recipientInsightsRepository.getRecipientPivot({
+      targetCurrency: 'EUR',
+      recipientIds: [5, 'evil'],
+    })).rejects.toThrow(/recipientIds contains invalid value/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('retains a selected recipient at the int4 ceiling', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 2147483647 }] });
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientPivot({
+      targetCurrency: 'EUR',
+      recipientIds: [2147483647],
+    });
+
+    expect(query.mock.calls[0][1]).toEqual([[2147483647]]);
+  });
+
   it('applies start and end date filters', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot([], 'EUR', { startDate: '2025-01-01', endDate: '2025-12-31' });
+    await recipientInsightsRepository.getRecipientPivot({
+      targetCurrency: 'EUR',
+      startDate: '2025-01-01',
+      endDate: '2025-12-31',
+    });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/t\.date >= \$\d+/);
     expect(sql).toMatch(/t\.date <= \$\d+/);
@@ -257,7 +290,7 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
       { period: '2025-04', recipient_id: 1, recipient_name: 'A', amount_eur: -25, cnt: 1 },
     ]);
 
-    const r = await recipientInsightsRepository.getRecipientPivot([], 'EUR');
+    const r = await recipientInsightsRepository.getRecipientPivot({ targetCurrency: 'EUR' });
     expect(r.recipientPivot['2025-04']).toEqual([
       { recipientId: 2, name: 'B', total: 50, transactionCount: 1 },
       { recipientId: 1, name: 'A', total: 125, transactionCount: 2 },
@@ -267,7 +300,11 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
   it('combines exclusion ids and date filter param numbering', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot([5, 6], 'EUR', { startDate: '2025-01-01' });
+    await recipientInsightsRepository.getRecipientPivot({
+      excludedRecipientIds: [5, 6],
+      targetCurrency: 'EUR',
+      startDate: '2025-01-01',
+    });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('NOT IN ($1, $2)');
     expect(sql).toContain('t.date >= $3');

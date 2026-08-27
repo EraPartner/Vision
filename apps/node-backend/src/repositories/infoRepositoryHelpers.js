@@ -6,7 +6,6 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toDecimal, toNumber, roundMoney } from '../lib/money.js';
-import { formatDateToYmd, toWireDate } from '../lib/dateFormat.js';
 import settingsRepository from './settingsRepository.js';
 
 /**
@@ -88,60 +87,11 @@ export function clearMvCache() {
   mvCache.clear();
 }
 
-// ── Numeric helpers ────────────────────────────────────────────────────────
-
-/**
- * @param {number|string|import('decimal.js').Decimal} value
- * @returns {number}
- */
-export function roundToCents(value) {
-  return roundMoney(value);
-}
-
-// ── Date helpers ───────────────────────────────────────────────────────────
-
-// Re-exported from lib/dateFormat so the existing repository importers keep
-// working while routes import the canonical helper from lib directly.
-export { formatDateToYmd, toWireDate };
-
-/**
- * @param {number|string} year
- * @param {number|string} month 1-based.
- * @returns {string} 'YYYY-MM'
- */
-export function formatYearMonthKey(year, month) {
-  return `${year}-${String(month).padStart(2, '0')}`;
-}
-
-/**
- * @param {Date} date
- * @param {number} [days]
- * @returns {Date}
- */
-export function addDaysUtc(date, days = 1) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-/**
- * @param {Date} date
- * @returns {string} 'YYYY-MM-DD' (UTC)
- */
-export function getDayKeyUtc(date) {
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-/**
- * @param {string|Date} value
- * @returns {string} 'YYYY-MM'
- */
-export function extractYearMonth(value) {
-  return String(value).substring(0, 7);
-}
+// Compatibility re-exports for callers outside the info-repository family.
+// Internal consumers import these helpers from their canonical owners.
+export { roundMoney as roundToCents } from '../lib/money.js';
+export { formatDateToYmd, toWireDate } from '../lib/dateFormat.js';
+export { formatYearMonthKey, addDaysUtc, getDayKeyUtc, extractYearMonth } from '../lib/dateKeys.js';
 
 // ── Aggregation helpers ────────────────────────────────────────────────────
 
@@ -177,7 +127,7 @@ export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, la
   const pivot = {};
   for (const [period, entities] of Object.entries(periodMap)) {
     pivot[period] = Object.values(entities)
-      .map((e) => ({ ...e, total: roundToCents(e.total) }))
+      .map((e) => ({ ...e, total: roundMoney(e.total) }))
       .sort((a, b) => a.total - b.total);
   }
   return pivot;
@@ -222,7 +172,7 @@ export function mapRowsForAmountConversion(rows, amountField = 'amount', fallbac
  * @param {number|string} categoryId `-1` is the "uncategorised" sentinel.
  * @returns {string}
  */
-export function getCategoryKey(categoryId) {
+function getCategoryKey(categoryId) {
   return categoryId === -1 ? 'null' : String(categoryId);
 }
 
@@ -233,7 +183,7 @@ export function getCategoryKey(categoryId) {
  *   deliberate here.)
  * @returns {number|null}
  */
-export function parseCategoryId(categoryId) {
+function parseCategoryId(categoryId) {
   return categoryId === -1 ? null : parseInt(categoryId, 10);
 }
 
@@ -253,7 +203,7 @@ export function buildCategoryFromConvertedRows(convertedRows) {
     const existing = categoryMap.get(key);
     if (existing) {
       existing.count += count;
-      existing.total += roundToCents(eur);
+      existing.total += roundMoney(eur);
       continue;
     }
 
@@ -261,7 +211,7 @@ export function buildCategoryFromConvertedRows(convertedRows) {
       id: parseCategoryId(row.category_id),
       name: row.name,
       count,
-      total: roundToCents(eur),
+      total: roundMoney(eur),
     });
   }
 
@@ -315,56 +265,4 @@ export async function batchConvertGroupsWithHistoricalRateFallback(groups, targe
       .filter(r => r[TAG] === i)
       .map(({ [TAG]: _tag, ...rest }) => rest)
   );
-}
-
-// ── Investment spike sanitizer ─────────────────────────────────────────────
-
-/**
- * @param {Array<{ date: string, liquid: number, liabilities: number, investments: number, netWorth: number }>} snapshots
- * @returns {Array<{ date: string, liquid: number, liabilities: number, investments: number, netWorth: number }>}
- */
-export function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
-  if (!Array.isArray(snapshots) || snapshots.length < 3) {
-    return Array.isArray(snapshots) ? snapshots : [];
-  }
-
-  const sanitized = snapshots.map(s => ({ ...s }));
-  const minJump = Math.log(1.18);
-  const neighborTolerance = Math.log(1.12);
-  const localNeedleRatio = 1.8;
-
-  for (let i = 1; i < sanitized.length - 1; i += 1) {
-    const prev = Number(sanitized[i - 1]?.investments);
-    const current = Number(sanitized[i]?.investments);
-    const next = Number(sanitized[i + 1]?.investments);
-
-    if (!Number.isFinite(prev) || !Number.isFinite(current) || !Number.isFinite(next)) continue;
-    if (prev <= 0 || current <= 0 || next <= 0) continue;
-
-    const jump = Math.log(current / prev);
-    const revert = Math.log(next / current);
-    const bridge = Math.log(next / prev);
-
-    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
-    const largeMove = Math.abs(jump) >= minJump && Math.abs(revert) >= minJump;
-    const bridgeLooksNormal = Math.abs(bridge) <= neighborTolerance;
-
-    const maxNeighbor = Math.max(prev, next);
-    const minNeighbor = Math.min(prev, next);
-    const localNeedlePeak = current >= maxNeighbor * localNeedleRatio && bridgeLooksNormal;
-    const localNeedleTrough = current * localNeedleRatio <= minNeighbor && bridgeLooksNormal;
-
-    if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
-      const correctedInvestments = Math.sqrt(prev * next);
-      const liquid = Number(sanitized[i]?.liquid) || 0;
-      // Liabilities are stored as negative balances (ADR-092); the canonical
-      // formula everywhere else is netWorth = liquid + liabilities + investments,
-      // so the corrected point must include the liabilities term too.
-      const liabilities = Number(sanitized[i]?.liabilities) || 0;
-      sanitized[i].investments = roundToCents(correctedInvestments);
-      sanitized[i].netWorth = roundToCents(liquid + liabilities + correctedInvestments);
-    }
-  }
-
-  return sanitized;
 }

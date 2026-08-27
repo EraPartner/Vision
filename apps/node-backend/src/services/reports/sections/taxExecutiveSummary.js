@@ -4,7 +4,7 @@
  * KPI grid: total taxes, fees, net taxable result, dividend WHT, TOB, capital gains, effective rate.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtPct, kpiGrid, sectionPage, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -33,13 +33,7 @@ export function renderTaxExecutiveSummary(data, { currency }) {
   const hasData = totalCosts > 0 || dividendsReceived > 0;
 
   if (!hasData) {
-    return `
-      <div class="page">
-        <div class="section-title">Tax Summary</div>
-        <div class="section-subtitle">Overview of taxes and fees for ${taxYear}</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No tax data</strong>No tax transactions found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Tax Summary', subtitle: `Overview of taxes and fees for ${taxYear}`, heading: 'No tax data', message: 'No tax transactions found for the selected period.' });
   }
 
   const noteHtml = periodNote
@@ -58,11 +52,10 @@ export function renderTaxExecutiveSummary(data, { currency }) {
     ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">Tax profile: ${escapeHtml(taxProfile.filingStatus ?? '')} · ${escapeHtml(taxProfile.region ?? '')}</p>`
     : '';
 
-  return `
-    <div class="page">
-      <div class="section-title">Tax Summary</div>
-      <div class="section-subtitle">Taxes and fees for tax year ${taxYear}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Tax Summary',
+    subtitle: `Taxes and fees for tax year ${taxYear}`,
+    content: `
       ${noteHtml}${profileHtml}${fxWarningHtml}
       ${kpiGrid([
         { label: 'Total Taxes Paid', value: fmtCurrency(totalTaxes, currency), cls: 'neg' },
@@ -94,6 +87,6 @@ export function renderTaxExecutiveSummary(data, { currency }) {
             <td class="num">—</td>
           </tr>
         </tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

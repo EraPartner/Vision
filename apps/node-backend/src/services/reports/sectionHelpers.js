@@ -96,6 +96,154 @@ export function signClass(amount) {
   return 'neutral';
 }
 
+// ── Section shell ─────────────────────────────────────────────────────────
+
+/**
+ * Render the shared report-section page chrome.
+ *
+ * @param {{
+ *   title: string,
+ *   subtitle: string,
+ *   content: string,
+ *   pageBreak?: boolean,
+ * }} section
+ * @returns {string}
+ */
+export function sectionPage({ title, subtitle, content, pageBreak = false }) {
+  return `
+    <div class="${pageBreak ? 'page page-break' : 'page'}">
+      <div class="section-title">${escapeHtml(title)}</div>
+      <div class="section-subtitle">${escapeHtml(subtitle)}</div>
+      <hr class="section-divider">
+      ${content}
+    </div>`;
+}
+
+/**
+ * Render the plain inline empty notice used inside an otherwise populated page.
+ *
+ * @param {string} message
+ * @returns {string}
+ */
+export function emptyNotice(message) {
+  return `<div class="empty-notice">${escapeHtml(message)}</div>`;
+}
+
+/**
+ * Render an empty report section using one of the two established notice styles.
+ *
+ * @param {{
+ *   title: string,
+ *   subtitle: string,
+ *   message: string,
+ *   heading?: string | null,
+ *   pageBreak?: boolean,
+ * }} section
+ * @returns {string}
+ */
+export function emptySection({ title, subtitle, message, heading = null, pageBreak = false }) {
+  const content = heading
+    ? `<div class="placeholder-notice"><strong>${escapeHtml(heading)}</strong>${escapeHtml(message)}</div>`
+    : emptyNotice(message);
+  return sectionPage({ title, subtitle, content, pageBreak });
+}
+
+const ASSET_CLASS_LABELS = {
+  stock:       { singular: 'Stock', plural: 'Stocks' },
+  etf:         { singular: 'ETF', plural: 'ETFs' },
+  crypto:      { singular: 'Crypto', plural: 'Crypto' },
+  metals:      { singular: 'Metals', plural: 'Metals' },
+  savings:     { singular: 'Savings', plural: 'Savings' },
+  bond:        { singular: 'Bond', plural: 'Bonds' },
+  real_estate: { singular: 'Real Estate', plural: 'Real Estate' },
+  other:       { singular: 'Other', plural: 'Other' },
+};
+
+/**
+ * Resolve a display label for one portfolio asset class.
+ *
+ * @param {string} assetClass
+ * @param {{ plural?: boolean }} [opts]
+ * @returns {string}
+ */
+export function assetClassLabel(assetClass, { plural = false } = {}) {
+  const labels = ASSET_CLASS_LABELS[assetClass];
+  return labels ? labels[plural ? 'plural' : 'singular'] : assetClass;
+}
+
+/**
+ * Build the shared current-value/invested buckets used by portfolio allocation sections.
+ *
+ * @param {Record<string, unknown> | null | undefined} latest
+ * @param {Array<{ assetClass: string; currentValue: number; totalInvested: number }>} breakdown
+ * @returns {Array<{ label: string; value: number; invested: number }>}
+ */
+export function buildAssetClassBuckets(latest, breakdown) {
+  /** @type {Array<{ label: string; value: number; invested: number }>} */
+  const buckets = [];
+  if (latest) {
+    /** @param {string} label @param {unknown} value @param {unknown} invested */
+    const add = (label, value, invested) => {
+      const currentValue = Number(value ?? 0);
+      const totalInvested = Number(invested ?? 0);
+      if (currentValue > 0 || totalInvested > 0) {
+        buckets.push({ label, value: currentValue, invested: totalInvested });
+      }
+    };
+    add('Stocks & ETFs', latest.stocks_etfs_value, latest.stocks_etfs_invested);
+    add('Crypto', latest.crypto_value, latest.crypto_invested);
+    add('Metals', latest.metals_value, latest.metals_invested);
+    const cash = Number(latest.cash_value ?? 0);
+    if (cash > 0) buckets.push({ label: 'Cash / Savings', value: cash, invested: cash });
+    return buckets;
+  }
+
+  /** @type {Map<string, { label: string; value: number; invested: number }>} */
+  const grouped = new Map();
+  for (const investment of breakdown) {
+    const assetClass = investment.assetClass;
+    if (!grouped.has(assetClass)) {
+      grouped.set(assetClass, { label: assetClassLabel(assetClass, { plural: true }), value: 0, invested: 0 });
+    }
+    const bucket = grouped.get(assetClass);
+    bucket.value += Number(investment.currentValue ?? 0);
+    bucket.invested += Number(investment.totalInvested ?? 0);
+  }
+  return [...grouped.values()];
+}
+
+/**
+ * Render the shared side-by-side filtered/all chart comparison.
+ *
+ * @param {{ filteredLabel: string; filteredChart: string; allLabel: string; allChart: string }} comparison
+ * @returns {string}
+ */
+export function comparisonChartPair({ filteredLabel, filteredChart, allLabel, allChart }) {
+  return `
+      <div class="chart-pair">
+        <div>
+          <div class="chart-pair-label">${escapeHtml(filteredLabel)}</div>
+          ${filteredChart}
+        </div>
+        <div>
+          <div class="chart-pair-label">${escapeHtml(allLabel)}</div>
+          ${allChart}
+        </div>
+      </div>`;
+}
+
+/**
+ * Render the shared table-filter explanation below comparison charts.
+ *
+ * @param {{ filteredCount: number; excludedCount: number; singular: string; plural: string }} details
+ * @returns {string}
+ */
+export function filterNotice({ filteredCount, excludedCount, singular, plural }) {
+  const filteredNoun = filteredCount === 1 ? singular : plural;
+  const excludedNoun = excludedCount === 1 ? singular : plural;
+  return `<div class="filter-notice">Table shows ${filteredCount} ${escapeHtml(filteredNoun)} matching active filters. ${excludedCount} ${escapeHtml(excludedNoun)} excluded — see "All data" chart above.</div>`;
+}
+
 // ── KPI cards ──────────────────────────────────────────────────────────────
 
 /**

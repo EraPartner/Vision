@@ -9,7 +9,7 @@ import { infoRepository } from '../../../repositories/infoRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { expandOccurrences } from '../../../lib/calculations/recurrence.js';
-import { toYmd } from '../../../utils/portfolioMath.js';
+import { toYmd } from '../../calculations/portfolioMath.js';
 import { todayAppDateString, addDaysYmd } from '../../../lib/timezone.js';
 import {
   parseEnum,

@@ -6,9 +6,11 @@
  */
 
 import {
+  emptySection,
   escapeHtml,
   fmtCurrency,
   fmtMonthLabel,
+  sectionPage,
   svgGroupedBarChart,
   signClass,
 } from '../sectionHelpers.js';
@@ -23,13 +25,7 @@ export function renderCashflowTrend(data, { currency, period }) {
   const months = filterMonthsByPeriod(data.monthly?.months ?? [], period);
 
   if (!months.length) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Cashflow Trend</div>
-        <div class="section-subtitle">Monthly income vs. expenses</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No data for selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Cashflow Trend', subtitle: 'Monthly income vs. expenses', message: 'No data for selected period.', pageBreak: true });
   }
 
   // Build chart groups — use all months in chronological order
@@ -55,11 +51,11 @@ export function renderCashflowTrend(data, { currency, period }) {
       </tr>`;
   }).join('');
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Cashflow Trend</div>
-      <div class="section-subtitle">Monthly income vs. expenses — ${escapeHtml(String(months.length))} month${months.length !== 1 ? 's' : ''}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Cashflow Trend',
+    subtitle: `Monthly income vs. expenses — ${String(months.length)} month${months.length !== 1 ? 's' : ''}`,
+    pageBreak: true,
+    content: `
       <div class="chart-wrap">${chartSvg}</div>
       <table class="data-table">
         <thead>
@@ -72,6 +68,6 @@ export function renderCashflowTrend(data, { currency, period }) {
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
+import { validateIdParam, validateNumber, assertMaxLength, assertCurrency, assertIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
 /**
@@ -179,7 +179,7 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const item = await watchlistRepository.getById(parseInt(req.params.id, 10));
+  const item = await watchlistRepository.getById(assertIdParam(req));
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
 });
@@ -198,7 +198,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const data = parseWatchlistBody(watchlistUpdateSchema, req.body);
   const item = await watchlistRepository.update(id, data);
   if (!item) throw new NotFoundError('Watchlist item not found');
@@ -206,7 +206,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const deleted = await watchlistRepository.delete(parseInt(req.params.id, 10));
+  const deleted = await watchlistRepository.delete(assertIdParam(req));
   if (!deleted) throw new NotFoundError('Watchlist item not found');
   res.status(204).send();
 });

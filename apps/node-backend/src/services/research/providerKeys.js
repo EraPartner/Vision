@@ -74,6 +74,20 @@ export function providerKey(provider, env = process.env) {
 }
 
 /**
+ * Effective key for a keyed provider, or the provider's configuration error.
+ * Adapter request builders use this so all five keyed providers share one guard.
+ *
+ * @param {keyof typeof ENV_VAR_BY_PROVIDER} provider
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
+export function requireProviderKey(provider, env = process.env) {
+  const key = providerKey(provider, env);
+  if (!key) throw new Error(`${ENV_VAR_BY_PROVIDER[provider]} not configured`);
+  return key;
+}
+
+/**
  * True if the provider needs no key, or has one from settings or env.
  * @param {string} provider
  * @param {NodeJS.ProcessEnv} [env]

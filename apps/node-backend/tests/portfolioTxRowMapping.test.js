@@ -32,8 +32,20 @@ describe('mapPortfolioTxRow — wire shape', () => {
   });
 
   it('passes through string dates and null untouched', () => {
-    const row = mapPortfolioTxRow({ id: 2, date: '2026-07-01', recurrence_end_date: null, amount: '1' });
+    const row = mapPortfolioTxRow({
+      id: 2,
+      date: '2026-07-01',
+      recurrence_end_date: null,
+      amount: '1',
+      import_batch_id: null,
+    });
     expect(row.date).toBe('2026-07-01');
     expect(row.recurrence_end_date).toBeNull();
+    expect(row.import_batch_id).toBeNull();
+  });
+
+  it('preserves BIGINT import batch provenance as a string', () => {
+    const row = mapPortfolioTxRow({ id: 3, date: '2026-07-01', import_batch_id: '7' });
+    expect(row.import_batch_id).toBe('7');
   });
 });

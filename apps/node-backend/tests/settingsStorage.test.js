@@ -69,7 +69,6 @@ describe('Settings storage and retrieval', () => {
     query.mockResolvedValue({});
 
     const payload = { value: { excludedCategoryIds: [7], excludedRecipientIds: [8] } };
-
     const res = await api.put(`${BASE}/dashboard_settings`).send(payload).expect(200);
 
     expect(res.body).toEqual(okEnvelope({ key: 'dashboard_settings', value: payload.value }));
@@ -119,13 +118,13 @@ describe('Settings storage and retrieval', () => {
     });
   });
 
-  it('settingsRepository.setMany should normalize object values before bulk upsert', async () => {
+  it('settingsRepository.setMany stores the values validated by the route without secondary coercion', async () => {
     query.mockResolvedValue({});
 
     await settingsRepository.setMany({
       dashboard_settings: {
-        excludedCategoryIds: ['1', '2'],
-        excludedRecipientIds: ['10'],
+        excludedCategoryIds: [1, 2],
+        excludedRecipientIds: [10],
       },
     });
 

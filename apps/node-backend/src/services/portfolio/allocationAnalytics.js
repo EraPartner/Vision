@@ -65,7 +65,7 @@ export const CLASSIC_PORTFOLIOS = Object.freeze({
  * (the precious-metals sleeve) and `intl_stocks` into `stocks`. Left here next to
  * CLASSIC_PORTFOLIOS so the canonical models stay intact for drift comparison.
  */
-export const REBALANCE_TARGET_ALIASES = Object.freeze({
+const REBALANCE_TARGET_ALIASES = Object.freeze({
   commodities: 'gold',
   intl_stocks: 'stocks',
 });

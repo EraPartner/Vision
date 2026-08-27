@@ -16,7 +16,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, assertOptionalId } from '../middleware/validation.js';
+import { validateIdParam, assertOptionalId, assertIdParam } from '../middleware/validation.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
@@ -105,13 +105,8 @@ const requireSymbol = (value) => parseResearchParam(symbolSchema, value);
 async function respond(res, dataType, params) {
   const result = await researchAggregator.fetch(dataType, params);
   const data = result.source === 'unavailable' ? EMPTY_BY_TYPE[dataType] : result.data;
-  // `ResponseMeta` (@vision/types/api) only declares `requestId`/`extra`, but
-  // envelope.js's wrapResponse spreads whatever `meta` object it's given onto
-  // the body directly — `provider`/`source` land at the top level at runtime
-  // exactly as passed here. That's a real divergence from the documented
-  // "arbitrary facts belong under meta.extra" convention (see api.js), predating
-  // this annotation pass; binding to a local (not a fresh object literal) sidesteps
-  // the excess-property check without changing what's sent on the wire.
+  // Provenance facts are route-specific envelope metadata and live beside the
+  // requestId at the top level (packages/types/src/api.js).
   const meta = { provider: result.provider ?? null, source: result.source };
   res.ok(data ?? null, meta);
 }
@@ -153,7 +148,7 @@ router.get('/fundamentals', /** @param {ExpressRequest} req @param {ExpressRespo
     assetClass: single(req.query.asset_class) || undefined,
   });
   const data = result.source === 'unavailable' ? EMPTY_BY_TYPE.fundamentals : result.data;
-  // See the comment in respond() above re: ResponseMeta vs. actual meta shape.
+  // See the provenance metadata convention in respond() above.
   const meta = { provider: result.provider ?? null, source: result.source };
   res.ok(data ?? null, meta);
 });
@@ -316,7 +311,7 @@ router.post('/mappings', /** @param {ExpressRequest} req @param {ExpressResponse
 
 // DELETE /api/research/mappings/:id
 router.delete('/mappings/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   // Idempotent hard delete (an already-removed mapping is not an error) →
   // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   await researchMappingService.remove(id);

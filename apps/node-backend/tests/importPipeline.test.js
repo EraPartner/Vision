@@ -13,8 +13,8 @@ import { refreshAggregations } from '../src/services/aggregationRefresh.js'
 
 // Ambient-aware connection mock: commitBatch's per-row writes now go through
 // repositories, which issue module-level query() inside withTransaction — the
-// ambient context routes those onto `mockClient`, alongside the SAVEPOINT
-// ceremony the pipeline still issues on the client directly.
+// ambient context routes those onto `mockClient`, alongside SAVEPOINTs issued
+// through withSavepointIfInTransaction.
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }))
 vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient))
 vi.mock('../src/config/logger.js', () => ({
@@ -464,8 +464,8 @@ describe('commitBatch', () => {
 
     const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
     expect(statements).toContain('ROLLBACK TO SAVEPOINT sp_commit_chunk')
-    expect(statements.some((s) => /^SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
-    expect(statements.some((s) => /^ROLLBACK TO SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
+    expect(statements).toContain('SAVEPOINT sp_commit_row')
+    expect(statements).toContain('ROLLBACK TO SAVEPOINT sp_commit_row')
     expect(statements.some((s) => s.includes("status = 'error'"))).toBe(true)
   })
 
@@ -532,7 +532,7 @@ describe('commitBatch', () => {
     const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
     expect(statements.filter((s) => s.includes('INSERT INTO transactions'))).toHaveLength(1)
     expect(statements.some((s) => s.includes('ROLLBACK TO SAVEPOINT'))).toBe(false)
-    expect(statements.some((s) => /^SAVEPOINT sp_row_/.test(s))).toBe(false)
+    expect(statements).not.toContain('SAVEPOINT sp_commit_row')
     expect(statements.filter((s) => s.includes("status = 'committed'"))).toHaveLength(1)
 
     // The unresolved row was written 'error' on the pool, before the chunk.
@@ -544,9 +544,9 @@ describe('commitBatch', () => {
 
   it('rejects a non-integer staging row.id before issuing SAVEPOINT', async () => {
     // Defence-in-depth: import_staging_rows.id is BIGSERIAL today, but if a
-    // future schema change ever loosened that to a string, the savepoint
-    // identifier interpolation would become an injection vector. The assert
-    // makes that fail loudly rather than silently injecting.
+    // future schema change ever loosened that contract, repository and staging
+    // writes must not receive an arbitrary identifier. Validation also stays
+    // before the per-row savepoint, so no transaction work starts for it.
     setupCommit({ ...matchedRow, id: "1; DROP TABLE x" })
     expect(await commitBatch({ batchId: 4 })).toEqual({ imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0 })
     const savepointCalls = mockClient.query.mock.calls.filter(

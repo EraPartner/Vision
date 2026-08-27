@@ -4,10 +4,10 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
-  validateId, sanitizeString, validateNumber,
+  validateId, validateNumber,
   validateDateString,
   sanitizeUpdateFields, validateIntArray, validateIdParam, validateIntParam,
-  assertOptionalId, MAX_INT32_ID, MAX_SAFE_ID,
+  assertOptionalId, assertIdParam, filterValidatedIdNumbers, MAX_INT32_ID, MAX_SAFE_ID,
 } from '../src/middleware/validation.js';
 import { coercedIdSchema, parseOverrideId } from '../src/lib/importBatchIds.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
@@ -112,19 +112,19 @@ describe('Validation Middleware', () => {
     });
   });
 
-  describe('sanitizeString', () => {
-    it('should trim and limit length', () => {
-      expect(sanitizeString('  hello  ')).toBe('hello');
-      expect(sanitizeString('a'.repeat(1000), 10)).toBe('a'.repeat(10));
+  describe('assertIdParam', () => {
+    it('returns a validated id for raw strings and middleware-normalised numbers', () => {
+      expect(assertIdParam(/** @type {any} */ ({ params: { id: '00042' } }))).toBe(42);
+      expect(assertIdParam(/** @type {any} */ ({ params: { id: 42 } }))).toBe(42);
+      expect(assertIdParam(/** @type {any} */ ({ params: { accountId: '7' } }), 'accountId')).toBe(7);
+      expect(assertIdParam(/** @type {any} */ ({ params: { id: String(MAX_INT32_ID) } }))).toBe(MAX_INT32_ID);
     });
 
-    it('should handle null/undefined', () => {
-      expect(sanitizeString(null)).toBeNull();
-      expect(sanitizeString(undefined)).toBeNull();
-    });
-
-    it('should convert non-strings', () => {
-      expect(sanitizeString(123)).toBe('123');
+    it('throws before a handler can retarget or use an out-of-range id', () => {
+      for (const id of ['12abc', '1e3', '0x10', '12.5', '0', '-1', String(MAX_INT32_ID + 1)]) {
+        expect(() => assertIdParam(/** @type {any} */ ({ params: { id } }))).toThrow(ValidationError);
+      }
+      expect(() => assertIdParam(/** @type {any} */ ({ params: {} }))).toThrow(ValidationError);
     });
   });
 
@@ -248,6 +248,15 @@ describe('Validation Middleware', () => {
     it('accepts an empty array and a scalar digit string', () => {
       expect(validateIntArray([])).toEqual({ valid: true, value: [] });
       expect(validateIntArray('7')).toEqual({ valid: true, value: [7] });
+    });
+  });
+
+  describe('filterValidatedIdNumbers', () => {
+    it('keeps only numeric int4 ids without coercing direct-call values', () => {
+      expect(filterValidatedIdNumbers([
+        1, '2', 0, -1, 1.5, NaN, Infinity, MAX_INT32_ID, MAX_INT32_ID + 1, null,
+      ])).toEqual([1, MAX_INT32_ID]);
+      expect(filterValidatedIdNumbers(null)).toEqual([]);
     });
   });
 

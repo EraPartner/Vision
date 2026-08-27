@@ -4,19 +4,7 @@
  * Shows a grouped bar chart (invested vs value per class) and a per-class P/L table.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, signClass, svgGenericGroupedBarChart } from '../sectionHelpers.js';
-
-/** @type {Record<string, string>} */
-const ASSET_CLASS_LABELS = {
-  stock:       'Stocks',
-  etf:         'ETFs',
-  crypto:      'Crypto',
-  metals:      'Metals',
-  savings:     'Savings',
-  bond:        'Bonds',
-  real_estate: 'Real Estate',
-  other:       'Other',
-};
+import { buildAssetClassBuckets, emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, signClass, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -28,47 +16,15 @@ export function renderAssetClassDetail(data, { currency }) {
   const breakdown = data?.breakdown ?? [];
 
   if (!latest && !breakdown.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Asset Class Detail</div>
-        <div class="section-subtitle">Invested vs. current value per asset class</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No data</strong>Add investments to see the asset class breakdown.</div>
-      </div>`;
+    return emptySection({
+      title: 'Asset Class Detail',
+      subtitle: 'Invested vs. current value per asset class',
+      heading: 'No data',
+      message: 'Add investments to see the asset class breakdown.',
+    });
   }
 
-  // Build asset-class rows
-  /** @type {Map<string, { label: string; value: number; invested: number }>} */
-  const classMap = new Map();
-
-  if (latest) {
-    /**
-     * @param {string} key
-     * @param {string} label
-     * @param {string} value
-     * @param {string} invested
-     */
-    const add = (key, label, value, invested) => {
-      const v = Number(value ?? 0);
-      const i = Number(invested ?? 0);
-      if (v > 0 || i > 0) classMap.set(key, { label, value: v, invested: i });
-    };
-    add('stocks_etfs', 'Stocks & ETFs', latest.stocks_etfs_value, latest.stocks_etfs_invested);
-    add('crypto',      'Crypto',        latest.crypto_value,      latest.crypto_invested);
-    add('metals',      'Metals',        latest.metals_value,      latest.metals_invested);
-    const cash = Number(latest.cash_value ?? 0);
-    if (cash > 0) classMap.set('cash', { label: 'Cash / Savings', value: cash, invested: cash });
-  } else {
-    for (const inv of breakdown) {
-      const ac    = inv.assetClass ?? inv.asset_class ?? 'other';
-      const label = ASSET_CLASS_LABELS[ac] ?? ac;
-      if (!classMap.has(ac)) classMap.set(ac, { label, value: 0, invested: 0 });
-      classMap.get(ac).value    += Number(inv.currentValue ?? 0);
-      classMap.get(ac).invested += Number(inv.totalInvested ?? inv.total_invested ?? 0);
-    }
-  }
-
-  const classes = [...classMap.values()].sort((a, b) => b.value - a.value);
+  const classes = buildAssetClassBuckets(latest, breakdown).sort((a, b) => b.value - a.value);
 
   const groups = classes.map(c => ({ label: c.label, value: c.value, invested: c.invested }));
   const seriesDefs = [
@@ -94,11 +50,10 @@ export function renderAssetClassDetail(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Asset Class Detail</div>
-      <div class="section-subtitle">Invested capital vs. current value per asset class</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Asset Class Detail',
+    subtitle: 'Invested capital vs. current value per asset class',
+    content: `
       <div class="chart-wrap">${chart}</div>
       <table class="data-table">
         <thead><tr>
@@ -110,6 +65,6 @@ export function renderAssetClassDetail(data, { currency }) {
           <th class="num">Share</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

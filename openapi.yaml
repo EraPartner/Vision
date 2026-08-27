@@ -1135,6 +1135,13 @@ components:
           type: integer
           nullable: true
           description: Owning account for the lot (ADR-091); null = unassigned/global
+        import_batch_id:
+          type: string
+          nullable: true
+          description: >-
+            Portfolio-import batch that created the row. PostgreSQL BIGINT is
+            serialized by node-postgres as a string; null means the transaction
+            was created manually or predates batch attribution.
         note:
           type: string
         is_recurring:
@@ -1677,20 +1684,61 @@ components:
     # ─── Import ───────────────────────────────────────────────────────────────
     ImportBatch:
       type: object
-      required: [id, bank, row_count, status, created_at]
+      required:
+        - id
+        - adapter_name
+        - source_filename
+        - source_size_bytes
+        - status
+        - rows_total
+        - rows_imported
+        - rows_duplicate
+        - rows_error
+        - error_summary
+        - started_at
+        - completed_at
+        - transactions_remaining
       properties:
         id:
           type: string
-        bank:
+          description: PostgreSQL BIGINT serialized by node-postgres as a string.
+        adapter_name:
           type: string
-        row_count:
-          type: integer
+        source_filename:
+          type: string
+          nullable: true
+        source_size_bytes:
+          type: string
+          nullable: true
+          description: PostgreSQL BIGINT serialized by node-postgres as a string.
+        custom_config:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Present on batch-detail responses; omitted from batch-list rows.
         status:
           type: string
-          enum: [pending, committed, failed]
-        created_at:
+          enum: [pending, staging, validating, matching, awaiting_review, committing, complete, failed, aborted]
+        rows_total:
+          type: integer
+        rows_imported:
+          type: integer
+        rows_duplicate:
+          type: integer
+        rows_error:
+          type: integer
+        error_summary:
+          type: string
+          nullable: true
+        started_at:
           type: string
           format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        transactions_remaining:
+          type: integer
 
     # Body of the 201 answer from POST /api/import/csv and /api/import/csv/custom,
     # built by buildImportResult(buildPipelineResult(...)) in routes/importRoutes.js.
@@ -2067,9 +2115,14 @@ paths:
               properties:
                 source_ids:
                   type: array
+                  minItems: 1
+                  maxItems: 500
                   items:
                     type: integer
-                  description: Account ids to merge into this account and delete
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
+                  description: Account ids to merge into this account and delete; must not include the survivor id
       responses:
         "200":
           description: Merge result (survivor id, merged ids, reassigned counts)
@@ -2077,6 +2130,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Empty, oversized, malformed, or self-referencing source_ids list
         "404":
           description: Target or a source account not found
 
@@ -3518,7 +3573,7 @@ paths:
           format: int32
           minimum: 1
     post:
-      summary: Merge recipient into another
+      summary: Merge aliases into the primary recipient identified by id
       operationId: mergeRecipient
       tags: [Recipients]
       requestBody:
@@ -3527,10 +3582,16 @@ paths:
           application/json:
             schema:
               type: object
-              required: [target_id]
+              required: [alias_ids]
               properties:
-                target_id:
-                  type: integer
+                alias_ids:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
       responses:
         "200":
           description: Merged
@@ -3538,6 +3599,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: alias_ids is missing, empty, or contains a malformed or out-of-range id; no recipients are merged
 
   /api/recipients/{id}/unmerge:
     parameters:
@@ -4651,11 +4714,27 @@ paths:
       parameters:
         - in: query
           name: start_date
+          description: Inclusive start date. Preferred over the deprecated `start` alias when both are present.
           schema:
             type: string
             format: date
         - in: query
           name: end_date
+          description: Inclusive end date. Preferred over the deprecated `end` alias when both are present.
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: start
+          deprecated: true
+          description: Deprecated alias for `start_date`.
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end
+          deprecated: true
+          description: Deprecated alias for `end_date`.
           schema:
             type: string
             format: date
@@ -4703,12 +4782,28 @@ paths:
             type: string
             enum: [monthly, yearly]
         - in: query
+          name: start_date
+          description: Inclusive start date. Preferred over the deprecated `start` alias when both are present.
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          description: Inclusive end date. Preferred over the deprecated `end` alias when both are present.
+          schema:
+            type: string
+            format: date
+        - in: query
           name: start
+          deprecated: true
+          description: Deprecated alias for `start_date`.
           schema:
             type: string
             format: date
         - in: query
           name: end
+          deprecated: true
+          description: Deprecated alias for `end_date`.
           schema:
             type: string
             format: date
@@ -5824,6 +5919,20 @@ paths:
                   format: date
                 currency:
                   type: string
+                excludedCategoryIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
+                excludedRecipientIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
       responses:
         "200":
           description: Report PDF or data
@@ -5846,6 +5955,20 @@ paths:
               properties:
                 currency:
                   type: string
+                excludedCategoryIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
+                excludedRecipientIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
       responses:
         "200":
           description: Portfolio report
@@ -5870,6 +5993,20 @@ paths:
                   type: integer
                 currency:
                   type: string
+                excludedCategoryIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
+                excludedRecipientIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
       responses:
         "200":
           description: Tax report
@@ -5961,6 +6098,12 @@ paths:
               properties:
                 title:
                   type: string
+                  maxLength: 200
+                model:
+                  type: string
+                  minLength: 1
+                  pattern: ".*\\S.*"
+                  description: Optional non-blank Ollama model identifier.
       responses:
         "201":
           description: Created conversation with its (empty) message list — same
@@ -6226,12 +6369,12 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file, bank]
+              required: [file, bank_name]
               properties:
                 file:
                   type: string
                   format: binary
-                bank:
+                bank_name:
                   type: string
       responses:
         "200":
@@ -6264,6 +6407,15 @@ paths:
                 file:
                   type: string
                   format: binary
+                separator:
+                  type: string
+                  minLength: 1
+                  maxLength: 1
+                  default: ","
+                  description: Single-character CSV delimiter.
+                encoding:
+                  type: string
+                  default: utf-8
       responses:
         "201":
           description: Import result
@@ -6288,6 +6440,15 @@ paths:
                 file:
                   type: string
                   format: binary
+                separator:
+                  type: string
+                  minLength: 1
+                  maxLength: 1
+                  default: ","
+                  description: Single-character CSV delimiter.
+                encoding:
+                  type: string
+                  default: utf-8
       responses:
         "201":
           description: Import result

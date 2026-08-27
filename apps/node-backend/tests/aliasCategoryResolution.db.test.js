@@ -666,13 +666,22 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
         [inheritedPlanned]: 'Bills:Utilities',
         [ownPlanned]: 'Food:Groceries',
       };
+      const expectedRecipientNames = {
+        [aliasPlanned]: 'Electrabel',
+        [inheritedPlanned]: 'Electrabel',
+        [ownPlanned]: 'Electrabel',
+      };
 
       const { items } = await plannedTransactionRepository.getAll({});
       expect(Object.fromEntries(items.map((r) => [r.id, r.category_name]))).toEqual(expected);
+      expect(Object.fromEntries(items.map((r) => [r.id, r.recipient_name]))).toEqual(
+        expectedRecipientNames,
+      );
 
       for (const [id, name] of Object.entries(expected)) {
         const row = await plannedTransactionRepository.getById(Number(id));
         expect(row.category_name).toBe(name);
+        expect(row.recipient_name).toBe('Electrabel');
         // Where the row carries its OWN category_id, the id and the displayed
         // name must denote the same category; where it does not, the name is
         // an inherited display value and category_id is legitimately null.
@@ -682,9 +691,15 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
 
       const due = await plannedTransactionRepository.getDueSoon(90);
       expect(Object.fromEntries(due.map((r) => [r.id, r.category_name]))).toEqual(expected);
+      expect(Object.fromEntries(due.map((r) => [r.id, r.recipient_name]))).toEqual(
+        expectedRecipientNames,
+      );
 
       const forecast = await plannedTransactionRepository.getForForecast(3);
       expect(Object.fromEntries(forecast.map((r) => [r.id, r.category_name]))).toEqual(expected);
+      expect(Object.fromEntries(forecast.map((r) => [r.id, r.recipient_name]))).toEqual(
+        expectedRecipientNames,
+      );
     });
 
     // The search clause matches the RESOLVED label: 'Utilities' reaches the row
@@ -722,6 +737,11 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
       // Pre-fix: all three were null except `ownPlanned` — this site joined
       // neither rc nor pc.
       expect(Object.fromEntries(occurrences.map((t) => [t.id, t.category_name]))).toEqual(reference);
+      expect(Object.fromEntries(occurrences.map((t) => [t.id, t.recipient_name]))).toEqual({
+        [aliasPlanned]: 'Electrabel',
+        [inheritedPlanned]: 'Electrabel',
+        [ownPlanned]: 'Electrabel',
+      });
       expect(reference[aliasPlanned]).toBe('Zzz:Last');
       expect(reference[inheritedPlanned]).toBe('Bills:Utilities');
       expect(reference[ownPlanned]).toBe('Food:Groceries');

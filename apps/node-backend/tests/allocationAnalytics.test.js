@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  backtestReturn, allocationDrift, normalizeWeights, CLASSIC_PORTFOLIOS,
+  backtestReturn, allocationDrift, normalizeWeights, CLASSIC_PORTFOLIOS, foldTargetSleeves,
 } from '../src/services/portfolio/allocationAnalytics.js';
 
 describe('backtestReturn (ADR-097)', () => {
@@ -37,6 +37,14 @@ describe('normalizeWeights', () => {
   it('is a no-op for empty/zero totals', () => {
     expect(normalizeWeights({})).toEqual({});
     expect(normalizeWeights({ a: 0 })).toEqual({ a: 0 });
+  });
+});
+
+describe('foldTargetSleeves', () => {
+  it('folds aliases into representable sleeves without mutating the input', () => {
+    const input = { stocks: 0.48, intl_stocks: 0.12, gold: 0.075, commodities: 0.075 };
+    expect(foldTargetSleeves(input)).toEqual({ stocks: 0.6, gold: 0.15 });
+    expect(input).toEqual({ stocks: 0.48, intl_stocks: 0.12, gold: 0.075, commodities: 0.075 });
   });
 });
 

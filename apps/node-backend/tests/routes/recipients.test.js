@@ -244,6 +244,17 @@ describe('Recipient Routes', () => {
       });
     });
 
+    it('rejects the whole merge when any alias id is malformed, without calling the service', async () => {
+      recipientRepository.getById.mockResolvedValue({ id: 1, name: 'PRIMARY', primary_recipient_id: null });
+
+      for (const bad of ['12abc', '1e3', '0x10', 1.5, 0, -1, true]) {
+        const res = await api.post(`${BASE}/1/merge`).send({ alias_ids: [3, bad] }).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      }
+
+      expect(mergeRecipientsAtomic).not.toHaveBeenCalled();
+    });
+
     it('should return a 404 NOT_FOUND envelope when primary recipient does not exist', async () => {
       recipientRepository.getById.mockResolvedValue(null);
 

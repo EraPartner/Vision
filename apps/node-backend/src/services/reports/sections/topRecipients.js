@@ -6,10 +6,14 @@
  */
 
 import {
+  comparisonChartPair,
+  emptySection,
   escapeHtml,
+  filterNotice,
   fmtCurrency,
   fmtDate,
   fmtPct,
+  sectionPage,
   svgHorizontalBars,
 } from '../sectionHelpers.js';
 
@@ -29,13 +33,7 @@ export function renderTopRecipients(data, { currency }) {
   const hasExclusions = excludedRecipientIds.length > 0;
 
   if (!topMerchants.length) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Top Recipients</div>
-        <div class="section-subtitle">Merchants by total spend</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No recipient data available.</div>
-      </div>`;
+    return emptySection({ title: 'Top Recipients', subtitle: 'Merchants by total spend', message: 'No recipient data available.', pageBreak: true });
   }
 
   // Client-side filtered list when exclusions are active
@@ -57,17 +55,12 @@ export function renderTopRecipients(data, { currency }) {
       value: m.totalSpend,
       fmtValue: fmtCurrency(m.totalSpend, currency),
     }));
-    chartHtml = `
-      <div class="chart-pair">
-        <div>
-          <div class="chart-pair-label">With active filters (${filteredMerchants.length} recipient${filteredMerchants.length === 1 ? '' : 's'})</div>
-          ${svgHorizontalBars(filteredItems)}
-        </div>
-        <div>
-          <div class="chart-pair-label">All data (${topMerchants.length} recipient${topMerchants.length === 1 ? '' : 's'})</div>
-          ${svgHorizontalBars(allItems)}
-        </div>
-      </div>`;
+    chartHtml = comparisonChartPair({
+      filteredLabel: `With active filters (${filteredMerchants.length} recipient${filteredMerchants.length === 1 ? '' : 's'})`,
+      filteredChart: svgHorizontalBars(filteredItems),
+      allLabel: `All data (${topMerchants.length} recipient${topMerchants.length === 1 ? '' : 's'})`,
+      allChart: svgHorizontalBars(allItems),
+    });
   } else {
     const chartItems = topMerchants.slice(0, MAX_CHART_ITEMS).map(m => ({
       label: m.name ?? `Recipient ${m.recipientId}`,
@@ -98,7 +91,7 @@ export function renderTopRecipients(data, { currency }) {
     : '';
 
   const filterNoticeHtml = hasExclusions
-    ? `<div class="filter-notice">Table shows ${filteredMerchants?.length ?? 0} recipients matching active filters. ${excludedRecipientIds.length} recipient${excludedRecipientIds.length === 1 ? '' : 's'} excluded — see "All data" chart above.</div>`
+    ? filterNotice({ filteredCount: filteredMerchants?.length ?? 0, excludedCount: excludedRecipientIds.length, singular: 'recipient', plural: 'recipients' })
     : '';
 
   // Month-over-month table (optional — only rendered when data present)
@@ -135,13 +128,7 @@ export function renderTopRecipients(data, { currency }) {
       </div>`;
   }
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Top Recipients</div>
-      <div class="section-subtitle">Merchants ranked by total spend (all time)</div>
-      <hr class="section-divider">
-      ${chartHtml}
-    </div>
+  return `${sectionPage({ title: 'Top Recipients', subtitle: 'Merchants ranked by total spend (all time)', content: chartHtml, pageBreak: true })}
     <div class="page-continuation">
       ${filterNoticeHtml}
       <table class="data-table">

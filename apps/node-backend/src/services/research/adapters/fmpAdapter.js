@@ -14,16 +14,12 @@
 
 import { z } from 'zod';
 import { getJson } from './httpClient.js';
-import { providerKey } from '../providerKeys.js';
+import { requireProviderKey } from '../providerKeys.js';
 import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
 const BASE = 'https://financialmodelingprep.com/stable';
 
-function key() {
-  const k = providerKey('fmp');
-  if (!k) throw new Error('FMP_API_KEY not configured');
-  return k;
-}
+const key = () => requireProviderKey('fmp');
 
 /** @param {unknown} arr */
 const first = (arr) => (Array.isArray(arr) ? arr[0] : undefined);

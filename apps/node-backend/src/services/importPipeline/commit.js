@@ -44,7 +44,7 @@
  * (`commitChunkPerRow`), which is still the authority on semantics.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
+import { query, withSavepointIfInTransaction, withTransaction } from '../../database/connection.js';
 import { transactionRepository } from '../../repositories/transactionRepository.js';
 import { accountRepository } from '../../repositories/accountRepository.js';
 import {
@@ -79,6 +79,7 @@ const COMMIT_CHUNK = 1000;
 
 // Static identifier, never interpolated from data.
 const CHUNK_SAVEPOINT = 'sp_commit_chunk';
+const ROW_SAVEPOINT = 'sp_commit_row';
 
 // error_message for a row that reaches commit with no recipient: the matcher
 // could not resolve one (match.js stamps such rows 'matched' with a NULL
@@ -221,9 +222,9 @@ function deriveRow(row) {
 
   // import_staging_rows.id is BIGSERIAL — the pg driver returns BIGINT values
   // as strings to preserve int64 precision, so the value here is a string of
-  // digits (or, defensively, a JS integer). Validate against a digits-only
-  // regex: the per-row fallback interpolates it into a SAVEPOINT identifier,
-  // and the batched path must reject exactly the same rows so the two agree.
+  // digits (or, defensively, a JS integer). Reject any other shape before it
+  // reaches repository or staging-row writes, and make the batched and per-row
+  // paths reject exactly the same rows.
   const idStr = String(row.id);
 
   return {
@@ -291,10 +292,10 @@ function candidateVisible(cand, rowHash, batchId) {
  * commit semantics, and the fallback whenever the batched plan cannot be
  * applied verbatim.
  *
- * @param {{ client: any, chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
+ * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
  * @returns {Promise<ChunkResult>}
  */
-async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
+async function commitChunkPerRow({ chunk, batchId, committedHashes }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
@@ -360,60 +361,59 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
       continue;
     }
 
-    // SAVEPOINT per row: if insert fails the txn stays usable for remaining
-    // rows. The identifier is interpolated, so the digits-only validation in
-    // deriveRow keeps it safe from injection without falsely rejecting
-    // string-form bigints.
+    // SAVEPOINT per row: if insert fails the transaction stays usable for the
+    // remaining rows. Rows are processed sequentially, so one static name can
+    // be reused. Keep BIGSERIAL validation as a data-integrity boundary for
+    // repository and staging-row writes, independent of savepoint naming.
     if (!d.idValid) {
       errors++;
       continue;
     }
-    const sp = `sp_row_${d.idStr}`;
-    await client.query(`SAVEPOINT ${sp}`);
     try {
-      // ON CONFLICT on the partial unique index over tx_hash makes the
-      // insert race-safe — a concurrent import that slipped past the
-      // field-based check above can't double-insert.
-      const insertedId = await transactionRepository.insertImportedRow({
-        date: d.dateStr,
-        // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
-        // trigger; the resolved FK is written explicitly (decoupled half).
-        bankAccount: d.bankAccount,
-        accountId: d.accountId,
-        recipientId: d.recipientId,
-        categoryId: d.categoryId,
-        amount: row.amount,
-        memo: row.memo || '',
-        // The SAME value the dup probe above was keyed on — currency is part
-        // of the row's identity, so the probe and the write must not drift.
-        currency: d.currencyKey,
-        balance: row.balance != null ? row.balance : null,
-        comment: row.comment || null,
-        importBatchId: batchId,
-        matchedPatternId: d.patternId,
-        txHash: d.txHash,
-      });
+      const duplicate = await withSavepointIfInTransaction(ROW_SAVEPOINT, async () => {
+        // ON CONFLICT on the partial unique index over tx_hash makes the
+        // insert race-safe — a concurrent import that slipped past the
+        // field-based check above can't double-insert.
+        const insertedId = await transactionRepository.insertImportedRow({
+          date: d.dateStr,
+          // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
+          // trigger; the resolved FK is written explicitly (decoupled half).
+          bankAccount: d.bankAccount,
+          accountId: d.accountId,
+          recipientId: d.recipientId,
+          categoryId: d.categoryId,
+          amount: row.amount,
+          memo: row.memo || '',
+          // The SAME value the dup probe above was keyed on — currency is part
+          // of the row's identity, so the probe and the write must not drift.
+          currency: d.currencyKey,
+          balance: row.balance != null ? row.balance : null,
+          comment: row.comment || null,
+          importBatchId: batchId,
+          matchedPatternId: d.patternId,
+          txHash: d.txHash,
+        });
 
-      if (insertedId === undefined) {
-        // tx_hash conflict — another row/import already has this hash.
-        duplicates++;
-        await markStagingRowDuplicate(row.id);
-        await client.query(`RELEASE SAVEPOINT ${sp}`);
-        continue;
-      }
+        if (insertedId === undefined) {
+          // tx_hash conflict — another row/import already has this hash.
+          duplicates++;
+          await markStagingRowDuplicate(row.id);
+          return true;
+        }
 
-      imported++;
-      inserted.push({
-        id: insertedId,
-        recipient_id: d.recipientId,
-        amount: row.amount,
-        transaction_date: d.dateStr,
+        imported++;
+        inserted.push({
+          id: insertedId,
+          recipient_id: d.recipientId,
+          amount: row.amount,
+          transaction_date: d.dateStr,
+        });
+        if (d.txHash) committedHashes.add(d.txHash);
+        await markStagingRowCommitted(row.id);
+        return false;
       });
-      if (d.txHash) committedHashes.add(d.txHash);
-      await markStagingRowCommitted(row.id);
-      await client.query(`RELEASE SAVEPOINT ${sp}`);
+      if (duplicate) continue;
     } catch (err) {
-      await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
       errors++;
       await markStagingRowError(row.id, err?.message?.slice(0, 500) || 'insert failed');
     }
@@ -603,7 +603,7 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       continue;
     }
 
-    // 3. Savepoint-identifier validation — ordered AFTER the dup checks
+    // 3. BIGSERIAL shape validation — ordered AFTER the duplicate checks
     //    exactly as the per-row loop orders it, so a malformed id on a
     //    duplicate row still counts as a duplicate rather than an error.
     if (!d.idValid) {
@@ -775,10 +775,10 @@ async function bulkInsertPlanned(toInsert, batchId) {
  * Commit one chunk: try the batched plan, fall back to the per-row loop under
  * a chunk-level SAVEPOINT if the bulk write cannot be applied as planned.
  *
- * @param {{ client: any, chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
+ * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
  * @returns {Promise<ChunkResult>}
  */
-async function commitChunk({ client, chunk, batchId, committedHashes }) {
+async function commitChunk({ chunk, batchId, committedHashes }) {
   // Inside the chunk transaction, before the SAVEPOINT: minted accounts roll
   // back with a failed chunk but survive the savepoint rollback that hands a
   // chunk to the per-row replay (see resolveChunkAccounts).
@@ -788,21 +788,21 @@ async function commitChunk({ client, chunk, batchId, committedHashes }) {
   /** @type {InsertedRow[]} */
   let inserted = [];
   if (plan.toInsert.length > 0) {
-    await client.query(`SAVEPOINT ${CHUNK_SAVEPOINT}`);
     try {
-      inserted = await bulkInsertPlanned(plan.toInsert, batchId);
-      await client.query(`RELEASE SAVEPOINT ${CHUNK_SAVEPOINT}`);
+      inserted = await withSavepointIfInTransaction(
+        CHUNK_SAVEPOINT,
+        () => bulkInsertPlanned(plan.toInsert, batchId),
+      );
     } catch (err) {
       // A poison row (FK/NOT NULL violation) or a lost tx_hash race. Either
       // way the whole plan is suspect — every verdict downstream of the row
       // that failed could differ — so discard it and replay row by row.
-      await client.query(`ROLLBACK TO SAVEPOINT ${CHUNK_SAVEPOINT}`);
       logger.warn('[pipeline:commit] batched chunk insert failed, replaying per row', {
         batchId,
         rows: chunk.length,
         error: err?.message,
       });
-      return commitChunkPerRow({ client, chunk, batchId, committedHashes });
+      return commitChunkPerRow({ chunk, batchId, committedHashes });
     }
   }
 
@@ -934,8 +934,8 @@ export async function commitBatch({ batchId, onProgress }) {
     // holding hashes that were never actually committed.
     const hashesBefore = new Set(committedHashes);
     try {
-      await withTransaction(async (client) => {
-        const res = await commitChunk({ client, chunk, batchId, committedHashes });
+      await withTransaction(async () => {
+        const res = await commitChunk({ chunk, batchId, committedHashes });
         chunkImported = res.imported;
         chunkDuplicates = res.duplicates;
         chunkErrors = res.errors;

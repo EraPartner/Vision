@@ -9,12 +9,11 @@
  */
 
 import { query } from '../database/connection.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
 import { toWireDate } from '../lib/dateFormat.js';
-import { buildExclusionClauses } from '../lib/filterBuilder.js';
+import { buildExclusionClauses, validateInt4Ids } from '../lib/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
-  roundToCents,
   buildPeriodPivot,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
@@ -211,11 +210,17 @@ export const recipientInsightsRepository = {
   },
 
   /**
-   * @param {string} [targetCurrency]
-   * @param {number[]} [excludedRecipientIds]
-   * @param {number[]} [excludedCategoryIds]
+   * @param {{
+   *   targetCurrency?: string,
+   *   excludedRecipientIds?: number[],
+   *   excludedCategoryIds?: number[],
+   * }} [options]
    */
-  async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = [], excludedCategoryIds = []) {
+  async getRecipientByYear({
+    targetCurrency = 'EUR',
+    excludedRecipientIds = [],
+    excludedCategoryIds = [],
+  } = {}) {
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
@@ -293,16 +298,23 @@ export const recipientInsightsRepository = {
   },
 
   /**
-   * @param {number[]} [excludedRecipientIds]
-   * @param {string} [targetCurrency]
    * @param {{
+   *   excludedRecipientIds?: number[],
+   *   targetCurrency?: string,
    *   bucket?: string,
    *   startDate?: string|null,
    *   endDate?: string|null,
    *   recipientIds?: number[]|null,
-   * }} [opts]
+   * }} [options]
    */
-  async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, recipientIds = null } = {}) {
+  async getRecipientPivot({
+    excludedRecipientIds = [],
+    targetCurrency = 'EUR',
+    bucket = 'monthly',
+    startDate = null,
+    endDate = null,
+    recipientIds = null,
+  } = {}) {
     // Canonical recipient exclusion (lib/filterBuilder.buildExclusionClauses).
     const excl = buildExclusionClauses({ excludedRecipientIds });
     const params = excl.params;
@@ -320,9 +332,7 @@ export const recipientInsightsRepository = {
     // ONLY those rows (hits idx_transactions_recipient_date_active) instead of
     // every active expense row for all recipients. See ADR-041 amendment.
     let recipientInclude = '';
-    const validIncludeIds = Array.isArray(recipientIds)
-      ? recipientIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647)
-      : [];
+    const validIncludeIds = validateInt4Ids(recipientIds, 'recipientIds');
     if (validIncludeIds.length > 0) {
       const memberRes = await query(
         `SELECT id FROM recipients WHERE id = ANY($1::int[]) OR primary_recipient_id = ANY($1::int[])`,

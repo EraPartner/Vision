@@ -11,7 +11,7 @@
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
-import { toYmd } from '../../../utils/portfolioMath.js';
+import { toYmd } from '../../calculations/portfolioMath.js';
 import { DEDUCTION_TYPES } from '../../tax/deductionClassifier.js';
 import { computeDeductionCandidates } from '../../tax/deductionCandidatesService.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';

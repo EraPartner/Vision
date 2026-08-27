@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { getJson, num } from './httpClient.js';
-import { providerKey } from '../providerKeys.js';
+import { requireProviderKey } from '../providerKeys.js';
 import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
 import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
@@ -57,11 +57,7 @@ const RANGE_TO_DAYS = Object.freeze({
   '1d': 1, '5d': 5, '1mo': 31, '3mo': 93, '6mo': 186, '1y': 366, '2y': 731, '5y': 1827, max: 7300,
 });
 
-function key() {
-  const k = providerKey('finnhub');
-  if (!k) throw new Error('FINNHUB_API_KEY not configured');
-  return k;
-}
+const key = () => requireProviderKey('finnhub');
 
 const DAY_MS = 86_400_000;
 const nowSec = () => Math.floor(Date.now() / 1000);

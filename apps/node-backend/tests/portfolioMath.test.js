@@ -6,7 +6,7 @@ import {
 import {
   calculateAccruedInterest,
   sanitizeSnapshotSpikes,
-} from '../src/utils/portfolioMath.js'
+} from '../src/services/calculations/portfolioMath.js'
 
 describe('calculateCostBasisFIFO', () => {
   it('returns zeros for empty transactions', () => {

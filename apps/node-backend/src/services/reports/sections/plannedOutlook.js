@@ -6,10 +6,13 @@
  */
 
 import {
+  emptyNotice,
+  emptySection,
   escapeHtml,
   fmtCurrency,
   fmtDate,
   kpiGrid,
+  sectionPage,
   signClass,
 } from '../sectionHelpers.js';
 
@@ -24,13 +27,7 @@ export function renderPlannedOutlook(data, { currency }) {
   const planned = data.planned;
 
   if (!planned) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Planned Outlook</div>
-        <div class="section-subtitle">Next month's expected transactions</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No planned transaction data available.</div>
-      </div>`;
+    return emptySection({ title: 'Planned Outlook', subtitle: "Next month's expected transactions", message: 'No planned transaction data available.', pageBreak: true });
   }
 
   const { summary, daily_data = [], period_start, period_end } = planned;
@@ -50,14 +47,14 @@ export function renderPlannedOutlook(data, { currency }) {
   const days = daily_data.slice(0, MAX_DAYS);
 
   if (!days.length) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Planned Outlook</div>
-        <div class="section-subtitle">${escapeHtml(periodLabel)}</div>
-        <hr class="section-divider">
+    return sectionPage({
+      title: 'Planned Outlook',
+      subtitle: periodLabel,
+      pageBreak: true,
+      content: `
         ${kpiHtml}
-        <div class="empty-notice">No planned transactions found.</div>
-      </div>`;
+        ${emptyNotice('No planned transactions found.')}`,
+    });
   }
 
   const dayGroups = days.map(day => {
@@ -82,12 +79,12 @@ export function renderPlannedOutlook(data, { currency }) {
       </div>`;
   }).join('');
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Planned Outlook</div>
-      <div class="section-subtitle">${escapeHtml(periodLabel)}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Planned Outlook',
+    subtitle: periodLabel,
+    pageBreak: true,
+    content: `
       ${kpiHtml}
-      ${dayGroups}
-    </div>`;
+      ${dayGroups}`,
+  });
 }

@@ -25,7 +25,7 @@ import {
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { validateIdParam, validateId, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, validateIntArray, MAX_MONEY_VALUE } from '../middleware/validation.js';
+import { validateIdParam, validateId, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, validateIntArray, MAX_MONEY_VALUE, assertIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import {
   scheduleReconcile,
@@ -59,7 +59,7 @@ const router = Router();
 
 /** @param {ExpressRequest} req */
 function parseRouteId(req) {
-  return parseInt(req.params.id, 10);
+  return assertIdParam(req);
 }
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
@@ -461,7 +461,7 @@ router.post('/transfers', /** @param {ExpressRequest} req @param {ExpressRespons
 
 // DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
 router.delete('/transfers/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  await unmarkTransfer(parseInt(req.params.id, 10));
+  await unmarkTransfer(assertIdParam(req));
   scheduleReconcile();
   // Deleting the transfer mark reports nothing the caller can't derive →
   // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
@@ -617,7 +617,7 @@ router.post(
 
 // GET /api/transactions/:id
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const transaction = await transactionService.getById(parseInt(req.params.id, 10));
+  const transaction = await transactionService.getById(assertIdParam(req));
   if (!transaction) {
     throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
   }

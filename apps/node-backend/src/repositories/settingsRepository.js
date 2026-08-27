@@ -29,30 +29,6 @@ function reviveLegacyJsonString(key, value) {
   try { return JSON.parse(value); } catch { return value; }
 }
 
-/**
- * @param {any} value Arbitrary JSON-serialisable setting value.
- * @returns {any}
- */
-function normalizeSettingValue(value) {
-  let normalizedValue = value;
-
-  try {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      normalizedValue = { ...value };
-      if (Array.isArray(value.excludedCategoryIds)) {
-        normalizedValue.excludedCategoryIds = value.excludedCategoryIds.map(Number);
-      }
-      if (Array.isArray(value.excludedRecipientIds)) {
-        normalizedValue.excludedRecipientIds = value.excludedRecipientIds.map(Number);
-      }
-    }
-  } catch {
-    // ignore normalization errors — DB will still store original value
-  }
-
-  return normalizedValue;
-}
-
 export const settingsRepository = {
   /**
    * Get a setting by key. Returns null if not found.
@@ -86,8 +62,7 @@ export const settingsRepository = {
    * @returns {Promise<{ key: string, value: any }>}
    */
   async set(key, value) {
-    const normalized = normalizeSettingValue(value);
-    const jsonValue = JSON.stringify(normalized);
+    const jsonValue = JSON.stringify(value);
 
     await query(
       `INSERT INTO user_settings (key, value, updated_at)
@@ -95,7 +70,7 @@ export const settingsRepository = {
        ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
       [key, jsonValue]
     );
-    return { key, value: normalized };
+    return { key, value };
   },
 
   /**
@@ -121,7 +96,7 @@ export const settingsRepository = {
     const values = [];
     for (const [key, value] of entries) {
       keys.push(key);
-      values.push(JSON.stringify(normalizeSettingValue(value)));
+      values.push(JSON.stringify(value));
     }
 
     await query(

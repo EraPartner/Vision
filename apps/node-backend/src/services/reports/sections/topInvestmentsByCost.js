@@ -4,7 +4,7 @@
  * Table sorted by total taxes + fees per investment.
  */
 
-import { escapeHtml, fmtCurrency } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, sectionPage } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -15,13 +15,7 @@ export function renderTopInvestmentsByCost(data, { currency }) {
   const byInvestment = data?.byInvestment ?? [];
 
   if (!byInvestment.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Top Investments by Tax Cost</div>
-        <div class="section-subtitle">Investments with the highest tax and fee burden</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No data</strong>No per-investment tax data found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Top Investments by Tax Cost', subtitle: 'Investments with the highest tax and fee burden', heading: 'No data', message: 'No per-investment tax data found for the selected period.' });
   }
 
   const sorted = [...byInvestment]
@@ -46,11 +40,10 @@ export function renderTopInvestmentsByCost(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Top Investments by Tax Cost</div>
-      <div class="section-subtitle">Highest tax and fee burden (top ${sorted.length} of ${byInvestment.length})</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Top Investments by Tax Cost',
+    subtitle: `Highest tax and fee burden (top ${sorted.length} of ${byInvestment.length})`,
+    content: `
       <table class="data-table">
         <thead><tr>
           <th>#</th>
@@ -63,6 +56,6 @@ export function renderTopInvestmentsByCost(data, { currency }) {
           <th class="num">Total Cost</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

@@ -21,7 +21,7 @@
 
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { validateId, MAX_SAFE_ID } from '../middleware/validation.js';
+import { validateId, MAX_SAFE_ID } from './validation.js';
 
 /**
  * The slice of an Express `Request` these parsers read. Structural, not

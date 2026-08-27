@@ -6,31 +6,18 @@
  */
 
 import { dayOfMonth } from '../seasonality.js';
+import { monthKey, orderedMonthKeys } from '../months.js';
 
 export const id = 'ewma';
 export const label = 'EWMA';
-export const DEFAULT_ALPHA = 0.15;
-
-/** @param {string} date */
-function monthKey(date) {
-  return date.slice(0, 7);
-}
+const DEFAULT_ALPHA = 0.15;
 
 /**
  * @param {{history: Array<{date:string, net:number}>, forecastDates: string[], alpha?: number}} ctx
  * @returns {Array<{date:string, value:number}>}
  */
 export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
-  const monthOrder = [];
-  const monthSeen = new Set();
-  for (const r of history) {
-    const mk = monthKey(r.date);
-    if (!monthSeen.has(mk)) {
-      monthSeen.add(mk);
-      monthOrder.push(mk);
-    }
-  }
-  monthOrder.sort();
+  const monthOrder = orderedMonthKeys(history);
 
   const series = new Map();
   for (const r of history) {

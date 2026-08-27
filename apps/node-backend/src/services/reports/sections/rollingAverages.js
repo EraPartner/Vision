@@ -6,9 +6,11 @@
  */
 
 import {
+  emptySection,
   escapeHtml,
   fmtCurrency,
   kpiGrid,
+  sectionPage,
   signClass,
 } from '../sectionHelpers.js';
 
@@ -21,13 +23,7 @@ export function renderRollingAverages(data, { currency }) {
   const avg = data.averages;
 
   if (!avg) {
-    return `
-      <div class="page page-break">
-        <div class="section-title">Rolling Averages</div>
-        <div class="section-subtitle">Current month vs. 6-month average</div>
-        <hr class="section-divider">
-        <div class="empty-notice">No rolling average data available.</div>
-      </div>`;
+    return emptySection({ title: 'Rolling Averages', subtitle: 'Current month vs. 6-month average', message: 'No rolling average data available.', pageBreak: true });
   }
 
   // `?? {}` is defensive-only — `avg` (once truthy) always carries all three
@@ -81,12 +77,12 @@ export function renderRollingAverages(data, { currency }) {
       </div>
     </div>`;
 
-  return `
-    <div class="page page-break">
-      <div class="section-title">Rolling Averages</div>
-      <div class="section-subtitle">Current month spending pace vs. 6-month rolling average</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Rolling Averages',
+    subtitle: 'Current month spending pace vs. 6-month rolling average',
+    pageBreak: true,
+    content: `
       ${kpiHtml}
-      ${statsHtml}
-    </div>`;
+      ${statsHtml}`,
+  });
 }

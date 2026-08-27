@@ -81,6 +81,28 @@ export function mockTxConnection(client, extra = {}) {
 
   const txClient = client ?? { query };
 
+  const withSavepointIfInTransaction = vi.fn(async (name, fn) => {
+    // Savepoint presence follows the ambient store directly. Unlike normal
+    // query routing, the no-explicit-client case is valid here: its shared
+    // query spy records the SAVEPOINT without recursively routing to itself.
+    const active = store.client;
+    if (!active) return fn();
+    await active.query(`SAVEPOINT ${name}`);
+    try {
+      const result = await fn();
+      await active.query(`RELEASE SAVEPOINT ${name}`);
+      return result;
+    } catch (err) {
+      try {
+        await active.query(`ROLLBACK TO SAVEPOINT ${name}`);
+      } catch {
+        // The production helper logs rollback failure and preserves the
+        // original error. Tests only need the same propagation contract.
+      }
+      throw err;
+    }
+  });
+
   return {
     query,
     queryPrepared,
@@ -94,6 +116,7 @@ export function mockTxConnection(client, extra = {}) {
         store.client = null;
       }
     }),
+    withSavepointIfInTransaction,
     ...restExtra,
   };
 }

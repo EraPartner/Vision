@@ -6,7 +6,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { computeMetrics, computeHeatmap } from '../utils/portfolioMath.js';
+import { computeMetrics, computeHeatmap } from './calculations/portfolioMath.js';
 import { computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
 import { getPortfolioSummary, getBreakdownSummary } from './portfolio/portfolioSummaryService.js';
 

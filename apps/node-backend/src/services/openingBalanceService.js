@@ -28,7 +28,7 @@ import { query, withTransaction } from '../database/connection.js';
 import accountRepository from '../repositories/accountRepository.js';
 import { recipientRepository } from '../repositories/recipientRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { assertCurrency, assertYmd } from '../middleware/validation.js';
+import { assertCurrency, assertYmd } from '../lib/validation.js';
 import { toWireDate } from '../lib/dateFormat.js';
 
 const OPENING_MEMO = 'OPENING BALANCE';

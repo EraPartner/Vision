@@ -53,6 +53,7 @@ vi.mock('../../src/services/portfolioImportBatchService.js', () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPreviewRows: vi.fn(),
+  getPortfolioImportBatchPreview: vi.fn(),
   overrideInvestment: vi.fn(),
   createInvestmentForRow: vi.fn(),
   resolveInvestmentRows: vi.fn(),
@@ -79,16 +80,24 @@ vi.mock('../../src/config/logger.js', () => ({
 
 import {
   getBatch,
-  getPreviewRows,
+  getPortfolioImportBatchPreview,
   listBatches,
   createInvestmentForRow,
   resolveInvestmentRows,
+  rollbackBatch,
 } from '../../src/services/portfolioImportBatchService.js';
 
 const { default: portfolioImportRouter } = await import('../../src/routes/portfolioImportRoutes.js');
 
 const BASE = '/api/portfolio/import';
 const api = routeAgent(portfolioImportRouter, { mountPath: BASE });
+
+function routeHandler(method, path) {
+  const layer = portfolioImportRouter.stack.find((candidate) =>
+    candidate.route?.path === path && candidate.route.methods[method]);
+  if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
+  return layer.route.stack.at(-1).handle;
+}
 
 describe('Portfolio Import Routes — batch/row id guards', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -97,7 +106,7 @@ describe('Portfolio Import Routes — batch/row id guards', () => {
     const res = await api.get(`${BASE}/batches/-1/preview`).expect(400);
     expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     expect(getBatch).not.toHaveBeenCalled();
-    expect(getPreviewRows).not.toHaveBeenCalled();
+    expect(getPortfolioImportBatchPreview).not.toHaveBeenCalled();
   });
 
   it('GET /batches/:id rejects a trailing-garbage id like "12abc"', async () => {
@@ -138,6 +147,51 @@ describe('Portfolio Import Routes — collection response shape', () => {
       limit: 50,
       offset: 0,
     }));
+  });
+});
+
+describe('Portfolio Import Routes — batch detail and rollback parity (listener-free)', () => {
+  const detailHandler = routeHandler('get', '/batches/:id');
+  const rollbackHandler = routeHandler('delete', '/batches/:id');
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns a batch and preserves the shared missing-batch error', async () => {
+    getBatch.mockResolvedValueOnce({ id: 4, status: 'complete' }).mockResolvedValueOnce(null);
+    const res = { ok: vi.fn() };
+
+    await detailHandler({ params: { id: '4' } }, res);
+    expect(res.ok).toHaveBeenCalledWith({ id: 4, status: 'complete' });
+    await expect(detailHandler({ params: { id: '5' } }, res))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('blocks pending before the portfolio rollback service', async () => {
+    getBatch.mockResolvedValue({ id: 4, status: 'pending' });
+    await expect(rollbackHandler({ params: { id: '4' } }, { ok: vi.fn() }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(rollbackBatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['VALIDATION_ERROR', 'VALIDATION_ERROR'],
+    ['NOT_FOUND', 'NOT_FOUND'],
+  ])('maps a service-coded %s rollback error', async (serviceCode, expectedCode) => {
+    getBatch.mockResolvedValue({ id: 4, status: 'complete' });
+    rollbackBatch.mockRejectedValue(Object.assign(new Error('locked recheck'), { code: serviceCode }));
+
+    await expect(rollbackHandler({ params: { id: '4' } }, { ok: vi.fn() }))
+      .rejects.toMatchObject({ code: expectedCode, message: 'locked recheck' });
+  });
+
+  it('returns only the portfolio deleted count', async () => {
+    getBatch.mockResolvedValue({ id: 4, status: 'complete' });
+    rollbackBatch.mockResolvedValue({ deleted: 3, recipientsRemoved: 99 });
+    const res = { ok: vi.fn() };
+
+    await rollbackHandler({ params: { id: '4' } }, res);
+
+    expect(res.ok).toHaveBeenCalledWith({ deleted: 3 });
   });
 });
 

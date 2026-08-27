@@ -9,7 +9,7 @@ import { transactionRepository } from '../../../repositories/transactionReposito
 import { memoizeAsync } from '../toolCache.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
-import { toYmd } from '../../../utils/portfolioMath.js';
+import { toYmd } from '../../calculations/portfolioMath.js';
 import { todayAppDateString, firstOfMonthYmd } from '../../../lib/timezone.js';
 import {
   requireDate,

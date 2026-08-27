@@ -13,10 +13,13 @@ vi.mock('../src/services/research/adapters/httpClient.js', async () => {
   return { ...actual, getJson: mockGetJson };
 });
 
-const { mockProviderKey } = vi.hoisted(() => ({ mockProviderKey: vi.fn() }));
+const { mockRequireProviderKey } = vi.hoisted(() => ({ mockRequireProviderKey: vi.fn() }));
 vi.mock('../src/services/research/providerKeys.js', async () => {
   const actual = await vi.importActual('../src/services/research/providerKeys.js');
-  return { ...actual, providerKey: mockProviderKey };
+  return {
+    ...actual,
+    requireProviderKey: mockRequireProviderKey,
+  };
 });
 
 import fredAdapter from '../src/services/research/adapters/fredAdapter.js';
@@ -25,12 +28,15 @@ import dbnomicsAdapter from '../src/services/research/adapters/dbnomicsAdapter.j
 describe('fredAdapter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockProviderKey.mockReturnValue('TEST_KEY');
+    mockRequireProviderKey.mockReturnValue('TEST_KEY');
   });
 
   it('throws when no FRED key is configured', async () => {
-    mockProviderKey.mockReturnValue(undefined);
+    mockRequireProviderKey.mockImplementationOnce(() => {
+      throw new Error('FRED_API_KEY not configured');
+    });
     await expect(fredAdapter.macroSearch('cpi')).rejects.toThrow('FRED_API_KEY not configured');
+    expect(mockRequireProviderKey).toHaveBeenCalledWith('fred');
   });
 
   it('macroSearch normalizes series and filters entries without id', async () => {

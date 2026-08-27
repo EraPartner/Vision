@@ -5,7 +5,7 @@
  * on a line chart, with a monthly return-% mini-table below.
  */
 
-import { fmtCurrency, fmtMonthLabel, fmtPct, signClass, svgLineChart } from '../sectionHelpers.js';
+import { emptySection, fmtCurrency, fmtMonthLabel, fmtPct, sectionPage, signClass, svgLineChart } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -16,13 +16,7 @@ export function renderPerformanceTrend(data, { currency }) {
   const snapshots = data?.snapshots ?? [];
 
   if (!snapshots.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Performance Trend</div>
-        <div class="section-subtitle">Portfolio value vs. invested capital over time</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No snapshot data</strong>Performance snapshots are generated nightly. Check back tomorrow.</div>
-      </div>`;
+    return emptySection({ title: 'Performance Trend', subtitle: 'Portfolio value vs. invested capital over time', heading: 'No snapshot data', message: 'Performance snapshots are generated nightly. Check back tomorrow.' });
   }
 
   // Deduplicate by month (take latest snapshot per month)
@@ -67,11 +61,10 @@ export function renderPerformanceTrend(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Performance Trend</div>
-      <div class="section-subtitle">Portfolio value vs. invested capital (${monthly.length} data points)</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Performance Trend',
+    subtitle: `Portfolio value vs. invested capital (${monthly.length} data points)`,
+    content: `
       <div class="chart-wrap">${chart}</div>
       ${tableRows ? `
         <table class="data-table">
@@ -83,6 +76,6 @@ export function renderPerformanceTrend(data, { currency }) {
             <th class="num">Return %</th>
           </tr></thead>
           <tbody>${tableRows}</tbody>
-        </table>` : ''}
-    </div>`;
+        </table>` : ''}`,
+  });
 }

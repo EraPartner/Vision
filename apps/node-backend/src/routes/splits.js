@@ -4,14 +4,14 @@
  * Bodies are validated with zod (schema → safeParse → ValidationError), the
  * idiom established in settings.js/reports.js. Schemas are LOOSE and forward
  * raw values (the repos take the coercion decisions); id bridges reuse
- * validateId so accepted shapes keep parseInt coercion exactly as before.
+ * validateId so every id surface keeps the same strict accepted shapes.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import splitService from '../services/splitService.js';
-import { validateIdParam, validateId } from '../middleware/validation.js';
+import { validateIdParam, validateId, assertIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
@@ -41,7 +41,7 @@ const OWED_EXPORT_HEADER = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Bal
 
 /** @param {ExpressRequest} req */
 function parseRouteId(req) {
-  return parseInt(req.params.id, 10);
+  return assertIdParam(req);
 }
 
 /** @param {OwedExportRow} row */

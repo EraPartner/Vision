@@ -253,17 +253,6 @@ export async function warmCache() {
 // ─── Conversion helpers ───────────────────────────────────────────────────────
 
 /**
- * Convert an amount from `fromCurrency` to EUR.
- *
- * @param {number} amount
- * @param {string|null|undefined} fromCurrency falsy is treated as "already EUR"
- * @returns {Promise<number>}
- */
-export async function convertToEur(amount, fromCurrency) {
-  return convertToCurrency(amount, fromCurrency, 'EUR');
-}
-
-/**
  * Convert an array of rows to a target currency (default EUR).
  * Rows must have `amount` and `currency` fields.
  * Returns rows with an `amount_eur` field containing the converted amount.
@@ -643,7 +632,6 @@ export async function backfillPortfolioHistoricalRates() {
 }
 
 export default {
-  convertToEur,
   convertRowsToEur,
   convertToCurrency,
   convertWithRates,

@@ -15,7 +15,7 @@ import { z } from 'zod';
 import plannedTransactionService from '../services/plannedTransactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
-import { validateIdParam, assertYmd, assertOptionalId, validateId, assertCurrency } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, assertOptionalId, validateId, assertCurrency, assertIdParam } from '../middleware/validation.js';
 import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
@@ -54,7 +54,7 @@ const MAX_PLANNED_AMOUNT = 1e12;
 
 /** @param {ExpressRequest} req */
 function parseRouteId(req) {
-  return parseInt(req.params.id, 10);
+  return assertIdParam(req);
 }
 
 /** @param {any} fields */

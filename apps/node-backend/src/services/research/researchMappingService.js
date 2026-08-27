@@ -27,7 +27,7 @@ import * as mapRepo from '../../repositories/instrumentProviderMapRepository.js'
 import investmentRepo from '../../repositories/investmentRepository.js';
 
 /** Relative price agreement tolerance for the self-audit (5%). */
-export const AUDIT_PRICE_TOLERANCE = 0.05;
+const AUDIT_PRICE_TOLERANCE = 0.05;
 
 /** @param {unknown} err */
 const errMessage = (err) => (err instanceof Error ? err.message : String(err));

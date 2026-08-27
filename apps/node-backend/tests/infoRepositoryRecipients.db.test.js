@@ -227,8 +227,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-06-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
 
       const insights = await recipientInsightsRepository.getRecipientInsights('EUR');
-      const byYear = await recipientInsightsRepository.getRecipientByYear('EUR');
-      const pivot = await recipientInsightsRepository.getRecipientPivot([], 'EUR');
+      const byYear = await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
+      const pivot = await recipientInsightsRepository.getRecipientPivot({ targetCurrency: 'EUR' });
 
       expect(merchant(insights, 'Colruyt').totalSpend).toBe(25); // 2024-06-01 rate, not the latest 0.90
       expect(byYear.recipientsByYear['2024'][0].totalSpend).toBe(25);
@@ -370,7 +370,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-06-01', amount: '-50.00', recipientId: rec.colruyt });
       await insertTxn({ date: '2025-01-01', amount: '-10.00', recipientId: rec.delhaize });
 
-      const r = await recipientInsightsRepository.getRecipientByYear('EUR');
+      const r = await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
       expect(r.recipientsByYear['2024']).toEqual([
         { recipientId: rec.delhaize, name: 'Delhaize', totalSpend: 125, transactionCount: 2 },
         { recipientId: rec.colruyt, name: 'Colruyt', totalSpend: 50, transactionCount: 1 },
@@ -388,7 +388,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertRate('USD', '2026-01-01', '0.90', true);
       await insertTxn({ date: '2024-06-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
 
-      const r = await recipientInsightsRepository.getRecipientByYear('EUR');
+      const r = await recipientInsightsRepository.getRecipientByYear({ targetCurrency: 'EUR' });
       expect(r.recipientsByYear['2024'][0].totalSpend).toBe(25);
     });
 
@@ -397,11 +397,11 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-01-10', amount: '-40.00', recipientId: rec.colruyt }); // Food via default
       await insertTxn({ date: '2024-01-10', amount: '-60.00', recipientId: rec.electrabel }); // Bills via default
 
-      const excl = await recipientInsightsRepository.getRecipientByYear(
-        'EUR',
-        [rec.electrabel],
-        [cat.Food],
-      );
+      const excl = await recipientInsightsRepository.getRecipientByYear({
+        targetCurrency: 'EUR',
+        excludedRecipientIds: [rec.electrabel],
+        excludedCategoryIds: [cat.Food],
+      });
       expect(excl.recipientsByYear['2024']).toBeUndefined(); // both rows filtered out
     });
 
@@ -418,7 +418,11 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
 
       for (const bad of [0, -1, 1.5, 'evil', '12abc', '1e3']) {
         await expect(
-          recipientInsightsRepository.getRecipientByYear('EUR', [bad, rec.electrabel], [cat.Food]),
+          recipientInsightsRepository.getRecipientByYear({
+            targetCurrency: 'EUR',
+            excludedRecipientIds: [bad, rec.electrabel],
+            excludedCategoryIds: [cat.Food],
+          }),
         ).rejects.toThrow(/excludedRecipientIds contains invalid value/);
       }
     });
@@ -435,14 +439,17 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-03-07', amount: '-50.00', recipientId: rec.colruyt });
       await insertTxn({ date: '2024-04-01', amount: '-10.00', recipientId: rec.colruyt });
 
-      const monthly = await recipientInsightsRepository.getRecipientPivot([], 'EUR');
+      const monthly = await recipientInsightsRepository.getRecipientPivot({ targetCurrency: 'EUR' });
       expect(Object.keys(monthly.recipientPivot).sort()).toEqual(['2024-03', '2024-04']);
       expect(monthly.recipientPivot['2024-03']).toEqual([
         { recipientId: rec.colruyt, name: 'Colruyt', total: 50, transactionCount: 1 },
         { recipientId: rec.delhaize, name: 'Delhaize', total: 125, transactionCount: 2 },
       ]);
 
-      const yearly = await recipientInsightsRepository.getRecipientPivot([], 'EUR', { bucket: 'yearly' });
+      const yearly = await recipientInsightsRepository.getRecipientPivot({
+        targetCurrency: 'EUR',
+        bucket: 'yearly',
+      });
       expect(Object.keys(yearly.recipientPivot)).toEqual(['2024']);
       expect(yearly.recipientPivot['2024']).toEqual([
         { recipientId: rec.colruyt, name: 'Colruyt', total: 60, transactionCount: 2 },
@@ -458,7 +465,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
 
       // Selecting the PRIMARY resolves its alias members through the real
       // recipients table, so the alias row is included.
-      const primaryOnly = await recipientInsightsRepository.getRecipientPivot([], 'EUR', {
+      const primaryOnly = await recipientInsightsRepository.getRecipientPivot({
+        targetCurrency: 'EUR',
         recipientIds: [rec.delhaize],
       });
       expect(primaryOnly.recipientPivot['2024-03']).toEqual([
@@ -466,7 +474,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       ]);
 
       // An id nobody matches short-circuits to an empty pivot.
-      const none = await recipientInsightsRepository.getRecipientPivot([], 'EUR', {
+      const none = await recipientInsightsRepository.getRecipientPivot({
+        targetCurrency: 'EUR',
         recipientIds: [2147483646],
       });
       expect(none).toEqual({ recipientPivot: {} });
@@ -480,7 +489,9 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-04-01', amount: '-2.00', recipientId: rec.colruyt });
       await insertTxn({ date: '2024-03-15', amount: '-99.00', recipientId: rec.delhaizeAlias });
 
-      const r = await recipientInsightsRepository.getRecipientPivot([rec.delhaize], 'EUR', {
+      const r = await recipientInsightsRepository.getRecipientPivot({
+        excludedRecipientIds: [rec.delhaize],
+        targetCurrency: 'EUR',
         startDate: '2024-03-01',
         endDate: '2024-03-31',
       });
@@ -511,7 +522,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       await insertTxn({ date: '2024-03-05', amount: '-100.00', recipientId: rec.delhaize });
       await insertTxn({ date: '2024-03-06', amount: '-25.00', recipientId: rec.delhaizeAlias });
 
-      const aliasPick = await recipientInsightsRepository.getRecipientPivot([], 'EUR', {
+      const aliasPick = await recipientInsightsRepository.getRecipientPivot({
+        targetCurrency: 'EUR',
         recipientIds: [rec.delhaizeAlias],
       });
       expect(aliasPick.recipientPivot['2024-03']).toEqual([

@@ -7,7 +7,6 @@
 import express from 'express';
 import { setTimeout as sleep } from 'node:timers/promises';
 import fs from 'node:fs';
-import { createGzip } from 'node:zlib';
 import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import settings from './config/config.js';
@@ -18,6 +17,8 @@ import { runMigrations } from './database/migrate.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
 import { createCsrfGuard } from './middleware/csrfGuard.js';
+import { createCorsMiddleware } from './middleware/cors.js';
+import { compression } from './middleware/compression.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
@@ -86,48 +87,7 @@ app.use(requestId);
 // Request metrics — rolling in-memory window for /api/admin/metrics/requests.
 app.use(requestMetrics);
 
-// CORS
-const CORS_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-const CORS_ALLOWED_HEADERS = 'Content-Type,Authorization,X-Request-Id';
-const CORS_EXPOSED_HEADERS = 'X-Request-Id';
-
-app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
-  // The Origin request header is single-valued per fetch/HTTP semantics —
-  // ExpressRequest.headers types every header generically as
-  // string|string[]|undefined (some headers, e.g. Set-Cookie-likes, do
-  // repeat), but Origin never does.
-  const origin = /** @type {string|undefined} */ (req.headers.origin);
-  // corsOrigins is always string[] (env.CORS_ORIGINS is parsed by csvEnv).
-  // There is no wildcard mode: a `'*'` branch used to sit here, but the value
-  // it compared against could never be the bare string '*', so the mode was
-  // unreachable for the whole life of the code. It was removed rather than
-  // made reachable — reflecting `Access-Control-Allow-Origin: *` is not a
-  // behaviour to resurrect by accident, and every doc describes CORS_ORIGINS
-  // as a comma-separated allowlist.
-  const allowed = settings.api.corsOrigins;
-  // Reflect only origins on the explicit allowlist, never a wildcard, so the
-  // credentialed response below is always bound to one vetted origin.
-  const originAllowed = allowed.includes(/** @type {string} */ (origin));
-
-  if (originAllowed && origin) {
-    // Vary: Origin tells shared caches not to serve this response to other origins.
-    res.setHeader('Vary', 'Origin');
-    // codeql[js/cors-misconfiguration]: origin is validated against the settings allowlist above; wildcard is never combined with credentials.
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
-    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
-    res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
-  }
-
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Max-Age', '600');
-    res.writeHead(204).end();
-    return;
-  }
-
-  next();
-});
+app.use(createCorsMiddleware(() => settings.api.corsOrigins));
 
 // JSON body parser with size limit
 app.use(express.json({ limit: '1mb' }));
@@ -146,93 +106,7 @@ app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {Exp
   next();
 });
 
-// Response compression (gzip via node:zlib)
-const COMPRESSIBLE_RE = /json|text|javascript|xml|svg|x-www-form-urlencoded/;
-const NO_COMPRESS_BELOW = 1024;
-
-app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
-  // Header value is typed generically as string|string[]|undefined; `.includes`
-  // exists on both but means different things (substring vs. exact-element) —
-  // preserved as-is (`any`) rather than coercing to `String(...)`, which would
-  // change the (rare, multi-valued Accept-Encoding) array-branch behavior.
-  const acceptEncoding = /** @type {any} */ (req.headers['accept-encoding'] ?? '');
-  if (!acceptEncoding.includes('gzip')) return next();
-
-  const _write = /** @type {(chunk?: any, encoding?: any, cb?: any) => boolean} */ (res.write.bind(res));
-  const _end = /** @type {(chunk?: any, encoding?: any, cb?: any) => ExpressResponse} */ (res.end.bind(res));
-  /** @type {import('node:zlib').Gzip|null} */
-  let gz = null;
-  let setupDone = false;
-
-  const setup = () => {
-    if (setupDone) return;
-    setupDone = true;
-    if (res.headersSent) return;
-    const contentType = String(res.getHeader('Content-Type') ?? '');
-    const contentLength = parseInt(String(res.getHeader('Content-Length') ?? '0'), 10);
-    // Never gzip SSE: the gzip transform buffers input until a block fills,
-    // which would batch tokens and break per-event delivery.
-    if (contentType.includes('text/event-stream')) return;
-    if (String(res.getHeader('X-Accel-Buffering') ?? '').toLowerCase() === 'no') return;
-    if (!COMPRESSIBLE_RE.test(contentType)) return;
-    if (contentLength > 0 && contentLength < NO_COMPRESS_BELOW) return;
-    gz = createGzip();
-    res.removeHeader('Content-Length');
-    res.setHeader('Content-Encoding', 'gzip');
-    // The representation now varies by Accept-Encoding — a shared cache/proxy
-    // must not serve this gzipped body to an identical-URL request that didn't
-    // send Accept-Encoding: gzip. Merge, don't clobber, any existing Vary.
-    const existingVary = String(res.getHeader('Vary') ?? '');
-    if (!/\bAccept-Encoding\b/i.test(existingVary)) {
-      res.setHeader('Vary', existingVary ? `${existingVary}, Accept-Encoding` : 'Accept-Encoding');
-    }
-
-    // Downstream backpressure: pause gz when raw socket buffer is full,
-    // resume on socket drain. Without this the gzip transform spins until
-    // its own buffer fills and then the response stalls.
-    gz.on('data', (chunk) => {
-      if (_write(chunk) === false) {
-        gz.pause();
-        res.once('drain', () => gz.resume());
-      }
-    });
-    gz.on('end', () => _end());
-    // Upstream backpressure: when gz drains, surface the drain on res so
-    // pipe sources (e.g. fs.createReadStream from express.static) resume.
-    gz.on('drain', () => res.emit('drain'));
-    gz.on('error', (err) => res.destroy(err));
-  };
-
-  // Node's http.ServerResponse#write/#end are overloaded
-  // ((chunk, cb?) | (chunk, encoding, cb?)) — `any` here mirrors that
-  // genuinely-polymorphic upstream shape rather than re-declaring the
-  // overload set locally.
-  res.write = (/** @type {any} */ chunk, /** @type {any} */ encoding, /** @type {any} */ cb) => {
-    setup();
-    if (gz) return gz.write(chunk, encoding, cb);
-    return _write(chunk, encoding, cb);
-  };
-
-  res.end = (/** @type {any} */ chunk, /** @type {any} */ encoding, /** @type {any} */ cb) => {
-    setup();
-    if (gz) {
-      if (typeof chunk === 'function') {
-        cb = chunk;
-        chunk = undefined;
-      } else if (typeof encoding === 'function') {
-        cb = encoding;
-        encoding = undefined;
-      }
-      if (chunk != null && chunk !== '') gz.write(chunk, encoding);
-      gz.end();
-      if (typeof cb === 'function') gz.once('end', cb);
-      return res;
-    }
-    return _end(chunk, encoding, cb);
-  };
-
-  next();
-});
+app.use(compression);
 
 // Request logging
 app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {

@@ -63,4 +63,20 @@ describe('mergeRecipients — flattens nested alias chains', () => {
     );
     expect(grandchild).toBeTruthy();
   });
+
+  it('filters invalid direct-call ids and the primary id without coercing strings', async () => {
+    const paramsBySql = [];
+    mockClient.query.mockImplementation(async (sql, params) => {
+      paramsBySql.push([sql, params]);
+      if (sql.includes('FOR UPDATE')) return { rows: [{ id: 1 }] };
+      if (sql.includes('information_schema')) return { rows: [] };
+      if (sql.includes('RETURNING id')) return { rows: [{ id: 3 }] };
+      return { rows: [], rowCount: 0 };
+    });
+
+    await mergeRecipients(1, /** @type {any} */ ([3, 3, 1, 0, -1, 1.5, '3', null]));
+
+    const transactionUpdate = paramsBySql.find(([sql]) => sql.includes('UPDATE transactions'));
+    expect(transactionUpdate[1]).toEqual([1, [3, 3]]);
+  });
 });

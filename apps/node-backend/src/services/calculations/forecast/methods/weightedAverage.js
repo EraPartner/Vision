@@ -6,30 +6,17 @@
  */
 
 import { dayOfMonth } from '../seasonality.js';
+import { monthKey, orderedMonthKeys } from '../months.js';
 
 export const id = 'weighted_avg';
 export const label = 'Weighted average';
-
-/** @param {string} date */
-function monthKey(date) {
-  return date.slice(0, 7);
-}
 
 /**
  * @param {{history: Array<{date:string, net:number}>, forecastDates: string[]}} ctx
  * @returns {Array<{date:string, value:number}>}
  */
 export function forecast({ history, forecastDates }) {
-  const monthOrder = [];
-  const monthSeen = new Set();
-  for (const r of history) {
-    const mk = monthKey(r.date);
-    if (!monthSeen.has(mk)) {
-      monthSeen.add(mk);
-      monthOrder.push(mk);
-    }
-  }
-  monthOrder.sort();
+  const monthOrder = orderedMonthKeys(history);
   const monthRank = new Map(monthOrder.map((mk, i) => [mk, i]));
 
   const buckets = new Map();

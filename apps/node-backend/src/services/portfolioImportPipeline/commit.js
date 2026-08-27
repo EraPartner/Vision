@@ -3,9 +3,9 @@
  *
  * Drains 'matched' staging rows into portfolio_transactions via the existing
  * portfolioTransactionRepository.create (so 2-of-3 unit math, oversell
- * prevention, and asset-class routing are reused). Each create is atomic on its
- * own connection, so a per-row failure (oversell, unresolved instrument) is
- * caught and recorded as a row error without aborting the batch.
+ * prevention, and asset-class routing are reused). Creates run inside a chunk
+ * transaction. A savepoint rolls back a failed row (oversell, unresolved
+ * instrument) without aborting the chunk or discarding successful sibling rows.
  *
  * FX is auto-resolved (on-or-before stored rate) when the row has no rate and
  * is non-EUR. Dedup is field-based against portfolio_transactions (no tx_hash

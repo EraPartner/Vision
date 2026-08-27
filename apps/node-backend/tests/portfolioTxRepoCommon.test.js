@@ -9,7 +9,6 @@ import {
   __resetPortfolioTransactionSchemaCache,
   UNIT_BASED_ASSET_CLASSES,
   buildListWhereClause,
-  makeValidationError,
   normalizeTransactionPayload,
   validateSellUnitsAvailability,
 } from '../src/repositories/portfolioTxRepo.common.js';
@@ -84,15 +83,6 @@ describe('buildListWhereClause', () => {
     expect(r.where).toBe('WHERE 1=1 AND investment_id = $1 AND type = $2');
     expect(r.params).toEqual([7, 'sell']);
     expect(r.nextParam).toBe(3);
-  });
-});
-
-describe('makeValidationError', () => {
-  it('attaches VALIDATION_ERROR code', () => {
-    const err = makeValidationError('bad input');
-    expect(err).toBeInstanceOf(Error);
-    expect(err.code).toBe('VALIDATION_ERROR');
-    expect(err.message).toBe('bad input');
   });
 });
 

@@ -8,9 +8,9 @@ import { query } from '../src/database/connection.js';
 import {
   mvAvailable,
   clearMvCache,
-  sanitizeIsolatedDailyInvestmentSpikes,
 } from '../src/repositories/infoRepositoryHelpers.js';
-import { sanitizeIsolatedValueSpikes } from '../src/utils/portfolioMath.js';
+import { sanitizeIsolatedValueSpikes } from '../src/services/calculations/portfolioMath.js';
+import { sanitizeIsolatedDailyInvestmentSpikes } from '../src/lib/calculations/netWorthSanitizer.js';
 
 describe('sanitizeIsolatedValueSpikes', () => {
   it('smooths an isolated one-day needle to the geometric mean of its neighbors', () => {
@@ -42,9 +42,11 @@ describe('sanitizeIsolatedDailyInvestmentSpikes', () => {
 
     // Corrected investments: geometric mean sqrt(1000 * 1010) ≈ 1004.99.
     expect(out[1].investments).toBe(1004.99);
+    expect(typeof out[1].investments).toBe('number');
     // Regression pin: netWorth must include the -200 liabilities term.
     // The pre-fix recomputation (liquid + investments only) produced 1504.99.
     expect(out[1].netWorth).toBe(1304.99);
+    expect(typeof out[1].netWorth).toBe('number');
 
     // Control: non-spike neighbor days are untouched, liabilities included.
     expect(out[0]).toEqual({ date: '2025-01-01', liquid: 500, liabilities: -200, investments: 1000, netWorth: 1300 });

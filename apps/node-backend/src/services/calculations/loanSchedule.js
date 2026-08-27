@@ -65,7 +65,7 @@ function addMonthsAtDay(baseDateStr, monthOffset, preferredDay) {
  * @param {LoanConfig} config
  * @returns {{ errors: string[], normalized: NormalizedLoanConfig }}
  */
-export function validateLoanConfig(config) {
+function validateLoanConfig(config) {
   const errors = [];
   const principal = Number(config.loan_principal);
   const annualRate = Number(config.loan_annual_interest_rate ?? 0);

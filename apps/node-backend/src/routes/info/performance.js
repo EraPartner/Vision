@@ -1,6 +1,6 @@
 /**
  * /api/info/portfolio-performance:
- *   - Pre-computed portfolio performance snapshots with period filter + LTTB downsample.
+ *   - Pre-computed portfolio performance snapshots with period filtering at full daily resolution.
  */
 
 import { Router } from 'express';

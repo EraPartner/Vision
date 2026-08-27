@@ -22,14 +22,14 @@ import {
   listBatches,
   getBatch,
   rollbackBatch,
-  getPreviewRows,
+  getImportBatchPreview,
   overrideRecipient,
   overrideCategory,
   categoryExists,
 } from '../services/importBatchService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
 import { registerParserRoutes } from './parserConfigRoutes.js';
-import { parsePagination } from '../lib/pagination.js';
+import { registerImportBatchRoutes } from './importBatchRoutes.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -412,50 +412,22 @@ router.post('/categories', csvUpload.single('file'), /** @param {ExpressRequest}
 
 // ─── Batch history + rollback ─────────────────────────────────────────────────
 
-// GET /api/import/batches
-//
-// Collection GETs use the canonical `{items, total, limit, offset}` body (the
-// service still speaks `batches` internally; only the wire key is normalised).
-router.get('/batches', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
-  const { batches, total } = await listBatches({ limit, offset });
-  res.ok({ items: batches, total, limit, offset });
-});
-
-// GET /api/import/batches/:id
-router.get('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseBatchIdParam(req);
-  const batch = await getBatch(id);
-  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
-  res.ok(batch);
-});
-
-// DELETE /api/import/batches/:id — rollback: deletes transactions, marks batch aborted
-router.delete('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseBatchIdParam(req);
-
-  const batch = await getBatch(id);
-  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
-  if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
-  if (['staging', 'validating', 'matching', 'committing'].includes(batch.status)) {
-    throw new ValidationError('Cannot rollback a batch that is still in progress');
-  }
-
-  const { deleted, recipientsRemoved } = await rollbackBatch(id);
-  logger.info('[import] batch rolled back', { batchId: id, deleted, recipientsRemoved });
-
-  if (deleted > 0 || recipientsRemoved > 0) {
-    try {
-      await refreshAggregations();
-    } catch (err) {
-      logger.warn('[import] post-rollback aggregation refresh failed', { batchId: id, error: err?.message });
+registerImportBatchRoutes(router, {
+  listBatches,
+  getBatch,
+  inProgressStatuses: ['staging', 'validating', 'matching', 'committing'],
+  rollback: async (batchId) => {
+    const { deleted, recipientsRemoved } = await rollbackBatch(batchId);
+    logger.info('[import] batch rolled back', { batchId, deleted, recipientsRemoved });
+    if (deleted > 0 || recipientsRemoved > 0) {
+      try {
+        await refreshAggregations();
+      } catch (err) {
+        logger.warn('[import] post-rollback aggregation refresh failed', { batchId, error: err?.message });
+      }
     }
-  }
-
-  // Not a plain delete: a rollback reports side-effect counts the import history
-  // card renders ("N transactions removed"), so it keeps a 200 body
-  // (docs/reference/code-patterns.md, "DELETE responses").
-  res.ok({ deleted, recipientsRemoved });
+    return { deleted, recipientsRemoved };
+  },
 });
 
 // ─── Import review endpoints ──────────────────────────────────────────────────
@@ -468,80 +440,8 @@ router.get('/batches/:id/preview', /** @param {ExpressRequest} req @param {Expre
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
-  const rows = await getPreviewRows(batchId);
-
-  /** @param {string|null} [general]
-   * @param {string|null} [detail] */
-  const formatCategoryLabel = (general, detail) => {
-    if (!general && !detail) return null;
-    return [general, detail].filter(Boolean).join(': ');
-  };
-
-  // Group rows by effective_recipient_id (null = unresolved).
-  /** @type {Map<string|number, any>} */
-  const groupMap = new Map();
-  for (const row of rows) {
-    const key = row.effective_recipient_id ?? '__unresolved__';
-    if (!groupMap.has(key)) {
-      const defaultLabel = formatCategoryLabel(
-        row.recipient_default_category_general,
-        row.recipient_default_category_detail,
-      );
-      const overrideLabel = formatCategoryLabel(
-        row.override_category_general,
-        row.override_category_detail,
-      );
-      const currentCategoryId = row.override_category_id ?? row.recipient_default_category_id ?? null;
-      const currentCategoryLabel = overrideLabel ?? defaultLabel ?? null;
-
-      groupMap.set(key, {
-        recipient_id: row.effective_recipient_id,
-        recipient_name: row.recipient_name,
-        recipient_default_category_id: row.recipient_default_category_id ?? null,
-        recipient_default_category_label: defaultLabel,
-        override_category_id: row.override_category_id ?? null,
-        current_category_id: currentCategoryId,
-        current_category_label: currentCategoryLabel,
-        matched_pattern_id: row.matched_pattern_id,
-        matched_pattern_text: row.matched_pattern_text,
-        matched_pattern_kind: row.matched_pattern_kind,
-        rows: [],
-      });
-    }
-    groupMap.get(key).rows.push({
-      id: row.id,
-      row_index: row.row_index,
-      recipient_raw: row.recipient_raw,
-      amount: row.amount,
-      currency: row.currency,
-      tx_date: row.tx_date,
-      memo: row.memo,
-      // Account label parsed from the CSV (WP-B6 import disclosure) — lets the
-      // review UI show "{n} transactions → {account}" and flag labels that will
-      // create a new account on commit (trigger in migration 0056).
-      bank_account: row.bank_account ?? null,
-      match_source: row.match_source,
-      match_similarity: row.match_similarity,
-      matched_pattern_id: row.matched_pattern_id,
-      user_override_recipient_id: row.user_override_recipient_id,
-      override_category_id: row.override_category_id ?? null,
-    });
-  }
-
-  const groups = [...groupMap.values()].map((g) => ({
-    ...g,
-    row_count: g.rows.length,
-  }));
-
-  // Summary counts across all groups.
-  /** @type {Record<string, number>} */
-  const totals = { exact: 0, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 };
-  for (const row of rows) {
-    const src = row.match_source ?? 'unresolved';
-    totals[src] = (totals[src] || 0) + 1;
-  }
-
-  res.ok({ batch_id: batchId, groups, totals });
+  const preview = await getImportBatchPreview(batchId);
+  res.ok({ batch_id: batchId, ...preview });
 });
 
 // POST /api/import/batches/:id/rows/:rowId/override

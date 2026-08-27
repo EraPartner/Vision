@@ -61,26 +61,14 @@
  * @property {(contentType: string) => ExpressResponse} [type] Express's `res.type`, used by main.js's SPA fallback.
  * @property {(event: string, ...args: any[]) => boolean} [emit] Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by main.js's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`.
  * @property {(err?: Error) => void} [destroy]
- * @property {(data: any, meta?: ResponseMetaLoose) => ExpressResponse} [ok] Attached by middleware/envelope.js's `wrapResponse`.
+ * @property {(data: any, meta?: ResponseMeta) => ExpressResponse} [ok] Attached by middleware/envelope.js's `wrapResponse`.
  * @property {Record<string, any>} [locals]
  */
 
 /**
- * `meta` as `res.ok(data, meta)` callers actually pass it, not as
- * `@vision/types/api`'s `ResponseMeta` declares it. `wrapResponse` (see
- * middleware/envelope.js) spreads whatever object `meta` is onto the response
- * body directly (`{ requestId, ...meta }`) — there is no runtime nesting under
- * `extra`. `ResponseMeta` documents `requestId`/`extra` as the ONLY sanctioned
- * members and says arbitrary facts belong under `extra`, but existing call
- * sites (e.g. routes/research.js's `provider`/`source` provenance meta)
- * predate that convention and pass extra top-level keys straight through — a
- * real drift between the documented contract and actual usage, left as-is
- * here (zero behavior change) rather than silently "fixed" by a type change.
- * A bare `ResponseMeta` reference also trips TS's weak-type check (TS2559) at
- * every one of those call sites, since such a literal shares no property with
- * `{requestId?, extra?}` — the `Record<string, any>` intersection below both
- * documents reality and satisfies the checker.
- * @typedef {import('@vision/types/api').ResponseMeta & Record<string, any>} ResponseMetaLoose
+ * Envelope metadata as declared by the shared package. Route-specific facts
+ * live beside `requestId` at the top level; pagination stays in the data body.
+ * @typedef {import('@vision/types/api').ResponseMeta} ResponseMeta
  */
 
 /**

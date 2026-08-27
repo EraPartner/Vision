@@ -12,7 +12,7 @@ import { categoryRepository } from '../../../repositories/categoryRepository.js'
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
-import { toYmd } from '../../../utils/portfolioMath.js';
+import { toYmd } from '../../calculations/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
 import { getQuotes } from '../../marketLookupService.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';

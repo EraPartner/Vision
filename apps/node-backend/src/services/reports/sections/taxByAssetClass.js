@@ -4,7 +4,7 @@
  * Grouped bar chart: taxes vs fees per asset class + summary table.
  */
 
-import { escapeHtml, fmtCurrency, svgGenericGroupedBarChart } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, sectionPage, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -24,13 +24,7 @@ export function renderTaxByAssetClass(data, { currency }) {
     .sort((a, b) => (b.taxes + b.fees) - (a.taxes + a.fees));
 
   if (!classes.length) {
-    return `
-      <div class="page">
-        <div class="section-title">Tax by Asset Class</div>
-        <div class="section-subtitle">Taxes and fees broken down by asset class</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No data</strong>No tax or fee data found by asset class for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Tax by Asset Class', subtitle: 'Taxes and fees broken down by asset class', heading: 'No data', message: 'No tax or fee data found by asset class for the selected period.' });
   }
 
   const groups = classes.map(c => ({ label: c.label, taxes: c.taxes, fees: c.fees }));
@@ -50,11 +44,10 @@ export function renderTaxByAssetClass(data, { currency }) {
     </tr>`;
   }).join('');
 
-  return `
-    <div class="page">
-      <div class="section-title">Tax by Asset Class</div>
-      <div class="section-subtitle">Taxes and fees across ${classes.length} asset class${classes.length === 1 ? '' : 'es'}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Tax by Asset Class',
+    subtitle: `Taxes and fees across ${classes.length} asset class${classes.length === 1 ? '' : 'es'}`,
+    content: `
       <div class="chart-wrap">${chart}</div>
       <table class="data-table">
         <thead><tr>
@@ -64,6 +57,6 @@ export function renderTaxByAssetClass(data, { currency }) {
           <th class="num">Total</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
-    </div>`;
+      </table>`,
+  });
 }

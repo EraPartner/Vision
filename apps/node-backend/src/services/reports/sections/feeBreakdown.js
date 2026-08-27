@@ -4,7 +4,7 @@
  * Fees per asset class; horizontal bars + table.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
+import { emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -22,13 +22,7 @@ export function renderFeeBreakdown(data, { currency }) {
   const totalFees  = data?.feesTotal ?? 0;
 
   if (!rows.length && totalFees === 0) {
-    return `
-      <div class="page">
-        <div class="section-title">Fee Breakdown</div>
-        <div class="section-subtitle">Broker and management fees by asset class</div>
-        <hr class="section-divider">
-        <div class="placeholder-notice"><strong>No fee data</strong>No fees found for the selected period.</div>
-      </div>`;
+    return emptySection({ title: 'Fee Breakdown', subtitle: 'Broker and management fees by asset class', heading: 'No fee data', message: 'No fees found for the selected period.' });
   }
 
   const barItems = rows.map(r => ({
@@ -50,11 +44,10 @@ export function renderFeeBreakdown(data, { currency }) {
     ? `<div class="chart-wrap">${svgHorizontalBars(barItems, { maxItems: 8 })}</div>`
     : '';
 
-  return `
-    <div class="page">
-      <div class="section-title">Fee Breakdown</div>
-      <div class="section-subtitle">Total fees: ${fmtCurrency(totalFees, currency)}</div>
-      <hr class="section-divider">
+  return sectionPage({
+    title: 'Fee Breakdown',
+    subtitle: `Total fees: ${fmtCurrency(totalFees, currency)}`,
+    content: `
       ${chartHtml}
       ${tableRows ? `
         <table class="data-table">
@@ -64,6 +57,6 @@ export function renderFeeBreakdown(data, { currency }) {
             <th class="num">Share</th>
           </tr></thead>
           <tbody>${tableRows}</tbody>
-        </table>` : `<p style="color:hsl(var(--muted));font-size:12px;">Fee detail by asset class unavailable — total: ${fmtCurrency(totalFees, currency)}</p>`}
-    </div>`;
+        </table>` : `<p style="color:hsl(var(--muted));font-size:12px;">Fee detail by asset class unavailable — total: ${fmtCurrency(totalFees, currency)}</p>`}`,
+  });
 }

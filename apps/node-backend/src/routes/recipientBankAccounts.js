@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import recipientBankAccountService from '../services/recipientBankAccountService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateIntParam, assertMaxLength } from '../middleware/validation.js';
+import { validateIdParam, validateIntParam, assertMaxLength, assertIdParam } from '../middleware/validation.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -17,14 +17,14 @@ const router = Router();
 const validateAccountIdParam = validateIntParam('accountId');
 
 router.get('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipientId = parseInt(req.params.id, 10);
+  const recipientId = assertIdParam(req);
   const activeOnly = req.query.active !== 'false';
   const accounts = await recipientBankAccountService.getByRecipientId(recipientId, activeOnly);
   res.ok({ items: accounts, total: accounts.length });
 });
 
 router.post('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipientId = parseInt(req.params.id, 10);
+  const recipientId = assertIdParam(req);
   const { account_number, bank_name, address, account_label, set_as_primary } = req.body;
 
   if (!account_number) throw new ValidationError('Missing required field: account_number');
@@ -46,7 +46,7 @@ router.post('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} r
 });
 
 router.patch('/:id/bank-accounts/:accountId', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const accountId = parseInt(req.params.accountId, 10);
+  const accountId = assertIdParam(req, 'accountId');
   const { bank_name, address, account_label } = req.body;
   const updated = await recipientBankAccountService.update(accountId, {
     bankName: bank_name,
@@ -61,7 +61,7 @@ router.patch('/:id/bank-accounts/:accountId', validateIdParam, validateAccountId
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses") — same shape as set-primary below.
 router.delete('/:id/bank-accounts/:accountId', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const accountId = parseInt(req.params.accountId, 10);
+  const accountId = assertIdParam(req, 'accountId');
   const deactivated = await recipientBankAccountService.softDelete(accountId);
   if (!deactivated) throw new NotFoundError('Bank account not found');
   const account = await recipientBankAccountService.getById(accountId);
@@ -69,8 +69,8 @@ router.delete('/:id/bank-accounts/:accountId', validateIdParam, validateAccountI
 });
 
 router.post('/:id/bank-accounts/:accountId/set-primary', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipientId = parseInt(req.params.id, 10);
-  const accountId = parseInt(req.params.accountId, 10);
+  const recipientId = assertIdParam(req);
+  const accountId = assertIdParam(req, 'accountId');
   const success = await recipientBankAccountService.setPrimary(accountId, recipientId);
   if (!success) throw new NotFoundError('Bank account not found or does not belong to this recipient');
   const account = await recipientBankAccountService.getById(accountId);

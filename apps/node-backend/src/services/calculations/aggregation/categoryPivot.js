@@ -20,7 +20,7 @@ export async function computeCategoryPivot({
 } = {}) {
   const key = `cat|${targetCurrency}|c:${statsKeyPart(excludedCategoryIds)}|r:${statsKeyPart(excludedRecipientIds)}`;
   return withStatisticsCache(key, async () => {
-    const data = await infoRepository.getCategoryPivot(excludedCategoryIds, targetCurrency, excludedRecipientIds);
+    const data = await infoRepository.getCategoryPivot({ excludedCategoryIds, targetCurrency, excludedRecipientIds });
     assertNoNaN(data, 'computeCategoryPivot');
     return buildEnvelope(data, { source: 'live' });
   });

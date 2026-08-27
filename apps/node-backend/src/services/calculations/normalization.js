@@ -26,7 +26,7 @@ export {
 };
 
 /** Default pg_trgm similarity cutoff for "the same recipient, spelled differently". */
-export const DEFAULT_MATCH_THRESHOLD = 0.7;
+const DEFAULT_MATCH_THRESHOLD = 0.7;
 
 /**
  * Batch-resolve raw recipient names to existing recipient ids.
@@ -120,4 +120,3 @@ export async function findBestRecipientMatches(names, { threshold = DEFAULT_MATC
   }
   return out;
 }
-

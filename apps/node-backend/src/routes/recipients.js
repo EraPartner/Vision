@@ -15,7 +15,7 @@ import {
 } from '../services/recipientPatternService.js';
 import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateIntParam, assertOptionalId } from '../middleware/validation.js';
+import { validateIdParam, validateIntParam, assertOptionalId, assertIdParam, validateIntArray } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
@@ -94,13 +94,13 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipient = await recipientService.getById(parseInt(req.params.id, 10));
+  const recipient = await recipientService.getById(assertIdParam(req));
   if (!recipient) throw new NotFoundError('Recipient not found');
   res.ok({ ...recipient, links: [] });
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const updated = await recipientService.update(id, req.body);
   if (!updated) throw new NotFoundError('Recipient not found');
   scheduleRefresh();
@@ -108,7 +108,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const deleted = await recipientService.hardDelete(id);
   if (!deleted) throw new NotFoundError('Recipient not found');
   scheduleRefresh();
@@ -117,11 +117,13 @@ router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {E
 });
 
 router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const primaryId = parseInt(req.params.id, 10);
+  const primaryId = assertIdParam(req);
   const { alias_ids } = req.body;
   if (!alias_ids || !Array.isArray(alias_ids) || alias_ids.length === 0) {
     throw new ValidationError('Missing required field: alias_ids (array of recipient IDs)');
   }
+  const aliasIdsResult = validateIntArray(alias_ids, 'alias_ids');
+  if (!aliasIdsResult.valid) throw new ValidationError(aliasIdsResult.error);
 
   const primary = await recipientService.getById(primaryId);
   if (!primary) throw new NotFoundError('Primary recipient not found');
@@ -131,7 +133,7 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
 
   const { mergedAliasIds, reassigned } = await mergeRecipientsAtomic(
     primaryId,
-    alias_ids.map(Number),
+    aliasIdsResult.value,
   );
   const updatedPrimary = await recipientService.getById(primaryId);
   const aliases = await recipientService.getAliases(primaryId);
@@ -168,7 +170,7 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
 });
 
 router.post('/:id/unmerge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const success = await recipientService.unmergeRecipient(id);
   if (!success) throw new NotFoundError('Recipient not found');
   const recipient = await recipientService.getById(id);
@@ -177,7 +179,7 @@ router.post('/:id/unmerge', validateIdParam, /** @param {ExpressRequest} req @pa
 });
 
 router.get('/:id/aliases', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const aliases = await recipientService.getAliases(id);
   res.ok({
     items: aliases.map((a) => ({
@@ -192,13 +194,13 @@ router.get('/:id/aliases', validateIdParam, /** @param {ExpressRequest} req @par
 // ── Pattern sub-routes ───────────────────────────────────────────────────────
 
 router.get('/:id/patterns', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = assertIdParam(req);
   const patterns = await listPatternsForRecipient(id);
   res.ok({ items: patterns, total: patterns.length });
 });
 
 router.post('/:id/patterns', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipientId = parseInt(req.params.id, 10);
+  const recipientId = assertIdParam(req);
   const { pattern, pattern_kind, case_sensitive, priority, notes } = req.body;
   if (!pattern) throw new ValidationError('Missing required field: pattern');
   const result = await createPattern({ recipientId, pattern, pattern_kind, case_sensitive, priority, notes });
@@ -214,13 +216,13 @@ router.post('/:id/patterns/preview', validateIdParam, /** @param {ExpressRequest
 });
 
 router.patch('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const patternId = parseInt(req.params.patternId, 10);
+  const patternId = assertIdParam(req, 'patternId');
   await updatePattern(patternId, req.body);
   res.ok({ patternId });
 });
 
 router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const patternId = parseInt(req.params.patternId, 10);
+  const patternId = assertIdParam(req, 'patternId');
   await deletePattern(patternId);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

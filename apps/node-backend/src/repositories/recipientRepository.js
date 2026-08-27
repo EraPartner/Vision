@@ -375,21 +375,6 @@ export const recipientRepository = {
   },
 
   /**
-   * Merge: set primary_recipient_id on alias recipients pointing to a primary.
-   *
-   * @param {number} primaryId
-   * @param {number[]} aliasIds
-   * @returns {Promise<number[]>} the alias ids actually flagged
-   */
-  async mergeRecipients(primaryId, aliasIds) {
-    if (!aliasIds.length) return [];
-    const placeholders = aliasIds.map((_, i) => `$${i + 2}`).join(',');
-    const sql = `UPDATE recipients SET primary_recipient_id = $1, updated_at = NOW() WHERE id IN (${placeholders}) AND id != $1 RETURNING id`;
-    const result = await query(sql, [primaryId, ...aliasIds]);
-    return result.rows.map((/** @type {any} */ r) => r.id);
-  },
-
-  /**
    * Lock the merge primary so concurrent merges into it serialize cleanly.
    * @param {number} id
    * @returns {Promise<{id:number}|undefined>}
@@ -401,8 +386,8 @@ export const recipientRepository = {
 
   /**
    * Flag alias rows as pointing at the primary, preserving the historical alias
-   * relationship for the Recipients UI + /:id/aliases. Distinct from
-   * mergeRecipients() above, which the older non-atomic route path still uses.
+   * relationship for the Recipients UI + /:id/aliases. The atomic merge service
+   * composes this with repointGrandchildAliases() in one transaction.
    * @param {number} primaryId
    * @param {number[]} aliasIds
    * @returns {Promise<number[]>} the alias ids actually flagged

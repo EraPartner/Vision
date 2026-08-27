@@ -19,9 +19,8 @@ vi.mock('../src/database/connection.js', () => ({
 vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   warmCache: vi.fn(() => Promise.resolve()),
   clearMemoryCache: vi.fn(),
-  convertToEur: vi.fn((amount) => Promise.resolve(amount)),
   convertRowsToEur: vi.fn((rows) => Promise.resolve(rows)),
-  default: { convertToEur: vi.fn(), convertRowsToEur: vi.fn(), warmCache: vi.fn(), clearMemoryCache: vi.fn() },
+  default: { convertRowsToEur: vi.fn(), warmCache: vi.fn(), clearMemoryCache: vi.fn() },
 }));
 
 vi.mock('../src/config/logger.js', () => ({

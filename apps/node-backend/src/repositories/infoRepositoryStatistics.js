@@ -4,11 +4,10 @@
 
 import { query, queryPrepared } from '../database/connection.js';
 import { buildExclusionClauses } from '../lib/filterBuilder.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   mvAvailable,
-  roundToCents,
   mapRowsForAmountConversion,
   buildCategoryFromConvertedRows,
   getIncludeTransfers,
@@ -121,11 +120,17 @@ export const statisticsRepository = {
   },
 
   /**
-   * @param {number[]} [excludedCategoryIds]
-   * @param {string} [targetCurrency]
-   * @param {number[]} [excludedRecipientIds]
+   * @param {{
+   *   excludedCategoryIds?: number[],
+   *   targetCurrency?: string,
+   *   excludedRecipientIds?: number[],
+   * }} [options]
    */
-  async getCategoryPivot(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
+  async getCategoryPivot({
+    excludedCategoryIds = [],
+    targetCurrency = 'EUR',
+    excludedRecipientIds = [],
+  } = {}) {
     const includeTransfers = await getIncludeTransfers();
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses,
     // shared with every other money surface): 3-level category COALESCE and

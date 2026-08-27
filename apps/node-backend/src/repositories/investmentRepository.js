@@ -10,6 +10,7 @@ import { query } from '../database/connection.js';
 import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
+import { makeValidationError } from '../lib/repositoryErrors.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
 /** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
@@ -119,16 +120,6 @@ export function pickInvestmentCreateFields(body) {
   const picked = {};
   for (const column of INVESTMENT_CREATE_COLUMNS) picked[column] = body?.[column];
   return picked;
-}
-
-/**
- * @param {string} message
- * @returns {Error & { code?: string }}
- */
-function makeValidationError(message) {
-  const err = /** @type {Error & { code?: string }} */ (new Error(message));
-  err.code = 'VALIDATION_ERROR';
-  return err;
 }
 
 /**

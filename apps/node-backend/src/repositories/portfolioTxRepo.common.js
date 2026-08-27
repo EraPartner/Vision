@@ -12,6 +12,7 @@
 import { query } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
+import { makeValidationError } from '../lib/repositoryErrors.js';
 import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision/types/assetClasses';
 import { PORTFOLIO_RECURRENCE_INTERVALS } from '@vision/types/recurrence';
 
@@ -112,16 +113,6 @@ export function buildListWhereClause({ investmentId = null, type = null } = {}) 
   }
 
   return { where, params, nextParam: idx };
-}
-
-/**
- * @param {string} message
- * @returns {Error & { code?: string }}
- */
-export function makeValidationError(message) {
-  const err = /** @type {Error & { code?: string }} */ (new Error(message));
-  err.code = 'VALIDATION_ERROR';
-  return err;
 }
 
 /**

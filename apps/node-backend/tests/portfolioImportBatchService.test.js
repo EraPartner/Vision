@@ -49,8 +49,10 @@ import {
   getCommittedRows,
   markBatchAborted,
   resetCommittedRowsToMatched,
+  getPreviewRows,
 } from '../src/repositories/portfolioImportBatchRepository.js';
 import {
+  getPortfolioImportBatchPreview,
   resolveInvestmentRows,
   rollbackBatch,
 } from '../src/services/portfolioImportBatchService.js';
@@ -84,6 +86,46 @@ beforeEach(() => {
       status: 'matched',
       user_override_investment_id: null,
     })),
+  });
+});
+
+describe('getPortfolioImportBatchPreview', () => {
+  it('preserves investment/raw/cash grouping, error precedence, row values, and totals', async () => {
+    getPreviewRows.mockResolvedValue([
+      { id: 1, row_index: 0, status: 'matched', route: 'trade', effective_investment_id: 9, investment_name: 'Fund', investment_symbol: 'FND', investment_asset_class: 'stocks_etfs', symbol_raw: 'FND', name_raw: 'Fund', match_source: 'symbol', amount: '100.50', units: '2.5' },
+      { id: 2, row_index: 1, status: 'matched', route: 'trade', effective_investment_id: null, symbol_raw: 'ABC', name_raw: 'Alpha', match_source: 'name_exact', amount: '20.00' },
+      { id: 3, row_index: 2, status: 'matched', route: 'trade', effective_investment_id: null, symbol_raw: 'abc', name_raw: 'Other', match_source: null, amount: '30.00' },
+      { id: 4, row_index: 3, status: 'matched', route: 'cash', effective_investment_id: null, symbol_raw: 'CASH', name_raw: 'Cash', match_source: null, amount: '40.00' },
+      { id: 5, row_index: 4, status: 'error', route: 'trade', effective_investment_id: null, symbol_raw: 'ERR', name_raw: 'Error', match_source: 'symbol', error_message: 'bad row', amount: '50.00' },
+    ]);
+
+    const result = await getPortfolioImportBatchPreview(4);
+
+    expect(getPreviewRows).toHaveBeenCalledWith(4);
+    expect(result.totals).toEqual({ symbol: 1, name_exact: 1, unresolved: 2, error: 1 });
+    expect(result.groups).toHaveLength(4);
+    expect(result.groups[0]).toEqual(expect.objectContaining({ investment_id: 9, row_count: 1 }));
+    expect(result.groups[0].rows[0]).toEqual(expect.objectContaining({
+      id: 1,
+      amount: '100.50',
+      units: '2.5',
+    }));
+    expect(result.groups[1].row_count).toBe(2);
+    expect(result.groups[1].rows.map((row) => row.id)).toEqual([2, 3]);
+    expect(result.groups[2]).toEqual(expect.objectContaining({
+      is_cash: true,
+      raw_symbol: null,
+      raw_name: null,
+    }));
+    expect(result.groups[3].rows[0].error_message).toBe('bad row');
+  });
+
+  it('returns the complete zeroed totals shape for an empty preview', async () => {
+    getPreviewRows.mockResolvedValue([]);
+    await expect(getPortfolioImportBatchPreview(1)).resolves.toEqual({
+      groups: [],
+      totals: { symbol: 0, name_exact: 0, unresolved: 0, error: 0 },
+    });
   });
 });
 
