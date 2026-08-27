@@ -37,6 +37,16 @@ describe("currency format defaults", () => {
 
     configureCurrencyFormatDefaults(previous);
   });
+
+  test("a non-finite digit override falls back instead of poisoning the defaults", () => {
+    const previous = getCurrencyFormatDefaults();
+    configureCurrencyFormatDefaults({ fractionDigits: Number.NaN });
+
+    expect(getCurrencyFormatDefaults().fractionDigits).toBe(2);
+    expect(formatCurrency(1234.56, "EUR", "en-US")).toBe("€1,234.56");
+
+    configureCurrencyFormatDefaults(previous);
+  });
 });
 
 describe("formatCurrency — malformed input degrades like Money / the parts hook", () => {
@@ -68,6 +78,25 @@ describe("formatCurrency — malformed input degrades like Money / the parts hoo
 });
 
 describe("formatCurrencyCompact", () => {
+  test("degrades to bare-number parts for malformed currency and digits", () => {
+    for (const result of [
+      formatCurrencyCompact(1234.56, "US", "de-DE", 2),
+      formatCurrencyCompact(1234.56, "EUR", "de-DE", -1),
+    ]) {
+      expect(result).toEqual({
+        display: "1234.56",
+        full: "1234.56",
+        isCompact: false,
+        parts: [{ type: "literal", value: "1234.56" }],
+      });
+    }
+  });
+
+  test("valid compact formatting still works after a failed call", () => {
+    formatCurrencyCompact(1, "US", "de-DE", 2);
+    expect(formatCurrencyCompact(1_253_632, "EUR", "en-US", 2).isCompact).toBe(true);
+  });
+
   test("returns full when below threshold", () => {
     const result = formatCurrencyCompact(42, "EUR", "en-US", 2);
     expect(result.isCompact).toBe(false);

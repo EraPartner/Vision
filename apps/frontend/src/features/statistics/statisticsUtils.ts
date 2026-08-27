@@ -2,7 +2,7 @@
  * Shared utilities for the Statistics page and its sub-components.
  */
 
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
 export type PivotValueMode = "absolute" | "net" | "income" | "expense";
@@ -29,7 +29,7 @@ export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: string }> 
  */
 export function formatPeriodLabel(period: string, locale: string): string {
   try {
-    return formatDate(parseISO(`${period}-01`), "MMM yyyy", locale);
+    return formatDate(parseISO(`${period}-01`), CHART_DATE_PATTERNS.monthLabel, locale);
   } catch {
     return period;
   }
@@ -37,7 +37,7 @@ export function formatPeriodLabel(period: string, locale: string): string {
 
 export function formatPeriodShort(period: string, locale: string): string {
   try {
-    return formatDate(parseISO(`${period}-01`), "MMM yy", locale);
+    return formatDate(parseISO(`${period}-01`), CHART_DATE_PATTERNS.monthTick, locale);
   } catch {
     return period;
   }

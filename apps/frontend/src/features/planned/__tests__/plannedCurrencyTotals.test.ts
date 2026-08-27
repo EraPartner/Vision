@@ -42,4 +42,28 @@ describe("sumConvertedAmounts", () => {
       unavailableCount: 1,
     });
   });
+
+  it.each([
+    ["daily", undefined, 30],
+    ["weekly", undefined, 4.33],
+    ["biweekly", undefined, 2.17],
+    ["monthly", undefined, 1],
+    ["quarterly", undefined, 1 / 3],
+    ["yearly", undefined, 1 / 12],
+    ["custom", 15, 2],
+  ])("applies the %s monthly multiplier", (frequency, customIntervalDays, expected) => {
+    const result = sumConvertedMonthlyAmounts([
+      {
+        amount: 1,
+        currency: "EUR",
+        is_active: true,
+        is_recurring: true,
+        frequency,
+        custom_interval_days: customIntervalDays,
+      },
+    ], (amount) => amount);
+
+    expect(result.total).toBeCloseTo(expected, 8);
+    expect(result.unavailableCount).toBe(0);
+  });
 });

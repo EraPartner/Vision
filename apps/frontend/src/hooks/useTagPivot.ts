@@ -16,8 +16,8 @@ const config: PivotConfig<TagPivotItem, TagPeriodData> = {
         const res = await getAggregationTagPivot({
             currency,
             bucket,
-            start,
-            end,
+            start_date: start,
+            end_date: end,
             // The tag endpoint takes an explicit all flag (unlike the recipient
             // one, where omitting the id list means "all").
             all,

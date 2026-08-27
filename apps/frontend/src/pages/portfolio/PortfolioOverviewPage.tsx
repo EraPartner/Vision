@@ -13,7 +13,8 @@ import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialo
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/features/portfolio/PortfolioNewsFeed";
 import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
-import { TotalValueCard, type SparklinePoint } from "@/features/portfolio/TotalValueCard";
+import { TotalValueCard } from "@/features/portfolio/TotalValueCard";
+import { buildNetContributionSparkline } from "@/features/portfolio/netContributionSparkline";
 import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
@@ -29,7 +30,6 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
-import { parseYmd } from "@/lib/timezone";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { formatPercent } from "@/utils/currency";
 
@@ -150,46 +150,12 @@ export default function PortfolioOverviewPage() {
     };
   }, [summaries, convertToTarget]);
 
-  const sparkline: SparklinePoint[] = useMemo(() => {
-    if (transactions.length === 0) return [];
-    const DAYS = 30;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startMs = today.getTime() - (DAYS - 1) * 86_400_000;
-
-    const investmentCurrency = new Map<number, string>();
-    summaries.forEach((s) => investmentCurrency.set(s.id, s.currency));
-
-    // Day-indexed net cost basis delta (buys + gifts - sells).
-    const dailyDelta = new Map<number, number>();
-    let baseline = 0;
-    for (const txn of transactions) {
-      if (txn.type !== 'buy' && txn.type !== 'sell' && txn.type !== 'gift') continue;
-      const amount = Number(txn.amount) || 0;
-      const signed = txn.type === 'sell' ? -amount : amount;
-      const ccy = investmentCurrency.get(txn.investment_id) || targetCurrency;
-      const inTarget = convertToTarget(signed, ccy);
-      const txnDate = parseYmd(txn.date);
-      txnDate.setHours(0, 0, 0, 0);
-      const ms = txnDate.getTime();
-      if (ms < startMs) {
-        baseline += inTarget;
-      } else if (ms <= today.getTime()) {
-        const dayIdx = Math.floor((ms - startMs) / 86_400_000);
-        dailyDelta.set(dayIdx, (dailyDelta.get(dayIdx) || 0) + inTarget);
-      }
-    }
-
-    const points: SparklinePoint[] = [];
-    let running = baseline;
-    for (let i = 0; i < DAYS; i++) {
-      running += dailyDelta.get(i) || 0;
-      points.push({ t: startMs + i * 86_400_000, v: running });
-    }
-    // Hide a flat-zero series (no recent activity).
-    const allEqual = points.every((p) => p.v === points[0].v);
-    return allEqual ? [] : points;
-  }, [transactions, summaries, convertToTarget, targetCurrency]);
+  const sparkline = useMemo(() => buildNetContributionSparkline({
+    transactions,
+    summaries,
+    targetCurrency,
+    convertToTarget,
+  }), [transactions, summaries, convertToTarget, targetCurrency]);
 
   const cards = [
     {

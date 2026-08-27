@@ -13,10 +13,10 @@ const API_BASE = "http://localhost:3002";
 
 function makeBatch(overrides: Partial<ImportBatch> = {}): ImportBatch {
     return {
-        id: 1,
+        id: "1",
         adapter_name: "kbc",
         source_filename: "transactions.csv",
-        source_size_bytes: 1024,
+        source_size_bytes: "1024",
         status: "complete",
         rows_total: 10,
         rows_imported: 8,
@@ -49,14 +49,20 @@ describe("ImportHistoryCard", () => {
             http.get(`${API_BASE}/api/import/batches`, () =>
                 ok({
                     items: [
-                        makeBatch({ id: 1, source_filename: "jan.csv" }),
+                        makeBatch({ id: "1", source_filename: "jan.csv" }),
                         makeBatch({
-                            id: 2,
+                            id: "2",
                             source_filename: "feb.csv",
                             adapter_name: "ing",
                         }),
+                        makeBatch({
+                            id: "3",
+                            source_filename: "review.csv",
+                            adapter_name: "belfius",
+                            status: "awaiting_review",
+                        }),
                     ],
-                    total: 2,
+                    total: 3,
                 }),
             ),
         );
@@ -67,6 +73,8 @@ describe("ImportHistoryCard", () => {
         expect(await screen.findByText("feb.csv")).toBeInTheDocument();
         expect(await screen.findByText("kbc")).toBeInTheDocument();
         expect(await screen.findByText("ing")).toBeInTheDocument();
+        expect(await screen.findByText("belfius")).toBeInTheDocument();
+        expect(await screen.findByText("awaiting_review")).toBeInTheDocument();
     });
 
     it("renders rollback button only for completed batches with remaining transactions", async () => {
@@ -75,13 +83,13 @@ describe("ImportHistoryCard", () => {
                 ok({
                     items: [
                         makeBatch({
-                            id: 1,
+                            id: "1",
                             source_filename: "rollbackable.csv",
                             status: "complete",
                             transactions_remaining: 5,
                         }),
                         makeBatch({
-                            id: 2,
+                            id: "2",
                             source_filename: "failed.csv",
                             status: "failed",
                             transactions_remaining: 0,
@@ -109,7 +117,7 @@ describe("ImportHistoryCard", () => {
                 ok({
                     items: [
                         makeBatch({
-                            id: 7,
+                            id: "7",
                             source_filename: "march.csv",
                             transactions_remaining: 3,
                         }),
@@ -146,7 +154,7 @@ describe("ImportHistoryCard", () => {
                 return ok({
                     items: [
                         makeBatch({
-                            id: 42,
+                            id: "42",
                             source_filename: "rollback-me.csv",
                             transactions_remaining: 4,
                         }),
@@ -193,7 +201,7 @@ describe("ImportHistoryCard", () => {
                 ok({
                     items: [
                         makeBatch({
-                            id: 99,
+                            id: "99",
                             source_filename: "keep.csv",
                             transactions_remaining: 2,
                         }),
@@ -229,7 +237,7 @@ describe("ImportHistoryCard", () => {
     it("renders pagination controls when total exceeds page size", async () => {
         const manyBatches = Array.from({ length: 10 }, (_, i) =>
             makeBatch({
-                id: i + 1,
+                id: String(i + 1),
                 source_filename: `file-${i + 1}.csv`,
                 transactions_remaining: 0,
             }),

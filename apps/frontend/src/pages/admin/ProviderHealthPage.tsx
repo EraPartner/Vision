@@ -165,7 +165,7 @@ export default function ProviderHealthPage() {
         <div className="flex flex-col gap-6 p-6">
             <PageHeader
                 title={t('admin.providers.title')}
-                description={t('admin.providers.description')}
+                subtitle={t('admin.providers.description')}
             />
 
             {error && <AdminErrorState error={error} fallbackMessage={t('admin.providers.loadError')} />}

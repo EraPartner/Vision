@@ -69,8 +69,23 @@ function display(value: unknown): { text: string; isNull: boolean } {
 
 // ── editable cell ───────────────────────────────────────────────────────────
 
+function RevertCellButton({ onRevert, t }: { onRevert: () => void; t: (k: string) => string }) {
+    const label = t('dbEditor.revertCell');
+    return (
+        <button
+            type="button"
+            className="shrink-0 text-amber-600 hover:text-foreground dark:text-amber-400"
+            aria-label={label}
+            title={label}
+            onClick={(e) => { e.stopPropagation(); onRevert(); }}
+        >
+            <RotateCcw className="h-3 w-3" />
+        </button>
+    );
+}
+
 function EditableCell({
-    column, value, dirty, disabled, lockEdit, onChange, t,
+    column, value, dirty, disabled, lockEdit, onChange, onRevert, t,
 }: {
     column: DbColumn;
     value: unknown;
@@ -78,6 +93,7 @@ function EditableCell({
     disabled: boolean;
     lockEdit?: boolean;
     onChange: (next: unknown) => void;
+    onRevert: () => void;
     t: (k: string) => string;
 }) {
     const [editing, setEditing] = useState(false);
@@ -89,11 +105,20 @@ function EditableCell({
     if (isBoolean(column)) {
         return (
             <TableCell className={dirtyCls}>
-                <Checkbox
-                    checked={value === true}
-                    disabled={disabled || !column.writable || lockEdit}
-                    onCheckedChange={(c) => onChange(c === true)}
-                />
+                <div className="flex items-center gap-2">
+                    <Checkbox
+                        checked={value === true}
+                        disabled={disabled || !column.writable || lockEdit}
+                        aria-keyshortcuts="Escape"
+                        onCheckedChange={(c) => onChange(c === true)}
+                        onKeyDown={(e) => {
+                            if (e.key !== 'Escape' || !dirty) return;
+                            e.preventDefault();
+                            onRevert();
+                        }}
+                    />
+                    {dirty && canEdit && <RevertCellButton onRevert={onRevert} t={t} />}
+                </div>
             </TableCell>
         );
     }
@@ -105,11 +130,12 @@ function EditableCell({
                 <Input
                     autoFocus
                     defaultValue={shown}
+                    aria-keyshortcuts="Enter Escape"
                     className="h-7 font-mono text-xs"
                     onBlur={(e) => { onChange(e.target.value); setEditing(false); }}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') { onChange((e.target as HTMLInputElement).value); setEditing(false); }
-                        if (e.key === 'Escape') setEditing(false);
+                        if (e.key === 'Escape') { e.preventDefault(); onRevert(); setEditing(false); }
                     }}
                 />
             </TableCell>
@@ -125,6 +151,7 @@ function EditableCell({
         >
             <div className="flex items-center justify-between gap-2 max-w-[28rem] truncate">
                 <span className={cn('truncate', isNull && 'text-muted-foreground italic')}>{text}</span>
+                {dirty && canEdit && <RevertCellButton onRevert={onRevert} t={t} />}
                 {column.nullable && canEdit && !isNull && (
                     <button
                         type="button"
@@ -225,8 +252,30 @@ export default function TableDataEditorPage() {
     function setCell(key: string, col: string, value: unknown) {
         setEdits((prev) => ({ ...prev, [key]: { ...prev[key], [col]: value } }));
     }
+    function revertCell(key: string, col: string) {
+        setEdits((prev) => {
+            const rowEdits = prev[key];
+            if (!rowEdits || !(col in rowEdits)) return prev;
+            const nextRowEdits = { ...rowEdits };
+            delete nextRowEdits[col];
+            if (Object.keys(nextRowEdits).length > 0) {
+                return { ...prev, [key]: nextRowEdits };
+            }
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    }
     function setNewCell(tempId: string, col: string, value: unknown) {
         setNewRows((prev) => prev.map((r) => (r.tempId === tempId ? { ...r, values: { ...r.values, [col]: value } } : r)));
+    }
+    function revertNewCell(tempId: string, col: string) {
+        setNewRows((prev) => prev.map((row) => {
+            if (row.tempId !== tempId || !(col in row.values)) return row;
+            const values = { ...row.values };
+            delete values[col];
+            return { ...row, values };
+        }));
     }
     function toggleDelete(key: string) {
         setDeletes((prev) => {
@@ -424,6 +473,7 @@ export default function TableDataEditorPage() {
                                             dirty={col.name in nr.values}
                                             disabled={false}
                                             onChange={(v) => setNewCell(nr.tempId, col.name, v)}
+                                            onRevert={() => revertNewCell(nr.tempId, col.name)}
                                             t={t}
                                         />
                                     ))}
@@ -459,6 +509,7 @@ export default function TableDataEditorPage() {
                                                     // different row. Lock them on existing rows.
                                                     lockEdit={primaryKey.includes(col.name)}
                                                     onChange={(v) => setCell(key, col.name, v)}
+                                                    onRevert={() => revertCell(key, col.name)}
                                                     t={t}
                                                 />
                                             );

@@ -14,7 +14,7 @@
  * numbers rather than today's live recomputation (engine-drift protection — ADR-059).
  */
 import { useMemo } from 'react';
-import { Lock, Snowflake, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -22,6 +22,7 @@ import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { formatPercent } from '@/utils/currency';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { TaxYearStatusIcon } from './TaxYearStatusIcon';
 
 interface MultiYearTrendStripProps {
     className?: string;
@@ -103,18 +104,11 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                         {tile.year}
                                     </span>
                                     <span className="flex items-center gap-0.5">
-                                        {tile.isFiled && (
-                                            <Lock
-                                                className="h-3 w-3 text-warning"
-                                                aria-label={t('tax.yearSwitcher.filedAria')}
-                                            />
-                                        )}
-                                        {!tile.isFiled && tile.hasFrozenCalculation && (
-                                            <Snowflake
-                                                className="h-3 w-3 text-sky-600"
-                                                aria-label={t('tax.yearSwitcher.frozenAria')}
-                                            />
-                                        )}
+                                        <TaxYearStatusIcon
+                                            isFiled={tile.isFiled}
+                                            hasFrozenCalculation={tile.hasFrozenCalculation}
+                                            className="h-3 w-3"
+                                        />
                                     </span>
                                 </span>
                                 <span className="mt-1 text-sm font-bold text-foreground tabular-nums">

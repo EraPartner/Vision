@@ -14,7 +14,10 @@ describe("RecipientsPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<RecipientsPage />);
         const headings = await screen.findAllByRole("heading", { name: /all recipients/i });
-        expect(headings.length).toBeGreaterThan(0);
+        expect(headings).toHaveLength(1);
+        expect(screen.getByRole("button", { name: /add recipient/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /merge recipients/i })).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/search database/i)).toBeInTheDocument();
     });
 
     it("renders without crashing when recipient list is empty", async () => {

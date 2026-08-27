@@ -117,7 +117,7 @@ describe("MarketLookupPage (integration)", () => {
         await user.type(input, "AAPL");
 
         // Click first dropdown result
-        const resultBtn = await screen.findByRole("button", { name: /apple inc/i }, { timeout: 5000 });
+        const resultBtn = await screen.findByRole("option", { name: /apple inc/i }, { timeout: 5000 });
         await user.click(resultBtn);
 
         expect(quoteFetched).toBe(true);
@@ -147,7 +147,7 @@ describe("MarketLookupPage (integration)", () => {
         const input = await screen.findByPlaceholderText(/search ticker/i);
         await user.type(input, "AAPL");
 
-        const resultBtn = await screen.findByRole("button", { name: /apple inc/i }, { timeout: 5000 });
+        const resultBtn = await screen.findByRole("option", { name: /apple inc/i }, { timeout: 5000 });
         await user.click(resultBtn);
 
         // Quote card shows symbol and company name
@@ -218,8 +218,7 @@ describe("MarketLookupPage (integration)", () => {
         // Default Details tab is Fundamentals; switch to News.
         await user.click(await screen.findByRole("tab", { name: /latest news/i }));
 
-        // market.noNews = "No news available"
-        expect(await screen.findByText(/no news available/i)).toBeInTheDocument();
+        expect(await screen.findByText(/no recent news for this symbol/i)).toBeInTheDocument();
     });
 
     it("shows time range buttons when quote is loaded", async () => {

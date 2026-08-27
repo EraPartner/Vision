@@ -146,7 +146,7 @@ export default function AdminOverviewPage() {
         <div className="flex flex-col gap-6 p-6">
             <PageHeader
                 title={t('admin.overview.title')}
-                description={t('admin.overview.description')}
+                subtitle={t('admin.overview.description')}
             />
 
             {/* The grid is shared with the loaded cards, so the status role is

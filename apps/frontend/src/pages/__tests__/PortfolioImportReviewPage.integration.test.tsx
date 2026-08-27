@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -9,13 +9,25 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { PortfolioImportReviewPage } from "@/pages/portfolio/PortfolioImportReviewPage";
 
-vi.mock("@tanstack/react-virtual", () => ({
-  useWindowVirtualizer: ({ count }: { count: number }) => ({
-    getVirtualItems: () => count > 0 ? [{ index: 0, start: 0, end: 38, key: 0 }] : [],
-    getTotalSize: () => count * 38,
-    measureElement: vi.fn(),
-    measure: vi.fn(),
+const { useWindowVirtualizerMock } = vi.hoisted(() => ({
+  useWindowVirtualizerMock: vi.fn(({ count }: { count: number }) => {
+    const indexes = count > 1 ? [0, count - 1] : count === 1 ? [0] : [];
+    return {
+      getVirtualItems: () => indexes.map((index) => ({
+        index,
+        start: index * 38,
+        end: (index + 1) * 38,
+        key: index,
+      })),
+      getTotalSize: () => count * 38,
+      measureElement: vi.fn(),
+      measure: vi.fn(),
+    };
   }),
+}));
+
+vi.mock("@tanstack/react-virtual", () => ({
+  useWindowVirtualizer: useWindowVirtualizerMock,
 }));
 
 vi.mock("@/features/portfolio/InvestmentCombobox", () => ({
@@ -71,9 +83,10 @@ const preview = {
 function renderReviewPage() {
   return renderWithApp(
     <Routes>
-      <Route path="/portfolio/import/review/:batchId" element={<PortfolioImportReviewPage />} />
+      <Route path="/portfolio/import/:batchId/review" element={<PortfolioImportReviewPage />} />
+      <Route path="/portfolio" element={<div>Portfolio destination</div>} />
     </Routes>,
-    { initialEntries: ["/portfolio/import/review/5"] },
+    { initialEntries: ["/portfolio/import/5/review"] },
   );
 }
 
@@ -85,7 +98,34 @@ beforeAll(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 });
 
+beforeEach(() => {
+  useWindowVirtualizerMock.mockClear();
+});
+
 describe("PortfolioImportReviewPage group resolution", () => {
+  it("renders only the preview rows selected by the window virtualizer", async () => {
+    const rows = preview.groups[0].rows.map((row, index) => ({
+      ...row,
+      tx_date: `2026-01-0${index + 1}`,
+    }));
+    server.use(
+      http.get(`${API_BASE}/api/portfolio/import/batches/5/preview`, () => ok({
+        ...preview,
+        groups: [{ ...preview.groups[0], rows }],
+      })),
+    );
+
+    renderReviewPage();
+
+    expect(await screen.findByText("2026-01-01")).toBeInTheDocument();
+    expect(screen.getByText("2026-01-03")).toBeInTheDocument();
+    expect(screen.queryByText("2026-01-02")).not.toBeInTheDocument();
+    expect(useWindowVirtualizerMock).toHaveBeenCalledWith(expect.objectContaining({
+      count: 3,
+      overscan: 8,
+    }));
+  });
+
   it("selects an existing holding with one request for every row id", async () => {
     const user = userEvent.setup();
     const rowIds = Array.from({ length: 2_000 }, (_, index) => index + 1);
@@ -140,5 +180,26 @@ describe("PortfolioImportReviewPage group resolution", () => {
 
     expect(requests).toBe(1);
     expect(body).toEqual({ row_ids: [10, 11, 12], create_new: true });
+  });
+
+  it("commits the batch once and navigates to the portfolio", async () => {
+    const user = userEvent.setup();
+    let requests = 0;
+    let body: unknown = null;
+    server.use(
+      http.get(`${API_BASE}/api/portfolio/import/batches/5/preview`, () => ok(preview)),
+      http.post(`${API_BASE}/api/portfolio/import/batches/5/commit`, async ({ request }) => {
+        requests += 1;
+        body = await request.json();
+        return ok({ batch_id: 5, imported: 3, duplicates: 0, errors: 0 });
+      }),
+    );
+
+    renderReviewPage();
+    await user.click(await screen.findByRole("button", { name: "Confirm import" }));
+
+    expect(await screen.findByText("Portfolio destination")).toBeInTheDocument();
+    expect(requests).toBe(1);
+    expect(body).toEqual({});
   });
 });

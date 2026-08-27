@@ -49,28 +49,10 @@ export const durations = {
 // ---------- Springs ----------
 
 export const springs = {
-    soft: {
-        type: "spring",
-        stiffness: 240,
-        damping: 28,
-        mass: 0.9,
-    },
     snappy: {
         type: "spring",
         stiffness: 420,
         damping: 32,
         mass: 0.7,
-    },
-    bouncy: {
-        type: "spring",
-        stiffness: 260,
-        damping: 20,
-        mass: 0.8,
-    },
-    dialog: {
-        type: "spring",
-        stiffness: 300,
-        damping: 30,
-        mass: 0.85,
     },
 } satisfies Record<string, Transition>;

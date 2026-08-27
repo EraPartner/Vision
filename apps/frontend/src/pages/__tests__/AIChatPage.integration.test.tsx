@@ -59,12 +59,11 @@ describe("AIChatPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows unreachable status label in header", async () => {
+    it("uses the actionable banner as the sole unreachable status", async () => {
         renderWithApp(<AIChatPage />);
-        // Status label reflects { ok: false } from MSW — appears in both the header
-        // and the OllamaStatusBanner alert; verify at least one is present
+        await screen.findByRole("alert");
         const matches = await screen.findAllByText(/local ai model unreachable/i);
-        expect(matches.length).toBeGreaterThan(0);
+        expect(matches).toHaveLength(1);
     });
 
     it("shows no conversations yet text in sidebar", async () => {

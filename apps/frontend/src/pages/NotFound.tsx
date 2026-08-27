@@ -21,7 +21,9 @@ const NotFound = () => {
                     <VisionMark className="h-10 w-10" />
                 </div>
                 <div className="space-y-2">
-                    <h1 className="text-6xl font-bold text-foreground tracking-tight">{t('notFound.title')}</h1>
+                    <h1 className="font-display text-6xl font-semibold tracking-tight text-foreground">
+                        {t('notFound.title')}
+                    </h1>
                     <p className="text-xl text-muted-foreground">{t('notFound.heading')}</p>
                 </div>
                 <p className="text-muted-foreground/80">{t('notFound.description')}</p>
@@ -31,6 +33,21 @@ const NotFound = () => {
                         {t('notFound.backHome')}
                     </Link>
                 </Button>
+                <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                    <Link
+                        className="ring-offset-background rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                        to="/transactions"
+                    >
+                        {t('nav.transactions')}
+                    </Link>
+                    <span aria-hidden="true">·</span>
+                    <Link
+                        className="ring-offset-background rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                        to="/import"
+                    >
+                        {t('nav.importExport')}
+                    </Link>
+                </div>
             </div>
         </div>
     );

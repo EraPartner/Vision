@@ -639,7 +639,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge recipient into another */
+        /** Merge aliases into the primary recipient identified by id */
         post: operations["mergeRecipient"];
         delete?: never;
         options?: never;
@@ -3549,6 +3549,8 @@ export interface components {
             fx_rate_to_eur?: number;
             /** @description Owning account for the lot (ADR-091); null = unassigned/global */
             account_id?: number | null;
+            /** @description Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by node-postgres as a string; null means the transaction was created manually or predates batch attribution. */
+            import_batch_id?: string | null;
             note?: string;
             is_recurring: boolean;
             recurrence_interval?: components["schemas"]["RecurrenceInterval"];
@@ -3792,13 +3794,28 @@ export interface components {
             updated_at?: string;
         };
         ImportBatch: {
+            /** @description PostgreSQL BIGINT serialized by node-postgres as a string. */
             id: string;
-            bank: string;
-            row_count: number;
+            adapter_name: string;
+            source_filename: string | null;
+            /** @description PostgreSQL BIGINT serialized by node-postgres as a string. */
+            source_size_bytes: string | null;
+            /** @description Present on batch-detail responses; omitted from batch-list rows. */
+            custom_config?: {
+                [key: string]: unknown;
+            } | null;
             /** @enum {string} */
-            status: "pending" | "committed" | "failed";
+            status: "pending" | "staging" | "validating" | "matching" | "awaiting_review" | "committing" | "complete" | "failed" | "aborted";
+            rows_total: number;
+            rows_imported: number;
+            rows_duplicate: number;
+            rows_error: number;
+            error_summary: string | null;
             /** Format: date-time */
-            created_at: string;
+            started_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            transactions_remaining: number;
         };
         ImportCsvResult: {
             /** @description Rows read from the CSV. */
@@ -4208,7 +4225,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Account ids to merge into this account and delete */
+                    /** @description Account ids to merge into this account and delete; must not include the survivor id */
                     source_ids: number[];
                 };
             };
@@ -4222,6 +4239,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Empty, oversized, malformed, or self-referencing source_ids list */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Target or a source account not found */
             404: {
@@ -5633,7 +5657,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    target_id: number;
+                    alias_ids: number[];
                 };
             };
         };
@@ -5646,6 +5670,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description alias_ids is missing, empty, or contains a malformed or out-of-range id; no recipients are merged */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6771,8 +6802,20 @@ export interface operations {
     getRecipientPivot: {
         parameters: {
             query?: {
+                /** @description Inclusive start date. Preferred over the deprecated `start` alias when both are present. */
                 start_date?: string;
+                /** @description Inclusive end date. Preferred over the deprecated `end` alias when both are present. */
                 end_date?: string;
+                /**
+                 * @deprecated
+                 * @description Deprecated alias for `start_date`.
+                 */
+                start?: string;
+                /**
+                 * @deprecated
+                 * @description Deprecated alias for `end_date`.
+                 */
+                end?: string;
                 currency?: string;
             };
             header?: never;
@@ -6800,7 +6843,19 @@ export interface operations {
                 /** @description When true, returns all active tags; tag_ids is ignored. Alias: all_tags. */
                 all?: boolean;
                 bucket?: "monthly" | "yearly";
+                /** @description Inclusive start date. Preferred over the deprecated `start` alias when both are present. */
+                start_date?: string;
+                /** @description Inclusive end date. Preferred over the deprecated `end` alias when both are present. */
+                end_date?: string;
+                /**
+                 * @deprecated
+                 * @description Deprecated alias for `start_date`.
+                 */
                 start?: string;
+                /**
+                 * @deprecated
+                 * @description Deprecated alias for `end_date`.
+                 */
                 end?: string;
                 currency?: string;
             };
@@ -7850,6 +7905,8 @@ export interface operations {
                     /** Format: date */
                     end_date?: string;
                     currency?: string;
+                    excludedCategoryIds?: number[];
+                    excludedRecipientIds?: number[];
                 };
             };
         };
@@ -7876,6 +7933,8 @@ export interface operations {
             content: {
                 "application/json": {
                     currency?: string;
+                    excludedCategoryIds?: number[];
+                    excludedRecipientIds?: number[];
                 };
             };
         };
@@ -7903,6 +7962,8 @@ export interface operations {
                 "application/json": {
                     year?: number;
                     currency?: string;
+                    excludedCategoryIds?: number[];
+                    excludedRecipientIds?: number[];
                 };
             };
         };
@@ -8001,6 +8062,8 @@ export interface operations {
             content: {
                 "application/json": {
                     title?: string;
+                    /** @description Optional non-blank Ollama model identifier. */
+                    model?: string;
                 };
             };
         };
@@ -8261,7 +8324,7 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    bank: string;
+                    bank_name: string;
                 };
             };
         };
@@ -8289,6 +8352,13 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
+                    /**
+                     * @description Single-character CSV delimiter.
+                     * @default ,
+                     */
+                    separator?: string;
+                    /** @default utf-8 */
+                    encoding?: string;
                 };
             };
         };
@@ -8316,6 +8386,13 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
+                    /**
+                     * @description Single-character CSV delimiter.
+                     * @default ,
+                     */
+                    separator?: string;
+                    /** @default utf-8 */
+                    encoding?: string;
                 };
             };
         };

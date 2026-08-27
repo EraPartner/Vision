@@ -16,8 +16,8 @@ const config: PivotConfig<RecipientPivotItem, RecipientPeriodData> = {
         const res = await getAggregationRecipientPivot({
             currency,
             bucket,
-            start,
-            end,
+            start_date: start,
+            end_date: end,
             // Fetch only the chart's selected recipients instead of the full
             // all-recipients pivot the client then discarded. For an "all
             // recipients" chart, omit the list so the server returns every

@@ -548,7 +548,7 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
 /**
  * Surfaces a translated toast when a debounced tax-profile persist fails.
  * Mounted UNDER LanguageProvider (the provider above it cannot translate),
- * mirroring AppSettingsSaveErrorToaster.
+ * mirroring SettingsSaveErrorToaster.
  */
 export function BelgianTaxSaveErrorToaster() {
     const { t } = useLanguage();

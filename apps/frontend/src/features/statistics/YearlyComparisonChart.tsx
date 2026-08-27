@@ -16,7 +16,7 @@ interface YearlyComparisonChartProps {
 
 export const YearlyComparisonChart = memo(function YearlyComparisonChart({ data }: YearlyComparisonChartProps) {
   const { t } = useLanguage();
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
 
   const chartData: YearlyDatum[] = data.yearlyComparison.map((y) => ({
     year: y.year.toString(),
@@ -35,7 +35,7 @@ export const YearlyComparisonChart = memo(function YearlyComparisonChart({ data 
       categoryAccessor={(d) => d.year}
       series={series}
       height={300}
-      valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      valueTickFormat={formatAxisCompact}
       tooltipValueFormat={(v) => formatCurrency(v)}
     />
   );

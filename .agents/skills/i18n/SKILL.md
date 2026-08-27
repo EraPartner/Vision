@@ -18,3 +18,6 @@ bun run validate-locales
 For a new user-facing string, add the source key, regenerate locales, synchronize Dutch keys, and
 finish with `bun run validate-locales`. Treat validation failure as a broken build. Do not edit a
 generated locale without updating its source.
+
+Use the product terminology and capitalization rules in `docs/glossary.md` and
+`docs/i18n/translations.md`. English buttons, dialog titles, and action labels use sentence case.

@@ -25,7 +25,7 @@ interface MonthlyChartProps {
 export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartProps) {
   const { t, language } = useLanguage();
   const monthLabelLocale = appLanguageToLocale(language);
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
   const [showOverlay, setShowOverlay] = useState(false);
 
   const chartData: IncomeSpendingDatum[] = useMemo(() => {
@@ -93,7 +93,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
         series={series}
         overlays={overlays}
         height={350}
-        valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+        valueTickFormat={formatAxisCompact}
         tooltipValueFormat={(v) => formatCurrency(v)}
       />
     </div>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { Routes, Route } from "react-router";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -79,6 +79,78 @@ describe("TableDataEditorPage (integration)", () => {
         expect(await screen.findByText(/review pending changes/i)).toBeInTheDocument();
         expect(await screen.findByText(/INSERT INTO/)).toBeInTheDocument();
         expect((previewBody as { dryRun: boolean }).dryRun).toBe(true);
+    });
+
+    it("reverts one staged existing-cell edit with its undo control and preserves the other", async () => {
+        let previewBody: unknown = null;
+        server.use(
+            http.get(`${API_BASE}/api/admin/database/tables/transactions/rows`, () => ok(rowsResponse)),
+            http.post(`${API_BASE}/api/admin/database/tables/transactions/mutate`, async ({ request }) => {
+                previewBody = await request.json();
+                return ok({ dryRun: true, count: 1, statements: [] });
+            }),
+        );
+
+        const user = userEvent.setup();
+        renderEditor();
+        await screen.findByText("EUR");
+
+        await user.click(screen.getByText("12.50"));
+        const amountInput = screen.getByDisplayValue("12.50");
+        await user.clear(amountInput);
+        await user.type(amountInput, "20{Enter}");
+
+        await user.click(screen.getByText("USD"));
+        const currencyInput = screen.getByDisplayValue("USD");
+        await user.clear(currencyInput);
+        await user.type(currencyInput, "CAD{Enter}");
+        expect(await screen.findByText(/2 pending change/i)).toBeInTheDocument();
+
+        const editedAmountRow = screen.getByText("20").closest("tr");
+        expect(editedAmountRow).not.toBeNull();
+        await user.click(within(editedAmountRow as HTMLElement).getByRole("button", { name: /revert cell change/i }));
+        expect(await screen.findByText("12.50")).toBeInTheDocument();
+        expect(screen.getByText(/1 pending change/i)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: /preview sql/i }));
+        await screen.findByText(/review pending changes/i);
+        expect(previewBody).toMatchObject({
+            dryRun: true,
+            changes: [{ op: "update", pk: { id: 2 }, xmin: "501", set: { currency: "CAD" } }],
+        });
+    });
+
+    it("reverts a staged value in a new row without discarding the row", async () => {
+        let previewBody: unknown = null;
+        server.use(
+            http.get(`${API_BASE}/api/admin/database/tables/transactions/rows`, () => ok(rowsResponse)),
+            http.post(`${API_BASE}/api/admin/database/tables/transactions/mutate`, async ({ request }) => {
+                previewBody = await request.json();
+                return ok({ dryRun: true, count: 1, statements: [] });
+            }),
+        );
+
+        const user = userEvent.setup();
+        renderEditor();
+        await screen.findByText("EUR");
+        await user.click(screen.getByRole("button", { name: /add row/i }));
+
+        const newRow = screen.getByRole("button", { name: /discard new row/i }).closest("tr");
+        expect(newRow).not.toBeNull();
+        const currencyCell = within(newRow as HTMLElement).getAllByRole("cell")[3];
+        await user.click(currencyCell);
+        await user.type(within(newRow as HTMLElement).getByRole("textbox"), "GBP{Enter}");
+        await user.click(within(newRow as HTMLElement).getByText("GBP"));
+        await user.keyboard("{Escape}");
+
+        expect(within(newRow as HTMLElement).getAllByText("NULL")).not.toHaveLength(0);
+        expect(screen.getByText(/1 pending change/i)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /preview sql/i }));
+        await screen.findByText(/review pending changes/i);
+        expect(previewBody).toMatchObject({
+            dryRun: true,
+            changes: [{ op: "insert", values: {} }],
+        });
     });
 
     it("renders a read-only notice path for a table with no primary key", async () => {

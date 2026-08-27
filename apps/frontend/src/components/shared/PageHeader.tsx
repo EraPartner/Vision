@@ -6,14 +6,12 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
     title: string;
     subtitle?: string;
-    /** Alias for `subtitle`, rendered identically when `subtitle` is absent. */
-    description?: string;
     icon?: LucideIcon;
     iconColor?: string;
     actions?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, description, icon: Icon, iconColor = "from-primary/20 to-primary/5 text-primary", actions }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, icon: Icon, iconColor = "from-primary/20 to-primary/5 text-primary", actions }: PageHeaderProps) {
     // Register the title so the topbar can show it when this header scrolls out.
     const { setTitle } = usePageTitle();
     useEffect(() => {
@@ -31,7 +29,7 @@ export function PageHeader({ title, subtitle, description, icon: Icon, iconColor
                 )}
                 <div>
                     <h1 className="text-3xl font-bold text-foreground tracking-tight">{title}</h1>
-                    {(subtitle ?? description) && <p className="text-muted-foreground mt-1">{subtitle ?? description}</p>}
+                    {subtitle && <p className="text-muted-foreground mt-1">{subtitle}</p>}
                 </div>
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}

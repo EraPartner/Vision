@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
+import { useSettingsStore } from '@/stores/settingsStore';
 const SETTINGS_KEY = 'widget_visibility';
 export interface WidgetDefinition {
     id: string;
@@ -40,6 +41,7 @@ async function loadFromBackend(): Promise<WidgetVisibilityMap> {
 function saveToBackend(v: WidgetVisibilityMap) {
     apiClient.saveSetting(SETTINGS_KEY, v).catch((err) => {
         logger.error('Failed to save widget visibility:', err);
+        useSettingsStore.getState()._markSettingsSaveError();
     });
 }
 /**

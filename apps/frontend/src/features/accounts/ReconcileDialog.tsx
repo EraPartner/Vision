@@ -234,12 +234,17 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
   // absent — list-endpoint provenance, WP-A1), offer an ADDITIVE third path
   // that records the statement figure as the account's opening-balance anchor
   // (same POST /accounts/:id/opening-balance the OpeningBalanceDialog uses).
-  const canBackfillOpening = !account.anchor_date && account.statement_balance != null;
+  const storedBackfillAvailable = readingRaw === '' && account.statement_balance != null;
+  const canBackfillOpening = !account.anchor_date && (canSaveReading || storedBackfillAvailable);
+  const backfillBalance = canSaveReading ? parsedReading : statement;
+  const backfillDate = canSaveReading
+    ? readingDate
+    : (storedStatementDate ?? toYmd(new Date()));
   const backfill = useMutation({
     mutationFn: () =>
       apiClient.setOpeningBalance(account.id, {
-        balance: statement,
-        date: storedStatementDate ?? toYmd(new Date()),
+        balance: backfillBalance,
+        date: backfillDate,
         // The statement figure is denominated in the base's currency (see
         // `baseCurrency`), which is what the description below shows it as —
         // stamping the anchor in any other code would record a different number.
@@ -457,7 +462,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
               <p className="text-sm font-medium">{t('accounts.reconcile.backfillTitle')}</p>
               <p className="text-xs text-muted-foreground">
                 {t('accounts.reconcile.backfillDescription', {
-                  balance: fmtCur(statement, baseCurrency),
+                  balance: fmtCur(backfillBalance, baseCurrency),
                 })}
               </p>
               <Button

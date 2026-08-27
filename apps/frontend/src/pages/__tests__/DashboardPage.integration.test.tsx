@@ -182,6 +182,7 @@ describe("DashboardPage (integration)", () => {
         expect(
             await screen.findByText(/error loading dashboard/i, {}, { timeout: 5000 }),
         ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });

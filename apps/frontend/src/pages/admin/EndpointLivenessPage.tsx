@@ -77,7 +77,7 @@ export default function EndpointLivenessPage() {
         <div className="flex flex-col gap-6 p-6">
             <PageHeader
                 title={t('admin.endpoints.title')}
-                description={t('admin.endpoints.description')}
+                subtitle={t('admin.endpoints.description')}
             />
 
             <Card className="glass-chrome">

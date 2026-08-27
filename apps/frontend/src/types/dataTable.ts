@@ -1,9 +1,8 @@
 /**
  * Shared DataTable column definition.
  *
- * Used by both DataTable and VirtualDataTable so the type is defined once and
- * callers can use the same `Column<T>` interface without importing from a
- * specific component file.
+ * Used by VirtualDataTable and its consumers so callers can share one
+ * `Column<T>` interface without importing it from the component module.
  */
 
 import type React from "react";

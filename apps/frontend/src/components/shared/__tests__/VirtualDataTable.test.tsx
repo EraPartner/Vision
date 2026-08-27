@@ -131,9 +131,85 @@ describe("VirtualDataTable — rendering", () => {
         expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
     });
 
+    it("supports an action-only header without rendering an empty heading", () => {
+        renderTable({ title: undefined, actions: <button>Add row</button> });
+
+        expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
+        expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    });
+
     it("footer shows loaded count", () => {
         renderTable();
         expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument();
+    });
+});
+
+describe("VirtualDataTable — column resizing", () => {
+    it("exposes a focusable separator and resizes with clamped arrow keys", () => {
+        renderTable();
+        const handle = screen.getByRole("separator", { name: "Name" });
+
+        expect(handle).toHaveAttribute("aria-orientation", "vertical");
+        expect(handle).toHaveAttribute("aria-valuemin", "60");
+        expect(handle).toHaveAttribute("aria-valuemax", "2000");
+        expect(handle).toHaveAttribute("aria-valuenow", "120");
+        expect(handle).toHaveAttribute("tabindex", "0");
+        expect(handle).toHaveClass("w-6", "touch-none");
+
+        fireEvent.keyDown(handle, { key: "ArrowRight" });
+        expect(handle).toHaveAttribute("aria-valuenow", "130");
+
+        for (let i = 0; i < 8; i += 1) fireEvent.keyDown(handle, { key: "ArrowLeft" });
+        expect(handle).toHaveAttribute("aria-valuenow", "60");
+    });
+
+    it("supports pointer dragging and stops tracking after pointer cancellation", async () => {
+        renderTable();
+        const handle = screen.getByRole("separator", { name: "Name" });
+
+        fireEvent.pointerDown(handle, { clientX: 100, pointerId: 7 });
+        fireEvent.pointerMove(document, { clientX: 140, pointerId: 7 });
+        await waitFor(() => expect(handle).toHaveAttribute("aria-valuenow", "160"));
+
+        fireEvent.pointerCancel(document, { pointerId: 7 });
+        expect(document.body.style.cursor).toBe("");
+        fireEvent.pointerMove(document, { clientX: 200, pointerId: 7 });
+        expect(handle).toHaveAttribute("aria-valuenow", "160");
+    });
+
+    it("measures a flexible column before the first keyboard resize", () => {
+        renderTable({
+            columns: [{ key: "name", header: "Name", minWidth: 180 }],
+        });
+        const handle = screen.getByRole("separator", { name: "Name" });
+        vi.spyOn(handle.parentElement as HTMLElement, "getBoundingClientRect").mockReturnValue({
+            width: 360,
+            height: 40,
+            top: 0,
+            right: 360,
+            bottom: 40,
+            left: 0,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+        });
+
+        fireEvent.focus(handle);
+        expect(handle).toHaveAttribute("aria-valuenow", "360");
+        fireEvent.keyDown(handle, { key: "ArrowLeft" });
+        expect(handle).toHaveAttribute("aria-valuenow", "350");
+    });
+
+    it("clamps keyboard resizing to the exposed maximum", () => {
+        renderTable({
+            columns: [{ key: "name", header: "Name", defaultWidth: 1995 }],
+        });
+        const handle = screen.getByRole("separator", { name: "Name" });
+
+        fireEvent.keyDown(handle, { key: "ArrowRight" });
+        expect(handle).toHaveAttribute("aria-valuenow", "2000");
+        fireEvent.keyDown(handle, { key: "ArrowRight" });
+        expect(handle).toHaveAttribute("aria-valuenow", "2000");
     });
 });
 

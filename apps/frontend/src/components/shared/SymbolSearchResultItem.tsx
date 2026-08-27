@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useContext, useId, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { SymbolSearchListContext } from "@/components/shared/symbolSearchContext";
 
 /** Shape shared by the research (`searchResearch`) and market (`searchMarket`) search results. */
 export interface SymbolSearchResult {
@@ -26,12 +27,23 @@ interface SymbolSearchResultItemProps {
  * pickers omit it.
  */
 export function SymbolSearchResultItem({ item, onSelect, leadingIcon, className }: SymbolSearchResultItemProps) {
+  const searchList = useContext(SymbolSearchListContext);
+  const insideSearchList = searchList !== null;
+  const optionId = `symbol-search-option-${useId()}`;
+  const active = searchList?.activeOptionId === optionId;
+
   return (
     <button
+      id={insideSearchList ? optionId : undefined}
+      role={insideSearchList ? "option" : undefined}
+      aria-selected={insideSearchList ? active : undefined}
+      tabIndex={insideSearchList ? -1 : undefined}
       type="button"
       onClick={() => onSelect(item)}
+      onPointerMove={() => searchList?.setActiveOptionId(optionId)}
       className={cn(
         "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/70",
+        active && "bg-muted/70",
         className,
       )}
     >

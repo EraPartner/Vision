@@ -354,6 +354,7 @@ export default function ResearchComparePage() {
             onChange={setSearchText}
             loading={isSearching && searchText.length > 0}
             open={isOpen && searchItems.length > 0}
+            onDismiss={() => setSearchText("")}
           >
             {searchItems.map((item) => (
               <SymbolSearchResultItem

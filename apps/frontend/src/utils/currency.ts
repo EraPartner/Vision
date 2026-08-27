@@ -96,7 +96,9 @@ export function configureCurrencyFormatDefaults(
     currencyFormatDefaults.locale = updates.locale;
   }
   if (updates.fractionDigits !== undefined) {
-    currencyFormatDefaults.fractionDigits = Math.max(0, Math.min(6, updates.fractionDigits));
+    currencyFormatDefaults.fractionDigits = Number.isFinite(updates.fractionDigits)
+      ? Math.max(0, Math.min(6, updates.fractionDigits))
+      : 2;
   }
 }
 
@@ -263,29 +265,82 @@ export function formatCurrencyCompact(
   const effectiveLocale = locale || currencyFormatDefaults.locale;
   const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
 
-  const fullParts = new Intl.NumberFormat(effectiveLocale, {
-    style: 'currency',
-    currency: effectiveCurrency,
-    minimumFractionDigits: effectiveFractionDigits,
-    maximumFractionDigits: effectiveFractionDigits,
-  }).formatToParts(amount);
-  const full = fullParts.map((p) => p.value).join('');
-  if (full.length <= COMPACT_LENGTH_THRESHOLD) {
-    return { display: full, full, isCompact: false, parts: fullParts };
+  try {
+    const fullParts = new Intl.NumberFormat(effectiveLocale, {
+      style: 'currency',
+      currency: effectiveCurrency,
+      minimumFractionDigits: effectiveFractionDigits,
+      maximumFractionDigits: effectiveFractionDigits,
+    }).formatToParts(amount);
+    const full = fullParts.map((p) => p.value).join('');
+    if (full.length <= COMPACT_LENGTH_THRESHOLD) {
+      return { display: full, full, isCompact: false, parts: fullParts };
+    }
+
+    const compactParts = new Intl.NumberFormat(effectiveLocale, {
+      style: 'currency',
+      currency: effectiveCurrency,
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).formatToParts(amount);
+    const compact = compactParts.map((p) => p.value).join('');
+    const hasCompactNotation = compactParts.some((p) => p.type === 'compact');
+
+    if (!hasCompactNotation || compact.length >= full.length) {
+      return { display: full, full, isCompact: false, parts: fullParts };
+    }
+
+    return { display: compact, full, isCompact: true, parts: compactParts };
+  } catch {
+    const fallback = `${amount}`;
+    return {
+      display: fallback,
+      full: fallback,
+      isCompact: false,
+      parts: [{ type: 'literal', value: fallback }],
+    };
+  }
+}
+
+/**
+ * Bounded currency label for chart axes. `Intl` compact notation deliberately
+ * leaves ordinary thousands unshortened in locales such as de-DE, which makes
+ * a 100k tick wider than the chart can safely reserve. Scale explicitly, then
+ * let `Intl` keep the locale's decimal separator and currency ordering.
+ */
+export function formatCurrencyAxisCompact(
+  amount: number,
+  currencyCode: string,
+  locale: string,
+): string {
+  const magnitude = Math.abs(amount);
+  const [divisor, suffix] = magnitude >= 1e12
+    ? [1e12, 'T']
+    : magnitude >= 1e9
+      ? [1e9, 'B']
+      : magnitude >= 1e6
+        ? [1e6, 'M']
+        : magnitude >= 1e3
+          ? [1e3, 'k']
+          : [1, ''];
+  let parts: Intl.NumberFormatPart[];
+  try {
+    parts = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: suffix ? 1 : 0,
+    }).formatToParts(amount / divisor);
+  } catch {
+    return `${amount}`;
   }
 
-  const compactParts = new Intl.NumberFormat(effectiveLocale, {
-    style: 'currency',
-    currency: effectiveCurrency,
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).formatToParts(amount);
-  const compact = compactParts.map((p) => p.value).join('');
-  const hasCompactNotation = compactParts.some((p) => p.type === 'compact');
+  if (!suffix) return parts.map((part) => part.value).join('');
 
-  if (!hasCompactNotation || compact.length >= full.length) {
-    return { display: full, full, isCompact: false, parts: fullParts };
-  }
-
-  return { display: compact, full, isCompact: true, parts: compactParts };
+  let lastNumberPart = -1;
+  parts.forEach((part, index) => {
+    if (part.type === 'integer' || part.type === 'fraction') lastNumberPart = index;
+  });
+  parts.splice(lastNumberPart + 1, 0, { type: 'literal', value: suffix });
+  return parts.map((part) => part.value).join('');
 }

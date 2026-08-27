@@ -9,7 +9,7 @@
  *
  * This component subscribes to the app QueryClient's `MutationCache` and toasts
  * the mapped, localized message for exactly those unhandled failures. Mounted
- * UNDER `LanguageProvider` (same pattern as `AppSettingsSaveErrorToaster`)
+ * UNDER `LanguageProvider` (same pattern as `SettingsSaveErrorToaster`)
  * because the module-scope QueryClient in App.tsx cannot reach `t`.
  *
  * Double-toast prevention — the backstop stays quiet when:

@@ -19,7 +19,7 @@ import {
     TrendingUp, TrendingDown, BarChart3, Percent,
     DollarSign, Activity,
 } from "lucide-react";
-import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -120,12 +120,9 @@ export default function PerformancePage() {
 
     const monthLabelLocale = useMemo(() => appLanguageToLocale(language), [language]);
 
-    const xTickFormatter = useMemo(() => {
-        if (selectedPeriod === "1m" || selectedPeriod === "3m" || selectedPeriod === "6m") {
-            return new Intl.DateTimeFormat(monthLabelLocale, { day: "numeric", month: "short" });
-        }
-        return new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" });
-    }, [monthLabelLocale, selectedPeriod]);
+    const xTickPattern = selectedPeriod === "1m" || selectedPeriod === "3m" || selectedPeriod === "6m"
+        ? CHART_DATE_PATTERNS.dayTick
+        : CHART_DATE_PATTERNS.monthTick;
 
     const snapshots = useMemo(() => portfolioPerformanceData?.snapshots ?? [], [portfolioPerformanceData]);
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
@@ -143,7 +140,7 @@ export default function PerformancePage() {
     );
     const hasFxExposure = breakdownSummary.some((b) => b.currency && b.currency !== defaultCurrency);
 
-    // Lightweight mapping of already-downsampled snapshots to chart format.
+    // Lightweight mapping of period-filtered daily snapshots to chart format.
     // chartDate is parsed ONCE here — parsing inside the chart's xAccessor ran
     // per point per render (~400 points × 7 series on a scrubbable chart).
     const chartData = useMemo(() => snapshots.map((s) => ({
@@ -175,7 +172,7 @@ export default function PerformancePage() {
         [sparkline1mData],
     );
 
-    // Relative performance (percentage-based) from already-downsampled snapshots
+    // Relative performance (percentage-based) from period-filtered snapshots
     const relativePerformanceData = useMemo(() => {
         if (snapshots.length < 2) return [];
 
@@ -349,9 +346,9 @@ export default function PerformancePage() {
                             { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
                         ]}
                         xIsDate={true}
-                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        xTickFormat={(v) => formatDate(v as Date, xTickPattern, monthLabelLocale)}
                         yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
-                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy", monthLabelLocale)}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), CHART_DATE_PATTERNS.detail, monthLabelLocale)}
                         tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         height={360}
                         margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
@@ -385,9 +382,9 @@ export default function PerformancePage() {
                             { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
                         ]}
                         xIsDate={true}
-                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        xTickFormat={(v) => formatDate(v as Date, xTickPattern, monthLabelLocale)}
                         yTickFormat={(v) => formatPercent(v as number, { digits: 0, signed: true })}
-                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy", monthLabelLocale)}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), CHART_DATE_PATTERNS.detail, monthLabelLocale)}
                         tooltipValueFormat={(v) => formatPercent(v, { digits: 2, signed: true })}
                         height={320}
                         margin={{ top: 16, right: 24, bottom: 28, left: 72 }}

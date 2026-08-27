@@ -34,6 +34,22 @@ describe("useChartCurrencyFormatter", () => {
         expect(typeof compact.isCompact).toBe("boolean");
     });
 
+    it("keeps ordinary EU axis thousands bounded without losing locale ordering", () => {
+        const { result } = renderHook(() => useChartCurrencyFormatter());
+        expect(result.current.formatAxisCompact(1_500)).toBe("1,5k\u00a0€");
+        expect(result.current.formatAxisCompact(100_000)).toBe("100k\u00a0€");
+        expect(result.current.formatAxisCompact(-1_500_000)).toBe("-1,5M\u00a0€");
+    });
+
+    it("keeps US currency ordering and decimal separator on axis labels", () => {
+        useSettingsStore.setState({
+            appSettings: { ...DEFAULT_APP_SETTINGS, numberFormat: "us", defaultCurrency: "USD" },
+        });
+        const { result } = renderHook(() => useChartCurrencyFormatter());
+        expect(result.current.formatAxisCompact(1_500)).toBe("$1.5k");
+        expect(result.current.formatAxisCompact(100_000)).toBe("$100k");
+    });
+
     it("reflects currency change in store", () => {
         useSettingsStore.setState({
             appSettings: { ...DEFAULT_APP_SETTINGS, defaultCurrency: "USD" },
@@ -41,5 +57,25 @@ describe("useChartCurrencyFormatter", () => {
         const { result } = renderHook(() => useChartCurrencyFormatter());
         expect(result.current.currency).toBe("USD");
         expect(result.current.currencySymbol).toBe("$");
+    });
+
+    it("degrades every chart formatter instead of throwing for invalid injected settings", () => {
+        useSettingsStore.setState({
+            appSettings: {
+                ...DEFAULT_APP_SETTINGS,
+                defaultCurrency: "US",
+                showDecimalPlaces: -1,
+            },
+        });
+
+        const { result } = renderHook(() => useChartCurrencyFormatter());
+        expect(result.current.formatCurrency(1234.56)).toBe("1234.56");
+        expect(result.current.formatCompact(1234.56)).toEqual({
+            display: "1234.56",
+            full: "1234.56",
+            isCompact: false,
+            parts: [{ type: "literal", value: "1234.56" }],
+        });
+        expect(result.current.formatAxisCompact(1234.56)).toBe("1234.56");
     });
 });

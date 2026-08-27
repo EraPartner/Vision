@@ -11,6 +11,9 @@ import {
   getCashflowForecastRolling,
   getCashflowForecastAccuracy,
   getSankeyFlow,
+  getAggregationCategoryPivot,
+  getAggregationRecipientByYear,
+  getAggregationRecipientPivot,
 } from "@/lib/api/aggregations";
 
 const API_BASE = "http://localhost:3002";
@@ -223,5 +226,78 @@ describe("aggregations — cashflow forecast branch coverage", () => {
     captureUrl("/api/aggregations/sankey", ref, { nodes: [], links: [], year: 0 });
     await getSankeyFlow();
     expect(ref.url.endsWith("/api/aggregations/sankey")).toBe(true);
+  });
+});
+
+describe("aggregations exclusion query building", () => {
+  it("getAggregationCategoryPivot appends repeated exclusion ids", async () => {
+    let url = "";
+    server.use(
+      http.get(`${API_BASE}/api/aggregations/category-pivot`, ({ request }) => {
+        url = request.url;
+        return ok({ categoryPivot: {} });
+      }),
+    );
+
+    await getAggregationCategoryPivot({
+      currency: "EUR",
+      excluded_category_ids: [1, 2],
+      excluded_recipient_ids: [3],
+    });
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("currency")).toBe("EUR");
+    expect(parsed.searchParams.getAll("excluded_category_ids")).toEqual(["1", "2"]);
+    expect(parsed.searchParams.getAll("excluded_recipient_ids")).toEqual(["3"]);
+  });
+
+  it("getAggregationCategoryPivot omits the query string with no params", async () => {
+    let url = "";
+    server.use(
+      http.get(`${API_BASE}/api/aggregations/category-pivot`, ({ request }) => {
+        url = request.url;
+        return ok({ categoryPivot: {} });
+      }),
+    );
+    await getAggregationCategoryPivot();
+    expect(url.endsWith("/api/aggregations/category-pivot")).toBe(true);
+  });
+
+  it("getAggregationRecipientByYear appends both exclusion lists", async () => {
+    let url = "";
+    server.use(
+      http.get(`${API_BASE}/api/aggregations/recipient-by-year`, ({ request }) => {
+        url = request.url;
+        return ok({ recipientsByYear: {} });
+      }),
+    );
+    await getAggregationRecipientByYear({ excluded_recipient_ids: [5], excluded_category_ids: [6, 7] });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.getAll("excluded_recipient_ids")).toEqual(["5"]);
+    expect(parsed.searchParams.getAll("excluded_category_ids")).toEqual(["6", "7"]);
+  });
+
+  it("getAggregationRecipientPivot forwards bucket, range and recipient ids", async () => {
+    let url = "";
+    server.use(
+      http.get(`${API_BASE}/api/aggregations/recipient-pivot`, ({ request }) => {
+        url = request.url;
+        return ok({ recipientPivot: {} });
+      }),
+    );
+    await getAggregationRecipientPivot({
+      currency: "USD",
+      bucket: "yearly",
+      start_date: "2025-01-01",
+      end_date: "2025-12-31",
+      recipient_ids: [10, 11],
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("bucket")).toBe("yearly");
+    expect(parsed.searchParams.get("start_date")).toBe("2025-01-01");
+    expect(parsed.searchParams.get("end_date")).toBe("2025-12-31");
+    expect(parsed.searchParams.has("start")).toBe(false);
+    expect(parsed.searchParams.has("end")).toBe(false);
+    expect(parsed.searchParams.getAll("recipient_ids")).toEqual(["10", "11"]);
   });
 });

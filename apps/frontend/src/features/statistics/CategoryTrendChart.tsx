@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
-import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
@@ -19,7 +19,7 @@ interface CategoryTrendChartProps {
 export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: CategoryTrendChartProps) {
   const { language } = useLanguage();
   const monthLabelLocale = appLanguageToLocale(language);
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
 
   // "Monthly spending for top 5 categories" — rank by EXPENSE total and plot
   // expense (not Σ|net|, which let income categories like salary into the top 5).
@@ -62,8 +62,8 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
       xAccessor={(d) => d.date}
       series={series}
       height={350}
-      xTickFormat={(v) => formatDate(v as Date, "MMM yy", monthLabelLocale)}
-      yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
+      yTickFormat={formatAxisCompact}
       tooltipTitle={(d) => formatPeriodShort(d.period, monthLabelLocale)}
       tooltipValueFormat={(v) => formatCurrency(v)}
     />

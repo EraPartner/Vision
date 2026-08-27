@@ -22,6 +22,18 @@ export function useRecipients(params?: {
     });
 }
 
+export function useRecipient(id?: number | null) {
+    return useQuery({
+        queryKey: recipientKeys.detail(id),
+        queryFn: () => {
+            if (id == null) throw new Error('Recipient id is required');
+            return apiClient.getRecipient(id);
+        },
+        enabled: id != null,
+        staleTime: 2 * 60_000,
+    });
+}
+
 export function useCreateRecipient() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();

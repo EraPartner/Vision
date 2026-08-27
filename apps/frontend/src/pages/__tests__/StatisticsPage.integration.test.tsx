@@ -138,6 +138,52 @@ describe("StatisticsPage (integration)", () => {
         expect(categoriesTab).toHaveAttribute("aria-selected", "true");
     });
 
+    it("renders recipient insights through the live Statistics tab", async () => {
+        const user = userEvent.setup();
+
+        server.use(
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                monthlySummaryWithData(),
+            ),
+            http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
+                ok({
+                    data: { categoryPivot: {} },
+                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                }),
+            ),
+            http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
+                ok({
+                    data: {
+                        topMerchants: [{
+                            recipientId: 7,
+                            name: "Corner Shop",
+                            totalSpend: 42,
+                            transactionCount: 2,
+                            avgAmount: 21,
+                            firstSeen: "2025-02-01",
+                            lastSeen: "2025-03-01",
+                        }],
+                        monthOverMonth: [],
+                    },
+                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                }),
+            ),
+            http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
+                ok({
+                    data: { recipientsByYear: {} },
+                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                }),
+            ),
+        );
+
+        renderWithApp(<StatisticsPage />);
+
+        await user.click(await screen.findByRole("tab", { name: /^recipients$/i }));
+
+        expect(await screen.findByText("Corner Shop")).toBeInTheDocument();
+        expect(screen.getByText(/recipient details/i)).toBeInTheDocument();
+    });
+
     it("shows empty-state heading when no monthly data", async () => {
         renderWithApp(<StatisticsPage />);
         // Default MSW returns months: [] → StatisticsPage renders no-data card

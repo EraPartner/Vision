@@ -33,7 +33,7 @@ export function PitBreakdownCard({
     { label: t("tax.pit.row.bracket2"), value: calculation.federalPITBracket2, type: "tax" as const, bracket: t("tax.pit.bracketRange2") },
     { label: t("tax.pit.row.bracket3"), value: calculation.federalPITBracket3, type: "tax" as const, bracket: t("tax.pit.bracketRange3") },
     { label: t("tax.pit.row.bracket4"), value: calculation.federalPITBracket4, type: "tax" as const, bracket: t("tax.pit.bracketRange4") },
-    { label: t("tax.pit.row.federalBefore"), value: calculation.federalPITTotal, type: "total" as const },
+    { label: t("tax.pit.row.federalBefore"), value: calculation.federalPITBeforeExemption, type: "total" as const },
     { label: t("tax.pit.row.personalExemptionBenefit"), value: calculation.personalExemptionBenefit, type: "reduction" as const },
     { label: t("tax.pit.row.federalTaxCredits"), value: calculation.federalTaxCredits, type: "reduction" as const },
     { label: t("tax.pit.row.federalAfter"), value: calculation.federalPITAfterReductions, type: "total" as const },

@@ -31,6 +31,7 @@ const SANCTIONED_COMPONENT_FEATURE_IMPORTS = {
     "components/layout/AppLayout.tsx": [
         "@/features/settings/DashboardSettingsDialog",
         "@/features/onboarding/OnboardingWizard",
+        "@/features/onboarding/useOnboarding",
     ],
     // A test of the SHARED loading-surface contract that uses one real feature
     // tab as its worked example. Test-only: never bundled into the app.

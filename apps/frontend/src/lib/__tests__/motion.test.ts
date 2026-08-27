@@ -6,6 +6,7 @@ describe("motion tokens", () => {
   it("exposes the expected duration + easing + spring tokens", () => {
     expect(durations.fast).toBeLessThan(durations.page);
     expect(easings.outExpo).toHaveLength(4);
-    expect(springs.dialog.type).toBe("spring");
+    expect(springs.snappy.type).toBe("spring");
+    expect(Object.keys(springs)).toEqual(["snappy"]);
   });
 });

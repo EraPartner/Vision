@@ -2,7 +2,7 @@
 // docs/audits/2026-07-package-adoption-audit.md). Written against the
 // hand-rolled implementations FIRST; the date-fns swap must keep them green.
 import { describe, expect, test } from "vitest";
-import { formatDate, parseISO } from "./dateUtils";
+import { CHART_DATE_PATTERNS, formatDate, parseISO } from "./dateUtils";
 import { filterByPeriod, CHART_PERIOD_OFFSET_DAYS } from "@/components/charts/chartPeriods";
 
 describe("formatDate numeric patterns (PKG-12 pins)", () => {
@@ -32,9 +32,21 @@ describe("formatDate numeric patterns (PKG-12 pins)", () => {
     expect(formatDate(d1, "MMM yyyy", "en-US")).toBe("Mar 2026");
     expect(formatDate(d1, "MMM yyyy", "nl-BE")).toBe("mrt 2026");
     expect(formatDate(d1, "MMM yy", "en-US")).toBe("Mar 26");
+    expect(formatDate(d1, "d MMM", "en-US")).toBe("5 Mar");
+    expect(formatDate(d1, "d MMM", "nl-BE")).toBe("5 mrt");
+    expect(formatDate(d1, "d MMM yy", "en-US")).toBe("5 Mar 26");
+    expect(formatDate(d1, "d MMM yyyy", "en-US")).toBe("5 Mar 2026");
     expect(formatDate(d1, "dd MMM yyyy", "en-US")).toBe("05 Mar 2026");
     expect(formatDate(d1, "MMM d", "en-US")).toBe("Mar 5");
     expect(formatDate(d1, "unknown-pattern", "en-US")).toBe("March 5, 2026");
+  });
+
+  test("canonical chart date roles stay pinned", () => {
+    expect(formatDate(d1, CHART_DATE_PATTERNS.dayTick, "en-US")).toBe("5 Mar");
+    expect(formatDate(d1, CHART_DATE_PATTERNS.monthTick, "en-US")).toBe("Mar 26");
+    expect(formatDate(d1, CHART_DATE_PATTERNS.detail, "en-US")).toBe("5 Mar 2026");
+    expect(formatDate(d1, CHART_DATE_PATTERNS.monthLabel, "en-US")).toBe("Mar 2026");
+    expect(formatDate(d1, CHART_DATE_PATTERNS.yearTick, "en-US")).toBe("2026");
   });
 });
 

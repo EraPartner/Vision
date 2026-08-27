@@ -83,9 +83,9 @@ describe("DbMaintenancePage (integration)", () => {
     it("shows empty tables message when no tables exist", async () => {
         server.use(http.get(`${API_BASE}/api/admin/database/stats`, () => ok(emptyStats)));
         renderWithApp(<DbMaintenancePage />);
-        // dbMaintenance.noTables = "No tables found"
+        // The empty state tells an administrator how to populate the schema.
         expect(
-            await screen.findByText(/no tables found/i),
+            await screen.findByText(/no tables found.*check the database connection/i),
         ).toBeInTheDocument();
     });
 

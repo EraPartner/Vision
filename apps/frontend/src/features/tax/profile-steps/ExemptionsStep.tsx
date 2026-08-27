@@ -1,5 +1,3 @@
-import { parseDecimal } from '@/lib/decimal';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { StepProps } from './types';
+import { ProfileNumberInput } from './ProfileNumberInput';
 
 export function ExemptionsStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
@@ -125,12 +124,12 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             <div className="grid grid-cols-1 gap-3">
                 <div>
                     <Label htmlFor="alimony">{t('tax.profile.field.alimonyPaid')}</Label>
-                    <Input id="alimony" type="number" min={0} step={10} value={profile.alimonyPaid || ''} onChange={(e) => updateProfile({ alimonyPaid: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.alimonyPaid')} />
+                    <ProfileNumberInput id="alimony" min={0} step={10} value={profile.alimonyPaid} onValueChange={(value) => updateProfile({ alimonyPaid: value ?? 0 })} placeholder={t('tax.profile.placeholder.alimonyPaid')} />
                 </div>
 
                 <div>
                     <Label htmlFor="pension">{t('tax.profile.field.personalPensionContributions')}</Label>
-                    <Input id="pension" type="number" min={0} step={10} value={profile.personalPensionContributions || ''} onChange={(e) => updateProfile({ personalPensionContributions: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.personalPensionContributions')} />
+                    <ProfileNumberInput id="pension" min={0} step={10} value={profile.personalPensionContributions} onValueChange={(value) => updateProfile({ personalPensionContributions: value ?? 0 })} placeholder={t('tax.profile.placeholder.personalPensionContributions')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Select value={profile.pensionScheme} onValueChange={(v) => updateProfile({ pensionScheme: v as '1050' | '1350' })}>
                             <SelectTrigger id="pension-scheme" className="w-56">
@@ -150,7 +149,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="group-insurance">{t('tax.profile.field.employeeGroupInsuranceContributions')}</Label>
-                    <Input id="group-insurance" type="number" min={0} step={10} value={profile.employeeGroupInsuranceContributions || ''} onChange={(e) => updateProfile({ employeeGroupInsuranceContributions: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.employeeGroupInsuranceContributions')} />
+                    <ProfileNumberInput id="group-insurance" min={0} step={10} value={profile.employeeGroupInsuranceContributions} onValueChange={(value) => updateProfile({ employeeGroupInsuranceContributions: value ?? 0 })} placeholder={t('tax.profile.placeholder.employeeGroupInsuranceContributions')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="group-insurance-eligible" checked={!!profile.employeeGroupInsuranceEligible} onCheckedChange={(v) => updateProfile({ employeeGroupInsuranceEligible: v })} />
                         <Label htmlFor="group-insurance-eligible" className="cursor-pointer">{t('tax.profile.flag.employeeGroupInsuranceEligible')}</Label>
@@ -159,7 +158,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="life">{t('tax.profile.field.lifeInsurancePremiums')}</Label>
-                    <Input id="life" type="number" min={0} step={10} value={profile.lifeInsurancePremiums || ''} onChange={(e) => updateProfile({ lifeInsurancePremiums: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.lifeInsurancePremiums')} />
+                    <ProfileNumberInput id="life" min={0} step={10} value={profile.lifeInsurancePremiums} onValueChange={(value) => updateProfile({ lifeInsurancePremiums: value ?? 0 })} placeholder={t('tax.profile.placeholder.lifeInsurancePremiums')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="life-eligible" checked={!!profile.lifeInsuranceEligible} onCheckedChange={(v) => updateProfile({ lifeInsuranceEligible: v })} />
                         <Label htmlFor="life-eligible" className="cursor-pointer">{t('tax.profile.flag.lifeInsuranceEligible')}</Label>
@@ -168,7 +167,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="donations">{t('tax.profile.field.charitableDonations')}</Label>
-                    <Input id="donations" type="number" min={0} step={10} value={profile.charitableDonations || ''} onChange={(e) => updateProfile({ charitableDonations: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.charitableDonations')} />
+                    <ProfileNumberInput id="donations" min={0} step={10} value={profile.charitableDonations} onValueChange={(value) => updateProfile({ charitableDonations: value ?? 0 })} placeholder={t('tax.profile.placeholder.charitableDonations')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="donations-eligible" checked={!!profile.charitableDonationsEligible} onCheckedChange={(v) => updateProfile({ charitableDonationsEligible: v })} />
                         <Label htmlFor="donations-eligible" className="cursor-pointer">{t('tax.profile.flag.charitableDonationsEligible')}</Label>
@@ -177,10 +176,10 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="childcare">{t('tax.profile.field.childcareCosts')}</Label>
-                    <Input id="childcare" type="number" min={0} step={10} value={profile.childcareCosts || ''} onChange={(e) => updateProfile({ childcareCosts: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.childcareCosts')} />
+                    <ProfileNumberInput id="childcare" min={0} step={10} value={profile.childcareCosts} onValueChange={(value) => updateProfile({ childcareCosts: value ?? 0 })} placeholder={t('tax.profile.placeholder.childcareCosts')} />
                     <div className="mt-2">
                         <Label htmlFor="childcare-days">{t('tax.profile.field.childcareEligibleDays')}</Label>
-                        <Input id="childcare-days" type="number" min={0} step={1} value={profile.childcareEligibleDays || ''} onChange={(e) => updateProfile({ childcareEligibleDays: parseInt(e.target.value || '0', 10) || 0 })} placeholder={t('tax.profile.placeholder.childcareEligibleDays')} />
+                        <ProfileNumberInput id="childcare-days" min={0} step={1} integer value={profile.childcareEligibleDays} onValueChange={(value) => updateProfile({ childcareEligibleDays: value ?? 0 })} placeholder={t('tax.profile.placeholder.childcareEligibleDays')} />
                     </div>
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="childcare-eligible" checked={!!profile.childcareEligible} onCheckedChange={(v) => updateProfile({ childcareEligible: v })} />
@@ -190,7 +189,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="domestic-help">{t('tax.profile.field.domesticHelpCosts')}</Label>
-                    <Input id="domestic-help" type="number" min={0} step={10} value={profile.domesticHelpCosts || ''} onChange={(e) => updateProfile({ domesticHelpCosts: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.domesticHelpCosts')} />
+                    <ProfileNumberInput id="domestic-help" min={0} step={10} value={profile.domesticHelpCosts} onValueChange={(value) => updateProfile({ domesticHelpCosts: value ?? 0 })} placeholder={t('tax.profile.placeholder.domesticHelpCosts')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="domestic-help-eligible" checked={!!profile.domesticHelpEligible} onCheckedChange={(v) => updateProfile({ domesticHelpEligible: v })} />
                         <Label htmlFor="domestic-help-eligible" className="cursor-pointer">{t('tax.profile.flag.domesticHelpEligible')}</Label>
@@ -199,7 +198,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
                 <div>
                     <Label htmlFor="union">{t('tax.profile.field.unionDues')}</Label>
-                    <Input id="union" type="number" min={0} step={10} value={profile.unionDues || ''} onChange={(e) => updateProfile({ unionDues: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.unionDues')} />
+                    <ProfileNumberInput id="union" min={0} step={10} value={profile.unionDues} onValueChange={(value) => updateProfile({ unionDues: value ?? 0 })} placeholder={t('tax.profile.placeholder.unionDues')} />
                     <p className="text-xs text-muted-foreground">{t('tax.profile.field.unionDues.desc')}</p>
                 </div>
             </div>

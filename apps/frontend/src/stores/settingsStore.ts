@@ -40,10 +40,18 @@ export type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat' 
  * - enhanced: adds the WebGL shader aurora and Electron vibrancy.
  */
 export type VisualEffectsTier = 'reduced' | 'standard' | 'enhanced';
+export const APP_DATE_FORMATS = [
+    'DD/MM/YYYY',
+    'MM/DD/YYYY',
+    'YYYY-MM-DD',
+    'DD.MM.YYYY',
+    'DD-MM-YYYY',
+] as const;
+export type AppDateFormat = typeof APP_DATE_FORMATS[number];
 
 export interface AppSettings {
     defaultCurrency: string;
-    dateFormat: string;
+    dateFormat: AppDateFormat;
     numberFormat: string;
     defaultPageSize: number;
     startOfWeek: 'monday' | 'sunday';
@@ -119,19 +127,20 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
  * where formatters guard — silently renders a bare unlocalised number on every
  * money tile. Validating here means every consumer sees Intl-safe settings.
  *
- * Deliberately type/shape-level only where any value is safe downstream
- * (`dateFormat`, `numberFormat` — `numberFormatToLocale` already maps unknown
- * strings to its own default, so an enum catch here would *change* behavior).
- * `showDecimalPlaces` is bounded to Intl's universally-valid 0–20 fraction
- * digits (the UI offers 0–3); `defaultCurrency` to a well-formed ISO-4217
- * 3-letter code, which is exactly what Intl accepts without throwing.
+ * `dateFormat` is limited to the five values exposed by Settings; malformed or
+ * hand-edited values recover to the default instead of reaching an English-only
+ * long-date fallback. `numberFormatToLocale` already maps unknown number-format
+ * strings to its own default, so that field remains shape-only.
+ * `showDecimalPlaces` deliberately keeps the app's conservative 0–20 bound
+ * (the UI offers 0–3), even though current Intl engines accept up to 100;
+ * `defaultCurrency` is limited to a well-formed ISO-4217 3-letter code.
  */
 const storedAppSettingsSchema = z.looseObject({
     defaultCurrency: z
         .string()
         .regex(/^[A-Za-z]{3}$/)
         .catch(DEFAULT_APP_SETTINGS.defaultCurrency),
-    dateFormat: z.string().catch(DEFAULT_APP_SETTINGS.dateFormat),
+    dateFormat: z.enum(APP_DATE_FORMATS).catch(DEFAULT_APP_SETTINGS.dateFormat),
     numberFormat: z.string().catch(DEFAULT_APP_SETTINGS.numberFormat),
     defaultPageSize: z.number().int().positive().catch(DEFAULT_APP_SETTINGS.defaultPageSize),
     startOfWeek: z
@@ -246,11 +255,11 @@ interface SettingsState {
     appSettings: AppSettings;
     isAppSettingsLoading: boolean;
     /**
-     * Bumped whenever a debounced persist of app settings fails. A component
+     * Bumped whenever a debounced settings persist fails. A component
      * rendered under LanguageProvider watches this to surface a translated toast
      * (the provider itself sits above LanguageProvider and can't translate).
      */
-    appSettingsSaveErrorNonce: number;
+    settingsSaveErrorNonce: number;
     /**
      * Session-only manual tier pick for the auto-adapt cap (ADR-075 addendum):
      * lives outside appSettings so it is never persisted — in-memory by
@@ -280,8 +289,8 @@ interface SettingsActions {
     setSessionTierOverride: (tier: VisualEffectsTier | undefined) => void;
     /** Called by AppSettingsProvider once preloaded data arrives. */
     _hydrateAppSettings: (settings: AppSettings, isLoading: boolean) => void;
-    /** Called by AppSettingsProvider when a debounced persist fails. */
-    _markAppSettingsSaveError: () => void;
+    /** Called when any instant-apply settings persist fails. */
+    _markSettingsSaveError: () => void;
 
     // Dashboard settings
     updateDashboardSettings: (updates: Partial<DashboardSettings>) => void;
@@ -316,11 +325,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     // ── App settings ──────────────────────────────────────────────────────────
     appSettings: DEFAULT_APP_SETTINGS,
     isAppSettingsLoading: true,
-    appSettingsSaveErrorNonce: 0,
+    settingsSaveErrorNonce: 0,
     sessionTierOverride: undefined,
 
     updateAppSettings: (updates) =>
-        set((s) => ({ appSettings: { ...s.appSettings, ...updates } })),
+        set((s) => ({ appSettings: migrateAppSettings({ ...s.appSettings, ...updates }) })),
 
     resetAppSettings: () =>
         set({ appSettings: DEFAULT_APP_SETTINGS, sessionTierOverride: undefined }),
@@ -331,8 +340,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     _hydrateAppSettings: (settings, isLoading) =>
         set({ appSettings: settings, isAppSettingsLoading: isLoading }),
 
-    _markAppSettingsSaveError: () =>
-        set((s) => ({ appSettingsSaveErrorNonce: s.appSettingsSaveErrorNonce + 1 })),
+    _markSettingsSaveError: () =>
+        set((s) => ({ settingsSaveErrorNonce: s.settingsSaveErrorNonce + 1 })),
 
     // ── Dashboard settings ────────────────────────────────────────────────────
     dashboardSettings: DEFAULT_DASHBOARD_SETTINGS,

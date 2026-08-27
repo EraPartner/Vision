@@ -1,5 +1,4 @@
 import { useRef } from 'react';
-import { parseDecimal } from '@/lib/decimal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +14,7 @@ import type {
     ProfessionalExpenseMethod,
 } from '@/contexts/BelgianTaxProfileContext';
 import type { StepProps } from './types';
+import { ProfileNumberInput } from './ProfileNumberInput';
 
 export function IncomeStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
@@ -38,13 +38,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                     {t('tax.profile.field.grossAnnualIncome')}
                 </Label>
                 <p className="text-xs text-muted-foreground">{t('tax.profile.field.grossAnnualIncome.desc')}</p>
-                <Input
+                <ProfileNumberInput
                     id="gross-income"
-                    type="number"
                     min={0}
                     step={100}
-                    value={profile.grossAnnualIncome || ''}
-                    onChange={(e) => updateProfile({ grossAnnualIncome: parseDecimal(e.target.value) })}
+                    value={profile.grossAnnualIncome}
+                    onValueChange={(value) => updateProfile({ grossAnnualIncome: value ?? 0 })}
                     placeholder={t('tax.profile.placeholder.grossIncome')}
                 />
             </div>
@@ -54,13 +53,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                     {t('tax.profile.field.otherTaxableIncome')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
                 </Label>
                 <p className="text-xs text-muted-foreground">{t('tax.profile.field.otherTaxableIncome.desc')}</p>
-                <Input
+                <ProfileNumberInput
                     id="other-income"
-                    type="number"
                     min={0}
                     step={100}
-                    value={profile.otherTaxableIncome || ''}
-                    onChange={(e) => updateProfile({ otherTaxableIncome: parseDecimal(e.target.value) })}
+                    value={profile.otherTaxableIncome}
+                    onValueChange={(value) => updateProfile({ otherTaxableIncome: value ?? 0 })}
                     placeholder={t('tax.profile.placeholder.otherIncome')}
                 />
             </div>
@@ -102,13 +100,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 {profile.professionalExpenseMethod === 'actual' && (
                     <div className="space-y-2 pt-1">
                         <Label htmlFor="actual-expenses" className="text-sm font-medium">{t('tax.profile.field.actualProfessionalExpenses')}</Label>
-                        <Input
+                        <ProfileNumberInput
                             id="actual-expenses"
-                            type="number"
                             min={0}
                             step={100}
-                            value={profile.actualProfessionalExpenses || ''}
-                            onChange={(e) => updateProfile({ actualProfessionalExpenses: parseDecimal(e.target.value) })}
+                            value={profile.actualProfessionalExpenses}
+                            onValueChange={(value) => updateProfile({ actualProfessionalExpenses: value ?? 0 })}
                             placeholder={t('tax.profile.placeholder.actualExpenses')}
                         />
                     </div>
@@ -120,13 +117,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                     {t('tax.profile.field.cadastralIncome')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
                 </Label>
                 <p className="text-xs text-muted-foreground">{t('tax.profile.field.cadastralIncome.desc')}</p>
-                <Input
+                <ProfileNumberInput
                     id="cadastral"
-                    type="number"
                     min={0}
                     step={10}
-                    value={profile.cadastralIncome || ''}
-                    onChange={(e) => updateProfile({ cadastralIncome: parseDecimal(e.target.value) })}
+                    value={profile.cadastralIncome}
+                    onValueChange={(value) => updateProfile({ cadastralIncome: value ?? 0 })}
                     placeholder={t('tax.profile.placeholder.cadastral')}
                 />
             </div>
@@ -146,9 +142,9 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                         </div>
                         <div>
                             <Label className="text-xs">{t('tax.profile.field.cadastralIncome')}</Label>
-                            <Input type="number" min={0} step={10} value={r.cadastralIncome || ''} onChange={(e) => {
+                            <ProfileNumberInput min={0} step={10} value={r.cadastralIncome} onValueChange={(value) => {
                                 const copy = [...(profile.additionalResidences || [])];
-                                copy[idx] = { ...copy[idx], cadastralIncome: parseDecimal(e.target.value) };
+                                copy[idx] = { ...copy[idx], cadastralIncome: value ?? 0 };
                                 updateProfile({ additionalResidences: copy });
                             }} />
                         </div>
@@ -210,20 +206,15 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 <Label htmlFor="mortgage-year" className="text-xs">
                                     {t('tax.profile.field.mortgageStartYear')}
                                 </Label>
-                                <Input
+                                <ProfileNumberInput
                                     id="mortgage-year"
-                                    type="number"
                                     min={1990}
                                     max={new Date().getFullYear()}
                                     step={1}
-                                    value={profile.mortgageStartYear || ''}
-                                    onChange={(e) =>
-                                        updateProfile({
-                                            mortgageStartYear: e.target.value
-                                                ? parseInt(e.target.value, 10)
-                                                : undefined,
-                                        })
-                                    }
+                                    value={profile.mortgageStartYear}
+                                    integer
+                                    allowEmpty
+                                    onValueChange={(value) => updateProfile({ mortgageStartYear: value })}
                                     placeholder={t('tax.profile.placeholder.mortgageStartYear')}
                                 />
                             </div>
@@ -254,15 +245,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 <Label htmlFor="mortgage-interest" className="text-xs">
                                     {t('tax.profile.field.mortgageInterestPaid')}
                                 </Label>
-                                <Input
+                                <ProfileNumberInput
                                     id="mortgage-interest"
-                                    type="number"
                                     min={0}
                                     step={10}
-                                    value={profile.mortgageInterestPaid || ''}
-                                    onChange={(e) =>
-                                        updateProfile({ mortgageInterestPaid: parseDecimal(e.target.value) })
-                                    }
+                                    value={profile.mortgageInterestPaid}
+                                    onValueChange={(value) => updateProfile({ mortgageInterestPaid: value ?? 0 })}
                                     placeholder={t('tax.profile.placeholder.mortgageInterestPaid')}
                                 />
                             </div>
@@ -270,15 +258,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 <Label htmlFor="mortgage-capital" className="text-xs">
                                     {t('tax.profile.field.mortgageCapitalRepaid')}
                                 </Label>
-                                <Input
+                                <ProfileNumberInput
                                     id="mortgage-capital"
-                                    type="number"
                                     min={0}
                                     step={10}
-                                    value={profile.mortgageCapitalRepaid || ''}
-                                    onChange={(e) =>
-                                        updateProfile({ mortgageCapitalRepaid: parseDecimal(e.target.value) })
-                                    }
+                                    value={profile.mortgageCapitalRepaid}
+                                    onValueChange={(value) => updateProfile({ mortgageCapitalRepaid: value ?? 0 })}
                                     placeholder={t('tax.profile.placeholder.mortgageCapitalRepaid')}
                                 />
                             </div>

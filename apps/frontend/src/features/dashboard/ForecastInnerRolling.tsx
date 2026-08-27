@@ -3,7 +3,7 @@ import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale, formatDate, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { mergeForViewRolling, type MergedDayDate } from "@/utils/forecastMerge";
@@ -50,7 +50,7 @@ function ForecastInnerRollingImpl({
     const xTickFormat = useMemo(
         () => (v: Date | number) => {
             const d = v instanceof Date ? v : new Date(v);
-            return formatDate(d, "MMM d", monthLabelLocale);
+            return formatDate(d, CHART_DATE_PATTERNS.dayTick, monthLabelLocale);
         },
         [monthLabelLocale],
     );

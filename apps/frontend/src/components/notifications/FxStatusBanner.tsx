@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { exchangeRateKeys } from "@/lib/queryKeys";
 import type { ExchangeRatesData } from "@/lib/api/info";
@@ -29,13 +31,30 @@ export function FxStatusBanner() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const [dismissed, setDismissed] = useState<boolean>(() => isDismissedRecently());
+    const queryClient = useQueryClient();
 
-    const { data } = useQuery<ExchangeRatesData>({
+    const { data, isFetching } = useQuery<ExchangeRatesData>({
         queryKey: exchangeRateKeys.fxStatus,
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
         retry: false,
     });
+
+    const refreshMutation = useMutation({
+        mutationFn: () => apiClient.refreshExchangeRates(),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all }),
+                queryClient.invalidateQueries({ queryKey: exchangeRateKeys.fxStatus }),
+            ]);
+            toast.success(t("exchangeRates.refreshSuccess"));
+        },
+        onError: () => {
+            toast.error(t("exchangeRates.refreshError"));
+        },
+    });
+
+    const isRefreshing = refreshMutation.isPending || isFetching;
 
     if (dismissed) return null;
     if (!data) return null;
@@ -61,7 +80,20 @@ export function FxStatusBanner() {
     return (
         <Alert variant="warning" className="mb-4 pr-10">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{message}</AlertDescription>
+            <AlertDescription className="flex flex-wrap items-center gap-3">
+                <span>{message}</span>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isRefreshing}
+                    onClick={() => refreshMutation.mutate()}
+                    className="gap-1.5"
+                >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                    {t("exchangeRates.refresh")}
+                </Button>
+            </AlertDescription>
             <button
                 type="button"
                 onClick={handleDismiss}

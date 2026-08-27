@@ -10,6 +10,7 @@
  */
 
 import { differenceInDays } from "@/components/shared/dateUtils";
+import { parsePlannedDueDate, toLocalMidnight } from "@/features/planned/plannedDueDate";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
 /** Days shown, inclusive of today: offsets 0…7 — the `days <= 7` window. */
@@ -24,9 +25,7 @@ export interface DayBucket {
 }
 
 export function bucketNextSevenDays(payments: PlannedPayment[], today: Date): DayBucket[] {
-  const normalizedToday = new Date(
-    today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0,
-  );
+  const normalizedToday = toLocalMidnight(today);
 
   const buckets: DayBucket[] = Array.from({ length: WINDOW_DAYS }, (_, offset) => ({
     date: new Date(
@@ -41,12 +40,9 @@ export function bucketNextSevenDays(payments: PlannedPayment[], today: Date): Da
 
   for (const p of payments) {
     if (!p.is_active) continue;
-    if (!p.due_date || typeof p.due_date !== "string") continue;
-    const datePart = p.due_date.includes("T") ? p.due_date.split("T")[0] : p.due_date;
-    const [year, month, day] = datePart.split("-").map(Number);
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) continue;
-    const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
-    const days = differenceInDays(normalizedDue, normalizedToday);
+    const dueDate = parsePlannedDueDate(p.due_date);
+    if (dueDate.kind !== "date") continue;
+    const days = differenceInDays(dueDate.date, normalizedToday);
     if (days < 0 || days > WINDOW_DAYS - 1) continue;
     buckets[days].items.push(p);
   }

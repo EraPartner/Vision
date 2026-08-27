@@ -11,7 +11,7 @@
  *    surfaces a "Create historical profile for {year}" footer action that seeds a snapshot
  *    from the live profile so the user can then edit it via the profile dialog.
  */
-import { ChevronDown, History, Lock, Plus, Snowflake, Sparkles, Wallet } from 'lucide-react';
+import { ChevronDown, History, Plus, Sparkles, Wallet } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { TaxYearStatusIcon } from './TaxYearStatusIcon';
 
 interface TaxYearSwitcherProps {
     className?: string;
@@ -78,18 +79,11 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                         >
                             <span className="flex items-center gap-1.5">
                                 <span className="font-medium tabular-nums">{entry.year}</span>
-                                {entry.isFiled && (
-                                    <Lock
-                                        className="h-3 w-3 text-warning"
-                                        aria-label={t('tax.yearSwitcher.filedAria')}
-                                    />
-                                )}
-                                {!entry.isFiled && entry.hasFrozenCalculation && (
-                                    <Snowflake
-                                        className="h-3 w-3 text-sky-600"
-                                        aria-label={t('tax.yearSwitcher.frozenAria')}
-                                    />
-                                )}
+                                <TaxYearStatusIcon
+                                    isFiled={entry.isFiled}
+                                    hasFrozenCalculation={entry.hasFrozenCalculation}
+                                    className="h-3 w-3"
+                                />
                             </span>
                             <span className="flex items-center gap-1">
                                 {entry.isCurrent && (

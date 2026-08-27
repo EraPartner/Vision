@@ -26,7 +26,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
-import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { formatPercent, numberFormatToLocale } from "@/utils/currency";
@@ -39,6 +38,13 @@ import {
     WORKSPACE_AGNOSTIC_URLS,
     type NavItem as PaletteEntry,
 } from "@/lib/navigation";
+import {
+    evaluateArithmetic,
+    parseFxQuery,
+    parseTickerQuery,
+    pushPaletteRecent,
+    readPaletteRecents,
+} from "@/lib/commandPalette";
 
 interface PaletteQuote {
     symbol: string;
@@ -56,68 +62,6 @@ function GoToHint({ url }: { url: string }) {
 }
 
 // Spotlight-style inline answers ------------------------------------------
-
-const FX_QUERY = /^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]{3})(?:\s+(?:in|to|naar)\s+([a-zA-Z]{3}))?$/;
-// Arithmetic only: digits, operators, parens, separators. No identifiers can
-// pass this charset, so evaluation is safe.
-const CALC_QUERY = /^[\d\s+\-*/().,]+$/;
-
-function parseFxQuery(q: string): { amount: number; from: string; to?: string } | null {
-    const m = q.match(FX_QUERY);
-    if (!m) return null;
-    const amount = Number(m[1].replace(",", "."));
-    if (!Number.isFinite(amount)) return null;
-    return { amount, from: m[2].toUpperCase(), to: m[3]?.toUpperCase() };
-}
-
-function evaluateArithmetic(q: string): number | null {
-    if (!CALC_QUERY.test(q)) return null;
-    if (!/[+\-*/]/.test(q) || !/\d/.test(q)) return null;
-    if (/^\s*[\d.,]+\s*$/.test(q)) return null;
-    try {
-        const result = new Function(`"use strict"; return (${q.replace(/,/g, ".")});`)() as unknown;
-        return typeof result === "number" && Number.isFinite(result) ? result : null;
-    } catch {
-        return null;
-    }
-}
-
-// Ticker lookup — a bare ticker (AAPL, BRK-B, ASML.AS, BTC-USD) or an explicit
-// $cashtag ($AAPL). The pattern is only a shape filter: the card renders solely
-// when a live quote returns, so ordinary words that fit the shape show nothing.
-const CASHTAG_QUERY = /^\$([A-Za-z][A-Za-z0-9.-]{0,9})$/;
-const BARE_TICKER_QUERY = /^[A-Za-z]{2,5}(?:[.-][A-Za-z0-9]{1,4})?$/;
-
-function parseTickerQuery(q: string): string | null {
-    const cash = q.match(CASHTAG_QUERY);
-    if (cash) return cash[1].toUpperCase();
-    // Require at least one uppercase letter before treating a bare word as a
-    // ticker candidate, so ordinary lowercase words typed while the palette is
-    // open (e.g. "food") don't each fire a market-quote request. The $cashtag
-    // form above remains the case-insensitive path.
-    if (/[A-Z]/.test(q) && BARE_TICKER_QUERY.test(q)) return q.toUpperCase();
-    return null;
-}
-
-const RECENTS_KEY = LOCAL_STORAGE_KEYS.PALETTE_RECENTS;
-const MAX_RECENTS = 5;
-
-function readRecents(): string[] {
-    try {
-        const raw = localStorage.getItem(RECENTS_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
-    } catch {
-        return [];
-    }
-}
-
-function pushRecent(url: string): void {
-    try {
-        const next = [url, ...readRecents().filter((u) => u !== url)].slice(0, MAX_RECENTS);
-        localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-    } catch { /* localStorage unavailable */ }
-}
 
 interface CommandPaletteProps {
     open: boolean;
@@ -138,7 +82,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
 
     useEffect(() => {
         if (open) {
-            setRecents(readRecents());
+            setRecents(readPaletteRecents());
         } else {
             setQuery("");
         }
@@ -220,7 +164,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
 
     const goTo = (url: string) => {
         onOpenChange(false);
-        pushRecent(url);
+        pushPaletteRecent(url);
         // Keep the sidebar workspace in sync with cross-workspace jumps.
         // Workspace-agnostic pages (AI chat, Accounts) keep the current one.
         if (url.startsWith("/portfolio")) {

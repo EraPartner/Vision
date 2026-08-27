@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,7 +36,7 @@ export default function AccountsPage() {
     const [searchParams] = useSearchParams();
     // Archived is a (collapsed) group now, not a toggle (WP-B3) — always fetch
     // the full population.
-    const { data, isLoading, isError, error } = useAccounts({ active: "all" });
+    const { data, isLoading, isError, error, refetch } = useAccounts({ active: "all" });
     const fmtCur = useCurrencyFormatter();
     const balanceProvenance = useBalanceProvenance();
     // Drift badge text + tone (§3 F1) — shared with the detail header and the
@@ -239,7 +240,7 @@ export default function AccountsPage() {
         <div className="space-y-6">
             <PageHeader
                 title={t('accounts.title')}
-                description={t('accounts.subtitle')}
+                subtitle={t('accounts.subtitle')}
                 icon={Landmark}
                 actions={<AddAccountDialog />}
             />
@@ -249,7 +250,10 @@ export default function AccountsPage() {
             )}
 
             {isError && (
-                <p className="text-sm text-destructive">{apiErrorToMessage(error, t)}</p>
+                <PageError
+                    message={apiErrorToMessage(error, t)}
+                    onRetry={() => void refetch()}
+                />
             )}
 
             {!isLoading && !isError && accounts.length === 0 && (

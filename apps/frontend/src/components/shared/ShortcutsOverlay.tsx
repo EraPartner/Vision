@@ -46,6 +46,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
         { keys: <><Key>↑</Key> <Key>↓</Key></>, label: t("shortcuts.tableNav") },
         { keys: <Key>↵</Key>, label: t("shortcuts.tableOpen") },
         { keys: <Key>Space</Key>, label: t("shortcuts.quickLook") },
+        { keys: <><Key>Alt</Key> <Key>T</Key></>, label: t("shortcuts.toastFocus") },
         { keys: <Key>?</Key>, label: t("shortcuts.showHelp") },
         { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
     ];

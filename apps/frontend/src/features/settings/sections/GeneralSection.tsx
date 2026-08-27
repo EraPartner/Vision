@@ -5,6 +5,7 @@ import {
     SettingsSection, SettingsGroup, SelectSettingRow, type SelectRowConfig,
 } from '../SettingsPrimitives';
 import { SUPPORTED_CURRENCIES as CURRENCIES } from '@/utils/currency';
+import type { AppDateFormat } from '@/stores/settingsStore';
 
 const DATE_FORMATS = [
     { value: 'DD/MM/YYYY', labelKey: 'settings.dateFormat.ddmmyyyy' },
@@ -12,7 +13,7 @@ const DATE_FORMATS = [
     { value: 'YYYY-MM-DD', labelKey: 'settings.dateFormat.yyyymmdd' },
     { value: 'DD.MM.YYYY', labelKey: 'settings.dateFormat.ddmmyyyy2' },
     { value: 'DD-MM-YYYY', labelKey: 'settings.dateFormat.ddmmyyyy3' },
-];
+] satisfies ReadonlyArray<{ value: AppDateFormat; labelKey: string }>;
 
 const NUMBER_FORMATS = [
     { value: 'eu', labelKey: 'settings.numberFormat.eu' },
@@ -53,7 +54,10 @@ export const GeneralSection = memo(function GeneralSection() {
         {
             title: t('settings.general.dateFormat'),
             value: appSettings.dateFormat,
-            onValueChange: (v) => updateAppSettings({ dateFormat: v }),
+            onValueChange: (v) => {
+                const selected = DATE_FORMATS.find((format) => format.value === v);
+                if (selected) updateAppSettings({ dateFormat: selected.value });
+            },
             options: DATE_FORMATS.map((f) => ({ value: f.value, label: t(f.labelKey) })),
         },
     ];

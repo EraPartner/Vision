@@ -256,6 +256,38 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("ExchangeRatesPage renders populated live and fallback rate tables", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/info/exchange-rates`, () => ok({
+                total_rates: 1,
+                rates: [{
+                    currency: "USD",
+                    rate_to_eur: 0.92,
+                    rate_date: "2026-08-26",
+                    fetched_at: "2026-08-26T09:00:00Z",
+                }],
+                fallback_rates: { EUR: 1, GBP: 1.17 },
+            })),
+        );
+
+        renderWithApp(<ExchangeRatesPage />);
+
+        const liveTable = await screen.findByRole("table");
+        expect(within(liveTable).getByRole("columnheader", { name: "Currency" })).toBeInTheDocument();
+        expect(within(liveTable).getByRole("columnheader", { name: "1 unit → EUR" })).toBeInTheDocument();
+        expect(within(liveTable).getByText("USD")).toBeInTheDocument();
+        expect(within(liveTable).getByText("0.920000")).toBeInTheDocument();
+        expect(within(liveTable).getByText("1.0870")).toBeInTheDocument();
+        expect(within(liveTable).getByText(/92[.,]00/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("tab", { name: /fallback rates/i }));
+        const fallbackTable = await screen.findByRole("table", {
+            name: /fallback rates are updated in-memory/i,
+        });
+        expect(within(fallbackTable).getByText("GBP")).toBeInTheDocument();
+    });
+
     it("ExchangeRatesPage shows error state when API fails", async () => {
         const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
@@ -864,7 +896,7 @@ describe("Portfolio pages (integration)", () => {
         await user.click(appleResult);
 
         // Fill in target price — required by the submit guard
-        const targetPriceInput = await screen.findByPlaceholderText(/enter target price/i);
+        const targetPriceInput = await screen.findByLabelText(/target buy price/i);
         await user.type(targetPriceInput, "150");
 
         // Submit — now both selectedAsset and targetPrice are set

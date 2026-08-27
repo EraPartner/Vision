@@ -23,6 +23,7 @@ beforeEach(() => {
     useSettingsStore.setState({
         appSettings: DEFAULT_APP_SETTINGS,
         isAppSettingsLoading: true,
+        settingsSaveErrorNonce: 0,
         dashboardSettings: DEFAULT_DASHBOARD_SETTINGS,
         isDashboardSettingsLoading: true,
         theme: "dark",
@@ -47,6 +48,18 @@ describe("useAppSettings", () => {
         act(() => result.current.updateAppSettings({ defaultCurrency: "USD" }));
         expect(result.current.appSettings.defaultCurrency).toBe("USD");
         expect(result.current.appSettings.dateFormat).toBe(DEFAULT_APP_SETTINGS.dateFormat);
+    });
+
+    it("updateAppSettings validates malformed runtime values", () => {
+        const { result } = renderHook(() => useAppSettings());
+        act(() =>
+            result.current.updateAppSettings({
+                defaultCurrency: "US",
+                showDecimalPlaces: Number.NaN,
+            }),
+        );
+        expect(result.current.appSettings.defaultCurrency).toBe("EUR");
+        expect(result.current.appSettings.showDecimalPlaces).toBe(2);
     });
 
     it("resetAppSettings restores defaults", () => {
@@ -187,6 +200,7 @@ describe("AppSettingsContext — edge cases", () => {
         expect(saveSpy).toHaveBeenCalled();
         // Local state remains updated despite save failure (no rollback)
         expect(result.current.appSettings.defaultCurrency).toBe("USD");
+        expect(useSettingsStore.getState().settingsSaveErrorNonce).toBe(1);
 
         vi.useRealTimers();
         saveSpy.mockRestore();
@@ -361,6 +375,7 @@ describe("SettingsContext — edge cases", () => {
 
         expect(saveSpy).toHaveBeenCalled();
         expect(result.current.settings.excludedCategoryIds).toEqual([99]);
+        expect(useSettingsStore.getState().settingsSaveErrorNonce).toBe(1);
 
         vi.useRealTimers();
         saveSpy.mockRestore();

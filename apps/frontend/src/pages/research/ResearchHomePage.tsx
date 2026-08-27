@@ -103,6 +103,7 @@ export default function ResearchHomePage() {
         value={searchText}
         onChange={setSearchText}
         open={isOpen}
+        onDismiss={() => setSearchText("")}
       >
         {searchUnavailable ? (
           <div className="px-3 py-3">

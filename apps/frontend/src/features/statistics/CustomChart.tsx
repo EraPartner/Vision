@@ -11,7 +11,7 @@ import {
   AreaChart, type AreaSeries,
   ChartLegend, type ChartLegendItem,
 } from "@/components/charts";
-import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useRecipientPivot } from "@/hooks/useRecipientPivot";
 import { useTagPivot } from "@/hooks/useTagPivot";
@@ -48,7 +48,7 @@ type SeriesMeta = { key: string; label: string; color: string };
 function formatPeriod(period: string, bucket: 'monthly' | 'yearly', locale: string): string {
   try {
     if (bucket === 'yearly') return period;
-    return formatDate(parseISO(`${period}-01`), "MMM yy", locale);
+    return formatDate(parseISO(`${period}-01`), CHART_DATE_PATTERNS.monthTick, locale);
   } catch {
     return period;
   }
@@ -75,7 +75,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
   const { t, language } = useLanguage();
   const monthLabelLocale = appLanguageToLocale(language);
   const loadingSurfaceProps = useLoadingSurfaceProps();
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
 
   const bucket = savedChart.time_bucket;
   const isRanked = savedChart.chart_variant === 'ranked';
@@ -240,8 +240,12 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     () => [{ key: 'total', label: t('statsPage.spending'), accessor: (e: Entity) => e.total }],
     [t]
   );
-  const yTick = (v: number) => `${currencySymbol}${(v / 1000).toFixed(0)}k`;
-  const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy', monthLabelLocale);
+  const yTick = formatAxisCompact;
+  const xTickFmt = (v: unknown) => formatDate(
+    v as Date,
+    bucket === 'yearly' ? CHART_DATE_PATTERNS.yearTick : CHART_DATE_PATTERNS.monthTick,
+    monthLabelLocale,
+  );
 
   const isEmpty = seriesMeta.length === 0;
   const isLoading = (hasRecipients && recipientLoading) || (hasTags && tagLoading);

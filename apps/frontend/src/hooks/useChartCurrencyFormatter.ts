@@ -6,11 +6,18 @@
 
 import { useCallback, useMemo } from "react";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { getCurrencySymbol, numberFormatToLocale, formatCurrencyCompact, type CompactFormatResult } from "@/utils/currency";
+import {
+  formatCurrencyAxisCompact,
+  formatCurrencyCompact,
+  getCurrencySymbol,
+  numberFormatToLocale,
+  type CompactFormatResult,
+} from "@/utils/currency";
 
 export interface ChartCurrencyFormatter {
   formatCurrency: (val: number) => string;
   formatCompact: (val: number) => CompactFormatResult;
+  formatAxisCompact: (val: number) => string;
   currencySymbol: string;
   locale: string;
   currency: string;
@@ -27,18 +34,23 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
   // formatters run once per axis tick / table cell, so rebuilding the
   // (relatively expensive) formatter per call is wasteful.
   const currencyNumberFormat = useMemo(
-    () =>
-      new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: fractionDigits,
-        maximumFractionDigits: fractionDigits,
-      }),
+    () => {
+      try {
+        return new Intl.NumberFormat(locale, {
+          style: "currency",
+          currency,
+          minimumFractionDigits: fractionDigits,
+          maximumFractionDigits: fractionDigits,
+        });
+      } catch {
+        return undefined;
+      }
+    },
     [locale, currency, fractionDigits],
   );
 
   const formatCurrency = useCallback(
-    (val: number) => currencyNumberFormat.format(val),
+    (val: number) => currencyNumberFormat?.format(val) ?? `${val}`,
     [currencyNumberFormat],
   );
 
@@ -47,8 +59,13 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
     [currency, locale, fractionDigits],
   );
 
+  const formatAxisCompact = useCallback(
+    (val: number) => formatCurrencyAxisCompact(val, currency, locale),
+    [currency, locale],
+  );
+
   return useMemo(
-    () => ({ formatCurrency, formatCompact, currencySymbol, locale, currency }),
-    [formatCurrency, formatCompact, currencySymbol, locale, currency],
+    () => ({ formatCurrency, formatCompact, formatAxisCompact, currencySymbol, locale, currency }),
+    [formatCurrency, formatCompact, formatAxisCompact, currencySymbol, locale, currency],
   );
 }

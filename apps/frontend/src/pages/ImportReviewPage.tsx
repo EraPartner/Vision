@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { importKeys, invalidateAccountDerived, invalidateTransactionData, plannedKeys } from "@/lib/queryKeys";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -128,7 +129,7 @@ export default function ImportReviewPage() {
   // and per-render page scans.
   const recipientLabelFor = useRecipientComboboxLabel();
 
-  const { data: preview, isLoading, error } = useQuery({
+  const { data: preview, isLoading, error, refetch } = useQuery({
     queryKey: importKeys.preview(batchId),
     queryFn: () => apiClient.getImportPreview(batchId),
     enabled: Number.isFinite(batchId),
@@ -351,9 +352,10 @@ export default function ImportReviewPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t("importReview.back")}
         </Button>
-        <p className="text-destructive text-sm">
-          {apiErrorToMessage(error, t)}
-        </p>
+        <PageError
+          message={apiErrorToMessage(error, t)}
+          onRetry={error ? () => void refetch() : undefined}
+        />
       </div>
     );
   }

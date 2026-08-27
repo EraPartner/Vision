@@ -396,8 +396,6 @@ export default function RecipientsPage() {
                 />
 
                 <VirtualDataTable
-                    title={t('recipientsPage.tableTitle')}
-                    subtitle={`${totalItems} ${t('recipients.title').toLowerCase()}`}
                     columns={columns}
                     data={recipients}
                     onRowUpdate={handleUpdate}

@@ -1,5 +1,13 @@
 import { format as dateFnsFormat, parseISO as dateFnsParseISO } from "date-fns";
 
+export const CHART_DATE_PATTERNS = {
+  dayTick: "d MMM",
+  monthTick: "MMM yy",
+  detail: "d MMM yyyy",
+  monthLabel: "MMM yyyy",
+  yearTick: "yyyy",
+} as const;
+
 /**
  * Map the app language to the locale used for month/day *names*.
  *
@@ -27,6 +35,7 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
     case "yyyy-MM":
     case "MM.yyyy":
     case "MM-yyyy":
+    case "yyyy":
       return dateFnsFormat(date, pattern);
     default:
       break;
@@ -43,6 +52,9 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
   switch (pattern) {
     case "MMM yyyy":    return `${MMM} ${y}`;
     case "MMM yy":      return `${MMM} ${String(y).slice(-2)}`;
+    case "d MMM":       return `${date.getDate()} ${MMM}`;
+    case "d MMM yy":    return `${date.getDate()} ${MMM} ${String(y).slice(-2)}`;
+    case "d MMM yyyy":  return `${date.getDate()} ${MMM} ${y}`;
     case "dd MMM yyyy": return `${String(date.getDate()).padStart(2, "0")} ${MMM} ${y}`;
     case "MMM d":       return `${MMM} ${date.getDate()}`;
     default:
@@ -110,7 +122,7 @@ export function appDateFormatToDateFnsPattern(appDateFormat: string): string {
     case "YYYY-MM-DD": return "yyyy-MM-dd";
     case "DD.MM.YYYY": return "dd.MM.yyyy";
     case "DD-MM-YYYY": return "dd-MM-yyyy";
-    default:           return "PPP";
+    default:           return "dd/MM/yyyy";
   }
 }
 

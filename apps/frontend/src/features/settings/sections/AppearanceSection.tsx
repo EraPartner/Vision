@@ -10,6 +10,7 @@ import { isElectronMac } from '@/lib/api/electron';
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
 import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
+import { gainLossPreviewStyle } from './gainLossPreview';
 
 interface VariantMeta {
     value: ThemeVariant;
@@ -215,7 +216,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                             value: 'colorblind',
                             label: (
                                 <span className="flex items-center gap-2">
-                                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(24 90% 62%)' }} aria-hidden />
+                                    <span className="h-3 w-3 rounded-full" style={gainLossPreviewStyle('colorblind')} aria-hidden />
                                     {t('settings.appearance.gainLossColors.colorblind')}
                                 </span>
                             ),
@@ -224,7 +225,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                             value: 'classic',
                             label: (
                                 <span className="flex items-center gap-2">
-                                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(358 82% 62%)' }} aria-hidden />
+                                    <span className="h-3 w-3 rounded-full" style={gainLossPreviewStyle('classic')} aria-hidden />
                                     {t('settings.appearance.gainLossColors.classic')}
                                 </span>
                             ),

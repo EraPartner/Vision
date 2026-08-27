@@ -1,5 +1,5 @@
 // @refresh reset
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -19,13 +19,10 @@ import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import logger from "@/lib/logger";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
 import { isReviewRequired } from "@/lib/api/imports";
 import { useAdapters } from "@/features/imports/useAdapters";
 import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
-
-const ONBOARDING_KEY = "onboarding_complete";
 
 /**
  * Heading recipes for the wizard's step titles.
@@ -71,46 +68,6 @@ function bankMonogram(adapter: { key: string; name: string }): string {
     const fromName = first.length >= 2 ? first.slice(0, 2) : first + second.slice(0, 1);
     const mono = fromName || (adapter.key ?? "").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
     return mono ? mono.charAt(0).toUpperCase() + mono.slice(1) : "?";
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useOnboarding() {
-    const { t } = useLanguage();
-    const [isComplete, setIsComplete] = useState(true);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        let cancelled = false;
-        apiClient.getSetting(ONBOARDING_KEY)
-            .then((result) => {
-                if (!cancelled) setIsComplete(result?.value === true);
-            })
-            .catch(() => {
-                if (!cancelled) setIsComplete(false);
-            })
-            .finally(() => {
-                if (!cancelled) setIsLoading(false);
-            });
-        return () => { cancelled = true; };
-    }, []);
-
-    const complete = useCallback(() => {
-        setIsComplete(true);
-        apiClient.saveSetting(ONBOARDING_KEY, true).catch((err) => {
-            logger.error('Failed to persist onboarding completion', err);
-            toast.error(t('onboarding.persist.failed'));
-        });
-    }, [t]);
-
-    const reset = useCallback(() => {
-        setIsComplete(false);
-        apiClient.saveSetting(ONBOARDING_KEY, false).catch((err) => {
-            logger.error('Failed to persist onboarding reset', err);
-            toast.error(t('onboarding.persist.failed'));
-        });
-    }, [t]);
-
-    return { isComplete, isLoading, complete, reset };
 }
 
 interface OnboardingWizardProps {

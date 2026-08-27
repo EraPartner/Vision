@@ -23,8 +23,9 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
   const cacheRef = useRef<Map<string, Intl.NumberFormat>>(new Map());
 
   return useCallback(
-    (val: number, currency: string = fallbackCurrency, decimals: number = decimalsSetting) => {
-      const key = `${locale}:${currency}:${decimals}`;
+    (val: number, currency: string = fallbackCurrency, decimals?: number) => {
+      const resolvedDecimals = decimals ?? decimalsSetting ?? 2;
+      const key = `${locale}:${currency}:${resolvedDecimals}`;
       // Same guard as the parts sibling below: degrade to the byte-identical
       // bare-number text instead of throwing RangeError into the error
       // boundary, so both formatters on a page fail the same way for the same
@@ -36,8 +37,8 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
           formatter = new Intl.NumberFormat(locale, {
             style: "currency",
             currency,
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals,
+            minimumFractionDigits: resolvedDecimals,
+            maximumFractionDigits: resolvedDecimals,
           });
           cacheRef.current.set(key, formatter);
         }
@@ -72,7 +73,7 @@ export function useCurrencyPartsFormatter(defaultCurrency?: string): CurrencyPar
   return useCallback(
     (val: number, opts: { currency?: string; decimals?: number; signed?: boolean } = {}) => {
       const currency = opts.currency ?? fallbackCurrency;
-      const decimals = opts.decimals ?? decimalsSetting;
+      const decimals = opts.decimals ?? decimalsSetting ?? 2;
       const signed = opts.signed ?? false;
       const key = `${locale}:${currency}:${decimals}:${signed ? "s" : "a"}`;
       // Mirrors Money.tsx's guard, and like Money's it is deliberately wide:

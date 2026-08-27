@@ -3,7 +3,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {X} from "lucide-react";
 
 import {cn} from "@/lib/utils";
-import {composeRefs, useGenieOrigin} from "@/lib/dialogGenie";
+import {composeRefs} from "@/lib/composeRefs";
+import {useGenieOrigin} from "@/hooks/useGenieOrigin";
 
 const Dialog = DialogPrimitive.Root;
 

@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useOnboarding } from '@/features/onboarding/OnboardingWizard';
+import { useOnboarding } from '@/features/onboarding/useOnboarding';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { apiClient } from '@/lib/api';

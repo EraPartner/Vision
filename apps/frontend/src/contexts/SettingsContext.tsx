@@ -36,6 +36,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
 
     const _hydrateDashboardSettings = useSettingsStore((s) => s._hydrateDashboardSettings);
+    const _markSettingsSaveError = useSettingsStore((s) => s._markSettingsSaveError);
     const dashboardSettings = useSettingsStore((s) => s.dashboardSettings);
     const isLoading = useSettingsStore((s) => s.isDashboardSettingsLoading);
 
@@ -64,6 +65,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     _hydrateDashboardSettings(migrated, false);
                     apiClient.saveSetting(SETTINGS_KEY, migrated).catch((err) => {
                         logger.error('Failed to migrate settings to database', err);
+                        _markSettingsSaveError();
                     });
                     localStorage.removeItem('vision_dashboardSettings');
                 } else {
@@ -75,7 +77,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
         }
         hasHydrated.current = true;
-    }, [preloaded, preloadLoading, _hydrateDashboardSettings]);
+    }, [preloaded, preloadLoading, _hydrateDashboardSettings, _markSettingsSaveError]);
 
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
@@ -87,13 +89,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         saveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SETTINGS_KEY, dashboardSettings).catch((err) => {
                 logger.error('Failed to save settings to database:', err);
+                _markSettingsSaveError();
             });
         }, 500);
 
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [dashboardSettings, isLoading]);
+    }, [dashboardSettings, isLoading, _markSettingsSaveError]);
 
     return <>{children}</>;
 }

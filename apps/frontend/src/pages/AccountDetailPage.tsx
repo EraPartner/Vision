@@ -266,7 +266,7 @@ export default function AccountDetailPage() {
 
             <PageHeader
                 title={a.display_name || a.name}
-                description={subtitleParts.join(" · ")}
+                subtitle={subtitleParts.join(" · ")}
                 icon={Landmark}
                 actions={
                     <>

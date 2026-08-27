@@ -127,11 +127,20 @@ const EMPTY_BASE = {
     post_anchor_count: 2,
 } as unknown as Account;
 
+const UNANCHORED = {
+    ...DRIFTING,
+    id: 12,
+    anchor_date: null,
+    statement_balance: 980,
+    statement_balance_date: "2026-06-03",
+} as unknown as Account;
+
 function mockAccountApi({ reconcileFails = false } = {}) {
     const calls: {
         patch: Array<{ id: string; body: Record<string, unknown> }>;
         reconcile: Array<{ id: string; body: Record<string, unknown> }>;
-    } = { patch: [], reconcile: [] };
+        opening: Array<{ id: string; body: Record<string, unknown> }>;
+    } = { patch: [], reconcile: [], opening: [] };
     server.use(
         http.patch(`${API_BASE}/api/accounts/:id`, async ({ request, params }) => {
             calls.patch.push({
@@ -153,6 +162,13 @@ function mockAccountApi({ reconcileFails = false } = {}) {
                 computed_balance: 1000,
                 transaction: null,
             });
+        }),
+        http.post(`${API_BASE}/api/accounts/:id/opening-balance`, async ({ request, params }) => {
+            calls.opening.push({
+                id: String(params.id),
+                body: (await request.json()) as Record<string, unknown>,
+            });
+            return ok({ warning: null });
         }),
     );
     return calls;
@@ -293,6 +309,53 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(0);
         expect(calls.reconcile[0].body).toEqual({ mode: "accept" });
+    });
+
+    it("backfills an opening balance from the valid fresh reading and date", async () => {
+        const calls = mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(UNANCHORED);
+
+        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.clear(screen.getByLabelText(/^as of$/i));
+        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
+        await user.click(screen.getByRole("button", { name: /opening balance/i }));
+
+        await waitFor(() => expect(calls.opening).toHaveLength(1));
+        expect(calls.opening[0]).toEqual({
+            id: "12",
+            body: { balance: 1042.75, date: "2026-07-20", currency: "EUR" },
+        });
+    });
+
+    it("keeps the stored statement as the opening-balance fallback when no draft exists", async () => {
+        const calls = mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(UNANCHORED);
+
+        await user.click(screen.getByRole("button", { name: /opening balance/i }));
+
+        await waitFor(() => expect(calls.opening).toHaveLength(1));
+        expect(calls.opening[0].body).toEqual({
+            balance: 980,
+            date: "2026-06-03",
+            currency: "EUR",
+        });
+    });
+
+    it.each([
+        ["garbage", false],
+        ["1042,75", true],
+    ])("does not silently backfill the stored statement for an unusable draft %#", async (draft, clearDate) => {
+        const calls = mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(UNANCHORED);
+
+        await user.type(screen.getByLabelText(/new statement reading/i), draft);
+        if (clearDate) await user.clear(screen.getByLabelText(/^as of$/i));
+
+        expect(screen.queryByRole("button", { name: /opening balance/i })).not.toBeInTheDocument();
+        expect(calls.opening).toHaveLength(0);
     });
 
     it("stops at the PATCH when the fresh reading already matches the ledger (server rejects zero-drift reconciles)", async () => {

@@ -45,6 +45,7 @@ const STATUS_VARIANT: Record<
   staging: "secondary",
   validating: "secondary",
   matching: "secondary",
+  awaiting_review: "secondary",
   committing: "secondary",
   complete: "default",
   failed: "destructive",

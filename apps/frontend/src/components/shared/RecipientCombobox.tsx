@@ -4,18 +4,17 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useRecipients } from "@/hooks/useRecipients";
+import { useRecipient, useRecipients } from "@/hooks/useRecipients";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { Recipient } from "@/types/api";
 
 /**
  * The unsearched page a closed combobox resolves its label against. Kept as one
- * frozen object so `useRecipientComboboxLabel` subscribes to *exactly* the
- * query the live control uses — same key, same cache entry, same page — and a
- * deferred combobox therefore paints the exact same string the live one would,
- * down to falling back to the placeholder when the selected recipient sits
- * past this page.
+ * frozen object so every deferred combobox label resolver shares one bounded
+ * query. The standard control now resolves its selected id independently;
+ * deferred rows deliberately keep this first-page snapshot to avoid one detail
+ * query per closed row.
  */
 const BASE_PAGE = { limit: 100, active: false, search: undefined } as const;
 
@@ -136,11 +135,21 @@ export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect
     const [search, setSearch] = useState("");
 
     const recipients = useSearchedRecipients(search);
-    const selected = useMemo(() => recipients.find((r) => r.id === value), [recipients, value]);
-    const displayLabel = selected ? selected.name : t('combobox.recipient.placeholder');
+    const { data: selectedRecipient } = useRecipient(value);
+    const selectedInResults = useMemo(() => recipients.find((r) => r.id === value), [recipients, value]);
+    const [pickedLabel, setPickedLabel] = useState<{ id: number; name: string }>();
+    const displayLabel = selectedRecipient?.name
+        ?? selectedInResults?.name
+        ?? (pickedLabel && pickedLabel.id === value ? pickedLabel.name : undefined)
+        ?? t('combobox.recipient.placeholder');
+
+    const handleOpenChange = (nextOpen: boolean) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch("");
+    };
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild>
                 <RecipientComboboxTrigger
                     id={id}
@@ -158,8 +167,11 @@ export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect
                     search={search}
                     onSearchChange={setSearch}
                     onPick={(recipientId, recipientName) => {
+                        setPickedLabel(recipientId != null && recipientName != null
+                            ? { id: recipientId, name: recipientName }
+                            : undefined);
                         onSelect(recipientId, recipientName);
-                        setOpen(false);
+                        handleOpenChange(false);
                     }}
                 />
             </PopoverContent>
@@ -168,14 +180,14 @@ export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect
 }
 
 /**
- * Resolves a recipient id to the label a closed `RecipientCombobox` paints,
- * from ONE shared `useRecipients` subscription.
+ * Resolves a recipient id to the label a closed `DeferredRecipientCombobox`
+ * paints, from ONE shared `useRecipients` subscription.
  *
  * Call it once per list that renders many `DeferredRecipientCombobox`es and
  * hand the result down: the list then holds a single query observer instead of
  * one per row, and — because it reads the very same cache entry the live
- * control reads (`BASE_PAGE`) — the deferred rows render identically to the
- * live control they stand in for. It doubles as the warm-up fetch, so opening
+ * control used before per-id label resolution — deferred rows avoid N detail
+ * observers at the cost of falling back past the first page. It doubles as the warm-up fetch, so opening
  * any row's popover shows its recipients from cache with no empty flash.
  */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -237,10 +249,10 @@ function DeferredRecipientComboboxItems({
  * popover is the real Radix one, so opening/keyboard/selection behave exactly
  * as before.
  *
- * The one deliberate divergence: while a search is filtering the selected
- * recipient out of the fetched page, the live control's trigger falls back to
- * the placeholder mid-search — here the trigger keeps naming the selected
- * recipient, since its label comes from the shared unsearched page.
+ * The deliberate divergence from the standard control is performance-related:
+ * the deferred trigger uses the caller's bounded label snapshot and preserves
+ * its search across close/reopen, while the standard control uses a per-id
+ * detail query and clears search on close.
  */
 export function DeferredRecipientCombobox({
     id,
@@ -254,8 +266,8 @@ export function DeferredRecipientCombobox({
 }: DeferredRecipientComboboxProps) {
     const [open, setOpen] = useState(false);
     // Held out here (it costs one useState, no timer and no query) so a
-    // reopened popover still shows the search the user last typed, as the live
-    // control does.
+    // reopened popover still shows the search the user last typed. This is an
+    // intentional deferred-control behavior; the standard control clears it.
     const [search, setSearch] = useState("");
 
     return (

@@ -10,6 +10,32 @@ beforeEach(() => {
 });
 
 describe("useCurrencyPartsFormatter — malformed currency degrades like Money", () => {
+    it("uses the same two-digit fallback as Money when the stored setting is undefined", () => {
+        useSettingsStore.setState({
+            appSettings: { ...DEFAULT_APP_SETTINGS, showDecimalPlaces: undefined as unknown as number },
+        });
+        const stringFormatter = renderHook(() => useCurrencyFormatter()).result.current;
+        const partsFormatter = renderHook(() => useCurrencyPartsFormatter()).result.current;
+        const partsText = partsFormatter(1234, { currency: "JPY" }).map((part) => part.value).join("");
+        const { container } = render(<Money amount={1234} currency="JPY" />);
+
+        expect(stringFormatter(1234, "JPY")).toBe("1.234,00\u00a0¥");
+        expect(partsText).toBe("1.234,00\u00a0¥");
+        expect(container.textContent).toBe(partsText);
+    });
+
+    it("preserves an explicit zero-decimal override", () => {
+        useSettingsStore.setState({
+            appSettings: { ...DEFAULT_APP_SETTINGS, showDecimalPlaces: undefined as unknown as number },
+        });
+        const stringFormatter = renderHook(() => useCurrencyFormatter()).result.current;
+        const partsFormatter = renderHook(() => useCurrencyPartsFormatter()).result.current;
+
+        expect(stringFormatter(1234.4, "JPY", 0)).toBe("1.234\u00a0¥");
+        expect(partsFormatter(1234.4, { currency: "JPY", decimals: 0 }).map((part) => part.value).join(""))
+            .toBe("1.234\u00a0¥");
+    });
+
     it("returns a bare-number literal instead of throwing RangeError", () => {
         // `new Intl.NumberFormat(locale, { currency: "US" })` throws RangeError:
         // a currency code must be three alphabetic characters. Without a guard

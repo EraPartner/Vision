@@ -11,6 +11,7 @@ import { BankBalancesWidget } from "@/features/dashboard/BankBalancesWidget";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,8 +21,8 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats, useMonthlySummary } from "@/hooks/useFilteredDashboardStats";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import { dashboardKeys } from "@/lib/queryKeys";
+import { fetchRecentDashboardTransactions } from "@/features/dashboard/recentTransactions";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
@@ -33,7 +34,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { parseCategoryName } from "@vision/shared-utils";
-import type { Transaction } from "@/lib/api";
 
 type GraphExclusions = Record<string, boolean>;
 
@@ -79,16 +79,21 @@ export default function DashboardPage() {
         (allExcludedCategoryIds.length > 0 || excludedRecipientIds.length > 0);
 
     // Fetch real-time statistics from /api/info endpoints with applied filters
-    const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
+    const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useFilteredDashboardStats();
 
     // Fetch transactions for charts and recent transactions table
-    const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
+    const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError, refetch: refetchTransactions } = useTransactions({ limit: 50 });
 
     // Monthly summary — FILTERED version. Shares the
     // ['monthlySummary', currency, categoryIds, recipientIds] key family with
     // useFilteredDashboardStats above, so the identical request is deduped into
     // one cache entry instead of refetched under a page-local key.
-    const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useMonthlySummary({
+    const {
+        data: monthlySummaryFiltered,
+        isLoading: monthlyFilteredLoading,
+        error: monthlyFilteredError,
+        refetch: refetchMonthlyFiltered,
+    } = useMonthlySummary({
         excludedCategoryIds: allExcludedCategoryIds,
         excludedRecipientIds,
         enabled: exclusionsApply,
@@ -98,7 +103,12 @@ export default function DashboardPage() {
     // Always enabled as fallback when users toggle a graph to "ignore filters";
     // with exclusions off this collapses onto the same cache entry as the
     // filtered variant and the stat cards — one fetch for the whole page.
-    const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useMonthlySummary();
+    const {
+        data: monthlySummaryUnfiltered,
+        isLoading: monthlyUnfilteredLoading,
+        error: monthlyUnfilteredError,
+        refetch: refetchMonthlyUnfiltered,
+    } = useMonthlySummary();
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
@@ -109,54 +119,10 @@ export default function DashboardPage() {
         data: recentFilteredTransactions,
         isLoading: recentFilteredLoading,
         error: recentFilteredError,
+        refetch: refetchRecentFiltered,
     } = useQuery({
         queryKey: dashboardKeys.recentTransactions(allExcludedCategoryIds, excludedRecipientIds, exclusionsApply),
-        queryFn: async () => {
-            const pageSize = 200;
-            // Cap the scan so a history dominated by excluded categories (e.g.
-            // transfers) can't trigger an unbounded sequence of 200-row round
-            // trips — this queryFn re-runs on every transaction mutation.
-            const maxPages = 3;
-            let offset = 0;
-            const picked: Transaction[] = [];
-
-            const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
-            const excludedRecipientIdSet = new Set(excludedRecipientIds);
-
-            for (let pageIndex = 0; picked.length < 5 && pageIndex < maxPages; pageIndex++) {
-                const page = await apiClient.getTransactions({
-                    limit: pageSize,
-                    offset,
-                    active: true,
-                });
-
-                if (page.items.length === 0) {
-                    break;
-                }
-
-                for (const tx of page.items) {
-                    if (tx.category_id && excludedCategoryIdSet.has(tx.category_id)) {
-                        continue;
-                    }
-
-                    if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id)) {
-                        continue;
-                    }
-
-                    picked.push(tx);
-                    if (picked.length === 5) {
-                        break;
-                    }
-                }
-
-                offset += pageSize;
-                if (offset >= page.total || page.items.length < pageSize) {
-                    break;
-                }
-            }
-
-            return picked;
-        },
+        queryFn: () => fetchRecentDashboardTransactions(allExcludedCategoryIds, excludedRecipientIds),
         enabled: exclusionsApply,
         staleTime: 30000,
     });
@@ -339,15 +305,39 @@ export default function DashboardPage() {
     // page. Cached data from any successful query still renders so the user
     // sees something useful when the host is offline. The banner distinguishes
     // "live" (some queries fresh, some failed) from "stale" (all served from cache).
-    const partialError = statsError || transactionsError || recentFilteredError;
-    const partialErrorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || '';
-    const hasAnyData = Boolean(statsData) || (transactionsData?.items?.length ?? 0) > 0;
+    const partialError = statsError || transactionsError || monthlyFilteredError || monthlyUnfilteredError || recentFilteredError;
+    const partialErrorMessage = statsError?.message
+        || transactionsError?.message
+        || monthlyFilteredError?.message
+        || monthlyUnfilteredError?.message
+        || recentFilteredError?.message
+        || '';
+    const hasAnyData = Boolean(statsData)
+        || (transactionsData?.items?.length ?? 0) > 0
+        || Boolean(monthlySummaryFiltered)
+        || Boolean(monthlySummaryUnfiltered);
     const allFromCache = Boolean(statsError) && Boolean(transactionsError);
+
+    const retryDashboard = () => {
+        const requests: Promise<unknown>[] = [
+            refetchStats(),
+            refetchTransactions(),
+            refetchMonthlyUnfiltered(),
+        ];
+        if (exclusionsApply) {
+            requests.push(refetchMonthlyFiltered(), refetchRecentFiltered());
+        }
+        void Promise.allSettled(requests);
+    };
 
     if (partialError && !hasAnyData) {
         return (
             <div className="space-y-8">
-                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(partialErrorMessage) })} icon={LayoutDashboard} />
+                <PageHeader title={t('dashboard.title')} icon={LayoutDashboard} />
+                <PageError
+                    message={t('dashboard.errorLoading', { msg: String(partialErrorMessage) })}
+                    onRetry={retryDashboard}
+                />
             </div>
         );
     }

@@ -32,6 +32,7 @@ export type SortDirection = "asc" | "desc" | null;
  * sub-length terms anyway, so forwarding them only refetches for nothing.
  */
 export const SERVER_SEARCH_MIN_LENGTH = 3;
+const MAX_COLUMN_WIDTH = 2000;
 
 /** The query actually forwarded to the server for a given raw input value. */
 function gateServerSearch(value: string): string {
@@ -87,7 +88,7 @@ export interface VirtualTableServerMode {
 }
 
 interface VirtualDataTableProps<T> {
-    title: string;
+    title?: string;
     subtitle?: string;
     columns: Column<T>[];
     data: T[];
@@ -501,12 +502,17 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         // rebuilds `columns` with the same keys and must not re-run this.
     }, [columnKeySignature]);
 
-    const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+    const resizingRef = useRef<{ key: string; pointerId: number; startX: number; startWidth: number } | null>(null);
+    const resizeCleanupRef = useRef<(() => void) | null>(null);
 
-    const handleResizeStart = useCallback((e: React.MouseEvent, colKey: string, currentWidth: number) => {
+    useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+    const handleResizeStart = useCallback((e: React.PointerEvent, colKey: string, currentWidth: number) => {
         e.preventDefault();
-        resizingRef.current = { key: colKey, startX: e.clientX, startWidth: currentWidth };
-        // Coalesce the per-mousemove state writes into one commit per animation
+        resizeCleanupRef.current?.();
+        resizingRef.current = { key: colKey, pointerId: e.pointerId, startX: e.clientX, startWidth: currentWidth };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        // Coalesce the per-pointermove state writes into one commit per animation
         // frame, so a fast drag re-renders the table at most once per frame.
         let rafId: number | null = null;
         let pendingWidth: number | null = null;
@@ -517,27 +523,51 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             const width = pendingWidth;
             setColumnWidths(prev => ({ ...prev, [key]: width }));
         };
-        const handleMouseMove = (ev: MouseEvent) => {
-            if (!resizingRef.current) return;
+        const handlePointerMove = (ev: PointerEvent) => {
+            if (!resizingRef.current || ev.pointerId !== resizingRef.current.pointerId) return;
             const diff = ev.clientX - resizingRef.current.startX;
             const col = columns.find(c => c.key === resizingRef.current!.key);
             const minW = col?.minWidth || 60;
-            pendingWidth = Math.max(minW, resizingRef.current.startWidth + diff);
+            pendingWidth = Math.min(MAX_COLUMN_WIDTH, Math.max(minW, resizingRef.current.startWidth + diff));
             if (rafId == null) rafId = requestAnimationFrame(flush);
         };
-        const handleMouseUp = () => {
+        const finishResize = (ev?: PointerEvent) => {
+            if (ev && resizingRef.current && ev.pointerId !== resizingRef.current.pointerId) return;
             if (rafId != null) cancelAnimationFrame(rafId);
             flush();
             resizingRef.current = null;
-            document.removeEventListener("mousemove", handleMouseMove);
-            document.removeEventListener("mouseup", handleMouseUp);
+            document.removeEventListener("pointermove", handlePointerMove);
+            document.removeEventListener("pointerup", finishResize);
+            document.removeEventListener("pointercancel", finishResize);
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
+            resizeCleanupRef.current = null;
         };
+        resizeCleanupRef.current = finishResize;
         document.body.style.cursor = "col-resize";
         document.body.style.userSelect = "none";
-        document.addEventListener("mousemove", handleMouseMove);
-        document.addEventListener("mouseup", handleMouseUp);
+        document.addEventListener("pointermove", handlePointerMove);
+        document.addEventListener("pointerup", finishResize);
+        document.addEventListener("pointercancel", finishResize);
+    }, [columns]);
+
+    const handleResizeKeyDown = useCallback((e: React.KeyboardEvent, colKey: string, currentWidth: number) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        const minWidth = columns.find((col) => col.key === colKey)?.minWidth || 60;
+        const delta = e.key === "ArrowRight" ? 10 : -10;
+        setColumnWidths((prev) => ({
+            ...prev,
+            [colKey]: Math.min(MAX_COLUMN_WIDTH, Math.max(minWidth, (prev[colKey] ?? currentWidth) + delta)),
+        }));
+    }, [columns]);
+
+    const syncRenderedColumnWidth = useCallback((handle: HTMLDivElement, colKey: string, fallbackWidth: number) => {
+        const measuredWidth = handle.parentElement?.getBoundingClientRect().width ?? 0;
+        const minWidth = columns.find((col) => col.key === colKey)?.minWidth || 60;
+        const width = Math.min(MAX_COLUMN_WIDTH, Math.max(minWidth, measuredWidth || fallbackWidth));
+        setColumnWidths((prev) => prev[colKey] === width ? prev : { ...prev, [colKey]: width });
+        return width;
     }, [columns]);
 
     const handleSort = (key: string) => {
@@ -773,13 +803,22 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     return (
         <Card className="premium-frame relative overflow-hidden">
             <CardSheen />
-            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
-                <div>
-                    <CardTitle className="text-lg font-semibold">{title}</CardTitle>
-                    {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
-                </div>
-                {actions && <div className="flex items-center gap-2">{actions}</div>}
-            </CardHeader>
+            {(title || subtitle || actions) && (
+                <CardHeader
+                    className={cn(
+                        "flex flex-row items-start space-y-0 pb-4",
+                        title || subtitle ? "justify-between" : "justify-end",
+                    )}
+                >
+                    {(title || subtitle) && (
+                        <div>
+                            {title && <CardTitle className="text-lg font-semibold">{title}</CardTitle>}
+                            {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+                        </div>
+                    )}
+                    {actions && <div className="flex items-center gap-2">{actions}</div>}
+                </CardHeader>
+            )}
 
             {/* Search bar */}
             <div className="px-6 pb-3 flex items-center gap-3">
@@ -924,12 +963,40 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
                                     {col.header && (
                                         <div
-                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-[width,background-color]"
-                                            onMouseDown={(e) => {
-                                                const el = e.currentTarget.parentElement;
-                                                const currentWidth = el ? el.getBoundingClientRect().width : 120;
-                                                handleResizeStart(e, col.key, currentWidth);
-                                            }}
+                                            role="separator"
+                                            aria-orientation="vertical"
+                                            aria-label={typeof col.header === "string" ? col.header : col.key}
+                                            aria-valuemin={col.minWidth || 60}
+                                            aria-valuemax={MAX_COLUMN_WIDTH}
+                                            aria-valuenow={Math.min(
+                                                MAX_COLUMN_WIDTH,
+                                                Math.max(col.minWidth || 60, columnWidths[col.key] ?? col.defaultWidth ?? 120),
+                                            )}
+                                            tabIndex={0}
+                                            className="absolute -right-3 bottom-0 top-0 z-10 w-6 touch-none cursor-col-resize before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] hover:before:w-0.5 hover:before:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:before:w-0.5 focus-visible:before:bg-primary/70 active:before:bg-primary"
+                                            onFocus={(e) => syncRenderedColumnWidth(
+                                                e.currentTarget,
+                                                col.key,
+                                                columnWidths[col.key] ?? col.defaultWidth ?? 120,
+                                            )}
+                                            onPointerDown={(e) => handleResizeStart(
+                                                e,
+                                                col.key,
+                                                syncRenderedColumnWidth(
+                                                    e.currentTarget,
+                                                    col.key,
+                                                    columnWidths[col.key] ?? col.defaultWidth ?? 120,
+                                                ),
+                                            )}
+                                            onKeyDown={(e) => handleResizeKeyDown(
+                                                e,
+                                                col.key,
+                                                syncRenderedColumnWidth(
+                                                    e.currentTarget,
+                                                    col.key,
+                                                    columnWidths[col.key] ?? col.defaultWidth ?? 120,
+                                                ),
+                                            )}
                                         />
                                     )}
                                 </div>

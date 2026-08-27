@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { migrateAppSettings, DEFAULT_APP_SETTINGS } from "@/stores/settingsStore";
+import { APP_DATE_FORMATS, migrateAppSettings, DEFAULT_APP_SETTINGS } from "@/stores/settingsStore";
 
 // Schema guard for the persisted app_settings blob (mirrors the
 // storedDashboardSettingsSchema precedent). The load-bearing cases are the
@@ -58,6 +58,14 @@ describe("migrateAppSettings — blob validation", () => {
     it("accepts any well-formed 3-letter code, not just the dropdown list", () => {
         expect(migrateAppSettings({ defaultCurrency: "BTC" }).defaultCurrency).toBe("BTC");
         expect(migrateAppSettings({ defaultCurrency: "XXX" }).defaultCurrency).toBe("XXX");
+    });
+
+    it("keeps supported date formats and defaults malformed values", () => {
+        for (const dateFormat of APP_DATE_FORMATS) {
+            expect(migrateAppSettings({ dateFormat }).dateFormat).toBe(dateFormat);
+        }
+        expect(migrateAppSettings({ dateFormat: "PPP" }).dateFormat).toBe("DD/MM/YYYY");
+        expect(migrateAppSettings({ dateFormat: 42 }).dateFormat).toBe("DD/MM/YYYY");
     });
 
     it("falls back to the default decimals for out-of-range showDecimalPlaces", () => {

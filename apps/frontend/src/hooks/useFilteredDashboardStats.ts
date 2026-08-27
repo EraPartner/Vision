@@ -154,5 +154,8 @@ export function useFilteredDashboardStats() {
     // set is settled and the numbers are real.
     isLoading: !isReady || summaryQuery.isLoading || countQuery.isLoading,
     error: summaryQuery.error ?? countQuery.error,
+    refetch: async () => {
+      await Promise.allSettled([summaryQuery.refetch(), countQuery.refetch()]);
+    },
   };
 }

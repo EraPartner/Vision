@@ -48,8 +48,8 @@ export function accountToFormValues(account: Account): AccountFormValues {
         multi_currency_cash: account.multi_currency_cash,
         has_cash_sleeve: account.has_cash_sleeve,
         statementBalance: account.statement_balance != null ? String(account.statement_balance) : "",
-        // The API serialises the DATE as a full ISO timestamp; the
-        // <input type="date"> and the server both want YYYY-MM-DD.
+        // The API emits YYYY-MM-DD. Keep the slice as defensive compatibility
+        // with older cached payloads that may still contain an ISO timestamp.
         statementBalanceDate: account.statement_balance_date ? account.statement_balance_date.slice(0, 10) : "",
     };
 }

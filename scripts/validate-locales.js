@@ -2,6 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const { extractTranslationCalls } = require('./lib/localeCallParser');
+
 const repoRoot = path.resolve(__dirname, '..');
 const src = path.join(repoRoot, 'i18n', 'source');
 const frontendLocales = path.join(repoRoot, 'apps', 'frontend', 'src', 'locales');
@@ -210,108 +212,6 @@ const frontendSrc = path.join(repoRoot, 'apps', 'frontend', 'src');
 const KEY_SHAPE = /^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+)+$/;
 const PLURAL_CATS = ['', '.zero', '.one', '.two', '.few', '.many', '.other'];
 
-// Blank out // and /* */ comments while preserving offsets and newlines, so
-// line numbers stay accurate and key-shaped literals inside JSDoc examples
-// (e.g. the t('col.date') in a usage comment) are not mistaken for real calls.
-function blankComments(code) {
-  let out = '';
-  let str = null;
-  for (let i = 0; i < code.length; i++) {
-    const c = code[i];
-    const c2 = code[i + 1];
-    if (str) {
-      out += c;
-      if (c === '\\') { out += code[i + 1] ?? ''; i++; }
-      else if (c === str) str = null;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') { str = c; out += c; continue; }
-    if (c === '/' && c2 === '/') { while (i < code.length && code[i] !== '\n') { out += ' '; i++; } i--; continue; }
-    if (c === '/' && c2 === '*') {
-      out += '  '; i += 2;
-      while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) { out += code[i] === '\n' ? '\n' : ' '; i++; }
-      out += '  '; i++;
-      continue;
-    }
-    out += c;
-  }
-  return out;
-}
-
-function readStringLiteral(s, i) {
-  const q = s[i];
-  if (q !== '"' && q !== "'" && q !== '`') return undefined;
-  let val = '';
-  let dynamic = false;
-  for (let j = i + 1; j < s.length; j++) {
-    const c = s[j];
-    if (c === '\\') { val += s[j + 1]; j++; continue; }
-    if (q === '`' && c === '$' && s[j + 1] === '{') dynamic = true;
-    if (c === q) return { value: val, end: j, dynamic };
-    val += c;
-  }
-  return undefined;
-}
-
-// From just after '(', split the argument list at top-level commas.
-function readArgs(s, i) {
-  let depth = 1;
-  let cur = '';
-  let str = null;
-  const args = [];
-  for (let j = i; j < s.length; j++) {
-    const c = s[j];
-    if (str) {
-      cur += c;
-      if (c === '\\') { cur += s[j + 1] ?? ''; j++; }
-      else if (c === str) str = null;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') { str = c; cur += c; continue; }
-    if (c === '(' || c === '[' || c === '{') depth++;
-    else if (c === ')' || c === ']' || c === '}') {
-      depth--;
-      if (depth === 0) { args.push(cur); break; }
-    }
-    if (depth === 1 && c === ',') { args.push(cur); cur = ''; continue; }
-    cur += c;
-  }
-  return args;
-}
-
-// Top-level keys of an object literal; returns undefined for spreads/variables.
-function objectKeys(raw) {
-  const s = raw.trim();
-  if (!s.startsWith('{')) return undefined;
-  const body = s.slice(1, s.lastIndexOf('}'));
-  const keys = [];
-  let depth = 0;
-  let str = null;
-  let expectKey = true;
-  let ident = '';
-  const flush = () => { const id = ident.trim(); if (/^[A-Za-z_$][\w$]*$/.test(id)) keys.push(id); ident = ''; };
-  for (let j = 0; j < body.length; j++) {
-    const c = body[j];
-    if (str) { if (c === '\\') j++; else if (c === str) str = null; continue; }
-    if (c === '"' || c === "'" || c === '`') {
-      if (depth === 0 && expectKey) {
-        const lit = readStringLiteral(body, j);
-        if (lit && !lit.dynamic) { keys.push(lit.value); j = lit.end; expectKey = false; ident = ''; continue; }
-      }
-      str = c; continue;
-    }
-    if (c === '(' || c === '[' || c === '{') { depth++; continue; }
-    if (c === ')' || c === ']' || c === '}') { depth--; continue; }
-    if (depth === 0) {
-      if (c === ':') { flush(); expectKey = false; continue; }
-      if (c === ',') { if (expectKey) flush(); ident = ''; expectKey = true; continue; }
-      ident += c;
-    }
-  }
-  if (expectKey) flush();
-  return keys;
-}
-
 function walkSources(dir, acc) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === 'locales' || entry.name === '__tests__') continue;
@@ -335,30 +235,17 @@ function placeholdersFor(key) {
 if (fs.existsSync(frontendSrc)) {
   const missingKeys = [];
   const droppedVars = [];
-  const callRe = /(?<![\w$.])(t|tc)\s*\(/g;
   for (const file of walkSources(frontendSrc, [])) {
-    const code = blankComments(fs.readFileSync(file, 'utf8'));
+    const code = fs.readFileSync(file, 'utf8');
     const rel = path.relative(repoRoot, file);
-    let m;
-    while ((m = callRe.exec(code))) {
-      const fn = m[1];
-      const args = readArgs(code, m.index + m[0].length);
-      if (!args.length) continue;
-      const arg0 = args[0].trim();
-      const lit = readStringLiteral(arg0, 0);
-      if (!lit || lit.dynamic || lit.end !== arg0.length - 1) continue; // dynamic/computed key
-      const key = lit.value;
+    for (const { fn, key, line, variableNames } of extractTranslationCalls(code, file)) {
       if (!KEY_SHAPE.test(key)) continue; // not an i18n key reference
-      const line = code.slice(0, m.index).split('\n').length;
       const { exists, tokens } = placeholdersFor(key);
       if (!exists) { missingKeys.push(`${rel}:${line}  ${fn}('${key}')`); continue; }
-      const varsRaw = fn === 't' ? args[1] : args[2];
-      if (varsRaw == null) continue;
-      const passed = objectKeys(varsRaw);
-      if (passed === undefined) continue; // spread / variable vars
+      if (variableNames === null) continue; // no vars, or a dynamic object/variable
       const allowed = new Set([...tokens].map((t) => t.slice(1, -1)));
       if (fn === 'tc') allowed.add('count');
-      const dropped = passed.filter((p) => !allowed.has(p));
+      const dropped = variableNames.filter((name) => !allowed.has(name));
       if (dropped.length) droppedVars.push(`${rel}:${line}  ${fn}('${key}') drops {${dropped.join('}, {')}} (string: "${en[key] ?? en[key + '.other'] ?? ''}")`);
     }
   }

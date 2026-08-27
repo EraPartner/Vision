@@ -18,6 +18,7 @@ describe("dateUtils app settings helpers", () => {
     expect(appDateFormatToDateFnsPattern("YYYY-MM-DD")).toBe("yyyy-MM-dd");
     expect(appDateFormatToDateFnsPattern("DD.MM.YYYY")).toBe("dd.MM.yyyy");
     expect(appDateFormatToDateFnsPattern("DD-MM-YYYY")).toBe("dd-MM-yyyy");
+    expect(appDateFormatToDateFnsPattern("invalid")).toBe("dd/MM/yyyy");
   });
 
   test("formats a date using selected app date format", () => {

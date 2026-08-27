@@ -69,6 +69,7 @@ describe("ImportReviewPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /back to import/i }),
         ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });
@@ -85,6 +86,7 @@ describe("ImportReviewPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /back to import/i }),
         ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 

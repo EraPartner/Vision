@@ -12,6 +12,7 @@ const Toaster = ({...props}: ToasterProps) => {
             className="toaster group"
             closeButton
             offset={18}
+            hotkey={["altKey", "KeyT"]}
             toastOptions={{
                 classNames: {
                     toast:

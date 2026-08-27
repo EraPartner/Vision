@@ -312,6 +312,7 @@ export default function MarketLookupPage() {
         onChange={setSearchText}
         loading={isSearching && searchText.length > 0}
         open={isOpen && (searchResults?.items?.length ?? 0) > 0}
+        onDismiss={() => setSearchText("")}
       >
         {searchResults?.items?.map((item) => (
           <SymbolSearchResultItem

@@ -1,10 +1,10 @@
 /**
  * Pure portfolio calculations — thin wrappers over @vision/shared-utils/portfolio.
  *
- * The implementations are shared verbatim with the backend (utils/
- * portfolioMath.js re-exports the same module) so the two sides can no longer
- * drift. Only "today" differs: the browser's local calendar day here, the
- * APP_TIMEZONE day on the server (identical for a user in the app timezone).
+ * Cost-basis implementations come from the same shared package used by backend
+ * portfolio services, so the two sides can no longer drift. Only "today"
+ * differs for accrued interest: the browser's local calendar day here and the
+ * APP_TIMEZONE day on the server.
  */
 
 import type { PortfolioTransaction } from '@/types/api';

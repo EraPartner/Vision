@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { netWorthKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,13 +86,13 @@ export default function NetWorthPage() {
   const fmtParts = useCurrencyPartsFormatter();
 
   const monthLabelLocale = useMemo(() => appLanguageToLocale(language), [language]);
-  const xTickFormatter = useMemo(() => {
-    if (period === '1m' || period === '3m' || period === '6m') {
-      return new Intl.DateTimeFormat(monthLabelLocale, { day: 'numeric', month: 'short' });
-    }
-    return new Intl.DateTimeFormat(monthLabelLocale, { month: 'short', year: '2-digit' });
-  }, [monthLabelLocale, period]);
-  const xTickFormat = useCallback((d: Date) => xTickFormatter.format(d), [xTickFormatter]);
+  const xTickPattern = period === '1m' || period === '3m' || period === '6m'
+    ? CHART_DATE_PATTERNS.dayTick
+    : CHART_DATE_PATTERNS.monthTick;
+  const xTickFormat = useCallback(
+    (d: Date) => formatDate(d, xTickPattern, monthLabelLocale),
+    [monthLabelLocale, xTickPattern],
+  );
 
   const periodLabels = useMemo((): Record<ChartPeriod, string> => ({
     '1m': t('performance.period.1m'),

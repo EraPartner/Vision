@@ -22,10 +22,10 @@
    "never rely on color alone". */
 :root.skin-v2 {
     --gain: 162 84% 30%;
-    --loss: 24 85% 45%;
+    --loss: var(--loss-colorblind);
 }
 
 :root.skin-v2.dark {
     --gain: 160 65% 52%;
-    --loss: 24 90% 62%;
+    --loss: var(--loss-colorblind);
 }

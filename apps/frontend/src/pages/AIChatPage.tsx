@@ -207,10 +207,12 @@ export default function AIChatPage() {
                         <h1 className="truncate text-lg font-semibold tracking-tight">
                             {detail?.conversation.title || t('aiChat.title')}
                         </h1>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className={cn('inline-block h-1.5 w-1.5 rounded-full', statusDotClass)} />
-                            {statusLabel}
-                        </p>
+                        {(statusLoading || status?.ok) && (
+                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <span className={cn('inline-block h-1.5 w-1.5 rounded-full', statusDotClass)} />
+                                {statusLabel}
+                            </p>
+                        )}
                         </div>
                     </div>
                 </header>

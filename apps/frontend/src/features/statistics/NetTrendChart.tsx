@@ -3,7 +3,7 @@ import { AreaChart, type AreaSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
-import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface NetDatum {
@@ -19,7 +19,7 @@ interface NetTrendChartProps {
 export const NetTrendChart = memo(function NetTrendChart({ data }: NetTrendChartProps) {
   const { t, language } = useLanguage();
   const monthLabelLocale = appLanguageToLocale(language);
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
 
   const chartData: NetDatum[] = data.monthlyData.map((m) => ({
     period: m.period,
@@ -37,8 +37,8 @@ export const NetTrendChart = memo(function NetTrendChart({ data }: NetTrendChart
       xAccessor={(d) => d.date}
       series={series}
       height={300}
-      xTickFormat={(v) => formatDate(v as Date, "MMM yy", monthLabelLocale)}
-      yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
+      yTickFormat={formatAxisCompact}
       tooltipTitle={(d) => formatPeriodShort(d.period, monthLabelLocale)}
       tooltipValueFormat={(v) => formatCurrency(v)}
     />

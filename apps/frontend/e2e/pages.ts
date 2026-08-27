@@ -3,8 +3,7 @@
  *
  * `a11y.spec.ts` (axe scans) and `network-drift.spec.ts` (failed-response
  * listener) both walk the same set of top-level pages. This is the single source
- * of truth for that list. `network-drift` additionally sweeps the Tax page (see
- * that spec).
+ * of truth for that list.
  */
 export interface PageEntry {
     name: string;
@@ -20,6 +19,7 @@ export const PAGES: PageEntry[] = [
     { name: "Recipients", path: "/recipients", heading: /recipients/i },
     { name: "Statistics", path: "/statistics", heading: /statistics|analytics/i },
     { name: "Owes", path: "/owes", heading: /who owes/i },
+    { name: "TaxOverview", path: "/tax", heading: /tax overview/i },
     { name: "PortfolioOverview", path: "/portfolio", heading: /portfolio/i },
     { name: "Watchlist", path: "/portfolio/watchlist", heading: /watchlist/i },
     { name: "Planned", path: "/planned", heading: /planned payments/i },

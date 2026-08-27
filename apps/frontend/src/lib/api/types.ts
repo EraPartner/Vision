@@ -6,6 +6,8 @@
  * perf/arch plan).
  */
 
+import type { components } from '@/types/generated';
+
 export interface AggregationEnvelope<T> {
     data: T;
     meta: {
@@ -165,21 +167,7 @@ export interface SavedChartCreate {
     dateRangeEnd?: string | null;
 }
 
-export interface ImportBatch {
-    id: number;
-    adapter_name: string;
-    source_filename: string | null;
-    source_size_bytes: number | null;
-    status: 'pending' | 'staging' | 'validating' | 'matching' | 'committing' | 'complete' | 'failed' | 'aborted';
-    rows_total: number | null;
-    rows_imported: number | null;
-    rows_duplicate: number | null;
-    rows_error: number | null;
-    error_summary: string | null;
-    started_at: string;
-    completed_at: string | null;
-    transactions_remaining: number;
-}
+export type ImportBatch = components['schemas']['ImportBatch'];
 
 export interface BatchListResponse {
     items: ImportBatch[];

@@ -11,7 +11,7 @@ import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
-import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -338,9 +338,9 @@ export function BankBalancesWidget() {
                             // Daily datapoints (~365) now outnumber the time-scale
                             // auto-ticks, so the width-derived tick spacing is fine —
                             // no more duplicated "MMM yy" labels between sparse points.
-                            xTickFormat={(v) => formatDate(v as Date, "MMM yy", monthLabelLocale)}
+                            xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(d.date, "d MMM yy", monthLabelLocale)}
+                            tooltipTitle={(d) => formatDate(d.date, CHART_DATE_PATTERNS.detail, monthLabelLocale)}
                             tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         />
                         <ChartLegend items={legendItems} align="center" />

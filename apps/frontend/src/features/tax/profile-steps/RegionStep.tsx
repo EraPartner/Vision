@@ -1,5 +1,3 @@
-import { parseDecimal } from '@/lib/decimal';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -9,6 +7,7 @@ import {
     type BelgianRegion,
 } from '@/contexts/BelgianTaxProfileContext';
 import type { StepProps } from './types';
+import { ProfileNumberInput } from './ProfileNumberInput';
 
 export function RegionStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
@@ -54,14 +53,13 @@ export function RegionStep({ profile, updateProfile }: StepProps) {
                 <Label htmlFor="communal-surcharge" className="text-sm font-medium">{t('tax.profile.field.communalSurcharge')}</Label>
                 <p className="text-xs text-muted-foreground">{t('tax.profile.field.communalSurcharge.desc')}</p>
                 <div className="flex items-center gap-3">
-                    <Input
+                    <ProfileNumberInput
                         id="communal-surcharge"
-                        type="number"
                         min={0}
                         max={9}
                         step={0.1}
                         value={profile.communalSurchargePercent}
-                        onChange={(e) => updateProfile({ communalSurchargePercent: parseDecimal(e.target.value) })}
+                        onValueChange={(value) => updateProfile({ communalSurchargePercent: value ?? 0 })}
                         className="w-24"
                     />
                     <span className="text-sm text-muted-foreground">{t('tax.profile.communalSurchargePct')}</span>

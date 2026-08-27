@@ -18,7 +18,7 @@ interface TopRecipientsChartProps {
 
 export const TopRecipientsChart = memo(function TopRecipientsChart({ data }: TopRecipientsChartProps) {
   const { t } = useLanguage();
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatAxisCompact } = useChartCurrencyFormatter();
   const [yearFilter, setYearFilter] = useState<string>("all");
 
   const filteredRecipients =
@@ -57,7 +57,7 @@ export const TopRecipientsChart = memo(function TopRecipientsChart({ data }: Top
         layout="horizontal"
         height={350}
         margin={{ top: 16, right: 32, bottom: 28, left: 160 }}
-        valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+        valueTickFormat={formatAxisCompact}
         tooltipTitle={(d) => d.fullName}
         tooltipValueFormat={(v) => formatCurrency(v)}
         colorForIndex={(i) => `hsl(var(--chart-${(i % 8) + 1}))`}

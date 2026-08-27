@@ -6,7 +6,7 @@ import { http } from "msw";
 import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
+import { err, ok, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { toYmd } from "@/components/shared/dateUtils";
 import AccountsPage from "@/pages/AccountsPage";
 
@@ -47,6 +47,17 @@ function mockAccounts(items: unknown[] = FIXTURE) {
 }
 
 describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
+    it("uses the shared retryable error state when accounts fail to load", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () => err(403, "Access denied")),
+        );
+
+        renderWithApp(<AccountsPage />);
+
+        expect(await screen.findByText(/access denied/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    });
+
     it("renders the four groups in deterministic order with label-sorted cards", async () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);

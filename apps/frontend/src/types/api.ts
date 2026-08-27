@@ -511,6 +511,7 @@ export interface PortfolioTransaction {
     currency: string;
     fx_rate_to_eur?: number;
     account_id?: number;
+    import_batch_id?: string | null;
     note?: string;
     is_recurring: boolean;
     recurrence_interval?: RecurrenceInterval;

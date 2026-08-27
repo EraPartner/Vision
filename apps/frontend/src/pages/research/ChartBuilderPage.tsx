@@ -427,6 +427,7 @@ export default function ChartBuilderPage() {
               value={searchText}
               onChange={setSearchText}
               open={searchOpen}
+              onDismiss={() => setSearchText("")}
             >
               {searchItems.length > 0 && macroItems.length > 0 && (
                 <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

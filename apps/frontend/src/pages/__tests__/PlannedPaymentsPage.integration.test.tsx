@@ -71,6 +71,8 @@ describe("PlannedPaymentsPage (integration)", () => {
         renderWithApp(<PlannedPaymentsPage />);
 
         expect(await screen.findByText(/db unavailable/i, {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /new payment/i })).not.toBeInTheDocument();
 
         consoleSpy.mockRestore();
     });

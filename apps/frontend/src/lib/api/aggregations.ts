@@ -151,14 +151,14 @@ export function getAggregationRecipientPivot(params?: {
     excluded_recipient_ids?: number[];
     recipient_ids?: number[];
     bucket?: 'monthly' | 'yearly';
-    start?: string | null;
-    end?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
 }): Promise<AggregationEnvelope<{ recipientPivot: Record<string, RecipientPivotItem[]> }>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set('currency', params.currency);
     if (params?.bucket) qp.set('bucket', params.bucket);
-    if (params?.start) qp.set('start', params.start);
-    if (params?.end) qp.set('end', params.end);
+    if (params?.start_date) qp.set('start_date', params.start_date);
+    if (params?.end_date) qp.set('end_date', params.end_date);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
     }
@@ -181,14 +181,14 @@ export function getAggregationTagPivot(params?: {
     tag_ids?: number[];
     all?: boolean;
     bucket?: 'monthly' | 'yearly';
-    start?: string | null;
-    end?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
 }): Promise<AggregationEnvelope<{ tagPivot: Record<string, TagPivotItem[]> }>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set('currency', params.currency);
     if (params?.bucket) qp.set('bucket', params.bucket);
-    if (params?.start) qp.set('start', params.start);
-    if (params?.end) qp.set('end', params.end);
+    if (params?.start_date) qp.set('start_date', params.start_date);
+    if (params?.end_date) qp.set('end_date', params.end_date);
     if (params?.all) {
         // "all tags": let the server return every tag with spend in range.
         qp.set('all', 'true');

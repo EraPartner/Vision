@@ -44,6 +44,7 @@ export const transactionKeys = {
 export const recipientKeys = {
     all: ['recipients'] as const,
     list: (params?: object) => ['recipients', params] as const,
+    detail: (id: number | null | undefined) => ['recipients', 'detail', id] as const,
     /** Settings → Statistics exclusion picker (full list snapshot). */
     allList: ['recipients', 'all'] as const,
     /** Merge-recipients dialog (full list snapshot). */

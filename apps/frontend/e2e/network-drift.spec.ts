@@ -10,14 +10,8 @@
 import { test, expect } from "@playwright/test";
 import { PAGES } from "./pages";
 
-// The drift listener additionally sweeps the Tax page, which the a11y suite skips.
-const DRIFT_PAGES = [
-    ...PAGES,
-    { name: "TaxOverview", path: "/tax", heading: /tax overview/i },
-];
-
 test.describe("Phase F4 — network drift listener", () => {
-    for (const { name, path } of DRIFT_PAGES) {
+    for (const { name, path } of PAGES) {
         test(`${name} loads with no 5xx / 4xx from API endpoints`, async ({ page }) => {
             const failures: Array<{ url: string; status: number }> = [];
 

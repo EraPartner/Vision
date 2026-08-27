@@ -46,6 +46,7 @@
         --success: 152 58% 38%;
         --warning: 38 80% 50%;
         --expense: 358 74% 44%;
+        --loss-colorblind: 24 85% 45%;
 
         /* Gain/loss palette — the single source every gain/loss surface (text,
            badges, icons, charts) reads. Legacy (no .skin-v2): variant-aware
@@ -183,6 +184,7 @@
         --success: 152 62% 54%;
         --warning: 38 88% 62%;
         --expense: 358 92% 68%;
+        --loss-colorblind: 24 90% 62%;
 
         /* -------- Charts -------- */
         --chart-1: 158 64% 58%;

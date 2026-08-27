@@ -118,9 +118,9 @@ describe("CategoriesPage (integration)", () => {
 
     it("shows empty categories message when category list is empty", async () => {
         renderWithApp(<CategoriesPage />);
-        // Default MSW returns { items: [] } → categoriesPage.empty = "No categories found"
+        // Default MSW returns { items: [] }.
         expect(
-            await screen.findByText(/no categories found/i),
+            await screen.findByText(/no categories yet.*import a categories csv/i),
         ).toBeInTheDocument();
     });
 

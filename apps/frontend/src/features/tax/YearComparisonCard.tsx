@@ -14,7 +14,7 @@
  * gating if applicable.
  */
 import { useMemo, useState, useEffect } from 'react';
-import { ArrowDownRight, ArrowUpRight, GitCompare, Lock, Minus, Snowflake } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, GitCompare, Minus } from 'lucide-react';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -29,6 +29,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TaxYearStatusIcon } from './TaxYearStatusIcon';
 
 interface YearComparisonCardProps {
     className?: string;
@@ -160,12 +161,11 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                         <SelectItem key={y.year} value={String(y.year)} className="text-xs">
                                             <span className="flex items-center gap-1.5">
                                                 <span className="tabular-nums">{y.year}</span>
-                                                {y.isFiled && (
-                                                    <Lock className="h-2.5 w-2.5 text-warning" />
-                                                )}
-                                                {!y.isFiled && y.hasFrozenCalculation && (
-                                                    <Snowflake className="h-2.5 w-2.5 text-sky-600" />
-                                                )}
+                                                <TaxYearStatusIcon
+                                                    isFiled={y.isFiled}
+                                                    hasFrozenCalculation={y.hasFrozenCalculation}
+                                                    className="h-2.5 w-2.5"
+                                                />
                                             </span>
                                         </SelectItem>
                                     ))}
@@ -190,12 +190,11 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                 <th className="text-right font-medium px-3 py-2 tabular-nums">
                                     <span className="flex items-center justify-end gap-1.5">
                                         {compareYear}
-                                        {compareEntry?.isFiled && (
-                                            <Lock className="h-3 w-3 text-warning" />
-                                        )}
-                                        {!compareEntry?.isFiled && compareEntry?.hasFrozenCalculation && (
-                                            <Snowflake className="h-3 w-3 text-sky-600" />
-                                        )}
+                                        <TaxYearStatusIcon
+                                            isFiled={compareEntry?.isFiled}
+                                            hasFrozenCalculation={compareEntry?.hasFrozenCalculation}
+                                            className="h-3 w-3"
+                                        />
                                     </span>
                                 </th>
                                 <th className="text-right font-medium px-3 py-2">

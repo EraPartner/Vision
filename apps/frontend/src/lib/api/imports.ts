@@ -278,7 +278,7 @@ export function listImportBatches(
     return apiRequest<BatchListResponse>(`/api/import/batches?limit=${limit}&offset=${offset}`);
 }
 
-export function rollbackImportBatch(id: number): Promise<{ deleted: number }> {
+export function rollbackImportBatch(id: string | number): Promise<{ deleted: number }> {
     return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, { method: 'DELETE' });
 }
 

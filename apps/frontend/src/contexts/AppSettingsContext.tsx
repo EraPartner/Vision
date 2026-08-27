@@ -43,7 +43,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         usePreloadedSetting<AppSettings>(SETTINGS_KEY);
 
     const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
-    const _markAppSettingsSaveError = useSettingsStore((s) => s._markAppSettingsSaveError);
+    const _markSettingsSaveError = useSettingsStore((s) => s._markSettingsSaveError);
     const appSettings = useSettingsStore((s) => s.appSettings);
     const isLoading = useSettingsStore((s) => s.isAppSettingsLoading);
 
@@ -87,14 +87,14 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
                 // Instant-apply has no Save button, so a silent failure means the
                 // user believes a change persisted when it didn't. Signal it so the
                 // toaster (under LanguageProvider) can surface a translated message.
-                _markAppSettingsSaveError();
+                _markSettingsSaveError();
             });
         }, 500);
 
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [appSettings, isLoading, _markAppSettingsSaveError]);
+    }, [appSettings, isLoading, _markSettingsSaveError]);
 
     return <>{children}</>;
 }
@@ -102,13 +102,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 // ─── Save-error toaster ────────────────────────────────────────────────────────
 
 /**
- * Surfaces a translated toast when a debounced app-settings persist fails.
+ * Surfaces a translated toast when an instant-apply settings persist fails.
  * Mounted UNDER LanguageProvider (the provider above it cannot translate), it
- * watches the store's save-error nonce and toasts on each new failure.
+ * watches the store's shared save-error nonce and toasts when it advances.
  */
-export function AppSettingsSaveErrorToaster() {
+export function SettingsSaveErrorToaster() {
     const { t } = useLanguage();
-    const nonce = useSettingsStore((s) => s.appSettingsSaveErrorNonce);
+    const nonce = useSettingsStore((s) => s.settingsSaveErrorNonce);
     const lastSeen = useRef(nonce);
     useEffect(() => {
         if (nonce !== lastSeen.current) {

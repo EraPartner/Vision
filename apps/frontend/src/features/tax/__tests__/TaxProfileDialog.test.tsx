@@ -89,6 +89,32 @@ describe("TaxProfileDialog", () => {
         expect(await screen.findByText("Income details")).toBeInTheDocument();
     });
 
+    it("renders zero-valued profile fields as 0 instead of an empty input", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+
+        await openSheet(user);
+        await user.click(screen.getByRole("button", { name: /next/i }));
+
+        expect(await screen.findByLabelText(/gross annual income/i)).toHaveValue("0");
+        expect(screen.getByLabelText(/other taxable income/i)).toHaveValue("0");
+    });
+
+    it("keeps a trailing decimal separator visible while editing and normalizes it on blur", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+
+        await openSheet(user);
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        const income = await screen.findByLabelText(/gross annual income/i);
+        await user.clear(income);
+        await user.type(income, "12.");
+
+        expect(income).toHaveValue("12.");
+        await user.tab();
+        expect(income).toHaveValue("12");
+    });
+
     it("can navigate through all 4 steps using Next", async () => {
         // Arrange
         const user = userEvent.setup();

@@ -15,6 +15,15 @@ import { SectionLoader } from "@/components/shared/SectionLoader";
 import { exchangeRateKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { useTabParam } from "@/hooks/useTabParam";
+import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 const EXCHANGE_RATE_TABS = ["live", "fallback"] as const;
 
@@ -33,30 +42,32 @@ function RatesTable({
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="border-b text-muted-foreground">
-                        <th className="text-left py-2 px-3 font-medium">{t('exchangeRates.col.currency')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.unitToEur')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.eurToUnit')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.hundredInEur')}</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <div>
+            <Table className="w-full text-sm">
+                {showFallbackNote && (
+                    <TableCaption className="mt-3 px-3 text-left text-xs">
+                        {t('exchangeRates.fallbackNote')}
+                    </TableCaption>
+                )}
+                <TableHeader>
+                    <TableRow className="border-b text-muted-foreground hover:bg-transparent">
+                        <TableHead scope="col" className="h-auto px-3 py-2 text-left text-sm font-medium normal-case tracking-normal">{t('exchangeRates.col.currency')}</TableHead>
+                        <TableHead scope="col" className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal">{t('exchangeRates.col.unitToEur')}</TableHead>
+                        <TableHead scope="col" className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal">{t('exchangeRates.col.eurToUnit')}</TableHead>
+                        <TableHead scope="col" className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal">{t('exchangeRates.col.hundredInEur')}</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                     {rows.map(({ currency, rate }) => (
-                        <tr key={currency} className="border-b border-border/50 hover:bg-muted/50">
-                            <td className="py-2 px-3 font-mono font-medium">{currency}</td>
-                            <td className="py-2 px-3 text-right font-mono">{rate.toFixed(6)}</td>
-                            <td className="py-2 px-3 text-right font-mono">{(1 / rate).toFixed(4)}</td>
-                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, defaultCurrency, locale)}</td>
-                        </tr>
+                        <TableRow key={currency} className="border-b border-border/50 hover:bg-muted/50">
+                            <TableCell className="px-3 py-2 font-mono font-medium">{currency}</TableCell>
+                            <TableCell className="px-3 py-2 text-right font-mono tabular-nums">{rate.toFixed(6)}</TableCell>
+                            <TableCell className="px-3 py-2 text-right font-mono tabular-nums">{(1 / rate).toFixed(4)}</TableCell>
+                            <TableCell className="px-3 py-2 text-right tabular-nums">{formatCurrency(100 * rate, defaultCurrency, locale)}</TableCell>
+                        </TableRow>
                     ))}
-                </tbody>
-            </table>
-            {showFallbackNote && (
-                <p className="text-xs text-muted-foreground mt-3 px-3">{t('exchangeRates.fallbackNote')}</p>
-            )}
+                </TableBody>
+            </Table>
         </div>
     );
 }

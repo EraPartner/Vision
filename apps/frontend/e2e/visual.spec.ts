@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
 // Visual regression tests — screenshots stored in e2e/__screenshots__/.
-// In CI these run with --update-snapshots on every main push; baselines are
-// uploaded as artifacts for review. Switch CI to compare mode once baselines
-// are committed to the repo.
+// This suite is manual because Linux CI and local macOS render different
+// baselines. Run test:e2e:visual to add missing local snapshots or
+// test:e2e:update-snapshots after an intentional visual change.
 
 const SHOTS: Array<{ name: string; path: string; heading: RegExp; file: string }> = [
     { name: "dashboard", path: "/", heading: /dashboard/i, file: "dashboard.png" },

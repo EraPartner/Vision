@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from "vitest";
-import { composeRefs } from "@/lib/dialogGenie";
+import { composeRefs } from "@/lib/composeRefs";
 
 describe("composeRefs", () => {
   it("invokes function refs with the node", () => {
