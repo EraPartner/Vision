@@ -23,13 +23,17 @@
  * the dispatcher reports back.
  */
 
-import { logger } from '../config/logger.js';
-import settings from '../config/config.js';
-import { AppError } from '../middleware/errorHandler.js';
-import { aiChatRepository } from '../repositories/aiChatRepository.js';
-import { getOllamaClient } from '../integrations/ollama/client.js';
-import { buildChatMessages } from '../integrations/ollama/prompts.js';
-import { dispatchTool, getToolSchemas, getToolNames } from './aiChat/tools/index.js';
+import { logger } from "../config/logger.js";
+import settings from "../config/config.js";
+import { AppError } from "../middleware/errorHandler.js";
+import { aiChatRepository } from "../repositories/aiChatRepository.js";
+import { getOllamaClient } from "../integrations/ollama/client.js";
+import { buildChatMessages } from "../integrations/ollama/prompts.js";
+import {
+  dispatchTool,
+  getToolSchemas,
+  getToolNames,
+} from "./aiChat/tools/index.js";
 
 /** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
 /** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
@@ -43,7 +47,64 @@ import { dispatchTool, getToolSchemas, getToolNames } from './aiChat/tools/index
  */
 
 const MAX_TOOL_ITERATIONS = 6;
-const DEFAULT_CONVERSATION_TITLE = 'New conversation';
+const DEFAULT_CONVERSATION_TITLE = "New conversation";
+/** @type {Map<string, Promise<void>>} */
+const conversationTurnTails = new Map();
+
+/**
+ * Serialize model turns for one conversation. A retry can arrive while the
+ * original request is still completing; making both requests pass through the
+ * same queue ensures the retry re-reads history after the original append.
+ *
+ * @template T
+ * @param {string} conversationId
+ * @param {() => Promise<T>} task
+ * @param {AbortSignal|undefined} signal
+ * @returns {Promise<T>}
+ */
+async function withConversationTurnLock(conversationId, task, signal) {
+  const previous =
+    conversationTurnTails.get(conversationId) ?? Promise.resolve();
+  /** @type {() => void} */
+  let release;
+  /** @type {Promise<void>} */
+  const current = new Promise((resolve) => {
+    release = () => resolve(undefined);
+  });
+  conversationTurnTails.set(conversationId, current);
+  let removeAbortListener = () => {};
+  const aborted = new Promise((resolve) => {
+    if (!signal) return;
+    const handleAbort = () => resolve(true);
+    signal.addEventListener("abort", handleAbort, { once: true });
+    removeAbortListener = () =>
+      signal.removeEventListener("abort", handleAbort);
+  });
+  const wasAborted = signal?.aborted
+    ? true
+    : await Promise.race([previous.then(() => false), aborted]);
+  removeAbortListener();
+  if (wasAborted || signal?.aborted) {
+    void previous.finally(() => {
+      release();
+      if (conversationTurnTails.get(conversationId) === current) {
+        conversationTurnTails.delete(conversationId);
+      }
+    });
+    throw new AiChatServiceError("Chat request was cancelled", {
+      code: "ABORTED",
+      status: 499,
+    });
+  }
+  try {
+    return await task();
+  } finally {
+    release();
+    if (conversationTurnTails.get(conversationId) === current) {
+      conversationTurnTails.delete(conversationId);
+    }
+  }
+}
 
 export class AiChatServiceError extends AppError {
   /**
@@ -54,8 +115,12 @@ export class AiChatServiceError extends AppError {
     // Extend AppError so the central error middleware forwards our status/code
     // (e.g. 404/410/503) instead of collapsing to a generic 500. Defaults match
     // the previous plain-Error behaviour.
-    super(message, { code: code || 'AI_CHAT_ERROR', status: status || 500, cause });
-    this.name = 'AiChatServiceError';
+    super(message, {
+      code: code || "AI_CHAT_ERROR",
+      status: status || 500,
+      cause,
+    });
+    this.name = "AiChatServiceError";
   }
 }
 
@@ -81,7 +146,7 @@ function normalizeToolCall(toolCall) {
  * @returns {value is Record<string, unknown>}
  */
 function isArgsRecord(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -91,10 +156,12 @@ function isArgsRecord(value) {
  * @returns {err is Error & { code: string }}
  */
 function isCodedProviderError(err) {
-  return err instanceof Error
-    && 'code' in err
-    && typeof err.code === 'string'
-    && err.code.length > 0;
+  return (
+    err instanceof Error &&
+    "code" in err &&
+    typeof err.code === "string" &&
+    err.code.length > 0
+  );
 }
 
 /**
@@ -103,7 +170,7 @@ function isCodedProviderError(err) {
  * @returns {string}
  */
 function truncateTitle(text, maxLen = 60) {
-  const trimmed = (text || '').trim().replace(/\s+/g, ' ');
+  const trimmed = (text || "").trim().replace(/\s+/g, " ");
   if (!trimmed) return DEFAULT_CONVERSATION_TITLE;
   if (trimmed.length <= maxLen) return trimmed;
   return `${trimmed.slice(0, maxLen - 1)}…`;
@@ -121,7 +188,7 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
     const existing = await aiChatRepository.getConversation(conversationId);
     if (!existing) {
       throw new AiChatServiceError(`Conversation ${conversationId} not found`, {
-        code: 'CONVERSATION_NOT_FOUND',
+        code: "CONVERSATION_NOT_FOUND",
         status: 404,
       });
     }
@@ -132,7 +199,10 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
     if (existing.title === DEFAULT_CONVERSATION_TITLE && firstUserMessage) {
       const newTitle = truncateTitle(firstUserMessage);
       if (newTitle && newTitle !== DEFAULT_CONVERSATION_TITLE) {
-        const renamed = await aiChatRepository.renameConversation(conversationId, newTitle);
+        const renamed = await aiChatRepository.renameConversation(
+          conversationId,
+          newTitle,
+        );
         if (renamed) existing.title = renamed.title;
       }
     }
@@ -154,6 +224,7 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
  * @param {string} [args.message]          - the new user message text
  * @param {string|null} [args.model]          - override the model (else conversation/default)
  * @param {boolean} [args.useTools=true]
+ * @param {boolean} [args.retryLastTurn=false]
  * @param {string|null} [args.preCallTool=null] - tool name to execute
  *   server-side BEFORE the model turn (ADR-110 §4). Its result is injected
  *   into the model's context so the model only narrates the already-fetched
@@ -181,20 +252,21 @@ export async function runChatTurn({
   model = null,
   useTools = true,
   preCallTool = null,
+  retryLastTurn = false,
   signal,
   streaming = false,
   onEvent,
   ollamaClient = getOllamaClient(),
 } = {}) {
   if (!settings.aiChat.enabled) {
-    throw new AiChatServiceError('AI chat is disabled', {
-      code: 'AI_CHAT_DISABLED',
+    throw new AiChatServiceError("AI chat is disabled", {
+      code: "AI_CHAT_DISABLED",
       status: 503,
     });
   }
-  if (typeof message !== 'string' || !message.trim()) {
-    throw new AiChatServiceError('message is required', {
-      code: 'INVALID_INPUT',
+  if (typeof message !== "string" || !message.trim()) {
+    throw new AiChatServiceError("message is required", {
+      code: "INVALID_INPUT",
       status: 400,
     });
   }
@@ -206,6 +278,7 @@ export async function runChatTurn({
       model,
       useTools,
       preCallTool,
+      retryLastTurn,
       signal,
       streaming,
       onEvent,
@@ -217,12 +290,12 @@ export async function runChatTurn({
     // the conversation while a stream was in flight. Surface as a clean
     // service-level error so the route emits an SSE error frame instead of
     // a 500 stack.
-    if (err && err.code === 'CONVERSATION_DELETED') {
-      logger.info('[aiChat] turn aborted: conversation deleted mid-stream', {
+    if (err && err.code === "CONVERSATION_DELETED") {
+      logger.info("[aiChat] turn aborted: conversation deleted mid-stream", {
         conversationId: err.conversationId,
       });
       throw new AiChatServiceError(err.message, {
-        code: 'CONVERSATION_DELETED',
+        code: "CONVERSATION_DELETED",
         status: 410,
         cause: err,
       });
@@ -232,7 +305,7 @@ export async function runChatTurn({
 }
 
 /**
- * @param {{ conversationId: any, message: any, model: any, useTools: any, preCallTool: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
+ * @param {{ conversationId: any, message: any, model: any, useTools: any, preCallTool: any, retryLastTurn: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
  */
 async function runChatTurnInner({
   conversationId,
@@ -240,34 +313,110 @@ async function runChatTurnInner({
   model,
   useTools,
   preCallTool,
+  retryLastTurn,
   signal,
   streaming,
   onEvent,
   ollamaClient,
 }) {
+  if (retryLastTurn && !conversationId) {
+    throw new AiChatServiceError("conversationId is required to retry a turn", {
+      code: "INVALID_INPUT",
+      status: 400,
+    });
+  }
   const conversation = await ensureConversation({
     conversationId,
     model,
     firstUserMessage: message,
   });
-  const activeModel = model || conversation.model || settings.ollama.defaultModel;
+  return withConversationTurnLock(
+    conversation.id,
+    () =>
+      runChatTurnLocked({
+        conversation,
+        message,
+        model,
+        useTools,
+        preCallTool,
+        retryLastTurn,
+        signal,
+        streaming,
+        onEvent,
+        ollamaClient,
+      }),
+    signal,
+  );
+}
+
+/**
+ * Execute a turn while holding the conversation-scoped serialization lock.
+ * @param {{ conversation: AiConversationRow, message: any, model: any, useTools: any, preCallTool: any, retryLastTurn: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
+ */
+async function runChatTurnLocked({
+  conversation,
+  message,
+  model,
+  useTools,
+  preCallTool,
+  retryLastTurn,
+  signal,
+  streaming,
+  onEvent,
+  ollamaClient,
+}) {
+  const activeModel =
+    model || conversation.model || settings.ollama.defaultModel;
 
   const history = await aiChatRepository.getMessages(conversation.id);
+  let historyBeforeTurn = history;
+  let effectiveMessage = message;
+  let userMessage;
 
-  const userMessage = await aiChatRepository.appendMessage({
-    conversationId: conversation.id,
-    role: 'user',
-    content: message,
-  });
-  await onEvent?.({ type: 'user_message', data: userMessage });
+  if (retryLastTurn) {
+    let lastUserIndex = -1;
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+      if (history[index].role === "user") {
+        lastUserIndex = index;
+        break;
+      }
+    }
+    if (lastUserIndex < 0) {
+      throw new AiChatServiceError("No user turn is available to retry", {
+        code: "TURN_NOT_RETRYABLE",
+        status: 409,
+      });
+    }
+    if (
+      history.slice(lastUserIndex + 1).some((row) => row.role === "assistant")
+    ) {
+      throw new AiChatServiceError("The latest turn is already complete", {
+        code: "TURN_ALREADY_COMPLETE",
+        status: 409,
+      });
+    }
+    userMessage = history[lastUserIndex];
+    effectiveMessage = userMessage.content;
+    // Tool rows from an interrupted attempt may trail the user row. Regenerate
+    // from the state before that turn so the model neither sees the prompt
+    // twice nor consumes an incomplete tool-call sequence.
+    historyBeforeTurn = history.slice(0, lastUserIndex);
+  } else {
+    userMessage = await aiChatRepository.appendMessage({
+      conversationId: conversation.id,
+      role: "user",
+      content: message,
+    });
+    await onEvent?.({ type: "user_message", data: userMessage });
+  }
 
   const toolSchemas = useTools ? getToolSchemas() : [];
   const toolNames = useTools ? getToolNames() : [];
   /** @type {OllamaMessage[]} */
   const baseMessages = buildChatMessages({
     toolNames,
-    history,
-    userInput: message,
+    history: historyBeforeTurn,
+    userInput: effectiveMessage,
     maxHistoryMessages: settings.aiChat.maxHistoryMessages,
   });
 
@@ -275,7 +424,11 @@ async function runChatTurnInner({
   const toolMessages = [];
   let iterations = 0;
   /** @type {{ evalCount: number|null, promptEvalCount: number|null, totalDurationMs: number|null }} */
-  let lastUsage = { evalCount: null, promptEvalCount: null, totalDurationMs: null };
+  let lastUsage = {
+    evalCount: null,
+    promptEvalCount: null,
+    totalDurationMs: null,
+  };
 
   // Request-scoped cache shared across every tool call in this chat turn so
   // tools that fetch the same heavy investment/transaction sets reuse one query.
@@ -293,42 +446,52 @@ async function runChatTurnInner({
   // not kill the turn — log and fall through to the normal loop.
   if (preCallTool) {
     try {
-      await onEvent?.({ type: 'tool_call', data: { name: preCallTool, args: {} } });
-      const { args: preCallArgs, result } = await dispatchTool(preCallTool, {}, toolContext);
+      await onEvent?.({
+        type: "tool_call",
+        data: { name: preCallTool, args: {} },
+      });
+      const { args: preCallArgs, result } = await dispatchTool(
+        preCallTool,
+        {},
+        toolContext,
+      );
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
-        role: 'tool',
+        role: "tool",
         toolName: preCallTool,
         toolArgs: preCallArgs ?? {},
         toolResult: result,
       });
       toolMessages.push(toolRow);
-      await onEvent?.({ type: 'tool_message', data: toolRow });
+      await onEvent?.({ type: "tool_message", data: toolRow });
 
       baseMessages.push({
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: preCallTool, arguments: '{}' } }],
+        role: "assistant",
+        content: "",
+        tool_calls: [{ function: { name: preCallTool, arguments: "{}" } }],
       });
       baseMessages.push({
-        role: 'tool',
+        role: "tool",
         name: preCallTool,
         content: JSON.stringify(result),
       });
     } catch (err) {
-      logger.warn('[aiChat] server-side pre-call failed — continuing turn without injected result', {
-        conversationId: conversation.id,
-        tool: preCallTool,
-        code: err?.code,
-        message: err?.message,
-      });
+      logger.warn(
+        "[aiChat] server-side pre-call failed — continuing turn without injected result",
+        {
+          conversationId: conversation.id,
+          tool: preCallTool,
+          code: err?.code,
+          message: err?.message,
+        },
+      );
     }
   }
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;
     const iterStart = Date.now();
-    logger.debug('[aiChat] iteration start', {
+    logger.debug("[aiChat] iteration start", {
       conversationId: conversation.id,
       iteration: iterations,
       model: activeModel,
@@ -338,14 +501,14 @@ async function runChatTurnInner({
     });
     let response;
     try {
-      if (streaming && typeof ollamaClient.chatStream === 'function') {
+      if (streaming && typeof ollamaClient.chatStream === "function") {
         response = await ollamaClient.chatStream({
           model: activeModel,
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           signal,
           onToken: async (/** @type {string} */ delta) => {
-            if (delta) await onEvent?.({ type: 'token', data: delta });
+            if (delta) await onEvent?.({ type: "token", data: delta });
           },
         });
       } else {
@@ -356,7 +519,7 @@ async function runChatTurnInner({
           signal,
         });
       }
-      logger.debug('[aiChat] iteration ollama returned', {
+      logger.debug("[aiChat] iteration ollama returned", {
         conversationId: conversation.id,
         iteration: iterations,
         ms: Date.now() - iterStart,
@@ -364,7 +527,7 @@ async function runChatTurnInner({
         contentLen: response.content?.length ?? 0,
       });
     } catch (err) {
-      logger.warn('[aiChat] iteration ollama failed', {
+      logger.warn("[aiChat] iteration ollama failed", {
         conversationId: conversation.id,
         iteration: iterations,
         ms: Date.now() - iterStart,
@@ -372,11 +535,14 @@ async function runChatTurnInner({
         message: err?.message,
       });
       if (isCodedProviderError(err)) {
-        throw new AiChatServiceError(`AI provider call failed: ${err.message}`, {
-          code: err.code || 'OLLAMA_ERROR',
-          status: err.code === 'ABORTED' ? 499 : 502,
-          cause: err,
-        });
+        throw new AiChatServiceError(
+          `AI provider call failed: ${err.message}`,
+          {
+            code: err.code || "OLLAMA_ERROR",
+            status: err.code === "ABORTED" ? 499 : 502,
+            cause: err,
+          },
+        );
       }
       throw err;
     }
@@ -390,10 +556,10 @@ async function runChatTurnInner({
     if (!response.toolCalls || response.toolCalls.length === 0) {
       const assistantMessage = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
-        role: 'assistant',
-        content: response.content || '',
+        role: "assistant",
+        content: response.content || "",
       });
-      await onEvent?.({ type: 'assistant_message', data: assistantMessage });
+      await onEvent?.({ type: "assistant_message", data: assistantMessage });
 
       return {
         conversation,
@@ -406,15 +572,15 @@ async function runChatTurnInner({
     }
 
     baseMessages.push({
-      role: 'assistant',
-      content: response.content || '',
+      role: "assistant",
+      content: response.content || "",
       tool_calls: response.toolCalls,
     });
 
     for (const rawCall of response.toolCalls) {
       const { name, rawArgs } = normalizeToolCall(rawCall);
       if (!name) {
-        logger.warn('[aiChat] tool call missing name', { rawCall });
+        logger.warn("[aiChat] tool call missing name", { rawCall });
         continue;
       }
 
@@ -424,7 +590,10 @@ async function runChatTurnInner({
       // the frontend frame schema requires a record and would drop the frame.
       // Fidelity nuance: for string-JSON arguments this frame shows `{}`
       // while the persisted row stores the dispatcher-coerced object.
-      await onEvent?.({ type: 'tool_call', data: { name, args: isArgsRecord(rawArgs) ? rawArgs : {} } });
+      await onEvent?.({
+        type: "tool_call",
+        data: { name, args: isArgsRecord(rawArgs) ? rawArgs : {} },
+      });
 
       // dispatchTool owns argument coercion and reports back what the tool
       // actually saw. The persisted row carries that record: the coerced
@@ -433,34 +602,34 @@ async function runChatTurnInner({
       const { args, result } = await dispatchTool(name, rawArgs, toolContext);
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
-        role: 'tool',
+        role: "tool",
         toolName: name,
         toolArgs: args ?? {},
         toolResult: result,
       });
       toolMessages.push(toolRow);
-      await onEvent?.({ type: 'tool_message', data: toolRow });
+      await onEvent?.({ type: "tool_message", data: toolRow });
 
       baseMessages.push({
-        role: 'tool',
+        role: "tool",
         name,
         content: JSON.stringify(result),
       });
     }
   }
 
-  logger.warn('[aiChat] tool loop hit iteration cap', {
+  logger.warn("[aiChat] tool loop hit iteration cap", {
     conversationId: conversation.id,
     cap: MAX_TOOL_ITERATIONS,
   });
   const fallbackMessage = await aiChatRepository.appendMessage({
     conversationId: conversation.id,
-    role: 'assistant',
+    role: "assistant",
     content:
-      'I wasn\'t able to finish answering — I hit the tool-call iteration limit. Try rephrasing your question.',
-    status: 'error',
+      "I wasn't able to finish answering — I hit the tool-call iteration limit. Try rephrasing your question.",
+    status: "error",
   });
-  await onEvent?.({ type: 'assistant_message', data: fallbackMessage });
+  await onEvent?.({ type: "assistant_message", data: fallbackMessage });
 
   return {
     conversation,

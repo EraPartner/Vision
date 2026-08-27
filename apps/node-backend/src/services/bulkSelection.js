@@ -11,17 +11,21 @@
  * filter-mode requests so a mistyped filter cannot delete the whole table.
  */
 
-import { query as dbQuery } from '../database/connection.js';
-import { ValidationError } from '../middleware/errorHandler.js';
-import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../lib/filterBuilder.js';
+import { query as dbQuery } from "../database/connection.js";
+import { ValidationError } from "../middleware/errorHandler.js";
+import {
+  buildTransactionWhere,
+  parseAmountFilter,
+  validateInt4Ids,
+} from "../lib/filterBuilder.js";
 import {
   assertMaxLength,
   assertOptionalId,
   assertYmd,
   validateIntArray,
   validateNumber,
-} from '../lib/validation.js';
-import { EXPORT_JOINS_SQL } from './transactionExport.js';
+} from "../lib/validation.js";
+import { EXPORT_JOINS_SQL } from "./transactionExport.js";
 
 const DEFAULT_ID_CAP = 500;
 const DEFAULT_FILTER_CAP = 5000;
@@ -42,24 +46,24 @@ const DEFAULT_FILTER_CAP = 5000;
  * an alias pair like the rest, just not a case transform.
  */
 const FILTER_ALIASES = [
-  ['transactionId', 'transaction_id'],
-  ['startDate', 'start_date'],
-  ['endDate', 'end_date'],
-  ['accountId', 'account_id'],
-  ['bankAccount', 'bank_account'],
-  ['bankAccounts', 'bank_accounts'],
-  ['categoryId', 'category_id'],
-  ['categoryIds', 'category_ids'],
-  ['recipientId', 'recipient_id'],
-  ['recipientGroupId', 'recipient_group_id'],
-  ['recipientName', 'recipient_name'],
-  ['search', 'search'],
-  ['active', 'active'],
-  ['transactionType', 'transaction_type'],
-  ['amountMin', 'amount_min'],
-  ['amountMax', 'amount_max'],
-  ['amountSigned', 'amount_signed'],
-  ['tagSlugs', 'tags'],
+  ["transactionId", "transaction_id"],
+  ["startDate", "start_date"],
+  ["endDate", "end_date"],
+  ["accountId", "account_id"],
+  ["bankAccount", "bank_account"],
+  ["bankAccounts", "bank_accounts"],
+  ["categoryId", "category_id"],
+  ["categoryIds", "category_ids"],
+  ["recipientId", "recipient_id"],
+  ["recipientGroupId", "recipient_group_id"],
+  ["recipientName", "recipient_name"],
+  ["search", "search"],
+  ["active", "active"],
+  ["transactionType", "transaction_type"],
+  ["amountMin", "amount_min"],
+  ["amountMax", "amount_max"],
+  ["amountSigned", "amount_signed"],
+  ["tagSlugs", "tags"],
 ];
 
 const KNOWN_FILTER_KEYS = new Set(FILTER_ALIASES.flat());
@@ -72,7 +76,8 @@ const KNOWN_FILTER_KEYS = new Set(FILTER_ALIASES.flat());
  * different case and is answered differently: `{}` is 400.
  * @param {unknown} value
  */
-const isUnset = (value) => value === undefined || value === null || value === '';
+const isUnset = (value) =>
+  value === undefined || value === null || value === "";
 
 /**
  * @param {unknown} value
@@ -81,7 +86,8 @@ const isUnset = (value) => value === undefined || value === null || value === ''
  */
 function optionalString(value, field) {
   if (isUnset(value)) return null;
-  if (typeof value !== 'string') throw new ValidationError(`${field} must be a string`);
+  if (typeof value !== "string")
+    throw new ValidationError(`${field} must be a string`);
   return value;
 }
 
@@ -92,7 +98,8 @@ function optionalString(value, field) {
  */
 function optionalYmd(value, field) {
   if (isUnset(value)) return null;
-  if (typeof value !== 'string') throw new ValidationError(`${field} must be a string`);
+  if (typeof value !== "string")
+    throw new ValidationError(`${field} must be a string`);
   return assertYmd(value, field);
 }
 
@@ -107,9 +114,9 @@ function optionalYmd(value, field) {
  */
 function optionalBoolean(value, field, fallback) {
   if (isUnset(value)) return fallback;
-  if (typeof value === 'boolean') return value;
-  if (value === 'true') return true;
-  if (value === 'false') return false;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
   throw new ValidationError(`${field} must be a boolean`);
 }
 
@@ -120,7 +127,7 @@ function optionalBoolean(value, field, fallback) {
  */
 function optionalAmount(value, field) {
   if (isUnset(value)) return null;
-  if (typeof value !== 'number' && typeof value !== 'string') {
+  if (typeof value !== "number" && typeof value !== "string") {
     throw new ValidationError(`${field} must be a number`);
   }
   const result = validateNumber(value, { fieldName: field });
@@ -151,10 +158,11 @@ function optionalIdArray(value, field) {
  */
 function optionalStringArray(value, field) {
   if (value === undefined || value === null) return null;
-  if (!Array.isArray(value)) throw new ValidationError(`${field} must be an array of strings`);
+  if (!Array.isArray(value))
+    throw new ValidationError(`${field} must be an array of strings`);
   if (value.length === 0) return null;
   return value.map((entry) => {
-    if (typeof entry !== 'string' || entry.trim() === '') {
+    if (typeof entry !== "string" || entry.trim() === "") {
       throw new ValidationError(`${field} contains invalid value: ${entry}`);
     }
     return entry.trim();
@@ -174,15 +182,17 @@ function optionalTagSlugs(value, field) {
   if (isUnset(value)) return null;
   const list = Array.isArray(value)
     ? value
-    : typeof value === 'string'
-      ? value.split(',').map((s) => s.trim().toLowerCase())
+    : typeof value === "string"
+      ? value.split(",").map((s) => s.trim().toLowerCase())
       : undefined;
   if (list === undefined) {
-    throw new ValidationError(`${field} must be an array of strings or a comma-separated string`);
+    throw new ValidationError(
+      `${field} must be an array of strings or a comma-separated string`,
+    );
   }
   if (list.length === 0) return null;
   return list.map((entry) => {
-    if (typeof entry !== 'string' || entry.trim() === '') {
+    if (typeof entry !== "string" || entry.trim() === "") {
       throw new ValidationError(`${field} contains invalid value: ${entry}`);
     }
     return entry;
@@ -223,12 +233,17 @@ function optionalTagSlugs(value, field) {
  * @throws {ValidationError} on an unknown key or any malformed field
  */
 export function normalizeBulkFilter(filter) {
-  if (!filter || typeof filter !== 'object') return {};
-  if (Array.isArray(filter)) throw new ValidationError('`filter` must be an object');
+  if (!filter || typeof filter !== "object") return {};
+  if (Array.isArray(filter))
+    throw new ValidationError("`filter` must be an object");
 
-  const unknown = Object.keys(filter).filter((key) => !KNOWN_FILTER_KEYS.has(key));
+  const unknown = Object.keys(filter).filter(
+    (key) => !KNOWN_FILTER_KEYS.has(key),
+  );
   if (unknown.length > 0) {
-    throw new ValidationError(`\`filter\` contains unknown field(s): ${unknown.join(', ')}`);
+    throw new ValidationError(
+      `\`filter\` contains unknown field(s): ${unknown.join(", ")}`,
+    );
   }
 
   /**
@@ -243,36 +258,78 @@ export function normalizeBulkFilter(filter) {
   const pick = (camel, snake) => {
     if (camel === snake) return filter[camel];
     if (filter[camel] != null && filter[snake] != null) {
-      throw new ValidationError(`Provide either \`${camel}\` or \`${snake}\`, not both`);
+      throw new ValidationError(
+        `Provide either \`${camel}\` or \`${snake}\`, not both`,
+      );
     }
     return filter[camel] ?? filter[snake];
   };
 
-  const amountSigned = optionalBoolean(pick('amountSigned', 'amount_signed'), 'amount_signed', false);
+  const amountSigned = optionalBoolean(
+    pick("amountSigned", "amount_signed"),
+    "amount_signed",
+    false,
+  );
 
   return {
-    transactionId: assertOptionalId(pick('transactionId', 'transaction_id'), 'transaction_id'),
-    startDate: optionalYmd(pick('startDate', 'start_date'), 'start_date'),
-    endDate: optionalYmd(pick('endDate', 'end_date'), 'end_date'),
-    accountId: assertOptionalId(pick('accountId', 'account_id'), 'account_id'),
-    bankAccount: optionalString(pick('bankAccount', 'bank_account'), 'bank_account'),
-    bankAccounts: optionalStringArray(pick('bankAccounts', 'bank_accounts'), 'bank_accounts'),
-    categoryId: assertOptionalId(pick('categoryId', 'category_id'), 'category_id'),
-    categoryIds: optionalIdArray(pick('categoryIds', 'category_ids'), 'category_ids'),
-    recipientId: assertOptionalId(pick('recipientId', 'recipient_id'), 'recipient_id'),
-    recipientGroupId: assertOptionalId(pick('recipientGroupId', 'recipient_group_id'), 'recipient_group_id'),
-    recipientName: optionalString(pick('recipientName', 'recipient_name'), 'recipient_name'),
+    transactionId: assertOptionalId(
+      pick("transactionId", "transaction_id"),
+      "transaction_id",
+    ),
+    startDate: optionalYmd(pick("startDate", "start_date"), "start_date"),
+    endDate: optionalYmd(pick("endDate", "end_date"), "end_date"),
+    accountId: assertOptionalId(pick("accountId", "account_id"), "account_id"),
+    bankAccount: optionalString(
+      pick("bankAccount", "bank_account"),
+      "bank_account",
+    ),
+    bankAccounts: optionalStringArray(
+      pick("bankAccounts", "bank_accounts"),
+      "bank_accounts",
+    ),
+    categoryId: assertOptionalId(
+      pick("categoryId", "category_id"),
+      "category_id",
+    ),
+    categoryIds: optionalIdArray(
+      pick("categoryIds", "category_ids"),
+      "category_ids",
+    ),
+    recipientId: assertOptionalId(
+      pick("recipientId", "recipient_id"),
+      "recipient_id",
+    ),
+    recipientGroupId: assertOptionalId(
+      pick("recipientGroupId", "recipient_group_id"),
+      "recipient_group_id",
+    ),
+    recipientName: optionalString(
+      pick("recipientName", "recipient_name"),
+      "recipient_name",
+    ),
     // The list endpoint truncates an over-long search to 200 chars. Truncating
     // a substring match here would *widen* the delete, so this rejects instead.
     search: /** @type {string|null} */ (
-      assertMaxLength(optionalString(pick('search', 'search'), 'search'), 200, 'search')
+      assertMaxLength(
+        optionalString(pick("search", "search"), "search"),
+        200,
+        "search",
+      )
     ),
-    active: optionalBoolean(pick('active', 'active'), 'active', true),
-    transactionType: parseTransactionType(pick('transactionType', 'transaction_type')),
-    amountMin: parseAmountFilter(optionalAmount(pick('amountMin', 'amount_min'), 'amount_min'), amountSigned),
-    amountMax: parseAmountFilter(optionalAmount(pick('amountMax', 'amount_max'), 'amount_max'), amountSigned),
+    active: optionalBoolean(pick("active", "active"), "active", true),
+    transactionType: parseTransactionType(
+      pick("transactionType", "transaction_type"),
+    ),
+    amountMin: parseAmountFilter(
+      optionalAmount(pick("amountMin", "amount_min"), "amount_min"),
+      amountSigned,
+    ),
+    amountMax: parseAmountFilter(
+      optionalAmount(pick("amountMax", "amount_max"), "amount_max"),
+      amountSigned,
+    ),
     amountSigned,
-    tagSlugs: optionalTagSlugs(pick('tagSlugs', 'tags'), 'tags'),
+    tagSlugs: optionalTagSlugs(pick("tagSlugs", "tags"), "tags"),
   };
 }
 
@@ -282,7 +339,7 @@ export function normalizeBulkFilter(filter) {
  */
 function parseTransactionType(value) {
   if (isUnset(value)) return null;
-  if (value !== 'income' && value !== 'expense') {
+  if (value !== "income" && value !== "expense") {
     throw new ValidationError("transaction_type must be 'income' or 'expense'");
   }
   return value;
@@ -298,29 +355,35 @@ function parseTransactionType(value) {
  * @param {object} [opts]
  * @param {number} [opts.idCap=500]      Maximum length for explicit id arrays
  * @param {number} [opts.filterCap=5000] Maximum row count for filter-mode
+ * @param {boolean} [opts.allowEmpty=false] Return an empty selection instead of rejecting filter drift to zero
+ * @param {(sql: string, params?: any[]) => Promise<{rows: any[]}>} [opts.query] Query runner used to keep selection in a caller-owned snapshot
  * @returns {Promise<number[]>}
  */
 export async function resolveBulkSelection(selector = {}, opts = {}) {
   const { ids, filter } = selector;
   const idCap = opts.idCap ?? DEFAULT_ID_CAP;
   const filterCap = opts.filterCap ?? DEFAULT_FILTER_CAP;
+  const query = opts.query ?? dbQuery;
 
   const hasIds = Array.isArray(ids) && ids.length > 0;
-  const hasFilter = filter && typeof filter === 'object' && Object.keys(filter).length > 0;
+  const hasFilter =
+    filter && typeof filter === "object" && Object.keys(filter).length > 0;
 
   if (hasIds && hasFilter) {
-    throw new ValidationError('Provide either `ids` or `filter`, not both');
+    throw new ValidationError("Provide either `ids` or `filter`, not both");
   }
   if (!hasIds && !hasFilter) {
-    throw new ValidationError('Either `ids` or `filter` must be provided');
+    throw new ValidationError("Either `ids` or `filter` must be provided");
   }
 
   if (hasIds) {
     if (!Array.isArray(ids)) {
-      throw new ValidationError('`ids` must be an array of integers');
+      throw new ValidationError("`ids` must be an array of integers");
     }
     if (ids.length > idCap) {
-      throw new ValidationError(`\`ids\` must contain at most ${idCap} entries (received ${ids.length})`);
+      throw new ValidationError(
+        `\`ids\` must contain at most ${idCap} entries (received ${ids.length})`,
+      );
     }
     // No `.map(Number)` in front of the validator: it did not merely drop bad
     // entries, it retargeted them. Number('1e3') is 1000 and Number('0x10') is
@@ -333,26 +396,28 @@ export async function resolveBulkSelection(selector = {}, opts = {}) {
     // tab is still a valid integer — it passes validation and simply matches
     // nothing in the `id = ANY(...)` below. Only malformed input is rejected,
     // and the frontend holds `number[]` straight from the API.
-    return validateInt4Ids(ids, 'ids');
+    return validateInt4Ids(ids, "ids");
   }
 
   const normalized = normalizeBulkFilter(filter);
   const { sql: whereSql, params } = buildTransactionWhere(normalized);
 
-  const countResult = await dbQuery(
+  const countResult = await query(
     `SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${whereSql}`,
     params,
   );
   const matched = countResult.rows[0]?.n ?? 0;
 
-  if (matched === 0) {
-    throw new ValidationError('Filter matches no transactions');
+  if (matched === 0 && !opts.allowEmpty) {
+    throw new ValidationError("Filter matches no transactions");
   }
   if (matched > filterCap) {
-    throw new ValidationError(`Filter matches ${matched} transactions; cap is ${filterCap}`);
+    throw new ValidationError(
+      `Filter matches ${matched} transactions; cap is ${filterCap}`,
+    );
   }
 
-  const idsResult = await dbQuery(
+  const idsResult = await query(
     `SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${whereSql} ORDER BY t.id`,
     params,
   );

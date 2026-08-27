@@ -9,13 +9,13 @@
  * atomic writes, and the post-write reconcile scheduling.
  */
 
-import { query as dbQuery, withTransaction } from '../database/connection.js';
-import { ValidationError } from '../middleware/errorHandler.js';
-import { validateInt4Ids } from '../lib/filterBuilder.js';
-import { resolveBulkSelection } from './bulkSelection.js';
-import { scheduleReconcile } from './transferReconciliationService.js';
-import { attachmentRepository } from './attachmentRecordService.js';
-import { removeAttachmentFilesBestEffort } from './attachmentCleanup.js';
+import { query as dbQuery, withTransaction } from "../database/connection.js";
+import { ValidationError } from "../middleware/errorHandler.js";
+import { validateInt4Ids } from "../lib/filterBuilder.js";
+import { resolveBulkSelection } from "./bulkSelection.js";
+import { scheduleReconcile } from "./transferReconciliationService.js";
+import { attachmentRepository } from "./attachmentRecordService.js";
+import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.js";
 
 /**
  * Add and/or remove tags (by slug) on a set of transactions.
@@ -30,12 +30,16 @@ import { removeAttachmentFilesBestEffort } from './attachmentCleanup.js';
  * @param {{ transactionIds: unknown[], addSlugs: string[], removeSlugs: string[] }} args
  * @returns {Promise<{ added: number, removed: number, transactions_affected: number }>}
  */
-export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlugs }) {
+export async function bulkTagTransactions({
+  transactionIds,
+  addSlugs,
+  removeSlugs,
+}) {
   // Validated as sent — see the note in bulkSelection.js: the `.map(Number)`
   // that used to sit here turned '1e3' into id 1000 and true into id 1.
-  const txIds = validateInt4Ids(transactionIds, 'transaction_ids');
+  const txIds = validateInt4Ids(transactionIds, "transaction_ids");
   if (txIds.length === 0) {
-    throw new ValidationError('transaction_ids contains no valid IDs');
+    throw new ValidationError("transaction_ids contains no valid IDs");
   }
 
   /** @type {number[]} */
@@ -47,10 +51,15 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
 
   if (addSlugs.length > 0) {
     const r = await dbQuery(
-      'SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+      "SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
       [addSlugs],
     );
-    const found = new Map(r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [row.slug, row.id]));
+    const found = new Map(
+      r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [
+        row.slug,
+        row.id,
+      ]),
+    );
     for (const s of addSlugs) {
       if (!found.has(s)) allUnknown.push(s);
       else addTagIds.push(found.get(s));
@@ -59,10 +68,15 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
 
   if (removeSlugs.length > 0) {
     const r = await dbQuery(
-      'SELECT id, slug FROM tags WHERE slug = ANY($1::text[])',
+      "SELECT id, slug FROM tags WHERE slug = ANY($1::text[])",
       [removeSlugs],
     );
-    const found = new Map(r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [row.slug, row.id]));
+    const found = new Map(
+      r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [
+        row.slug,
+        row.id,
+      ]),
+    );
     for (const s of removeSlugs) {
       if (!found.has(s)) allUnknown.push(s);
       else removeTagIds.push(found.get(s));
@@ -70,7 +84,9 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
   }
 
   if (allUnknown.length > 0) {
-    throw new ValidationError(`Unknown or inactive tags: ${allUnknown.join(', ')}`);
+    throw new ValidationError(
+      `Unknown or inactive tags: ${allUnknown.join(", ")}`,
+    );
   }
 
   const result = await withTransaction(async (client) => {
@@ -89,7 +105,9 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
         [txIds, addTagIds],
       );
       added = r.rows.length;
-      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) => affectedTxIds.add(row.transaction_id));
+      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) =>
+        affectedTxIds.add(row.transaction_id),
+      );
     }
 
     if (removeTagIds.length > 0) {
@@ -100,7 +118,9 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
         [txIds, removeTagIds],
       );
       removed = r.rows.length;
-      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) => affectedTxIds.add(row.transaction_id));
+      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) =>
+        affectedTxIds.add(row.transaction_id),
+      );
     }
 
     return { added, removed, transactions_affected: affectedTxIds.size };
@@ -119,60 +139,76 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
  * clause construction). FK targets are validated up front so the entire batch
  * fails atomically on the first invalid reference.
  *
- * @param {{ ids?: number[], filter?: object, fields: { category_id?: number|null, recipient_id?: number, is_active?: boolean } }} args
- * @returns {Promise<number>} number of rows updated
+ * @param {{ ids?: number[], filter?: object, expectedCount?: number, fields: { category_id?: number|null, recipient_id?: number, is_active?: boolean } }} args
+ * @returns {Promise<{ updated: number, requested: number, matched: number }>} reconciliation counts
  */
-export async function bulkUpdateTransactions({ ids, filter, fields }) {
+export async function bulkUpdateTransactions({
+  ids,
+  filter,
+  fields,
+  expectedCount,
+}) {
   if (fields.category_id != null) {
     const r = await dbQuery(
-      'SELECT id FROM categories WHERE id = $1 AND is_active = true',
+      "SELECT id FROM categories WHERE id = $1 AND is_active = true",
       [fields.category_id],
     );
     if (r.rows.length === 0) {
-      throw new ValidationError(`Category ${fields.category_id} does not exist or is inactive`);
+      throw new ValidationError(
+        `Category ${fields.category_id} does not exist or is inactive`,
+      );
     }
   }
   if (fields.recipient_id != null) {
     const r = await dbQuery(
-      'SELECT id FROM recipients WHERE id = $1 AND is_active = true',
+      "SELECT id FROM recipients WHERE id = $1 AND is_active = true",
       [fields.recipient_id],
     );
     if (r.rows.length === 0) {
-      throw new ValidationError(`Recipient ${fields.recipient_id} does not exist or is inactive`);
+      throw new ValidationError(
+        `Recipient ${fields.recipient_id} does not exist or is inactive`,
+      );
     }
   }
 
-  const txIds = await resolveBulkSelection({ ids, filter });
+  const txIds = await resolveBulkSelection(
+    { ids, filter },
+    { allowEmpty: expectedCount !== undefined },
+  );
 
   /** @type {string[]} */
   const setClauses = [];
   /** @type {Array<number[] | number | boolean | null>} */
   const params = [txIds];
   let p = 2;
-  if ('category_id' in fields) {
+  if ("category_id" in fields) {
     setClauses.push(`category_id = $${p++}`);
     params.push(fields.category_id);
   }
-  if ('recipient_id' in fields) {
+  if ("recipient_id" in fields) {
     setClauses.push(`recipient_id = $${p++}`);
     params.push(fields.recipient_id);
   }
-  if ('is_active' in fields) {
+  if ("is_active" in fields) {
     setClauses.push(`is_active = $${p}`);
     params.push(fields.is_active);
   }
-  setClauses.push('updated_at = NOW()');
+  setClauses.push("updated_at = NOW()");
 
   const updated = await withTransaction(async (client) => {
     const r = await client.query(
-      `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = ANY($1::int[]) RETURNING id`,
+      `UPDATE transactions SET ${setClauses.join(", ")} WHERE id = ANY($1::int[]) RETURNING id`,
       params,
     );
     return r.rows.length;
   });
 
   if (updated > 0) scheduleReconcile();
-  return updated;
+  return {
+    updated,
+    requested: expectedCount ?? txIds.length,
+    matched: txIds.length,
+  };
 }
 
 /**
@@ -183,13 +219,17 @@ export async function bulkUpdateTransactions({ ids, filter, fields }) {
  * file paths are collected BEFORE the delete (the CASCADE removes the rows
  * that know them) and removed best-effort after the commit.
  *
- * @param {{ ids?: number[], filter?: object }} args
- * @returns {Promise<number>} number of rows deleted
+ * @param {{ ids?: number[], filter?: object, expectedCount?: number }} args
+ * @returns {Promise<{ deleted: number, requested: number, matched: number }>} reconciliation counts
  */
-export async function bulkDeleteTransactions({ ids, filter }) {
-  const txIds = await resolveBulkSelection({ ids, filter });
+export async function bulkDeleteTransactions({ ids, filter, expectedCount }) {
+  const txIds = await resolveBulkSelection(
+    { ids, filter },
+    { allowEmpty: expectedCount !== undefined },
+  );
 
-  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds(txIds);
+  const attachmentPaths =
+    await attachmentRepository.listPathsByTransactionIds(txIds);
   const deleted = await withTransaction(async (client) => {
     const r = await client.query(
       `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
@@ -202,5 +242,9 @@ export async function bulkDeleteTransactions({ ids, filter }) {
     await removeAttachmentFilesBestEffort(attachmentPaths);
     scheduleReconcile();
   }
-  return deleted;
+  return {
+    deleted,
+    requested: expectedCount ?? txIds.length,
+    matched: txIds.length,
+  };
 }

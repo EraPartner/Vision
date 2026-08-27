@@ -39,7 +39,6 @@ components:
       description: Rows to skip. Omit (together with limit) to receive the whole collection.
 
   schemas:
-
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -298,7 +297,23 @@ components:
 
     Account:
       type: object
-      required: [id, name, currency, type, liquidity_class, spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, is_active, created_at, updated_at]
+      required:
+        [
+          id,
+          name,
+          currency,
+          type,
+          liquidity_class,
+          spendable,
+          in_net_worth,
+          tax_wrapper,
+          owner,
+          multi_currency_cash,
+          has_cash_sleeve,
+          is_active,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -315,7 +330,16 @@ components:
           description: ISO 4217 currency code
         type:
           type: string
-          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+          enum:
+            [
+              checking,
+              savings,
+              brokerage,
+              crypto_exchange,
+              wallet,
+              pension,
+              liability,
+            ]
         liquidity_class:
           type: string
           enum: [liquid, semi_liquid, illiquid]
@@ -432,7 +456,16 @@ components:
           type: string
         type:
           type: string
-          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+          enum:
+            [
+              checking,
+              savings,
+              brokerage,
+              crypto_exchange,
+              wallet,
+              pension,
+              liability,
+            ]
         liquidity_class:
           type: string
           enum: [liquid, semi_liquid, illiquid]
@@ -476,7 +509,16 @@ components:
           type: string
         type:
           type: string
-          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+          enum:
+            [
+              checking,
+              savings,
+              brokerage,
+              crypto_exchange,
+              wallet,
+              pension,
+              liability,
+            ]
         liquidity_class:
           type: string
           enum: [liquid, semi_liquid, illiquid]
@@ -540,18 +582,36 @@ components:
           type: integer
 
     BulkSelection:
-      type: object
       description: >-
-        Selects transactions to act on. Provide an explicit `ids` array or a
-        `filter` object (a subset of the GET /api/transactions query filters);
-        exactly one is resolved server-side.
-      properties:
-        ids:
-          type: array
-          items:
-            type: integer
-        filter:
-          $ref: "#/components/schemas/BulkTransactionFilter"
+        Selects transactions to act on. Explicit-id mode accepts only `ids`.
+        Filter mode requires both `filter` and the `expected_count` shown when
+        the user confirmed the action.
+      oneOf:
+        - type: object
+          required: [ids]
+          properties:
+            ids:
+              type: array
+              minItems: 1
+              maxItems: 500
+              items:
+                type: integer
+          not:
+            anyOf:
+              - required: [filter]
+              - required: [expected_count]
+        - type: object
+          required: [filter, expected_count]
+          properties:
+            filter:
+              $ref: "#/components/schemas/BulkTransactionFilter"
+            expected_count:
+              type: integer
+              minimum: 1
+              maximum: 5000
+              description: Count shown when the user confirmed the action.
+          not:
+            required: [ids]
 
     BulkTransactionFilter:
       type: object
@@ -801,7 +861,15 @@ components:
 
     PlannedLoanScheduleEntry:
       type: object
-      required: [installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal]
+      required:
+        [
+          installment_number,
+          due_date,
+          payment_amount,
+          principal_amount,
+          interest_amount,
+          remaining_principal,
+        ]
       properties:
         installment_number:
           type: integer
@@ -834,7 +902,19 @@ components:
 
     PlannedTransaction:
       type: object
-      required: [id, planned_date, bank_account, amount, is_recurring, is_executed, execution_count, is_active, created_at, links]
+      required:
+        [
+          id,
+          planned_date,
+          bank_account,
+          amount,
+          is_recurring,
+          is_executed,
+          execution_count,
+          is_active,
+          created_at,
+          links,
+        ]
       properties:
         id:
           type: integer
@@ -1016,7 +1096,22 @@ components:
 
     PortfolioTxnType:
       type: string
-      enum: [buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital]
+      enum:
+        [
+          buy,
+          sell,
+          dividend,
+          fee,
+          tax,
+          interest,
+          rent_income,
+          appreciation,
+          gift,
+          split,
+          merger,
+          spinoff,
+          return_of_capital,
+        ]
 
     RecurrenceInterval:
       type: string
@@ -1028,7 +1123,18 @@ components:
 
     Investment:
       type: object
-      required: [id, name, asset_class, currency, price_provider, is_active, show_in_ticker, created_at, updated_at]
+      required:
+        [
+          id,
+          name,
+          asset_class,
+          currency,
+          price_provider,
+          is_active,
+          show_in_ticker,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -1106,7 +1212,18 @@ components:
 
     PortfolioTransaction:
       type: object
-      required: [id, investment_id, type, date, amount, currency, is_recurring, created_at, updated_at]
+      required:
+        [
+          id,
+          investment_id,
+          type,
+          date,
+          amount,
+          currency,
+          is_recurring,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -1242,7 +1359,22 @@ components:
     # ─── Saved Charts ────────────────────────────────────────────────────────
     SavedChart:
       type: object
-      required: [id, name, chart_type, chart_variant, time_bucket, category_ids, recipient_ids, tag_ids, all_categories, all_recipients, all_tags, created_at, updated_at]
+      required:
+        [
+          id,
+          name,
+          chart_type,
+          chart_variant,
+          time_bucket,
+          category_ids,
+          recipient_ids,
+          tag_ids,
+          all_categories,
+          all_recipients,
+          all_tags,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -1316,7 +1448,19 @@ components:
       type: object
       # recipient_name/note are required + nullable: formatSplit always emits
       # them (`row.recipient_name || null` / `row.note`), never omits them.
-      required: [id, transaction_id, recipient_id, recipient_name, amount, amount_paid, note, is_settled, created_at, updated_at]
+      required:
+        [
+          id,
+          transaction_id,
+          recipient_id,
+          recipient_name,
+          amount,
+          amount_paid,
+          note,
+          is_settled,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -1384,7 +1528,15 @@ components:
     # carried here — the summary sums across a recipient's splits.
     SplitOwed:
       type: object
-      required: [recipient_id, recipient_name, total_owed, total_paid, remaining, split_count]
+      required:
+        [
+          recipient_id,
+          recipient_name,
+          total_owed,
+          total_paid,
+          remaining,
+          split_count,
+        ]
       properties:
         recipient_id:
           type: integer
@@ -1405,7 +1557,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/Split"
         - type: object
-          required: [transaction_date, transaction_amount, transaction_currency, remaining]
+          required:
+            [
+              transaction_date,
+              transaction_amount,
+              transaction_currency,
+              remaining,
+            ]
           properties:
             transaction_date:
               type: string
@@ -1429,7 +1587,16 @@ components:
     # ─── Attachments ─────────────────────────────────────────────────────────
     Attachment:
       type: object
-      required: [id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at]
+      required:
+        [
+          id,
+          transaction_id,
+          filename,
+          stored_path,
+          mime_type,
+          size_bytes,
+          created_at,
+        ]
       properties:
         id:
           type: integer
@@ -1454,7 +1621,8 @@ components:
     # into this row.
     WatchlistItem:
       type: object
-      required: [id, name, asset_class, target_price, currency, created_at, updated_at]
+      required:
+        [id, name, asset_class, target_price, currency, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -1604,7 +1772,18 @@ components:
     # when the daemon is reachable (or no hint applies).
     OllamaStatus:
       type: object
-      required: [ok, baseUrl, displayUrl, modelCount, error, code, hint, defaultModel, enabled]
+      required:
+        [
+          ok,
+          baseUrl,
+          displayUrl,
+          modelCount,
+          error,
+          code,
+          hint,
+          defaultModel,
+          enabled,
+        ]
       properties:
         ok:
           type: boolean
@@ -1633,7 +1812,17 @@ components:
     # ─── Portfolio Import ─────────────────────────────────────────────────────
     PortfolioImportBatch:
       type: object
-      required: [id, adapter_name, status, rows_total, rows_imported, rows_duplicate, rows_error, started_at]
+      required:
+        [
+          id,
+          adapter_name,
+          status,
+          rows_total,
+          rows_imported,
+          rows_duplicate,
+          rows_error,
+          started_at,
+        ]
       properties:
         id:
           type: string
@@ -1645,7 +1834,19 @@ components:
           type: integer
         status:
           type: string
-          enum: [pending, staging, validating, matching, committing, complete, complete_with_errors, failed, aborted, awaiting_review]
+          enum:
+            [
+              pending,
+              staging,
+              validating,
+              matching,
+              committing,
+              complete,
+              complete_with_errors,
+              failed,
+              aborted,
+              awaiting_review,
+            ]
         rows_total:
           type: integer
         rows_imported:
@@ -1718,7 +1919,18 @@ components:
           description: Present on batch-detail responses; omitted from batch-list rows.
         status:
           type: string
-          enum: [pending, staging, validating, matching, awaiting_review, committing, complete, failed, aborted]
+          enum:
+            [
+              pending,
+              staging,
+              validating,
+              matching,
+              awaiting_review,
+              committing,
+              complete,
+              failed,
+              aborted,
+            ]
         rows_total:
           type: integer
         rows_imported:
@@ -1744,7 +1956,18 @@ components:
     # built by buildImportResult(buildPipelineResult(...)) in routes/importRoutes.js.
     ImportCsvResult:
       type: object
-      required: [total, imported, duplicates, errors, batch_id, auto_linked_count, status, error_message, links]
+      required:
+        [
+          total,
+          imported,
+          duplicates,
+          errors,
+          batch_id,
+          auto_linked_count,
+          status,
+          error_message,
+          links,
+        ]
       properties:
         total:
           type: integer
@@ -1841,7 +2064,6 @@ components:
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
-
   # ─── Tags ───────────────────────────────────────────────────────────────────
 
   /api/tags:
@@ -3203,10 +3425,16 @@ paths:
                         properties:
                           deleted:
                             type: integer
+                          requested:
+                            type: integer
+                          matched:
+                            type: integer
+                        required: [deleted, requested, matched]
         "400":
           description: >-
             Invalid selector: neither/both of `ids` and `filter`, a malformed
-            id, or an unknown/malformed filter field
+            id, a missing or misplaced `expected_count`, or an
+            unknown/malformed filter field
         "429":
           description: Rate limit exceeded
 
@@ -3251,10 +3479,16 @@ paths:
                         properties:
                           updated:
                             type: integer
+                          requested:
+                            type: integer
+                          matched:
+                            type: integer
+                        required: [updated, requested, matched]
         "400":
           description: >-
-            Invalid or missing fields, an invalid FK reference, or an
-            unknown/malformed filter field
+            Invalid selector or fields, including a missing or misplaced
+            `expected_count`, an invalid FK reference, or an unknown/malformed
+            filter field
         "429":
           description: Rate limit exceeded
 
@@ -3282,6 +3516,11 @@ paths:
       responses:
         "200":
           description: Streamed export
+          headers:
+            X-Exported-Count:
+              description: Number of transactions written to the export stream
+              schema:
+                type: integer
           content:
             text/csv:
               schema:
@@ -3290,7 +3529,9 @@ paths:
               schema:
                 type: string
         "400":
-          description: Invalid format, or an unknown/malformed filter field
+          description: >-
+            Invalid selector or format, including a missing or misplaced
+            `expected_count`, or an unknown/malformed filter field
         "429":
           description: Rate limit exceeded
 
@@ -4045,8 +4286,10 @@ paths:
                                   type: object
                                   properties:
                                     id: { type: integer }
-                                    recipient_id: { type: integer, nullable: true }
-                                    recipient_name: { type: string, nullable: true }
+                                    recipient_id:
+                                      { type: integer, nullable: true }
+                                    recipient_name:
+                                      { type: string, nullable: true }
                                     amount: { type: number }
                                     planned_date: { type: string }
                                     currency: { type: string, nullable: true }
@@ -4057,7 +4300,8 @@ paths:
                                     type: object
                                     properties:
                                       id: { type: integer }
-                                      recipient_name: { type: string, nullable: true }
+                                      recipient_name:
+                                        { type: string, nullable: true }
                                       amount: { type: number }
                                       transaction_date: { type: string }
                                       currency: { type: string, nullable: true }
@@ -6186,8 +6430,23 @@ paths:
               properties:
                 message:
                   type: string
-                conversation_id:
+                conversationId:
                   type: string
+                  format: uuid
+                  nullable: true
+                model:
+                  type: string
+                  nullable: true
+                useTools:
+                  type: boolean
+                  default: true
+                insightsPreCall:
+                  type: boolean
+                  default: false
+                retryLastTurn:
+                  type: boolean
+                  default: false
+                  description: Regenerate the latest incomplete turn without appending its user message again. Requires conversationId.
       responses:
         "200":
           description: AI response
@@ -6200,7 +6459,15 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: [conversation, userMessage, toolMessages, assistantMessage, usage, iterations]
+                        required:
+                          [
+                            conversation,
+                            userMessage,
+                            toolMessages,
+                            assistantMessage,
+                            usage,
+                            iterations,
+                          ]
                         properties:
                           conversation:
                             $ref: "#/components/schemas/AiConversation"
@@ -6232,8 +6499,23 @@ paths:
               properties:
                 message:
                   type: string
-                conversation_id:
+                conversationId:
                   type: string
+                  format: uuid
+                  nullable: true
+                model:
+                  type: string
+                  nullable: true
+                useTools:
+                  type: boolean
+                  default: true
+                insightsPreCall:
+                  type: boolean
+                  default: false
+                retryLastTurn:
+                  type: boolean
+                  default: false
+                  description: Regenerate the latest incomplete turn without appending its user message again. Requires conversationId.
       responses:
         "200":
           description: Server-sent event stream
@@ -6261,7 +6543,8 @@ paths:
                   format: binary
                 bank_name:
                   type: string
-                  description: Bank adapter identifier. The route also accepts it
+                  description:
+                    Bank adapter identifier. The route also accepts it
                     as a query parameter (`req.query.bank_name || req.body.bank_name`,
                     routes/importRoutes.js) — the frontend client sends it in the
                     query string.
@@ -6305,7 +6588,15 @@ paths:
                 (`{...req.query, ...req.body}`), so every field may equally be
                 sent as a query parameter — the frontend client sends them all
                 in the query string.
-              required: [file, bank_name, date_format, date_column, recipient_column, amount_column]
+              required:
+                [
+                  file,
+                  bank_name,
+                  date_format,
+                  date_column,
+                  recipient_column,
+                  amount_column,
+                ]
               properties:
                 file:
                   type: string
@@ -7970,7 +8261,11 @@ paths:
                 horizon_months: { type: integer }
                 monthly_contribution: { type: number }
                 paths: { type: integer }
-                forward_blend: { type: number, description: "0 = historical drift, 1 = forward" }
+                forward_blend:
+                  {
+                    type: number,
+                    description: "0 = historical drift, 1 = forward",
+                  }
                 method: { type: string, enum: [parametric, block_bootstrap] }
                 target_value: { type: number }
                 currency: { type: string }

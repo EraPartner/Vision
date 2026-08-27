@@ -14,40 +14,51 @@
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
-import { Router } from 'express';
-import { z } from 'zod';
-import transactionService from '../services/transactionService.js';
+import { Router } from "express";
+import { z } from "zod";
+import transactionService from "../services/transactionService.js";
 import {
   bulkTagTransactions,
   bulkUpdateTransactions,
   bulkDeleteTransactions,
-} from '../services/transactionBulkService.js';
-import { resolveRecipientIdByName } from '../services/recipientService.js';
-import { resolveCategoryIdByName } from '../services/categoryService.js';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { validateIdParam, validateId, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, validateIntArray, MAX_MONEY_VALUE, assertIdParam } from '../middleware/validation.js';
-import { rateLimiter } from '../middleware/rateLimiter.js';
+} from "../services/transactionBulkService.js";
+import { resolveRecipientIdByName } from "../services/recipientService.js";
+import { resolveCategoryIdByName } from "../services/categoryService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import {
+  validateIdParam,
+  validateId,
+  assertYmd,
+  assertOptionalId,
+  assertCurrency,
+  assertMaxLength,
+  validateIntArray,
+  MAX_MONEY_VALUE,
+  assertIdParam,
+} from "../middleware/validation.js";
+import { rateLimiter } from "../middleware/rateLimiter.js";
 import {
   scheduleReconcile,
   getTransferSuggestions,
   markTransfer,
   unmarkTransfer,
-} from '../services/transferReconciliationService.js';
+} from "../services/transferReconciliationService.js";
+import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import { toDecimal, toNumber } from "../lib/money.js";
 import {
-  ValidationError,
-  NotFoundError,
-} from '../middleware/errorHandler.js';
-import { toDecimal, toNumber } from '../lib/money.js';
-import { buildTransactionWhere, parseAmountFilter } from '../lib/filterBuilder.js';
+  buildTransactionWhere,
+  parseAmountFilter,
+} from "../lib/filterBuilder.js";
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
   streamNdjsonExport,
   buildIdListWhere,
-} from '../services/transactionExport.js';
-import { resolveBulkSelection } from '../services/bulkSelection.js';
-import { parsePagination } from '../lib/pagination.js';
-import { toWireDate } from '../lib/dateFormat.js';
+} from "../services/transactionExport.js";
+import { resolveBulkSelection } from "../services/bulkSelection.js";
+import { parsePagination } from "../lib/pagination.js";
+import { toWireDate } from "../lib/dateFormat.js";
+import { getClient } from "../database/connection.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -62,38 +73,63 @@ function parseRouteId(req) {
   return assertIdParam(req);
 }
 
+function parseBulkExpectedCount(value, filter) {
+  if (!filter) {
+    if (value !== undefined) {
+      throw new ValidationError("`expected_count` is only valid with `filter`");
+    }
+    return undefined;
+  }
+  const parsed = z.number().int().positive().max(5000).safeParse(value);
+  if (!parsed.success) {
+    throw new ValidationError(
+      "`expected_count` must be an integer between 1 and 5000 in filter mode",
+    );
+  }
+  return parsed.data;
+}
+
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
 
-const tagsField = z.array(z.unknown(), { error: 'tags must be an array of strings' }).optional();
+const tagsField = z
+  .array(z.unknown(), { error: "tags must be an array of strings" })
+  .optional();
 
 // bank_account is TEXT on transactions but VARCHAR(100) on the raw mirror
 // (manual_raw_transactions); cap it up front so the mirror insert can't 500
 // *after* the main row already committed. null/short values pass untouched.
-const bankAccountField = z.unknown().transform((value, ctx) => {
-  try {
-    return assertMaxLength(value, 100, 'bank_account');
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
-    return z.NEVER;
-  }
-}).optional();
+const bankAccountField = z
+  .unknown()
+  .transform((value, ctx) => {
+    try {
+      return assertMaxLength(value, 100, "bank_account");
+    } catch (err) {
+      ctx.addIssue({ code: "custom", message: err.message });
+      return z.NEVER;
+    }
+  })
+  .optional();
 
 // Normalise/validate currency (ISO-4217) so free text never reaches the
 // VARCHAR(3) column + 0046 CHECK as a raw 400/500. `rejectEmpty` picks the
 // clear-vs-default semantics: POST maps absent/'' to undefined (repo default),
 // PATCH rejects a cleared value (the column is NOT NULL).
-const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((value, ctx) => {
-  if (rejectEmpty && (value == null || value === '')) {
-    ctx.addIssue({ code: 'custom', message: 'currency cannot be cleared' });
-    return z.NEVER;
-  }
-  try {
-    return assertCurrency(value);
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
-    return z.NEVER;
-  }
-}).optional();
+const currencyField = ({ rejectEmpty = false } = {}) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      if (rejectEmpty && (value == null || value === "")) {
+        ctx.addIssue({ code: "custom", message: "currency cannot be cleared" });
+        return z.NEVER;
+      }
+      try {
+        return assertCurrency(value);
+      } catch (err) {
+        ctx.addIssue({ code: "custom", message: err.message });
+        return z.NEVER;
+      }
+    })
+    .optional();
 
 // recipient_id/category_id on PATCH: null clears (both columns are nullable),
 // but a present non-null value must be a positive integer — a non-integer here
@@ -105,15 +141,22 @@ const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((v
 // transaction at a recipient/category the caller never named — a silent
 // mis-attribution in the ledger rather than a 400.
 /** @param {string} field */
-const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
-  if (value === null) return null;
-  const parsed = validateId(value, field);
-  if (!parsed.valid) {
-    ctx.addIssue({ code: 'custom', message: `${field} must be a positive integer` });
-    return z.NEVER;
-  }
-  return parsed.value;
-}).optional();
+const nullableFkField = (field) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      if (value === null) return null;
+      const parsed = validateId(value, field);
+      if (!parsed.valid) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${field} must be a positive integer`,
+        });
+        return z.NEVER;
+      }
+      return parsed.value;
+    })
+    .optional();
 
 // POST body: per-field guards run first; the cross-field required/amount/
 // recipient checks mirror the pre-zod handler (raw values are forwarded to the
@@ -129,31 +172,52 @@ const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
 // 22P02; 0 and negatives an FK violation). '0x10' was worse than a 500: PG 16
 // reads hex integer literals, so it lands on category 16 wherever that row
 // exists. Surfaced by a test written while closing the FK-body set (e0cab62c).
-const createTransactionSchema = z.looseObject({
-  tags: tagsField,
-  currency: currencyField(),
-  bank_account: bankAccountField,
-  category_id: nullableFkField('category_id'),
-}).superRefine((data, ctx) => {
-  const txDate = data.transaction_date || data.date;
-  if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
-    ctx.addIssue({ code: 'custom', message: 'Missing required fields: date, bank_account, recipient_id, amount' });
-    return;
-  }
-  // Sign carries meaning (− expense / + income), so a zero amount is
-  // meaningless and only pollutes aggregations — reject it up front.
-  const amountNum = Number(data.amount);
-  if (!Number.isFinite(amountNum) || amountNum === 0 || Math.abs(amountNum) > MAX_MONEY_VALUE) {
-    ctx.addIssue({ code: 'custom', message: 'amount must be a non-zero finite number within range' });
-  }
-  // Validate recipient_id is a positive integer up front — a non-integer here
-  // otherwise reached the DB as an FK type error and surfaced as a 500. Same
-  // strict accept set as the PATCH field above: `Number()` would have booked
-  // a '1e3' against recipient 1000 instead of rejecting it.
-  if (!validateId(data.recipient_id, 'recipient_id').valid) {
-    ctx.addIssue({ code: 'custom', message: 'recipient_id must be a positive integer' });
-  }
-});
+const createTransactionSchema = z
+  .looseObject({
+    tags: tagsField,
+    currency: currencyField(),
+    bank_account: bankAccountField,
+    category_id: nullableFkField("category_id"),
+  })
+  .superRefine((data, ctx) => {
+    const txDate = data.transaction_date || data.date;
+    if (
+      !txDate ||
+      !data.bank_account ||
+      !data.recipient_id ||
+      data.amount == null
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Missing required fields: date, bank_account, recipient_id, amount",
+      });
+      return;
+    }
+    // Sign carries meaning (− expense / + income), so a zero amount is
+    // meaningless and only pollutes aggregations — reject it up front.
+    const amountNum = Number(data.amount);
+    if (
+      !Number.isFinite(amountNum) ||
+      amountNum === 0 ||
+      Math.abs(amountNum) > MAX_MONEY_VALUE
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "amount must be a non-zero finite number within range",
+      });
+    }
+    // Validate recipient_id is a positive integer up front — a non-integer here
+    // otherwise reached the DB as an FK type error and surfaced as a 500. Same
+    // strict accept set as the PATCH field above: `Number()` would have booked
+    // a '1e3' against recipient 1000 instead of rejecting it.
+    if (!validateId(data.recipient_id, "recipient_id").valid) {
+      ctx.addIssue({
+        code: "custom",
+        message: "recipient_id must be a positive integer",
+      });
+    }
+  });
 
 // PATCH body (after normalizeTransactionPatchFields). Parity with POST, which
 // validates date/amount/recipient_id. Without these, the inline row editor's
@@ -163,61 +227,105 @@ const createTransactionSchema = z.looseObject({
 // them but never clear them.
 const patchTransactionSchema = z.looseObject({
   tags: tagsField,
-  transaction_date: z.unknown().transform((value, ctx) => {
-    if (!value) {
-      ctx.addIssue({ code: 'custom', message: 'transaction_date cannot be cleared' });
-      return z.NEVER;
-    }
-    try {
-      return assertYmd(value, 'transaction_date');
-    } catch (err) {
-      ctx.addIssue({ code: 'custom', message: err.message });
-      return z.NEVER;
-    }
-  }).optional(),
-  amount: z.unknown().transform((value, ctx) => {
-    const amountNum = Number(value);
-    if (value == null || value === '' || !Number.isFinite(amountNum) || Math.abs(amountNum) > MAX_MONEY_VALUE) {
-      ctx.addIssue({ code: 'custom', message: 'amount must be a number within range' });
-      return z.NEVER;
-    }
-    return amountNum;
-  }).optional(),
+  transaction_date: z
+    .unknown()
+    .transform((value, ctx) => {
+      if (!value) {
+        ctx.addIssue({
+          code: "custom",
+          message: "transaction_date cannot be cleared",
+        });
+        return z.NEVER;
+      }
+      try {
+        return assertYmd(value, "transaction_date");
+      } catch (err) {
+        ctx.addIssue({ code: "custom", message: err.message });
+        return z.NEVER;
+      }
+    })
+    .optional(),
+  amount: z
+    .unknown()
+    .transform((value, ctx) => {
+      const amountNum = Number(value);
+      if (
+        value == null ||
+        value === "" ||
+        !Number.isFinite(amountNum) ||
+        Math.abs(amountNum) > MAX_MONEY_VALUE
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "amount must be a number within range",
+        });
+        return z.NEVER;
+      }
+      return amountNum;
+    })
+    .optional(),
   currency: currencyField({ rejectEmpty: true }),
   bank_account: bankAccountField,
-  recipient_id: nullableFkField('recipient_id'),
-  category_id: nullableFkField('category_id'),
+  recipient_id: nullableFkField("recipient_id"),
+  category_id: nullableFkField("category_id"),
 });
 
-const bulkTagSchema = z.object({
-  transaction_ids: z.array(z.unknown(), { error: 'transaction_ids must be a non-empty array of up to 500 IDs' })
-    .min(1, { error: 'transaction_ids must be a non-empty array of up to 500 IDs' })
-    .max(500, { error: 'transaction_ids must be a non-empty array of up to 500 IDs' }),
-  add_slugs: z.array(z.unknown(), { error: 'add_slugs must be an array of up to 50 slugs' })
-    .max(50, { error: 'add_slugs must be an array of up to 50 slugs' })
-    .default([]),
-  remove_slugs: z.array(z.unknown(), { error: 'remove_slugs must be an array of up to 50 slugs' })
-    .max(50, { error: 'remove_slugs must be an array of up to 50 slugs' })
-    .default([]),
-}).superRefine((data, ctx) => {
-  if (data.add_slugs.length === 0 && data.remove_slugs.length === 0) {
-    ctx.addIssue({ code: 'custom', message: 'At least one of add_slugs or remove_slugs must be non-empty' });
-  }
-});
+const bulkTagSchema = z
+  .object({
+    transaction_ids: z
+      .array(z.unknown(), {
+        error: "transaction_ids must be a non-empty array of up to 500 IDs",
+      })
+      .min(1, {
+        error: "transaction_ids must be a non-empty array of up to 500 IDs",
+      })
+      .max(500, {
+        error: "transaction_ids must be a non-empty array of up to 500 IDs",
+      }),
+    add_slugs: z
+      .array(z.unknown(), {
+        error: "add_slugs must be an array of up to 50 slugs",
+      })
+      .max(50, { error: "add_slugs must be an array of up to 50 slugs" })
+      .default([]),
+    remove_slugs: z
+      .array(z.unknown(), {
+        error: "remove_slugs must be an array of up to 50 slugs",
+      })
+      .max(50, { error: "remove_slugs must be an array of up to 50 slugs" })
+      .default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.add_slugs.length === 0 && data.remove_slugs.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "At least one of add_slugs or remove_slugs must be non-empty",
+      });
+    }
+  });
 
 // bulk-update `fields`: strict (no coercion) — the pre-zod code required real
 // numbers/booleans here. Unknown keys are stripped, exactly like the old
 // manual sanitized{} build; presence drives the SET clause construction.
 const bulkUpdateFieldsSchema = z.object({
-  category_id: z.number({ error: '`fields.category_id` must be a positive integer or null' })
-    .int({ error: '`fields.category_id` must be a positive integer or null' })
-    .positive({ error: '`fields.category_id` must be a positive integer or null' })
-    .nullable().optional(),
-  recipient_id: z.number({ error: '`fields.recipient_id` must be a positive integer' })
-    .int({ error: '`fields.recipient_id` must be a positive integer' })
-    .positive({ error: '`fields.recipient_id` must be a positive integer' })
+  category_id: z
+    .number({
+      error: "`fields.category_id` must be a positive integer or null",
+    })
+    .int({ error: "`fields.category_id` must be a positive integer or null" })
+    .positive({
+      error: "`fields.category_id` must be a positive integer or null",
+    })
+    .nullable()
     .optional(),
-  is_active: z.boolean({ error: '`fields.is_active` must be a boolean' }).optional(),
+  recipient_id: z
+    .number({ error: "`fields.recipient_id` must be a positive integer" })
+    .int({ error: "`fields.recipient_id` must be a positive integer" })
+    .positive({ error: "`fields.recipient_id` must be a positive integer" })
+    .optional(),
+  is_active: z
+    .boolean({ error: "`fields.is_active` must be a boolean" })
+    .optional(),
 });
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
@@ -231,8 +339,12 @@ function parseTransactionBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
-      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
-      .join('; ');
+      .map((issue) =>
+        issue.path.length
+          ? `${issue.path.join(".")}: ${issue.message}`
+          : issue.message,
+      )
+      .join("; ");
     throw new ValidationError(msg);
   }
   return result.data;
@@ -271,8 +383,8 @@ function parseTransactionBody(schema, body) {
 function parseIdListQueryParam(raw, field) {
   if (raw == null) return null;
   const joined = String(raw);
-  if (joined === '') return null;
-  const result = validateIntArray(joined.split(','), field);
+  if (joined === "") return null;
+  const result = validateIntArray(joined.split(","), field);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
 }
@@ -284,29 +396,50 @@ function parseIdListQueryParam(raw, field) {
 function parseTransactionListQuery(query) {
   const {
     transaction_id,
-    start_date, end_date, account_id, bank_account,
-    category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
-    active = 'true', search,
-    sort_by, sort_dir,
+    start_date,
+    end_date,
+    account_id,
+    bank_account,
+    category_id,
+    category_ids,
+    recipient_id,
+    recipient_group_id,
+    recipient_name,
+    active = "true",
+    search,
+    sort_by,
+    sort_dir,
     include_balance,
     transaction_type,
-    amount_min, amount_max, amount_exact, amount_signed,
+    amount_min,
+    amount_max,
+    amount_exact,
+    amount_signed,
     tags,
   } = query;
   const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
 
-  const parsedCategoryIds = parseIdListQueryParam(category_ids, 'category_ids');
+  const parsedCategoryIds = parseIdListQueryParam(category_ids, "category_ids");
 
   const parsedTagSlugs = tags
-    ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+    ? String(tags)
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
     : null;
 
   // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
   // bulkSelection). amount_exact is shorthand for min == max.
-  const amountSigned = amount_signed === 'true' || amount_signed === '1';
+  const amountSigned = amount_signed === "true" || amount_signed === "1";
   const amountExact = parseAmountFilter(amount_exact, amountSigned);
-  const amountMin = amountExact != null ? amountExact : parseAmountFilter(amount_min, amountSigned);
-  const amountMax = amountExact != null ? amountExact : parseAmountFilter(amount_max, amountSigned);
+  const amountMin =
+    amountExact != null
+      ? amountExact
+      : parseAmountFilter(amount_min, amountSigned);
+  const amountMax =
+    amountExact != null
+      ? amountExact
+      : parseAmountFilter(amount_max, amountSigned);
 
   return {
     limit,
@@ -319,24 +452,30 @@ function parseTransactionListQuery(query) {
     // as ids no row can have, and a NaN (which is what the Transactions page
     // sends for a hand-edited URL) passed the `!= null` guard and reached
     // Postgres as a 22P02 500.
-    transactionId: assertOptionalId(transaction_id, 'transaction_id'),
-    startDate: assertYmd(start_date, 'start_date'),
-    endDate: assertYmd(end_date, 'end_date'),
+    transactionId: assertOptionalId(transaction_id, "transaction_id"),
+    startDate: assertYmd(start_date, "start_date"),
+    endDate: assertYmd(end_date, "end_date"),
     // account_id is the preferred account filter (ADR-088 — reads key on the
     // FK); bank_account stays as a substring escape hatch.
-    accountId: assertOptionalId(account_id, 'account_id'),
+    accountId: assertOptionalId(account_id, "account_id"),
     bankAccount: bank_account || null,
-    categoryId: assertOptionalId(category_id, 'category_id'),
+    categoryId: assertOptionalId(category_id, "category_id"),
     categoryIds: parsedCategoryIds,
-    recipientId: assertOptionalId(recipient_id, 'recipient_id'),
-    recipientGroupId: assertOptionalId(recipient_group_id, 'recipient_group_id'),
+    recipientId: assertOptionalId(recipient_id, "recipient_id"),
+    recipientGroupId: assertOptionalId(
+      recipient_group_id,
+      "recipient_group_id",
+    ),
     recipientName: recipient_name || null,
     search: search ? String(search).slice(0, 200) : null,
-    active: active !== 'false',
+    active: active !== "false",
     sortBy: sort_by || null,
-    sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
-    includeBalance: include_balance === 'true',
-    transactionType: transaction_type === 'income' || transaction_type === 'expense' ? transaction_type : null,
+    sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : null,
+    includeBalance: include_balance === "true",
+    transactionType:
+      transaction_type === "income" || transaction_type === "expense"
+        ? transaction_type
+        : null,
     amountMin,
     amountMax,
     amountSigned,
@@ -365,12 +504,15 @@ function buildExportFilters(query) {
   // EXPORT_MAX_LIST_SIZE still rejects rather than being sliced away unseen.
   // The cap itself is unchanged (it silently truncates an over-long list — a
   // separate, pre-existing narrowing, shared with bank_accounts below).
-  const accountIds = parseIdListQueryParam(query.account_ids, 'account_ids')
-    ?.slice(0, EXPORT_MAX_LIST_SIZE) ?? null;
+  const accountIds =
+    parseIdListQueryParam(query.account_ids, "account_ids")?.slice(
+      0,
+      EXPORT_MAX_LIST_SIZE,
+    ) ?? null;
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
-        .split(',')
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
         .slice(0, EXPORT_MAX_LIST_SIZE)
@@ -405,12 +547,18 @@ function buildExportFilters(query) {
 function normalizeTransactionPatchFields(body) {
   // Immutable-rest sanitization (docs/reference/code-patterns.md) — strip
   // read-only keys via destructuring, never with in-place delete.
-  const { links: _links, id: _id, created_at: _createdAt, date, ...fields } = body;
+  const {
+    links: _links,
+    id: _id,
+    created_at: _createdAt,
+    date,
+    ...fields
+  } = body;
 
   // Remap whenever the key is present — a cleared date ('' / null) must also
   // land on transaction_date so the PATCH validation can reject it instead of
   // letting `SET "date" = ''` reach Postgres.
-  if ('date' in body) {
+  if ("date" in body) {
     fields.transaction_date = date;
   }
 
@@ -437,84 +585,134 @@ async function resolveCategoryNameToId(fields) {
 // segment so they never collide with the single-segment `/:id` handlers.
 
 // GET /api/transactions/transfer-suggestions — ambiguous transfer matches
-router.get('/transfer-suggestions', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  res.ok({ items: await getTransferSuggestions() });
-});
+router.get(
+  "/transfer-suggestions",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    res.ok({ items: await getTransferSuggestions() });
+  },
+);
 
 // POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
-router.post('/transfers', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  // Same strict id parse as everywhere else. This was a bare parseInt guarded
-  // only by Number.isInteger, so `aId: "12abc"` marked transaction 12 as a
-  // transfer — a wrong-record *write*, not a wrong-record read — and an id past
-  // int4 (99999999999) passed the guard and 500'd at the column.
-  const a = validateId(req.body?.aId, 'aId');
-  const b = validateId(req.body?.bId, 'bId');
-  if (!a.valid || !b.valid || a.value === b.value) {
-    throw new ValidationError('aId and bId must be two distinct transaction ids');
-  }
-  const aId = a.value;
-  const bId = b.value;
-  await markTransfer(aId, bId);
-  scheduleReconcile();
-  res.ok({ ok: true });
-});
+router.post(
+  "/transfers",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    // Same strict id parse as everywhere else. This was a bare parseInt guarded
+    // only by Number.isInteger, so `aId: "12abc"` marked transaction 12 as a
+    // transfer — a wrong-record *write*, not a wrong-record read — and an id past
+    // int4 (99999999999) passed the guard and 500'd at the column.
+    const a = validateId(req.body?.aId, "aId");
+    const b = validateId(req.body?.bId, "bId");
+    if (!a.valid || !b.valid || a.value === b.value) {
+      throw new ValidationError(
+        "aId and bId must be two distinct transaction ids",
+      );
+    }
+    const aId = a.value;
+    const bId = b.value;
+    await markTransfer(aId, bId);
+    scheduleReconcile();
+    res.ok({ ok: true });
+  },
+);
 
 // DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
-router.delete('/transfers/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  await unmarkTransfer(assertIdParam(req));
-  scheduleReconcile();
-  // Deleting the transfer mark reports nothing the caller can't derive →
-  // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
-  res.status(204).send();
-});
+router.delete(
+  "/transfers/:id",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    await unmarkTransfer(assertIdParam(req));
+    scheduleReconcile();
+    // Deleting the transfer mark reports nothing the caller can't derive →
+    // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+    res.status(204).send();
+  },
+);
 
 // GET /api/transactions
-router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const { uncategorised, normalize_to_eur = 'false', target_currency } = req.query;
-  const opts = parseTransactionListQuery(req.query);
+router.get(
+  "/",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const {
+      uncategorised,
+      normalize_to_eur = "false",
+      target_currency,
+    } = req.query;
+    const opts = parseTransactionListQuery(req.query);
 
-  let items, total;
-  if (uncategorised === 'true') {
-    const result = await transactionService.getUncategorisedWithCount(opts);
-    items = result.rows;
-    total = result.total;
-  } else {
-    const result = await transactionService.getAllWithCount(opts);
-    items = result.rows;
-    total = result.total;
-  }
+    let items, total;
+    if (uncategorised === "true") {
+      const result = await transactionService.getUncategorisedWithCount(opts);
+      items = result.rows;
+      total = result.total;
+    } else {
+      const result = await transactionService.getAllWithCount(opts);
+      items = result.rows;
+      total = result.total;
+    }
 
-  if (normalize_to_eur === 'true') {
-    items = await convertRowsToEur(items, target_currency || 'EUR');
-  }
+    if (normalize_to_eur === "true") {
+      items = await convertRowsToEur(items, target_currency || "EUR");
+    }
 
-  res.ok({
-    items: items.map(formatTransaction),
-    total,
-    limit: opts.limit,
-    offset: opts.offset,
-    links: [],
-  });
-});
+    res.ok({
+      items: items.map(formatTransaction),
+      total,
+      limit: opts.limit,
+      offset: opts.offset,
+      links: [],
+    });
+  },
+);
 
 // GET /api/transactions/export/csv
 // Rate-limited, streamed CSV. Chunked pagination bounds memory.
 router.get(
-  '/export/csv',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-csv' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-    const includeBalance = req.query.include_balance === 'true';
+  "/export/csv",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-export-csv",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const includeBalance = req.query.include_balance === "true";
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
-    await streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance });
+    await streamCsvExport(res, {
+      whereSql,
+      params,
+      nextParamIdx,
+      includeBalance,
+    });
   },
 );
 
 // GET /api/transactions/export/json
 // Rate-limited, streamed NDJSON (newline-delimited JSON). One JSON object per line.
 router.get(
-  '/export/json',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-json' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  "/export/json",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-export-json",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
     await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
   },
@@ -522,10 +720,20 @@ router.get(
 
 // POST /api/transactions/bulk-tag
 router.post(
-  '/bulk-tag',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-tag' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-    const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(bulkTagSchema, req.body);
+  "/bulk-tag",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-bulk-tag",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(
+      bulkTagSchema,
+      req.body,
+    );
 
     // bulkTagSchema only validates "is an array" (add_slugs/remove_slugs item
     // type is unchecked, matching pre-zod behavior) while bulkTagTransactions
@@ -546,12 +754,20 @@ router.post(
 // CASCADE on transaction_tags / transaction_splits / attachments handles
 // dependent rows; raw_transactions and import_batches use SET NULL.
 router.post(
-  '/bulk-delete',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-delete' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-    const { ids, filter } = req.body ?? {};
-    const deleted = await bulkDeleteTransactions({ ids, filter });
-    res.ok({ deleted });
+  "/bulk-delete",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-bulk-delete",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { ids, filter, expected_count } = req.body ?? {};
+    const expectedCount = parseBulkExpectedCount(expected_count, filter);
+    const result = await bulkDeleteTransactions({ ids, filter, expectedCount });
+    res.ok(result);
   },
 );
 
@@ -560,13 +776,23 @@ router.post(
 // transactions selected by `ids` or `filter`. FK targets are validated up front
 // so the entire batch fails atomically on the first invalid reference.
 router.post(
-  '/bulk-update',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-update' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-    const { ids, filter, fields } = req.body ?? {};
+  "/bulk-update",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-bulk-update",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { ids, filter, fields, expected_count } = req.body ?? {};
+    const expectedCount = parseBulkExpectedCount(expected_count, filter);
 
-    if (!fields || typeof fields !== 'object') {
-      throw new ValidationError('`fields` must be an object with at least one updatable property');
+    if (!fields || typeof fields !== "object") {
+      throw new ValidationError(
+        "`fields` must be an object with at least one updatable property",
+      );
     }
 
     // Strip-mode parse: unknown keys are dropped, present keys are validated,
@@ -574,16 +800,24 @@ router.post(
     // Explicit-undefined values (unreachable via JSON) are dropped too, so a
     // `category_id: undefined` can never become `SET category_id = NULL`.
     const sanitized = Object.fromEntries(
-      Object.entries(parseTransactionBody(bulkUpdateFieldsSchema, fields))
-        .filter(([, value]) => value !== undefined),
+      Object.entries(
+        parseTransactionBody(bulkUpdateFieldsSchema, fields),
+      ).filter(([, value]) => value !== undefined),
     );
 
     if (Object.keys(sanitized).length === 0) {
-      throw new ValidationError('`fields` must contain at least one of: category_id, recipient_id, is_active');
+      throw new ValidationError(
+        "`fields` must contain at least one of: category_id, recipient_id, is_active",
+      );
     }
 
-    const updated = await bulkUpdateTransactions({ ids, filter, fields: sanitized });
-    res.ok({ updated });
+    const result = await bulkUpdateTransactions({
+      ids,
+      filter,
+      fields: sanitized,
+      expectedCount,
+    });
+    res.ok(result);
   },
 );
 
@@ -591,72 +825,131 @@ router.post(
 // Streams CSV / NDJSON for a set of transactions selected by `ids` or `filter`.
 // Reuses the same chunked streaming pipeline as the GET export endpoints.
 router.post(
-  '/bulk-export',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-export' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-    const { ids, filter, format = 'csv', include_balance = false } = req.body ?? {};
-    if (format !== 'csv' && format !== 'json') {
+  "/bulk-export",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-bulk-export",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const {
+      ids,
+      filter,
+      format = "csv",
+      include_balance = false,
+      expected_count,
+    } = req.body ?? {};
+    if (format !== "csv" && format !== "json") {
       throw new ValidationError("`format` must be 'csv' or 'json'");
     }
 
-    const txIds = await resolveBulkSelection({ ids, filter });
-    const { whereSql, params, nextParamIdx } = buildIdListWhere(txIds);
+    parseBulkExpectedCount(expected_count, filter);
+    const client = await getClient();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const query = (sql, params) => client.query(sql, params);
+      const txIds = await resolveBulkSelection({ ids, filter }, { query });
+      const countResult = await query(
+        "SELECT COUNT(*)::int AS n FROM transactions WHERE id = ANY($1::int[])",
+        [txIds],
+      );
+      res.setHeader("X-Exported-Count", String(countResult.rows[0]?.n ?? 0));
+      const { whereSql, params, nextParamIdx } = buildIdListWhere(txIds);
 
-    if (format === 'csv') {
-      await streamCsvExport(res, {
-        whereSql,
-        params,
-        nextParamIdx,
-        includeBalance: include_balance === true,
-      });
-    } else {
-      await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
+      if (format === "csv") {
+        await streamCsvExport(res, {
+          whereSql,
+          params,
+          nextParamIdx,
+          includeBalance: include_balance === true,
+          query,
+        });
+      } else {
+        await streamNdjsonExport(res, {
+          whereSql,
+          params,
+          nextParamIdx,
+          query,
+        });
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
   },
 );
 
 // GET /api/transactions/:id
-router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const transaction = await transactionService.getById(assertIdParam(req));
-  if (!transaction) {
-    throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
-  }
-  res.ok(formatTransaction(transaction));
-});
+router.get(
+  "/:id",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const transaction = await transactionService.getById(assertIdParam(req));
+    if (!transaction) {
+      throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
+    }
+    res.ok(formatTransaction(transaction));
+  },
+);
 
 // POST /api/transactions
-router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  // Validated body: currency is coerced (uppercased / undefined → repo
-  // default); everything else is forwarded raw, exactly as before the schema.
-  // The dup-check → insert → raw-mirror → auto-link → reconcile chain lives
-  // in the service; a duplicate surfaces as ConflictError (409) from there.
-  const data = parseTransactionBody(createTransactionSchema, req.body);
+router.post(
+  "/",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    // Validated body: currency is coerced (uppercased / undefined → repo
+    // default); everything else is forwarded raw, exactly as before the schema.
+    // The dup-check → insert → raw-mirror → auto-link → reconcile chain lives
+    // in the service; a duplicate surfaces as ConflictError (409) from there.
+    const data = parseTransactionBody(createTransactionSchema, req.body);
 
-  // createTransactionSchema is a loose passthrough object (see module doc) —
-  // its zod-inferred type makes every field optional, but the schema's own
-  // superRefine already enforces date/bank_account/recipient_id/amount are
-  // present before this line runs (400s otherwise), matching
-  // createManualTransaction's required-field param type.
-  const { transaction, autoLink } = await transactionService.createManualTransaction(
-    /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null }} */ (data),
-  );
+    // createTransactionSchema is a loose passthrough object (see module doc) —
+    // its zod-inferred type makes every field optional, but the schema's own
+    // superRefine already enforces date/bank_account/recipient_id/amount are
+    // present before this line runs (400s otherwise), matching
+    // createManualTransaction's required-field param type.
+    const { transaction, autoLink } =
+      await transactionService.createManualTransaction(
+        /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null }} */ (
+          data
+        ),
+      );
 
-  res.status(201);
-  res.ok({
-    // transactionService.createManualTransaction's own @returns widens
-    // `transaction` to `object` at the service seam, but it's a pass-through
-    // of transactionRepository.create()'s EnrichedTransactionRow|null.
-    ...formatTransaction(/** @type {EnrichedTransactionRow} */ (transaction)),
-    auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
-  });
-});
+    res.status(201);
+    res.ok({
+      // transactionService.createManualTransaction's own @returns widens
+      // `transaction` to `object` at the service seam, but it's a pass-through
+      // of transactionRepository.create()'s EnrichedTransactionRow|null.
+      ...formatTransaction(/** @type {EnrichedTransactionRow} */ (transaction)),
+      auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
+    });
+  },
+);
 
 // PATCH /api/transactions/:id
 router.patch(
-  '/:id',
+  "/:id",
   validateIdParam,
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-patch' }),
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "transactions-patch",
+  }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
     const id = parseRouteId(req);
     // Whitelist-strip read-only keys, then validate/coerce the typed fields.
     // Absent keys stay absent (partial PATCH), null keeps its clear semantics
@@ -671,7 +964,11 @@ router.patch(
       resolveRecipientNameToId(fields),
       resolveCategoryNameToId(fields),
     ]);
-    const { recipient_name: _recipientName, category_name: _categoryName, ...patch } = fields;
+    const {
+      recipient_name: _recipientName,
+      category_name: _categoryName,
+      ...patch
+    } = fields;
     if (recipientId !== undefined) patch.recipient_id = recipientId;
     if (categoryId !== undefined) patch.category_id = categoryId;
 
@@ -680,7 +977,10 @@ router.patch(
     // types `tags` as `string[]` since that's what it writes to the junction
     // table — same "loose zod passthrough vs. typed repository param" gap as
     // the POST handler above.
-    const updated = await transactionService.update(id, /** @type {Record<string, any> & { tags?: string[] }} */ (patch));
+    const updated = await transactionService.update(
+      id,
+      /** @type {Record<string, any> & { tags?: string[] }} */ (patch),
+    );
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
@@ -691,15 +991,22 @@ router.patch(
 );
 
 // DELETE /api/transactions/:id
-router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseRouteId(req);
-  const deleted = await transactionService.hardDeleteWithCleanup(id);
-  if (!deleted) {
-    throw new NotFoundError(`Transaction with ID ${id} not found`);
-  }
-  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
-  res.status(204).send();
-});
+router.delete(
+  "/:id",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const id = parseRouteId(req);
+    const deleted = await transactionService.hardDeleteWithCleanup(id);
+    if (!deleted) {
+      throw new NotFoundError(`Transaction with ID ${id} not found`);
+    }
+    // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+    res.status(204).send();
+  },
+);
 
 /**
  * Format a transaction row for API response.
@@ -709,7 +1016,8 @@ router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {E
 function formatTransaction(row) {
   if (!row) return null;
   const amount = toNumber(toDecimal(row.amount));
-  const amountEur = row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
+  const amountEur =
+    row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
   return {
     id: row.id,
     // DATE column: emit the calendar day, not the raw pg Date (which JSON-

@@ -5,12 +5,12 @@
  * place so the two entry points cannot drift.
  */
 
-import { query as dbQuery } from '../database/connection.js';
-import { logger } from '../config/logger.js';
-import { NotFoundError } from '../middleware/errorHandler.js';
-import { toDecimal } from '../lib/money.js';
-import { toYmd } from './calculations/portfolioMath.js';
-import { escapeCsvValue } from '../lib/csv.js';
+import { query as dbQuery } from "../database/connection.js";
+import { logger } from "../config/logger.js";
+import { NotFoundError } from "../middleware/errorHandler.js";
+import { toDecimal } from "../lib/money.js";
+import { toYmd } from "./calculations/portfolioMath.js";
+import { escapeCsvValue } from "../lib/csv.js";
 
 /**
  * The slice of an Express `Response` this module actually calls. Deliberately
@@ -25,6 +25,11 @@ import { escapeCsvValue } from '../lib/csv.js';
  * @property {(event: string, cb: () => void) => void} [once]
  * @property {boolean} [headersSent]
  * @property {() => void} end
+ * @property {(error?: Error) => void} [destroy]
+ */
+
+/**
+ * @typedef {(sql: string, params?: any[]) => Promise<{rows: ExportTransactionRow[]|any[]}>} ExportQuery
  */
 
 /**
@@ -63,7 +68,7 @@ export const EXPORT_JOINS_SQL = `
     LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
 function buildExportTimestamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
 
 function buildCsvFilename() {
@@ -94,8 +99,9 @@ function buildExportProbeSql(whereSql) {
 function writeWithBackpressure(res, chunk) {
   // `res.once` is missing on minimal/mocked response objects — in that case
   // there's no drain event to await, so just resolve.
-  if (res.write(chunk) || typeof res.once !== 'function') return Promise.resolve();
-  return new Promise((resolve) => res.once('drain', resolve));
+  if (res.write(chunk) || typeof res.once !== "function")
+    return Promise.resolve();
+  return new Promise((resolve) => res.once("drain", resolve));
 }
 
 /**
@@ -105,15 +111,21 @@ function writeWithBackpressure(res, chunk) {
  * @param {number} [cursorIdParamIdx]
  * @returns {string}
  */
-function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursorIdParamIdx) {
+function buildExportChunkSql(
+  whereSql,
+  limitParamIdx,
+  cursorDateParamIdx,
+  cursorIdParamIdx,
+) {
   // Keyset pagination: each chunk continues strictly after the previous chunk's
   // last (date, id) instead of OFFSET. OFFSET across separate pool queries (new
   // snapshot each time) silently dropped/duplicated rows when a concurrent
   // insert/delete shifted the result set mid-export. (date, id) is unique
   // (t.id) so the cursor is exact and the scan is index-friendly.
-  const keyset = cursorDateParamIdx != null
-    ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
-    : '';
+  const keyset =
+    cursorDateParamIdx != null
+      ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
+      : "";
   return `
     SELECT t.id, t.date, acct.name AS bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
@@ -166,10 +178,10 @@ function buildCsvRow(row, { includeBalance = false } = {}) {
     escapeCsvValue(row.balance),
     escapeCsvValue(row.category_name),
     escapeCsvValue(row.comment),
-    escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(';') : ''),
+    escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(";") : ""),
   ];
   if (includeBalance) cols.push(escapeCsvValue(row.running_balance));
-  return cols.join(',');
+  return cols.join(",");
 }
 
 /**
@@ -208,17 +220,31 @@ function buildNdjsonRow(row) {
  *   writeHeader?: (res: ExpressResponse) => void,
  *   formatRow: (row: ExportTransactionRow, rowIndex: number) => string,
  *   label: string,
+ *   query?: (sql: string, params?: any[]) => Promise<{rows: ExportTransactionRow[]|any[]}>,
  * }} opts
  * @returns {Promise<{ rowCount: number }>}
  */
-async function streamExport(res, { whereSql, params, nextParamIdx, contentType, filename, writeHeader, formatRow, label }) {
-  const probe = await dbQuery(buildExportProbeSql(whereSql), params);
+async function streamExport(
+  res,
+  {
+    whereSql,
+    params,
+    nextParamIdx,
+    contentType,
+    filename,
+    writeHeader,
+    formatRow,
+    label,
+    query = dbQuery,
+  },
+) {
+  const probe = await query(buildExportProbeSql(whereSql), params);
   if (probe.rows.length === 0) {
-    throw new NotFoundError('No transactions found matching filters');
+    throw new NotFoundError("No transactions found matching filters");
   }
 
-  res.setHeader('Content-Type', contentType);
-  res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
 
   if (writeHeader) writeHeader(res);
 
@@ -231,12 +257,21 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
   try {
     while (true) {
       /** @type {{ rows: ExportTransactionRow[] }} */
-      const chunk = cursorDate == null
-        ? await dbQuery(buildExportChunkSql(whereSql, nextParamIdx), [...params, EXPORT_CHUNK_SIZE])
-        : await dbQuery(
-            buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1, nextParamIdx + 2),
-            [...params, EXPORT_CHUNK_SIZE, cursorDate, cursorId],
-          );
+      const chunk =
+        cursorDate == null
+          ? await query(buildExportChunkSql(whereSql, nextParamIdx), [
+              ...params,
+              EXPORT_CHUNK_SIZE,
+            ])
+          : await query(
+              buildExportChunkSql(
+                whereSql,
+                nextParamIdx,
+                nextParamIdx + 1,
+                nextParamIdx + 2,
+              ),
+              [...params, EXPORT_CHUNK_SIZE, cursorDate, cursorId],
+            );
       if (chunk.rows.length === 0) break;
       for (const row of chunk.rows) {
         await writeWithBackpressure(res, formatRow(row, rowCount));
@@ -254,8 +289,9 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
   } catch (err) {
     if (res.headersSent) {
       logger.error(`${label} export failed mid-stream`, { error: err.message });
-      res.end();
-      return { rowCount };
+      if (res.destroy) res.destroy(err);
+      else res.end();
+      throw err;
     }
     throw err;
   }
@@ -263,10 +299,13 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
 
 /**
  * @param {ExpressResponse} res
- * @param {{ whereSql: string, params: any[], nextParamIdx: number, includeBalance?: boolean }} args
+ * @param {{ whereSql: string, params: any[], nextParamIdx: number, includeBalance?: boolean, query?: ExportQuery }} args
  * @returns {Promise<{ rowCount: number }>}
  */
-export async function streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance = false }) {
+export async function streamCsvExport(
+  res,
+  { whereSql, params, nextParamIdx, includeBalance = false, query },
+) {
   // Partitioned by account_id (ADR-088): the list endpoint's window partitions
   // by account because a stream spanning multiple accounts otherwise sums them
   // into one meaningless cross-account total. Kept as Decimals across the whole
@@ -278,43 +317,50 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
     whereSql,
     params,
     nextParamIdx,
-    contentType: 'text/csv',
+    contentType: "text/csv",
     filename: buildCsvFilename(),
     writeHeader(target) {
       const header = includeBalance
-        ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance'
-        : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags';
+        ? "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance"
+        : "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags";
       target.write(`${header}\n`);
     },
     formatRow(row) {
       if (includeBalance) {
         const key = row.account_id ?? null;
-        const next = (runningBalances.get(key) ?? toDecimal(0)).plus(toDecimal(row.amount ?? 0));
+        const next = (runningBalances.get(key) ?? toDecimal(0)).plus(
+          toDecimal(row.amount ?? 0),
+        );
         runningBalances.set(key, next);
         return `${buildCsvRow({ ...row, running_balance: next.toString() }, { includeBalance })}\n`;
       }
       return `${buildCsvRow(row)}\n`;
     },
-    label: 'CSV',
+    label: "CSV",
+    query,
   });
 }
 
 /**
  * @param {ExpressResponse} res
- * @param {{ whereSql: string, params: any[], nextParamIdx: number }} args
+ * @param {{ whereSql: string, params: any[], nextParamIdx: number, query?: ExportQuery }} args
  * @returns {Promise<{ rowCount: number }>}
  */
-export async function streamNdjsonExport(res, { whereSql, params, nextParamIdx }) {
+export async function streamNdjsonExport(
+  res,
+  { whereSql, params, nextParamIdx, query },
+) {
   return streamExport(res, {
     whereSql,
     params,
     nextParamIdx,
-    contentType: 'application/x-ndjson',
+    contentType: "application/x-ndjson",
     filename: buildNdjsonFilename(),
     formatRow(row) {
       return `${buildNdjsonRow(row)}\n`;
     },
-    label: 'JSON',
+    label: "JSON",
+    query,
   });
 }
 
@@ -328,7 +374,7 @@ export async function streamNdjsonExport(res, { whereSql, params, nextParamIdx }
  */
 export function buildIdListWhere(ids) {
   return {
-    whereSql: 't.id = ANY($1::int[])',
+    whereSql: "t.id = ANY($1::int[])",
     params: [ids],
     nextParamIdx: 2,
   };
