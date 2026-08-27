@@ -3,6 +3,7 @@ title: PDF Report Export
 type: feature
 status: active
 date: 2026-08-25
+updated: 2026-08-26
 tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, phase-8, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation, portfolio, tax]
 description: Comprehensive PDF report export for financial, portfolio, and tax data. Cover page, theme-aware styling, modular section renderers. Phase 4 adds ExportDialog UI. Phase 5 adds pagination/footer/print-break polish. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers, belgianRulesSummary, and taxProfile/precomputedPIT pass-through.
 aliases: [pdf export, financial report, portfolio report, tax report, report download, PDF generation, export dialog, report dialog, pagination, footer]
@@ -567,15 +568,19 @@ const pdf = await renderHtmlToPdf(html, {
    - Validates report type + period + sections
    - Builds HTML document from theme tokens + CSS + body sections
    - Invokes Puppeteer renderer → PDF buffer
-   - Streams to HTTP response
+   - Returns `{ pdf, filename }` to the route without depending on Express
 
-2. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`)
+2. **HTTP route** (`apps/node-backend/src/routes/reports.js`)
+   - Writes the PDF content type, download filename, and byte length
+   - Ends the response with the raw PDF buffer
+
+3. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`)
    - Parallel `Promise.allSettled` loads all data in parallel
    - Gracefully handles failures (returns null for failed sources)
    - Wraps aggregation results + repository data
    - Exports `filterMonthsByPeriod()` utility for section renderers
 
-3. **Section Renderers** (`apps/node-backend/src/services/reports/sections/`)
+4. **Section Renderers** (`apps/node-backend/src/services/reports/sections/`)
    - Each renderer is a pure function: `(data, { currency, period }) → HTML string`
    - All renderers imported in dispatcher's `FINANCIAL_SECTION_RENDERERS` map
    - Default sections list: all except plannedOutlook (customizable)

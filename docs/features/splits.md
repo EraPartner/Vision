@@ -3,11 +3,11 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-04-22
-updated: 2026-08-19
+updated: 2026-08-26
 tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, phase-q, decimal, money, i18n, notifications, recipient-groups, recipient-alias-collapsing]
 description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage. Phase Q+ adds recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) into single rows for consistency with other reporting surfaces.
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
-related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/lib/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
+related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/lib/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/features/splits/SplitTransactionDialog.tsx", "apps/frontend/src/features/splits/owes/RecipientOwesDetail.tsx", "apps/frontend/src/features/splits/owes/RecentRecipientTransactionsTable.tsx", "apps/frontend/src/features/splits/owes/useRecentRecipientTransactions.ts", "apps/frontend/src/hooks/useSplits.ts"]
 ---
 
 # Feature: Splits & Owes
@@ -175,6 +175,12 @@ Implementation notes:
 - **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient using `recipient_group_id` filter (Phase Q) — includes all transactions for the recipient and all linked recipients in the same primary group, surfacing the full transaction history even when linked recipients are involved
 - **Bulk Settle**: Settle all outstanding splits for a person with confirmation; settling a primary recipient or alias settles all unsettled splits from the entire alias group
 - **Jump to Source**: Double-click any split row to open Transactions filtered to the source `transaction_id`
+
+`OwesPage` is the summary composition root. The selected-recipient surface lives in
+`features/splits/owes/RecipientOwesDetail.tsx`; its recent transaction table and guarded offset
+pagination live beside it in `RecentRecipientTransactionsTable.tsx` and
+`useRecentRecipientTransactions.ts`. The feature-local hook preserves the 10-row page size,
+recipient-group query key, duplicate-ID suppression, and response-body total semantics.
 
 ### Recipient Alias Grouping (Owed View Consistency)
 

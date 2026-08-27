@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-08-23
-last_modified: 2026-08-23
+updated: 2026-08-27
+last_modified: 2026-08-27
 tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
@@ -18,12 +18,13 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/routes/portfolioImportRoutes.js"
+  - "apps/node-backend/src/routes/importBatchRoutes.js"
   - "apps/node-backend/src/lib/csvUpload.js"
   - "apps/node-backend/src/services/portfolio/fxResolve.js"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx"
   - "apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx"
-  - "apps/frontend/src/components/portfolio/InvestmentCombobox.tsx"
+  - "apps/frontend/src/features/portfolio/InvestmentCombobox.tsx"
   - "apps/frontend/src/lib/api/portfolioImports.ts"
   - "apps/frontend/src/hooks/usePortfolioParserConfigs.ts"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
@@ -132,9 +133,9 @@ The routing is deterministic from the row and decided at validate time; a statem
 
 ### The double-count rule
 
-**Ledger cash is the only cash truth.** Cash from a brokerage statement enters net worth exclusively through the `transactions` rows the import creates (the per-currency anchor+delta balance SQL, ADR-094/WP-A1). Portfolio-side `dividend`/`interest`/`fee`/`tax` rows in `portfolio_transactions` remain the **tax/stats source** (dividend-income surfaces per ADR-096, Belgian tax reporting) and **never enter net worth**: snapshot valuation is `units × price` plus the non-unit formulas, and income/dividend/fee/tax rows explicitly do not alter invested capital or value (`snapshotBuilder.js`, "income / dividends / fees / taxes: don't alter invested capital"). So an instrument-attached dividend is counted once (portfolio stats, not cash), an instrument-less one is counted once (ledger cash, not portfolio stats) — they can never both enter net worth.
+**Ledger cash is the only cash truth.** Cash from a brokerage statement enters net worth exclusively through the `transactions` rows the import creates (the per-currency anchor+delta balance SQL, ADR-094/WP-A1). Portfolio-side `dividend`/`interest`/`fee`/`tax` rows in `portfolio_transactions` remain the **current per-instrument and Belgian-tax statistics source** and **never enter net worth**: snapshot valuation is `units × price` plus the non-unit formulas, and income/dividend/fee/tax rows explicitly do not alter invested capital or value (`snapshotBuilder.js`, "income / dividends / fees / taxes: don't alter invested capital"). The portfolio-level income and FIRE coverage surface proposed by [[docs/adr/096-dividend-income-fire|ADR-096]] is deferred and is not a current consumer. So an instrument-attached dividend is counted once (portfolio stats, not cash), an instrument-less one is counted once (ledger cash, not portfolio stats) — they can never both enter net worth.
 
-**Accepted trade-off** (per the ADR-095 addendum): D6 cash rows live in the ledger, not in portfolio analytics — an account-level distribution does not count toward per-instrument dividend-income surfaces or the portfolio-side tax figures; category-based ledger reporting covers it. Conversely, an instrument-attached dividend's cash does not appear in the ledger (ADR-090 synthetic legs were deleted per ADR-108) — reconciliation of the sleeve's true cash balance for trade-driven flows is WP-C4 territory.
+**Accepted trade-off** (per the ADR-095 addendum): D6 cash rows live in the ledger, not in portfolio analytics — an account-level distribution does not count toward current per-instrument income statistics or the portfolio-side tax figures; category-based ledger reporting covers it. Conversely, an instrument-attached dividend's cash does not appear in the ledger (ADR-090 synthetic legs were deleted per ADR-108) — reconciliation of the sleeve's true cash balance for trade-driven flows is WP-C4 territory.
 
 **Cash-row dedup identity:** a cash row dedups on `(account, date, signed amount, memo)` by **occurrence matching**, not existence — a statement may legitimately repeat one identity (e.g. two identical per-exchange custody fees on one date whose descriptions weren't mapped into `note`), so the i-th occurrence in a batch is a duplicate only if the ledger already held more than i matching rows before the run; both fees land on first import, and a re-import of the same statement is still a complete no-op. The legacy absolute-amount branch (recognizing pre-sign-fix positive withdrawals) applies only to untyped deposit/withdrawal rows — D6 rows match the signed amount only, so a new −10 fee never dedups against an unrelated +10 row sharing date and memo.
 
@@ -230,14 +231,11 @@ after a partial group update.
 
 See [[docs/api/portfolio-imports#POST /api/portfolio/import/batches/:id/rows/investment-override|the bulk review endpoint contract]].
 
-> [!warning] Brokerage routing UI flag-gated — default OFF (ADR-103, 2026-06-20)
-> The **brokerage toggle** (marks a batch as `is_brokerage=true`) and the **sleeve-account picker**
-> on `PortfolioImportPage` are hidden when `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the
-> default). Similarly, the per-row cash/trade routing display and the account picker on
-> `PortfolioImportReviewPage` are hidden. Standard portfolio CSV import (without brokerage routing)
-> continues to work regardless of the flag — it is only the per-account brokerage fan-out path that
-> is gated. Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` to restore the full brokerage import UI.
-> See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] and
+> [!info] Brokerage import after ADR-108 / WP-C1
+> ADR-108 deleted the ADR-103 build flag and the old trade cash-leg fan-out path. Brokerage import
+> classification and assignment to an account remain supported without a frontend build flag;
+> WP-C1 deliberately retained those import fields. See
+> [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] and
 > [[docs/adr/095-brokerage-account-import|ADR-095]].
 
 ### Components
@@ -286,8 +284,9 @@ See [[docs/reference/data-model|Data Model Reference]] for field-level schema.
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import Architecture]]
 - [[docs/features/import|Import Feature]] — budgeting import pipeline (parallel)
 - [[docs/features/portfolio|Portfolio Feature]]
-- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103: Per-account holdings UI flag]] — gates the brokerage toggle + account picker (default off)
-- [[docs/adr/095-brokerage-account-import|ADR-095: Brokerage Account Import]] — fan-out core; brokerage routing UI gated by ADR-103
+- [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108: Portfolio accounts v2]] — retires the ADR-103 flag and synthetic trade cash legs
+- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103: Per-account holdings UI flag]] — historical decision, superseded by ADR-108
+- [[docs/adr/095-brokerage-account-import|ADR-095: Brokerage Account Import]] — batch-level account and cash-row routing retained by ADR-108
 - [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]] — original parser-config design
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074: FX Attribution]] — fxResolve semantics used by commit phase
 - [[docs/reference/data-model|Data Model Reference]] — `portfolio_import_batches`, `portfolio_import_staging_rows`, `custom_parser_configs`

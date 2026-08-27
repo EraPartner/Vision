@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-08-25
+updated: 2026-08-27
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
 ---
 
@@ -14,21 +14,24 @@ aliases: [code patterns, coding patterns, conventions, patterns, delete response
 > [!abstract] Purpose
 > This document captures the standard code patterns used throughout the Vision project. AI agents should follow these patterns when writing new code. Developers can use this as a quick reference.
 
-## Shared Utilities Monorepo Package (June 2026, ADR-069)
+## Shared Cross-Workspace Package (June 2026, ADR-069 and ADR-073)
 
 **Package:** `@vision/shared-utils` at [[packages/shared-utils/]]
 
-Pure helpers that are needed on both the frontend and backend now live in a dedicated Bun workspace package rather than being duplicated in each app.
+Pure logic that is needed on both the frontend and backend lives in this Bun workspace package rather than being duplicated in each app. The package includes generic utilities and the shared portfolio calculation domain. It must remain free of app-specific I/O and framework dependencies.
 
 **Shared modules:**
 
-| Module | Exports | Previous location |
-|--------|---------|-------------------|
-| `money` | `toDecimal`, `addAll`, `subtract`, `multiply`, `divide`, `roundMoney`, `toNumber` | `apps/node-backend/src/lib/money.js` |
-| `slugify` | `slugify` | duplicated in both apps |
-| `downsample` | `downsample` | `apps/frontend/src/lib/downsample.ts` |
+| Module | Purpose |
+|--------|---------|
+| `money` | Decimal conversion, arithmetic, and canonical banker's rounding |
+| `portfolio` | Cost-basis, lot-event, and portfolio-summary calculations shared across workspaces (ADR-073) |
+| `assetClasses` | Canonical investment asset-class constants and predicates |
+| `category` | Category-name parsing and formatting |
+| `csv` | Safe CSV quoting and formula-neutralization helpers |
+| `slugify` | Canonical slug generation |
 
-Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies and re-export from `@vision/shared-utils/money` (and equivalents) so existing import paths continue to work as thin shims.
+Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies. Money keeps per-app re-export shims for compatibility. Use an explicit package subpath for modules exposed that way; `category` remains the root-barrel exception. Add new modules only when their logic is genuinely shared and pure; backend-only or frontend-only domain logic stays in its owning app.
 
 > [!important] Do not import from `apps/node-backend/src/lib/money.js` directly in the frontend, or vice-versa. Always import from `@vision/shared-utils/money` (or the per-app re-export shim at `src/lib/money.js` / `src/lib/money.ts`).
 
@@ -49,6 +52,13 @@ All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-poi
 > ESLint custom rule `no-raw-money-arithmetic` now warns on raw `+`, `-`, `*`, `÷` operators on identifiers matching money-like names (e.g., `amount`, `balance`, `cost`). This helps prevent drift in hot paths like split allocation and portfolio math. Not all warnings are errors — context matters — but all should be reviewed before merge.
 
 
+
+### Layer boundary
+
+- Use CSS/Tailwind animation utilities for static mount and overlay state transitions. Dialog and
+  alert-dialog use the owned `animate-dialog-in` / `animate-dialog-out` keyframes.
+- Use Framer Motion for layout, gesture, chart-draw, and route transitions that need runtime state.
+- Do not add parallel named entrance variants to `motion.ts`; it exposes only shared timing tokens.
 
 ### Pattern
 
@@ -364,19 +374,23 @@ const ymdString = toYmd(new Date());                // → "2026-04-22"
 - **UTC operations** — use native `Date` for UTC math
 - **Date formatting** — use `formatDate()` or `formatDateWithAppSettings()` instead
 
-### Chart Month Names — `appLanguageToLocale`
+### Chart Date Roles and Month Names
 
 `formatDate(date, pattern, locale)` defaults `locale` to `en-US`, so any caller that
 omits it renders English month names ("Jan/May/Oct") in the Dutch UI. Month-name
 patterns (`MMM …`) must pass the locale explicitly:
 
 ```typescript
-import { appLanguageToLocale, formatDate } from '@/components/shared/dateUtils';
+import {
+  appLanguageToLocale,
+  CHART_DATE_PATTERNS,
+  formatDate,
+} from '@/components/shared/dateUtils';
 
 const { language } = useLanguage();
 const monthLabelLocale = appLanguageToLocale(language);   // 'nl' → 'nl-NL', else 'en-US'
 
-formatDate(d, 'MMM yy', monthLabelLocale);
+formatDate(d, CHART_DATE_PATTERNS.monthTick, monthLabelLocale);
 ```
 
 **Do not reuse `numberFormatToLocale` for this.** It maps the *number-format setting*
@@ -387,11 +401,25 @@ UI language; number shapes follow the number setting — two different inputs.
 **required** parameter for exactly this reason: omission is a compile error rather
 than a silent English fallback.
 
+Use the shared semantic roles instead of spelling chart patterns at call sites:
+`dayTick` (`d MMM`), `monthTick` (`MMM yy`), `detail` (`d MMM yyyy`),
+`monthLabel` (`MMM yyyy`), and `yearTick` (`yyyy`). Full-year detail labels are
+intentional; compact axes use the two-digit year.
+
 ---
 
 ## Backend Repository Pattern
 
 **Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
+
+### Accepted repository API shapes
+
+Vision uses two repository API shapes. Choose by responsibility; a default export is not a layer requirement.
+
+- **Entity CRUD repositories** expose one named object such as `transactionRepository`, usually also as the module default. Use the shared `getAll`, `getCount`, `getById`, `create`, `update`, and `hardDelete` vocabulary when those operations have ordinary entity semantics.
+- **Specialized query or workflow repositories** expose named functions when one object would hide materially different operations. Examples include `importBatchRepository` (`listBatches`, `getPreviewRows`, `rollbackBatch`) and `providerApiKeyRepository` (`listAll`, `upsert`, `remove`). Names should state domain semantics; do not mechanically rename `rollbackBatch`, `remove`, or workflow-state transitions merely to resemble CRUD.
+
+Within either form, use `get*` for one value, `list*` for collections, and a specific mutation verb when it conveys more than generic CRUD. New generic entity deletion methods should use `hardDelete` or `softDelete`; retain established domain verbs where changing the name would erase intent.
 
 > [!note] `null`/`undefined` at the repository boundary
 > Repository methods return an empty result (rather than throwing) when a row is not found — a
@@ -493,6 +521,7 @@ export default entityRepository;
 | Delete success | `result.rowCount > 0` |
 | Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined` |
 | SQL injection | Use parameterized queries only, never string concatenation |
+| Export shape | Entity CRUD object or specialized named functions, chosen by responsibility |
 
 ### Layering: repositories must not import services — with a closed list of sanctioned exceptions
 
@@ -634,7 +663,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/entities/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  const entity = await entityRepository.getById(parseInt(req.params.id, 10));
+  const entity = await entityRepository.getById(assertIdParam(req));
   if (!entity) throw new NotFoundError('Entity not found');
   res.ok(entity);
 });
@@ -654,7 +683,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', validateIdParam, async (req, res) => {
   // Remove read-only fields immutably (via destructuring rest, not in-place delete)
   const { id: _id, createdAt: _createdAt, ...sanitized } = req.body;
-  const updated = await entityRepository.update(parseInt(req.params.id, 10), sanitized);
+  const updated = await entityRepository.update(assertIdParam(req), sanitized);
   if (!updated) throw new NotFoundError('Entity not found');
   res.ok(updated);
 });
@@ -662,7 +691,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 // DELETE /api/entities/:id — hard delete answers 204 with no body (see
 // "DELETE Response Pattern" below for the soft-delete / side-effect exceptions)
 router.delete('/:id', validateIdParam, async (req, res) => {
-  const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
+  const deleted = await entityRepository.hardDelete(assertIdParam(req));
   if (!deleted) throw new NotFoundError('Entity not found');
   res.status(204).send();
 });
@@ -676,7 +705,7 @@ export default router;
 |---------|------|
 | **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
 | **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
-| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Both accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser — and never *filter* a bad id out of a list, since that answers with a silently different dataset ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
 | **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |
@@ -744,6 +773,10 @@ res.ok({ items: summary, total: summary.length });
 res.ok({ items, total }, { source: 'mv', computedAt: '...' });
 ```
 
+Route-specific metadata fields live directly under `meta`, beside the optional
+`requestId`; do not add an `extra` nesting layer. Pagination is the exception:
+its count and window fields belong in the `data` body as described above.
+
 ### Adding pagination to a list that never had it
 
 A list endpoint that has always returned every row cannot simply adopt
@@ -785,7 +818,7 @@ DELETE success responses previously used six different shapes (`204` empty, `{me
 ```js
 // Hard delete — the row is gone; nothing to report.
 router.delete('/:id', validateIdParam, async (req, res) => {
-  const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
+  const deleted = await entityRepository.hardDelete(assertIdParam(req));
   if (!deleted) throw new NotFoundError('Entity not found');
   res.status(204).send();
 });
@@ -793,7 +826,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 // Soft delete / deactivate — the row survives with is_active = false, so the
 // caller gets the updated entity back (same shape as PATCH).
 router.delete('/:id', validateIdParam, async (req, res) => {
-  const deactivated = await tagService.softDelete(parseInt(req.params.id, 10));
+  const deactivated = await tagService.softDelete(assertIdParam(req));
   res.ok({ ...deactivated, links: [] });
 });
 
@@ -884,9 +917,10 @@ These predate the rule and keep camelCase — including **new endpoints added to
 | [[apps/node-backend/src/routes/crossWorkspace.js|crossWorkspace.js]] | `targetWeights`, `availableCash` | request + response |
 | [[apps/node-backend/src/routes/admin.js|admin.js]] DB-editor routes | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor|ADR-101]]) | request |
 | [[apps/node-backend/src/routes/marketLookup.js|marketLookup.js]] | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, … | response only — passthrough of the upstream provider shape |
-| [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]] rollback bodies | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id` and `DELETE /api/portfolio/import/batches/:id` | response only |
+| [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]] rollback body | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id` | response only |
+| [[apps/node-backend/src/routes/portfolioImportRoutes.js|portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id` | response only |
 
-Everything else in `importRoutes.js` is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
+Everything else in the import routers is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
 
 ### When Adding a Route
 
@@ -902,7 +936,13 @@ Everything else in `importRoutes.js` is snake_case (`auto_linked_count`); only t
 
 ```ts
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import {
+  createRecipient as createEntity,
+  deleteRecipient as deleteEntity,
+  getRecipient as getEntity,
+  getRecipients as getEntities,
+  updateRecipient as updateEntity,
+} from '@/lib/api/recipients';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -910,7 +950,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 export function useEntities(params?: { limit?: number; offset?: number }) {
   return useQuery({
     queryKey: ['entities', params],
-    queryFn: () => apiClient.getEntities(params),
+    queryFn: () => getEntities(params),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
@@ -920,7 +960,7 @@ export function useEntities(params?: { limit?: number; offset?: number }) {
 export function useEntity(id: number) {
   return useQuery({
     queryKey: ['entities', id],
-    queryFn: () => apiClient.getEntity(id),
+    queryFn: () => getEntity(id),
     enabled: !!id,
     staleTime: 60_000,
   });
@@ -932,7 +972,7 @@ export function useCreateEntity() {
   const { t } = useLanguage();
 
   return useMutation({
-    mutationFn: (data: EntityCreate) => apiClient.createEntity(data),
+    mutationFn: (data: EntityCreate) => createEntity(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entities'] });
       toast.success(t('entities.created'));
@@ -950,7 +990,7 @@ export function useUpdateEntity() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: EntityUpdate }) =>
-      apiClient.updateEntity(id, data),
+      updateEntity(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entities'] });
       toast.success(t('entities.updated'));
@@ -967,7 +1007,7 @@ export function useDeleteEntity() {
   const { t } = useLanguage();
 
   return useMutation({
-    mutationFn: (id: number) => apiClient.deleteEntity(id),
+    mutationFn: (id: number) => deleteEntity(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entities'] });
       toast.success(t('entities.deleted'));
@@ -1087,7 +1127,7 @@ export const apiClient = new ApiClient();
 | Pattern | Rule |
 |---------|------|
 | Base URL | `VITE_API_URL` env var, fallback to `localhost:3002` |
-| Singleton | Export single `apiClient` instance |
+| Imports | New narrow consumers import from `@/lib/api/<domain>`; `apiClient` remains a compatibility or multi-domain facade |
 | Query params | `buildQuery()` skips `undefined`/`null` values |
 | Retry | Exponential backoff for idempotent methods only |
 | Timeout | AbortController with 30s default timeout |
@@ -1154,7 +1194,7 @@ router.get('/monthly-summary', async (req, res) => {
 });
 ```
 
-> [!warning] Never filter bad ids out of a list — reject the request
+> [!warning] Never filter bad ids out of a request list — reject the request
 > This was `.map(Number).filter(Number.isFinite)` until 2026-08-11, which **dropped** the bad
 > element: `?excluded_category_ids=12abc` became `[]`, so the exclusion silently switched off and
 > the endpoint answered with a different dataset than the caller asked for — no error anywhere.
@@ -1172,7 +1212,7 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 | Non-finite check | Reject NaN, Infinity, undefined parse results |
 | Bounds enforcement | Apply min (default 1) and max bounds; use `fallback` if out of range |
 | String arrays | Handle both single `?param=val` and multi `?param=val1&param=val2` |
-| Array filtering | **Ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
+| Array filtering | **Request ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. A documented lower merge-service defense may use `filterValidatedIdNumbers` only after strict boundary validation. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
 | Type narrowing | Results are always `number | number[]` or fallback type, never string |
 
 ### When to Use
@@ -1194,19 +1234,19 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ## Express App Setup
 
-**Source:** [[apps/node-backend/src/main.js|main.js]]
+**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.js|cors.js]], [[apps/node-backend/src/middleware/compression.js|compression.js]]
 
 ### Middleware Stack (in order)
 
-1. **CORS** — custom inline middleware; checks `Origin` header against `settings.api.corsOrigins` allowlist, sets `Access-Control-*` headers, handles OPTIONS preflight with 204 response (Phase 5 slim-down)
-2. **JSON parsing** — `express.json({ limit: '1mb' })`
-3. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
-4. **Compression** — custom inline middleware using `node:zlib` createGzip(); compresses for `Accept-Encoding: gzip` + compressible types + ≥1 KB responses (Phase 5 slim-down)
-5. **Request logging** — `logger.debug('[REQ] METHOD PATH')`
-6. **Global rate limiter** — applied before routes
-7. **Routes** — registered with per-route limiters where needed
-8. **404 handler** — `{ detail: 'Not Found: METHOD PATH' }`
-9. **Global error handler** — suppresses details in production
+1. **Request ID and metrics** — attach the correlation ID, then begin rolling request measurement
+2. **CORS** — `middleware/cors.js` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
+3. **JSON parsing** — `express.json({ limit: '1mb' })`
+4. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
+5. **Compression** — `middleware/compression.js` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
+6. **Request logging and response envelope** — log the request and attach `res.ok(data, meta?)`
+7. **Global guards and rate limiter** — apply cross-site request forgery protection and limiting before routes
+8. **Routes** — registered with per-route limiters where needed
+9. **404 and global error handlers** — typed error envelopes with production-safe details
 
 ### Startup Sequence
 
@@ -1515,9 +1555,9 @@ const totalHistory = [...totalsByMonth.keys()]
 
 ## Pure Calculation Services (Phase 3)
 
-**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/utils/portfolioMath.js|portfolioMath.js]]
+**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/services/calculations/portfolioMath.js|portfolioMath.js]], [[packages/shared-utils/src/portfolio.js|shared portfolio calculations]]
 
-As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. These are hosted in `services/calculations/` and `utils/` and are suitable for golden-fixture testing and migration to shared utility libraries.
+As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. Backend-owned functions live in `services/calculations/`; cross-workspace portfolio calculations live in `@vision/shared-utils/portfolio`. Both are suitable for golden-fixture testing.
 
 **Modules:**
 
@@ -1526,12 +1566,13 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 | `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
 | `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
 | `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_ | Transaction-split allocation/payment validation and owed-summary projection |
-| `utils/portfolioMath.js` | Cost basis calculations (weighted average, FIFO, LIFO) with immutable lot handling |
+| `services/calculations/portfolioMath.js` | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation |
+| `@vision/shared-utils/portfolio` | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
 
-**Immutability in portfolioMath (2026-04-25):**
+**Immutability in shared portfolio math (2026-04-25):**
 - `calculateCostBasisFIFO()` and `calculateCostBasisLIFO()` now use immutable patterns throughout: spread operators for array construction, immutable object creation for lot updates, and immutable transformations via `.map()` in helper functions.
 - `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
-- All portfolio math calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
+- Shared cost-basis calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
 
 **Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.js` now uses the canonical `services/calculations/` modules directly.
 
@@ -2570,28 +2611,23 @@ test('createSseWriter tracks client close', (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
+**Source:** [[apps/node-backend/src/database/connection.js|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
 For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
+
+Vision is a single-user application, but the HTTP process can overlap user requests, import workers, scheduled refreshes, and other background jobs. “Single user” therefore does not mean “one database writer.” Protect cross-table invariants, entity merges, ledger pairs, and read-then-write decisions against those concurrent jobs.
 
 ### Pattern
 
 ```js
-import { getClient } from '../database/connection.js';
+import { withTransaction } from '../database/connection.js';
 
 export async function complexMultiStepOperation(primaryId, aliasIds) {
-  // Validate inputs
   if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {
     throw new Error('Invalid inputs');
   }
 
-  // Get a dedicated client for transaction control
-  const client = await getClient();
-  try {
-    // Begin transaction
-    await client.query('BEGIN');
-
-    // Lock the primary row to serialize concurrent operations
+  return withTransaction(async (client) => {
     const primaryCheck = await client.query(
       `SELECT id FROM primary_table WHERE id = $1 FOR UPDATE`,
       [primaryId],
@@ -2600,19 +2636,16 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
       throw new Error('Primary not found');
     }
 
-    // Step 1: Update first dependent table
     const step1 = await client.query(
       `UPDATE table1 SET primary_id = $1 WHERE primary_id = ANY($2)`,
       [primaryId, aliasIds],
     );
 
-    // Step 2: Update second dependent table
     const step2 = await client.query(
       `UPDATE table2 SET primary_id = $1 WHERE primary_id = ANY($2)`,
       [primaryId, aliasIds],
     );
 
-    // Step 3: Deduplicate via INSERT ... ON CONFLICT (race-safe)
     await client.query(
       `INSERT INTO dedup_table (primary_id, unique_field, data)
        SELECT $1, unique_field, data FROM source_table WHERE id = ANY($2)
@@ -2620,43 +2653,37 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
       [primaryId, aliasIds],
     );
 
-    // Step 4: Mark aliases as merged
     await client.query(
       `UPDATE primary_table SET primary_reference_id = $1 WHERE id = ANY($2)`,
       [primaryId, aliasIds],
     );
 
-    // Commit all steps atomically
-    await client.query('COMMIT');
-
-    return { 
-      primaryId, 
+    return {
+      primaryId,
       mergedAliasIds: aliasIds,
       reassigned: {
         table1: step1.rowCount,
         table2: step2.rowCount,
-      }
+      },
     };
-  } catch (error) {
-    // Rollback on any error — all partial changes discarded
-    await client.query('ROLLBACK');
-    throw error;
-  }
+  });
 }
 ```
+
+`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. Pass the callback client explicitly when that makes the boundary clearer. Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
 
 ### Key Conventions
 
 | Pattern | Rule |
 |---------|------|
-| Explicit tx | Use `BEGIN` / `COMMIT` / `ROLLBACK` for control |
+| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release |
 | Row locking | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access |
 | Dependency order | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate) |
 | Conflict dedup | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication |
 | Error handling | `ROLLBACK` on any error; caller receives clear error message |
 | Fallback reads | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID |
 | Validation first | Validate all inputs before `BEGIN` to fail fast |
-| No nested txs | PostgreSQL does not support nested transactions (except savepoints); keep transaction boundaries explicit |
+| Nested work | Reuse the ambient transaction and `withSavepointIfInTransaction` for per-item isolation; do not start an independent nested transaction |
 
 ### When to Use
 
@@ -2670,6 +2697,12 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 - Simple single-statement operations (repositories handle implicit tx)
 - Pure calculation services (no DB access)
 - Streaming or large-batch operations (explicit chunking may be more efficient)
+
+### Sanctioned resumable pipeline alternative
+
+Large imports may use **chunk-atomic, row-isolated, chunk-resumable** processing instead of one transaction for the entire file. Both [[apps/node-backend/src/services/importPipeline/commit.js|transaction import commit]] and [[apps/node-backend/src/services/portfolioImportPipeline/commit.js|portfolio import commit]] wrap each chunk in `withTransaction` and isolate bad rows with savepoints. They update progress checkpoints only after the chunk commits. This is the accepted alternative when one global transaction would hold locks too long and a failed row must not discard prior committed chunks.
+
+The alternative is not permission for arbitrary partial writes: every chunk must preserve invariants, row failures must roll back to a savepoint, and persisted counters/checkpoints must advance only after commit.
 
 ### PostgreSQL Limitation: FOR UPDATE with GROUP BY
 
@@ -2723,21 +2756,24 @@ All Framer Motion-enabled components must check `useReducedMotion()` and conditi
 ### Pattern
 
 ```tsx
-import { motion } from 'framer-motion';
-import { DURATION_NORMAL, SPRING_SMOOTH, useReducedMotion } from '@/lib/motion';
+import { m, useReducedMotion } from 'framer-motion';
+import { durations, easings } from '@/lib/motion';
 
 export function MyAnimatedComponent() {
   const prefersReduced = useReducedMotion();
   
   return (
-    <motion.div
+    <m.div
       initial={prefersReduced ? {} : { opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={prefersReduced ? {} : { opacity: 0, scale: 0.90 }}
-      transition={prefersReduced ? {} : { duration: DURATION_NORMAL / 1000, ...SPRING_SMOOTH }}
+      transition={{
+        duration: prefersReduced ? 0 : durations.normal,
+        ease: easings.outExpo,
+      }}
     >
       {/* Content */}
-    </motion.div>
+    </m.div>
   );
 }
 ```
@@ -2757,13 +2793,14 @@ export function MyAnimatedComponent() {
 
 | Pattern | Duration | Timing | When |
 |---------|----------|--------|------|
-| Dialog enter | 300ms | SPRING_SMOOTH | Modal overlay, form dialog |
-| Dialog exit | 200ms | ease-out-cubic | Dismissal or cancel |
-| Page transition | 300ms enter, 200ms exit | SPRING_BOUNCE | Route change |
-| Hover elevation | 150ms | ease-out-cubic | Card, button hover state |
-| Micro-interaction | 150ms | ease-out-expo | Icon action, toggle state |
+| Dialog enter | 420ms | CSS `dialog-in` overshoot | Modal overlay, form dialog |
+| Dialog exit | 200ms | CSS `dialog-out` glide | Dismissal or cancel |
+| Page transition | 520ms enter-only | `easings.outExpo` | Route change |
+| Layout indicator | spring | `springs.snappy` | Sidebar rail, tab pill |
+| Hover elevation | 150ms | `easings.glide` | Card, button hover state |
+| Micro-interaction | 150ms | `easings.outExpo` | Icon action, toggle state |
 | Loading pulse | 1.5s | ease-in-out | Skeleton screens (opacity only) |
-| Fade in | 200-300ms | ease-out-cubic | Content appearance |
+| Fade in | 260ms | `easings.outExpo` | Runtime-controlled content appearance |
 
 ---
 
@@ -3421,8 +3458,8 @@ Large monetary totals in headline slots (dashboard cards, statistics tables) abb
 import { formatCurrencyCompact } from "@/utils/currency";
 
 const result = formatCurrencyCompact(1_253_632, "EUR", "en-US", 2);
-// result.display  → "$1.3M"    (compact, shown in UI)
-// result.full     → "$1,253,632.00"  (full, shown on hover)
+// result.display  → "€1.3M"    (compact, shown in UI)
+// result.full     → "€1,253,632.00"  (full, shown on hover)
 // result.isCompact → true
 ```
 
@@ -3432,10 +3469,19 @@ export interface CompactFormatResult {
   display: string;   // compact if full > 9 chars AND compact is shorter, else full
   full: string;      // always full-precision
   isCompact: boolean;
+  parts: Intl.NumberFormatPart[]; // parts for display/animated rendering
 }
 ```
 
 Threshold constant: `COMPACT_LENGTH_THRESHOLD = 9`. Guard: if `compact.length >= full.length`, returns full (avoids mid-range values where compact is paradoxically longer).
+
+All money-formatting entry points share one failure contract. If a malformed
+currency, locale, or fraction-digit value makes `Intl.NumberFormat` throw, they
+return the bare numeric text (`${amount}`) instead of taking the page into an
+error boundary. Compact results use that text for both `display` and `full`, set
+`isCompact` to `false`, and expose one `literal` part. The settings store validates
+both hydrated values and runtime `updateAppSettings` writes, so this fallback is
+defense in depth rather than the normal settings path.
 
 ### Hook Usage (Preferred)
 

@@ -3,7 +3,7 @@ title: AI Agent Codebase Navigation Map
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e, bulk-actions]
 description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation, Phase E component decomposition, and bulk transaction actions.
 aliases: [agent navigation, codebase map, file map, navigation guide]
@@ -91,7 +91,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Savings Page | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] |
 | Performance Page | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] |
 | Net Worth Page | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
-| Watchlist Page | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
+| Watchlist Page | [[apps/frontend/src/pages/research/WatchlistPage.tsx]] |
 | Hook | [[apps/frontend/src/hooks/usePortfolio.ts]] |
 | Dialogs | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]] |
 | Backend Route | [[apps/node-backend/src/routes/investments.js]] |
@@ -130,11 +130,11 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 **Related Components:**
 | Component | Purpose |
 |-----------|---------|
-| [[apps/frontend/src/components/import/ImportHistoryCard.tsx]] | Import history view (composed in ImportPage) |
-| [[apps/frontend/src/components/import/CsvColumnMapper.tsx]] | CSV column mapping UI (used by TransactionImportCard) |
+| [[apps/frontend/src/features/imports/ImportHistoryCard.tsx]] | Import history view (composed in ImportPage) |
+| [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]] | CSV column mapping UI (used by TransactionImportCard) |
 
 **Backend Route** | [[apps/node-backend/src/routes/importRoutes.js]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/services/textNormalization.js]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.js]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -154,7 +154,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Layer | Files |
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/DashboardPage.tsx]] |
-| Components | [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlySpendingChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]] |
+| Components | [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]] |
 | Settings Dialog | [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]] |
 | Hook | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]] |
 | Backend Service | [[apps/node-backend/src/services/materializedViewService.js]] |
@@ -201,9 +201,9 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | `/portfolio/performance` | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] |
 | `/portfolio/net-worth` | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | `/admin/exchange-rates` | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]] |
-| `/portfolio/watchlist` | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
+| `/portfolio/watchlist` | [[apps/frontend/src/pages/research/WatchlistPage.tsx]] |
 | `/portfolio/tax` | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]] |
-| `/portfolio/market` | [[apps/frontend/src/pages/MarketLookupPage.tsx]] |
+| `/portfolio/market` | [[apps/frontend/src/pages/research/MarketLookupPage.tsx]] |
 | `*` (404) | [[apps/frontend/src/pages/NotFound.tsx]] |
 
 ### Frontend Contexts (7 total)
@@ -291,7 +291,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Quote Backfill | [[apps/node-backend/src/services/quoteBackfillService.js]] |
 | Recurrence | [[apps/node-backend/src/services/calculations/recurrence.js]] |
 | Recurring Detection | [[apps/node-backend/src/services/recurringDetectionService.js]] |
-| Text Normalization | [[apps/node-backend/src/services/textNormalization.js]] |
+| Text Normalization | [[apps/node-backend/src/lib/textNormalization.js]] |
 
 ### Database
 
@@ -303,9 +303,12 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 
 ### Migrations
 
-Full list: [[docs/reference/migration-dependencies|Migration Dependencies]]
+Workflow: [[docs/guides/migrations|Migration Guide]]
 
-Directory: `alembic/versions/` — 24 numbered migrations from `0001_initial_database_schema.py` to `0024_per_class_invested_columns.py`
+Current dependency order: `bun run db:history`
+
+Directory: `alembic/versions/` — active revisions; read each file's
+`down_revision` metadata rather than relying on a copied count.
 
 ---
 

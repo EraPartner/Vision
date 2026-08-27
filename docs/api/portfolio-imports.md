@@ -5,13 +5,14 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-08-23
-last_modified: 2026-08-23
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
 aliases: [portfolio-imports-api, portfolio-csv-import, brokerage-import]
 related_code:
   - "apps/node-backend/src/routes/portfolioImportRoutes.js"
+  - "apps/node-backend/src/routes/importBatchRoutes.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/validate.js"
@@ -303,15 +304,14 @@ Returns staging rows grouped by investment (or by distinct raw symbol/name for u
 | Field | Type | Description |
 |-------|------|-------------|
 | `batch_id` | number | Positive safe-integer batch identifier |
-| `groups[]` | array | One entry per resolved investment or per distinct unresolved symbol+name combination |
+| `groups[]` | array | One entry per resolved investment, case-insensitive unresolved raw symbol/name, or the shared cash group |
+| `groups[].is_cash` | boolean | `true` for brokerage cash rows, which never require a holding |
 | `groups[].investment_id` | `number \| null` | Matched or overridden investment. `null` = unresolved. |
-| `groups[].symbol` | string | Raw CSV symbol for the group |
-| `groups[].name_exact` | boolean | Whether the group was resolved by exact name (vs. symbol) |
-| `groups[].unresolved` | boolean | `true` if no investment has been matched yet |
-| `groups[].error` | boolean | `true` if this group contains rows with validation errors |
+| `groups[].investment_name` / `investment_symbol` / `investment_asset_class` | strings or null | Resolved holding metadata |
+| `groups[].raw_symbol` / `raw_name` | strings or null | First raw instrument identity for unresolved groups; null for cash |
 | `groups[].row_count` | integer | Number of staging rows in the group |
-| `groups[].rows[]` | array | Per-row detail: date, units, price, amount, currency, match_source, error_detail |
-| `totals` | object | `{symbol_exact, name_exact, unresolved, error}` counts across all groups |
+| `groups[].rows[]` | array | Per-row status, route, date, type, raw instrument, units, price, amount, fees, taxes, currency, FX rate, note, match source, `error_message`, and override id |
+| `totals` | object | `{symbol, name_exact, unresolved, error}` row counts; error rows count only as errors |
 
 ---
 

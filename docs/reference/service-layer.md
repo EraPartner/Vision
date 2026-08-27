@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-08-11
+last_modified: 2026-08-27
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the eight sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -36,6 +36,12 @@ Repository Layer (SQL queries)
 - External I/O (DB, HTTP) is encapsulated within services
 - Pure computation services have zero dependencies
 - Side-effect services depend on `connection.js` (PostgreSQL)
+
+### Service directory placement
+
+The top level of `services/` is the public route/startup-facing seam. Keep domain facades, cross-domain orchestrators, infrastructure entry points, and established integration seams there. Put internal implementations in domain subdirectories such as `services/prices/`, `services/portfolio/`, `services/aiChat/`, and `services/importPipeline/`.
+
+Top-level modules such as `priceProviderService`, `providerHealthService`, `quoteBackfillService`, `portfolioPerformanceSnapshotService`, `portfolioImportBatchService`, and `aiChatService` are intentional facades or orchestration seams with direct route, controller, or startup callers. Their domain subdirectories contain the lower-level implementation. `deduplication` and `bulkSelection` also remain services because they coordinate persistence or repository-backed selection; they are not pure calculations. Framework-free pure helpers belong in `lib/` or `services/calculations/`, as demonstrated by the move of `textNormalization` to `lib/textNormalization.js`.
 
 > [!note] Who owns HTTP semantics (route/service boundary)
 > The rule is: **services throw typed `AppError` subclasses** (`ValidationError`, `NotFoundError`,
@@ -93,10 +99,10 @@ Repository Layer (SQL queries)
 - **Factory Pattern:** `createAdapter` selects parser from `BANK_CONFIGURATIONS` registry
 - **Generic Adapter:** Accepts `column_mapping`, `date_format`, `separator`, `skip_rows` for arbitrary CSV formats
 - **Reverse Balance (Belfius):** Extracts last balance from CSV metadata, computes running balances backward
-- **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/services/textNormalization.js]]
+- **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/lib/textNormalization.js]]
 
 ### Dependencies
-- `textNormalization.js`
+- `lib/textNormalization.js`
 - `logger.js`
 
 ---
@@ -160,7 +166,6 @@ Repository Layer (SQL queries)
 
 | Function | Signature | Returns |
 |----------|-----------|---------|
-| `convertToEur` | `(amount: number, fromCurrency: string) => number` | Amount in EUR |
 | `convertToCurrency` | `(amount, fromCurrency, toCurrency) => number` | Amount in target currency |
 | `convertRowsToEur` | `(rows, targetCurrency, options?) => Row[]` | Batch-converted rows |
 | `warmCache` | `() => Promise<void>` | Fetches + merges + persists rates |
@@ -295,7 +300,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 | `commit.js` | `commitBatch()` | Transaction insertion and accounting |
 
 ### Dependencies
-- `bankAdapters.js`, `deduplication.js`, `textNormalization.js`
+- `bankAdapters.js`, `deduplication.js`, `lib/textNormalization.js`
 - `materializedViewService.js` (post-pipeline refresh)
 - `importBatchRepository.js`, `connection.js`, `logger.js`
 
@@ -538,7 +543,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ---
 
-## 14. calculations/recurrence.js  _(formerly recurrenceService.js)_
+## 14. lib/calculations/recurrence.js _(formerly recurrenceService.js)_
 
 **File:** [[apps/node-backend/src/lib/calculations/recurrence.js]]  
 **Purpose:** Calculates next occurrence dates for recurring patterns. **One grammar, two steppers (2026-08-09):** the pattern grammar lives only in `parseRecurrenceStep`; both the Date-space stepper (`calculateNextDate`, used by `/execute` and `expandOccurrences`) and the string-space stepper (`nextOccurrenceYmd` + `fastForwardYmd`, used by `infoRepositoryPlanned`'s next-month expansion) dispatch off it, so a new pattern is added in exactly one place.
@@ -613,9 +618,9 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ---
 
-## 17. textNormalization.js
+## 17. lib/textNormalization.js
 
-**File:** [[apps/node-backend/src/services/textNormalization.js]]  
+**File:** [[apps/node-backend/src/lib/textNormalization.js]]
 **Purpose:** Normalizes and cleans text data for consistent matching across the application.
 
 ### Exported Functions
@@ -698,50 +703,27 @@ every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap o
 ## Dependency Graph
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    External APIs                         │
-│  ECB  │  Statbel  │  Eurostat  │  Yahoo  │  Binance     │
-│  Kinesis  │  open.er-api                                │
-└────┬────────┬────────┬────────┬────────┬────────┬───────┘
-     │        │        │        │        │        │
-     ▼        ▼        ▼        ▼        ▼        ▼
-┌────────────────┐ ┌───────────────────┐ ┌──────────────────┐ ┌────────────────┐
-│ belgianInflation│ │ currencyConversion│ │ priceProvider    │ │ quoteBackfill  │
-│   Service       │ │   Service         │ │ Service          │ │ Service        │
-└────────────────┘ └───────────────────┘ └──────────────────┘ └────────────────┘
-                          │                        │
-     ┌────────────────────┼────────────────────┐   │
-     ▼                    ▼                    ▼   ▼
-┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ portfolio   │ │ importPipeline     │ │ dataImport      │
-│ Performance │ │ (Phase C)          │ │ Service         │
-│ Snapshot    │ │                    │ │                 │
-└────────────┘ └────────────────────┘ └─────────────────┘
-     │                    │                    │
-     ▼                    ▼                    ▼
-┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ materialized│ │ bankAdapters       │ │ deduplication   │
-│ View        │ │ (+ other helpers)  │ │                 │
-└────────────┘ └────────────────────┘ └─────────────────┘
-     │                    │                    │
-     ▼                    ▼                    ▼
-┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ recurring   │ │ deduplication      │ │ loanRepayment   │
-│ Detection   │ │                    │ │ Service         │
-└────────────┘ └────────────────────┘ └─────────────────┘
-     │                    │                    │
-     ▼                    ▼                    ▼
-┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ recurrence  │ │ textNormalization  │ │ iban            │
-│ Service     │ │                    │ │                 │
-└────────────┘ └────────────────────┘ └─────────────────┘
+Routes and startup callers
+            |
+            v
+Top-level service facades and cross-domain orchestrators
+            |
+            v
+Domain internals
+  prices/ | portfolio/ | aiChat/ | importPipeline/
+            |
+            v
+Repositories and external APIs
+
+Pure calculations branch separately: services/calculations/ and lib/ are
+framework-free and do not depend on repositories or external APIs.
 ```
 
 ## Service Classification
 
 | Category | Services |
 |----------|----------|
-| **Pure Computation** | `calculations/loanSchedule`, `calculations/recurrence`, `calculations/forecast/*`, `iban`, `textNormalization`, `filterBuilder` |
+| **Pure Computation** | `services/calculations/loanSchedule`, `services/calculations/forecast/*`, `lib/calculations/recurrence`, `lib/textNormalization`, `lib/filterBuilder` |
 | **External Data** | `belgianInflationService`, `currency/currencyConversionService`, `priceProviderService` |
 | **Quote Management** | `quoteBackfillService` |
 | **Import Pipeline** | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); `streamingImportService` and `rawTransactionImportService` deleted (2026-05-29) |
@@ -844,20 +826,25 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 |----------|---------|
 | `findClusters(opts)` | `Array<{ primary, members[], confidence }>` |
 
-**Dependencies:** `recipientRepository.js`, `textNormalization.js`.
+**Dependencies:** `recipientRepository.js`, `lib/textNormalization.js`.
 
 ---
 
 ## recipientPatternService.js
 
 **File:** [[apps/node-backend/src/services/recipientPatternService.js]]
-**Purpose:** Detects recurring name patterns and IBAN-based identity hints; used by the import pipeline to assign recipients and by `recipientClusterService` to refine clusters.
+**Purpose:** Creates, previews, caches, and applies literal-prefix, glob, and regex recipient match patterns for the import pipeline.
 
 | Function | Returns |
 |----------|---------|
-| `inferRecipientFromRow(row)` | `{ recipientId?, confidence, source }` |
+| `loadActivePatterns()` | Active patterns ordered for matching |
+| `applyPatterns(rawNames, patterns?)` | Raw-name to recipient match map |
+| `suggestPatternFromNames(names)` | Suggested literal-prefix pattern |
+| `previewPatternMatches(pattern)` | Matching raw-name preview |
+| `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle |
+| `listPatternsForRecipient(recipientId)` | Recipient pattern list |
 
-**Dependencies:** `recipientRepository.js`, `iban.js`, `textNormalization.js`.
+**Dependencies:** `connection.js`, `lib/sqlClauses.js`, `logger.js`, typed error classes.
 
 ---
 
@@ -939,7 +926,9 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 | `splitService.js` | `splits.js` | Split lifecycle + payment |
 | `watchlistService.js` | `watchlist.js` | Watchlist CRUD |
 | `attachmentRecordService.js` | `attachments.js` | Attachment metadata (complements `attachmentService.js`) |
-| `importBatchService.js` | `importRoutes.js` | Batch management delegation |
+| `importBatchService.js` | `importRoutes.js` | Batch management plus transaction-preview grouping and totals |
+| `portfolioImportBatchService.js` | `portfolioImportRoutes.js` | Portfolio batch coordination plus investment/raw/cash preview grouping and totals |
+| `routes/importBatchRoutes.js` | Both import routers | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
 | `customParserConfigService.js` | `importRoutes.js` | Named parser CRUD |
 | `portfolioTxService.js` | (reused existing) | Portfolio transaction coordination |
 

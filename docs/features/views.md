@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-08-25
+updated: 2026-08-27
 tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026, portfolio-ticker]
 description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
@@ -70,7 +70,7 @@ The main landing page providing a quick overview of your finances.
 - **Date Range**: View current month by default
 - **Real-time Data**: Refreshes automatically
 - **Semantic date-label UX pass (dashboard)**: Cashflow month descriptions/headings and Monthly Trends x-axis labels now use `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` from [[apps/frontend/src/components/shared/dateUtils.ts]] to avoid overly detailed full-date labels while respecting app settings
-- **Hotfix (settings-refactor runtime safety)**: Dashboard cashflow month description labels now consistently use in-scope `locale` (not undefined `language`) in [[apps/frontend/src/pages/DashboardPage.tsx]], and chart month formatter scope now defines `locale` in [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]]
+- **Hotfix (settings-refactor runtime safety)**: Dashboard cashflow month description labels used an in-scope `locale` (not undefined `language`) in [[apps/frontend/src/pages/DashboardPage.tsx]] and the since-removed `CashFlowComparisonChart.tsx`.
 
 ### Use Cases
 
@@ -196,6 +196,8 @@ Manage payees and payers (merchants, employers, etc.).
 - Recipients search uses the same controlled virtual-table flow as transactions.
 - Search updates while typing and while removing characters, so broadening a query immediately reflects in the next debounced fetch.
 - Input persistence and clear handling are implemented in `VirtualDataTable` and consumed by `RecipientsPage`.
+- The page-level `PageHeader` is the sole "All recipients" heading. The table omits its optional
+  title while retaining search and the Add/Merge/filter action toolbar.
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]]
 
@@ -229,7 +231,7 @@ Track upcoming and recurring payments.
 - **Execute**: Mark as paid (creates transaction)
 - **Overdue Alerts**: Highlight missed payments
 
-Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]]
+Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]]
 
 ### Transaction Types
 
@@ -310,7 +312,7 @@ The statistics page normalizes all category names to ensure consistent formattin
 - Budget planning
 - Recipient spending patterns
 
-Code links: [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/components/statistics/statisticsUtils.ts]], [[apps/frontend/src/hooks/useStatistics.ts]], [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+Code links: [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/hooks/useStatistics.ts]], [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
 
 ---
 
@@ -374,7 +376,7 @@ Track shared expenses and debts between people.
 - **Recipient Table Empty State**: Shows localized empty state text when no recent transactions exist for the recipient
 - **Jump to Source Transaction (Recent Table)**: Double-click a recent transaction row to open Transactions filtered by that row's `transaction_id`
 
-Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
+Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/features/splits/owes/RecipientOwesDetail.tsx]], [[apps/frontend/src/features/splits/owes/RecentRecipientTransactionsTable.tsx]], [[apps/frontend/src/features/splits/owes/useRecentRecipientTransactions.ts]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
 ### Use Cases
 
@@ -452,7 +454,7 @@ Investment portfolio management across multiple asset classes.
 - **Refresh Prices**: Update all prices
 - **Default/Reset Currency Source**: Add investment dialog default/reset currency follows `appSettings.defaultCurrency`
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/index.css]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/index.css]]
 
 ### Asset Classes
 
@@ -521,7 +523,7 @@ Real-time market data search and quotes.
 - **Date/time formatting consistency**: Chart tooltips and analyst/news date labels follow app date format + locale settings
 - **News image rendering fix**: backend CSP now permits remote HTTPS thumbnails, and market/portfolio news cards hide image fallback placeholders on thumbnail fetch failures
 
-Code links: [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.js]]
+Code links: [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.js]]
 
 ### Data Source
 
@@ -544,10 +546,10 @@ Track symbols without owning them.
 - Long watchlist company names truncate before the asset-class badge and retain the full name in the native title tooltip.
 - Date axis labels in chart dialog follow app date format
 - Target/current price and currency displays follow app number format + decimal settings
-- Net Worth x-axis month labels follow app language locale (`en-US` / `nl-NL`), while Performance month keys use app date format helpers
-- Runtime-safety hotfix: `formatDisplayCurrency` in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] is defined inside component scope so it closes over in-scope `locale` and `appSettings` (prevents runtime undefined-reference failures)
+- Net Worth and Performance chart axes share the same app-language-aware date roles: day/month for short periods and month/two-digit-year for longer periods; detailed tooltips use a four-digit year
+- Runtime-safety hotfix: `formatDisplayCurrency` in [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]] is defined inside component scope so it closes over in-scope `locale` and `appSettings` (prevents runtime undefined-reference failures)
 
-Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]]
+Code links: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]]
 
 ---
 
@@ -570,11 +572,11 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 - **Pagination defaults**: `defaultPageSize` now drives Transactions, Recipients, and Recipient Insights load-more pagination
 - **Reset behavior**: `Reset all` now resets both general app settings and dashboard exclusions
 - **Strict date-format enforcement complete (frontend month labels)**: After the latest pass, no `toLocaleDateString(` remains under `apps/frontend/src`; month labels route through app helpers including `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)` in [[apps/frontend/src/components/shared/dateUtils.ts]]
-- **Final readability + enforcement pass**: Dense month x-axes in [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] and [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] enforce `interval="preserveStartEnd"` + `minTickGap={20}`; tooltip numeric fallback locale is sourced from `getCurrencyFormatDefaults().locale` in [[apps/frontend/src/utils/currency.ts]] via `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+- **Final readability + enforcement pass**: Dense month x-axes in [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] and [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] enforce `interval="preserveStartEnd"` + `minTickGap={20}`; tooltip numeric fallback locale is sourced from `getCurrencyFormatDefaults().locale` in [[apps/frontend/src/utils/currency.ts]] via `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
 - **Grep verification snapshot**: no `toLocaleDateString(` or `toLocaleString(` in `apps/frontend/src`; no `form.currency || 'EUR'`; no persisted `defaultBankAccount` (removed — was unused)
-- **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]]
+- **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]]
 
-Code links: [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+Code links: [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
 
 ---
 
@@ -584,8 +586,9 @@ Simple 404 page displayed when no route matches.
 
 ### Features
 
-- Centered layout with title, heading, and description
-- "Back to Home" link navigates to `/`
+- Centered layout with the Vision mark, display-face title, heading, and description
+- "Back to Dashboard" link navigates to `/`
+- Quiet secondary links navigate to Transactions and Import
 - Logs the attempted route via `logger.warn` on mount
 - Uses `useLocation` internally to access the unmatched path
 
@@ -618,13 +621,13 @@ Cross-page premium polish follows shared UI primitives and utility classes for c
 
 ### Core code links
 
-[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
+[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/features/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
 
 ---
 
-## RecipientInsights Page
+## Recipient Insights Tab
 
-Full analytics page for recipient spending patterns.
+Recipient spending analytics embedded in the Statistics page.
 
 ### Features
 
@@ -634,9 +637,9 @@ Full analytics page for recipient spending patterns.
 - Horizontal bar chart of top 10 recipients by spend
 - Month-over-month change alerts (increases in red, decreases in green)
 - [[docs/components/shared-components|VirtualDataTable]] with paginated recipient details (rank, name, total spend, count, average, first/last seen)
-- Accessible from Statistics page via deep link or direct navigation
+- Accessible from the Recipients tab on the Statistics page
 
-**Code**: [[apps/frontend/src/pages/RecipientInsightsPage.tsx]]
+**Code**: [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]]
 
 ---
 
@@ -707,6 +710,9 @@ Natural-language chat against the user's financial data — purely local (Ollama
 - Toggle to opt-out of tool calls per turn
 
 **Code**: [[apps/frontend/src/pages/AIChatPage.tsx]], [[apps/frontend/src/features/ai-chat/]], [[apps/frontend/src/lib/aiChatStreamStore.ts]]
+
+When Ollama is unreachable, the actionable setup/retry banner is the sole status message; the page
+header does not repeat the same failure. Loading and ready states remain visible in the header.
 
 **Related**: [[docs/features/ai-chat|AI Chat Feature]], [[docs/api/ai|AI Chat API]], [[docs/adr/024-local-llm-chat|ADR-024]], [[docs/adr/048-ai-chat-module-level-stream-store|ADR-048]]
 

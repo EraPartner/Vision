@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-08-23
-last_modified: 2026-08-23
+updated: 2026-08-26
+last_modified: 2026-08-26
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -34,10 +34,10 @@ related_code:
   - apps/frontend/src/hooks/useRecipientPivot.ts
   - apps/frontend/src/utils/forecastMerge.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
-  - apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx
-  - apps/frontend/src/components/dashboard/ForecastInner.tsx
-  - apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx
-  - apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx
+  - apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx
+  - apps/frontend/src/features/dashboard/ForecastInner.tsx
+  - apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx
+  - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/components/charts/LineChart.tsx
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
   - alembic/versions/0012_cashflow_forecast_accuracy.py
@@ -385,11 +385,13 @@ Per-recipient aggregated spending data with category and time-bucket filtering, 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
-| `time_bucket` | string | monthly | `monthly` or `yearly` |
-| `category_ids[]` | integer[] | [] | Categories to include (if empty, all included) |
+| `bucket` | string | monthly | `monthly` or `yearly` |
 | `recipient_ids[]` | integer[] | [] | Recipients to include (if empty, all included) |
-| `date_range_start` | string | null | ISO date filter start (YYYY-MM-DD) |
-| `date_range_end` | string | null | ISO date filter end (YYYY-MM-DD) |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+| `start_date` | string | null | Inclusive ISO date filter start (`YYYY-MM-DD`) |
+| `end_date` | string | null | Inclusive ISO date filter end (`YYYY-MM-DD`) |
+
+The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
 
 **Response (data field):**
 
@@ -453,16 +455,15 @@ Per-recipient aggregated spending data with category and time-bucket filtering, 
 **Frontend Usage:**
 
 ```typescript
-const envelope = await apiClient.getAggregationRecipientPivot({
+const envelope = await getAggregationRecipientPivot({
   currency: 'EUR',
-  time_bucket: 'monthly',
+  bucket: 'monthly',
   recipient_ids: [10, 11],
-  category_ids: [5, 7],
-  date_range_start: '2026-01-01',
-  date_range_end: '2026-03-31'
+  start_date: '2026-01-01',
+  end_date: '2026-03-31'
 });
 
-// envelope.data.recipients → array of per-recipient series
+// envelope.data.recipientPivot['2026-01'] → RecipientPivotItem[]
 // Render as CustomChart with recipients as series
 ```
 
@@ -485,9 +486,11 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 | `tag_ids[]` | integer[] | Conditional | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`. |
 | `all` | boolean | No | Alias: `all_tags`. When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
 | `bucket` | string | No (default: `monthly`) | `monthly` or `yearly` |
-| `start` | string | No | ISO date filter start (`YYYY-MM-DD`) |
-| `end` | string | No | ISO date filter end (`YYYY-MM-DD`) |
+| `start_date` | string | No | Inclusive ISO date filter start (`YYYY-MM-DD`) |
+| `end_date` | string | No | Inclusive ISO date filter end (`YYYY-MM-DD`) |
 | `currency` | string | No (default: `EUR`) | Target currency (3-letter code, case-insensitive) |
+
+The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
 
 **Response envelope:**
 
@@ -537,18 +540,18 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 
 ```typescript
 // Explicit tag selection
-const envelope = await apiClient.getAggregationTagPivot({
+const envelope = await getAggregationTagPivot({
   tag_ids: [3, 7],
   bucket: 'monthly',
-  start: '2026-01-01',
-  end: '2026-06-30',
+  start_date: '2026-01-01',
+  end_date: '2026-06-30',
   currency: 'EUR'
 });
 // envelope.data.tagPivot['2026-01'] → TagPivotEntry[]
 // Render as CustomChart with tags as series (legend: #slug)
 
 // Dynamic all-tags mode (saved chart with all_tags=true)
-const allTagsEnvelope = await apiClient.getAggregationTagPivot({
+const allTagsEnvelope = await getAggregationTagPivot({
   all: true,  // omits tag_ids; returns every active tag
   bucket: 'yearly',
   currency: 'EUR'
@@ -1362,17 +1365,18 @@ await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });
 await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
-await apiClient.getAggregationRecipientPivot({ // Custom Charts feature — recipient series
+await getAggregationRecipientPivot({ // Custom Charts feature — recipient series
   currency: 'EUR',
-  time_bucket: 'monthly',
+  bucket: 'monthly',
   recipient_ids: [10, 11],
-  category_ids: [5, 7]
+  start_date: '2026-01-01',
+  end_date: '2026-06-30'
 });
-await apiClient.getAggregationTagPivot({ // Custom Charts feature — tag series (June 2026)
+await getAggregationTagPivot({ // Custom Charts feature — tag series (June 2026)
   tag_ids: [3, 7],
   bucket: 'monthly',
-  start: '2026-01-01',
-  end: '2026-06-30',
+  start_date: '2026-01-01',
+  end_date: '2026-06-30',
   currency: 'EUR'
 });
 

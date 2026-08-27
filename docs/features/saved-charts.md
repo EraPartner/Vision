@@ -12,9 +12,9 @@ related_code:
   - apps/frontend/src/hooks/useTagPivot.ts
   - apps/frontend/src/lib/api/aggregations.ts
   - apps/frontend/src/lib/api/types.ts
-  - apps/frontend/src/components/statistics/CustomChart.tsx
-  - apps/frontend/src/components/statistics/CustomChartBuilderModal.tsx
-  - apps/frontend/src/components/statistics/SavedChartsSection.tsx
+  - apps/frontend/src/features/statistics/CustomChart.tsx
+  - apps/frontend/src/features/statistics/CustomChartBuilderModal.tsx
+  - apps/frontend/src/features/statistics/SavedChartsSection.tsx
   - apps/node-backend/src/routes/savedCharts.js
   - apps/node-backend/src/repositories/savedChartsRepository.js
   - apps/node-backend/src/repositories/infoRepositoryTags.js
@@ -22,6 +22,7 @@ related_code:
   - alembic/versions/0017_saved_charts_recipients_variants.py
   - alembic/versions/0063_saved_charts_tag_ids.py
   - alembic/versions/0064_saved_charts_all_source_flags.py
+updated: 2026-08-26
 ---
 
 # Saved Charts Feature
@@ -151,7 +152,7 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
 
 ### CustomChart (read-only display)
 
-`apps/frontend/src/components/statistics/CustomChart.tsx` — pure display component:
+`apps/frontend/src/features/statistics/CustomChart.tsx` — pure display component:
 
 1. Calls `useRecipientPivot(savedChart)` for recipient data and `useTagPivot(savedChart)` for tag data.
 2. Runs a unified entity pipeline:
@@ -174,7 +175,7 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
 
 ### Builder Modal
 
-`apps/frontend/src/components/statistics/CustomChartBuilderModal.tsx` — Dialog with two-column layout:
+`apps/frontend/src/features/statistics/CustomChartBuilderModal.tsx` — Dialog with two-column layout:
 
 - **Left column**: name field, chart-type combo select (now includes a **"Bar (Ranked)"** option in addition to the original 6, mapping to `chart_type='bar'` + `chart_variant='ranked'`); time-bucket toggle (hidden when ranked is selected); date-range pickers; per-dimension pickers with an **"All …"** toggle (Switch) per dimension:
   - When the "All" toggle is on for a dimension, the matching `*_ids` manual picker is disabled and the `all_*` flag is sent to the backend.
@@ -185,7 +186,7 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
 
 ### SavedChartsSection (tab content)
 
-`apps/frontend/src/components/statistics/SavedChartsSection.tsx` — full tab content:
+`apps/frontend/src/features/statistics/SavedChartsSection.tsx` — full tab content:
 
 - Header: section title + "New chart" button.
 - Empty state: illustration + description + "Create your first chart" CTA when no charts.

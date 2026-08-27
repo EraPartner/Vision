@@ -3,11 +3,11 @@ title: Feature - Onboarding
 type: feature
 status: active
 date: 2026-04-19
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [feature, onboarding, wizard, first-run, phase-9, backup, encrypt, passphrase, phase-2]
 description: First-run onboarding wizard for new Vision users
 aliases: [onboarding, setup wizard, first-run, welcome]
-related_code: ["apps/frontend/src/features/onboarding/OnboardingWizard.tsx", "apps/frontend/src/App.tsx"]
+related_code: ["apps/frontend/src/features/onboarding/OnboardingWizard.tsx", "apps/frontend/src/features/onboarding/useOnboarding.ts", "apps/frontend/src/components/layout/AppLayout.tsx", "apps/frontend/src/features/settings/sections/AboutSection.tsx"]
 ---
 
 # Feature: Onboarding
@@ -57,7 +57,8 @@ It can be restarted from **Settings → About & Maintenance → Restart setup wi
 
 ## State and resource writes
 
-The wizard persists only the `onboarding_complete` setting through `useOnboarding()`. The steps do
+The wizard persists only the `onboarding_complete` setting through `useOnboarding()` in
+`apps/frontend/src/features/onboarding/useOnboarding.ts`. The steps do
 not configure language, currency, date, or dashboard preferences. Category creation, CSV import,
 and backup restore use their normal resource APIs, so their data follows the same validation and
 error handling as the corresponding application pages.

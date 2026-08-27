@@ -3,7 +3,7 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
-updated: 2026-05-12
+updated: 2026-08-27
 tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing, bulk-actions, belgian-tax, adr-059, freeze-display-pattern]
 description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks; May 2026 bulk transaction operations; May 12 2026 adds Belgian Tax historical year extensions (ADR-059) tasks
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
@@ -23,7 +23,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Add a new service | [[docs/reference/code-patterns\|Code Patterns]] | [[docs/architecture/backend-architecture\|Backend Architecture]] |
 | Add a new bank adapter | [[docs/integrations/bank-adapters\|Bank Adapters]] | [[docs/features/import\|Import Feature]] |
 | Add a new price provider | [[docs/integrations/price-providers\|Price Providers]] | [[docs/features/portfolio\|Portfolio]] |
-| Create a database migration | [[docs/guides/migrations\|Migration Guide]] | [[docs/reference/migration-dependencies\|Migration Dependencies]] |
+| Create a database migration | [[docs/guides/migrations\|Migration Guide]] | [[docs/reference/scripts#Database & Migration Scripts\|Migration Scripts]] |
 | Debug a database issue | [[docs/troubleshooting\|Troubleshooting]] | [[docs/reference/database-triggers\|Triggers]] |
 | Configure environment variables | [[docs/reference/environment-variables\|Environment Variables]] | [[docs/guides/backend-configuration\|Backend Configuration]] |
 | Protect admin endpoints with token auth | [[docs/reference/environment-variables\|Environment Variables]] (`ADMIN_AUTH_TOKEN`) | [[docs/api/admin\|Admin API]], [[docs/security/index\|Security]] |
@@ -66,7 +66,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Understand inflation adjustment | [[docs/features/portfolio\|Portfolio]] | [[docs/api/info\|Info API]] |
 | Update investment prices | [[docs/integrations/price-providers\|Price Providers]] | [[docs/api/investments\|Investments API]] |
 | View a past tax year without changing my live profile | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Belgian Tax Historical Year Viewer]] | [[docs/adr/058-belgian-tax-historical-year-snapshots\|ADR-058]], [[docs/features/portfolio-tax\|Portfolio Tax]] |
-| Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[apps/frontend/src/components/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
+| Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[apps/frontend/src/features/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
 | Freeze a tax year calculation to prevent engine drift | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], YearActionsMenu component |
 | Mark a tax year as filed with a reference number | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], MarkAsFiledDialog component |
 | Export a tax year as CSV for backup | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], exportTaxYearCsv module |
@@ -101,7 +101,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 |-------------|------------|------------|
 | Run all local checks (lint, typecheck, locales, endpoint matrix, tests) | `bun run check` | [[docs/reference/scripts\|Scripts Reference]] |
 | Run all tests | [[docs/reference/scripts\|Scripts Reference]] | `bun run test` |
-| Run E2E tests | [[docs/testing/testing#phase-b-e2e-testing-2026-04-30--complete\|E2E Testing]] | `bun run test:e2e` |
+| Run E2E tests | [[docs/testing/frontend/e2e#Current execution contract\|E2E execution contract]] | Host: `bun run test:e2e`; scheduled CI for Linux |
 | Run mutation tests | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation` |
 | Write a unit test | [[docs/testing/testing\|Testing Documentation]] | [[docs/reference/code-patterns\|Code Patterns]] |
 | Write an integration test | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]] | [[docs/testing/test-inventory\|Test Inventory]] |
@@ -143,7 +143,7 @@ bun run db:upgrade       # Run migrations
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)
 bun run test             # Run all tests
 bun run test:watch       # Watch mode
-bun run test:e2e         # Run E2E tests (Playwright)
+bun run test:e2e         # Run E2E tests on the host (Playwright)
 bun run --filter 'vision-frontend' test:mutation    # Run mutation tests (Stryker; frontend workspace only)
 
 # Building

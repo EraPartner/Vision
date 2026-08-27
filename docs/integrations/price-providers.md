@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-08-23
-updated: 2026-08-23
+last_modified: 2026-08-26
+updated: 2026-08-26
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, adr-082, capability-map, quota-governor, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -252,8 +252,9 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 
 Unlike the [bank-adapter seam](bank-adapters.md#adding-new-banks), adding a price provider is **not**
 a single registration point. The provider identity is spread across backend dispatch, a PostgreSQL
-enum, and the OpenAPI contract. The frontend picker now gets its membership and ordering from the
-backend catalog instead of maintaining separate Add and Edit dialog lists. The current touchpoints:
+enum, and the OpenAPI contract. The frontend picker gets its normal membership and ordering from
+the backend catalog instead of maintaining separate Add and Edit dialog lists. It also keeps a
+compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The current touchpoints:
 
 **Backend**
 1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.js`.
@@ -272,16 +273,17 @@ backend catalog instead of maintaining separate Add and Edit dialog lists. The c
 **Contract + frontend**
 7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
    update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`.
-8. Add an `addInv.provider.hint.*` localization key and map it in
-   `features/portfolio/usePriceProviderCatalog.ts` when the backend's English description is not
-   sufficient. Add and Edit both render the shared `PriceProviderFields`, which loads
-   `GET /api/investments/providers`; they need no separate catalog edits.
+8. Add the provider to `FALLBACK_CATALOG` in `features/portfolio/usePriceProviderCatalog.ts` so an
+   existing holding remains editable while the catalog request is loading or unavailable. Add an
+   `addInv.provider.hint.*` localization key and `HINT_KEYS` mapping when the backend's English
+   description is not sufficient. Add and Edit both render the shared `PriceProviderFields`, so
+   they need no separate per-dialog catalog edits.
 
 > [!tip] Reducing this cost
 > Live fetching already groups providers into identifier-based and investment-based descriptor
 > loops. Historical fetching still has provider-specific branches. The database enum and OpenAPI
-> union remain explicit compatibility boundaries; the frontend option catalog itself is served by
-> the backend.
+> union remain explicit compatibility boundaries. The backend serves the normal frontend option
+> catalog; the frontend fallback is an explicit offline-resilience touchpoint.
 
 ## Related
 

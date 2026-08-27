@@ -3,10 +3,10 @@ title: Testing Documentation Index
 type: testing-index
 status: active
 date: 2026-04-30
-updated: 2026-05-08
-last-updated: 2026-05-08
-modified: 2026-05-08
-last_updated_timestamp: 2026-05-08T00:00:00Z
+updated: 2026-08-26
+last-updated: 2026-08-26
+modified: 2026-08-26
+last_updated_timestamp: 2026-08-26T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -147,7 +147,7 @@ bun vitest run src/path/to/test.test.js
 4. **Playwright E2E Expanded** — Two new spec files:
    - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape, focus-trap Tab/Shift-Tab, autofocus
    - `e2e/critical-flows.spec.ts` — page-load smoke (catches pageerrors), mutation roundtrips (create category/recipient → list refetch)
-   - Wired into `test:e2e` script alongside existing `smoke.spec.ts`
+   - Now discovered automatically by the non-visual `chromium` project used by `test:e2e`
 
 **Test count delta:** 1147 → **1204 vitest tests** (+57 contract-level). +24 live-API. +9 Playwright specs (3 files total).
 
@@ -156,7 +156,7 @@ bun vitest run src/path/to/test.test.js
 - Endpoint removed → Live-API `404` or `ok=false`
 - Page crashes from undefined data → `critical-flows.spec.ts` `pageerror` listener
 - Dialog behavior regression → `dialogs-edge.spec.ts` keyboard/focus tests
-- Visual layout drift → `test-e2e-visual` screenshot comparison
+- Visual layout drift → manual `visual-chromium` screenshot comparison
 
 **Details:** [[docs/testing/test-inventory#phase-f1--backend-drift-detection-sweep-2026-05-02|Phase F1 in Test Inventory]]
 
@@ -209,8 +209,8 @@ bun vitest run src/path/to/test.test.js
 
 **What's new (3 new e2e specs, 32 new tests):**
 - `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant)
-- `e2e/a11y.spec.ts` — Axe WCAG 2.1 A/AA scans on 9 key pages (9 tests, zero critical violations required)
-- `e2e/network-drift.spec.ts` — Network listener catching 5xx/4xx during page boot (10 tests catching frontend → backend route mismatches)
+- `e2e/a11y.spec.ts` — Originally 9 page scans; the current shared catalog has 11, including Tax (zero critical or serious violations required)
+- `e2e/network-drift.spec.ts` — Originally 10 page checks; it now consumes the same 11-page catalog and catches frontend → backend route mismatches
 - `test:e2e` script now runs all 3 new specs alongside smoke, dialogs-edge, critical-flows
 
 **Test count delta:** 1219 → **1219 vitest** (unchanged); +**32 Playwright e2e tests**.
@@ -309,6 +309,12 @@ See [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical|Mock
 
 ## Frontend Phase C: Accessibility & Visual Regression (2026-04-30)
 
+This section is the historical Phase C delivery record. Its original commands and CI jobs were
+superseded on 2026-08-26. Current behavior is documented in
+[[docs/testing/frontend/e2e#Current execution contract|the E2E execution contract]]: `test:e2e`
+auto-discovers every non-visual spec in the `chromium` project and runs nightly or on manual
+dispatch, while the platform-sensitive `visual-chromium` project is manual only.
+
 Added automated accessibility checks (axe-core) and visual regression testing to the E2E suite.
 
 **What's new:**
@@ -337,7 +343,8 @@ bun run test:e2e  # Auto-boots dev server
 bun run test:e2e:visual  # Updates baselines
 ```
 
-**Running in CI:** Automatic — smoke+a11y on all PRs, visual regression on main pushes.
+**Current CI:** the non-visual suite runs in `.github/workflows/e2e.yml` nightly or on manual
+dispatch. Visual regression does not run in CI.
 
 **Reference:** [[docs/testing/frontend/e2e|E2E Test Guide]], `.github/workflows/ci.yml`, `apps/frontend/playwright.config.ts`, `apps/frontend/e2e/smoke.spec.ts`, `apps/frontend/e2e/visual.spec.ts`
 
@@ -453,9 +460,11 @@ Locked coverage thresholds at current actual levels and added comprehensive cont
 
 Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/testing/testing#frontend-phase-d-coverage-threshold-ratchet--contract-tests|Phase D Details]], [[apps/frontend/vite.config.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]]
 
-## Frontend Phase A: Component-Integration Testing (2026-05-02 — COMPLETE)
+## Frontend Phase A: Component-Integration Testing (historical 2026-05-02 snapshot)
 
-Completed frontend component-integration test infrastructure. Phase A complete with 376 passing tests across 20 page-level test files. Pages render with MSW-mocked network at test time, no backend server needed. All frontend page integration test files are now gap-free. Updated 2026-05-02 with AdminPages (25 tests) and PortfolioPages (69 tests) expansions.
+This section records the Phase A completion snapshot and its original per-file inventory. It is not
+a current whole-tree test count. Pages render with MSW-mocked network at test time, with no backend
+server needed. Use the filesystem and Vitest collection for current totals.
 
 **What's new:**
 
@@ -465,8 +474,8 @@ Completed frontend component-integration test infrastructure. Phase A complete w
 
 3. **Expanded Default Handlers** — 13 boot-time endpoints covered: `/api/settings`, `/api/info`, `/api/categories`, `/api/recipients`, `/api/transactions`, `/api/planned`, `/api/planned-transactions`, `/api/investments`, `/api/aggregations/:name`, `/api/info/exchange-rates`, `/api/market/news`, `/api/import/batches`, `/api/admin/endpoint-liveness`.
 
-4. **Component-Integration Tests** (20 pages, 376 tests):
-   All frontend page test files complete with comprehensive CRUD, error states, export endpoints, and i18n coverage.
+4. **Component-Integration Tests** (historical Phase A inventory):
+   The original page-test set covered CRUD, error states, export endpoints, and internationalization.
    - `TransactionsPage.integration.test.tsx` (18 tests) — empty-list, error state, Add Transaction dialog, form submission, export JSON success/error toasts
    - `ImportPage.integration.test.tsx` (23 tests) — CSV import workflow, bank source selection, file input handling
    - `LanguageSwitch.integration.test.tsx` (32 tests) — EN/NL switching across 8 pages with i18n validation
@@ -478,17 +487,18 @@ Completed frontend component-integration test infrastructure. Phase A complete w
    - `DashboardPage.integration.test.tsx` (16 tests) — Landing page, quick stats, recent activity
    - `PlannedPaymentsPage.integration.test.tsx` (16 tests) — New Payment dialog, loan scheduling, error states
    - `TaxOverviewPage.integration.test.tsx` (16 tests) — Tax profile dialog, employment step selection, deduction workflow
-   - `StatisticsPage.integration.test.tsx` (13 tests) — Analytics page, chart rendering, period/category filters
+   - `StatisticsPage.integration.test.tsx` (18 tests) — Analytics tabs, including live recipient-insights rendering
    - `AIChatPage.integration.test.tsx` (15 tests) — AI chat interface, message submission, error handling
    - `ImportReviewPage.integration.test.tsx` (14 tests) — Import staging, transaction preview, conflict resolution
-   - `RecipientInsightsPage.integration.test.tsx` (14 tests) — Recipient analytics, spending patterns, history
    - `PortfolioOverviewPage.integration.test.tsx` (14 tests) — Portfolio summary page rendering
    - `MarketLookupPage.integration.test.tsx` (12 tests) — Market data lookup, quote search, news display
    - `DbMaintenancePage.integration.test.tsx` (12 tests) — Database operations, view refresh, cache clearing
    - `AddTransactionDialog.integration.test.tsx` (10 tests) — Dialog open/close, form submission, duplicate detection
    - `NotFound.integration.test.tsx` (5 tests) — 404 page, navigation fallback
 
-**Test Results:** 20 frontend test files, 376 tests, all passing (Phase A COMPLETE). Infrastructure: Vitest + RTL + MSW v2 with `renderWithApp` helper, `server.use()` per-test overrides, `ok()`/`err()` envelope helpers. Updated 2026-05-02: PortfolioPages +15 tests, AdminPages +8 tests.
+**Snapshot result:** the Phase A set passed at completion. Current results and totals come from the
+Vitest run, not this historical list. Infrastructure: Vitest + React Testing Library + MSW v2 with
+`renderWithApp`, per-test `server.use()` overrides, and `ok()`/`err()` envelope helpers.
 
 **Key Gotchas Documented:**
 - TaxOverviewPage dialog duplication → use `findAllByRole` + index first
@@ -496,7 +506,8 @@ Completed frontend component-integration test infrastructure. Phase A complete w
 - Recipient category regex → use anchored pattern `/^employee/i`
 - VirtualDataTable rows → skip row-measurement tests
 
-**Status:** Phase A COMPLETE (all 20 pages, 376 tests, 2026-05-02). Phase B E2E (Playwright) COMPLETE. Phase C visual regression + accessibility COMPLETE. Phase D coverage threshold ratchet + contract tests COMPLETE.
+**Historical status:** Phase A was declared complete on 2026-05-02. Later phases and current gate
+status must be read from their own sections and the current test run.
 
 Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/testing/testing#frontend-phase-a-component-integration-testing-2026-05-02|Phase A Details]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/pages/__tests__]]
 
@@ -609,9 +620,10 @@ Three dialog component integration test files now include comprehensive tests fo
 
 **Pattern documentation:** [[docs/testing/frontend-component-integration#dialog-component-integration-tests-2026-05-01---phase-a|Dialog Tests]], [[docs/testing/frontend-component-integration#error-state-tests-account-for-apirequest-retry-backoff|Error-State Test Timeout Pattern]]
 
-## Frontend Phase A Complete: All 20 Page Integration Tests (2026-05-02)
+## Frontend Phase A Completion Snapshot (2026-05-02)
 
-Phase A testing infrastructure now includes comprehensive coverage of all 20 frontend pages. Final gap closures added export endpoint tests:
+At the Phase A snapshot, the then-current 20-page inventory was declared complete. Final gap
+closures added export endpoint tests:
 
 **TransactionsPage export JSON (2 new tests):**
 - Export JSON shows success toast when download succeeds
@@ -621,7 +633,8 @@ Phase A testing infrastructure now includes comprehensive coverage of all 20 fro
 - Export CSV shows success toast when download succeeds (recipient detail view)
 - Export CSV shows error toast when download fails (recipient detail view)
 
-**Result:** All 20 frontend page integration test files now gap-free. Total: 376 tests across 20 files (updated 2026-05-02 with AdminPages + PortfolioPages expansions).
+**Snapshot result:** 376 tests across the then-current 20-file inventory. This is historical, not a
+current whole-tree total.
 
 **Coverage matrix:**
 - Core CRUD: Transactions, Categories, Recipients, Planned Payments ✓
@@ -644,7 +657,7 @@ All 34 integration test files (231 tests) now passing. Fixes discovered four key
 
 2. **Stale Element References** — Removed `.toBeInTheDocument()` assertions after awaited `findByRole()` calls. Component re-mounts between find and assertion create stale references; `await findByRole()` alone is sufficient.
 
-3. **Multiple Elements Pattern** — Switched to `findAllByRole()` when pages render the same heading in multiple components (e.g., PageHeader + VirtualDataTable). Index the first match.
+3. **Multiple Elements Pattern** — Historical tests used `findAllByRole()` for duplicate headings. Current guidance is to keep page headings unique and use scoped queries only for legitimately repeated controls.
 
 4. **Role-Based Over Text** — Use `findByRole()` instead of `findByText()` when text spans multiple DOM nodes. Roles are unique; text queries may match wrong elements.
 

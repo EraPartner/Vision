@@ -3,6 +3,7 @@ title: Glossary & Terminology
 type: reference
 status: active
 date: 2026-03-31
+updated: 2026-08-26
 tags: [glossary, terminology, reference, search]
 description: Key terms, aliases, and disambiguation for the Vision project - helps with search and navigation
 aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
@@ -21,8 +22,9 @@ aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
 | **Category** | label, tag | Organization label in `GENERAL:DETAIL` format (e.g., `FOOD:GROCERIES`). | [[docs/api/categories\|Categories API]] |
 | **Recipient** | payee, payer, counterparty | Person or entity associated with a transaction. | [[docs/api/recipients\|Recipients API]] |
 | **Planned Transaction** | planned payment, scheduled payment, recurring payment | Future-dated transaction that can be one-time or recurring. | [[docs/features/plannedTransactions\|Planned Transactions]] |
-| **Portfolio** | investments, holdings | Collection of investment holdings (stocks, ETFs, crypto, metals, real estate, savings, bonds). | [[docs/features/portfolio\|Portfolio]] |
-| **Investment** | holding, asset | A single portfolio position (e.g., "Apple Inc." stock). | [[docs/api/investments\|Investments API]] |
+| **Portfolio** | investments, holdings | Collection of owned positions (stocks, ETFs, crypto, metals, real estate, savings, bonds). | [[docs/features/portfolio\|Portfolio]] |
+| **Investment** | instrument, asset | The entity selected, imported, created, or deleted (for example, Apple Inc. stock). Dutch: `belegging`. | [[docs/api/investments\|Investments API]] |
+| **Holding** | position | An investment as owned in an account or measured in performance, allocation, or open/closed-position context. Dutch: `positie`. | [[docs/features/portfolio\|Portfolio]] |
 | **Watchlist** | watch list, tracked symbols | List of symbols to track with target prices. | [[docs/api/watchlist\|Watchlist API]] |
 | **Split** | owed, debt, shared expense | Division of a transaction amount among multiple recipients. | [[docs/api/splits\|Splits API]] |
 | **Import** | bank import, CSV import | Process of bringing transaction data from bank CSV files. | [[docs/features/import\|Import]] |

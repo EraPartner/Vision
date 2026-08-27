@@ -227,6 +227,13 @@ package "Feature Components - Statistics" {
 
 package "Feature Components - Planning" {
   class RecurringDetectionPanel
+  class PlannedPaymentsTable {
+    +memoized VirtualDataTable columns
+    +prop-driven row actions
+  }
+  class PlannedDueBadge {
+    +shared local-calendar due state
+  }
 }
 
 package "Feature Components - Recipients" {

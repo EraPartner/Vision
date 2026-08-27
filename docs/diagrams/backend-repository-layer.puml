@@ -35,7 +35,8 @@ package "Repositories" {
     +createOrGet(data): Promise<{recipient, created}>
     +update(id, fields): Promise<Recipient>
     +hardDelete(id): Promise<boolean>
-    +mergeRecipients(primaryId, aliasIds): Promise<number[]>
+    +flagAliasesOf(primaryId, aliasIds): Promise<number[]>
+    +repointGrandchildAliases(primaryId, aliasIds): Promise<number>
     +unmergeRecipient(id): Promise<boolean>
     +getAliases(primaryId): Promise<Recipient[]>
   }

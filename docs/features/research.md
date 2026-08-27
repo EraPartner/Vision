@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-08-25
+updated: 2026-08-26
 tags:
   - url-state
   - feature
@@ -58,7 +58,7 @@ related_code:
   - apps/frontend/src/pages/research/ChartBuilderPage.tsx
   - apps/frontend/src/pages/research/MarketOverviewPage.tsx
   - apps/frontend/src/pages/research/marketViews.ts
-  - apps/frontend/src/components/research/ResearchScorecard.tsx
+  - apps/frontend/src/features/research/ResearchScorecard.tsx
   - apps/frontend/src/lib/research/indicators.ts
   - apps/frontend/src/types/research.ts
   - apps/frontend/src/lib/api/research.ts
@@ -271,7 +271,7 @@ New i18n keys: `research.builder.groupMarkets`, `research.builder.groupEconomic`
 
 All four symbol-picker pages in the Research section (`ResearchHomePage`, `MarketLookupPage`, `ResearchComparePage`, `ChartBuilderPage`) share two components from `apps/frontend/src/components/shared/` that guarantee visual consistency across the section:
 
-- **`SymbolSearchBox`** — the tall glass input (`h-14 glass-regular`) with a leading `Search` icon, optional trailing loading spinner, and the `glass-thick` floating results dropdown (changed from `glass-elevated` in the June 2026 glass-consistency pass — floating dropdowns now uniformly use glass-thick).
+- **`SymbolSearchBox`** — the tall glass input (`h-14 glass-regular`) with a leading `Search` icon, optional trailing loading spinner, and the `glass-thick` floating results dropdown (changed from `glass-elevated` in the June 2026 glass-consistency pass — floating dropdowns now uniformly use glass-thick). It exposes an ARIA combobox/listbox relationship; Arrow Up/Down visibly move the active result while input focus stays in place, Enter activates it, and Escape dismisses the popup. Home/End retain their normal text-caret behavior.
 - **`SymbolSearchResultItem`** — the canonical result row (monospaced ticker, company name, asset-type badge, exchange label). Also used by `AddToWatchlistDialog` (inline scrollable list inside a modal, not a floating dropdown).
 
 Each page owns its own query logic and passes result rows as `children` to `SymbolSearchBox`. Full props reference: [[docs/components/shared-components#SymbolSearchBox|Shared Components — SymbolSearchBox]].

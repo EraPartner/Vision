@@ -3,6 +3,7 @@ title: How to Add a New API Endpoint
 type: guide
 status: active
 date: 2026-03-31
+updated: 2026-08-26
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
 aliases: [add api, new endpoint, create endpoint, api tutorial]
@@ -40,7 +41,7 @@ Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse
 ```javascript
 import { Router } from 'express';
 import <resource>Service from '../services/<resource>Service.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
@@ -61,19 +62,19 @@ router.post('/', async (req, res) => {
 
 // GET /api/<resource>/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  const item = await <resource>Service.get(Number(req.params.id)); // throws NotFoundError if absent
+  const item = await <resource>Service.get(assertIdParam(req)); // throws NotFoundError if absent
   res.ok({ ...item, links: [] });
 });
 
 // PATCH /api/<resource>/:id
 router.patch('/:id', validateIdParam, async (req, res) => {
-  const item = await <resource>Service.update(Number(req.params.id), req.body);
+  const item = await <resource>Service.update(assertIdParam(req), req.body);
   res.ok({ ...item, links: [] });
 });
 
 // DELETE /api/<resource>/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
-  await <resource>Service.remove(Number(req.params.id)); // throws NotFoundError if absent
+  await <resource>Service.remove(assertIdParam(req)); // throws NotFoundError if absent
   res.status(204).end();
 });
 

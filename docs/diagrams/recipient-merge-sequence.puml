@@ -12,7 +12,8 @@ participant "RecipientsPage" as Page
 participant "useRecipients" as Hook
 participant "ApiClient" as API
 participant "RecipientsRouter" as Router
-participant "RecipientRepository" as Repo
+participant "RecipientMergeService" as Service
+participant "Repositories" as Repos
 participant "PostgreSQL" as DB
 
 group View aliases
@@ -20,10 +21,10 @@ group View aliases
   Page -> Hook : getRecipients({search})
   Hook -> API : GET /api/recipients
   API -> Router : /recipients
-  Router -> Repo : getAll()
-  Repo -> DB : SELECT recipients
-  DB -> Repo : recipients with aliases
-  Repo -> Router : list
+  Router -> Repos : getAll()
+  Repos -> DB : SELECT recipients
+  DB -> Repos : recipients with aliases
+  Repos -> Router : list
   Router -> API : JSON
   API -> Hook : RecipientsResponse
   Hook -> Page : display list
@@ -35,17 +36,21 @@ group Merge action
   Hook -> API : POST /api/recipients/:id/merge
 
   API -> Router : POST /recipients/:id/merge { alias_ids: [...] }
-  Router -> Repo : mergeRecipients(primaryId, aliasIds)
+  Router -> Service : mergeRecipients(primaryId, aliasIds)
 
-  Repo -> DB : UPDATE recipients SET primary_recipient_id = primaryId WHERE id = ANY(alias_ids)
-  DB -> Repo : updated count
+  Service -> Repos : lock primary + repoint foreign keys
+  Repos -> DB : UPDATE dependent rows
+  DB -> Repos : updated counts
 
-  Repo -> DB : SELECT aliases WHERE primary_recipient_id = primaryId
-  DB -> Repo : updated aliases list
+  Service -> Repos : flagAliasesOf() + repointGrandchildAliases()
+  Repos -> DB : UPDATE recipient alias relationships
+  DB -> Repos : merged alias ids
 
-  Repo -> Router : {primary, merged_ids, aliases}
+  Repos -> Service : merge results
+  Service -> Router : {mergedAliasIds, reassigned}
+  Router -> Router : fetch primary/aliases + build patternSuggestion
   Router -> API : JSON
-  API -> Hook : { primary, merged_ids, aliases }
+  API -> Hook : { primary, merged_ids, reassigned, aliases, patternSuggestion }
   Hook -> Hook : invalidate useRecipients cache
   Hook -> Page : refresh
   Page -> User : Show Success Message
@@ -57,12 +62,12 @@ group Unmerge action
   Hook -> API : POST /api/recipients/:aliasId/unmerge
 
   API -> Router : POST /recipients/:aliasId/unmerge
-  Router -> Repo : unmergeRecipient(aliasId)
+  Router -> Repos : unmergeRecipient(aliasId)
 
-  Repo -> DB : UPDATE recipients SET primary_recipient_id = NULL WHERE id = aliasId
-  DB -> Repo : updated
+  Repos -> DB : UPDATE recipients SET primary_recipient_id = NULL WHERE id = aliasId
+  DB -> Repos : updated
 
-  Repo -> Router : unmerged recipient
+  Repos -> Router : unmerged recipient
   Router -> API : JSON
   API -> Hook : Recipient
   Hook -> Page : refresh list

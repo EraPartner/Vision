@@ -3,7 +3,7 @@ title: Layout Components
 type: component
 status: active
 date: 2026-04-25
-updated: 2026-06-24
+updated: 2026-08-26
 tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
 description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI. 2026-06-24 — ActiveRail shape changed to flush full-height 2px bar; inset box-shadow removed from sidebar.tsx.
 aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
@@ -305,9 +305,9 @@ function WorkspaceSwitcher() {
 
 **Status**: Re-added in June 2026 (ADR-070) as enter-only spring.
 
-`components/layout/PageTransition.tsx` wraps routed children in a `motion.div` keyed on `location.pathname`. It is enter-only (no `AnimatePresence` exit) to avoid double-rendering React Suspense boundaries around lazy-loaded routes.
+`components/layout/PageTransition.tsx` wraps routed children in an `m.div` keyed on `location.pathname`. It is enter-only (no `AnimatePresence` exit) to avoid double-rendering React Suspense boundaries around lazy-loaded routes.
 
-**Spring parameters**: uses `SPRING_SMOOTH` from `lib/motion.ts`; under `prefers-reduced-motion`, transition is instant (empty initial/animate props).
+**Timing**: uses `durations.page` with `easings.outExpo` from `lib/motion.ts`; under `prefers-reduced-motion`, the wrapper is omitted and children render directly.
 
 **History**:
 - Added in ADR-017 (April 2026) as full enter + exit spring.
@@ -320,7 +320,7 @@ Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
 
 **Status**: Added June 2026 (ADR-070).
 
-`components/shared/CommandPalette.tsx` provides a ⌘K / Ctrl+K global command palette built on the `cmdk` library. Mounted by `AppLayout` with a topbar button trigger.
+`components/shared/CommandPalette.tsx` provides a ⌘K / Ctrl+K global command palette built on the `cmdk` library. Mounted by `AppLayout` with a topbar button trigger. `lib/commandPalette.ts` owns its pure FX, arithmetic, and ticker-query helpers plus the recent-route storage adapter.
 
 **Coverage**:
 - All budgeting pages (Dashboard, Transactions, Categories, Recipients, Statistics, Planned, Import, Owes, Tax)
@@ -333,7 +333,7 @@ Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
 
 **i18n**: 5 new keys under `commandPalette.*` (en + nl).
 
-Code link: [[apps/frontend/src/components/shared/CommandPalette.tsx]]
+Code links: [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[apps/frontend/src/lib/commandPalette.ts]]
 
 ---
 

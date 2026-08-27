@@ -3,7 +3,7 @@ title: Application Updates
 type: feature
 status: active
 date: 2026-04-28
-updated: 2026-04-28
+updated: 2026-08-26
 tags: [feature, updates, electron, deployment, docker, shell-update, backup, rollback, checksums, supply-chain-security, devops, phase-9]
 description: Application update system supporting three deployment modes (dev, source, docker) with backup-before-update pattern, shell script rollback, and cryptographic verification
 aliases: [auto-update, update flow, deployment modes, shell installer, docker pull, backup, update lifecycle]
@@ -12,7 +12,7 @@ related_code:
   - packaging/electron/preload.js
   - apps/frontend/src/lib/api/electron.ts
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
-  - apps/frontend/src/components/settings/tabs/AppTab.tsx
+  - apps/frontend/src/features/settings/sections/AboutSection.tsx
   - .github/workflows/ci.yml
   - .github/workflows/release.yml
 ---

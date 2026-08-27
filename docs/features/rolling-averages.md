@@ -9,7 +9,8 @@ aliases: [rolling average, trend overlay, moving average, smoothing]
 related_code:
   - apps/frontend/src/utils/rollingAverage.ts
   - apps/frontend/src/components/charts/BarChart.tsx
-  - apps/frontend/src/components/statistics/MonthlyChart.tsx
+  - apps/frontend/src/features/statistics/MonthlyChart.tsx
+updated: 2026-08-26
 ---
 
 # Rolling Average Overlays (Phase 7)
@@ -134,7 +135,7 @@ function buildOverlayPath(data: MonthlyChartDatum[]): string {
 
 ## Frontend: MonthlyChart Component
 
-**Location:** `apps/frontend/src/components/statistics/MonthlyChart.tsx`
+**Location:** `apps/frontend/src/features/statistics/MonthlyChart.tsx`
 
 **Changes from Phase 6:**
 

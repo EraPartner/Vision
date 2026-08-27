@@ -3,7 +3,7 @@ title: Container Hardening
 type: security
 status: active
 date: 2026-04-25
-updated: 2026-08-23
+updated: 2026-08-26
 tags: [security, docker, containers, hardening, defense-in-depth, trivy-scan, supply-chain, electron, npm-scripts, bun]
 description: Docker container hardening posture — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning. Also covers Electron release build supply-chain hardening with frozen Bun installs and ignored lifecycle scripts.
 aliases: [container security, docker hardening, container posture, electron supply chain]
@@ -31,7 +31,7 @@ Host loopback (`127.0.0.1:3002`) → docker-proxy → hardened container. The co
 | Persistent volume | `attachments_data:/app/data/attachments` | Survives `docker compose down` and image rebuilds |
 | Memory ceiling | `mem_limit: 4g` | `docker stats` |
 | CPU ceiling | `cpus: 4.0` | `docker stats` |
-| Healthcheck | `HEALTHCHECK` → `wget /health` every 30s | `docker inspect --format '{{.State.Health.Status}}'` |
+| Healthcheck | `HEALTHCHECK` → `wget /health` every 30s; observational under plain Docker | `docker inspect --format '{{.State.Health.Status}}'` |
 
 ## Puppeteer Note
 

@@ -3,9 +3,9 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
-updated: 2026-08-22
+updated: 2026-08-26
 tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
-description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and more
+description: Formal documentation of Vision algorithms — deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and historical LTTB context
 aliases: [algorithms, data structures, CS, computational methods]
 ---
 
@@ -18,7 +18,11 @@ aliases: [algorithms, data structures, CS, computational methods]
 
 ## LTTB (Largest-Triangle-Three-Buckets) Downsampling
 
-**Location:** [[apps/frontend/src/utils/downsample.ts]]
+> [!note] Removed
+> Vision no longer runs LTTB in either application. This section is historical algorithm context;
+> the removal rationale and former implementation are recorded in
+> [[docs/performance/chart-downsampling|Chart Downsampling]]. Current charts render the full daily
+> series, so there is no live source location.
 
 ### Problem Statement
 
@@ -305,7 +309,7 @@ This performs a **single pass** over rows, building a rate lookup map to avoid r
 
 ## Text Normalization
 
-**Location:** [[apps/node-backend/src/services/textNormalization.js]]
+**Location:** [[apps/node-backend/src/lib/textNormalization.js]]
 
 ### Problem Statement
 
@@ -396,6 +400,12 @@ For each day from seed_date to today:
 #### Spike Sanitization
 
 Isolated one-day spikes (needles) are sanitized to prevent chart distortion:
+
+The canonical implementation is `lib/calculations/valueSpikeSanitizer.js`.
+Portfolio snapshots call it through `sanitizeSnapshotSpikes`; net-worth history
+uses `lib/calculations/netWorthSanitizer.js` as a thin wrapper that recomputes
+`netWorth` after the shared rule corrects `investments`. Corrected money fields
+remain plain JavaScript numbers on both JSON paths.
 
 ```
 For each day i (not first or last):

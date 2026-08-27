@@ -3,7 +3,7 @@ title: Localization Documentation Index
 type: i18n-index
 status: active
 date: 2026-04-24
-updated: 2026-06-26
+updated: 2026-08-26
 tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability, splits, settlement, chart-aria, screen-reader, accessibility, aria-label, plural, tc, intl-plural-rules, validate-locales, source-key-usage]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds plural-aware tc(key, count, vars?) using Intl.PluralRules. 2026-06-26 — validate-locales now scans frontend source for key-existence, dropped-vars, and value-shape errors; i18n bug fixes close 10 missing keys and placeholder mismatches.
 aliases: [i18n, localization, translations, languages]
@@ -165,7 +165,7 @@ All keys added to `i18n/source/en.json` and `i18n/source/nl.json`; generated int
 
 Source-of-truth reminder: translation keys are maintained in `i18n/source/*.json`; generated frontend locale bundles are derived artifacts and should be regenerated after key changes.
 
-Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/components/reports/ExportDialog.tsx]]
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/features/reports/ExportDialog.tsx]]
 
 ## Key Naming Convention
 

@@ -67,11 +67,6 @@ package "Budgeting Pages" {
     +Commit / cancel batch
   }
 
-  class RecipientInsightsPage {
-    +Per-recipient charts
-    +Owes detail
-    +Tag breakdown
-  }
 }
 
 package "Portfolio Pages" {
@@ -221,8 +216,9 @@ package "Admin Pages (Workspace-Agnostic)" {
 
   class TableDataEditorPage <<ADR-101>> {
     +Column grid (ui/table primitives)
-    +Click-to-edit cells; NULL toggle; boolean checkboxes
-    +Per-column filters + raw WHERE box
+    +Click-to-edit cells; Set NULL; boolean checkboxes
+    +Per-cell undo button / Escape revert
+    +Per-column filters
     +Sort / paginate (paused while dirty)
     +Add row / mark-delete affordances
     +SQL Preview dialog (dry-run)
@@ -282,8 +278,6 @@ ImportPage --> ImportReviewPage : "/import/:batchId/review"
 AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
 AppLayout --> AIChatPage : "/ai-chat"
-RecipientsPage --> RecipientInsightsPage : "/recipients/:id/insights"
-
 AppLayout --> PortfolioOverviewPage : "/portfolio"
 PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
 PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"

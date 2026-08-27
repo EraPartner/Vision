@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-08-17
-last_modified: 2026-08-17
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
 description: "Main entry point to Vision project documentation for developers and coding agents."
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -139,7 +139,7 @@ LIMIT 20
 | [[docs/reference/frontend-routes|🛣️ Frontend Routes]] | Complete route table |
 | [[docs/reference/scripts|⚙️ Scripts Reference]] | All bun/npm commands |
 | [[docs/reference/database-triggers|🗄️ Database Triggers]] | All PostgreSQL triggers |
-| [[docs/reference/migration-dependencies|🔗 Migration Dependencies]] | Migration chain and groups |
+| [[docs/guides/migrations|🔗 Migration Workflow]] | Alembic workflow; use `bun run db:history` for the current chain |
 | [[docs/reference/code-patterns|💻 Code Patterns]] | Standard code patterns for all layers |
 | [[docs/reference/error-codes|❌ Error Codes]] | All API error responses and status codes |
 | [[docs/reference/typescript-types|🔢 TypeScript Types]] | All frontend type definitions |
@@ -355,12 +355,12 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 - Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
 
 **Frontend:**
-- `[[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]]` — Added `useNavigate` hook, `lastDayOfMonth()` helper, and `buildDrillUrl()` helper; all table cells with click handlers
+- `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]` — Added `useNavigate` hook, `lastDayOfMonth()` helper, and `buildDrillUrl()` helper; all table cells with click handlers
 - `[[apps/frontend/src/lib/api/transactions.ts]]` — Extended `getTransactions()` params with `category_ids` and `transaction_type`
 - `[[apps/frontend/src/features/transactions/hooks/useTransactionListData.ts]]` — Extended options with `categoryIdsFilter`, `transactionTypeFilter`, passed through to API calls
 - `[[apps/frontend/src/pages/TransactionsPage.tsx]]` — Reads URL search params `category_ids`, `transaction_type`, passes to hook
 - `[[apps/frontend/src/features/transactions/components/FilterBanner.tsx]]` — Extended with new filter props; active-check updated
-- Tests: 11 new tests in `[[apps/frontend/src/components/statistics/CategoryPivotTable.test.ts]]`
+- Tests: 11 new tests in `[[apps/frontend/src/features/statistics/CategoryPivotTable.test.ts]]`
 
 **Documentation:**
 - [[docs/api/transactions#query-parameters|Transactions API]] — Documented `category_ids` and `transaction_type` params

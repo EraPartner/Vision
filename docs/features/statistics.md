@@ -3,8 +3,8 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-14
-last_modified: 2026-08-14
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough, exclusion-filters, recipient-insights]
 description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters. June 2026: all-years Top Recipients chart now honours exclusion filters (bug fix).
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
@@ -27,7 +27,7 @@ The Statistics page (`/statistics`) is the primary analytics dashboard for trans
 
 ## Refactoring and Performance Optimization (April 2026)
 
-**Component Refactoring:** The Statistics page was refactored from a 920-line monolith into a thin 232-line orchestrator that composes sub-components from `apps/frontend/src/components/statistics/`. This improves testability, reusability, and maintainability while preserving all functionality.
+**Component Refactoring:** The Statistics page was refactored from a 920-line monolith into a thin 232-line orchestrator that composes sub-components from `apps/frontend/src/features/statistics/`. This improves testability, reusability, and maintainability while preserving all functionality.
 
 **Performance Optimization (April 25):** All 8 chart components are now lazy-loaded via `React.lazy()` and `Suspense` per tab. The `chartCardProps` is memoized with `useMemo()` to prevent unnecessary child re-renders. The 6 statistics chart components (MonthlyChart, NetTrendChart, YearlyComparisonChart, TopRecipientsChart, CategoryPieChart, CategoryTrendChart) are wrapped with `React.memo()`, along with the 5 settings tab components (GeneralTab, AppearanceTab, AppTab, DashboardTab, BackupTab). This reduces bundle size for initial page load and improves rendering performance when switching tabs.
 
@@ -43,7 +43,7 @@ The Statistics page (`/statistics`) is the primary analytics dashboard for trans
 
 ### Component Architecture
 
-**Location:** `[[apps/frontend/src/components/statistics/]]`
+**Location:** `[[apps/frontend/src/features/statistics/]]`
 
 The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator that:
 
@@ -110,7 +110,7 @@ The Statistics page **is still computed entirely on the frontend**. The `useStat
 
 ### processTransactions()
 
-Located in `[[apps/frontend/src/components/statistics/statisticsUtils.ts]]`, this pure function processes transaction arrays into a `StatisticsData` object:
+Located in `[[apps/frontend/src/features/statistics/statisticsUtils.ts]]`, this pure function processes transaction arrays into a `StatisticsData` object:
 
 ```typescript
 processTransactions(
@@ -245,7 +245,7 @@ All non-critical chart components are lazy-loaded per tab via `React.lazy()` and
 
 ```tsx
 const MonthlyChart = lazy(() =>
-  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+  import("@/features/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
 );
 
 <Suspense fallback={<ChartSkeleton />}>
@@ -330,7 +330,7 @@ Two new query parameters added to `GET /api/transactions`:
 
 ### Frontend Drillthrough Implementation
 
-**Component:** `[[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]]`
+**Component:** `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]`
 
 **Helpers:**
 - `lastDayOfMonth(period: string): string` — Computes the last day of a month (e.g., `2026-03` → `2026-03-31`)
@@ -344,7 +344,7 @@ Two new query parameters added to `GET /api/transactions`:
 - Income-only/expense-only modes propagate `transaction_type` to the drill URL
 
 **Test Coverage:**
-- `[[apps/frontend/src/components/statistics/CategoryPivotTable.test.ts]]` — 11 tests covering `lastDayOfMonth` and `buildDrillUrl` helpers
+- `[[apps/frontend/src/features/statistics/CategoryPivotTable.test.ts]]` — 11 tests covering `lastDayOfMonth` and `buildDrillUrl` helpers
 
 > [!warning] General-category group drills previously wedged TransactionsPage
 > Drillthrough URLs with `?category_ids=1,2,3` (produced by GENERAL group header clicks) triggered an infinite render loop in `TransactionsPage` — the multi-value array was rebuilt on every render, causing cascading memo + effect re-runs. Fixed in June 2026 by memoizing `categoryIdsFilter` on the raw param string. Detail-cell (scalar `?category_id=…`) drills were not affected. See [[docs/features/transactions#multi-value-filter-memoization-june-2026|Multi-Value Filter Memoization]] for details.

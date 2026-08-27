@@ -2,6 +2,7 @@
 title: ADR-096 Dividend/Coupon Income & FIRE Coverage (descriptive)
 type: adr
 date: 2026-06-18
+updated: 2026-08-27
 tags: [adr, portfolio, dividend, coupon, income, fire, coverage-ratio, statistics, descriptive, adr-044, adr-073]
 description: Surface projected + realized investment income and a FIRE coverage ratio (passive yield vs spending run-rate) as portfolio-workspace statistics that READ budgeting numbers but never feed Planned Transactions or the cash-flow forecast.
 aliases: [dividend income, coupon income, FIRE, coverage ratio, passive yield]
@@ -10,7 +11,12 @@ aliases: [dividend income, coupon income, FIRE, coverage ratio, passive yield]
 # ADR-096: Dividend/Coupon Income & FIRE Coverage (descriptive)
 
 ## Status
-Proposed
+Deferred
+
+Deferred on 2026-08-27. No route or user-interface caller exists, so
+`portfolioIncomeService` remains an isolated prototype with focused unit tests rather than a
+shipped feature. Resume this proposal only through a new implementation batch that wires the
+endpoint and user interface and revalidates the inputs and boundaries below.
 
 ## Date
 2026-06-18

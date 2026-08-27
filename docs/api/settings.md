@@ -5,11 +5,11 @@ method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
 date: 2026-06-19
-updated: 2026-08-11
+updated: 2026-08-26
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
-related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
+related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 ---
 
 # Settings API
@@ -77,8 +77,8 @@ Storage behavior:
 - If `:key` length exceeds 100 chars, endpoint returns `400` with `Setting key too long (max 100 chars)`
 
 Implementation note:
-- Route-level validation was refactored into shared helpers (`validateSettingKeyLength`, `getSettingKeyTooLongError`, `normalizeDashboardSettingsValue`) reused by single-key and bulk upsert endpoints while preserving endpoint-specific error-message text and validation semantics ([[apps/node-backend/src/routes/settings.js]]).
-- Repository normalization (`normalizeSettingValue`) now uses a shallow-clone strategy for object values, avoiding in-place mutation of caller-provided payload objects while preserving stored JSONB output and validation behavior ([[apps/node-backend/src/repositories/settingsRepository.js]]).
+- Route-level `validateSettingValue` is reused by single-key and bulk upserts. Its `dashboard_settings` schema delegates each exclusion ID to `validateIntArray`, so coercion and rejection happen before the repository is called ([[apps/node-backend/src/routes/settings.js]]).
+- The repository stores the already-validated value as JSONB and does not apply a second lossy `Number()` normalization pass. A malformed value therefore cannot become JSON `null` during persistence ([[apps/node-backend/src/repositories/settingsRepository.js]]).
 
 ### PUT /api/settings
 
@@ -194,7 +194,7 @@ Typical fields persisted in `app_settings`:
 
 **`autoClearPlannedOnMatch` (June 2026):** When `true` (default), an ingested transaction that unambiguously matches exactly one active unexecuted planned payment is automatically linked and that planned payment is executed (same path as a manual `POST /:id/execute`). Ambiguous matches (0 or ≥2 candidates) surface as confirmable suggestions via `GET /api/planned-transactions/match-suggestions`. Set to `false` to disable all auto-link behavior including suggestions. See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Planned Transactions: Auto-Link on Ingest]].
 
-Code links: [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
+Code links: [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 
 ### `theme_settings` shape (appearance)
 
@@ -260,7 +260,7 @@ Scheduled mode (light 6 AM – 8 PM, dark 8 PM – 6 AM):
 }
 ```
 
-Code links: [[apps/frontend/src/styles/themes.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]], [[docs/features/appearance|Appearance Feature]]
+Code links: [[apps/frontend/src/styles/themes.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[docs/features/appearance|Appearance Feature]]
 
 ### Current Frontend Coverage Notes
 
@@ -269,13 +269,13 @@ Code links: [[apps/frontend/src/styles/themes.ts]], [[apps/frontend/src/contexts
 - `defaultPageSize` is enforced by recipient-insights paging/load-more behavior
 - `showDecimalPlaces` is applied by statistics and tax-related currency displays
 
-Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]]
+Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]]
 
 ### Frontend Formatting Helpers
 
 Shared date utilities include app-settings-aware date-time helpers used by settings propagation across date/time labels.
 
-Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
 
 ## Related
 

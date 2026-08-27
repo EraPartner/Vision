@@ -3,9 +3,9 @@ title: Architecture Deep Dive
 type: architecture-doc
 status: active
 date: 2026-04-02
-updated: 2026-04-25
+updated: 2026-08-27
 tags: [architecture, design-patterns, system-design, deep-dive, phase-5, dependency-slim-down]
-description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. Updated Phase 5 to reflect inlined CORS and compression middleware.
+description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. CORS and zero-dependency gzip compression are isolated middleware modules.
 aliases: [architecture deep dive, system design, design patterns, architectural patterns]
 ---
 
@@ -45,24 +45,25 @@ aliases: [architecture deep dive, system design, design patterns, architectural 
 
 ### 1. Repository Pattern (Backend)
 
-**Purpose:** Abstract data access behind a consistent interface.
+**Purpose:** Abstract data access behind responsibility-appropriate interfaces.
 
 ```
-Repository Interface:
-├── getAll({ limit, offset, filters })
-├── getCount({ filters })
-├── getById(id)
-├── create(data)
-├── update(id, fields)
-└── hardDelete(id)
+Entity CRUD repository object:       Specialized repository functions:
+├── getAll / getCount                ├── listBatches
+├── getById                          ├── getPreviewRows
+├── create / update                  └── rollbackBatch
+└── hardDelete / softDelete
 ```
 
 **Benefits:**
 - Decouples business logic from SQL
 - Enables easy mocking in tests
-- Consistent API across all entities
+- Predictable API within each repository responsibility
 
 **Implementation:** [[apps/node-backend/src/repositories/]]
+
+See [[docs/reference/code-patterns#accepted-repository-api-shapes|Accepted repository API shapes]]
+for the naming and export rules for both forms.
 
 ### 2. Strategy Pattern (Bank Adapters)
 
@@ -221,7 +222,7 @@ Backend Dependencies:
 ├── yahoo-finance2 (market data)
 ├── binance-api (crypto data)
 └── express-rate-limit (rate limiting)
-(compression and CORS inlined as custom middleware in Phase 5)
+(zero-dependency compression and CORS live in dedicated middleware modules)
 
 Shared:
 ├── Zod (validation — frontend)

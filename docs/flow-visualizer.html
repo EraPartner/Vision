@@ -1561,8 +1561,8 @@
         {
           "from": "be.repos",
           "to": "sv.snapshot",
-          "payload": "computeMetrics + computeHeatmap (LTTB downsample)",
-          "annotation": "Server-side LTTB cuts payload 30-40\u00d7 for filtered periods."
+          "payload": "computeMetrics + computeHeatmap + period filter",
+          "annotation": "Returns full-resolution daily snapshots; avoids LTTB preserving isolated price needles."
         },
         {
           "from": "sv.snapshot",
@@ -1773,13 +1773,13 @@
         {
           "from": "fe.pages",
           "to": "fe.apiclient",
-          "payload": "PUT /api/recipients/:id/merge",
+          "payload": "POST /api/recipients/:id/merge",
           "annotation": "lib/api/recipients.ts."
         },
         {
           "from": "fe.apiclient",
           "to": "be.routes",
-          "payload": "{ duplicate_ids: [...] }",
+          "payload": "{ alias_ids: [...] }",
           "annotation": "routes/recipients.js."
         },
         {
@@ -1791,8 +1791,8 @@
         {
           "from": "sv.merge",
           "to": "be.repos",
-          "payload": "recipientRepository.merge + transactionRepository.rewriteFk",
-          "annotation": "Single SQL transaction."
+          "payload": "repository FK repoints + flagAliasesOf + repointGrandchildAliases",
+          "annotation": "recipientMergeService composes repository writes in one SQL transaction."
         },
         {
           "from": "be.repos",

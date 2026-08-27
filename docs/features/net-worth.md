@@ -3,9 +3,9 @@ title: Net Worth Feature
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-06-21
+updated: 2026-08-26
 tags: [feature, net-worth, portfolio, chart, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history, per-account, period-selector, scrub, shared-chart-card, adr-093, adr-100]
-description: Daily net worth tracking with a responsive, period-scoped area chart at full daily resolution (no downsampling), all three series (total/liquid/investments) shown together with a legend, drag-to-compare scrubbing, and daily breakdown tables. The chart shares the app-wide ChartCard / ChartPeriodSelector chrome with the Performance page. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill. Per-account breakdown table (ADR-093/ADR-100) shows cash + holdings + total per in_net_worth account.
+description: Daily net worth tracking with a responsive, period-scoped area chart at full daily resolution (no downsampling), all three series (total/liquid/investments) shown together with a legend, drag-to-compare scrubbing, and a daily aggregate breakdown table. The chart shares the app-wide ChartCard / ChartPeriodSelector chrome with the Performance page. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill.
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
@@ -106,9 +106,8 @@ The historical price series that feeds snapshot computation is now kept dense at
 
 **Frontend downsampling removed (2026-06-19)**: The net-worth chart no longer applies LTTB (or any
 downsample) — it renders the full daily series. The dense daily backfill described here therefore
-flows straight through to the chart at full resolution, and every day is a scrub stop. (The LTTB
-helper at `apps/frontend/src/utils/downsample.ts` is retained in the codebase but no longer has a
-call site after this change — a candidate for later removal alongside its KB pattern docs.)
+flows straight through to the chart at full resolution, and every day is a scrub stop. The former
+LTTB helper and its shared-package copy were removed after their last caller disappeared.
 
 See [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] for the full decision record including the Kinesis `timeFrame` unit ambiguity caveat.
 
@@ -226,39 +225,22 @@ A `VirtualDataTable` showing daily snapshots in reverse chronological order:
 4. **Single SVG path per series**: full daily resolution renders as one `LinePath`/`AreaClosed` per series — no per-point DOM nodes
 5. **Memoized series/legend**: chart series and legend descriptors are memoized on `t`
 
-## Per-Account Net-Worth Breakdown (2026-06-18, ADR-093 / ADR-100)
+## Retired Per-Account Net-Worth Path (2026-08-10, ADR-108)
 
-> [!warning] Flag-gated — default OFF (ADR-103, 2026-06-20)
-> The per-account holdings breakdown grid and the `NetWorthByAccountChart` on this page are hidden
-> when `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the default). The by-account net-worth query
-> (`GET /api/info/net-worth/by-account`) is also disabled when the flag is off. The headline net
-> worth total and the per-account **cash** balances (bank-balances widget) are unaffected and always
-> shown. Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` in `apps/frontend/.env.local` to restore the
-> full per-account holdings breakdown. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].
+ADR-108 and WP-C1 removed the experimental per-account net-worth path. The build flag, per-account
+grid and chart, frontend hook, endpoint, and the snapshot `splitByAccount` / `value_by_account`
+payloads no longer exist. Net Worth remains an aggregate historical series backed by
+`portfolio_performance_snapshots`.
 
-`NetWorthPage` now includes a **"By Account"** table below the main chart. Each row shows one
-`in_net_worth=true` account's:
-
-| Column | Source |
-|--------|--------|
-| Cash | Computed ledger balance (ADR-094 reconciliation) |
-| Holdings | `byAccount[account_id].currentValue` from `getPortfolioSummary` |
-| Total | Cash + Holdings |
-
-Unassigned lots (`account_id: null`) are surfaced as a single "Unassigned" row.
-
-Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountNetWorth.ts` — fetches accounts, the
-per-account cash balances, and the `byAccount` array from the portfolio summary in parallel and
-merges them.
-
-The historical time-series chart is unchanged — it remains a single-aggregate series. Per-account
-historical series require per-account daily snapshots, which are not yet built. See
-[[docs/adr/100-net-worth-account-native-holdings|ADR-100]] for the deliberate scoping of this.
+Migration 0074's `portfolio_snapshot_accounts` table is intentionally dormant and remains covered
+by the backup manifest. It is not populated or read by the application. The still-open WP-C7 owns
+any future forward-only per-broker history; the dormant table is not evidence that such history is
+currently implemented.
 
 ## Related Features
 
 - [[docs/features/portfolio|Portfolio]] — Investment-specific performance tracking and per-account holdings
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency normalization for multi-currency portfolios
-- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] — Flag-gate for per-account holdings UI (default off)
-- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity decision (UI scope narrowed by ADR-103)
+- [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] — Retires the per-account net-worth path and keeps portfolio account tags
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Historical per-account design, superseded by ADR-108
 - [[docs/adr/093-net-worth-sum-of-accounts|ADR-093]] — Net worth = Σ accounts definition

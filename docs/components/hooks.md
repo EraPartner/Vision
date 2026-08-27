@@ -3,8 +3,8 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-11
-last_modified: 2026-08-11
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
 related_code: ["apps/frontend/src/hooks"]
@@ -59,7 +59,6 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useDebounce()` | Debounce value changes; exports `SEARCH_DEBOUNCE_MS = 300` — the shared constant all search inputs must use | [[apps/frontend/src/hooks/useDebounce.ts\|useDebounce.ts]] |
 | `useIsMobile()` | Responsive breakpoint check | `use-mobile.tsx` |
-| `useDataTableColumns()` | Memoized column definitions for DataTable (Phase 4) | [[apps/frontend/src/hooks/useDataTableColumns.ts\|useDataTableColumns.ts]] |
 
 ### Portfolio Hooks
 
@@ -694,7 +693,7 @@ Input sanitization and XSS prevention utilities. These are pure functions (not R
 
 Shared processing module for statistics aggregation. `useStatistics` delegates pivot aggregation and recipient yearly aggregation to this module.
 
-**Code**: [[apps/frontend/src/components/statistics/statisticsUtils.ts]]
+**Code**: [[apps/frontend/src/features/statistics/statisticsUtils.ts]]
 
 | Export | Description |
 |--------|-------------|
@@ -710,11 +709,12 @@ Currency formatting and parsing utilities.
 | Function | Description |
 |----------|-------------|
 | `formatCurrency(amount, currency?, locale?)` | Formats a number as currency string using `Intl.NumberFormat` |
-| `getCurrencyFormatDefaults(currency)` | Returns default formatting options (decimals, symbol) for a currency |
+| `getCurrencyFormatDefaults()` | Returns the configured default currency, locale, and fraction digits |
 | `numberFormatToLocale(appSettings)` | Derives the locale string from app settings for number formatting |
 | `parseLocaleNumber(input)` | Intelligently parses locale-aware numeric strings (comma or period decimal/thousands) back to a number (see [[docs/reference/code-patterns#Number Parsing Pattern|code-patterns]]) |
 | `getCurrencySymbol(currencyCode)` | Returns currency symbol for ISO currency code |
-| `formatAmountWithSymbol(amount, currencyCode?)` | Simple currency formatting with symbol |
+| `formatCurrencyCompact(amount, currency?, locale?, digits?)` | Returns compact/full text, compaction state, and display parts |
+| `formatCurrencyAxisCompact(amount, currency, locale)` | Returns a width-bounded chart-axis currency label |
 
 ---
 
@@ -728,10 +728,12 @@ Shared hook for currency formatting in chart components. Eliminates duplicated `
 
 ```typescript
 const {
-  formatCurrency,    // (val: number) => string
-  currencySymbol,    // string (e.g. "€")
-  locale,            // string (e.g. "en-US")
-  currency,          // string (e.g. "EUR")
+  formatCurrency,     // (val: number) => string
+  formatCompact,      // (val: number) => CompactFormatResult
+  formatAxisCompact,  // (val: number) => string
+  currencySymbol,     // string (e.g. "€")
+  locale,             // string (e.g. "en-US")
+  currency,           // string (e.g. "EUR")
 } = useChartCurrencyFormatter();
 ```
 
@@ -740,7 +742,9 @@ const {
 - Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
 - Derives locale from `AppSettingsContext.numberFormat`
 - Returns `formatCurrency()` function formatted with user's decimal place preference
+- Returns compact headline and bounded axis-label formatters bound to the same settings
 - Respects app-wide currency and locale settings
+- Degrades malformed formatter inputs to bare numeric text instead of throwing during render
 
 ### Usage
 
@@ -835,59 +839,6 @@ return (
 - Forms with multiple fields and dirty state tracking
 - Dialog/modal forms where reset is important
 - Any controlled form where you want to avoid repetitive `useState` boilerplate
-
----
-
-## useDataTableColumns (Phase 4)
-
-Memoized column definition factory for DataTable and VirtualDataTable components.
-
-### API
-
-```typescript
-const columns = useDataTableColumns<T>(
-  () => [
-    { key: 'date', header: 'Date', render: (row) => formatDate(row.date) },
-    { key: 'amount', header: 'Amount', sortable: true },
-  ],
-  [t, formatDate] // dependency array
-);
-```
-
-### Parameters
-
-- **factory**: `() => Column<T>[]` — Function returning column array
-- **deps**: `React.DependencyList` — Dependency array (forwarded to `useMemo`)
-
-### Returns
-
-Stable `Column<T>[]` reference that only changes when `deps` changes.
-
-### Features
-
-- **Prevents re-renders**: Inline column arrays cause table re-renders every parent render; this memoizes them
-- **Works with both DataTable and VirtualDataTable**
-- **Simple wrapper**: Just `useMemo(factory, deps)` for clarity
-
-### Usage
-
-```tsx
-const COLUMNS = useDataTableColumns<Transaction>(
-  () => [
-    { key: 'date', header: t('col.date'), render: (row) => row.date },
-    { key: 'amount', header: t('col.amount'), sortable: true },
-    { key: 'recipient', header: t('col.recipient') },
-  ],
-  [t]
-);
-
-return <DataTable columns={COLUMNS} data={transactions} />;
-```
-
-### When to Use
-
-- Any DataTable/VirtualDataTable with columns defined inline
-- Columns that depend on i18n (`t()`) or formatters
 
 ---
 
@@ -1006,7 +957,7 @@ const pnl = isForeign ? computeFxAwarePnl(holding) : undefined;
 {pnl && <FxAwarePnlRows pnl={pnl} currency={targetCurrency} />}
 ```
 
-Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
+Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 ---
 

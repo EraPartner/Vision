@@ -5,12 +5,12 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-08-22
-last_modified: 2026-08-09
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
-related_code: ["apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js"]
+related_code: ["apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/importBatchRoutes.js", "apps/node-backend/src/services/importBatchService.js", "apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js"]
 ---
 
 # Imports API
@@ -131,18 +131,6 @@ data: {"batch_id":42,"match_source_counts":{"exact":140,"fuzzy":10},"percent":70
 - Progress parsing ([[apps/frontend/src/lib/api.ts]]) handles SSE event blocks separated by blank lines with support for multi-line `data:` fields.
 - No async Promise executor anti-pattern; stream lifecycle is explicit.
 - Defensive parsing tolerates malformed/partial SSE payloads with sanitized error fallback.
-
-### GET /api/import/supported-banks
-
-Get list of supported bank adapters.
-
-**Response:**
-```json
-{
-  "banks": ["Belfius", "Revolut", "Kbc", "Sabb", "Wise", "Vision", "Custom"],
-  "total": 7
-}
-```
 
 ### POST /api/import/recipients
 
@@ -407,6 +395,41 @@ When the pipeline detects fuzzy / pattern / new recipient resolutions it leaves 
 > These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000, `"0o17"` → 15, `"0b11"` → 3 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId`, so these routes and the `:id` path params enforce one accept set. An integral id above `int32` is still a legal row and 404s if absent; `"1e300"`, previously let through to that same 404, is now a 400. Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 >
 > As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `ImportBatch.id` in batch list/detail responses remains a string because node-postgres returns raw `BIGINT` values as strings at that repository boundary.
+
+### GET /api/import/batches
+
+Returns import history as `{ items, total, limit, offset }`. Pagination defaults
+to `limit=50&offset=0`; the maximum limit is 200.
+
+Batch list rows and batch details share this wire shape. `custom_config` is
+detail-only and therefore optional:
+
+| Field | Wire type | Notes |
+|-------|-----------|-------|
+| `id` | string | PostgreSQL `BIGINT`; use as an opaque decimal identifier |
+| `adapter_name` | string | Adapter used for the import |
+| `source_filename` | string or null | Uploaded filename |
+| `source_size_bytes` | string or null | PostgreSQL `BIGINT`; byte count is serialized as a decimal string |
+| `custom_config` | object or null, optional | Present only on the detail response |
+| `status` | string | `pending`, `staging`, `validating`, `matching`, `awaiting_review`, `committing`, `complete`, `failed`, or `aborted` |
+| `rows_total`, `rows_imported`, `rows_duplicate`, `rows_error` | integer | Non-null row counters |
+| `error_summary` | string or null | Terminal pipeline error summary |
+| `started_at`, `completed_at` | date-time | `completed_at` is null while active |
+| `transactions_remaining` | integer | Active transactions still attributed to the batch |
+
+### GET /api/import/batches/:id
+
+Returns the repository batch record unchanged, or `404 NOT_FOUND` when absent.
+
+### DELETE /api/import/batches/:id
+
+Rolls back a batch and returns `{ deleted, recipientsRemoved }`.
+The route rejects `staging`, `validating`, `matching`, `committing`, and
+`aborted` batches with `400`; `pending`, `awaiting_review`, `failed`, and
+`complete` batches are accepted and may return zero deletions when nothing was
+committed. A successful rollback refreshes aggregations when either side-effect
+count is positive; refresh failure is logged and does not change the rollback
+response.
 
 ### GET /api/import/batches/:id/preview
 

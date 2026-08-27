@@ -3,7 +3,7 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-06-01
+updated: 2026-08-26
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -142,10 +142,10 @@ translated at the form seam, so validation copy flows through each form's
 existing presentation path (inline ARIA field errors via `useFieldErrors`, or
 the form's single error toast). Per-form schemas live next to their forms:
 
-- `apps/frontend/src/components/forms/addTransactionForm.ts` (`addTransactionSchema`)
-- `apps/frontend/src/components/portfolio/portfolioTxnSchema.ts` (add/edit portfolio txns)
+- `apps/frontend/src/features/transactions/addTransactionForm.ts` (`addTransactionSchema`)
+- `apps/frontend/src/features/portfolio/portfolioTxnSchema.ts` (add/edit portfolio txns)
 - `apps/frontend/src/features/accounts/accountFormSchema.ts`
-- `apps/frontend/src/components/tax/taxProfileSchema.ts`
+- `apps/frontend/src/features/tax/taxProfileSchema.ts`
 
 Non-financial forms may still use plain controlled-state checks; new forms
 should compose the shared builders. Example (real schema):
@@ -164,15 +164,17 @@ export const addTransactionSchema = z.object({
 });
 ```
 
-### Backend (Middleware)
+### Backend validation
 
-Request validation middleware validates:
+The pure validation library defines:
 - ID parameters (positive integers)
 - Date formats (ISO 8601)
 - Amount ranges
 - Required fields
 
-**Location:** [[apps/node-backend/src/middleware/validation.js]]
+**Locations:** [[apps/node-backend/src/lib/validation.js|lib/validation.js]] owns the value rules;
+[[apps/node-backend/src/middleware/validation.js|middleware/validation.js]] contains the Express
+path-parameter adapters and route-compatible re-exports.
 
 ---
 

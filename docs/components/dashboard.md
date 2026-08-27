@@ -3,11 +3,11 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
-related_code: ["apps/frontend/src/components/dashboard", "apps/frontend/src/features/dashboard"]
+related_code: ["apps/frontend/src/features/dashboard/"]
 ---
 
 # Dashboard Components
@@ -18,6 +18,10 @@ Components for the main Dashboard page (`/`), providing financial overview and v
 > **V9 — NetSummaryCard sparkline scrub**: The sparkline strip in `NetSummaryCard` is now a pointer scrub surface (hover + `pointerdown` capture for touch, `touch-action: pan-y`). Scrubbing drives the hero `RollingNumber` value, its accent/destructive color, and the trend caption (shows the scrubbed month label) through the 12-month `netHistory` array. The card-level gradient and header icon stay on the live value. Leaving or releasing the pointer resets to the live value. `Sparkline` gained an optional `activeIndex` prop that renders a hairline + dot at the specified data point.
 >
 > **Per-widget dashboard hydration**: The all-queries loading gate in `DashboardPage` is removed. Each section renders its own skeleton keyed to its own query loading state. Chart skeletons use `ChartSkeleton` (ghost waveform). **StatCard** now uses `RollingNumber` for the hero value and `DeltaPill` for the change indicator. **Synced dashboard charts**: Time-series charts share `syncId="dashboard-timeline"` under a `ChartSyncProvider`; scrub is enabled on those same charts. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
+
+### Query failure and recovery
+
+Dashboard statistics, transactions, both monthly-summary variants, and the filtered recent-transactions query all contribute to the page error state. If at least one query has usable data, the dashboard keeps that data visible and shows the partial-data warning. If no query has usable data, the page renders the shared `PageError` recovery surface with a Retry action. Retry refetches the active dashboard queries; exclusion-specific queries are retried only when exclusions apply.
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
 > Dashboard stat cards and hero summary cards were migrated to `glass-elevated` (StatCard, NetSummaryCard) with tint overlays as child elements. KPI/chart card wrappers use `glass-regular`. Tables stay opaque. References to `surface-elevated premium-frame` in this document reflect the pre-June 2026 state; the current canonical recipe is documented in [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]].
@@ -37,15 +41,13 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 |-----------|-------------|------|
 | StatCard | Shared summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/shared/StatCard.tsx\|StatCard.tsx]] |
 | NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) and a localized accessible income/spending proportion summary | [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
-| MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
-| CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
-| CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
-| CashFlowForecastChart | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
-| ForecastInner | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel | [[apps/frontend/src/components/dashboard/ForecastInner.tsx\|ForecastInner.tsx]] |
-| ForecastInnerRolling | Rolling-window forecast rendering with preset duration chips and "today" reference line | [[apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]] |
-| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
+| MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
+| CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
+| CashFlowForecastChart | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
+| ForecastInner | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel | [[apps/frontend/src/features/dashboard/ForecastInner.tsx\|ForecastInner.tsx]] |
+| ForecastInnerRolling | Rolling-window forecast rendering with preset duration chips and "today" reference line | [[apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]] |
+| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
 | BankBalancesWidget | Bank account balance cards and history chart with entity display names | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
-| MonthlySpendingChart | Monthly spending line chart (visx) | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
 
 ---
 
@@ -109,7 +111,7 @@ function MyCard() {
   - `surface-elevated premium-frame micro-lift`
 - This replaces ad-hoc elevated class chains (`border-none shadow-lg ... hover:-translate-y-*`) for consistent depth/motion behavior.
 
-Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/index.css]]
+Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/index.css]]
 
 ---
 
@@ -216,7 +218,10 @@ interface CategoryPieChartProps {
 
 ---
 
-## CashFlowComparisonChart
+## Historical: CashFlowComparisonChart
+
+> [!info] Removed component
+> This comparison chart was removed and superseded by [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx|CashFlowForecastChart]]. The notes below describe the retired component.
 
 Compares current period cashflow with previous period.
 
@@ -259,11 +264,11 @@ interface CashFlowComparisonChartProps {
 - Semantic date-label UX pass adds shared month helpers in [[apps/frontend/src/components/shared/dateUtils.ts]]:
   - `formatMonthYearWithAppSettings(date, appDateFormat, locale?)`
   - `formatMonthLabelWithLocale(date, locale?, width?)`
-- [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] now uses the month-year helper for chart labels (avoids overly detailed full dates while respecting settings)
-- [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] x-axis readability for dense month labels is reinforced with `interval="preserveStartEnd"` and `minTickGap={20}`
-- [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]] and [[apps/frontend/src/pages/DashboardPage.tsx]] now use the month-year helper for cashflow month descriptions
+- [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] now uses the month-year helper for chart labels (avoids overly detailed full dates while respecting settings)
+- [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] x-axis readability for dense month labels is reinforced with `interval="preserveStartEnd"` and `minTickGap={20}`
+- The retired `CashFlowComparisonChart.tsx` and [[apps/frontend/src/pages/DashboardPage.tsx]] used the month-year helper for cashflow month descriptions.
 
-Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Current code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
 
 ---
 
@@ -483,9 +488,9 @@ interface ForecastInnerRollingProps {
 - **Loading state** — Renders skeleton/spinner during API fetch
 
 > [!info] X-axis month-label locale
-> Month abbreviations on the rolling forecast x-axis follow the app **language** setting, not the number-format setting. The component derives `monthLabelLocale` as `language === "nl" ? "nl-NL" : "en-US"` and passes it to `formatDate(d, "MMM d", monthLabelLocale)`. This matches the canonical pattern used by `NetWorthPage` and `PerformancePage`. The y-axis currency formatter continues to use `numberFormatToLocale(appSettings.numberFormat)` — only the x-axis month label was changed.
+> Month abbreviations on the rolling forecast x-axis follow the app **language** setting, not the number-format setting. The component derives `monthLabelLocale` through `appLanguageToLocale(language)` and uses the shared `CHART_DATE_PATTERNS.dayTick` role (`d MMM`). This matches the short-period axes on `NetWorthPage` and `PerformancePage`; Performance and Bank Balances use the full-year `detail` role for detailed tooltips. The y-axis currency formatter continues to use `numberFormatToLocale(appSettings.numberFormat)`.
 >
-> **Root cause (fixed):** Previously, `ForecastInnerRolling` passed the number-format locale to `formatDate` for `xTickFormat`. Because the default number format is `'eu'` (which maps to `'de-DE'`), the x-axis always showed German month abbreviations (e.g. "Mär", "Mai") regardless of the selected app language. Other charts were unaffected: they either omit the locale argument (defaulting to en-US) or use `formatMonthYearWithAppSettings` whose localized-month branch is unreachable for the 5 numeric `dateFormat` options.
+> **Root cause (fixed):** Previously, `ForecastInnerRolling` passed the number-format locale to `formatDate` for `xTickFormat`. Because the default number format is `'eu'` (which maps to `'de-DE'`), the x-axis showed German month abbreviations regardless of the selected app language. Chart month-name call sites now use the app-language locale explicitly.
 
 ### Data Shape
 
@@ -592,7 +597,10 @@ Code links: [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[a
 
 ---
 
-## MonthlySpendingChart
+## Historical: MonthlySpendingChart
+
+> [!info] Removed component
+> This chart was removed; [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx|MonthlyTrendsChart]] is the current income-versus-spending chart. The notes below describe the retired component.
 
 Renders a Recharts BarChart comparing monthly spending vs income.
 
@@ -628,7 +636,7 @@ interface MonthlySpendingChartProps {
 - Legend for series identification
 - No-data state when data array is empty
 
-**Code**: [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx]]
+**Current code**: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]]
 
 ---
 

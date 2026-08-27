@@ -3,10 +3,10 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-08-25
-updated: 2026-08-25
-last-updated: 2026-08-25
-last_updated_timestamp: 2026-08-25T00:00:00Z
+last_modified: 2026-08-26
+updated: 2026-08-26
+last-updated: 2026-08-26
+last_updated_timestamp: 2026-08-26T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -54,14 +54,14 @@ aliases:
   - test inventory
 related_code:
   - apps/frontend/src/hooks/useStatistics.test.ts
-  - apps/frontend/src/components/forms/addTransactionForm.test.ts
+  - apps/frontend/src/features/transactions/addTransactionForm.test.ts
   - apps/frontend/src/components/shared/dateUtils.test.ts
-  - apps/frontend/src/components/tax/__tests__/SuggestedDeductionsCard.test.tsx
+  - apps/frontend/src/features/tax/__tests__/SuggestedDeductionsCard.test.tsx
   - apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx
   - apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx
-  - apps/frontend/src/components/statistics/__tests__/CustomChartBuilderModal.test.tsx
-  - apps/frontend/src/components/planned/__tests__/LinkTransactionDialog.test.tsx
-  - apps/frontend/src/components/tax/__tests__/TaxProfileDialog.test.tsx
+  - apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx
+  - apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx
+  - apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx
 ---
 
 # Test Inventory
@@ -101,9 +101,9 @@ Expanded to cover additional boot-time endpoints so more pages render without pe
 | `/api/import/batches` | { items: [], total: 0, limit, offset } | **Phase A** |
 | `/api/admin/endpoint-liveness` | { items: [], total: 0 } | Phase 0 |
 
-### Hook Unit Tests (2026-05-01, updated 2026-05-03)
+### Hook Unit Tests (2026-05-01, updated 2026-08-26)
 
-Five new hook unit test files added to `apps/frontend/src/hooks/__tests__/` and `apps/frontend/src/hooks/portfolio/__tests__/`:
+Six hook unit test files cover shared and feature-local hooks:
 
 | File | Tests | Coverage |
 |------|-------|----------|
@@ -112,8 +112,9 @@ Five new hook unit test files added to `apps/frontend/src/hooks/__tests__/` and 
 | `usePlannedPayments.test.ts` | 8 | Plain fetch hook with apiClient spies; loading, error, add/delete/update/refetch paths |
 | `useQueryHooks.test.tsx` | 13 | TanStack Query hooks: `useBankAccounts`, `useSavedCharts` (queries + mutations), `useOllamaStatus`, `useOllamaModels`, `useCurrencyConverter`; uses QueryClientProvider + LanguageProvider wrappers |
 | `portfolio/__tests__/useInvestments.test.ts` | 25 | **NEW 2026-05-03**: `useInvestmentsQuery` (3 tests), `usePortfolioTransactionsQuery` (5 tests), `useInvestmentMutations` (17 tests: addInvestment, updateInvestment, deleteInvestment, addTransaction, deleteTransaction, updateTransaction, refreshPrices with live/stale/cached toast notifications, isRefreshingPrices pending state) |
+| `features/splits/owes/__tests__/useRecentRecipientTransactions.test.tsx` | 4 | Recipient-group request contract, response-body totals, duplicate suppression, raw-page offsets, concurrency guard, and missing-total fallback |
 
-**Total hook tests (phase E8+):** 5 files, **64 tests**, all passing
+**Total hook tests (phase E8+):** 6 files, **68 tests**, all passing
 
 **Key patterns used:**
 - `// @vitest-environment jsdom` for DOM-dependent hooks
@@ -130,9 +131,9 @@ Five new hook unit test files added to `apps/frontend/src/hooks/__tests__/` and 
 | File | Type | What It Tests |
 |------|------|---------------|
 | `apps/frontend/src/hooks/useStatistics.test.ts` | Hook test | `useStatistics` hook behavior, exclusion toggles, data processing |
-| `apps/frontend/src/components/forms/addTransactionForm.test.ts` | Unit test | Transaction form validation logic (Zod schema) |
+| `apps/frontend/src/features/transactions/addTransactionForm.test.ts` | Unit test | Transaction form validation logic (Zod schema) |
 | `apps/frontend/src/components/shared/dateUtils.test.ts` | Unit test | Date formatting utilities with various app settings |
-| `apps/frontend/src/components/tax/__tests__/SuggestedDeductionsCard.test.tsx` | Component test | SuggestedDeductionsCard rendering and interactions |
+| `apps/frontend/src/features/tax/__tests__/SuggestedDeductionsCard.test.tsx` | Component test | SuggestedDeductionsCard rendering and interactions |
 | `apps/frontend/src/utils/currency.test.ts` | Unit test | Currency formatting utilities (`formatCurrency`, `formatCurrencyCompact`, `parseLocaleNumber`). NEW (2026-05-08): Added unit test for single-comma + 3-digit tail as US thousands separator (e.g., "1,000" → 1000) |
 
 ### Context Unit Tests (2026-05-03)
@@ -179,9 +180,11 @@ Three new dialog component integration test files added to `apps/frontend/src/fe
 
 **Test execution:** <5 seconds (integrated into main suite)
 
-### Component-Integration Tests (Phase A — Complete, 2026-05-02)
+### Component-Integration Tests (historical Phase A snapshot — 2026-05-02)
 
-All 20 frontend page integration test files complete with 354 total tests. Key highlights:
+This table preserves the original Phase A inventory with later row-level updates. It is not a
+complete current manifest. Use the filesystem and Vitest collection for current file and test
+totals.
 
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
@@ -192,21 +195,21 @@ All 20 frontend page integration test files complete with 354 total tests. Key h
 | `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx` | Component-integration | 11 | Dialog open/close, form submission, recipient/category selection, duplicate detection (409), **validation error handling (422)** (2026-05-03) |
 | `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx` | Component-integration | 16 | Page render, New Payment dialog, form submission, loan scheduling, error states |
 | `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx` | Component-integration | 14 | Page heading, empty state, summary rendering |
-| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx` | Component-integration | 17 | Owes/splits tracking, Record Payment dialog, Settle all workflow, export CSV success/error toasts |
+| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx` | Component-integration | 21 | Owes/splits tracking, Record Payment dialog, Settle all workflow, export CSV success/error toasts |
 | `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx` | Component-integration | 25 | Admin dashboard, provider health, endpoint liveness, database, update checks |
 | `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Component-integration | 18 | Category list, add/edit/delete dialogs, validation |
 | `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Component-integration | 18 | Recipient list, add/edit/delete dialogs, validation, insights button |
-| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Component-integration | 13 | Analytics page, chart rendering, period/category filters |
+| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Component-integration | 18 | Statistics tabs, including recipient analytics |
 | `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Component-integration | 69 | Investments, Performance, Net Worth pages with data loading and chart states |
 | `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Component-integration | 18 | Landing page, quick stats, recent activity, error states (full error + partial warning) |
 | `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | Component-integration | 15 | AI chat interface, message submission, error handling |
 | `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Component-integration | 12 | Market data lookup, quote search, news display |
 | `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx` | Component-integration | 14 | Import staging, transaction preview, conflict resolution |
 | `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx` | Component-integration | 12 | Database operations, view refresh, cache clearing |
-| `apps/frontend/src/pages/__tests__/RecipientInsightsPage.integration.test.tsx` | Component-integration | 14 | Recipient analytics, spending patterns, history |
 | `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx` | Component-integration | 5 | 404 page, navigation fallback |
 
-**Total Phase A tests:** 20 test files, 381 tests (all green — COMPLETE, 2026-05-02; updated 2026-05-03 with dialog 422 validation error tests: +2 dialog tests, +1 transaction dialog test)
+**Historical result:** the Phase A set was green when completed. Counts in this snapshot are not a
+current whole-tree total.
 
 ### DashboardPage Error-State Tests (2026-05-02)
 
@@ -240,11 +243,11 @@ Added two error-state integration tests to DashboardPage to verify error handlin
 - `Export CSV shows success toast when download succeeds` — `GET /api/splits/owed/:id/export/csv` success path in recipient detail view ✓
 - `Export CSV shows error toast when download fails` — `GET /api/splits/owed/:id/export/csv` error path in recipient detail view ✓
 
-**All 20 page integration test files now gap-free.**
+**Historical Phase A result:** the then-current 20-file inventory was declared gap-free.
 
 **Related documentation:** [[docs/testing/frontend-component-integration#frontend-export-tests-2026-05-02|Frontend Export Tests section]], [[docs/testing/testing#frontend-error-state-test-timeout-gotcha-apirequest-retry-loop|apiRequest Retry Gotcha]], [[docs/testing/frontend-component-integration#error-state-tests-account-for-apirequest-retry-backoff|Error-State Test Timeout Pattern]]
 
-**Test suite metrics (2026-05-02):**
+**Historical test suite metrics (2026-05-02 snapshot):**
 - Frontend component-integration tests: 20 test files, 376 tests, all passing (updated with AdminPages + PortfolioPages expansions)
 - Backend tests: 54+ files, 871+ tests, all passing
 - Total: 376 frontend + 871+ backend = 1247+ tests across 74+ files
@@ -283,9 +286,9 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
    - Solution: `await findByRole(...)` alone is sufficient (find confirms stable DOM state)
 
 3. **Multiple Elements Pattern Fix (1 test)**
-   - `RecipientsPage.integration.test.tsx`: Switched from `findByRole` to `findAllByRole` for page heading
-   - Both PageHeader and VirtualDataTable render the same heading simultaneously
-   - Pattern: Use `findAllByRole` + index first when same element appears in multiple locations
+   - Historical 2026-05-01 fix: `RecipientsPage.integration.test.tsx` temporarily used `findAllByRole` while both PageHeader and VirtualDataTable rendered the heading.
+   - Current behavior: the page-level PageHeader is the sole semantic heading; VirtualDataTable omits its optional title.
+   - Current pattern: keep landmark headings unique and scope queries only for legitimately repeated controls.
 
 4. **Role-Based Assertion Fix (1 test)**
    - `AIChatPage.integration.test.tsx`: Replaced `findByText(/local ai model unreachable/i)` with `findByRole("alert")`
@@ -496,9 +499,9 @@ Three new deep component-integration test files covering multi-step dialogs and 
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Dialog open; Save disabled when name empty; Save disabled with name but no selection; Save enabled when name + category selected; create mode POST + `onOpenChange(false)`; edit mode pre-populated; edit mode PATCH + close; cancel/close calls `onOpenChange(false)`; recipients loaded from API and shown |
-| `apps/frontend/src/components/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Dialog open; renders unlinked transactions list; shows empty state; link button calls PATCH and closes; unlink button calls PATCH and closes; search filters transactions; confirm-unlink dialog shown; cancel from confirm-unlink stays open; error toast on API failure |
-| `apps/frontend/src/components/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; step indicator buttons jump to step; `initialStep` prop opens directly to specified step |
+| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Dialog open; Save disabled when name empty; Save disabled with name but no selection; Save enabled when name + category selected; create mode POST + `onOpenChange(false)`; edit mode pre-populated; edit mode PATCH + close; cancel/close calls `onOpenChange(false)`; recipients loaded from API and shown |
+| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Dialog open; renders unlinked transactions list; shows empty state; link button calls PATCH and closes; unlink button calls PATCH and closes; search filters transactions; confirm-unlink dialog shown; cancel from confirm-unlink stays open; error toast on API failure |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; step indicator buttons jump to step; `initialStep` prop opens directly to specified step |
 
 **Total E13 tests:** 3 files, **28 tests**, all passing
 
@@ -526,13 +529,13 @@ Eleven new dialog and modal component integration test files added across portfo
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/portfolio/__tests__/AddPortfolioTxnDialog.test.tsx` | 10 | Trigger-based dialog; adds portfolio transaction (buy/sell/etc.); calls `POST /api/investments/:id/transactions`; validates form fields; handles submission and closes |
-| `apps/frontend/src/components/portfolio/__tests__/EditPortfolioTxnDialog.test.tsx` | 10 | Controlled dialog via props; edits portfolio transaction; calls `PATCH /api/investments/transactions/:id`; type field is disabled in edit mode; cancel calls `onOpenChange(false)` |
-| `apps/frontend/src/components/portfolio/__tests__/AddToWatchlistDialog.test.tsx` | 8 | Controlled dialog; adds symbol to watchlist; calls `GET /api/market/search` + `POST /api/watchlist`; search/selection flow; form validation |
-| `apps/frontend/src/components/portfolio/__tests__/WatchlistChartDialog.test.tsx` | 7 | Trigger-based dialog; uses raw `fetch()` (not apiClient); MSW handlers use `HttpResponse.json()` directly without `ok()` envelope for `GET /api/market/chart`; chart data rendering |
-| `apps/frontend/src/components/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 7 | Trigger-based dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence |
-| `apps/frontend/src/components/portfolio/__tests__/InvestmentDetailDialog.test.tsx` | 9 | Trigger-based dialog; default trigger label is "Details"; icon-only Pencil/Trash action buttons found by index; delete confirmation; edit/view modes |
-| `apps/frontend/src/components/portfolio/__tests__/AddInvestmentFromMarketDialog.test.tsx` | 9 | Trigger-based dialog; multi-step (choose → new/transaction); `existingInvestment` prop enables transaction step; scoped `within(dialog)` to avoid trigger button ambiguity; market search integration |
+| `apps/frontend/src/features/portfolio/__tests__/AddPortfolioTxnDialog.test.tsx` | 10 | Trigger-based dialog; adds portfolio transaction (buy/sell/etc.); calls `POST /api/investments/:id/transactions`; validates form fields; handles submission and closes |
+| `apps/frontend/src/features/portfolio/__tests__/EditPortfolioTxnDialog.test.tsx` | 10 | Controlled dialog via props; edits portfolio transaction; calls `PATCH /api/investments/transactions/:id`; type field is disabled in edit mode; cancel calls `onOpenChange(false)` |
+| `apps/frontend/src/features/portfolio/__tests__/AddToWatchlistDialog.test.tsx` | 8 | Controlled dialog; adds symbol to watchlist; calls `GET /api/market/search` + `POST /api/watchlist`; search/selection flow; form validation |
+| `apps/frontend/src/features/portfolio/__tests__/WatchlistChartDialog.test.tsx` | 7 | Trigger-based dialog; uses raw `fetch()` (not apiClient); MSW handlers use `HttpResponse.json()` directly without `ok()` envelope for `GET /api/market/chart`; chart data rendering |
+| `apps/frontend/src/features/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 7 | Trigger-based dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence |
+| `apps/frontend/src/features/portfolio/__tests__/InvestmentDetailDialog.test.tsx` | 9 | Trigger-based dialog; default trigger label is "Details"; icon-only Pencil/Trash action buttons found by index; delete confirmation; edit/view modes |
+| `apps/frontend/src/features/portfolio/__tests__/AddInvestmentFromMarketDialog.test.tsx` | 9 | Trigger-based dialog; multi-step (choose → new/transaction); `existingInvestment` prop enables transaction step; scoped `within(dialog)` to avoid trigger button ambiguity; market search integration |
 
 **Recipients Dialog Tests (1 file, 10 tests):**
 
@@ -544,19 +547,19 @@ Eleven new dialog and modal component integration test files added across portfo
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Modal (not Dialog) with create/edit modes; `GET /api/saved-charts` + `POST /api/saved-charts`; form validation (name required, selection required); category/recipient selection via combobox; index-based selection pattern for comboboxes |
+| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Modal (not Dialog) with create/edit modes; `GET /api/saved-charts` + `POST /api/saved-charts`; form validation (name required, selection required); category/recipient selection via combobox; index-based selection pattern for comboboxes |
 
 **Planned Dialog Tests (1 file, 9 tests):**
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Controlled dialog; links a planned transaction to an existing bank transaction; calls `onExecute(paymentId, txnId, date)` on confirm; candidates fetched from `GET /api/transactions`; search/filtering; unlink confirmation |
+| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Controlled dialog; links a planned transaction to an existing bank transaction; calls `onExecute(paymentId, txnId, date)` on confirm; candidates fetched from `GET /api/transactions`; search/filtering; unlink confirmation |
 
 **Tax Dialog Tests (1 file, 10 tests):**
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Trigger-based Radix **Sheet** (not Dialog); 4-step form (employment → income → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Trigger-based Radix **Sheet** (not Dialog); 4-step form (employment → income → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
 
 **Total E14 tests:** 11 files, **88 tests**, all passing
 
@@ -587,7 +590,7 @@ Six new frontend dialog and wizard component integration test files added. Tests
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/onboarding/__tests__/OnboardingWizard.test.tsx` | 11 | Multi-step wizard (welcome → bank → categories → tour → backup); full flow completion; `onComplete()` callback; bank step calls `GET /api/info/supported-adapters` — returns `{ adapters, total_count }` envelope shape (not caught by default handlers, requires `server.use()` override); navigation prev/next between steps; form validation per step |
+| `apps/frontend/src/features/onboarding/__tests__/OnboardingWizard.test.tsx` | 11 | Multi-step wizard (welcome → bank → categories → tour → backup); full flow completion; `onComplete()` callback; bank step calls `GET /api/info/supported-adapters` — returns `{ adapters, total_count }` envelope shape (not caught by default handlers, requires `server.use()` override); navigation prev/next between steps; form validation per step |
 
 **Notifications and Update Tests (1 file, 8 tests):**
 
@@ -605,19 +608,19 @@ Six new frontend dialog and wizard component integration test files added. Tests
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/onboarding/__tests__/RestoreFromBackupCard.test.tsx` | 8 | **Electron-only component** — returns `null` on web; uses `window.electronBackup` IPC (not HTTP); tests install/uninstall Electron stubs in `beforeEach`, restore in `afterEach`; partial `setTimeout` stub to prevent 3s `window.location.reload()` from breaking test isolation (stubs reload timer, keeps sub-second timers real for Radix); encrypted backup path triggers passphrase dialog |
+| `apps/frontend/src/features/onboarding/__tests__/RestoreFromBackupCard.test.tsx` | 8 | **Electron-only component** — returns `null` on web; uses `window.electronBackup` IPC (not HTTP); tests install/uninstall Electron stubs in `beforeEach`, restore in `afterEach`; partial `setTimeout` stub to prevent 3s `window.location.reload()` from breaking test isolation (stubs reload timer, keeps sub-second timers real for Radix); encrypted backup path triggers passphrase dialog |
 
 **Settings Backup Tab Tests (1 file, 9 tests):**
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/settings/tabs/__tests__/BackupTab.test.tsx` | 9 | Settings tab with **Electron-only branch** — `apiClient.isElectron()` check; routes through `window.electronBackup` IPC (runBackup, selectDir, setPassphrase); controlled component with `value` + `onChange` props — wrapped in small **stateful harness component** holding state instead of feeding props directly to test (enables onChange to update parent state); success/error toast assertions |
+| `apps/frontend/src/features/settings/sections/__tests__/BackupSection.test.tsx` | 9 | Settings tab with **Electron-only branch** — `apiClient.isElectron()` check; routes through `window.electronBackup` IPC (runBackup, selectDir, setPassphrase); controlled component with `value` + `onChange` props — wrapped in small **stateful harness component** holding state instead of feeding props directly to test (enables onChange to update parent state); success/error toast assertions |
 
 **Import History Tests (1 file, 8 tests):**
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `apps/frontend/src/components/import/__tests__/ImportHistoryCard.test.tsx` | 8 | Bank import history list; `GET /api/import/batches` covered in MSW defaultHandlers; rollback via AlertDialog calls `DELETE /api/import/batches/:id`; pagination triggers when `total > PAGE_SIZE` (10); import status rendering |
+| `apps/frontend/src/features/imports/__tests__/ImportHistoryCard.test.tsx` | 8 | Bank import history list; `GET /api/import/batches` covered in MSW defaultHandlers; rollback via AlertDialog calls `DELETE /api/import/batches/:id`; pagination triggers when `total > PAGE_SIZE` (10); import status rendering |
 
 **Total E15 tests:** 6 files, **54 tests**, all passing
 
@@ -672,7 +675,7 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 | Phase F1 (Backend drift detection) | 4 | +57 vitest, +24 live, +9 Playwright | All passing (NEW 2026-05-02): MSW contract + live-API contract + Playwright dialog/page e2e |
 | Phase F2 (Stale refetch / mutation invalidation) | 4 | +6 | All passing (NEW 2026-05-02): RecipientsPage create, OwesPage settle-all, Watchlist delete, CryptoPage create, StocksPage create, StatisticsPage year-param contract |
 | Phase F3 (Dialog field validation + submit error) | 5 | +6 | All passing (NEW 2026-05-02): TransactionInfoDialog cancel-no-submit, AddInvestmentFromMarketDialog blank-name guard, LinkTransactionDialog disabled-no-selection + execute-failure-keeps-open, ExecutionHistoryDialog 5xx tolerance, CustomChartBuilderModal POST 5xx stays open |
-| Phase F4 (Playwright parity expansion) | 3 | +13 mutations + 9 a11y + 10 network-drift Playwright | NEW 2026-05-02: e2e/mutations-parity.spec.ts (CRUD lifecycles in real browser), e2e/a11y.spec.ts (axe WCAG 2.1 A/AA scans on 9 pages), e2e/network-drift.spec.ts (boot-time fetch listener catching 5xx/4xx drift) |
+| Phase F4 (Playwright parity expansion) | 3 | +13 mutations + 11 a11y + 11 network-drift Playwright | NEW 2026-05-02: e2e/mutations-parity.spec.ts (CRUD lifecycles in real browser), e2e/a11y.spec.ts (axe WCAG 2.1 A/AA scans on 11 pages, including Tax), e2e/network-drift.spec.ts (boot-time fetch listener catching 5xx/4xx drift on the same catalog) |
 | Phase F5 (Property + chaos) | 3 | +14 vitest | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts) |
 | Phase F6 (Mutation testing — Stryker) | config + harness | runs on `bun run test:mutation` | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating) |
 | Phase F7 (Coverage matrix gap-fill) | 3 | +5 | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches) |
@@ -694,8 +697,8 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 - **Playwright e2e** for browser-only edges:
   - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape (real browser), focus-trap Tab/Shift-Tab, autofocus on open
   - `e2e/critical-flows.spec.ts` — page-load smoke for every major page (catches `pageerror`s); mutation roundtrip (create category / create recipient → list refetches new item)
-  - Wired into `test:e2e` script alongside existing `smoke.spec.ts`
-- **CI already wired:** `test-frontend` (vitest contract + integration) on every PR, `test-live-api-contracts` against Docker Compose stack on non-draft PRs, `test-e2e` runs all e2e specs against full stack on non-draft PRs, `test-e2e-visual` captures screenshots on push to main.
+  - Discovered automatically by the non-visual `chromium` project used by `test:e2e`
+- **CI already wired:** `test-frontend` (vitest contract + integration) runs on every PR, `test-live-api-contracts` runs against Docker Compose on non-draft PRs, and the separate scheduled E2E workflow runs every non-visual spec nightly or on manual dispatch. Visual snapshots stay in the manual `visual-chromium` project because Linux CI and local macOS rendering require different baselines.
 
 **How drift is caught now:**
 
@@ -707,7 +710,7 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 | New required query param | Live-API contract fails on `4xx` |
 | Page crashes from undefined data | `critical-flows.spec.ts` `pageerror` listener |
 | Dialog behavior regression (focus/escape/backdrop) | `dialogs-edge.spec.ts` |
-| Visual layout drift | `test-e2e-visual` screenshot comparison |
+| Visual layout drift | Manual `visual-chromium` screenshot comparison |
 
 **Coverage delta this phase:** baseline 1147 → **1204** vitest tests (+57 contract-level, no jsdom regressions). +24 live-API tests (skipped locally, run on CI). +9 Playwright tests across 2 new files.
 
@@ -760,10 +763,10 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 | File | Coverage |
 |------|----------|
 | `e2e/mutations-parity.spec.ts` | Full CRUD lifecycle in a real browser (Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant). 4 tests. |
-| `e2e/a11y.spec.ts` | Axe WCAG 2.1 A/AA scan on 9 key pages (Dashboard, Transactions, Categories, Recipients, Statistics, Owes, PortfolioOverview, Watchlist, Planned). Asserts zero `impact: critical` violations. Uses `@axe-core/playwright`. 9 tests. |
-| `e2e/network-drift.spec.ts` | `page.on("response")` listener flags any `/api/` 5xx or unexpected 4xx during page boot. 10 pages. Catches frontend → backend route mismatches that contract tests can't see (because the route never gets called by the test). 10 tests. |
+| `e2e/a11y.spec.ts` | Axe WCAG 2.1 A/AA scan on 11 key pages (Dashboard, Transactions, Import, Categories, Recipients, Statistics, Owes, Tax, PortfolioOverview, Watchlist, Planned). Asserts zero `impact: critical` or `serious` violations. Uses `@axe-core/playwright`. 11 tests. |
+| `e2e/network-drift.spec.ts` | `page.on("response")` listener flags any `/api/` 5xx or unexpected 4xx during page boot. Uses the same 11-page catalog as axe. Catches frontend → backend route mismatches that contract tests can't see (because the route never gets called by the test). 11 tests. |
 
-`test:e2e` script updated to include the three new specs alongside `smoke`, `dialogs-edge`, `critical-flows`.
+`test:e2e` discovers these specs through the non-visual `chromium` project, so later non-visual `e2e/*.spec.ts` files join the suite without another package-script edit. `visual.spec.ts` is isolated in the manual `visual-chromium` project.
 
 ### Phase F5 — Property + Chaos Tests (2026-05-02)
 
@@ -810,7 +813,7 @@ A coverage-matrix audit found stale claims (matrix said contexts had ZERO tests;
 | `AddToWatchlistDialog`, `WatchlistChartDialog`, `ExecutionHistoryDialog`, `DashboardSettingsDialog`, `WidgetVisibilityDialog`, `TaxProfileDialog`, `ExportDialog`, `SplitTransactionDialog`, `AddRecipientDialog`, `LinkTransactionDialog`, `InvestmentDetailDialog`, `MergeRecipientsDialog`, `PortfolioTaxAdjustmentsDialog`, `EditPortfolioTxnDialog`, `AddPortfolioTxnDialog`, `EditInvestmentDialog`, `AddCategoryDialog`, `RecipientPatternsDialog`, `CustomChartBuilderModal`, `TransactionInfoDialog`, `AddInvestmentFromMarketDialog` | Escape closes (where not already covered), `data-state="open"` modality guard, first-focusable keyboard-nav check, submit-error toast/dialog-stays-open paths |
 | `TransactionsPage` | 401/404 error surfacing, no error banner with paginated data, refetch behaviour around dialog flows |
 | `RecipientsPage` | 404 error surfacing, large-list rendering does not crash |
-| `PlannedPaymentsPage`, `AIChatPage`, `RecipientInsightsPage`, `CategoriesPage`, `DashboardPage`, `ImportPage`, `OwesPage`, `TaxOverviewPage`, `ImportReviewPage`, `DbMaintenancePage`, `PortfolioOverviewPage` | 4xx tolerance check + refetch verification (where applicable) |
+| `PlannedPaymentsPage`, `AIChatPage`, `CategoriesPage`, `DashboardPage`, `ImportPage`, `OwesPage`, `TaxOverviewPage`, `ImportReviewPage`, `DbMaintenancePage`, `PortfolioOverviewPage` | 4xx tolerance check + refetch verification (where applicable) |
 | `StatisticsPage` | 4xx surfacing on monthly aggregation, empty-state heading rendering |
 | `MarketLookupPage` | 4xx tolerance for unknown symbol, 5xx tolerance for news endpoint |
 | `AdminPages` (Overview / ProviderHealth / EndpointLiveness) | 4xx tolerance for each admin endpoint |

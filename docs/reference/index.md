@@ -3,6 +3,7 @@ title: Reference Documentation Index
 type: reference-index
 status: active
 date: 2026-04-25
+updated: 2026-08-26
 tags: [reference, index, code-patterns, types, algorithms, phase-1, phase-g-aggregations]
 description: Index of all reference documentation — code patterns, types, algorithms, environment variables, and API client methods (updated Phase G)
 aliases: [reference docs, reference index, code reference]
@@ -50,7 +51,7 @@ SORT title ASC
 | Document | Description |
 |----------|-------------|
 | [[docs/reference/database-triggers\|Database Triggers]] | All PostgreSQL triggers |
-| [[docs/reference/migration-dependencies\|Migration Dependencies]] | Migration chain and groups |
+| [[docs/guides/migrations\|Migration Workflow]] | Create, inspect, apply, and roll back Alembic revisions; use `bun run db:history` for the current chain |
 
 ## Configuration
 

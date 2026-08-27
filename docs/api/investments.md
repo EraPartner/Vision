@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-08-23
-updated: 2026-08-23
+last_modified: 2026-08-26
+updated: 2026-08-26
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -99,10 +99,10 @@ Get supported price providers.
 {
   "providers": [
     { "key": "manual", "name": "Manual", "description": "Set price manually" },
-    { "key": "binance", "name": "Binance", "description": "Crypto prices (use trading pair, e.g. \"BTCUSDT\")" },
+    { "key": "binance", "name": "Binance", "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")" },
     { "key": "yahoo", "name": "Yahoo Finance", "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")" },
-    { "key": "kinesis", "name": "Kinesis", "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\")" },
-    { "key": "custom", "name": "Custom JSON", "description": "Any JSON endpoint with a configurable price path" }
+    { "key": "custom", "name": "Custom JSON", "description": "Any JSON endpoint with a configurable price path" },
+    { "key": "kinesis", "name": "Kinesis", "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")" }
   ]
 }
 ```
@@ -112,8 +112,9 @@ Get supported price providers.
 Fetch historical price points for an investment from its provider-specific history source.
 
 Current support:
-- `yahoo` and `custom` providers: endpoint reads persisted DB history first, fetches provider history when range coverage is missing, then upserts refreshed rows.
-- Other providers return persisted history if available.
+- All providers read persisted database history first and return it directly when it already covers the requested range (or when `db_only=true`).
+- `yahoo` fetches daily chart quotes; `binance` walks the requested window through paginated daily klines; `kinesis` fetches trendline data, converts USD points with historical foreign-exchange rates when needed, and sanitizes isolated spikes; `custom` follows the configured, Server-Side Request Forgery-guarded history URL and JSON paths.
+- Successful live fetches are range-filtered and upserted into `asset_price_history`. Manual or unknown providers have no external history branch and therefore return persisted points only.
 
 Persistence notes:
 - Historical quotes are stored in `asset_price_history` (daily `price_date` and `close_price` per investment).
@@ -318,6 +319,7 @@ This endpoint is intended for portfolio pages that need to load many holdings at
       "fees": 5.00,
       "currency": "USD",
       "fx_rate_to_eur": 0.92,
+      "import_batch_id": "12",
       "created_at": "2026-01-15T10:00:00Z"
     }
   ],
@@ -329,6 +331,11 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 ```
 
 Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
+
+`import_batch_id` records portfolio-import provenance. It is a decimal string
+when the row was created by a portfolio import because node-postgres preserves
+PostgreSQL `BIGINT` values as strings. It is `null` for manual transactions and
+transactions created before migration 0086 added attribution.
 
 ### POST /api/investments/:id/transactions
 
@@ -400,12 +407,12 @@ Create-path compatibility:
 - `create()` now supports inheritance schema for portfolio transactions; if `portfolio_transactions` is a non-updatable compatibility view, it inserts into the asset-specific child transaction table based on the investment `asset_class`.
 - Before inherited child-table insert, `create()` proactively resyncs the `portfolio_transactions_base` sequence to reduce sequence drift failures; if insert still hits duplicate id (`23505`), it self-heals by resyncing again and retries once ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
-- Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]]).
+- Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]]).
 - Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
 - `POST /api/investments/:id/transactions` now forwards preloaded investment `asset_class` from route lookup into repository create (`preloaded_asset_class`) so repository can skip a duplicate investment metadata query; validation and response behavior remain unchanged ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
-- Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
+- Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
 
 ### ~~POST /api/investments/:id/move~~ *(removed 2026-07-22 — WP-C1 / ADR-108)*
@@ -441,7 +448,7 @@ Update endpoint notes:
 - If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
 - Optional `fx_rate_to_eur` is supported on update payloads as well; `null` clears a stored rate,
   while an absent key leaves it unchanged. This includes the UI edit flow
-  ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]],
+  ([[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]],
   [[apps/node-backend/src/routes/investments.js]],
   [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - `null` clears `recurrence_interval` and `recurrence_end_date`; absent keys leave them unchanged.

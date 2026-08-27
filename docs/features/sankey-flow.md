@@ -9,9 +9,10 @@ aliases: [flow diagram, sankey, income flow, spending allocation]
 related_code:
   - apps/node-backend/src/services/calculations/aggregation/sankey.js
   - apps/node-backend/src/routes/aggregations.js
-  - apps/frontend/src/components/statistics/SankeyChart.tsx
-  - apps/frontend/src/components/statistics/SankeyTab.tsx
+  - apps/frontend/src/features/statistics/SankeyChart.tsx
+  - apps/frontend/src/features/statistics/SankeyTab.tsx
   - apps/frontend/src/lib/api/aggregations.ts
+updated: 2026-08-26
 ---
 
 # Sankey Flow Diagram (Phase 7)
@@ -141,7 +142,7 @@ Located in the Statistics page (`/statistics`) as the fourth tab:
 
 ## Frontend: SankeyChart Component
 
-**Location:** `apps/frontend/src/components/statistics/SankeyChart.tsx`
+**Location:** `apps/frontend/src/features/statistics/SankeyChart.tsx`
 
 **Props:**
 
@@ -183,7 +184,7 @@ interface SankeyChartProps {
 
 ## Frontend: SankeyTab Component
 
-**Location:** `apps/frontend/src/components/statistics/SankeyTab.tsx`
+**Location:** `apps/frontend/src/features/statistics/SankeyTab.tsx`
 
 **Props:**
 

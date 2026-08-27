@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-08-23
+updated: 2026-08-26
 tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
 description: >-
   Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
@@ -19,7 +19,7 @@ description: >-
   handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu
   key-equivalent redispatch.
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/features/settings/sections/AboutSection.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # Electron Desktop Architecture
@@ -179,7 +179,7 @@ Migration is non-fatal; any error is logged and app continues.
 
 10. **Frontend** connects to backend at `http://localhost:3002`
 
-11. **Renderer** subscribes to `backend:lost` and `backend:restored` events via `window.electronRecovery.onBackendLost/onBackendRestored()`
+11. **Preload bridge** exposes `backend:lost` and `backend:restored` callbacks via `window.electronRecovery.onBackendLost/onBackendRestored()`. The current React renderer does not subscribe, so these runtime events are an available bridge contract rather than a visible banner today.
 
 ---
 
@@ -442,7 +442,7 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 - `apps/frontend/src/lib/api/electron.ts` — Type definitions and wrapper functions
   - `runBackup(destDir, frontendStateJson?)` — Collects localStorage snapshot, invokes `backup:run`
   - `restoreBackup(filePath)` — Invokes `backup:restore`, writes frontend state back to localStorage
-- `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrases, directory selection
+- `apps/frontend/src/features/settings/sections/BackupSection.tsx` — UI for backup/restore, passphrases, directory selection
   - Handles `BUNDLE_SCHEMA_NEWER` error with user-friendly toast
 
 **Passphrase Storage & OS Keychain (Lazy safeStorage):**
@@ -800,6 +800,14 @@ After startup succeeds, a watchdog monitors backend health:
 - 3 consecutive failures → `backend:lost` IPC event
 - Renderer can show user-facing error banner
 - Recovery → `backend:restored` event
+
+The watchdog is observational. It does not restart a container whose process is still alive but
+whose Docker health status is `unhealthy`; plain Docker also does not restart on health status
+alone. Its loss/restoration IPC callbacks are exposed by preload but currently have no React
+subscriber. On initial readiness timeout, the shell starts capturing `docker compose ps --all` and
+the last 200 app/database log lines asynchronously while loading the Retry/Open Logs error page.
+This makes a repeated Alembic crash loop diagnosable without turning the shell into an automatic
+database-recovery controller.
 
 ### Corrupt Settings Recovery
 

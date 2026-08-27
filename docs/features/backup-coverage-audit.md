@@ -3,12 +3,12 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-updated: 2026-06-11
-last_modified: 2026-06-11
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
-related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/frontend/src/components/settings/DashboardSettingsDialog.tsx"]
+related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
 ---
 
 # Backup Coverage Audit
@@ -333,7 +333,7 @@ Adding a table or localStorage key without updating the registries causes a CI f
 - `packaging/electron/main.js` IPC handlers unwrap `response.data.value` correctly (matching the `{ ok, data: { key, value } }` envelope shape).
 - `settings.json` (Electron-local) mirrors the raw stored values rather than the unwrapped result, so the file accurately reflects what the backend returned.
 
-**Sources:** [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/settings/tabs/BackupTab.tsx]], [[packaging/electron/main.js]]
+**Sources:** [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/BackupSection.tsx]], [[packaging/electron/main.js]]
 
 ---
 

@@ -3,22 +3,22 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-08-09
+updated: 2026-08-26
 tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar, accessibility, colorblind, gain-loss]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
   - apps/frontend/src/stores/settingsStore.ts
-  - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
-  - apps/frontend/src/components/settings/SettingsPrimitives.tsx
-  - apps/frontend/src/components/settings/sections/GeneralSection.tsx
-  - apps/frontend/src/components/settings/sections/AppearanceSection.tsx
-  - apps/frontend/src/components/settings/sections/StatisticsSection.tsx
-  - apps/frontend/src/components/settings/sections/BehaviorSection.tsx
-  - apps/frontend/src/components/settings/sections/AiSection.tsx
-  - apps/frontend/src/components/settings/sections/BackupSection.tsx
-  - apps/frontend/src/components/settings/sections/AboutSection.tsx
-  - apps/frontend/src/components/settings/AIChatSettingsSection.tsx
+  - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
+  - apps/frontend/src/features/settings/SettingsPrimitives.tsx
+  - apps/frontend/src/features/settings/sections/GeneralSection.tsx
+  - apps/frontend/src/features/settings/sections/AppearanceSection.tsx
+  - apps/frontend/src/features/settings/sections/StatisticsSection.tsx
+  - apps/frontend/src/features/settings/sections/BehaviorSection.tsx
+  - apps/frontend/src/features/settings/sections/AiSection.tsx
+  - apps/frontend/src/features/settings/sections/BackupSection.tsx
+  - apps/frontend/src/features/settings/sections/AboutSection.tsx
+  - apps/frontend/src/features/settings/AIChatSettingsSection.tsx
   - apps/frontend/src/contexts/AppSettingsContext.tsx
   - apps/frontend/src/contexts/SettingsContext.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
@@ -81,7 +81,7 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 The persisted `app_settings` and `dashboard_settings` blobs are untrusted JSON from the settings API. Both are validated at the store boundary during hydration, in `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`:
 
 - `migrateDashboardSettings` (ZOD-11) parses the blob with `storedDashboardSettingsSchema` — a Zod `looseObject` (unknown keys survive and are persisted back) with per-field `.catch` to the default, so one malformed field never poisons the merge.
-- `migrateAppSettings` (2026-08) does the same via `storedAppSettingsSchema`, in addition to its pre-ADR-075 `enhancedEffects → visualEffects` legacy mapping. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20. `numberFormat`/`dateFormat` stay shape-level (`string`) on purpose — `numberFormatToLocale` already maps unknown strings to its own default, so tightening them here would change resolution. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
+- `migrateAppSettings` (2026-08) does the same via `storedAppSettingsSchema`, in addition to its pre-ADR-075 `enhancedEffects → visualEffects` legacy mapping. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20. `dateFormat` is limited to the five values offered by Settings; malformed or hand-edited values recover to `DD/MM/YYYY` instead of reaching a locale-sensitive fallback. `numberFormatToLocale` already maps unknown number-format strings to its own default, so that field remains shape-level. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
 
 A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...DEFAULTS, ...blob }` result, byte for byte. All `Intl.NumberFormat`-backed money formatters (`Money.tsx`, `useCurrencyFormatter` string + parts paths, `utils/currency.ts#formatCurrency`) additionally guard construction with try/catch and degrade to the same bare `` `${val}` `` text — defense in depth for per-call currency/decimals overrides that come from data rather than settings.
 
@@ -92,7 +92,7 @@ A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...
 | `defaultCurrency` | string | `'EUR'` | Default display currency |
 | `numberFormat` | string | `'european'` | Number formatting style |
 | `showDecimalPlaces` | number | `2` | Decimal places for display |
-| `dateFormat` | string | `'dd/MM/yyyy'` | Date display format |
+| `dateFormat` | string | `'DD/MM/YYYY'` | One of the five date display formats exposed by Settings |
 | `defaultPageSize` | number | `50` | Default table page size |
 | `excludedCategoryIds` | number[] | `[]` | Categories to exclude from stats |
 | `excludedRecipientIds` | number[] | `[]` | Recipients to exclude from stats |
@@ -128,7 +128,7 @@ type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat';
 
 **Redirect behavior** is handled by `[[apps/frontend/src/components/shared/StartupRedirect.tsx]]`, mounted inside `<BrowserRouter>` in `App.tsx`. It fires once, after settings hydrate, and only when the app opened at the root path `/`. It calls `navigate(..., { replace: true })` so the redirect does not create a history entry. Deep links (any non-`/` initial path) and later in-app navigation back to `/` are unaffected.
 
-**UI:** a "Open app on" Select is located in the **Behavior** section of `DashboardSettingsDialog` (`[[apps/frontend/src/components/settings/sections/BehaviorSection.tsx]]`). The option labels reuse `nav.*` i18n keys. Two i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
+**UI:** a "Open app on" Select is located in the **Behavior** section of `DashboardSettingsDialog` (`[[apps/frontend/src/features/settings/sections/BehaviorSection.tsx]]`). The option labels reuse `nav.*` i18n keys. Two i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
 
 ## Backend Storage
 
@@ -162,8 +162,8 @@ Upserts a single setting.
 ```
 
 Implementation note:
-- Backend route logic now reuses shared key-length and `dashboard_settings` normalization/validation helpers across single-key and bulk writes (`validateSettingKeyLength`, `getSettingKeyTooLongError`, `normalizeDashboardSettingsValue`) without changing API behavior.
-- Backend repository normalization now avoids mutating caller-provided setting objects in place by normalizing through a shallow clone, preserving stored JSON output while reducing side-effect risk in calling code (`normalizeSettingValue`) ([[apps/node-backend/src/repositories/settingsRepository.js]]).
+- Backend route logic reuses `assertSettingKeyLength` and `validateSettingValue` across single-key and bulk writes. Dashboard exclusion fields must be arrays; digit-string IDs are coerced to positive PostgreSQL `int4` integers, while malformed or out-of-range values are rejected before storage.
+- The repository serializes the already-validated value directly to JSONB. It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.js]]).
 
 #### PUT /api/settings (bulk)
 
@@ -173,7 +173,7 @@ Bulk upserts multiple settings.
 ```json
 {
   "defaultCurrency": "EUR",
-  "dateFormat": "dd/MM/yyyy"
+  "dateFormat": "DD/MM/YYYY"
 }
 ```
 
@@ -203,6 +203,7 @@ const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults } =
 
 - **Page-scoped**: Each page has its own visibility state (e.g., `'statistics'`, `'portfolioTax'`)
 - **Persisted**: Saved to `widget_visibility` setting key
+- **Failure feedback**: A rejected save keeps the optimistic local visibility but triggers the shared translated settings error toast, warning that the change may not survive a restart
 - **Defaultable**: Each widget defines its own `defaultVisible` state
 - **Resettable**: Can reset all widgets to their defaults
 
@@ -266,12 +267,12 @@ This automatic recovery prevents startup failure while preserving the corrupted 
 > [!info] Reworked June 2026 (ADR-084)
 > The settings dialog was a 5-tab Save/Cancel form (`General`, `Appearance`, `Dashboard`, `App`, `Backup`). It is now a **sidebar-navigated, instant-apply** surface. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
 
-The primary UI is `[[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, which acts as a **sidebar shell orchestrator**: a left rail of seven section icons/labels, and a scrollable content pane on the right. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator no longer threads staged props.
+The primary UI is `[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, which acts as a **sidebar shell orchestrator**: a left rail of seven section icons/labels, and a scrollable content pane on the right. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator no longer threads staged props.
 
 The section rail implements the tabs accessibility pattern: one selected tab is in the tab order,
 each tab controls the active tab panel, and Arrow keys plus Home/End move focus and selection.
 
-**Shared layout primitives** live in `[[apps/frontend/src/components/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]`:
+**Shared layout primitives** live in `[[apps/frontend/src/features/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]`:
 - `SettingsSection` — title + description header
 - `SettingsGroup` — bordered, hairline-divided card with optional label
 - `SettingRow` — label + hint + control; `row` layout for switches/actions, `stack` layout for selects/lists
@@ -296,6 +297,8 @@ Every control writes through on change — there is no global Save/Cancel footer
 - **`includeTransfers`**: a server-only aggregation setting with no client reader. Its toggle persists via `apiClient.saveSetting` then `queryClient.invalidateQueries()` for an optimistic cache refresh. Lives in the Statistics section.
 - **Visual-effects tier**: applied inline on change (ADR-075 addendum). On an auto-adapt-capped display, a pick writes to `sessionTierOverride`; on an uncapped display it writes the synced `visualEffects` preference and clears the override. Toggling auto-adapt clears the override.
 - **Reset to defaults**: moved out of a Save-time action into the **About & Maintenance** danger zone as an explicit "Reset to defaults" button with confirmation.
+
+Rejected `app_settings`, `dashboard_settings`, and `widget_visibility` saves all increment the shared `settingsSaveErrorNonce`. `SettingsSaveErrorToaster`, mounted under `LanguageProvider`, shows the existing localized `settings.saveFailed` message when it observes the nonce advance; React may coalesce simultaneous failures into one toast. The optimistic local state is deliberately not rolled back, so the user can keep working while being warned that the change may not survive a restart.
 
 ### Legacy Deep-Link Compatibility
 

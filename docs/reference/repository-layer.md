@@ -3,7 +3,7 @@ title: Repository Layer Reference
 type: reference
 status: active
 date: 2026-04-23
-updated: 2026-08-11
+updated: 2026-08-26
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -405,11 +405,11 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 | Sub-Module | File | Lines | Purpose |
 |-----------|------|-------|---------|
-| `infoRepositoryHelpers.js` | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.js]]` | 194 | Shared utilities: mvCache, rounding, date/aggregation/category/currency helpers, spike sanitization, `batchConvertGroupsWithHistoricalRateFallback()` |
+| `infoRepositoryHelpers.js` | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.js]]` | 268 | Repository-specific MV cache, aggregation, category, row-mapping, and currency-conversion helpers; compatibility re-exports point generic helpers to their canonical owners |
 | `statisticsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]` | 186 | `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary` |
 | `monthlyRepository` | `[[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]` | 484 | `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison`; uses batch FX conversion and parallel queries |
 | `banksRepository` | `[[apps/node-backend/src/repositories/infoRepositoryBanks.js]]` | 145 | `getBankBalances`; uses batch FX conversion and parallel queries |
-| `netWorthRepository` | `[[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]]` | 233 | `getNetWorthFromSnapshots` with snapshot-based valuation and spike sanitization |
+| `netWorthRepository` | `[[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]]` | 559 | `getNetWorthFromSnapshots` with snapshot-based valuation and spike sanitization |
 | `plannedRepository` | `[[apps/node-backend/src/repositories/infoRepositoryPlanned.js]]` | 94 | `getPlannedExpensesNextMonth` |
 | `recipientInsightsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryRecipients.js]]` | 124 | `getRecipientInsights` |
 
@@ -444,14 +444,16 @@ The main `infoRepository.js` file:
 - **FX Conversion:** Multi-currency endpoints support `targetCurrency` parameter with date-aware historical rate fallback
 - **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.js` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
 - **Parallel Query Execution:** `Promise.all` for independent queries (`getMonthlyFinancialSummary`, `getCashflowComparison`, `getBankBalances`, `getAverageVsCurrentSpending`)
-- **Spike Sanitization:** `getNetWorthFromSnapshots` applies Kinesis spike sanitization on investment value data via `sanitizeIsolatedDailyInvestmentSpikes()`
+- **Spike Sanitization:** `getNetWorthFromSnapshots` applies `sanitizeIsolatedDailyInvestmentSpikes()` from `lib/calculations/netWorthSanitizer.js`; the wrapper delegates needle detection and numeric smoothing to `lib/calculations/valueSpikeSanitizer.js`, then recomputes the corrected row's net worth with liabilities included
 - **Complex Aggregations:** CTEs with window functions for recipient insights and category breakdowns
-- **Shared Utilities:** Helpers centralize repeated patterns: `mvCache`, `roundToCents`, date formatting (`formatDateToYmd`, `formatYearMonthKey`, `extractYearMonth`), aggregation helpers (`buildMonthlySummary`), category merging, row mapping (`mapRowsForAmountConversion`), currency conversion fallback
+- **Shared Utilities:** `infoRepositoryHelpers.js` centralizes repository-specific MV caching, aggregation, category merging, row mapping, and currency conversion fallback. Generic date keys live in `lib/dateKeys.js`; date serialization in `lib/dateFormat.js`; numeric rounding in `lib/money.js`.
 
 ### Dependencies (All Sub-Modules)
 - `connection.js`
 - `currencyConversionService.js` (for FX conversions)
-- `infoRepositoryHelpers.js` (shared utilities and cache)
+- `infoRepositoryHelpers.js` (repository aggregation helpers and MV cache)
+- `lib/dateKeys.js`, `lib/dateFormat.js`, and `lib/money.js` (generic formatting and rounding)
+- `lib/calculations/valueSpikeSanitizer.js` (shared numeric needle rule) and `lib/calculations/netWorthSanitizer.js` (net-worth recomputation wrapper)
 
 ---
 
@@ -475,8 +477,10 @@ connection.js (PostgreSQL pool)
     │
     └── infoRepository (barrel, Phase 3.1 refactor) ──→ currencyConversionService
             │
-            ├─→ infoRepositoryHelpers (shared utilities: mvCache, rounding, date/agg/category/currency helpers,
+            ├─→ infoRepositoryHelpers (repository helpers: mvCache, aggregation/category/FX helpers,
             │                          batchConvertGroupsWithHistoricalRateFallback for batch FX optimization)
+            ├─→ lib/dateKeys + lib/dateFormat + lib/money (generic date and rounding helpers)
+            ├─→ lib/calculations/netWorthSanitizer ──→ valueSpikeSanitizer (shared needle rule)
             │
             ├─→ infoRepositoryStatistics (getStatistics, getCategoryBreakdown, getBanks, getTransactionCount, getTransactionSummary)
             │       └→ connection.js
@@ -637,9 +641,11 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 `portfolioTransactionRepository.js` is split into three files for clarity:
 
-- [[apps/node-backend/src/repositories/portfolioTxRepo.common.js|portfolioTxRepo.common.js]] — shared helpers, mappers, and the public barrel.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.common.js|portfolioTxRepo.common.js]] — portfolio normalization and validation helpers, mappers, and the public barrel.
 - [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — read paths (list, summary, by-investment). Exports `mapPortfolioTxRow` (the NUMERIC coercion mapper) so write paths can reuse it.
 - [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — mutations (create, update, FIFO/LIFO cost-basis recompute); imports `mapPortfolioTxRow` from the reads module.
+
+`investmentRepository.js`, `portfolioTxRepo.common.js`, and `portfolioTxRepo.writes.js` use [[apps/node-backend/src/lib/repositoryErrors.js|repositoryErrors.js]] as the canonical owner of coded repository validation errors. This keeps the `VALIDATION_ERROR` contract independent of either repository family.
 
 ---
 

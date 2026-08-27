@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069).
 date: 2026-04-23
-last_modified: 2026-06-01
+last_modified: 2026-08-26
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -331,7 +331,8 @@ package "Repositories" {
     +getById(id)
     +createOrGet(data)
     +update(id, fields)
-    +mergeRecipients(primaryId, aliasIds)
+    +flagAliasesOf(primaryId, aliasIds)
+    +repointGrandchildAliases(primaryId, aliasIds)
   }
 
   class CategoryRepository {
@@ -398,8 +399,8 @@ package "Repositories" {
     }
     class Helpers {
       +mvCache
-      +roundToCents()
-      +formatDateToYmd()
+      +buildMonthlySummary()
+      +batchConvertGroupsWithHistoricalRateFallback()
     }
   }
 }
@@ -440,7 +441,7 @@ RecipientsRepo <.. Helpers
 - Original `infoRepository.js` monolith (1445 lines) was split into 7 domain-specific sub-modules
 - Barrel re-export in main `infoRepository.js` (37 lines) maintains backward compatibility
 - All 9 consumer files import unchanged; internal organization is transparent to callers
-- Shared utilities in `infoRepositoryHelpers.js` reduce code duplication across aggregation patterns
+- Repository-specific cache, aggregation, category, and FX helpers in `infoRepositoryHelpers.js` reduce duplication across the sub-modules. Generic UTC keys live in `lib/dateKeys.js`; money rounding stays in `lib/money.js`; the shared needle algorithm lives in `lib/calculations/valueSpikeSanitizer.js`; and `lib/calculations/netWorthSanitizer.js` is the net-worth-specific recomputation wrapper.
 
 ## Service Layer
 
@@ -672,7 +673,7 @@ Recent update note (2026-04-10):
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/importRoutes.js]], [[apps/node-backend/src/routes/transactions.js]]).
 - Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.js]] against [[apps/node-backend/src/routes/settings.js]].
 - Database connection/pool resilience paths are now regression-covered in [[apps/node-backend/tests/connection.test.js]] for [[apps/node-backend/src/database/connection.js]] (idle pool error handler, transient retry/backoff, non-transient fail-fast, helper methods and pool stats).
-- Validation middleware id-param coercion and error semantics are explicitly covered in [[apps/node-backend/tests/validation.test.js]] for [[apps/node-backend/src/middleware/validation.js]].
+- Pure value-validation rules live in [[apps/node-backend/src/lib/validation.js]], while [[apps/node-backend/src/middleware/validation.js]] keeps the Express path-parameter adapters and route compatibility exports. ID coercion and error semantics are covered in [[apps/node-backend/tests/validation.test.js]].
 
 ## Database Schema
 
@@ -1375,23 +1376,27 @@ participant "RecipientsPage" as Page
 participant "useRecipients" as Hook
 participant "ApiClient" as API
 participant "RecipientsRouter" as Router
-participant "RecipientRepository" as Repo
+participant "RecipientMergeService" as Service
+participant "Repositories" as Repos
 database "PostgreSQL" as DB
 
 User -> Page : Merge Recipients
 Page -> Hook : mergeRecipients(primaryId, aliasIds)
 Hook -> API : POST /api/recipients/:id/merge
 API -> Router : POST /recipients/:id/merge
-Router -> Repo : mergeRecipients(primaryId, aliasIds)
-Repo -> DB : UPDATE recipients
-DB -> Repo : updated
-Repo -> Router : {primary, merged_ids}
+Router -> Service : mergeRecipients(primaryId, aliasIds)
+Service -> Repos : lock primary + repoint foreign keys + flag aliases
+Repos -> DB : transactional updates
+DB -> Repos : updated
+Repos -> Service : merge results
+Service -> Router : {mergedAliasIds, reassigned}
+Router -> Router : fetch primary/aliases + build patternSuggestion
 Router -> API : JSON
 API -> Hook : MergeResponse
 Hook -> Page : refresh
 Page -> User : Success
 
-note right of Repo
+note right of Repos
   Aliases point to primary
   via primary_recipient_id
 end note

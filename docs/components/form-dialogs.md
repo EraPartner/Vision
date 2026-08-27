@@ -3,11 +3,11 @@ title: Form Dialogs
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog, settings-dialog]
-related_code: ["apps/frontend/src/components/forms", "apps/frontend/src/components/settings"]
+related_code: ["apps/frontend/src/features/transactions/", "apps/frontend/src/features/categories/", "apps/frontend/src/features/recipients/", "apps/frontend/src/features/settings/", "apps/frontend/src/features/tax/TaxProfileDialog.tsx", "apps/frontend/src/features/tax/profile-steps/ProfileNumberInput.tsx"]
 ---
 
 # Form Dialogs
@@ -18,7 +18,7 @@ Modal dialog components for creating, editing data, and configuring application 
 
 | Component | Description | File |
 |-----------|-------------|------|
-| AddTransactionDialog | Add new transaction | [[apps/frontend/src/components/forms/AddTransactionDialog.tsx\|AddTransactionDialog.tsx]] |
+| AddTransactionDialog | Add new transaction | [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx\|AddTransactionDialog.tsx]] |
 | AddCategoryDialog | Add new category | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]] |
 | AddRecipientDialog | Add new recipient | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]] |
 
@@ -50,7 +50,7 @@ Modal dialog for creating new transactions.
 ### Usage
 
 ```tsx
-import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
+import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
 
 function TransactionsPage() {
   return (
@@ -105,7 +105,7 @@ TRANSPORT:PUBLIC
 ### Usage
 
 ```tsx
-import { AddCategoryDialog } from "@/components/forms/AddCategoryDialog";
+import { AddCategoryDialog } from "@/features/categories/AddCategoryDialog";
 
 function CategoriesPage() {
   return (
@@ -134,7 +134,7 @@ Modal dialog for creating new recipients.
 ### Usage
 
 ```tsx
-import { AddRecipientDialog } from "@/components/forms/AddRecipientDialog";
+import { AddRecipientDialog } from "@/features/recipients/AddRecipientDialog";
 
 function RecipientsPage() {
   return (
@@ -263,7 +263,7 @@ import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 
 Dialog for splitting a transaction's amount among multiple recipients.
 
-**File:** [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]]
+**File:** [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]]
 
 ### Props
 
@@ -286,7 +286,7 @@ interface SplitTransactionDialogProps {
 ### Usage
 
 ```tsx
-import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
+import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
 
 <SplitTransactionDialog
   transactionId={txn.id}
@@ -301,14 +301,20 @@ import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDial
 
 Multi-step sheet/dialog for configuring the user's Belgian tax profile.
 
-**File:** [[apps/frontend/src/components/tax/TaxProfileDialog.tsx]]
+Numeric profile fields use a shared local-draft control. Stored zero values render as `0`, while
+transitional decimal input such as `12.` remains visible during editing instead of being replaced
+by the parsed number on each keystroke. Parseable drafts still update profile state immediately;
+blur normalizes the display, and external profile changes resynchronize fields that are not focused.
+
+**File:** [[apps/frontend/src/features/tax/TaxProfileDialog.tsx]]
 
 ### Props
 
 ```typescript
 interface TaxProfileDialogProps {
   trigger?: ReactNode;
-  initialStep?: Step; // 'employment' | 'income' | 'exemptions' | 'region'
+  initialStep?: Step; // 'employment' | 'income' | 'incomeSources' | 'exemptions' | 'region'
+  targetYear?: number; // defaults to the live profile year
 }
 ```
 
@@ -318,13 +324,14 @@ interface TaxProfileDialogProps {
 |------|-------------|--------|
 | **Employment** | Employment type selection | employee, civil_servant, self_employed, retired, other |
 | **Income** | Income and expense details | gross annual income, other taxable income, professional expense method (lump sum vs actual), cadastral income, additional residences |
+| **Income Sources** | Select transaction categories treated as taxable income | income category selection |
 | **Deductions** | Exemptions and dependents | dependent children, other dependents, alimony, pension contributions, life insurance, charitable donations, childcare costs, domestic help, mortgage interest, union dues, medical expenses, disability exemptions |
 | **Region** | Region and surcharge | Flanders/Wallonia/Brussels, communal surcharge percentage |
 
 ### Usage
 
 ```tsx
-import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
+import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 
 <TaxProfileDialog
   trigger={<Button>Configure Tax Profile</Button>}
@@ -428,9 +435,9 @@ Returns a fresh form state object with sensible defaults:
 
 ### Usage
 
-Used by [[apps/frontend/src/components/forms/AddTransactionDialog.tsx|AddTransactionDialog]] to initialize and reset the form state. The flat string-based state is designed for easy integration with controlled form inputs.
+Used by [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx|AddTransactionDialog]] to initialize and reset the form state. The flat string-based state is designed for easy integration with controlled form inputs.
 
-**Code**: [[apps/frontend/src/components/forms/addTransactionForm.ts]]
+**Code**: [[apps/frontend/src/features/transactions/addTransactionForm.ts]]
 
 ---
 
@@ -537,52 +544,6 @@ interface Column<T> {
 
 **Code**: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]]
 
----
-
-## DataTable
-
-Standard data table with pagination, inline editing, search, and column filtering. Simpler alternative to VirtualDataTable for smaller datasets that don't require virtual scrolling.
-
-### Props
-
-| Prop | Type | Description |
-|------|------|-------------|
-| `title` | `string` | Table title |
-| `subtitle` | `string?` | Optional subtitle |
-| `columns` | `Column<T>[]` | Column definitions (same as VirtualDataTable) |
-| `data` | `T[]` | Row data |
-| `emptyMessage` | `string?` | Empty state message |
-| `actions` | `ReactNode?` | Header action buttons |
-| `onRowUpdate` | `(index, row) => void` | Inline edit save callback |
-| `page` | `number?` | Current page (controlled) |
-| `pageSize` | `number?` | Items per page (default: 50) |
-| `totalItems` | `number?` | Total items for pagination |
-| `onPageChange` | `(page) => void` | Page change callback |
-| `onSearchChange` | `(query) => void` | Server-side search callback |
-| `searchValue` | `string?` | Controlled search value |
-
-### Key Differences from VirtualDataTable
-
-| Feature | DataTable | VirtualDataTable |
-|---------|-----------|------------------|
-| Rendering | Standard table rows | Virtual scrolling |
-| Pagination | Built-in page controls | Infinite scroll |
-| Performance | Good for <500 rows | Handles 10,000+ rows |
-| Row height | Fixed | Configurable estimate |
-| Double-click | Not supported | `onRowDoubleClick` prop |
-| Editing state callback | Not supported | `onEditingChange` prop |
-
-### Features
-
-- **Pagination** — page controls with `page`/`pageSize`/`onPageChange`
-- **Inline editing** — double-click editable cells
-- **Server-side search** — debounced via `onSearchChange`
-- **Local search** — falls back to client-side filtering when no `onSearchChange`
-- **Column sorting** — client-side or server-side
-- **Column filtering** — popover-based filters
-
-**Code**: [[apps/frontend/src/components/shared/DataTable.tsx]]
-
 ## SuggestedDeductionsCard
 
 Analyzes the user's Belgian tax profile and generates a list of missed or available tax deductions.
@@ -596,10 +557,10 @@ No props — reads tax profile from context.
 - Analyzes Belgian tax profile for deduction opportunities
 - Covers: pension savings, life insurance, group insurance, charitable donations, childcare, domestic help, alimony
 - Shows estimated tax savings per deduction
-- CTA button opens the [[apps/frontend/src/components/tax/TaxProfileDialog.tsx|TaxProfileDialog]]
+- CTA button opens the [[apps/frontend/src/features/tax/TaxProfileDialog.tsx|TaxProfileDialog]]
 - No props required — reads from BelgianTaxProfileContext
 
-**Code**: [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]]
+**Code**: [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]]
 
 ---
 
@@ -708,7 +669,7 @@ interface DashboardSettingsDialogProps {
 ### Usage
 
 ```tsx
-import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+import { DashboardSettingsDialog } from "@/features/settings/DashboardSettingsDialog";
 import { useState } from "react";
 
 function SettingsButton() {

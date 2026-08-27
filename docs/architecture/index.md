@@ -3,7 +3,7 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-updated: 2026-06-23
+updated: 2026-08-26
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -263,7 +263,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 
 **Frontend Integration:**
 - `apps/frontend/src/lib/api/electron.ts` — TypeScript wrapper types and functions
-- `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrase management, error handling
+- `apps/frontend/src/features/settings/sections/BackupSection.tsx` — UI for backup/restore, passphrase management, error handling
 
 **Coverage:** All 31 user-data tables + attachments + localStorage keys. CI test enforces coverage on every migration.
 
@@ -388,9 +388,9 @@ Documentation:
 
 [[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] — The `mv_recipient_monthly` materialized view was never read after `agg_recipient_totals` became the live source. Migration `0038` drops it. `aggregationRefresh.js` no longer schedules its refresh. See [[docs/performance/materialized-views|Materialized Views]] for updated strategy.
 
-### @vision/shared-utils Monorepo Package (ADR-069)
+### @vision/shared-utils Cross-Workspace Package (ADR-069 and ADR-073)
 
-[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] — New Bun workspace package `packages/shared-utils/` holds `money`, `slugify`, and `downsample`. Both apps re-export from it. `roundMoney` is now canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. Eliminates frontend/backend money-rounding drift.
+[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] introduced `packages/shared-utils/` for pure logic shared by both apps, and [[docs/adr/073-shared-portfolio-math-package|ADR-073]] explicitly broadened that boundary to cross-workspace portfolio calculations. Its current modules are `money`, `portfolio`, `assetClasses`, `category`, `csv`, and `slugify`; the removed `downsample` module is no longer part of the package. `roundMoney` remains canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. App-specific I/O and framework code remain in their owning workspaces.
 
 ### Other June 2026 Security & Correctness
 

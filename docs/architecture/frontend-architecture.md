@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -46,8 +46,9 @@ primitives), `components/shared/`, `components/charts/`, `components/layout/`,
 > machine-readable twin of this callout — keep the two in sync, and prefer moving the component
 > into the feature over widening the list:
 > - `components/layout/AppLayout.tsx` — the app shell / composition root, which mounts
->   `@/features/settings/DashboardSettingsDialog` and `@/features/onboarding/OnboardingWizard` over
->   every page. It is `components/`-shaped only because there is no `app/` directory.
+>   `@/features/settings/DashboardSettingsDialog` and `@/features/onboarding/OnboardingWizard`, and
+>   consumes `@/features/onboarding/useOnboarding` over every page. It is `components/`-shaped only
+>   because there is no `app/` directory.
 > - `components/shared/__tests__/loadingSurface.test.tsx` — a test of the *shared* loading-surface
 >   contract that uses `@/features/research/ResearchAnalystTab` as its worked example. Test-only:
 >   never bundled into the app.
@@ -55,6 +56,28 @@ primitives), `components/shared/`, `components/charts/`, `components/layout/`,
 When adding a component, put it in `features/<feature>/` unless it is reused by unrelated features
 *and* carries no feature-specific domain logic — in which case it belongs in `components/shared/`
 (or `components/ui/` for a design-system primitive).
+
+### Shared code placement
+
+- `hooks/` owns reusable cross-feature React hooks. `hooks/portfolio/` groups the larger reusable
+  portfolio hook family without changing that ownership rule. Browser or React lifecycle state
+  belongs here, even when the returned callback also performs utility work.
+- `lib/` owns generic shared primitives and cross-cutting application infrastructure. Examples
+  include CSV/decimal parsing, storage keys, logging, API seams, and generic React composition
+  helpers. A reusable lifecycle hook still belongs in `hooks/`, not `lib/`.
+- `utils/` owns feature-agnostic Vision domain and presentation helpers, such as currency
+  formatting, accessibility preferences, price staleness, rolling averages, and asset classes.
+  New generic primitives belong in `lib/`; new feature-specific helpers stay in features.
+- Feature-specific hooks and helpers remain beside their feature when they are not shared. A
+  feature may use a `hooks/` subdirectory when several local hooks need grouping; a single local
+  hook such as `features/imports/useAdapters.ts` may stay at the feature root.
+
+Frontend API calls follow the same ownership signal: new narrow consumers import directly from
+`@/lib/api/<domain>`. The `@/lib/api` `apiClient` facade remains a compatibility and
+multi-domain-orchestration surface; the two forms delegate to the same domain modules.
+
+Devtools hooks are intentionally co-located under `lib/devtools/` because each belongs to that
+single subsystem rather than serving as a general application hook.
 
 ## Technology Stack
 
@@ -252,7 +275,6 @@ package "Utility Hooks" {
   class useMobile
   class useToast
   class useConfirmDialog
-  class useDataTableColumns
   class useFormState
 }
 
@@ -445,12 +467,12 @@ Thick and elevated materials gain lensing edges (inset top specular + bottom con
 > ADR-070 rolled out glass selectively ("only ~6 KPI/hero/chart surfaces per viewport"). In practice that left many content/chart/stat cards opaque while their siblings were glass, causing visible inconsistency in the enhanced/vibrancy tier. The rule was broadened in June 2026 to **role-based**: glass is now applied to ALL content / chart / stat / state cards so peer cards shine consistently. The base `Card` component was NOT changed — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old 6-surface budget in standard/enhanced; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque on large displays and under `fx-reduced`); profiling the packaged Electron app on Apple Silicon before each release is the watchpoint.
 
 **Opaque surfaces (deliberate — role-based exceptions):**
-- `DataTable`, `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — intentionally opaque; dense row rendering under a backdrop-filter would exceed GPU budget with no readability benefit.
+- `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — intentionally opaque; dense row rendering under a backdrop-filter would exceed GPU budget with no readability benefit.
 - Dense form/import cards — opaque by design.
 - Dashed "add" placeholder cards (`bg-muted/30 border-dashed`) — intentionally flat.
 - Accent/danger callout cards (`bg-primary/5`, `bg-destructive/5`) — colored tint defeats glass.
 - Cards nested inside an already-glass dialog (e.g., `InvestmentDetailDialog`) — avoids double-blur.
-- Dashboard recent-transactions skeleton — pairs with its opaque `DataTable`.
+- Dashboard recent-transactions skeleton — pairs with its opaque `VirtualDataTable`.
 - `Input`, `Textarea`, `Button`, `Tabs` — no blur.
 - Select/Menu **triggers** (`SelectTrigger`, `MenubarTrigger`) — `bg-background/80`; floating content layers are glass-thick.
 
@@ -482,9 +504,9 @@ Previous variable fonts were superseded by static weight selection for performan
 
 Centralized in `apps/frontend/src/lib/motion.ts`:
 
-- **Durations**: fast (150ms), normal (300ms), slow (500ms)
-- **Easings**: cubic-bezier variants (out-expo, out-cubic, in-quad)
-- **Spring configs**: SPRING_BOUNCE, SPRING_SMOOTH, SPRING_SNAPPY
+- **Durations**: fast (150ms), normal (260ms), slow (420ms), page (520ms)
+- **Easings**: glide, out-expo, and in-out-quart
+- **Spring configs**: snappy
 - **Reduced-motion**: `useReducedMotion()` hook ensures `prefers-reduced-motion: reduce` compliance
 - **Page transitions**: `PageTransition.tsx` (re-added June 2026) — enter-only spring keyed on pathname; no `AnimatePresence` exit to avoid double-rendering Suspense boundaries around lazy routes.
 - **Route loading**: 2px top hairline shimmer replaces the old `PageLoader` full-screen spinner.
@@ -544,7 +566,9 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v
 
 ### Command Palette (Liquid Glass v2)
 
-`components/shared/CommandPalette.tsx` — new ⌘K / Ctrl+K palette (built on `cmdk`):
+`components/shared/CommandPalette.tsx` — new ⌘K / Ctrl+K palette (built on `cmdk`). Pure FX,
+arithmetic, and ticker-query logic plus the recent-route storage adapter live in
+`lib/commandPalette.ts` so the component owns only query orchestration and presentation:
 
 - Covers all budgeting and portfolio pages, admin pages (when enabled), theme and settings actions.
 - Mounted by `AppLayout` with a topbar `⌘K` trigger button.
@@ -932,7 +956,7 @@ All charts consume `apps/frontend/src/styles/tokens.css`:
 
 ### Performance
 
-For large datasets (>1000 points), the backend provides pre-downsampled data via LTTB algorithm (see [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]]).
+Charts receive full-resolution daily data. LTTB was removed after the historical ADR-008 design because multi-thousand-point SVG paths remained practical and downsampling could preserve isolated price needles preferentially; see [[docs/performance/chart-downsampling|Chart Downsampling]].
 
 ### Migration Impact
 
@@ -957,7 +981,7 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `transaction-state.puml` - Transaction lifecycle states
 
 Recent update note (2026-04-10):
-- Shared table architecture now includes extracted `ColumnFilter` and explicit source-row identity (`sourceIndex`) mapping semantics used by `DataTable` and `VirtualDataTable` ([[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]).
+- Shared table architecture now uses `VirtualDataTable` with extracted `ColumnFilter` and explicit source-row identity (`sourceIndex`) mapping semantics ([[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]).
 
 **System-Wide:**
 - `api-communication.puml` - Frontend to Backend communication

@@ -3,14 +3,14 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
-updated: 2026-08-10
+updated: 2026-08-26
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
 related_code:
   - apps/frontend/src/pages/research/MarketLookupPage.tsx
   - apps/frontend/src/App.tsx
-  - apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx
+  - apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx
   - apps/node-backend/src/routes/marketLookup.js
 ---
 
@@ -107,7 +107,7 @@ The market-lookup routes use Yahoo Finance as their primary provider (keyless, u
 When viewing a **Yahoo symbol**, the quote header exposes action buttons:
 
 - **Add to portfolio** — opens `AddInvestmentFromMarketDialog` pre-filled with the symbol and provider.
-- **Add to watchlist** (Star icon, `addWatchlist.title`) — opens `[[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx|AddToWatchlistDialog]]` with a `prefill` object seeded from the current quote (`symbol`, `name`, `type`, `currency`, `price`). The dialog skips its internal search step and is one confirm away from adding the item. See [[docs/features/watchlist|Watchlist]] for full prefill details.
+- **Add to watchlist** (Star icon, `addWatchlist.title`) — opens `[[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx|AddToWatchlistDialog]]` with a `prefill` object seeded from the current quote (`symbol`, `name`, `type`, `currency`, `price`). The dialog skips its internal search step and is one confirm away from adding the item. See [[docs/features/watchlist|Watchlist]] for full prefill details.
 - **Map provider** (`Link2` icon, `research.mapping.button`) — opens `ResearchMappingDialog`. If the page was opened from a holding (`?investmentId=`), the dialog pre-seeds that holding's configured provider as already confirmed.
 
 > [!info]

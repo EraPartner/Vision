@@ -230,6 +230,17 @@ The frontend transport already short-circuits on 204 (`apps/frontend/src/lib/api
 
 Full rule, exception list, and the "adding a DELETE route" checklist: [[docs/reference/code-patterns#DELETE Response Pattern|Code Patterns — DELETE Response Pattern]].
 
+**Amendment — route-specific metadata is top-level (2026-08-26):**
+
+The original `ResponseMeta` example listed a fixed set of metadata keys. The
+runtime envelope has always accepted route-specific response facts directly
+under `meta`, and active consumers rely on that shape. For example, research
+responses expose `meta.provider` and `meta.source`; list code may expose
+`meta.computedAt`. The shared type now reflects this established contract with
+an index signature beside the reserved optional `requestId` field. There is no
+`meta.extra` nesting layer. Pagination remains excluded from metadata and stays
+in the `data` body under the list-response convention.
+
 ## Related
 
 - [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011: Aggregation Envelope]] — specialized by this ADR

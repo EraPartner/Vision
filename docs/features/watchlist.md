@@ -3,14 +3,14 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-06-18
-last_modified: 2026-08-10
-updated: 2026-08-10
+last_modified: 2026-08-26
+updated: 2026-08-26
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
 related_code:
-  - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
-  - apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx
+  - apps/frontend/src/pages/research/WatchlistPage.tsx
+  - apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
   - apps/frontend/src/lib/api.ts
@@ -112,7 +112,7 @@ Available methods:
 
 All methods are typed and integrate with React Query for caching and invalidation.
 
-Code links: [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]]
+Code links: [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]]
 
 ## Price Updates
 
@@ -159,7 +159,7 @@ The watchlist page gracefully degrades when offline:
 - **User feedback**: When quotes are unavailable (offline or provider error), a banner displays showing i18n key `watchlist.quotesOffline` ("Live quotes unavailable. Showing target prices only.")
 - **Target price fallback**: Page continues to show target prices and allow editing even when live quotes are unavailable
 
-Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
+Code links: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
 
 ## i18n Fixes (2026-04-28)
 

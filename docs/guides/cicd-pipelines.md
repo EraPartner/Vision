@@ -3,7 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-08-25
+updated: 2026-08-27
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, auto-merge, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, native pull-request auto-merge, supply chain security scanning, quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
@@ -896,11 +896,10 @@ permissions:
 Before tagging a release, ensure **both** sources are in sync:
 
 ```bash
-# Check package.json version
-jq '.version' packaging/electron/package.json
+# Update both enforced manifests together (no leading v or numeric leading zeros)
+bun run version:bump 1.2.3
 
-# Should match your intended tag (without 'v')
-# e.g., if tagging v1.2.3, package.json should have "version": "1.2.3"
+# Review the two-file diff, then tag v1.2.3 only after the release checks pass.
 ```
 
 ### 2. Test Locally Before Publishing

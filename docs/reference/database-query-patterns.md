@@ -3,7 +3,7 @@ title: Database Query Patterns & Optimization
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-06-18
+updated: 2026-08-26
 tags: [database, postgresql, queries, optimization, performance, indexes, phase-1, group-by-currency, per-currency-aggregation]
 description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision. June 2026 adds multi-currency GROUP BY aggregation pattern.
 aliases: [db optimization, query patterns, postgresql performance, indexing strategy]
@@ -410,6 +410,6 @@ FKs that protect financial history (e.g. `transactions.recipient_id`) are delibe
 - [[docs/adr/004-postgresql-table-inheritance|ADR-004: Table Inheritance]]
 - [[docs/adr/005-materialized-views|ADR-005: Materialized Views]]
 - [[docs/reference/database-triggers|Database Triggers]]
-- [[docs/reference/migration-dependencies|Migration Dependencies]]
+- [[docs/guides/migrations|Migration Guide]]
 - [[docs/performance/caching-strategies|Caching Strategies]]
 - [[docs/performance/materialized-views|Materialized Views Performance]]

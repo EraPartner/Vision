@@ -5,11 +5,11 @@ method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
 date: 2026-04-24
-updated: 2026-08-10
+updated: 2026-08-26
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
-related_code: ["apps/node-backend/src/routes/attachments.js", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.js", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
+related_code: ["apps/node-backend/src/routes/attachments.js", "apps/node-backend/src/middleware/attachmentUpload.js", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.js", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
 ---
 
 # Attachments API
@@ -20,6 +20,8 @@ The Attachments API provides CRUD operations for managing receipt and document a
 
 > [!info] File Storage (Phase 5A)
 > Attachments are stored in a configurable directory (`ATTACHMENTS_DIR`, default `./data/attachments`) organized by transaction ID. Database stores relative file paths and metadata (MIME type, file size).
+
+The HTTP middleware owns multipart parsing, in-memory buffering, the declared MIME prefilter, and the upload-size ceiling. The attachment service then verifies magic bytes and the filename extension before it stores the buffer. This keeps transport handling out of the persistence service while preserving the two-stage file-type check.
 
 ## Configuration
 

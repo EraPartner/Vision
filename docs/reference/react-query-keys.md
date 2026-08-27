@@ -3,7 +3,7 @@ title: React Query Keys Reference
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-08-11
+updated: 2026-08-26
 tags: [reference, react-query, caching, frontend]
 description: Complete reference of all React Query keys used in the Vision frontend
 aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
@@ -123,7 +123,9 @@ aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
 
 | Query Key | Variables | Used By | Description |
 |-----------|-----------|---------|-------------|
-| `['recipient-insights', targetCurrency]` | `targetCurrency: string` | `RecipientInsightsPage` | Recipient spending analytics |
+| `['aggregations', 'recipient-insights', targetCurrency]` | currency | `useStatistics` | Unfiltered Statistics recipient analytics |
+| `['aggregations', 'recipient-insights', 'filtered', targetCurrency, excludedCategoryIds, excludedRecipientIds]` | currency and exclusion ID arrays | `useStatistics` | Filtered Statistics recipient analytics |
+| `['aggregations', 'recipient-insights', targetCurrency, excludedCategoryIds, excludedRecipientIds]` | currency and exclusion ID arrays | `RecipientInsightsTab` in Statistics | Recipient spending analytics |
 
 ## Invalidation Patterns
 

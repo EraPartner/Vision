@@ -3,7 +3,7 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-14
+updated: 2026-08-26
 tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance, phase-13, drillthrough]
 description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization. Phase 13 adds pivot table drillthrough to transactions page.
 related_code:
@@ -20,7 +20,7 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 ## Overview
 
 **Page:** `[[apps/frontend/src/pages/StatisticsPage.tsx]]` (232 lines)  
-**Components:** `[[apps/frontend/src/components/statistics/]]`
+**Components:** `[[apps/frontend/src/features/statistics/]]`
 
 The page acts as a thin orchestrator with lazy-loading and memoization:
 
@@ -28,7 +28,7 @@ The page acts as a thin orchestrator with lazy-loading and memoization:
 import { lazy, Suspense, useMemo } from "react";
 
 const MonthlyChart = lazy(() =>
-  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+  import("@/features/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
 );
 
 function StatisticsPage() {
@@ -331,7 +331,7 @@ All pivot cells are clickable and drill through to the TransactionsPage with pre
 
 **URL Construction:**
 - `lastDayOfMonth(period)` helper computes the last day of a month (e.g., `2026-03` → `2026-03-31`)
-- `buildDrillUrl()` helper constructs the drill URL with params; zero-value cells remain non-clickable ([[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]])
+- `buildDrillUrl()` helper constructs the drill URL with params; zero-value cells remain non-clickable ([[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]])
 - `filter_label` param contains a human-readable label for UX context
 
 **Usage:**
@@ -626,7 +626,7 @@ SankeyTab
 
 ### statisticsUtils.ts
 
-**Location:** `[[apps/frontend/src/components/statistics/statisticsUtils.ts]]`
+**Location:** `[[apps/frontend/src/features/statistics/statisticsUtils.ts]]`
 
 **Exports:**
 
@@ -682,6 +682,7 @@ export function computeMasterToggleState(
 export interface ChartCurrencyFormatter {
   formatCurrency: (val: number) => string;
   formatCompact: (val: number) => CompactFormatResult;
+  formatAxisCompact: (val: number) => string;
   currencySymbol: string;
   locale: string;
   currency: string;
@@ -698,7 +699,9 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter
 - Derives locale from `AppSettingsContext.numberFormat`
 - Returns `formatCurrency()` function formatted with decimal places from settings
 - Returns `formatCompact()` — uses length-based threshold (>9 chars) to abbreviate large values via `Intl.NumberFormat({ notation: 'compact' })`; always returns `full` string for tooltip; falls back to full when compact is not shorter
+- Returns `formatAxisCompact()` — always-bounded `k/M/B/T` axis labels with locale-aware decimal separators and currency ordering, including locales where `Intl` does not compact ordinary thousands
 - Returns `currencySymbol` (e.g., "€" for EUR)
+- Statistics chart axes use `formatAxisCompact(value)`; they do not concatenate `currencySymbol`, `toFixed()`, and a hard-coded `k`, because that bypasses the app's number-format locale and currency ordering
 
 **Usage:**
 
@@ -706,14 +709,13 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
 function MyChart() {
-  const { formatCurrency, formatCompact, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatCompact } = useChartCurrencyFormatter();
   const r = formatCompact(1_253_632);
   
   return (
     <div>
       <p>Income: {formatCurrency(5000)}</p>
       <p>Large: <span title={r.isCompact ? r.full : undefined}>{r.display}</span></p>
-      <p>Symbol: {currencySymbol}</p>
     </div>
   );
 }

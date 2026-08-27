@@ -3,7 +3,7 @@ title: Reports API
 type: endpoint
 status: active
 date: 2026-04-27
-updated: 2026-08-10
+updated: 2026-08-26
 tags:
   - api
   - reports
@@ -202,8 +202,8 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 | `period` | object | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below) |
 | `sections` | array | `[]` (uses defaults) | List of section IDs to include; empty = default sections |
 | `theme` | object | `{}` | Theme tokens (HSL values); omit to use defaults |
-| `excludedCategoryIds` | array | `[]` | Category IDs to exclude from filtered view (generates filter impact comparison) |
-| `excludedRecipientIds` | array | `[]` | Recipient IDs to exclude from filtered view (generates filter impact comparison) |
+| `excludedCategoryIds` | integer array | `[]` | Category IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
+| `excludedRecipientIds` | integer array | `[]` | Recipient IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
 
 **Period Options**
 
@@ -387,6 +387,7 @@ No `apiRequest` wrapper is used because the response is a binary stream.
 ### Architecture
 
 - **Dispatcher** (`apps/node-backend/src/services/reports/index.js`): Routes by report type, builds HTML, invokes Puppeteer
+- **HTTP route** (`apps/node-backend/src/routes/reports.js`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
 - **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`): Parallel Promise.allSettled loads all data; graceful degradation
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
 - **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders
@@ -406,7 +407,7 @@ All fetched in parallel via Promise.allSettled:
 
 - **Parallel data loading**: All sources fetched concurrently
 - **Graceful degradation**: Failed sources return null; sections skip silently
-- **PDF buffering**: Entire report generated before streaming to client
+- **PDF buffering**: Entire report is generated before the route sends it to the client
 - **Typical size**: 2–10 MB depending on transaction volume
 
 ### Dependencies

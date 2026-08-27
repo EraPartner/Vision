@@ -3,14 +3,13 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-08-25
-last_modified: 2026-08-25
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers.
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers. 2026-08-26: SymbolSearchBox gained ARIA listbox semantics and input-owned keyboard navigation; RecipientCombobox now resolves the selected label independently of its filtered search page; VirtualDataTable column resizing gained pointer and keyboard operation.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
-  - apps/frontend/src/components/shared/DataTable.tsx
   - apps/frontend/src/components/shared/ColumnFilter.tsx
   - apps/frontend/src/components/shared/dateUtils.ts
   - apps/frontend/src/components/shared/ErrorBoundary.tsx
@@ -34,11 +33,14 @@ related_code:
 
 ## VirtualDataTable
 
-**Path:** `[[apps/frontend/src/components/shared/VirtualDataTable.tsx]]` (1,032 lines)
+**Path:** `[[apps/frontend/src/components/shared/VirtualDataTable.tsx]]`
 
 The most complex shared component — a high-performance virtualized data table used across Transactions, Recipients, Owes, Net Worth, and more.
 
 ### Features
+
+- **Optional table heading**: `title` is optional. When a page already owns the semantic heading,
+  the table can render an action-only header without emitting an empty or duplicate heading.
 
 - **Virtual scrolling**: Uses `@tanstack/react-virtual` to render only visible rows
 - **Client-side search**: Full-text search across all columns with debounced input
@@ -49,7 +51,7 @@ The most complex shared component — a high-performance virtualized data table 
 - **Stable source row mapping**: Filter/sort/search pipelines preserve row identity through `sourceIndex` mapping so row actions/edit handlers target original source rows
 - **Inline editing**: Double-click to edit editable columns (Enter to save, Escape to cancel)
 - **Dynamic edit column width**: Action column expands to 88px when in editing mode (default 40px) to prevent button overlap while editing
-- **Column resizing**: Drag column borders to resize
+- **Column resizing**: Drag column-border separators with a mouse, pen, or touch pointer; focus a separator and use Left/Right Arrow for 10-pixel steps. Widths never cross the column's minimum.
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search
 - **Memoized visible rows**: Server-search keystrokes leave unchanged row and context-menu subtrees mounted without rerendering
@@ -97,6 +99,7 @@ Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.1|ux.1]]. The 
 | Header scroll wrapper | `role="rowgroup"` | Groups the single header row |
 | Header row `div` | `role="row"` | |
 | Each header cell | `role="columnheader"` + `aria-sort` | `aria-sort` reflects current sort: `"ascending"`, `"descending"`, or `"none"` |
+| Each resize handle | `role="separator"` + `aria-orientation="vertical"` + value metadata | Focusable; pointer drag and Left/Right Arrow update the same clamped width state |
 | Body scroll wrapper | `role="rowgroup"` | Groups all body rows |
 | Virtualizer sizing `div` | `role="presentation"` | Suppresses the layout-only container from the accessibility tree |
 | Each body row | `role="row"` + `aria-rowindex` | `aria-rowindex` = virtual row index + 2 (1-based, +1 for header row) |
@@ -116,7 +119,7 @@ Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] for V
 
 ```typescript
 interface VirtualDataTableProps<T> {
-  title: string;
+  title?: string;
   subtitle?: string;
   columns: Column<T>[];
   data: T[];
@@ -124,15 +127,20 @@ interface VirtualDataTableProps<T> {
   actions?: React.ReactNode;
   onRowUpdate?: (index: number, updatedRow: T) => void;
   onRowDoubleClick?: (row: T, index: number) => void;
-  totalItems?: number;
-  isFetchingMore?: boolean;
-  onLoadMore?: () => void;
-  hasMore?: boolean;
-  onSearchChange?: (query: string) => void;
-  searchValue?: string;
-  onSortChange?: (key: string | null, dir: SortDirection) => void;
-  sortKeyProp?: string | null;
-  sortDirProp?: SortDirection;
+  serverMode?: {
+    search?: { onChange: (query: string) => void; value?: string };
+    sort?: {
+      onChange: (key: string | null, dir: SortDirection) => void;
+      key?: string | null;
+      dir?: SortDirection;
+    };
+    pagination?: {
+      totalItems?: number;
+      isFetchingMore?: boolean;
+      onLoadMore?: () => void;
+      hasMore?: boolean;
+    };
+  };
   maxHeight?: number;       // Default: 600
   rowHeight?: number;       // Default: 44
   cancelEditingRef?: MutableRefObject<(() => void) | null>;
@@ -172,16 +180,14 @@ interface Column<T> {
 **With server-side search and sort:**
 ```tsx
 <VirtualDataTable
-  title="Recipients"
   columns={columns}
   data={recipients}
-  onSearchChange={(q) => setSearchQuery(q)}
-  onSortChange={(key, dir) => handleSort(key, dir)}
-  sortKeyProp={sortKey}
-  sortDirProp={sortDir}
-  totalItems={total}
-  onLoadMore={loadMore}
-  hasMore={hasMore}
+  actions={recipientActions}
+  serverMode={{
+    search: { onChange: setSearchQuery, value: searchQuery },
+    sort: { onChange: handleSort, key: sortKey, dir: sortDir },
+    pagination: { totalItems: total, onLoadMore: loadMore, hasMore },
+  }}
 />
 ```
 
@@ -193,8 +199,9 @@ Date formatting and parsing utilities with UTC-safe handling. All date-only stri
 
 | Function | Purpose |
 |----------|---------|
+| `CHART_DATE_PATTERNS` | Canonical chart roles: day tick, month tick, detailed tooltip, month label, and year tick |
 | `formatDate(date, pattern, locale?)` | Generic date formatter supporting patterns like `"yyyy-MM-dd"`, `"dd/MM/yyyy"`, `"MMM yyyy"`, etc. |
-| `formatDateWithAppSettings(date, dateFormat)` | Formats a Date using the app's configured date format setting |
+| `formatDateWithAppSettings(date, dateFormat)` | Formats a Date using one of the five supported app date formats; unknown values recover to the default numeric format |
 | `formatDateTimeStringWithAppSettings(dateStr, dateFormat, locale?)` | Formats an ISO datetime string with app date format + time |
 | `parseLocalDateFromYmd(ymd)` | Parses YYYY-MM-DD to a **local** Date object (not UTC) — critical for avoiding calendar display errors |
 | `parseISO(dateString)` | Parses ISO date strings; date-only strings (YYYY-MM-DD) become local midnight |
@@ -228,17 +235,6 @@ new Date(y, m - 1, d)  // → 2026-05-05 local midnight for all timezones
 
 `components/ui/label.tsx` and `components/ui/alert.tsx` use `leading-tight` for wrap-capable labels and alert titles. This keeps multi-line Dutch copy legible at enlarged browser zoom while preserving the compact text role.
 
-## DataTable
-
-**Path:** `[[apps/frontend/src/components/shared/DataTable.tsx]]`
-
-Non-virtualized shared table used on pages where full virtualization is not required.
-
-Key behaviors:
-- Uses the same source-row identity strategy as `VirtualDataTable` via `sourceIndex`, so filtered/sorted rows still map safely to original row handlers.
-- Uses shared `ColumnFilter` instead of local duplicated filter implementations.
-- Cleans up debounced search timers on unmount and safely syncs controlled `searchValue` updates.
-
 ## ColumnFilter
 
 **Path:** `[[apps/frontend/src/components/shared/ColumnFilter.tsx]]`
@@ -248,7 +244,7 @@ Reusable column-filter popover component extracted from previous inline/duplicat
 Responsibilities:
 - Renders selectable unique values for a column.
 - Applies/clears column filter state consistently across table variants.
-- Centralizes filter UI behavior used by both `DataTable` and `VirtualDataTable`.
+- Centralizes filter UI behavior used by `VirtualDataTable`.
 
 ## ErrorBoundary
 
@@ -338,15 +334,19 @@ Combobox for selecting recipients with search. Used in transaction forms and fil
 - **Async search** — Fetches matching recipients from `/api/recipients` endpoint via `useRecipients` hook
 - **Fuzzy matching** — Backend performs fuzzy string matching on recipient name/alias
 - **Display** — Shows recipient name or "(none)" fallback
+- **Stable selected label** — Fetches the selected recipient by id, so filtering, first-page limits, and a closed popover cannot replace a valid selection with the placeholder; closing also clears the previous search query
 
 ### Props
 
 ```typescript
 interface RecipientComboboxProps {
-  value: number | null;
-  onChange: (recipientId: number | null) => void;
-  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+  value?: number | null;
+  onSelect: (recipientId: number | null, recipientName: string | null) => void;
   disabled?: boolean;
+  className?: string;
+  portalContainer?: HTMLElement | null;
 }
 ```
 
@@ -441,7 +441,7 @@ Image component for loading remote news thumbnails with fallback handling. Used 
 
 Canonical ticker/company search box chrome shared across every symbol picker in the Research section. Introduced in a June 2026 UI-consistency pass that brought `MarketLookupPage`, `ResearchComparePage`, and `ChartBuilderPage` in line with `ResearchHomePage`'s reference look.
 
-**Responsibility split:** `SymbolSearchBox` owns only the visual chrome (tall glass input, leading `Search` icon, optional trailing loading spinner, `glass-thick` floating dropdown). Each page retains its own query logic and passes result rows as `children`. Rows inside the dropdown should use `SymbolSearchResultItem`.
+**Responsibility split:** `SymbolSearchBox` owns the visual chrome and interaction semantics: the input/listbox ARIA relationship, active-option state, and keyboard navigation. Each page retains its own query logic and passes result rows as `children`. Rows inside the dropdown should use `SymbolSearchResultItem`; that row gains `role="option"` only when rendered inside a `SymbolSearchBox`, so its inline use in `AddToWatchlistDialog` remains a normal button.
 
 ### Props
 
@@ -452,6 +452,8 @@ interface SymbolSearchBoxProps {
   placeholder: string;
   /** Whether the results dropdown should be shown. */
   open: boolean;
+  /** Dismisses the caller-controlled dropdown without selecting a result. */
+  onDismiss: () => void;
   /** Result rows plus any empty / unavailable / no-results states. */
   children: ReactNode;
   autoFocus?: boolean;
@@ -470,6 +472,12 @@ interface SymbolSearchBoxProps {
 - Input: `h-14 pl-12 text-base glass-regular` with a `Search` icon pinned `left-4 top-1/2`.
 - Loading spinner: `h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent`, pinned `right-4 top-1/2`; only rendered when `loading` is `true`.
 - Dropdown: `Card` with `glass-thick border border-border shadow-lg z-50`, opening `top-full mt-2`; `CardContent` has `p-1` padding.
+
+### Keyboard and assistive-technology contract
+
+- The input exposes `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`, `aria-controls`, and `aria-activedescendant`.
+- The dropdown content is the controlled `role="listbox"`; `SymbolSearchResultItem` rows inside it are stable-id `role="option"` elements.
+- Arrow Up/Down wraps through results and gives the active row a visible highlight; Enter activates it while focus stays on the input. Escape calls the required dismissal handler. Typing clears the active option, while Home/End retain their native text-caret behavior. Popup options are removed from the Tab sequence, so Tab leaves the combobox for the next control.
 
 ### Pages using SymbolSearchBox
 
@@ -556,7 +564,7 @@ The following rule applies across all summary/stat cards:
 
 > [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
 
-Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
 
 ---
 
@@ -641,8 +649,7 @@ The former `SuggestionCard` dashboard widget (a Siri-suggestion-style card betwe
 | Component | Used In |
 |-----------|---------|
 | VirtualDataTable | Transactions, Recipients, Owes, Net Worth, Portfolio Tax |
-| DataTable | Shared non-virtualized list/table views |
-| ColumnFilter | DataTable + VirtualDataTable column filtering |
+| ColumnFilter | VirtualDataTable column filtering |
 | dateUtils | Every page (date formatting) |
 | CategoryCombobox | Transaction forms, filters, category assignment |
 | CategoryMultiCombobox | Export filters (Phase 13) |

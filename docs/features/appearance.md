@@ -3,14 +3,14 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-08-09
+updated: 2026-08-26
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
   - apps/frontend/src/contexts/ThemeContext.tsx
-  - apps/frontend/src/components/settings/AppearanceTab.tsx
+  - apps/frontend/src/features/settings/sections/AppearanceSection.tsx
   - apps/frontend/src/lib/accentColor.ts
   - apps/frontend/src/stores/settingsStore.ts
   - apps/node-backend/src/routes/settings.js
@@ -413,7 +413,7 @@ See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|C
 - Added (addendum 2026-06-12): `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`
 - Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`
 
-Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hooks/useVisualEffectsTier.ts]], [[apps/frontend/src/components/layout/VisualEffectsController.tsx]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/components/layout/shaderAuroraMode.ts]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hooks/useVisualEffectsTier.ts]], [[apps/frontend/src/components/layout/VisualEffectsController.tsx]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/components/layout/shaderAuroraMode.ts]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]]
 
 ---
 
@@ -449,7 +449,7 @@ Because `applyThemePalette` runs first, the overlay **composes with all five the
 
 **i18n keys**: `settings.appearance.systemAccent`, `settings.appearance.systemAccentHint` (en + nl, +2 keys from ADR-072).
 
-Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]]
 
 ---
 
@@ -576,7 +576,7 @@ Stored colorblindGainLoss setting (post-hydration)
 | `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
 | `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
 
-Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/components/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
+Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
 
 ---
 

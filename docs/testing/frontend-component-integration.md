@@ -3,9 +3,9 @@ title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-25
-last-updated: 2026-08-25
-last_updated_timestamp: 2026-08-25T00:00:00Z
+updated: 2026-08-26
+last-updated: 2026-08-26
+last_updated_timestamp: 2026-08-26T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
 added_dialog_integration_tests: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
@@ -334,9 +334,11 @@ Three new dialog component integration test files test isolated modal interactio
 6. **Validation testing** — All three test that empty/invalid forms block submission
 7. **Dialog open/close flows** — Async finding and waiting for dialog presence/absence
 
-## Phase A Test Inventory (Complete — 2026-04-30)
+## Phase A Test Inventory (historical snapshot — 2026-04-30)
 
-The following component-integration tests are now available, with all 20 frontend page integration test files fully built out:
+This table records the original Phase A page-test set plus later edits to the listed files. It is
+not a complete current test manifest. Use the filesystem and Vitest collection for current file
+and test totals; per-file counts here are updated only when that row is touched.
 
 | Test File | Scope | Tests |
 |---|---|---|
@@ -351,17 +353,16 @@ The following component-integration tests are now available, with all 20 fronten
 | `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx` | Admin pages (dashboard, provider health, endpoint liveness) | 25 |
 | `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Categories management | 18 |
 | `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Recipients management | 18 |
-| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Statistics and analytics | 13 |
+| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Statistics and embedded recipient insights | 18 |
 | `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth) | 69 |
 | `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Dashboard landing page with error-state coverage | 18 |
 | `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | AI Chat feature | 15 |
 | `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Market lookup/quotes | 12 |
 | `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx` | Import review/staging | 14 |
 | `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx` | Database maintenance | 12 |
-| `apps/frontend/src/pages/__tests__/RecipientInsightsPage.integration.test.tsx` | Recipient insights | 14 |
 | `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx` | 404 page | 5 |
 
-**Coverage Summary:** 20 page test files, 386 total integration tests, all green (COMPLETE — 2026-05-02; updated 2026-05-02 with AdminPages + PortfolioPages + DashboardPage error-state expansions; updated 2026-06-11 with multi-value filter render-loop regression in TransactionsPage)
+**Coverage note:** Recipient insights are covered through the live Recipients tab in `StatisticsPage.integration.test.tsx`; the deleted standalone page and its test are not part of the route inventory.
 
 ### Phase A Gotchas & Patterns
 
@@ -433,25 +434,20 @@ await screen.findByRole("heading");
 
 **Example in code:** [[apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx]] (PerformancePage) removed `.toBeInTheDocument()` after awaited `findByRole`.
 
-### Multiple Same Elements: Use findAllByRole
+### Multiple Same Elements: Scope the Query or Fix Duplicate Semantics
 
-When a page renders the same heading or element in multiple locations (e.g., PageHeader **and** VirtualDataTable both render the page heading), `findByRole` throws on multiple matches. Use `findAllByRole` and index the first:
+When repeated visible controls legitimately share a name, scope the query with `within(...)` or use `findAllByRole`. Page-level semantic headings are different: a page and its embedded table should not emit duplicate headings merely to make a test pass. `VirtualDataTable.title` is optional so the page can keep one unique `PageHeader` heading.
 
 ```typescript
-// ❌ WRONG: Throws on multiple matches
-const heading = await screen.findByRole("heading", { name: /recipients/i });
+// A page heading should be unique.
+await screen.findByRole("heading", { name: /recipients/i });
 
-// ✅ CORRECT: findAllByRole returns array; take first
-const headings = await screen.findAllByRole("heading", { name: /recipients/i });
-expect(headings[0]).toBeInTheDocument();
-
-// ✅ OR: Just wait for the first to exist without asserting
-await screen.findAllByRole("heading", { name: /recipients/i });
+// Repeated row actions are legitimate; scope to one row.
+const row = screen.getByRole("row", { name: /Alice/i });
+await within(row).findByRole("button", { name: /edit/i });
 ```
 
-**Why:** Compound pages often render the same semantic heading in multiple components for accessibility and consistency. The first match is typically the PageHeader; subsequent matches may be in VirtualDataTable headers or other nested components.
-
-**Example in code:** [[apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx]] switched from `findByRole` to `findAllByRole` to handle both PageHeader and VirtualDataTable heading renders.
+**Why:** Indexing the first duplicate can hide an accessibility regression and couples the test to DOM order. Scope genuinely repeated controls; remove accidental duplicate landmarks and headings.
 
 ### Role-Based Assertions Preferred Over Text
 
@@ -527,7 +523,7 @@ Two new tests in `OwesPage.integration.test.tsx`:
 
 Covers: Export button in recipient detail view integrating with `GET /api/splits/owed/:id/export/csv` endpoint.
 
-**Impact:** All 20 frontend page integration test files now gap-free. Total: 386 tests across 20 files (updated 2026-06-11: +8 regression tests in TransactionsPage for multi-value filter render loop; updated 2026-05-02 with DashboardPage error-state coverage) covering:
+**Historical Phase A coverage included:**
 - Full CRUD flows for core entities (Transactions, Recipients, Categories, Planned Payments, Portfolio)
 - Export/download endpoints (JSON, CSV)
 - Analytics pages (Statistics, Dashboard, Insights)

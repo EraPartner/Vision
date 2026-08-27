@@ -3,14 +3,14 @@ title: Portfolio Tax Feature
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-10
+updated: 2026-08-26
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
 related_code:
   - apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx
   - apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts
-  - apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx
+  - apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
   - apps/frontend/src/lib/belgianTax/portfolioTax.ts
   - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts

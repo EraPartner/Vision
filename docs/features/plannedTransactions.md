@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-08-23
+updated: 2026-08-26
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -90,6 +90,13 @@ tables are quoted.
 
 ## Features
 
+### Recipient Display Resolution
+
+Planned-payment responses display the primary recipient name for rows stored
+under a recipient alias, matching ordinary transaction lists and dashboard
+aggregates. The stored `recipient_id` remains unchanged for editing and matching.
+Search accepts both the displayed primary name and the stored alias name.
+
 ### Form UX and Date Handling
 
 Planned payment forms now use shared input components for consistency across dialogs:
@@ -109,7 +116,7 @@ Planned payment form currency defaults are now sourced from app settings consist
 - Form reset after create/edit reuses `appSettings.defaultCurrency`
 - Planned payment API mapping fallback currency uses configured defaults rather than hardcoded values
 
-Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
 
 ### Execution Tracking
 
@@ -175,7 +182,7 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Pattern date labels in `RecurringDetectionPanel` follow app `dateFormat` + locale settings
 - Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
 
-Code links: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
 
 ---
 
@@ -254,7 +261,7 @@ After the user confirms, `PlannedPaymentsPage` invalidates the `["plannedMatchSu
 **Frontend files:**
 - [[apps/frontend/src/lib/api/planned.ts]] — `getPlannedMatchSuggestions()` + types `PlannedMatchSuggestion`, `PlannedMatchCandidate`
 - [[apps/frontend/src/hooks/usePlannedMatchSuggestions.ts]] — React Query hook, cache key `["plannedMatchSuggestions"]`
-- [[apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx]] — UI banner on PlannedPaymentsPage
+- [[apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx]] — UI banner on PlannedPaymentsPage
 
 **i18n keys added:**
 - `settings.general.autoClearPlanned` — toggle label
@@ -586,7 +593,7 @@ Extracted dialog component that manages linking a transaction execution to a pla
 - **i18n (2026-04-26):** New key `plannedPage.link.includesLinked` for linked-recipient helper text
 - **i18n (2026-06-25):** Added `plannedPage.link.dueOn` ("Due {date}") for the header description and `plannedPage.link.recordedOn` ("Recorded as paid on {date}") for the selection readout. Removed key `plannedPage.link.txDate` (was the old "Transaction date:" caption).
 
-**Code**: [[apps/frontend/src/components/planned/LinkTransactionDialog.tsx]]
+**Code**: [[apps/frontend/src/features/planned/LinkTransactionDialog.tsx]]
 
 ### ExecutionHistoryDialog (2026-04-26)
 
@@ -608,7 +615,7 @@ Extracted dialog component that displays the execution history for selected plan
 - Loads when dialog opens
 - Batches transaction fetches for all planned payments' executions
 
-**Code**: [[apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx]]
+**Code**: [[apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx]]
 
 ### RecurringDetectionPanel
 
@@ -630,7 +637,7 @@ Panel that displays detected recurring payment patterns from the backend. Allows
 
 **Dismissal Storage:** Uses dual storage — localStorage for immediate persistence and backend settings API for cross-device sync. Storage key: `dismissed_recurring_patterns`.
 
-**Code**: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]]
+**Code**: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]]
 
 ### PlannedPaymentsPage Refactoring (2026-04-26)
 
@@ -657,6 +664,12 @@ After the VirtualDataTable migration the column widths were adjusted so the tabl
 
 The category column's absence of `defaultWidth` is intentional — VirtualDataTable treats columns without a `defaultWidth` as the auto-fill column.
 
+As of 2026-08-26, the eight column definitions and their cell presentation live
+in `features/planned/PlannedPaymentsTable.tsx`. The page retains query and
+mutation orchestration, confirmation, logging, toast handling, dialog state,
+and the active-only filter. The table receives those actions as callbacks and
+memoizes its column definitions.
+
 ### PlannedPaymentsPage — the next-7-days strip (August 2026)
 
 The page opens with `features/planned/NextSevenDaysStrip.tsx`: eight day columns —
@@ -673,10 +686,16 @@ the fourth, **Est. Monthly**, survives as the strip's single side figure.
 and are lifted verbatim from the "Due this week" tile they replaced:
 
 - only `is_active` rows count (executed rows stay in, marked with a check);
-- the due date is parsed by splitting `YYYY-MM-DD` into a **local** midnight
+- the due date is parsed by `features/planned/plannedDueDate.ts` into a **local** midnight
   `Date` — never `new Date(str)`, which is UTC midnight and shifts the calendar
   day east of UTC;
 - the window is `0 <= differenceInDays(due, today) <= 7`, i.e. eight columns.
+
+The same parser backs `PlannedDueBadge`, so table badges and the next-seven-days
+strip agree on missing, invalid, ISO-timestamp, and local-calendar date handling.
+Frequency-to-monthly multiplier logic remains owned by
+`features/planned/plannedCurrencyTotals.ts` and is tested through its public
+aggregate helper.
 
 The header also shows the window's net total, converted with the same
 `useCurrencyConverter` instance that sums Est. Monthly. Both aggregates call

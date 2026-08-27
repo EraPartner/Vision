@@ -58,6 +58,11 @@ package "Business Logic Services" {
     +monteCarloEnsemble(opts): Paths
   }
 
+  class "portfolio/rebalanceTargets" as RebalanceTargets {
+    +resolveRebalanceTargetWeights(body): TargetWeights
+    note bottom: Validates explicit weights or model presets,\nfolds aliases, then normalizes.
+  }
+
   class DeduplicationService {
     +isDuplicateByFields(date, amount, recipient, memo): Promise<boolean>
     +findDuplicates(criteria): Promise<Transaction[]>
@@ -186,11 +191,12 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   class SplitService { +list() +create() +settle() }
   class WatchlistService { +list() +create() +update() +delete() }
   class AttachmentRecordService { +list() +delete() }
-  class ImportBatchService { +list() +get() +rollback() }
+  class ImportBatchService { +listBatches() +getBatch() +getImportBatchPreview() +rollbackBatch() }
+  class ImportBatchRoutes { +registerImportBatchRoutes(router, options) }
   class CustomParserConfigService { +list(kind) +create(kind) +update() +delete() }
   class PortfolioTxService { +create() +update() +delete() }
   class PortfolioImportPipelineService <<ADR-078>> { +runPortfolioImportPipeline(opts) +commitPortfolioImport(batchId, accountId?) }
-  class PortfolioImportBatchService <<ADR-078>> { +listBatches() +getBatch() +getPreviewRows() +overrideInvestment() +resolveInvestmentRows() +rollbackBatch() }
+  class PortfolioImportBatchService <<ADR-078>> { +listBatches() +getBatch() +getPortfolioImportBatchPreview() +overrideInvestment() +resolveInvestmentRows() +rollbackBatch() }
   class FxResolveService <<ADR-074, ADR-078>> { +resolveRate(currency, date): Promise<number> }
   class PortfolioSummaryService <<ADR-044, ADR-091, ADR-100>> {
     +getPortfolioSummary(currency): Promise<Summary>

@@ -3,14 +3,13 @@ title: Recipient Insights Feature
 type: feature
 status: active
 date: 2026-04-09
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [feature, recipients, analytics, insights, frontend, merchant, exclusion-filters]
 description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables. June 2026: the all-years Top Recipients chart now honours category/recipient exclusion filters via new optional params on GET /api/aggregations/recipient-insights.
 aliases: [merchant insights, spending insights, recipient analytics]
 related_code:
-  - apps/frontend/src/pages/RecipientInsightsPage.tsx
-  - apps/frontend/src/components/statistics/RecipientInsightsTab.tsx
+  - apps/frontend/src/features/statistics/RecipientInsightsTab.tsx
   - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/lib/api/aggregations.ts
   - apps/node-backend/src/routes/aggregations.js
@@ -22,7 +21,7 @@ related_code:
 
 ## Overview
 
-The Recipient Insights page provides detailed spending analytics focused on merchants/recipients. It surfaces the top spending recipients, month-over-month spending changes, and a comprehensive detail table with pagination. It is accessible both as a standalone page and embedded within the Statistics page's Recipients tab.
+Recipient Insights provides detailed spending analytics focused on merchants and recipients. It surfaces the top spending recipients, month-over-month spending changes, and a comprehensive detail table with pagination inside the Statistics page's Recipients tab. There is no standalone recipient-insights route.
 
 ## Architecture
 
@@ -51,9 +50,9 @@ interface RecipientInsightsResponse {
 }
 ```
 
-### Frontend Page
+### Frontend Tab
 
-Located at `[[apps/frontend/src/pages/RecipientInsightsPage.tsx]]`, the page consists of:
+Located at `[[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]]`, the tab consists of:
 
 1. **KPI Cards** (3 cards):
    - Top recipient name and total spend
@@ -76,7 +75,7 @@ Located at `[[apps/frontend/src/pages/RecipientInsightsPage.tsx]]`, the page con
 > [!info] June 2026 — All-Years Chart Now Filtered
 > Prior to June 2026, `GET /api/aggregations/recipient-insights` accepted only `currency`. The "all years" Top Recipients chart embedded in the Statistics page therefore never reacted to category/recipient exclusion toggles — only the per-year sub-queries were filtered. The endpoint now accepts `excluded_category_ids[]` and `excluded_recipient_ids[]`, and `useStatistics.ts` issues a second filtered query (`recipientInsightsFilteredQuery`) when exclusions are active. The `mapToStatisticsData` function picks the filtered payload for `topRecipients` when available.
 
-The page respects the global exclusion settings:
+The tab respects the global exclusion settings:
 
 ```typescript
 const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
@@ -91,7 +90,7 @@ When exclusions apply, filtered-out recipients are removed from both `topMerchan
 
 ## Pagination Strategy
 
-The page uses a client-side "load more" pattern rather than true pagination:
+The tab uses a client-side "load more" pattern rather than true pagination:
 
 ```typescript
 const [displayCount, setDisplayCount] = useState(pageSize);
@@ -103,9 +102,9 @@ const hasMore = displayCount < totalMerchants;
 - Load more: Increments by `pageSize` until all are shown
 - Reset: Resets to `pageSize` when `totalMerchants` or `pageSize` changes
 
-## Embedded Usage
+## Statistics Integration
 
-The `RecipientInsightsTab` component (`[[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]]`) allows embedding the insights within the Statistics page. It accepts the top recipients chart as a prop, enabling the Statistics page to control the chart rendering while the insights tab handles MoM alerts and the detail table.
+The `RecipientInsightsTab` component (`[[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]]`) is lazy-loaded by the Statistics page. It accepts the top recipients chart as a prop, enabling the parent page to control chart rendering while the tab handles month-over-month alerts and the detail table.
 
 ## Query Configuration
 

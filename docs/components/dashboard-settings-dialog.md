@@ -3,21 +3,21 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-10
+updated: 2026-08-26
 tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084, small-viewport-robustness]
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
   - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
-  - apps/frontend/src/components/settings/SettingsPrimitives.tsx
-  - apps/frontend/src/components/settings/sections/GeneralSection.tsx
-  - apps/frontend/src/components/settings/sections/AppearanceSection.tsx
-  - apps/frontend/src/components/settings/sections/StatisticsSection.tsx
-  - apps/frontend/src/components/settings/sections/BehaviorSection.tsx
-  - apps/frontend/src/components/settings/sections/AiSection.tsx
-  - apps/frontend/src/components/settings/sections/BackupSection.tsx
-  - apps/frontend/src/components/settings/sections/AboutSection.tsx
-  - apps/frontend/src/components/settings/AIChatSettingsSection.tsx
+  - apps/frontend/src/features/settings/SettingsPrimitives.tsx
+  - apps/frontend/src/features/settings/sections/GeneralSection.tsx
+  - apps/frontend/src/features/settings/sections/AppearanceSection.tsx
+  - apps/frontend/src/features/settings/sections/StatisticsSection.tsx
+  - apps/frontend/src/features/settings/sections/BehaviorSection.tsx
+  - apps/frontend/src/features/settings/sections/AiSection.tsx
+  - apps/frontend/src/features/settings/sections/BackupSection.tsx
+  - apps/frontend/src/features/settings/sections/AboutSection.tsx
+  - apps/frontend/src/features/settings/AIChatSettingsSection.tsx
 ---
 
 # DashboardSettingsDialog
@@ -107,7 +107,7 @@ interface DashboardSettingsDialogProps {
 ### Usage
 
 ```tsx
-import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+import { DashboardSettingsDialog } from "@/features/settings/DashboardSettingsDialog";
 import { useState } from "react";
 
 function SettingsButton() {
@@ -130,7 +130,7 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 
 ### File
 
-`[[apps/frontend/src/components/settings/SettingsPrimitives.tsx]]`
+`[[apps/frontend/src/features/settings/SettingsPrimitives.tsx]]`
 
 ### Exports
 
@@ -148,7 +148,7 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/GeneralSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/GeneralSection.tsx]]`
 
 ### Contents
 
@@ -160,7 +160,7 @@ Currency, number format, decimal places, date format, language, start of week, p
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/AppearanceSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]]`
 
 ### Contents
 
@@ -187,7 +187,7 @@ Formerly the `DashboardTab`. Renamed for accuracy: the exclusion scope option la
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/StatisticsSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/StatisticsSection.tsx]]`
 
 ### Contents
 
@@ -205,7 +205,7 @@ Reads from `useSettings`; exclusion arrays + scope write through `updateDashboar
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/BehaviorSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/BehaviorSection.tsx]]`
 
 ### Contents
 
@@ -222,11 +222,11 @@ Reads from `useAppSettings`; writes through `updateAppSettings`.
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/AiSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/AiSection.tsx]]`
 
 ### Contents
 
-Composes `[[apps/frontend/src/components/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama connection status + model selector) and `ResearchKeysSection` (provider API keys). Both sub-components read and write independently; `AiSection` is a layout wrapper.
+Composes `[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama connection status + model selector) and `ResearchKeysSection` (provider API keys). Both sub-components read and write independently; `AiSection` is a layout wrapper.
 
 ---
 
@@ -236,7 +236,7 @@ Formerly `BackupTab`. Now self-contained: it owns all backup state and writes di
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/BackupSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/BackupSection.tsx]]`
 
 ### Contents
 
@@ -260,7 +260,7 @@ All backup state (`backupDir`, `backupPassphrase`, `backupEncrypt`, `showRestore
 
 ### Tests
 
-`[[apps/frontend/src/components/settings/sections/__tests__/BackupSection.test.tsx]]`
+`[[apps/frontend/src/features/settings/sections/__tests__/BackupSection.test.tsx]]`
 
 ### Related
 
@@ -275,7 +275,7 @@ All backup state (`backupDir`, `backupPassphrase`, `backupEncrypt`, `showRestore
 
 ### File
 
-`[[apps/frontend/src/components/settings/sections/AboutSection.tsx]]`
+`[[apps/frontend/src/features/settings/sections/AboutSection.tsx]]`
 
 ### Contents
 
@@ -292,7 +292,7 @@ Reusable section for AI chat model configuration. Unchanged from Phase 3; now co
 
 ### File
 
-`[[apps/frontend/src/components/settings/AIChatSettingsSection.tsx]]`
+`[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx]]`
 
 ### Props
 

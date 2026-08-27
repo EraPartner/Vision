@@ -3,14 +3,15 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-13
+updated: 2026-08-26
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
-  - apps/frontend/src/components/tax/TaxProfileDialog.tsx
-  - apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx
+  - apps/frontend/src/features/tax/TaxProfileDialog.tsx
+  - apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx
+  - apps/frontend/src/features/tax/TaxYearStatusIcon.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
   - apps/frontend/src/lib/belgianTax/pit.ts
   - apps/frontend/src/lib/belgianTax/constants.ts
@@ -319,7 +320,7 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 
 ### UI surfaces
 
-- `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
+- `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. Compact filed/frozen markers in this switcher and the comparison surfaces share `TaxYearStatusIcon`, with filed status taking precedence. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
 - `HistoricalYearBanner` — shown above the page body when `isViewingHistorical` (via `HistoricalYearBannerSection`, still the composition used by `/portfolio/tax`). Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot. On `/tax` this banner is no longer a separate element — `TaxFilingMasthead` renders the same modes and actions inline (see below).
 - `TaxProfileDialog` accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
 

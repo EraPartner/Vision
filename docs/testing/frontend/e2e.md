@@ -3,7 +3,7 @@ title: Frontend E2E Tests (Playwright)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-05-02
+updated: 2026-08-27
 tags:
   - testing
   - frontend
@@ -13,13 +13,13 @@ tags:
   - phase-c
   - a11y
   - visual-regression
-description: Playwright E2E tests with a11y checks and visual regression — run locally with dev server or in CI with Docker Compose
+description: Current Playwright E2E discovery, scheduled CI, accessibility, and manual visual-regression workflow
 ---
 
 # Frontend E2E Tests (Playwright)
 
 > [!abstract] What this layer is for
-> Run Playwright against a real backend (local dev server or CI Docker Compose stack). Smoke-test critical user journeys: dashboard load, transaction add, CSV import, planned transaction create, portfolio overview. Every smoke test includes automated a11y checks (axe-core). Visual regression tests capture and compare full-page screenshots to catch unintended style changes. Catches integration issues between frontend and backend and design regressions that component-integration tests (MSW + jsdom) cannot.
+> Run Playwright against a real backend (local dev server or the scheduled CI Docker Compose stack). The automatically discovered non-visual specs cover page loads, dialog behavior, selected mutations, accessibility scans, and network drift. The separate manual visual project captures and compares full-page screenshots. Together they catch browser and integration failures that component tests (MSW + jsdom) cannot.
 >
 > Complements:
 > - **Component-integration tests** — fast, network-mocked, no backend (Phase A)
@@ -27,7 +27,53 @@ description: Playwright E2E tests with a11y checks and visual regression — run
 > - **Visual regression** — catch unintended layout/style changes (Phase C)
 > - **Accessibility checks** — automated WCAG 2.1 violations (Phase C)
 
-## Phase C: Accessibility Checks and Visual Regression (2026-04-30)
+## Current execution contract
+
+Playwright has two explicit projects:
+
+| Project | Selection | Execution |
+|---------|-----------|-----------|
+| `chromium` | Every `e2e/*.spec.ts` except `visual.spec.ts` | `bun run test:e2e`; nightly scheduled workflow or `workflow_dispatch` |
+| `visual-chromium` | Only `e2e/visual.spec.ts` | Manual local run; not scheduled in Linux CI |
+
+The hardened devcontainer does not include a browser or the system libraries needed to install
+one, and its egress policy excludes browser download hosts. Run browser-backed E2E and visual tests
+on the host, or use the scheduled Linux CI workflow. Test discovery with `--list` does not launch a
+browser and remains available in the devcontainer.
+
+The non-visual package script selects the project rather than naming spec files. A new non-visual
+`e2e/*.spec.ts` file therefore joins the scheduled suite automatically. The scheduled workflow is
+`.github/workflows/e2e.yml`; it is deliberately outside pull-request CI and runs nightly or on
+manual dispatch against the Docker Compose stack.
+
+Visual screenshots are platform-sensitive. Linux CI and local macOS rendering require different
+baselines, so no visual workflow job currently runs. Use:
+
+```bash
+# All automatically discovered non-visual specs
+bun run test:e2e
+
+# Add only missing local visual baselines
+bun run test:e2e:visual
+
+# Replace local visual baselines after an intentional UI change
+bun run test:e2e:update-snapshots
+```
+
+The accessibility and network-drift specs share the page catalog in `e2e/pages.ts`. Current suite
+membership is authoritative in `apps/frontend/e2e/` and can be inspected without starting the app:
+
+```bash
+CI=1 bun run test:e2e -- --list
+CI=1 bun run test:e2e:visual -- --list
+```
+
+> [!history] Dated implementation record below
+> The remaining sections describe how the first Playwright phases were introduced in April and
+> May 2026. References there to `smoke.spec.ts`, hardcoded package scripts, pull-request E2E, or a
+> `test-e2e-visual` CI job are historical and are superseded by the current contract above.
+
+## Historical Phase C: Accessibility Checks and Visual Regression (2026-04-30)
 
 > [!info] Phase C Testing Layers
 > Added automated accessibility (a11y) and visual regression layers to the E2E suite.

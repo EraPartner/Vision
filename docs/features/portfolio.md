@@ -3,12 +3,12 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-08-22
-updated: 2026-08-22
+last_modified: 2026-08-26
+updated: 2026-08-26
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/services/portfolio/rebalanceTargets.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -81,7 +81,7 @@ Constraints:
 - `symbol` must be non-empty when set and globally unique (case-insensitive).
 - Edit history is timestamp-only via `updated_at` (no full value history).
 
-Code links: [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ### Price Refresh
 ```
@@ -164,7 +164,7 @@ Rules:
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
-Code links: [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
 
 ## Holdings Calculation
 
@@ -423,7 +423,7 @@ When internet is unavailable and the backend cannot reach live price providers, 
 - If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
 - If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
 
-Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/components/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/components/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ## Performance Page Rewrite (Server-Computed Response)
 
@@ -435,7 +435,7 @@ The Performance page architecture was significantly refactored to move heavy com
 - `metrics` object: `currentValue`, `totalInvested`, `totalGainLoss`, `totalReturnPct`, `annualizedReturn`, `realReturnPct`, `cumulativeInflation`
 - `heatmap` object: contribution-adjusted monthly returns per year-month (fixed formula: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`)
 - `breakdownSummary` array: per-investment values all pre-converted to target currency server-side
-- **Period-filtered snapshots** are downsampled to ~400 points server-side using LTTB, while metrics/heatmap always use full historical data
+- **Period-filtered snapshots** retain full daily resolution. Metrics and heatmap also use full historical data; removing LTTB avoids preferentially retaining isolated price needles.
 - Persisted snapshots remain the single source of truth during response shaping:
   the backend no longer applies a second total-only spike smoother that could
   erase a genuine one-day cash movement. It derives `gain_loss` and
@@ -443,7 +443,7 @@ The Performance page architecture was significantly refactored to move heavy com
   FX-neutral parity ([[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
 - Cache key includes period: `${currency}:${period}` for independent caching per period
 - New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
-- New utility: [[apps/node-backend/src/utils/downsample.js]] — LTTB downsampler ported to backend
+- Payload shaping: [[apps/node-backend/src/services/info/performanceHelpers.js]] filters the requested period and returns daily snapshots without downsampling
 
 **Frontend simplification (`PerformancePage.tsx`, `PerformanceBreakdown.tsx`):**
 - Removed 4 heavy useMemo blocks: `filteredSnapshots`, `downsampledSnapshots`, `overallMetrics`, `heatmapData`
@@ -461,10 +461,10 @@ The Performance page architecture was significantly refactored to move heavy com
 - **Heatmap accuracy fix**: Contribution-adjusted returns now correctly account for cash flows; old formula conflated deposits/withdrawals with investment performance
 
 **Short-period chart formatting:**
-- **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks display day + month (e.g., "15 Jan"). For periods > 6 months (1y, 3y, all), ticks display month + year (e.g., "Jan 26"). Locale-aware formatting follows app language (en-US/nl-NL) for month names.
+- **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks use the shared `dayTick` role (day + month, e.g., "15 Jan"). Longer periods use `monthTick` (month + two-digit year, e.g., "Jan 26"). Detailed tooltips use `detail` (day + month + four-digit year). Locale-aware month names follow the app language.
 - **Y-axis adaptive domain**: For short periods (5d, 1m, 3m), the Y-axis uses `auto/auto` domain to zoom into the data range and highlight price fluctuations. For longer periods (≥ 6m), Y-axis uses `0/auto` domain to anchor at zero, showing full historical context.
 
-Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
@@ -567,7 +567,7 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
 
 **Implementation:**
 
-- Shared calculation functions in `@vision/shared-utils/portfolio` (re-exported by `[[apps/node-backend/src/utils/portfolioMath.js]]` and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
+- Shared calculation functions in `[[packages/shared-utils/src/portfolio.js|@vision/shared-utils/portfolio]]` (used directly by backend portfolio services and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
@@ -587,7 +587,7 @@ All cost basis methods handle:
 - **Mergers** — Cost-basis-neutral treatment
 - **Return of Capital** — Reduces cost basis per unit across all lots
 
-Code links: [[apps/node-backend/src/utils/portfolioMath.js]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
+Code links: [[packages/shared-utils/src/portfolio.js]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 
 ## Info Card Security Hardening (Phase 9)
 
@@ -712,24 +712,15 @@ Users can hide it from the widget visibility dialog (`portfolio.widget.ticker` i
 
 The ticker reuses the existing `/api/market/quote` batch endpoint and the existing `PATCH /api/investments/:id` endpoint (with the new `show_in_ticker` field). The `docs/reference/api-endpoint-matrix.md` count is unchanged.
 
-Code links: [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/lib/api.ts]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/lib/api.ts]]
 
 ## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
 
-> [!warning] Holdings UI flag-gated — default OFF (ADR-103, 2026-06-20)
-> The per-account **holdings** surfaces in this section are hidden when
-> `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the default). Specifically gated off:
-> - Account pickers on `AddPortfolioTxnDialog` and `EditPortfolioTxnDialog` (new trades stay
->   global; no `account_id` / `cash_account_id` → no cash leg created).
-> - The "Move Holdings" button, `MoveHoldingDialog`, and the per-investment per-account breakdown
->   card in `InvestmentDetailDialog`.
-> - The holdings-transfer block inside `CloseAccountDialog` (the cash-account archive path stays).
->
-> **Unaffected by the flag:** `AccountsPage` CRUD, the bank-balances widget (per-account cash),
-> `bank_account` on transaction forms, liabilities, and statement-balance reconciliation. The
-> backend `byAccount` data is still computed; it simply goes unused on the frontend.
-> Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` to restore the full surface. See
-> [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].
+> [!info] ADR-103 flag retired by ADR-108 / WP-C1
+> The `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` build flag and the old move-holding, cash-leg fan-out,
+> per-account snapshot, and net-worth endpoint surfaces were deleted. The current portfolio
+> summary still returns `byAccount` for ADR-108's partitioned profit-and-loss view. That response
+> is always available and is not controlled by a frontend flag.
 
 ### Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)
 
@@ -760,33 +751,26 @@ Per-broker read surfaces (hub cards, net-worth by-account table, `InvestmentDeta
 
 `EditPortfolioTxnDialog` has an account selector. `PATCH /api/investments/transactions/:id` accepts `account_id` (integer to reassign a lot to a different account, or `null` to unassign it). No other transaction fields are required alongside it.
 
-### Partial-move cost-basis strategy
+### Account reassignment and closing after ADR-108
 
-`POST /api/investments/:id/move` accepts an optional `strategy` field:
+`EditPortfolioTxnDialog` can reassign a complete transaction row by updating its `account_id`, or
+clear the assignment with `null`. ADR-108 deleted partial lot moves, the move endpoint,
+`MoveHoldingDialog`, and `moveHoldingService`; account reassignment no longer performs cost-basis
+surgery.
 
-| `strategy` | Behavior |
-|------------|----------|
-| `'fifo'` | Default. Move oldest buy lots first; boundary lot split pro-rata. |
-| `'proportional'` | Average-cost: split *every* lot by the same fraction. Useful for mutual fund–style holdings. |
+`CloseAccountDialog` archives the account with `is_active: false` and warns when a computed cash
+balance remains. It preserves history and holdings and does not transfer lots to another account.
 
-The strategy selector is shown in `MoveHoldingDialog` only for partial moves (`units < net`). `MoveHoldingService` implements both paths.
+Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]
 
-### Close-account workflow
+### Brokerage batch routing after ADR-108
 
-`CloseAccountDialog` (wired into `AccountsPage`) lists all of an account's holdings, lets the user pick a destination account, transfers all lots in-specie (calls `POST /api/investments/:id/move` per holding), then archives the account (`PATCH /api/accounts/:id` with `{ is_active: false }`). This is a UI-level workflow with no dedicated backend endpoint; the `ON DELETE RESTRICT` FK on `portfolio_transactions_base.account_id` prevents hard-deletion of an account that still has lots.
+Portfolio imports retain ADR-095's batch-level `is_brokerage` classification and `account_id`.
+Trade rows are stored as portfolio transactions assigned to that account. Real external or
+instrument-less cash rows are stored in the budgeting ledger. ADR-108 deleted synthetic trade cash
+legs, so an imported trade never manufactures a second cash movement.
 
-Code links: [[apps/frontend/src/components/portfolio/CloseAccountDialog.tsx]], [[apps/node-backend/src/services/portfolio/moveHoldingService.js]]
-
-### Brokerage fan-out core (ADR-095)
-
-`apps/node-backend/src/services/importPipeline/brokerageFanout.js` is now wired and tested. It exports `planBrokerageFanout(rows, accountId)` and `commitBrokerageFanout(plan, db)`, which route one parsed brokerage statement into:
-- cash ledger rows (deposits, withdrawals, fees, dividends, taxes, interest) → `transactions`
-- trade rows (buys, sells) → `portfolio_transactions` with an ADR-090 cash leg
-
-The double-count guard is enforced: a trade emits exactly one cash movement (its leg); no standalone cash row is also created for the same buy/sell.
-
-> [!warning] Remaining surface
-> The brokerage **parser kind** (mixed-row CSV classifier), the **staging schema** for mixed-row batches, and the **review UI integration** for per-row routing decisions are **not yet built**. The fan-out service is correct and tested but is not reachable through the import UI. See [[docs/adr/095-brokerage-account-import|ADR-095]] for the full status.
+Code links: [[apps/node-backend/src/services/importPipeline/brokerageRouting.js]], [[apps/node-backend/src/services/portfolioImportPipeline/commit.js]]
 
 ## FX Attribution (2026-06-11, ADR-074)
 
@@ -844,7 +828,7 @@ The hook:
 **InvestmentDetailDialog behaviour after the change:**
 
 - Calls `useFxAwarePnl(targetCurrency)` internally to compute the P&L.
-- The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when the holding is in a genuinely foreign currency. The gate compares the holding's NATIVE currency (`holding.originalCurrency`) to `targetCurrency` — **not** `holding.currency`, which on an `InvestmentSummary` is the display/target currency (every monetary field is converted to it). The native-value row and the transactions tab also label amounts in the holding's own currency. This removes spurious FX rows for base-currency holdings while keeping them for foreign ones. (Editing the same `currency`-vs-`originalCurrency` distinction: [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]] edits `originalCurrency`.)
+- The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when the holding is in a genuinely foreign currency. The gate compares the holding's NATIVE currency (`holding.originalCurrency`) to `targetCurrency` — **not** `holding.currency`, which on an `InvestmentSummary` is the display/target currency (every monetary field is converted to it). The native-value row and the transactions tab also label amounts in the holding's own currency. This removes spurious FX rows for base-currency holdings while keeping them for foreign ones. (Editing the same `currency`-vs-`originalCurrency` distinction: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]] edits `originalCurrency`.)
 - The dialog renders identically regardless of which page opened it (Stocks, Crypto, Overview, dashboard, Real Estate, Savings).
 
 **StocksPage:** Now uses `useFxAwarePnl` for its holdings table column as well, ensuring the table values match the detail dialog values. The previously passed-down props have been removed from the component signature.
@@ -856,7 +840,7 @@ The hook:
 | `invDetail.fxAwareRealized` | Label for the FX-aware realized P&L row (shows `{currency}`) |
 | `invDetail.fxAwareUnrealized` | Label for the FX-aware unrealized P&L row (shows `{currency}`) |
 
-Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
+Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 ## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
 
@@ -930,7 +914,7 @@ New keys in `rebalance.*` namespace (en + nl). Notable renames: `rebalance.plan`
 management UI), `rebalance.editor.*` (custom editor rows), `rebalance.sleeve.*` (sleeve labels),
 `rebalance.customNew`, `rebalance.presets`, `rebalance.savedPlans`.
 
-Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/routes/crossWorkspace.js]], [[apps/node-backend/tests/settingsStorage.test.js]]
+Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/routes/crossWorkspace.js]], [[apps/node-backend/src/services/portfolio/rebalanceTargets.js]], [[apps/node-backend/tests/settingsStorage.test.js]]
 
 See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/adr/098-cross-workspace-features|ADR-098]]
 
@@ -942,10 +926,10 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
 - [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
 - [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, startup backfill
-- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] — Flag-gate for per-account holdings UI (default off)
-- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity (Σ byAccount); UI scope narrowed by ADR-103
-- [[docs/adr/091-per-account-positioning|ADR-091]] — Per-account lots, move-holding, close-account; UI scope narrowed by ADR-103
-- [[docs/adr/095-brokerage-account-import|ADR-095]] — Brokerage fan-out (core built; parser/UI deferred)
+- [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] — Current broker-tag design; supersedes the ADR-103 flag and move workflow
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Historical per-account parity design, superseded where noted by ADR-108
+- [[docs/adr/091-per-account-positioning|ADR-091]] — Historical per-account lot design; partial moves superseded by ADR-108
+- [[docs/adr/095-brokerage-account-import|ADR-095]] — Batch-level brokerage import routing retained by ADR-108
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution with purchase-date rates
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (converted track)
 - [[docs/adr/002-database-schema|Database Schema]]

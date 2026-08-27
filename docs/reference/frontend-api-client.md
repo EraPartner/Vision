@@ -3,7 +3,7 @@ title: Frontend API Client Architecture
 type: reference
 status: active
 date: 2026-04-22
-updated: 2026-04-29
+updated: 2026-08-26
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -13,7 +13,7 @@ related_code:
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/transactions.ts
   - apps/frontend/src/lib/api/categories.ts
-  - apps/frontend/src/lib/api/investments.ts
+  - apps/frontend/src/lib/api/portfolio.ts
   - apps/frontend/src/lib/env.ts
   - apps/frontend/src/types/generated.ts
   - openapi.yaml
@@ -39,6 +39,16 @@ The frontend HTTP client in `apps/frontend/src/lib/api/` implements a three-laye
 ### Current modules (`apps/frontend/src/lib/api/`, 18 domain modules as of 2026-05-16)
 
 `admin`, `aggregations`, `ai`, `attachments`, `categories`, `charts`, `electron`, `helpers`, `imports`, `info`, `market`, `planned`, `portfolio`, `recipients`, `reports`, `settings`, `splits`, `sse`, `tags`, `transactions` — plus `client.ts` (transport) and `types.ts` (envelope / error types).
+
+### Import convention
+
+New narrow consumers import the function they need from `@/lib/api/<domain>`. This keeps domain
+ownership visible and avoids growing the compatibility facade. `@/lib/api` and its `apiClient`
+object remain supported for existing callers and for code that intentionally coordinates several
+domains; migrating those callers is incremental cleanup, not a prerequisite for feature work.
+
+Both forms delegate to the same domain modules. They are access paths, not separate HTTP client
+implementations.
 
 ## Environment Configuration
 
@@ -151,8 +161,7 @@ export type ApiResponse<T> =
 
 export interface ResponseMeta {
   requestId?: string;
-  computedAt?: string;
-  source?: 'mv' | 'live';
+  [key: string]: unknown; // route-specific facts such as source or computedAt
 }
 // Pagination is NOT in meta — a list's data body is
 // `{ items, total, limit?, offset? }` (limit/offset only when the request

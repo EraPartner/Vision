@@ -3,7 +3,7 @@ title: Database Maintenance UI
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-06-18
+updated: 2026-08-26
 tags: [feature, admin, database, maintenance, performance, phase-7, vacuum, db-data-editor, adr-101, audit]
 description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a committed-SQL audit trail.
 aliases: [db maintenance, database admin, VACUUM, table stats, db data editor, table editor]
@@ -187,7 +187,6 @@ The editor page (`TableDataEditorPage.tsx`) renders a controlled grid using the 
 
 - **Column headers** are sortable (click once for ASC, again for DESC). Sorting is paused while uncommitted changes exist to prevent silent loss of dirty state.
 - **Per-column filter inputs** appear below each header. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`.
-- **Raw WHERE box** for free-form SQL predicates. Semicolons are rejected server-side; the query runs inside a READ ONLY transaction so mutation is structurally impossible.
 - **Pagination** via `limit` (default 100, max 500) and `offset` controls.
 
 The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[docs/api/admin|Admin API]].
@@ -195,7 +194,9 @@ The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[d
 ### Editing cells
 
 - Click any non-PK, non-generated cell to activate an inline editor.
-- A **NULL toggle** checkbox is shown for nullable columns.
+- Press **Enter** to stage the active value. Reopen a staged cell and press **Escape** to remove only that cell's pending value and restore its original value; other staged rows and cells remain intact. Escape also reverts staged boolean and new-row cells.
+- A **Set NULL** icon button is shown for writable nullable columns with a non-NULL value.
+- Dirty cells expose a per-cell undo button for pointer users; the same action is available with **Escape** from the active editor or boolean control.
 - Boolean columns render as checkboxes.
 - Edited cells are highlighted as **dirty state**. Filtering, sorting, and paging are paused while dirty rows exist so refetches cannot silently discard changes.
 - **Add row** button appends a new blank row in dirty state.

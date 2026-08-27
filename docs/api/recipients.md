@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
 date: 2026-04-16
-updated: 2026-08-11
+updated: 2026-08-26
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -150,6 +150,11 @@ Merge multiple recipients into one (the recipient identified by `:id` becomes th
 
 Merges all transactions, splits, planned transactions, and bank accounts from alias recipients to the primary recipient. Sets `primary_recipient_id` on aliases.
 
+`alias_ids` is required, must be a non-empty array, and each element must be a plain base-10
+integer in 1..2,147,483,647. Digit strings are normalized to numbers. One malformed element
+(`12abc`, `1e3`, `0x10`, a fraction, zero, or a negative id) rejects the whole request with
+`400 VALIDATION_ERROR`; no recipient lookup or merge write runs for a partial subset.
+
 **Atomic Guarantees (Phase 6):**
 - All FK reassignments execute within a single database transaction.
 - If any step fails, the entire merge rolls back (no partial state).
@@ -202,26 +207,26 @@ Get all alias recipients for a primary recipient.
 
 ### GET /api/recipients/clusters
 
-Identify recipient clusters for bulk merge operations. Analyzes active primary recipients and groups them by common prefixes and categories, returning potential match patterns for pattern-based merge suggestions.
+Identify recipient clusters for bulk merge operations. The service scans at most the first 10,000 active primary recipients in name order and returns at most 50 meaningful pattern suggestions. On larger datasets, recipients after that deterministic scan window are not considered.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| minCount | integer | 2 | Minimum recipients per cluster |
+| min_count | integer | 2 | Minimum recipients per cluster (minimum 2) |
 
 **Response:**
 ```json
 {
   "items": [
     {
-      "lcp": "SUPER",
-      "confidence": 0.95,
+      "lcp": "SUPERMARKET",
+      "confidence": "medium",
       "recipientIds": [1, 5, 7],
-      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Super Convenience"],
+      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Supermarket City"],
       "categoryId": 5,
-      "suggestedPattern": "super%",
-      "suggestedKind": "prefix"
+      "suggestedPattern": "SUPERMARKET",
+      "suggestedKind": "literal_prefix"
     }
   ],
   "total": 1
@@ -230,18 +235,18 @@ Identify recipient clusters for bulk merge operations. Analyzes active primary r
 
 **Response Fields:**
 - `lcp` (string): Longest common prefix of recipient names in the cluster
-- `confidence` (number): Match confidence (0.0–1.0) based on LCP length and cluster size
+- `confidence` (string): `"high"` when the common prefix is at least 16 characters; otherwise `"medium"`
 - `recipientIds` (array): IDs of recipients in the cluster
 - `recipientNames` (array): Names of recipients in the cluster
-- `categoryId` (integer): Shared or most common category ID in the cluster
-- `suggestedPattern` (string): Recommended pattern for merge rule (e.g., `"super%"` for prefix matching)
-- `suggestedKind` (string): Pattern type, currently `"prefix"`
+- `categoryId` (integer or null): Category shared by every recipient in the cluster
+- `suggestedPattern` (string): Recommended literal common-prefix pattern
+- `suggestedKind` (string): Pattern type, currently `"literal_prefix"`
 
 **Implementation:**
 - Queries active primary recipients only (excludes aliases and inactive)
 - Buckets by first-4-character prefix + category for initial grouping
 - Analyzes longest common prefix (LCP) with minimum length of 8 characters
-- Returns up to 50 clusters sorted by confidence (highest first)
+- Scans up to 10,000 recipients in name and ID order, then returns the first 50 qualifying clusters in that order
 - Used by the frontend to suggest pattern-based merge opportunities after manual merge actions
 
 ## Recipient Patterns

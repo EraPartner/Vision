@@ -3,6 +3,7 @@ title: Frontend Routes Reference
 type: reference
 status: active
 date: 2026-04-25
+updated: 2026-08-26
 tags: [reference, frontend, routing, pages, react-router, admin, workspace]
 description: Complete reference of all frontend routes and their page components, including admin routes and workspace-aware navigation
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -21,7 +22,6 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 | `/transactions` | `TransactionsPage` | AppLayout | Transaction CRUD with virtual table | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]] |
 | `/categories` | `CategoriesPage` | AppLayout | Category management | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]] |
 | `/recipients` | `RecipientsPage` | AppLayout | Recipient management | [[apps/frontend/src/pages/RecipientsPage.tsx\|RecipientsPage.tsx]] |
-| `/recipients/:id/insights` | `RecipientInsightsPage` | AppLayout | Recipient spending analytics | [[apps/frontend/src/pages/RecipientInsightsPage.tsx\|RecipientInsightsPage.tsx]] |
 | `/planned` | `PlannedPaymentsPage` | AppLayout | Planned and recurring payments | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx\|PlannedPaymentsPage.tsx]] |
 | `/statistics` | `StatisticsPage` | AppLayout | Analytics and reporting | [[apps/frontend/src/pages/StatisticsPage.tsx\|StatisticsPage.tsx]] |
 | `/import` | `ImportPage` | AppLayout | CSV import | [[apps/frontend/src/pages/ImportPage.tsx\|ImportPage.tsx]] |
@@ -41,8 +41,8 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 | `/portfolio/performance` | `PerformancePage` | AppLayout | Portfolio performance charts | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx\|PerformancePage.tsx]] |
 | `/portfolio/net-worth` | `NetWorthPage` | AppLayout | Net worth tracking | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]] |
 | `/admin/exchange-rates` | `ExchangeRatesPage` | AppLayout + RequireAdmin | Exchange rate management (admin mode; old `/portfolio/exchange-rates` redirects) | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]] |
-| `/portfolio/watchlist` | `WatchlistPage` | AppLayout | Investment watchlist | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx\|WatchlistPage.tsx]] |
-| `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
+| `/portfolio/watchlist` | `WatchlistPage` | AppLayout | Investment watchlist | [[apps/frontend/src/pages/research/WatchlistPage.tsx\|WatchlistPage.tsx]] |
+| `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/research/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
 | `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
 
 ## Admin Routes
@@ -62,7 +62,7 @@ Admin routes are workspace-agnostic and preserve the active workspace when navig
 |-------|-----------|--------|-------------|------|
 | `/ai-chat` | `AIChatPage` | AppLayout | Local AI chat for natural-language queries | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]] |
 
-> Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
+> Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
 ## Special Routes
 

@@ -3,12 +3,13 @@ title: Exchange Rates Feature
 type: feature
 status: active
 date: 2026-04-02
-updated: 2026-08-10
+updated: 2026-08-26
 tags: [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
 description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability. 2026-06-16 — moved from /portfolio/exchange-rates to /admin/exchange-rates (admin-mode section; it inspects the FX rate feed rather than being a per-user task). Old path redirects.
 aliases: [FX rates, currency rates, exchange rates page]
 related_code:
   - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
+  - apps/frontend/src/components/notifications/FxStatusBanner.tsx
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/services/currency/currencyConversionService.js
 ---
@@ -42,6 +43,10 @@ The active tab (`live` | `fallback`) is mirrored to `?tab=` via [[docs/component
 
 #### Refresh Button
 Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.
+
+#### Global stale-rate warning
+
+`FxStatusBanner` appears in the application layout when stored rates are stale or fallback rates are in use. It shows the last successful fetch time when available. Its inline **Refresh** button calls the same `POST /api/info/exchange-rates/refresh` endpoint as the admin page, invalidates both exchange-rate cache families, and reloads the banner status. Success and failure are reported with localized toasts. Dismissing the warning still suppresses it locally for one hour.
 
 ### Backend Endpoints
 
@@ -107,19 +112,24 @@ Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/curren
 
 ```typescript
 useQuery<ExchangeRatesData>({
-  queryKey: ["exchangeRates"],
-  queryFn: () => apiClient.request("/api/info/exchange-rates"),
-  staleTime: 60_000,
+  queryKey: exchangeRateKeys.all,
+  queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
+  staleTime: 10 * 60_000,
 })
 ```
+
+The admin page and conversion consumers share `exchangeRateKeys.all` (`["exchange-rates"]`). The global status banner keeps its legacy `exchangeRateKeys.fxStatus` key (`["exchangeRates", { dbOnly: true }]`) because it uses a shorter staleness policy and warning-specific lifecycle.
 
 ### Refresh Mutation
 
 ```typescript
 useMutation({
-  mutationFn: () => apiClient.request("/api/info/exchange-rates/refresh", { method: "POST" }),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
+  mutationFn: () => apiClient.refreshExchangeRates(),
+  onSuccess: async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all }),
+      queryClient.invalidateQueries({ queryKey: exchangeRateKeys.fxStatus }),
+    ]);
     toast.success(t('exchangeRates.refreshSuccess'));
   },
 })

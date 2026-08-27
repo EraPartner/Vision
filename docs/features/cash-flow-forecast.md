@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-08-26
+last_modified: 2026-08-26
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -20,8 +20,8 @@ related_code:
   - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
   - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
-  - apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx
-  - apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx
+  - apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx
+  - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/lib/api/aggregations.ts
   - alembic/versions/0012_cashflow_forecast_accuracy.py
   - alembic/versions/0013_cashflow_forecast_mc.py
@@ -781,7 +781,7 @@ Additionally, the diagnostics section includes ensemble weights:
 
 ### Phase C: Frontend Components
 
-**CashFlowForecastChart** (`apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx`):
+**CashFlowForecastChart** (`apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx`):
 - Entry point for dashboard forecast widget
 - Props: `excludedCategoryIds`, `excludedRecipientIds`, `currency`
 - State:
@@ -801,7 +801,7 @@ Additionally, the diagnostics section includes ensemble weights:
   - Method legend with color swatch and label
 - Self-contained `useQuery(getCashflowForecastMethods)` with params derived from props and local state
 
-**CashFlowForecastDiagnostics** (`apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx`):
+**CashFlowForecastDiagnostics** (`apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx`):
 - Right-side Sheet panel showing backtest results (Phase C) and persisted accuracy history (Phase D)
 - Props: `diagnostics` (from chart parent), `open` boolean, `onOpenChange` callback
 - Data loading:
@@ -907,8 +907,8 @@ Walk-forward backtest is per-calendar-month: it iterates historical months and m
 
 ### Frontend wiring
 
-- `apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, branches between two `useQuery` calls (one enabled at a time), and renders either `ForecastInner` or `ForecastInnerRolling`.
-- `apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PerformancePage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
+- `apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, branches between two `useQuery` calls (one enabled at a time), and renders either `ForecastInner` or `ForecastInnerRolling`.
+- `apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PerformancePage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
 - `apps/frontend/src/utils/forecastMerge.ts` exports `mergeForViewRolling` that produces date-keyed `MergedDayDate[]` rows (with `t: Date`) instead of dayNum-keyed rows.
 - `apps/frontend/src/components/charts/LineChart.tsx` extends `LineReferenceLine` to support an optional `x: Date | number` field for vertical reference lines (backwards-compatible with existing `y` references).
 

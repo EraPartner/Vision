@@ -3,11 +3,11 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/lib/validation.js", "apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -16,13 +16,18 @@ Vision implements comprehensive input validation to prevent SQL injection, XSS a
 
 ## Overview
 
-The validation middleware (`validation.js`) provides centralized input validation for all API endpoints. It uses a whitelist approach to ensure only valid data enters the system.
+`lib/validation.js` owns the pure value rules and update-field whitelist used by routes, services,
+repositories, and lower-level libraries. `middleware/validation.js` contains the Express
+parameter adapters (`validateIdParam`, `validateIntParam`, and the point-of-use `assertIdParam`) and
+re-exports the pure helpers for route compatibility. Lower layers import the library directly and
+do not depend on `middleware/validation.js`; typed application errors remain owned by
+`middleware/errorHandler.js` under the existing project-wide convention.
 
 ## Validation Functions
 
 ### ID Validation
 
-Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField`, `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
+Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField`, `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
 
 ```javascript
 validateId(value, fieldName = 'id', max = MAX_INT32_ID)
@@ -40,27 +45,17 @@ validateId(value, fieldName = 'id', max = MAX_INT32_ID)
 >
 > This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.js`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
+Route handlers read numeric path parameters through `assertIdParam(req, name)`, which validates at
+the point of use and returns a number. `validateIdParam` and `validateIntParam(name)` remain at the
+router boundary for early rejection, but handler safety no longer depends on those middleware
+functions running first. Do not reintroduce `parseInt(req.params...)`, `Number(req.params...)`, or
+a raw cast: a future route mounted without middleware would then be able to retarget a malformed id.
+
 **Returns:**
 ```javascript
 { valid: true, value: 123 }  // Success
 { valid: false, error: "id must be a positive integer" }  // Failure
 ```
-
----
-
-### String Sanitization
-
-Sanitizes string inputs by trimming whitespace and enforcing maximum length.
-
-```javascript
-sanitizeString(value, maxLength = 500)
-```
-
-**Rules:**
-- Converts non-strings to strings
-- Trims whitespace
-- Enforces maximum length
-- Returns `null` for null/undefined inputs
 
 ---
 
@@ -129,6 +124,15 @@ validateIntArray(values, fieldName = 'ids')
 > The element parse was `parseInt`, the same truncation the `:id` params lost the same day, and here it was worse. These arrays feed **exclusion and filter sets**, not a single-record lookup, so a truncated element did not 404 — it quietly changed which rows an aggregation or saved chart covered, and no error surfaced to anyone. `["12abc"]` silently became category `[12]`; `["12.5"]` and `["1e3"]` likewise became `[12]` and `[1]`.
 >
 > Malformed elements now return **400 `VALIDATION_ERROR`**. Clients sending plain integers are unaffected — the frontend types all four fields `number[]` (`lib/api/types.ts`, `stores/settingsStore.ts`), so no shipped caller is affected.
+
+Request boundaries reject an ID collection as one unit through `validateIntArray`; they never
+filter individual values and continue with a smaller read or write. The permitted lower-layer
+exceptions are `filterValidatedIdNumbers` inside merge services and the already documented
+`normalizeInvestmentIds` repository adapter below. The merge helper is defense in depth for an
+already validated internal `number[]`: it does not coerce strings, it retains the full inclusive
+int4 range, and it drops invalid direct-call values because that layer cannot return an HTTP 400.
+Each use must document its resource-specific self-ID/deduplication behavior and have a direct-call
+regression test. Route handlers must not use this helper.
 
 ---
 
@@ -455,7 +459,7 @@ const ALLOWED_COLUMNS = {
 
 ### sanitizeUpdateFields()
 
-This function filters update requests to only include allowed columns:
+This library function filters update requests to only include allowed columns:
 
 ```javascript
 sanitizeUpdateFields('transactions', { amount: 100, unknown_field: 'bad' })

@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-25
+updated: 2026-08-27
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps, todo-hygiene]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -32,12 +32,13 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `dev` | `concurrently … backend dev … frontend dev` | Run both workspaces' `dev` scripts in parallel with coloured prefixes. |
 | `backend` | `bun run --filter '…-node' start` | Start the backend in production mode (no watcher). |
 | `update` | `bun update` | Refresh dependency graph to the latest allowed versions. |
+| `version:bump` | `node scripts/version-bump.js <x.y.z>` | Validate a canonical release version and update the root and Electron manifests with rollback on failure. Refuses prefixes, prereleases, leading zeros, and pre-existing manifest drift. |
 
 ### Build
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| `build` | `npm run generate-locales-if-not-ci && bun run --filter 'vision-frontend' build` | Production frontend build, preceded by locale generation outside CI. |
+| `build` | `bun run --filter 'vision-frontend' build` | Production frontend build; the frontend workspace script generates locales exactly once before Vite. |
 | `build:dev` | `bun run --filter 'vision-frontend' build:dev` | Frontend build in development mode (no minification). |
 | `dist` | `npm run build && cd packaging/electron && npm run dist` | Full Electron desktop build. Output is **unsigned / ad-hoc; no notarization** (`packaging/electron/package.json` sets `identity: null`, `hardenedRuntime: false`, and CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false`) — see [[packaging/release/README.md]] for the release posture. |
 | `preview` | `bun run --filter 'vision-frontend' preview` | Serve the built frontend bundle locally for smoke-testing. |
@@ -98,8 +99,8 @@ Flags: `--list` (inventory every token, always exit 0) · `--strict` (`PENDING` 
 | `test:all` | `concurrently … backend test … frontend test` | Run both test suites in parallel. |
 | `test:watch` | `bun run --filter '…-node' test:watch` | Backend tests in watch mode. |
 | `test:coverage` | `bun run --filter 'vision-frontend' test:coverage` | Frontend test coverage (V8). |
-| `test:e2e` | `bun run --filter 'vision-frontend' test:e2e` | Playwright E2E (smoke, dialogs-edge, critical-flows, mutations-parity, network-drift, a11y). |
-| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Update visual regression baselines that are missing. |
+| `test:e2e` | `bun run --filter 'vision-frontend' test:e2e` | Discover and run every non-visual Playwright E2E spec through the `chromium` project. |
+| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Run the manual `visual-chromium` project and add visual regression baselines that are missing. |
 
 ### Database (Alembic)
 
@@ -148,15 +149,15 @@ The wrappers spawn Electron from `packaging/electron/`, layering a docker-compos
 | Script | Command | Description |
 |--------|---------|-------------|
 | `dev` | `vite` | Vite dev server with HMR (port 5174). |
-| `build` | `GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && vite build` | Locale codegen + Vite production build. |
+| `build` | `node ../../scripts/generate-locales.js && vite build` | Locale codegen + Vite production build. The root `build` delegates here instead of generating locales a second time. |
 | `build:dev` | `vite build --mode development` | Build without minification, useful for debugging. |
 | `preview` | `vite preview` | Serve the production build at a local port. |
 | `lint` | `eslint .` | Frontend ESLint. |
 | `test` | `vitest run` | Vitest one-shot. |
 | `test:coverage` | `vitest run --coverage` | Vitest with V8 coverage. |
-| `test:e2e` | `playwright test e2e/{smoke,dialogs-edge,critical-flows,mutations-parity,network-drift,a11y}.spec.ts` | Playwright real-browser suite. |
-| `test:e2e:visual` | `playwright test --update-snapshots=missing e2e/visual.spec.ts` | Add missing visual baselines (does not overwrite existing). |
-| `test:e2e:update-snapshots` | `playwright test --update-snapshots` | Overwrite *all* Playwright snapshots — run after intentional UI changes. |
+| `test:e2e` | `playwright test --project=chromium` | Discover and run every non-visual Playwright real-browser spec. |
+| `test:e2e:visual` | `playwright test --project=visual-chromium --update-snapshots=missing` | Run `visual.spec.ts` and add missing local baselines (does not overwrite existing). This platform-sensitive suite is manual, not scheduled in Linux CI. |
+| `test:e2e:update-snapshots` | `playwright test --project=visual-chromium --update-snapshots` | Overwrite all local visual snapshots after an intentional UI change. |
 | `test:mutation` | `stryker run` | Stryker mutation testing on scoped modules (currency + API client). Opt-in; not in CI. |
 
 ## Backend workspace scripts (`apps/node-backend/package.json`)

@@ -3,6 +3,7 @@ title: API Client Methods Reference (ARCHIVED)
 type: reference
 status: archived
 date: 2026-04-21
+updated: 2026-08-26
 tags: [reference, api-client, frontend, typescript, http, archived, phase-1]
 description: Legacy reference of monolithic api.ts — replaced by modular architecture in Phase 1
 aliases: [api client, HTTP client, fetch methods, apiClient]
@@ -71,7 +72,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | `createRecipient(data)` | POST /api/recipients | `{ recipient, wasCreated }` |
 | `updateRecipient(id, data)` | PATCH /api/recipients/:id | `Recipient` |
 | `deleteRecipient(id)` | DELETE /api/recipients/:id | `void` |
-| `mergeRecipients(primaryId, aliasIds)` | POST /api/recipients/:id/merge | `{ primary, merged_ids, aliases }` |
+| `mergeRecipients(primaryId, aliasIds)` | POST /api/recipients/:id/merge | `{ primary, merged_ids, aliases, patternSuggestion }` |
 | `unmergeRecipient(id)` | POST /api/recipients/:id/unmerge | `Recipient` |
 | `getRecipientAliases(id)` | GET /api/recipients/:id/aliases | `{ items, total }` |
 

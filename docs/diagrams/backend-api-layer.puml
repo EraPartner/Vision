@@ -30,24 +30,29 @@ package "Middleware" {
     note: dev bypasses gated on VISION_DEV=true (fail-safe) — June 2026
   }
 
-  class Validation {
-    +sanitizeUpdateFields(table, fields): SanitizedFields
-    +validateId(id): ValidationResult
-    +sanitizeString(value): string
-    +validateNumber(value): ValidationResult
-    +validateDateString(value): ValidationResult
-    +validatePagination(opts): PaginationResult
-    +validateIdParam(param): number
-    +validateIntArray(value): number[]
+  class ValidationMiddleware {
+    +assertIdParam(req, name): number
+    +validateIdParam(req, res, next): void
+    +validateIntParam(name): Middleware
   }
 
   class Security {
-    +cors: custom inline middleware (Phase 5, replaces cors package)
-    +compression: custom inline middleware via node:zlib (Phase 5, replaces compression package)
+    +cors: middleware/cors.js (strict allowlist, replaces cors package)
+    +compression: middleware/compression.js (node:zlib, replaces compression package)
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
     +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
     +csrfGuard middleware (Sec-Fetch-Site / Origin allowlist; blocks cross-site state-changing requests to /api/admin)
+  }
+}
+
+package "Validation library" {
+  class PureValidation {
+    +sanitizeUpdateFields(table, fields): SanitizedFields
+    +validateId(id): ValidationResult
+    +validateNumber(value): ValidationResult
+    +validateDateString(value): ValidationResult
+    +validateIntArray(value): number[]
   }
 }
 
@@ -119,9 +124,16 @@ package "Routes" {
     +POST /csv : import CSV
     +POST /csv/custom : import with custom config
     +POST /csv/stream : SSE streaming import
-    +GET /supported-banks : list supported banks
     +POST /recipients : bulk import recipients
     +POST /categories : bulk import categories
+    +GET /batches : list transaction import batches
+    +GET /batches/:id : get transaction import batch
+    +DELETE /batches/:id : rollback transaction import batch
+    +GET /batches/:id/preview : preview rows grouped by recipient
+  }
+
+  class ImportBatchRoutes {
+    +registerImportBatchRoutes(router, options)
   }
 
   class PortfolioImportRouter <<ADR-078>> {
@@ -187,7 +199,7 @@ package "Routes" {
 
   class InfoRouter {
     +GET / : get statistics
-    +GET /banks : list supported banks
+    +GET /banks : list transaction bank-account labels
     +GET /supported-adapters : list supported adapters
     +GET /transaction-count : get transaction count
     +GET /transaction-summary : get transaction summary
@@ -268,9 +280,9 @@ package "Routes" {
     +DELETE /:id : soft-delete
   }
 
-  class BulkActionsRoutes <<mounted on /api/transactions>> {
-    +POST /bulk-tag : add/remove tags on ≤500 transactions
-    +POST /bulk-delete : ≤500 ids OR ≤5000 filter matches
+  class BulkActionsRoutes <<mounted route>> {
+    +POST /bulk-tag : add/remove tags on up to 500 transactions
+    +POST /bulk-delete : up to 500 ids OR 5000 filter matches
     +POST /bulk-update : category / recipient / active update
     +POST /bulk-export : CSV / NDJSON streamed export
   }
@@ -283,18 +295,18 @@ note right of InvestmentsRouter
 end note
 
 package "Repositories" {
-  class TransactionRepository as TR
-  class CategoryRepository as CR
-  class RecipientRepository as RR
-  class PlannedTransactionRepository as PTR
-  class InvestmentRepository as IR
-  class PortfolioTransactionRepository as PTR2
-  class WatchlistRepository as WR
-  class SavedChartsRepository as SCR
-  class SplitRepository as SR
-  class SettingsRepository as SR2
-  class RecipientBankAccountRepository as RBAR
-  class InfoRepository as IFR
+  class "TransactionRepository" as TR
+  class "CategoryRepository" as CR
+  class "RecipientRepository" as RR
+  class "PlannedTransactionRepository" as PTR
+  class "InvestmentRepository" as IR
+  class "PortfolioTransactionRepository" as PTR2
+  class "WatchlistRepository" as WR
+  class "SavedChartsRepository" as SCR
+  class "SplitRepository" as SR
+  class "SettingsRepository" as SR2
+  class "RecipientBankAccountRepository" as RBAR
+  class "InfoRepository" as IFR
 }
 
 package "Database" {
@@ -345,6 +357,7 @@ Main --> AiRouter
 Main --> AttachmentsRouter
 Main --> TagsRouter
 TransactionsRouter ..> BulkActionsRoutes : mounts bulk endpoints
+ValidationMiddleware --> PureValidation : delegates
 
 ' Nested route (RecipientsRouter mounts RecipientBankAccountsRouter at /recipients/:id/bank-accounts)
 RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts
@@ -360,7 +373,10 @@ ImportRouter --> ImportService
 ImportRouter --> RawTransactionImportService
 ImportRouter --> StreamingImportService
 ImportRouter --> DataImportService
+ImportRouter ..> ImportBatchRoutes : registers shared batch routes
+ImportRouter --> ImportBatchService
 PortfolioImportRouter --> PortfolioImportPipelineService
+PortfolioImportRouter ..> ImportBatchRoutes : registers shared batch routes
 PortfolioImportRouter --> PortfolioImportBatchService
 SettingsRouter --> SR2
 WatchlistRouter --> WR

@@ -3,7 +3,7 @@ title: Deployment Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-08-23
+updated: 2026-08-26
 tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening, packaging, bun, troubleshooting]
 description: Production deployment instructions including port binding and admin endpoints security
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
@@ -202,14 +202,16 @@ keeps only the newest 7 bundles, so between manual dumps your recovery point obj
 "whenever you last ran a backup." A volume loss in that window is otherwise unrecoverable. For any
 Docker/server deployment holding real data, schedule a periodic `pg_dump` with retention.
 
-Example nightly cron entry (compressed dump + 14-day retention):
+Example nightly user-crontab entry (compressed dump + 14-day retention). Install it with
+`crontab -e` for an account allowed to run Docker, and replace `/mnt/vision-backups` with an
+absolute path on separate storage:
 
 ```bash
-# /etc/cron.d/vision-db-backup  — runs at 02:30 daily
-30 2 * * *  cd /path/to/vision && \
+# User crontab — runs at 02:30 daily
+30 2 * * *  mkdir -p /mnt/vision-backups && cd /path/to/vision && \
   docker compose exec -T db pg_dump -U ftm_user -Fc financial_transactions \
-    > "backups/financial_transactions-$(date +\%F).dump" && \
-  find backups -name 'financial_transactions-*.dump' -mtime +14 -delete
+    > "/mnt/vision-backups/financial_transactions-$(date +\%F).dump" && \
+  find /mnt/vision-backups -name 'financial_transactions-*.dump' -mtime +14 -delete
 ```
 
 Store the backups directory on a **separate volume/host** from `postgres_data` so a disk failure
@@ -472,6 +474,33 @@ If you need users to pull from GHCR (e.g., published release), either:
 ```bash
 curl http://localhost:3002/api/info/health
 ```
+
+### Health and Restart Semantics
+
+The app image has a Docker `HEALTHCHECK`, but plain Docker Compose treats that status as
+observational. `restart: unless-stopped` restarts a container only after its process exits; it does
+not restart a process that remains alive while the health check reports `unhealthy`. This is the
+accepted policy: operators can alert or restart from their monitoring system without giving the
+application an automatic container-restart control loop.
+
+The Electron shell also does not restart a merely unhealthy container. It polls the backend HTTP
+health endpoint and exposes sustained loss/restoration IPC callbacks, although the current React
+renderer does not subscribe to them. On startup timeout, the shell starts recording
+`docker compose ps --all` plus the last 200 app and database log lines while it loads the
+recoverable error page, whose Retry/Open Logs actions handle startup recovery.
+
+A failed database migration exits the backend, so Compose may retry it under the restart policy.
+This loop is not silent: the backend emits the distinct `alembic command failed` event with exit,
+stdout, and stderr metadata, followed by `Failed to start application`. Electron captures those
+lines in its startup diagnostics. For a server-only deployment, inspect them with:
+
+```bash
+docker compose ps --all
+docker compose logs --tail=200 app db
+```
+
+Repeated migration failure needs human repair; do not keep restarting or modify
+`alembic_version` until the exact failing revision and database state are understood.
 
 ### Log Analysis
 

@@ -5,11 +5,11 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-08-11
+updated: 2026-08-26
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
-related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
+related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
 ---
 
 # Accounts API
@@ -137,8 +137,9 @@ D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDial
 ### POST /api/accounts/:id/merge
 
 Merge one or more **source** accounts into this **survivor** (`:id`). Body
-`{ source_ids: number[] }`. Every entry must be a plain base-10 integer in 1..2,147,483,647, and one
-malformed entry rejects the whole request with a `400` naming it — no accounts are merged. (Changed
+`{ source_ids: number[] }`. Supply 1–500 source ids; every entry must be a plain base-10 integer in
+1..2,147,483,647 and none may equal the survivor `:id`. An oversized, self-referencing, or malformed
+request rejects the whole operation with a `400` — no accounts are merged. (Changed
 2026-08-11, breaking for malformed ids: the entries were parsed with `parseInt` and guarded by
 `Number.isInteger`, which catches an unparseable entry but not a partially-parsed one, so `'12abc'`
 became the integer 12 and **merged and deleted account 12** — an irreversible write to a record the

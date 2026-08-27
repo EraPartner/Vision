@@ -3,7 +3,7 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-09: keyboardNav.ts — shared keyboard access to per-point values (focusable charts, arrow-key stepping, Shift+arrow scrub, Escape/blur clear) on LineChart/AreaChart/BarChart and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -384,7 +384,7 @@ ARIA: the SVG keeps `role="img"` + the generated `aria-label` summary (above); f
 
 Charts synced via `syncId` publish keyboard hover the same way as pointer hover, so siblings mirror the crosshair.
 
-**Tests:** `apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx` (hook unit + wiring per chart), `apps/frontend/src/components/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
+**Tests:** `apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx` (hook unit + wiring per chart), `apps/frontend/src/features/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
 
 ## Responsive Design
 
@@ -408,7 +408,7 @@ Mobile breakpoints automatically adjust:
 
 **Purpose:** Directed flow diagram showing income allocation to spending categories.
 
-**Location:** `apps/frontend/src/components/statistics/SankeyChart.tsx`
+**Location:** `apps/frontend/src/features/statistics/SankeyChart.tsx`
 
 **Implementation:**
 
@@ -422,7 +422,7 @@ Mobile breakpoints automatically adjust:
 **Example:**
 
 ```tsx
-import { SankeyChart } from '@/components/statistics/SankeyChart';
+import { SankeyChart } from '@/features/statistics/SankeyChart';
 
 function FlowTab() {
   const flowData = {

@@ -3,11 +3,11 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-06-24
-updated: 2026-08-23
+updated: 2026-08-26
 tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
-related_code: ["apps/frontend/src/components/portfolio", "apps/frontend/src/pages/portfolio/WatchlistPage.tsx"]
+related_code: ["apps/frontend/src/features/portfolio/", "apps/frontend/src/pages/research/WatchlistPage.tsx"]
 ---
 
 # Portfolio Components
@@ -19,16 +19,16 @@ Components for managing investment portfolios, including stocks, crypto, metals,
 | Component | Description | File |
 |-----------|-------------|------|
 | AddInvestmentDialog | Add new investment | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]] |
-| AddPortfolioTxnDialog | Record buy/sell transactions | [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]] |
+| AddPortfolioTxnDialog | Record buy/sell transactions | [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]] |
 | EditInvestmentDialog | Edit existing investment details | [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]] |
-| EditPortfolioTxnDialog | Edit existing portfolio transaction | [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]] |
-| InvestmentDetailDialog | View investment details | [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]] |
-| AddToWatchlistDialog | Add symbol to watchlist | [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]] |
-| PortfolioNewsFeed | Market news for holdings | [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx\|PortfolioNewsFeed.tsx]] |
-| WatchlistChartDialog | Chart for watchlist symbol | [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]] |
-| AddInvestmentFromMarketDialog | Add investment from market search | [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
-| PortfolioTaxAdjustmentsDialog | Tax adjustments for investments | [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
-| PortfolioTicker | Live day-change scrolling ticker tape for the Portfolio Overview | [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx\|PortfolioTicker.tsx]] |
+| EditPortfolioTxnDialog | Edit existing portfolio transaction | [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]] |
+| InvestmentDetailDialog | View investment details | [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]] |
+| AddToWatchlistDialog | Add symbol to watchlist | [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]] |
+| PortfolioNewsFeed | Market news for holdings | [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx\|PortfolioNewsFeed.tsx]] |
+| WatchlistChartDialog | Chart for watchlist symbol | [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]] |
+| AddInvestmentFromMarketDialog | Add investment from market search | [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
+| PortfolioTaxAdjustmentsDialog | Tax adjustments for investments | [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
+| PortfolioTicker | Live day-change scrolling ticker tape for the Portfolio Overview | [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx\|PortfolioTicker.tsx]] |
 
 ---
 
@@ -124,7 +124,7 @@ Record buy or sell transactions for an investment.
 ### Usage
 
 ```tsx
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 
 <AddPortfolioTxnDialog investmentId={123}>
   <Button>Record Transaction</Button>
@@ -163,7 +163,7 @@ The FX-aware realized/unrealized rows are gated on `holding.currency !== targetC
 
 See [[docs/features/portfolio#unified-fx-aware-pl-in-investmentdetaildialog-2026-06-28|Portfolio — Unified FX-Aware P&L]] for the full description of the computation logic.
 
-Code links: [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/shared/dateUtils.ts]]
 
 ### EditInvestmentDialog
 
@@ -191,7 +191,7 @@ Behavior:
 - buy/sell keeps two-of-three amount/units/price validation and auto-derivation
 - supports recurring fields and note updates
 
-Code link: [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]]
+Code link: [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]
 
 ### Settings Propagation Notes
 
@@ -200,7 +200,7 @@ Code link: [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]]
 ### Usage
 
 ```tsx
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 
 <InvestmentDetailDialog investmentId={123}>
   <Button>View Details</Button>
@@ -239,7 +239,7 @@ const symbols = ["AAPL", "BTC", "ETH"];
 - Links to full articles
 - **Locale-aware timestamps (2026-04-25):** Relative date formatting respects the user's configured language (en/nl) via `useLanguage()` context, eliminating hardcoded English in news item timestamps
 
-Code links: [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
 
 ---
 
@@ -268,7 +268,7 @@ interface AddToWatchlistDialogProps {
 ### Usage
 
 ```tsx
-import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
+import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog";
 
 <AddToWatchlistDialog>
   <Button>Add to Watchlist</Button>
@@ -287,12 +287,12 @@ Manage tax adjustments for investment holdings.
 
 - Currency amounts in adjustments follow app decimal precision (`appSettings.showDecimalPlaces`)
 
-Code links: [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
 
 ### Usage
 
 ```tsx
-import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioTaxAdjustmentsDialog";
+import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTaxAdjustmentsDialog";
 
 <PortfolioTaxAdjustmentsDialog investmentId={123}>
   <Button>Tax Adjustments</Button>
@@ -310,13 +310,13 @@ Adds a new investment directly from market lookup results.
 - Default generated note date now follows app date format + locale
 - Transaction date form input remains persisted as `YYYY-MM-DD` for data consistency
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
 
 ### Metals Support Notes
 
 - Unit-based behavior now includes metals for add transaction, detail valuation, and performance/overview calculations.
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]]
 
 ---
 
@@ -363,13 +363,13 @@ The popover header shows a count badge: `portfolio.ticker.manageCount` with `{sh
 ### Usage
 
 ```tsx
-import { PortfolioTicker } from "@/components/portfolio/PortfolioTicker";
+import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
 
 // In PortfolioOverviewPage — rendered when isVisible('ticker') is true:
 <PortfolioTicker items={summaries} />
 ```
 
-Code links: [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ---
 
@@ -452,16 +452,16 @@ Benefits:
 - React Query integration for caching and invalidation
 - Typed method signatures for better IDE support
 
-Code link: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+Code link: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
 ## Additional Page Links
 
 - [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] - Savings maturity date display uses app date format
 - [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]] - Exchange-rate fetched-at/description timestamps use app date-time format
-- [[apps/frontend/src/pages/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
+- [[apps/frontend/src/pages/research/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
 - [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] - Month labels use app-language locale (`en-US`/`nl-NL`), while chart/table values use app settings; page includes Total/Investments/Liquid series toggle, daily-only timeline with per-day hover values, horizontal scroll/zoom controls, and a virtualized daily breakdown table
 - [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Absolute and relative charts run on day-level timeline points (`YYYY-MM-DD`) for more realistic fluctuation shape; relative contribution adjustment uses day-keyed net flows (not month-bucket chart alignment); chart x-axis keys by day internally while rendering locale-formatted month-year ticks for readability; relative performance keeps chained index baseline `1` with display conversion `(index - 1) * 100`; monthly heatmap remains month-based and keeps Modified Dietz-style monthly return denominator `prevValue + netFlow / 2` (fallback `prevValue` when denominator <= 0); first heatmap month is rendered as no data (`null`) rather than forced `0%`; inflation adjustment compounds backend Belgian monthly rates (`/api/info/inflation-rates`) keyed by `YYYY-MM`; when DB-only historical quote cache is empty for an investment, the page now performs a non-DB fallback fetch once to hydrate and use provider history instead of flattening that asset line.
-- [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] - Phase 3.6 refactored to use `apiClient` watchlist methods (`getWatchlist()`, `getMarketQuotes()`, `deleteWatchlistItem()`) instead of raw fetch calls; 60s auto-refresh interval on market quotes via React Query
+- [[apps/frontend/src/pages/research/WatchlistPage.tsx]] - Phase 3.6 refactored to use `apiClient` watchlist methods (`getWatchlist()`, `getMarketQuotes()`, `deleteWatchlistItem()`) instead of raw fetch calls; 60s auto-refresh interval on market quotes via React Query
 
 - [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`; Phase 3.6 adds watchlist methods (`getWatchlist()`, `createWatchlistItem()`, `updateWatchlistItem()`, `deleteWatchlistItem()`) and market quotes method (`getMarketQuotes(symbols)`).
 - [[apps/node-backend/src/services/belgianInflationService.js]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.

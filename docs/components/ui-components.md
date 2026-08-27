@@ -3,9 +3,9 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-25
+updated: 2026-08-26
 tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass, small-viewport-robustness, badge-size-variant]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier. Aug 2026 (small-viewport robustness, PR #156): Badge gains `size` (`default`/`sm`) and `muted` variants; DialogContent caps at `max-h-[90vh] overflow-y-auto`; TabsList scrolls horizontally with a hidden scrollbar; AccordionTrigger gains a `trailing` slot for header-row controls that must not nest inside the trigger button.
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via hooks/useGenieOrigin.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier. Aug 2026 (small-viewport robustness, PR #156): Badge gains `size` (`default`/`sm`) and `muted` variants; DialogContent caps at `max-h-[90vh] overflow-y-auto`; TabsList scrolls horizontally with a hidden scrollbar; AccordionTrigger gains a `trailing` slot for header-row controls that must not nest inside the trigger button.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -213,7 +213,7 @@ Page-level consistency is provided by reusable shared components:
 - Title uses the display-serif (Fraunces) `font-display` class for premium emphasis.
 - All existing `title` / `description` / `action` props preserved; no API change.
 
-Code links: [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
 
 ## Notifications (Toast)
 
@@ -223,7 +223,7 @@ Frontend notification rendering is standardized on Sonner:
 - New and existing flows should use `toast` from `sonner`
 - Legacy Radix toast plumbing (`use-toast` hook wrappers and Radix toaster bridge) has been removed from the frontend package
 
-Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/package.json]]
+Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/package.json]]
 
 ## Component List
 
@@ -450,20 +450,21 @@ Dialog and `AlertDialog` animations were rebuilt in June 2026 (ADR-070):
 - Exit: `animate-dialog-out` keyframe.
 - `motion-reduce` media query disables both keyframes.
 
-#### Genie Exit (V10 — `lib/dialogGenie.ts`)
+#### Genie Exit (V10 — `hooks/useGenieOrigin.ts`)
 
 V10 adds pointer-driven transform-origin for dialog close animations:
 
-- **`lib/dialogGenie.ts`**: A module-level `pointerdown` capture listener records the last pointer position and timestamp. `useGenieOrigin()` returns a ref callback; attaching it to `DialogContent` (or `AlertDialogContent`) sets three CSS custom properties on the element at mount time when the opening pointer event is less than 1.5 s old: `--genie-origin` (transform-origin as `{x}% {y}%`), `--genie-scale`, `--genie-y`.
+- **`hooks/useGenieOrigin.ts`**: A module-level `pointerdown` capture listener records the last pointer position and timestamp. `useGenieOrigin()` returns a ref callback; attaching it to `DialogContent` (or `AlertDialogContent`) sets three CSS custom properties on the element at mount time when the opening pointer event is less than 1.5 s old: `--genie-origin` (element-relative pixels), `--genie-scale`, `--genie-y`.
 - **`dialog-out` keyframe target** (tailwind.config.ts): now animates to `scale(var(--genie-scale, 0.97)) translateY(var(--genie-y, 6px))` — pointer-opened dialogs shrink toward the pointer; keyboard-opened dialogs fall back to the previous neutral exit. Duration increased from 160 ms to 200 ms for readable travel.
 - **Closed-state**: `data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)]` is applied in `dialog.tsx` and `alert-dialog.tsx`.
-- **`composeRefs` helper**: exported from `dialogGenie.ts` for merging multiple React refs on the same element.
+- **`composeRefs` helper**: exported from `lib/composeRefs.ts` for merging multiple React refs on the same element.
 - **Sheets**: not affected (Sheet polish remains on the v4 candidate list).
 - **Reduced motion**: unaffected — `animate-none` already kills both keyframes.
 
 ```typescript
 // Consuming the hook (already wired into dialog.tsx / alert-dialog.tsx)
-import { useGenieOrigin, composeRefs } from "@/lib/dialogGenie";
+import { useGenieOrigin } from "@/hooks/useGenieOrigin";
+import { composeRefs } from "@/lib/composeRefs";
 
 function MyDialogContent({ ref, ...props }) {
   const genieRef = useGenieOrigin();
@@ -471,7 +472,7 @@ function MyDialogContent({ ref, ...props }) {
 }
 ```
 
-Code links: [[apps/frontend/src/lib/dialogGenie.ts]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/alert-dialog.tsx]]
+Code links: [[apps/frontend/src/hooks/useGenieOrigin.ts]], [[apps/frontend/src/lib/composeRefs.ts]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/alert-dialog.tsx]]
 
 ### Components
 
