@@ -85,10 +85,11 @@ fi
 # The run above self-skips every case behind tests/setup/db.js (it prints a
 # banner saying how many). When the push itself changes that surface, the
 # skipped cases are precisely the ones at risk -- so run them for real against
-# the throwaway Postgres `bun run test:db` spins up.
+# the throwaway PostgreSQL database `bun run test:db` spins up.
 #
-# This must never turn "no database here" into a failed push: without docker or
-# the alembic toolchain it degrades to a loud warning and lets the push through.
+# This must never turn "no database here" into a failed push: without native
+# PostgreSQL 18 or Docker, or without the Alembic toolchain, it degrades to a
+# loud warning and lets the push through.
 # Skip it outright with SKIP_DB_TESTS=1.
 
 # Files whose change means the DB-backed cases must actually be exercised. The
@@ -98,8 +99,7 @@ fi
 DB_SURFACE_RE='(\.db\.test\.js$|^apps/node-backend/tests/setup/db\.js$|^alembic/versions/)'
 
 db_toolchain_ready() {
-  command -v docker >/dev/null 2>&1 || return 1
-  docker info >/dev/null 2>&1 || return 1
+  VISION_TEST_DB_CHECK_ONLY=1 scripts/with-test-db.sh >/dev/null 2>&1 || return 1
   [ -n "${ALEMBIC_BIN:-}" ] && command -v "$ALEMBIC_BIN" >/dev/null 2>&1 && return 0
   [ -x venv/bin/alembic ] && return 0
   command -v alembic >/dev/null 2>&1
@@ -129,10 +129,11 @@ if [ "${SKIP_TESTS:-}" != "1" ] && [ "${SKIP_DB_TESTS:-}" != "1" ]; then
       else
         echo ""
         echo "[pre-push] WARNING: this push changes DB-backed test surface, but the"
-        echo "[pre-push]          DB-backed cases were SKIPPED -- docker and/or the alembic"
-        echo "[pre-push]          toolchain are not available here, so 'bun run test:db'"
+        echo "[pre-push]          DB-backed cases were SKIPPED -- neither PostgreSQL 18 nor"
+        echo "[pre-push]          Docker is usable, and/or the Alembic toolchain is unavailable."
+        echo "[pre-push]          Therefore 'bun run test:db'"
         echo "[pre-push]          cannot run. CI WILL run them. Exercise them on a machine"
-        echo "[pre-push]          with docker before trusting this push."
+        echo "[pre-push]          with PostgreSQL 18 or Docker before trusting this push."
         echo ""
       fi
     fi
