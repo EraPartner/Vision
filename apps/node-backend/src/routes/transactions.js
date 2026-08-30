@@ -53,12 +53,10 @@ import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
   streamNdjsonExport,
-  buildIdListWhere,
+  streamBulkTransactionExport,
 } from "../services/transactionExport.js";
-import { resolveBulkSelection } from "../services/bulkSelection.js";
 import { parsePagination } from "../lib/pagination.js";
 import { toWireDate } from "../lib/dateFormat.js";
-import { getClient } from "../database/connection.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -847,41 +845,12 @@ router.post(
     }
 
     parseBulkExpectedCount(expected_count, filter);
-    const client = await getClient();
-    try {
-      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-      const query = (sql, params) => client.query(sql, params);
-      const txIds = await resolveBulkSelection({ ids, filter }, { query });
-      const countResult = await query(
-        "SELECT COUNT(*)::int AS n FROM transactions WHERE id = ANY($1::int[])",
-        [txIds],
-      );
-      res.setHeader("X-Exported-Count", String(countResult.rows[0]?.n ?? 0));
-      const { whereSql, params, nextParamIdx } = buildIdListWhere(txIds);
-
-      if (format === "csv") {
-        await streamCsvExport(res, {
-          whereSql,
-          params,
-          nextParamIdx,
-          includeBalance: include_balance === true,
-          query,
-        });
-      } else {
-        await streamNdjsonExport(res, {
-          whereSql,
-          params,
-          nextParamIdx,
-          query,
-        });
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => {});
-      throw error;
-    } finally {
-      client.release();
-    }
+    await streamBulkTransactionExport(res, {
+      ids,
+      filter,
+      format,
+      includeBalance: include_balance === true,
+    });
   },
 );
 

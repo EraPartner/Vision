@@ -346,6 +346,48 @@ function parseTransactionType(value) {
 }
 
 /**
+ * Validate a bulk selector without touching the database. Keeping this as the
+ * single selector-validation boundary lets streaming callers reject malformed
+ * requests before they acquire a connection or open a transaction.
+ *
+ * @param {object} selector
+ * @param {number[]} [selector.ids]
+ * @param {object} [selector.filter]
+ * @param {object} [opts]
+ * @param {number} [opts.idCap=500]
+ * @returns {{ mode: "ids", ids: number[] } | { mode: "filter", filter: object }}
+ */
+export function validateBulkSelection(selector = {}, opts = {}) {
+  const { ids, filter } = selector;
+  const idCap = opts.idCap ?? DEFAULT_ID_CAP;
+
+  const hasIds = Array.isArray(ids) && ids.length > 0;
+  const hasFilter =
+    filter && typeof filter === "object" && Object.keys(filter).length > 0;
+
+  if (hasIds && hasFilter) {
+    throw new ValidationError("Provide either `ids` or `filter`, not both");
+  }
+  if (!hasIds && !hasFilter) {
+    throw new ValidationError("Either `ids` or `filter` must be provided");
+  }
+
+  if (hasIds) {
+    if (ids.length > idCap) {
+      throw new ValidationError(
+        `\`ids\` must contain at most ${idCap} entries (received ${ids.length})`,
+      );
+    }
+    // Do not coerce the complete array with Number(): validateInt4Ids accepts
+    // canonical digit strings while rejecting exponents, hex, booleans, and
+    // nested arrays that could otherwise retarget a destructive bulk action.
+    return { mode: "ids", ids: validateInt4Ids(ids, "ids") };
+  }
+
+  return { mode: "filter", filter: normalizeBulkFilter(filter) };
+}
+
+/**
  * Resolve a `{ ids } | { filter }` selector into a concrete `number[]` of
  * transaction IDs. Throws `ValidationError` on every malformed or oversized input.
  *
@@ -360,46 +402,13 @@ function parseTransactionType(value) {
  * @returns {Promise<number[]>}
  */
 export async function resolveBulkSelection(selector = {}, opts = {}) {
-  const { ids, filter } = selector;
   const idCap = opts.idCap ?? DEFAULT_ID_CAP;
   const filterCap = opts.filterCap ?? DEFAULT_FILTER_CAP;
   const query = opts.query ?? dbQuery;
+  const selection = validateBulkSelection(selector, { idCap });
+  if (selection.mode === "ids") return selection.ids;
 
-  const hasIds = Array.isArray(ids) && ids.length > 0;
-  const hasFilter =
-    filter && typeof filter === "object" && Object.keys(filter).length > 0;
-
-  if (hasIds && hasFilter) {
-    throw new ValidationError("Provide either `ids` or `filter`, not both");
-  }
-  if (!hasIds && !hasFilter) {
-    throw new ValidationError("Either `ids` or `filter` must be provided");
-  }
-
-  if (hasIds) {
-    if (!Array.isArray(ids)) {
-      throw new ValidationError("`ids` must be an array of integers");
-    }
-    if (ids.length > idCap) {
-      throw new ValidationError(
-        `\`ids\` must contain at most ${idCap} entries (received ${ids.length})`,
-      );
-    }
-    // No `.map(Number)` in front of the validator: it did not merely drop bad
-    // entries, it retargeted them. Number('1e3') is 1000 and Number('0x10') is
-    // 16, both of which then passed as ids, so a bulk DELETE could hard-delete
-    // a row the client never named. Number([7]) is 7 and Number(true) is 1 for
-    // the same reason. Each element is validated as sent instead.
-    //
-    // Rejecting rather than skipping is safe for a stale selection: staleness
-    // is not what this filter catches. An id whose row was deleted in another
-    // tab is still a valid integer — it passes validation and simply matches
-    // nothing in the `id = ANY(...)` below. Only malformed input is rejected,
-    // and the frontend holds `number[]` straight from the API.
-    return validateInt4Ids(ids, "ids");
-  }
-
-  const normalized = normalizeBulkFilter(filter);
+  const normalized = selection.filter;
   const { sql: whereSql, params } = buildTransactionWhere(normalized);
 
   const countResult = await query(

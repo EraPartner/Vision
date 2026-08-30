@@ -5,12 +5,16 @@
  * place so the two entry points cannot drift.
  */
 
-import { query as dbQuery } from "../database/connection.js";
+import { getClient, query as dbQuery } from "../database/connection.js";
 import { logger } from "../config/logger.js";
 import { NotFoundError } from "../middleware/errorHandler.js";
 import { toDecimal } from "../lib/money.js";
 import { toYmd } from "./calculations/portfolioMath.js";
 import { escapeCsvValue } from "../lib/csv.js";
+import {
+  resolveBulkSelection,
+  validateBulkSelection,
+} from "./bulkSelection.js";
 
 /**
  * The slice of an Express `Response` this module actually calls. Deliberately
@@ -378,4 +382,56 @@ export function buildIdListWhere(ids) {
     params: [ids],
     nextParamIdx: 2,
   };
+}
+
+/**
+ * Resolve and stream one bulk export inside a repeatable-read snapshot. The
+ * route owns request validation only; the database transaction belongs at the
+ * service boundary with the selection and streaming orchestration (ADR-067).
+ *
+ * @param {ExpressResponse} res
+ * @param {{
+ *   ids?: number[],
+ *   filter?: object,
+ *   format: "csv"|"json",
+ *   includeBalance?: boolean,
+ * }} args
+ * @returns {Promise<void>}
+ */
+export async function streamBulkTransactionExport(
+  res,
+  { ids, filter, format, includeBalance = false },
+) {
+  // Reject malformed selectors before reserving a pool connection. The same
+  // shared validator is used again by resolveBulkSelection inside the snapshot,
+  // so validation behavior cannot drift between export and the other actions.
+  validateBulkSelection({ ids, filter });
+  const client = await getClient();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const query = (sql, params) => client.query(sql, params);
+    const txIds = await resolveBulkSelection({ ids, filter }, { query });
+    const countResult = await query(
+      "SELECT COUNT(*)::int AS n FROM transactions WHERE id = ANY($1::int[])",
+      [txIds],
+    );
+    res.setHeader("X-Exported-Count", String(countResult.rows[0]?.n ?? 0));
+    const where = buildIdListWhere(txIds);
+
+    if (format === "csv") {
+      await streamCsvExport(res, {
+        ...where,
+        includeBalance,
+        query,
+      });
+    } else {
+      await streamNdjsonExport(res, { ...where, query });
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }

@@ -10,11 +10,13 @@ vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 vi.mock("../src/database/connection.js", () => ({
+  getClient: vi.fn(),
   query: vi.fn(),
 }));
 
-import { query as dbQuery } from "../src/database/connection.js";
+import { getClient, query as dbQuery } from "../src/database/connection.js";
 import {
+  streamBulkTransactionExport,
   streamCsvExport,
   streamNdjsonExport,
 } from "../src/services/transactionExport.js";
@@ -200,5 +202,68 @@ describe("export tag aggregation", () => {
     // … as a grouped LEFT JOIN, not a t.id-correlated subquery.
     expect(chunkSql).toContain("GROUP BY tt.transaction_id");
     expect(chunkSql).not.toContain("WHERE tt.transaction_id = t.id");
+  });
+});
+
+describe("bulk export service snapshot", () => {
+  function useClientResults(...results) {
+    const query = vi.fn();
+    for (const result of results) query.mockResolvedValueOnce(result);
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query, release });
+    return { query, release };
+  }
+
+  it("rejects a malformed selector before acquiring a database client", async () => {
+    const res = mockRes();
+
+    await expect(
+      streamBulkTransactionExport(res, { format: "csv" }),
+    ).rejects.toThrow(/either .* or .* must be provided/i);
+
+    expect(getClient).not.toHaveBeenCalled();
+    expect(res.setHeader).not.toHaveBeenCalled();
+  });
+
+  it("commits and releases one repeatable-read snapshot after streaming", async () => {
+    const { query, release } = useClientResults(
+      {},
+      { rows: [{ n: 1 }] },
+      { rows: [{ "?column?": 1 }] },
+      { rows: [exportRow()] },
+      {},
+    );
+    const res = mockRes();
+
+    await streamBulkTransactionExport(res, {
+      ids: [1],
+      format: "csv",
+    });
+
+    expect(query.mock.calls[0][0]).toBe(
+      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    );
+    expect(query.mock.calls.at(-1)[0]).toBe("COMMIT");
+    expect(release).toHaveBeenCalledOnce();
+    expect(res.end).toHaveBeenCalledOnce();
+    expect(res.setHeader).toHaveBeenCalledWith("X-Exported-Count", "1");
+  });
+
+  it("rolls back and releases the snapshot when the export has no rows", async () => {
+    const { query, release } = useClientResults(
+      {},
+      { rows: [{ n: 1 }] },
+      { rows: [] },
+      {},
+    );
+    const res = mockRes();
+
+    await expect(
+      streamBulkTransactionExport(res, { ids: [1], format: "csv" }),
+    ).rejects.toThrow("No transactions found");
+
+    expect(query.mock.calls.at(-1)[0]).toBe("ROLLBACK");
+    expect(release).toHaveBeenCalledOnce();
+    expect(res.end).not.toHaveBeenCalled();
   });
 });

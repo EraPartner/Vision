@@ -85,7 +85,7 @@ describe("POST /bulk-export — CSV success", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("streams CSV header and a single row to the response", async () => {
-    useClientResults(
+    const { query, release } = useClientResults(
       {}, // BEGIN snapshot
       { rows: [{ n: 1 }] }, // exact existing row count
       { rows: [{ "?column?": 1 }] }, // probe
@@ -102,6 +102,25 @@ describe("POST /bulk-export — CSV success", () => {
     expect(res.text).toMatch(/^Date,Bank Account,Recipient/);
     expect(res.text).toContain("Trader Joe");
     expect(res.text).toContain("weekly");
+    expect(query.mock.calls[0][0]).toBe(
+      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    );
+    expect(query.mock.calls.at(-1)[0]).toBe("COMMIT");
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and releases the snapshot when streaming fails", async () => {
+    const { query, release } = useClientResults(
+      {},
+      { rows: [{ n: 1 }] },
+      { rows: [] },
+      {},
+    );
+
+    await bulkExport({ ids: [1], format: "csv" }).expect(404);
+
+    expect(query.mock.calls.at(-1)[0]).toBe("ROLLBACK");
+    expect(release).toHaveBeenCalledOnce();
   });
 });
 
