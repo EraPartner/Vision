@@ -1,11 +1,18 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-04-26
-tags: [guide, backend, configuration, logging, database, infrastructure, phase-1]
+date: 2026-08-30
+tags:
+  [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
 description: Backend configuration management, logging, and database startup behavior
-related_code: ["apps/node-backend/src/config/config.js", "apps/node-backend/src/config/logger.js", "apps/node-backend/src/main.js", "apps/node-backend/src/database/migrate.js"]
+related_code:
+  [
+    "apps/node-backend/src/config/config.js",
+    "apps/node-backend/src/config/logger.js",
+    "apps/node-backend/src/main.js",
+    "apps/node-backend/src/database/migrate.js",
+  ]
 ---
 
 # Backend Configuration & Infrastructure
@@ -19,6 +26,7 @@ Centralized configuration module that loads settings from environment variables 
 ### Environment Loading
 
 On import, the module:
+
 1. Checks for `.env.local` at the project root
 2. Parses key=value pairs (ignoring comments and blank lines)
 3. Only sets variables that aren't already defined in `process.env`
@@ -57,7 +65,7 @@ On import, the module:
 ### Usage
 
 ```javascript
-import settings from './config/config.js';
+import settings from "./config/config.js";
 
 const port = settings.server.port;
 const isProd = settings.isProduction();
@@ -73,41 +81,49 @@ Structured logger with configurable log levels and timestamp formatting. Support
 
 ### Log Levels
 
-| Level | Code | Description |
-|-------|------|-------------|
-| `debug` | 0 | Detailed diagnostic information |
-| `info` | 1 | General operational messages |
-| `warn` | 2 | Warning conditions |
-| `error` | 3 | Error conditions |
-| `silent` | 4 | No output |
+| Level    | Code | Description                     |
+| -------- | ---- | ------------------------------- |
+| `debug`  | 0    | Detailed diagnostic information |
+| `info`   | 1    | General operational messages    |
+| `warn`   | 2    | Warning conditions              |
+| `error`  | 3    | Error conditions                |
+| `silent` | 4    | No output                       |
 
 ### Configuration
 
 Controlled via environment variables:
 
-| Variable | Values | Default |
-|----------|--------|---------|
-| `LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `debug` (dev), `info` (prod) |
-| `ENABLE_LOGGING` | `true`, `false` | `true` |
+| Variable         | Values                           | Default                      |
+| ---------------- | -------------------------------- | ---------------------------- |
+| `LOG_LEVEL`      | `debug`, `info`, `warn`, `error` | `debug` (dev), `info` (prod) |
+| `ENABLE_LOGGING` | `true`, `false`                  | `true`                       |
 
 ### Usage
 
 The logger accepts arguments in two styles:
 
 **Traditional style (message, extra):**
-```javascript
-import { logger } from './config/logger.js';
 
-logger.info('Server started', { port: 3002 });
-logger.debug('Processing request', { method: 'GET', path: '/api/transactions' });
-logger.warn('Rate limit approaching', { current: 180, max: 200 });
-logger.error('Database connection failed', { error: err.message });
+```javascript
+import { logger } from "./config/logger.js";
+
+logger.info("Server started", { port: 3002 });
+logger.debug("Processing request", {
+  method: "GET",
+  path: "/api/transactions",
+});
+logger.warn("Rate limit approaching", { current: 180, max: 200 });
+logger.error("Database connection failed", { error: err.message });
 ```
 
 **Pino style (bindings, message):**
+
 ```javascript
-logger.info({ port: 3002 }, 'Server started');
-logger.debug({ method: 'GET', path: '/api/transactions' }, 'Processing request');
+logger.info({ port: 3002 }, "Server started");
+logger.debug(
+  { method: "GET", path: "/api/transactions" },
+  "Processing request",
+);
 ```
 
 The `formatMessage` function automatically detects which style is used based on argument types.
@@ -133,18 +149,22 @@ Several services have been optimized to use `debug` level for high-frequency or 
 
 **Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.js]]
 
-The backend no longer manages a local PostgreSQL process. It always connects to `DATABASE_URL` and waits for database readiness during startup.
+The backend process connects to `DATABASE_URL` and waits for readiness. In native mode the Electron
+runtime provider manages the private PostgreSQL process and supplies that URL; in Docker or custom
+deployments the database lifecycle remains external to the backend.
 
 ### Startup Sequence
 
 1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
-2. Runs `runMigrations()` once a DB connection is available — shells out to `alembic upgrade head`
+2. Runs `runMigrations()` once a DB connection is available. This performs the required
+   `alembic_version VARCHAR(64)` preflight before invoking Alembic.
 3. Refreshes materialized views (runtime artifacts)
 4. Starts the HTTP server only after DB readiness and schema initialization are confirmed
 
 ### Operational Model
 
-- Database lifecycle is managed by Docker Compose (`db` service)
+- Database lifecycle is managed by the active runtime provider: native Electron or optional Docker
+  Compose.
 - Backend process lifecycle is managed by Node/Bun and container restart policy
 - **Schema is managed exclusively by Alembic** ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
 - Alembic migrations are available via `bun run db:*` commands

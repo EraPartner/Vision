@@ -4,27 +4,37 @@
  * Main application entry point.
  */
 
-import express from 'express';
-import { setTimeout as sleep } from 'node:timers/promises';
-import fs from 'node:fs';
-import { dirname, resolve, sep } from 'path';
-import { fileURLToPath } from 'url';
-import settings from './config/config.js';
-import { logger } from './config/logger.js';
-import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
-import { ensureAppRole } from './database/roleBootstrap.js';
-import { runMigrations } from './database/migrate.js';
-import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
-import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
-import { createCsrfGuard } from './middleware/csrfGuard.js';
-import { createCorsMiddleware } from './middleware/cors.js';
-import { compression } from './middleware/compression.js';
-import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
-import { wrapResponse } from './middleware/envelope.js';
-import { requestId } from './middleware/requestId.js';
-import { requestMetrics } from './middleware/requestMetrics.js';
-import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.js';
-import { runWarmupTasks } from './startup/warmup.js';
+import express from "express";
+import { setTimeout as sleep } from "node:timers/promises";
+import fs from "node:fs";
+import { dirname, resolve, sep } from "path";
+import { fileURLToPath } from "url";
+import settings from "./config/config.js";
+import { logger } from "./config/logger.js";
+import {
+  checkConnection,
+  closePool,
+  getPoolStats,
+} from "./database/connection.js";
+import { ensureAppRole } from "./database/roleBootstrap.js";
+import { runDatabaseAnalyze, runMigrations } from "./database/migrate.js";
+import {
+  createErrorHandler,
+  NotFoundError,
+} from "./middleware/errorHandler.js";
+import {
+  createAdminAuthMiddleware,
+  isLoopbackHost,
+} from "./middleware/adminAuth.js";
+import { createCsrfGuard } from "./middleware/csrfGuard.js";
+import { createCorsMiddleware } from "./middleware/cors.js";
+import { compression } from "./middleware/compression.js";
+import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.js";
+import { wrapResponse } from "./middleware/envelope.js";
+import { requestId } from "./middleware/requestId.js";
+import { requestMetrics } from "./middleware/requestMetrics.js";
+import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.js";
+import { runWarmupTasks } from "./startup/warmup.js";
 
 /**
  * @typedef {import('./types/express.js').ExpressRequest} ExpressRequest
@@ -32,7 +42,9 @@ import { runWarmupTasks } from './startup/warmup.js';
  * @typedef {import('./types/express.js').ExpressNextFunction} ExpressNextFunction
  */
 
-const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
+const adminAuthMiddleware = createAdminAuthMiddleware(
+  () => settings.admin.authToken,
+);
 // Blocks cross-site state-changing requests (browser CSRF), which the loopback
 // binding alone cannot stop. Mounted across the whole data plane below; the
 // alias documents intent at the (now redundant) admin mount point.
@@ -40,29 +52,29 @@ const csrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
 const adminCsrfGuard = csrfGuard;
 
 // Import route modules
-import transactionsRouter from './routes/transactions.js';
-import categoriesRouter from './routes/categories.js';
-import recipientsRouter from './routes/recipients.js';
-import plannedTransactionsRouter from './routes/plannedTransactions.js';
-import infoRouter from './routes/info.js';
-import aggregationsRouter from './routes/aggregations.js';
-import adminRouter from './routes/admin.js';
-import importRouter from './routes/importRoutes.js';
-import portfolioImportRouter from './routes/portfolioImportRoutes.js';
-import investmentsRouter from './routes/investments.js';
-import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
-import settingsRouter from './routes/settings.js';
-import marketLookupRouter from './routes/marketLookup.js';
-import researchRouter from './routes/research.js';
-import watchlistRouter from './routes/watchlist.js';
-import splitsRouter from './routes/splits.js';
-import savedChartsRouter from './routes/savedCharts.js';
-import aiRouter from './routes/ai.js';
-import attachmentsRouter from './routes/attachments.js';
-import reportsRouter from './routes/reports.js';
-import tagsRouter from './routes/tags.js';
-import accountsRouter from './routes/accounts.js';
-import crossWorkspaceRouter from './routes/crossWorkspace.js';
+import transactionsRouter from "./routes/transactions.js";
+import categoriesRouter from "./routes/categories.js";
+import recipientsRouter from "./routes/recipients.js";
+import plannedTransactionsRouter from "./routes/plannedTransactions.js";
+import infoRouter from "./routes/info.js";
+import aggregationsRouter from "./routes/aggregations.js";
+import adminRouter from "./routes/admin.js";
+import importRouter from "./routes/importRoutes.js";
+import portfolioImportRouter from "./routes/portfolioImportRoutes.js";
+import investmentsRouter from "./routes/investments.js";
+import recipientBankAccountsRouter from "./routes/recipientBankAccounts.js";
+import settingsRouter from "./routes/settings.js";
+import marketLookupRouter from "./routes/marketLookup.js";
+import researchRouter from "./routes/research.js";
+import watchlistRouter from "./routes/watchlist.js";
+import splitsRouter from "./routes/splits.js";
+import savedChartsRouter from "./routes/savedCharts.js";
+import aiRouter from "./routes/ai.js";
+import attachmentsRouter from "./routes/attachments.js";
+import reportsRouter from "./routes/reports.js";
+import tagsRouter from "./routes/tags.js";
+import accountsRouter from "./routes/accounts.js";
+import crossWorkspaceRouter from "./routes/crossWorkspace.js";
 import {
   rateLimiter,
   globalRateLimiter,
@@ -74,8 +86,8 @@ import {
   marketRateLimiter,
   investmentRateLimiter,
   aggregationRateLimiter,
-} from './middleware/rateLimiter.js';
-import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
+} from "./middleware/rateLimiter.js";
+import { buildRouteManifest, mountRouter } from "./services/routeManifest.js";
 
 const app = express();
 
@@ -90,29 +102,52 @@ app.use(requestMetrics);
 app.use(createCorsMiddleware(() => settings.api.corsOrigins));
 
 // JSON body parser with size limit
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: "1mb" }));
 
 // Security headers (production-ready)
-app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '0'); // Deprecated; rely on CSP instead
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
-  if (settings.isProduction()) {
-    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  }
-  next();
-});
+app.use(
+  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
+    req,
+    res,
+    next,
+  ) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "0"); // Deprecated; rely on CSP instead
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()",
+    );
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+    );
+    if (settings.isProduction()) {
+      res.setHeader(
+        "Strict-Transport-Security",
+        "max-age=63072000; includeSubDomains; preload",
+      );
+    }
+    next();
+  },
+);
 
 app.use(compression);
 
 // Request logging
-app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
-  logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, { requestId: req.id });
-  next();
-});
+app.use(
+  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
+    req,
+    res,
+    next,
+  ) => {
+    logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, {
+      requestId: req.id,
+    });
+    next();
+  },
+);
 
 // Unified response envelope — attaches res.ok(data, meta?) before routers run.
 app.use(wrapResponse);
@@ -124,17 +159,29 @@ app.use(wrapResponse);
 // mutates these. The wire format below keeps a backward-compatible boolean
 // `caches` map (the Electron shell gates first navigation on
 // `caches.materializedViews === true`) and adds `warmup` (tri-state) + `degraded`.
-const WARMUP_KEYS = ['exchangeRates', 'inflation', 'portfolioSnapshots', 'infoCaches', 'materializedViews'];
-const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, 'pending']));
+const WARMUP_KEYS = [
+  "exchangeRates",
+  "inflation",
+  "portfolioSnapshots",
+  "infoCaches",
+  "materializedViews",
+];
+const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, "pending"]));
 
-app.get('/health', /** @param {ExpressRequest} req @param {ExpressResponse} res */ (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'financial-transaction-manager-node',
-    version: settings.api.version,
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get(
+  "/health",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ (
+    req,
+    res,
+  ) => {
+    res.json({
+      status: "healthy",
+      service: "financial-transaction-manager-node",
+      version: settings.api.version,
+      timestamp: new Date().toISOString(),
+    });
+  },
+);
 
 // /health/* sits outside /api, so the global rate limiter doesn't apply — and
 // the detailed probe costs a DB round-trip. Cache the probe result briefly so
@@ -150,47 +197,61 @@ async function checkConnectionCached() {
   return value;
 }
 
-app.get('/health/detailed', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const states = Object.values(warmupStatus);
-  const warming = states.includes('pending');
-  const degraded = states.includes('failed');
+app.get(
+  "/health/detailed",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const states = Object.values(warmupStatus);
+    const warming = states.includes("pending");
+    const degraded = states.includes("failed");
 
-  // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
-  // process-level "I'm listening" check would miss. checkConnection never throws.
-  const dbConnected = await checkConnectionCached();
+    // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
+    // process-level "I'm listening" check would miss. checkConnection never throws.
+    const dbConnected = await checkConnectionCached();
 
-  res.json({
-    status: warming ? 'warming' : 'ready', // unchanged contract: 'ready' once warmup settles (pass or fail)
-    degraded, // a best-effort warmup task failed; app is serving but missing some warm data
-    service: 'financial-transaction-manager-node',
-    version: settings.api.version,
-    timestamp: new Date().toISOString(),
-    database: { connected: dbConnected, pool: getPoolStats() },
-    warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
-    // Backward-compatible boolean map (true once a task settles, pass or fail) —
-    // consumed by the Electron readiness gate. Prefer `warmup` for new code.
-    caches: Object.fromEntries(WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== 'pending'])),
-  });
-});
+    res.json({
+      status: warming ? "warming" : "ready", // unchanged contract: 'ready' once warmup settles (pass or fail)
+      degraded, // a best-effort warmup task failed; app is serving but missing some warm data
+      service: "financial-transaction-manager-node",
+      version: settings.api.version,
+      timestamp: new Date().toISOString(),
+      database: { connected: dbConnected, pool: getPoolStats() },
+      warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
+      // Backward-compatible boolean map (true once a task settles, pass or fail) —
+      // consumed by the Electron readiness gate. Prefer `warmup` for new code.
+      caches: Object.fromEntries(
+        WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== "pending"]),
+      ),
+    });
+  },
+);
 
 // ==================== API Root ====================
 
-app.get('/api/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ (req, res) => {
-  res.json({
-    version: settings.api.version,
-    title: settings.api.title,
-    description: settings.api.description,
-    runtime: 'Node.js/Express',
-    links: [],
-  });
-});
+app.get(
+  "/api/",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ (
+    req,
+    res,
+  ) => {
+    res.json({
+      version: settings.api.version,
+      title: settings.api.title,
+      description: settings.api.description,
+      runtime: "Node.js/Express",
+      links: [],
+    });
+  },
+);
 
 // ==================== Route Registration ====================
 
 // Baseline rate limiting across the whole data plane. Mounted before every
 // router so previously-unthrottled routes (/api/transactions, /api/settings, …)
 // get a DoS backstop; stricter per-route limiters below stack on top.
-app.use('/api', globalRateLimiter);
+app.use("/api", globalRateLimiter);
 
 // CSRF backstop across the whole data plane. Previously only /api/admin was
 // guarded, leaving state-changing data-plane routes (/api/import/csv,
@@ -198,30 +259,47 @@ app.use('/api', globalRateLimiter);
 // multipart POST (a CORS-simple request that fires without preflight). The
 // guard is stateless (Sec-Fetch-Site/Origin based) so same-origin SPA and
 // Electron-main requests pass unchanged.
-app.use('/api', csrfGuard);
+app.use("/api", csrfGuard);
 
-mountRouter(app, '/api/transactions', transactionsRouter);
-mountRouter(app, '/api/categories', categoriesRouter);
-mountRouter(app, '/api/recipients', recipientsRouter);
-mountRouter(app, '/api/recipients', recipientBankAccountsRouter);
-mountRouter(app, '/api/planned-transactions', plannedTransactionsRouter);
-mountRouter(app, '/api/info', infoRouter);
-mountRouter(app, '/api/aggregations', aggregationRateLimiter, aggregationsRouter);
-mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
-mountRouter(app, '/api/import', importRateLimiter, importRouter);
-mountRouter(app, '/api/portfolio/import', importRateLimiter, portfolioImportRouter);
-mountRouter(app, '/api/investments', investmentRateLimiter, investmentsRouter);
-mountRouter(app, '/api/settings', settingsRouter);
-mountRouter(app, '/api/market', marketRateLimiter, marketLookupRouter);
-mountRouter(app, '/api/research', marketRateLimiter, researchRouter);
-mountRouter(app, '/api/watchlist', watchlistRouter);
-mountRouter(app, '/api/splits', splitsRouter);
-mountRouter(app, '/api/saved-charts', savedChartsRouter);
-mountRouter(app, '/api/attachments', attachmentRateLimiter, attachmentsRouter);
-mountRouter(app, '/api/reports', reportRateLimiter, reportsRouter);
-mountRouter(app, '/api/tags', tagsRouter);
-mountRouter(app, '/api/accounts', accountsRouter);
-mountRouter(app, '/api/cross-workspace', crossWorkspaceRouter);
+mountRouter(app, "/api/transactions", transactionsRouter);
+mountRouter(app, "/api/categories", categoriesRouter);
+mountRouter(app, "/api/recipients", recipientsRouter);
+mountRouter(app, "/api/recipients", recipientBankAccountsRouter);
+mountRouter(app, "/api/planned-transactions", plannedTransactionsRouter);
+mountRouter(app, "/api/info", infoRouter);
+mountRouter(
+  app,
+  "/api/aggregations",
+  aggregationRateLimiter,
+  aggregationsRouter,
+);
+mountRouter(
+  app,
+  "/api/admin",
+  adminRateLimiter,
+  adminCsrfGuard,
+  adminAuthMiddleware,
+  adminRouter,
+);
+mountRouter(app, "/api/import", importRateLimiter, importRouter);
+mountRouter(
+  app,
+  "/api/portfolio/import",
+  importRateLimiter,
+  portfolioImportRouter,
+);
+mountRouter(app, "/api/investments", investmentRateLimiter, investmentsRouter);
+mountRouter(app, "/api/settings", settingsRouter);
+mountRouter(app, "/api/market", marketRateLimiter, marketLookupRouter);
+mountRouter(app, "/api/research", marketRateLimiter, researchRouter);
+mountRouter(app, "/api/watchlist", watchlistRouter);
+mountRouter(app, "/api/splits", splitsRouter);
+mountRouter(app, "/api/saved-charts", savedChartsRouter);
+mountRouter(app, "/api/attachments", attachmentRateLimiter, attachmentsRouter);
+mountRouter(app, "/api/reports", reportRateLimiter, reportsRouter);
+mountRouter(app, "/api/tags", tagsRouter);
+mountRouter(app, "/api/accounts", accountsRouter);
+mountRouter(app, "/api/cross-workspace", crossWorkspaceRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
@@ -229,15 +307,16 @@ if (settings.aiChat?.enabled) {
   const aiChatLimiter = rateLimiter({
     windowMs: 60_000,
     maxRequests: settings.aiChat.rateLimit,
-    keyPrefix: 'ai-chat',
+    keyPrefix: "ai-chat",
   });
-  app.use('/api/ai/chat', aiChatLimiter);
-  mountRouter(app, '/api/ai', aiRouter);
-  logger.debug(`AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`);
+  app.use("/api/ai/chat", aiChatLimiter);
+  mountRouter(app, "/api/ai", aiRouter);
+  logger.debug(
+    `AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`,
+  );
 } else {
-  logger.info('AI chat routes disabled (settings.aiChat.enabled = false)');
+  logger.info("AI chat routes disabled (settings.aiChat.enabled = false)");
 }
-
 
 // Build route manifest after all routes are registered so /api/admin/endpoints
 // reflects the full router stack.
@@ -247,7 +326,15 @@ buildRouteManifest(app);
 // Serve the built React app when running in production (Docker/standalone)
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
-  const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
+  const distPath = process.env.VISION_DIST_DIR
+    ? resolve(process.env.VISION_DIST_DIR)
+    : resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "..",
+        "..",
+        "dist",
+      );
   // Only Vite's content-hashed bundles live under dist/assets/ — those are
   // safe to cache for a year. Everything else in dist/ has a stable name
   // (index.html, favicon.svg, robots.txt, …) and must revalidate, or an
@@ -255,32 +342,50 @@ if (settings.isProduction()) {
   // (stale shells then 404 on their old hashed chunk URLs after an upgrade).
   // `index: false` only disables directory-index resolution, it does not
   // exempt those files from the long-lived cache header.
-  const hashedAssetsPrefix = resolve(distPath, 'assets') + sep;
-  app.use(express.static(distPath, {
-    index: false,
-    maxAge: '1y',
-    immutable: true,
-    setHeaders: (/** @type {ExpressResponse} */ res, /** @type {string} */ filePath) => {
-      if (!filePath.startsWith(hashedAssetsPrefix)) {
-        res.setHeader('Cache-Control', 'no-cache');
-      }
-    },
-  }));
+  const hashedAssetsPrefix = resolve(distPath, "assets") + sep;
+  app.use(
+    express.static(distPath, {
+      index: false,
+      maxAge: "1y",
+      immutable: true,
+      setHeaders: (
+        /** @type {ExpressResponse} */ res,
+        /** @type {string} */ filePath,
+      ) => {
+        if (!filePath.startsWith(hashedAssetsPrefix)) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }),
+  );
   // Preload the SPA shell once at startup; the fallback route then serves it
   // from memory with no per-request file I/O.
-  const indexHtml = fs.readFileSync(resolve(distPath, 'index.html'), 'utf-8');
-  app.get(/^(?!\/api)/, spaRateLimiter, /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (_req, res) => {
-    res.setHeader('Cache-Control', 'no-cache');
-    res.type('html').send(indexHtml);
-  });
+  const indexHtml = fs.readFileSync(resolve(distPath, "index.html"), "utf-8");
+  app.get(
+    /^(?!\/api)/,
+    spaRateLimiter,
+    /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (
+      _req,
+      res,
+    ) => {
+      res.setHeader("Cache-Control", "no-cache");
+      res.type("html").send(indexHtml);
+    },
+  );
 }
 
 // ==================== Error Handling ====================
 
 // 404 handler — funnel through the error handler so the envelope stays uniform.
-app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
-  next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
-});
+app.use(
+  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
+    req,
+    res,
+    next,
+  ) => {
+    next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
+  },
+);
 
 // Global error handler — typed errors (AppError, ValidationError, NotFoundError, …)
 // map to their declared status; untyped errors fall through to 500.
@@ -311,7 +416,7 @@ let httpServer = null;
 let isShuttingDown = false;
 
 // ── Boot instrumentation ───────────────────────────────────────────────────
-const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
+const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== "0";
 const _bootT0 = Date.now();
 /** @type {{ phase: string, ms: number }[]} */
 const _bootMarks = [];
@@ -327,10 +432,12 @@ function bootMark(phase) {
     return ms;
   };
 }
-function bootSummary(extraPhase = 'backend_total') {
+function bootSummary(extraPhase = "backend_total") {
   const total = Date.now() - _bootT0;
   if (BOOT_TRACE_ENABLED) {
-    process.stderr.write(`[startup] ${JSON.stringify({ phase: extraPhase, ms: total, marks: _bootMarks })}\n`);
+    process.stderr.write(
+      `[startup] ${JSON.stringify({ phase: extraPhase, ms: total, marks: _bootMarks })}\n`,
+    );
   }
 }
 
@@ -346,18 +453,18 @@ async function start() {
     if (!isLoopbackHost(HOST) && !settings.admin.allowTokenlessNonLoopback) {
       logger.error(
         `Refusing to start: bind address '${HOST}' is not loopback and ADMIN_AUTH_TOKEN is not set. ` +
-        'Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an ' +
-        'outer layer already restricts access (e.g. Docker publishing the port on host loopback) — ' +
-        'set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.'
+          "Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an " +
+          "outer layer already restricts access (e.g. Docker publishing the port on host loopback) — " +
+          "set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.",
       );
       process.exit(1);
     }
     logger.warn(
-      'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
-      'This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF ' +
-      'guard blocks cross-site *state-changing* requests, but NOT cross-site GET reads ' +
-      '(safe methods are exempt), so it is not by itself an authorization boundary. If you ' +
-      'publish the port on 0.0.0.0 or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
+      "ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. " +
+        "This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF " +
+        "guard blocks cross-site *state-changing* requests, but NOT cross-site GET reads " +
+        "(safe methods are exempt), so it is not by itself an authorization boundary. If you " +
+        "publish the port on 0.0.0.0 or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.",
     );
   }
 
@@ -369,7 +476,7 @@ async function start() {
     // once as the privileged DATABASE_URL_MIGRATIONS role, creates the app
     // role if missing and (re)applies the shared grant set. No-op in the
     // classic single-role setup; warn-not-crash on every failure path.
-    const endRoleBootstrap = bootMark('role_bootstrap');
+    const endRoleBootstrap = bootMark("role_bootstrap");
     await ensureAppRole({
       databaseUrl: settings.database.url,
       migrationsUrl: settings.database.migrationsUrl,
@@ -387,16 +494,16 @@ async function start() {
     const baseDelay = 50; // Start with 50ms
     const maxDelay = 1000;
 
-    const endDbPoll = bootMark('db_poll');
+    const endDbPoll = bootMark("db_poll");
     while (!dbReady && attemptCount < maxAttempts) {
       const isConnected = await checkConnection();
       if (isConnected) {
         dbReady = true;
         endDbPoll();
-        logger.info('Database connection verified successfully');
+        logger.info("Database connection verified successfully");
         // Run alembic migrations (fail-fast on non-zero exit).
         // Alembic is the single source of schema DDL (ADR-027).
-        const endMig = bootMark('run_migrations');
+        const endMig = bootMark("run_migrations");
         await runMigrations();
         endMig();
         // One database-wide ANALYZE at boot so small, rarely-mutated tables
@@ -410,8 +517,11 @@ async function start() {
         // table on every boot. On a boot that just migrated, the two big tables
         // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
         // whole-DB sample is cheap on this dataset.
-        query('ANALYZE').catch((err) =>
-          logger.warn({ err: err.message }, 'boot-time ANALYZE failed; non-fatal'),
+        runDatabaseAnalyze().catch((err) =>
+          logger.warn(
+            { err: err.message },
+            "boot-time ANALYZE failed; non-fatal",
+          ),
         );
         // Materialized views are runtime artifacts, not schema (ADR-027), so the
         // whole create/index/refresh lifecycle lives in the post-listen warmup
@@ -425,23 +535,30 @@ async function start() {
       } else {
         attemptCount++;
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
-        const delay = Math.min(baseDelay * Math.pow(2, attemptCount - 1), maxDelay);
-        logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts}, next retry in ${delay}ms)`);
+        const delay = Math.min(
+          baseDelay * Math.pow(2, attemptCount - 1),
+          maxDelay,
+        );
+        logger.debug(
+          `Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts}, next retry in ${delay}ms)`,
+        );
         await sleep(delay);
       }
     }
 
     if (!dbReady) {
-      logger.error('Database connection failed after multiple attempts');
-      logger.info(`DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ':***@')}`);
-      throw new Error('Failed to connect to database');
+      logger.error("Database connection failed after multiple attempts");
+      logger.info(
+        `DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ":***@")}`,
+      );
+      throw new Error("Failed to connect to database");
     }
 
     // Start Express server immediately after DB is ready
-    const endListen = bootMark('app_listen');
+    const endListen = bootMark("app_listen");
     const server = app.listen(PORT, HOST, async () => {
       endListen();
-      bootSummary('backend_total');
+      bootSummary("backend_total");
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
         host: HOST,
         port: PORT,
@@ -453,21 +570,22 @@ async function start() {
         const intervals = await runWarmupTasks({ warmupStatus });
         exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
         quotesRefreshInterval = intervals.quotesRefreshInterval;
-        cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
+        cashflowForecastRefreshInterval =
+          intervals.cashflowForecastRefreshInterval;
         holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
       } catch (err) {
-        logger.error('Warmup tasks failed', { error: err.message });
+        logger.error("Warmup tasks failed", { error: err.message });
       }
     });
 
     httpServer = server;
 
-    server.on('error', (/** @type {any} */ err) => {
-      logger.error('HTTP server error', { error: err.message });
+    server.on("error", (/** @type {any} */ err) => {
+      logger.error("HTTP server error", { error: err.message });
       process.exit(1);
     });
   } catch (err) {
-    logger.error('Failed to start application', { error: err.message });
+    logger.error("Failed to start application", { error: err.message });
     process.exit(1);
   }
 }
@@ -480,23 +598,26 @@ async function shutdown(signal) {
   // A second SIGINT/SIGTERM while a drain is already in progress should not
   // restart the sequence — just note it and let the first run finish.
   if (isShuttingDown) {
-    logger.warn(`Received ${signal || 'signal'} during shutdown — already draining`);
+    logger.warn(
+      `Received ${signal || "signal"} during shutdown — already draining`,
+    );
     return;
   }
   isShuttingDown = true;
-  logger.info('Shutting down...', { signal });
+  logger.info("Shutting down...", { signal });
 
   // Hard backstop: if draining hangs (a stuck request, a pool that won't
   // close), force-exit rather than wedging the process forever.
   const forceExit = setTimeout(() => {
-    logger.error('Graceful shutdown timed out — forcing exit');
+    logger.error("Graceful shutdown timed out — forcing exit");
     process.exit(1);
   }, SHUTDOWN_FORCE_EXIT_MS);
   forceExit.unref();
 
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   if (quotesRefreshInterval) clearInterval(quotesRefreshInterval);
-  if (cashflowForecastRefreshInterval) clearInterval(cashflowForecastRefreshInterval);
+  if (cashflowForecastRefreshInterval)
+    clearInterval(cashflowForecastRefreshInterval);
   if (holdingGapBackfillInterval) clearInterval(holdingGapBackfillInterval);
   cancelPendingAggregationRefresh();
 
@@ -518,8 +639,8 @@ async function shutdown(signal) {
   process.exit(0);
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 // Last-resort handlers. Node terminates the process on an unhandled rejection
 // or uncaught exception anyway — but with no structured log line, so under a
@@ -542,17 +663,17 @@ function logFatal(kind, err) {
   });
 }
 
-process.on('unhandledRejection', (reason) => {
-  logFatal('Unhandled promise rejection', reason);
+process.on("unhandledRejection", (reason) => {
+  logFatal("Unhandled promise rejection", reason);
   process.exit(1);
 });
 
-process.on('uncaughtException', (err) => {
-  logFatal('Uncaught exception', err);
+process.on("uncaughtException", (err) => {
+  logFatal("Uncaught exception", err);
   process.exit(1);
 });
 
 start().catch((err) => {
-  logger.error('Failed to start application', { error: err.message });
+  logger.error("Failed to start application", { error: err.message });
   process.exit(1);
 });

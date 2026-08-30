@@ -68,7 +68,7 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 - English and Dutch (`nl`) localization
 - Offline-resilient — online status detection gates market queries, disables refresh controls gracefully
 - Secure backup/restore with AES-256-GCM encryption (per-backup salt)
-- Desktop app via Electron with Docker-managed backend
+- Desktop app via Electron with bundled PostgreSQL 18 and a native Bun backend
 
 ---
 
@@ -76,7 +76,15 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 
 ### Option A — macOS Desktop (recommended for end users)
 
-The `install.sh` script sets up everything from scratch — Homebrew, Docker Desktop, Bun, dependencies, and a `.app` launcher:
+Install the release DMG. The application contains PostgreSQL 18, the migration
+runner, the Bun backend, the production frontend, and the browser used for PDF
+reports. Neither Docker Desktop nor a running Homebrew PostgreSQL service is
+required.
+
+To build the same application from source, first provide Bun, Node.js, a
+PostgreSQL 18.6 distribution from Postgres.app or Homebrew, and a Python build
+environment containing the pinned requirements and PyInstaller 6.22.2. The
+PostgreSQL service does not need to be started. Then run:
 
 ```bash
 git clone https://github.com/EraPartner/Vision.git
@@ -84,13 +92,16 @@ cd Vision
 ./install.sh
 ```
 
-After installation, open **Vision** from `/Applications/Vision.app` or run:
+After installation, open **Vision** from `/Applications/Vision.app`:
 
 ```bash
-bun run electron:prod
+open /Applications/Vision.app
 ```
 
-> Docker Desktop must be running. On first launch, Vision generates `.env` with a secure random password automatically.
+Vision creates a private, loopback-only database under its macOS application-data
+directory on first launch. See
+[`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for
+data migration and rollback.
 
 ### Option B — Docker Compose (any platform)
 
@@ -108,8 +119,7 @@ docker compose up -d
 Open `http://localhost:3002` in your browser.
 
 ```bash
-docker compose down        # stop
-docker compose down -v     # stop and remove all data
+docker compose down        # stop without deleting data volumes
 ```
 
 ### Option C — Development mode
@@ -118,16 +128,18 @@ docker compose down -v     # stop and remove all data
 git clone https://github.com/EraPartner/Vision.git
 cd Vision
 bun install
-cp .env.example .env       # edit as needed
-
-bun run docker:dev         # start Postgres + backend via Compose
-bun run dev                # start frontend + backend in watch mode
+bun run native:prepare     # one-time native PostgreSQL/migration/PDF payload
+bun run dev                # start private PostgreSQL, backend, and frontend
 ```
 
-| Service | URL |
-|---------|-----|
-| Frontend | `http://localhost:8080` (auto-picks next free port if busy) |
-| Backend API | `http://localhost:3002` |
+`native:prepare` needs PostgreSQL 18.6 build files and the pinned Python build
+dependencies, but it never starts the external PostgreSQL service. Docker
+development remains available explicitly through `bun run docker:dev`.
+
+| Service     | URL                                                         |
+| ----------- | ----------------------------------------------------------- |
+| Frontend    | `http://localhost:8080` (auto-picks next free port if busy) |
+| Backend API | `http://localhost:3002`                                     |
 
 ---
 
@@ -169,8 +181,9 @@ Vision/
 
 ```bash
 # Development
-bun run dev                  # frontend + backend in watch mode (concurrent)
-bun run backend              # backend only
+bun run native:prepare       # one-time private PostgreSQL/migration/PDF payload
+bun run dev                  # private PostgreSQL + watched backend + Vite
+bun run backend              # backend only; requires an explicit database config
 
 # Building
 bun run build                # production frontend build (generates locales first)
@@ -185,6 +198,7 @@ bun run typecheck            # frontend TypeScript typecheck
 
 # Testing
 bun run test                 # backend Vitest suite
+bun run test:db              # backend suite with a private temporary PostgreSQL 18
 bun run test:frontend        # frontend Vitest suite
 bun run test:all             # backend + frontend (concurrent)
 bun run test:coverage        # frontend coverage report
@@ -194,10 +208,10 @@ bun run test:e2e:visual      # frontend visual-regression tests
 
 # Database (Alembic / PostgreSQL)
 bun run db:upgrade           # apply all pending migrations
-bun run db:downgrade         # revert one migration
+bun run db:downgrade         # destructive maintenance only; never run on live data
 bun run db:current           # show current revision
 bun run db:history           # show migration history
-bun run db:stamp             # stamp DB at head without running migrations
+bun run db:stamp             # expert recovery only; does not run migrations
 bun run db:revision          # create a new autogenerate migration
 bun run db:index-stats       # report index usage stats
 bun run db:precision-drift   # check for numeric precision drift
@@ -209,13 +223,14 @@ bun run docker:dev:down      # stop dev stack
 bun run docker:dev:rebuild   # rebuild and restart dev stack
 bun run docker:clean         # start clean Compose stack (fresh build)
 bun run docker:clean:down    # stop clean stack
-bun run docker:clean:reset   # wipe volumes + restart clean stack
+bun run docker:clean:reset   # DESTROYS the synthetic clean volume; never real data
 bun run docker:logs          # tail app logs
 
 # Electron
-bun run electron:dev         # desktop dev mode
-bun run electron:prod        # desktop production mode
-bun run electron:clean       # desktop with clean Compose override
+bun run electron:dev         # native desktop with isolated development data
+bun run electron:prod        # native desktop production shell
+bun run electron:docker      # explicit optional Docker provider
+bun run electron:clean       # destructive synthetic Docker clean provider only
 
 # i18n
 bun run generate-locales     # compile i18n source → locale files
@@ -230,54 +245,58 @@ bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
-| Backend | Node.js (Bun runtime), Express |
-| Database | PostgreSQL 18 (Alpine), Alembic migrations |
-| Desktop | Electron |
-| AI | Ollama (local LLM) |
-| Testing | Vitest (frontend + backend) |
-| Packaging | Docker Compose, GitHub Actions release workflow |
-| API spec | OpenAPI 3.x (`openapi.yaml`) |
+| Layer     | Technology                                                                                    |
+| --------- | --------------------------------------------------------------------------------------------- |
+| Frontend  | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
+| Backend   | Node.js (Bun runtime), Express                                                                |
+| Database  | PostgreSQL 18.6 native bundle or optional PostgreSQL 18 Compose service; Alembic migrations   |
+| Desktop   | Electron                                                                                      |
+| AI        | Ollama (local LLM)                                                                            |
+| Testing   | Vitest (frontend + backend)                                                                   |
+| Packaging | Native Electron DMG/ZIP, optional Docker Compose, GitHub Actions release workflow             |
+| API spec  | OpenAPI 3.x (`openapi.yaml`)                                                                  |
 
 ### Bank Import Adapters
 
-| Adapter | File |
-|---------|------|
-| Belfius | `belfius.js` |
-| Revolut | `revolut.js` |
-| KBC | `kbc.js` |
-| ING | `ing.js` |
-| BNP Paribas Fortis | `bnp.js` |
-| SABB | `sabb.js` |
-| Wise | `wise.js` |
-| Vision backup | `vision.js` |
+| Adapter            | File         |
+| ------------------ | ------------ |
+| Belfius            | `belfius.js` |
+| Revolut            | `revolut.js` |
+| KBC                | `kbc.js`     |
+| ING                | `ing.js`     |
+| BNP Paribas Fortis | `bnp.js`     |
+| SABB               | `sabb.js`    |
+| Wise               | `wise.js`    |
+| Vision backup      | `vision.js`  |
 | Generic CSV mapper | `generic.js` |
 
 ### Price Providers
 
-| Provider | Asset class |
-|----------|------------|
-| Yahoo Finance | Stocks, ETFs, indices |
-| Binance | Crypto |
-| Kinesis | Precious metals (gold, silver) |
+| Provider             | Asset class                           |
+| -------------------- | ------------------------------------- |
+| Yahoo Finance        | Stocks, ETFs, indices                 |
+| Binance              | Crypto                                |
+| Kinesis              | Precious metals (gold, silver)        |
 | Custom JSON endpoint | Any asset via configurable URL + path |
 
 ---
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the required values.
+Native Vision generates database credentials in its restricted application-data directory. Do not
+create a database URL for the packaged app. Copy `.env.example` to `.env` only for Docker Compose
+or source-development provider keys and overrides.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✓ | PostgreSQL connection string |
-| `POSTGRES_PASSWORD` | ✓ | DB password for Compose setup |
-| `LOG_LEVEL` | — | `debug` / `info` / `warn` / `error` (default: `warn`) |
-| `ENABLE_LOGGING` | — | Toggle logging output (`true` / `false`) |
+| Variable            | Required       | Description                                           |
+| ------------------- | -------------- | ----------------------------------------------------- |
+| `DATABASE_URL`      | Docker/custom  | PostgreSQL connection string                          |
+| `POSTGRES_PASSWORD` | Docker Compose | Database bootstrap password                           |
+| `LOG_LEVEL`         | No             | `debug` / `info` / `warn` / `error` (default: `warn`) |
+| `ENABLE_LOGGING`    | No             | Toggle logging output (`true` / `false`)              |
 
-> The Electron launcher generates `.env` automatically on first run with a securely randomized password. You only need to create it manually for Docker-only deployments.
+> The native Electron provider writes `runtime.env` with restrictive permissions and separate
+> administrator, migration-owner, and application credentials. The optional Docker provider keeps
+> its existing `.env` contract.
 
 ---
 

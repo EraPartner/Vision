@@ -1,79 +1,84 @@
-# Financial Transaction Manager - Node.js Backend
+# Vision Node Backend
 
-A Node.js/Express port of the Python/FastAPI backend. Connects to the **same PostgreSQL database** and exposes the **same REST API**.
+The Express backend is Vision's production application service. It provides the REST API,
+PostgreSQL persistence, imports, portfolios, planning, reports, attachments, backups, admin tools,
+and integrations used by the React frontend.
 
-## Architecture
+## Normal development
 
-```
-apps/node-backend/
-├── src/
-│   ├── main.js                          # Express app entry point (mirrors main.py)
-│   ├── config/
-│   │   ├── config.js                    # Settings management
-│   │   └── logger.js                    # Structured logging (mirrors config/logging_config.py)
-│   ├── database/
-│   │   └── connection.js                # PostgreSQL pool (mirrors database/connection.py)
-│   ├── repositories/
-│   │   ├── transactionRepository.js     # Transaction data access
-│   │   ├── categoryRepository.js        # Category data access
-│   │   ├── recipientRepository.js       # Recipient data access
-│   │   ├── plannedTransactionRepository.js  # Planned transaction data access
-│   │   └── infoRepository.js            # Statistics data access
-│   └── routes/
-│       ├── transactions.js              # /api/transactions (mirrors api_routes_transactions.py)
-│       ├── categories.js                # /api/categories (mirrors api_routes_categories.py)
-│       ├── recipients.js                # /api/recipients (mirrors api_routes_recipients.py)
-│       ├── plannedTransactions.js       # /api/planned-transactions
-│       ├── info.js                      # /api/info (mirrors api_routes_info.py)
-│       ├── admin.js                     # /api/admin (mirrors api_routes_admin.py)
-│       └── importRoutes.js              # /api/import (stub - use Python backend)
-├── package.json
-└── README.md
-```
-
-## Quick Start
+Start from the repository root:
 
 ```bash
-cd apps/node-backend
-npm install
-npm run dev
+bun install
+bun run native:prepare
+bun run dev
 ```
 
-The server starts on `http://localhost:3002` by default (same port as Python backend).
+This starts Vision's private PostgreSQL 18.6 development cluster, the backend in watch mode, and
+Vite. It does not require Docker or a running Homebrew PostgreSQL service. The native preparation
+step needs PostgreSQL 18.6 build files, the pinned Python migration build environment, and the
+pinned Chrome Headless Shell download. See
+[`docs/guides/native-macos-runtime.md`](../../docs/guides/native-macos-runtime.md).
+
+To run only the backend, provide a real `DATABASE_URL` and, for schema changes,
+`DATABASE_URL_MIGRATIONS`, then run:
+
+```bash
+bun run --filter 'financial-transaction-manager-node' dev
+```
+
+The backend binds to loopback in native mode. A non-loopback deployment without
+`ADMIN_AUTH_TOKEN` fails closed unless the operator explicitly acknowledges an external network
+boundary.
 
 ## Configuration
 
-Set via environment variables or `.env.local` file in the `apps/node-backend/` directory:
+Backend source development uses the environment layering defined in ADR-080:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions` | PostgreSQL connection string |
-| `PORT` | `3002` | Server port |
-| `HOSTNAME` | `localhost` | Server host |
-| `CORS_ORIGINS` | `http://localhost:5174` | Allowed CORS origins |
-| `ENVIRONMENT` | `development` | Environment name |
+1. `apps/node-backend/.env.local` for local connection and port overrides;
+2. the repository `.env` for shared provider keys and optional Docker settings; and
+3. real process environment values, which take precedence.
 
-## Differences from Python Backend
+Packaged native Vision does not depend on these checkout files. Electron generates a restricted
+`runtime.env` in the application-data directory with separate administrator, migration-owner, and
+least-privilege application roles.
 
-1. **No CSV Import** - The import functionality (bank adapters, deduplication) is complex and Python-specific. Use the Python backend for imports.
-2. **No HATEOAS Links** - Links arrays are returned empty (`[]`). The frontend doesn't use them.
-3. **No Alembic** - Database migrations are still managed by the Python backend's Alembic setup.
-4. **No SQLAlchemy** - Uses raw SQL via `pg` (node-postgres) for direct, readable queries.
+The authoritative variable inventory is
+[`docs/reference/environment-variables.md`](../../docs/reference/environment-variables.md).
 
-## Running Alongside Python Backend
+## Database migrations
 
-You can only run one backend at a time on port 3002. To switch:
+Alembic remains the single source of schema definition, but writes must go through Vision's
+guarded JavaScript runner because it preflights `alembic_version.version_num` as `VARCHAR(64)`:
 
 ```bash
-# Stop Python backend, start Node.js:
-cd apps/node-backend && npm run dev
-
-# Or vice versa:
-cd apps/backend && ./venv/bin/python main.py
+bun run db:upgrade
 ```
 
-Both backends are fully compatible with the frontend - just point to the same port.
+Do not use bare `alembic upgrade`, stamp, reset, or downgrade against live data. Native startup and
+Docker startup both invoke the same underlying migration runner automatically.
+
+## Focused checks
+
+```bash
+bun run lint:backend
+bun run test
+
+# From apps/node-backend for one file or test name:
+bun vitest run src/path/to/test.test.js
+bun vitest run --test-name-pattern="name"
+```
+
+Database-backed tests use the repository's disposable PostgreSQL 18 harness. It prefers installed
+native tools and does not start the Homebrew service; Docker remains an optional fallback:
+
+```bash
+bun run test:db
+```
+
+The root [`AGENTS.md`](../../AGENTS.md) and repository documentation define the current development
+and safety contract.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See the root [LICENSE](../../LICENSE) file.
+Vision is licensed under AGPL-3.0-only. See [`LICENSE`](../../LICENSE).

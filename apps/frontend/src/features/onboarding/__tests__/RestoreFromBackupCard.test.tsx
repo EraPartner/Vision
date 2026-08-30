@@ -96,7 +96,9 @@ describe("RestoreFromBackupCard", () => {
         installElectronMocks();
         renderWithApp(<RestoreFromBackupCard />);
 
-        expect(await screen.findByText("Already have a Vision database?")).toBeInTheDocument();
+        expect(
+            await screen.findByText("Already have a Vision database?"),
+        ).toBeInTheDocument();
         expect(
             screen.getByText(/If you have a Vision backup/i),
         ).toBeInTheDocument();
@@ -123,7 +125,9 @@ describe("RestoreFromBackupCard", () => {
 
     it("opens the confirm dialog with the selected file basename", async () => {
         installElectronMocks({
-            selectFile: vi.fn().mockResolvedValue("/tmp/backups/snapshot.visionbak"),
+            selectFile: vi
+                .fn()
+                .mockResolvedValue("/tmp/backups/snapshot.visionbak"),
         });
         const user = userEvent.setup();
         renderWithApp(<RestoreFromBackupCard />);
@@ -132,7 +136,9 @@ describe("RestoreFromBackupCard", () => {
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
 
-        expect(await screen.findByText("Restore database?")).toBeInTheDocument();
+        expect(
+            await screen.findByText("Restore database?"),
+        ).toBeInTheDocument();
         expect(screen.getByText("snapshot.visionbak")).toBeInTheDocument();
     });
 
@@ -151,7 +157,9 @@ describe("RestoreFromBackupCard", () => {
         await user.click(screen.getByRole("button", { name: /^Cancel$/ }));
 
         await waitFor(() => {
-            expect(screen.queryByText("Restore database?")).not.toBeInTheDocument();
+            expect(
+                screen.queryByText("Restore database?"),
+            ).not.toBeInTheDocument();
         });
         expect(backup.restoreBackup).not.toHaveBeenCalled();
     });
@@ -186,6 +194,39 @@ describe("RestoreFromBackupCard", () => {
         });
     });
 
+    it("restores the supported frontend localStorage snapshot", async () => {
+        window.localStorage.clear();
+        installElectronMocks({
+            selectFile: vi.fn().mockResolvedValue("/tmp/snapshot.visionbak"),
+            isEncrypted: vi.fn().mockResolvedValue(false),
+            restoreBackup: vi.fn().mockResolvedValue({
+                success: true,
+                file: "snapshot.visionbak",
+                frontendState: {
+                    keys: {
+                        vision_theme: "dark",
+                        vision_theme_variant: "forest",
+                    },
+                },
+            }),
+        });
+        const user = userEvent.setup();
+        renderWithApp(<RestoreFromBackupCard />);
+
+        await user.click(
+            await screen.findByRole("button", { name: /Restore from backup/i }),
+        );
+        await screen.findByText("Restore database?");
+        await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
+
+        await waitFor(() => {
+            expect(window.localStorage.getItem("vision_theme")).toBe("dark");
+            expect(window.localStorage.getItem("vision_theme_variant")).toBe(
+                "forest",
+            );
+        });
+    });
+
     it("surfaces a toast error when the restore fails", async () => {
         const { toast } = await import("sonner");
         installElectronMocks({
@@ -208,8 +249,8 @@ describe("RestoreFromBackupCard", () => {
         await waitFor(() => {
             expect(toast.error).toHaveBeenCalled();
         });
-        const [, opts] = (toast.error as unknown as ReturnType<typeof vi.fn>).mock
-            .calls[0];
+        const [, opts] = (toast.error as unknown as ReturnType<typeof vi.fn>)
+            .mock.calls[0];
         expect(opts).toMatchObject({ description: "Disk write failure" });
     });
 
@@ -227,7 +268,9 @@ describe("RestoreFromBackupCard", () => {
         await screen.findByText("Restore database?");
         await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
 
-        expect(await screen.findByText("Backup is encrypted")).toBeInTheDocument();
+        expect(
+            await screen.findByText("Backup is encrypted"),
+        ).toBeInTheDocument();
         expect(screen.getByLabelText("Passphrase")).toBeInTheDocument();
     });
 });

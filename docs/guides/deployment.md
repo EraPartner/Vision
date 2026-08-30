@@ -2,13 +2,15 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-04-21
-updated: 2026-08-27
+date: 2026-08-30
+updated: 2026-08-30
 tags:
   [
     guide,
     deployment,
     production,
+    native-runtime,
+    postgresql,
     docker,
     electron,
     phase-1,
@@ -20,7 +22,7 @@ tags:
     bun,
     troubleshooting,
   ]
-description: Production deployment instructions including port binding and admin endpoints security
+description: Native macOS, optional Docker Compose, and custom production deployment with secure port binding and admin endpoints
 aliases:
   [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
@@ -34,17 +36,21 @@ This guide covers deploying Vision in production environments.
 
 Vision supports multiple deployment methods:
 
-| Method           | Use Case                 | Complexity |
-| ---------------- | ------------------------ | ---------- |
-| Docker Compose   | Single server production | Medium     |
-| Electron Desktop | Local desktop app        | Low        |
-| Manual           | Custom infrastructure    | High       |
+| Method          | Use Case                                       | Complexity |
+| --------------- | ---------------------------------------------- | ---------- |
+| Native Electron | Normal macOS desktop use with PostgreSQL 18    | Low        |
+| Docker Compose  | Optional single-server or container deployment | Medium     |
+| Manual          | Custom infrastructure                          | High       |
 
 Browser deployments expose a minimal Web App Manifest, so a supporting browser can install the
 site with Vision branding and standalone window metadata. This does not add a service worker or an
 offline cache; the backend remains required for application data and operations.
 
-## Docker Compose (Recommended)
+## Docker Compose (Optional)
+
+Native macOS installation and Docker-to-native migration are documented in
+[[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]. This Compose section remains the
+supported container deployment path and does not duplicate application business logic.
 
 ### Prerequisites
 
@@ -97,7 +103,7 @@ docker compose logs -f app
 docker compose ps
 
 # Test API health
-curl http://localhost:3002/api/info/health
+curl http://localhost:3002/health
 ```
 
 ### 5. Setup Nginx (Reverse Proxy)
@@ -111,7 +117,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:5173;
+        proxy_pass http://localhost:3002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -139,19 +145,24 @@ The backend's admin API (`/api/admin/*`) is protected by:
      - "127.0.0.1:${PORT:-3002}:3002" # Loopback bind (recommended)
    ```
 
-2. **Private network allowlist fallback**: When `ADMIN_AUTH_TOKEN` is unset, admin endpoints allow requests from:
-   - Loopback (127.0.0.1, ::1, ::ffff:127.0.0.1)
-   - Private networks (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-   - IPv6 ULA (fc00::/7)
+2. **CSRF guard**: state-changing admin requests must pass the existing origin checks. This blocks
+   cross-site browser requests but is not an identity check.
 
-3. **Bearer token (optional)**: Set `ADMIN_AUTH_TOKEN` for explicit token-based protection. This is recommended if:
+3. **Bearer token**: Set `ADMIN_AUTH_TOKEN` for explicit token-based protection. It is required if:
    - You change the port binding to `0.0.0.0`
    - You expose the backend to untrusted networks
    - You want defense-in-depth beyond network isolation
 
-**Important:** If you modify `docker-compose.yml` to change the port binding from `127.0.0.1` to `0.0.0.0`, you **must** set `ADMIN_AUTH_TOKEN` to prevent LAN access to dangerous admin operations. See [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]] for details.
+There is no private-network IP allowlist fallback. If the backend binds beyond loopback without a
+token or an explicit acknowledged outer boundary, startup fails closed. See
+[[docs/adr/063-admin-auth-csrf-guard|ADR-063]].
 
-**Critical synchronization:** Any named volumes added to `docker-compose.yml` **must also be added** to `packaging/electron/resources/docker-compose.yml` (the embedded Electron app compose file). Omitting a volume from the embedded file causes data loss on updates — see [[docs/guides/cicd-pipelines#3-verify-compose-sync--docker-compose-sync-check|CI/CD Pipelines: Verify Compose Sync]] and [[docs/adr/051-docker-compose-sync-named-volumes|ADR-046]] for details.
+**Critical synchronization:** Any named volumes added to `docker-compose.yml` **must also be added**
+to `packaging/electron/resources/docker-compose.yml`, which is retained for the optional Electron
+Docker provider and Demo path. Omitting a volume from that copy can lose optional-provider data on
+updates. Native startup does not use this Compose file. See
+[[docs/guides/cicd-pipelines#3-verify-compose-sync--docker-compose-sync-check|CI/CD Pipelines:
+Verify Compose Sync]] and [[docs/adr/051-docker-compose-sync-named-volumes|ADR-051]].
 
 ### 7. Container Hardening
 
@@ -170,10 +181,11 @@ For complete details, rationale, and path-to-production hardening checklist, see
 
 ## Database Migrations in Production
 
-Startup logic runs automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
+Startup logic runs automatically when the container starts. `docker-entrypoint.sh` starts the Bun
+backend, and the backend then:
 
 1. Waits for the PostgreSQL database to be ready
-2. Runs `alembic upgrade head` to bootstrap or migrate the schema
+2. Runs Vision's guarded migration runner to bootstrap or migrate the schema
    - On a fresh DB: baseline migration `0001_initial_database_schema` creates all 27 tables, enums, indexes, and triggers
    - On an existing DB: pending migrations are applied in sequence
 3. Starts the backend application
@@ -183,9 +195,12 @@ Startup logic runs automatically when the container starts via the `docker-entry
 If you need to run migrations manually (e.g., for troubleshooting):
 
 ```bash
-# Run migrations in the app container using the venv Python
-docker compose exec app /app/venv/bin/python3 -m alembic -c /app/config/alembic.ini upgrade head
+# Run migrations through the same guarded runner used at application startup
+docker compose exec app bun run apps/node-backend/scripts/db-migrate.js upgrade
 ```
+
+Never use a bare Alembic write against Vision. The runner preflights
+`alembic_version.version_num` as `VARCHAR(64)` before Alembic writes.
 
 Note: migration `0002_add_url_to_planned_transactions` is idempotent and safely skips `url` creation when the column already exists.
 
@@ -197,41 +212,55 @@ Migration caveat: `0022_add_kinesis_price_provider_enum` adds enum value `kinesi
 
 ## Backup and Restore
 
-### Backup Database
+### Complete application backup
+
+Use Vision's backup UI when possible. A `.visionbak` contains the PostgreSQL dump, attachments,
+supported frontend/localStorage state, schema metadata, and optional AES-256-GCM encryption. A
+database dump alone is not a complete Vision backup.
+
+For an operator-managed final logical dump while PostgreSQL remains available:
 
 ```bash
-# Create backup
-docker compose exec db pg_dump -U ftm_user financial_transactions > backup.sql
-
-# Compressed backup
-docker compose exec db pg_dump -U ftm_user -Fc financial_transactions > backup.dump
+docker compose exec -T db pg_dump -U ftm_user \
+  --format=custom --no-owner --no-acl financial_transactions > backup.dump
 ```
 
-### Restore Database
+Export the attachment volume separately and verify its file count and hashes. Keep both artifacts
+together with a non-secret manifest.
+
+### Restore validation
+
+Do not restore over the live database. Create a fresh database from `template0`, restore with
+error-on-first-failure in one transaction, then validate schema, counts, attachments, readiness,
+and representative workflows before any cutover:
 
 ```bash
-# Restore from plain SQL
-docker compose exec -T db psql -U ftm_user financial_transactions < backup.sql
-
-# Restore from compressed dump
-docker compose exec -T db pg_restore -U ftm_user -d financial_transactions -c backup.dump
+docker compose exec -T db createdb -U ftm_user --template=template0 vision_restore_check
+docker compose exec -T db pg_restore -U ftm_user \
+  --exit-on-error --single-transaction --no-owner --no-acl \
+  --dbname=vision_restore_check < backup.dump
 ```
+
+The native `.visionbak` restore path automates staging, validation, atomic attachment replacement,
+and rollback through the active runtime provider.
 
 ### Scheduled Backups (recommended)
 
-The commands above are **ad-hoc** — nothing runs them on a schedule. The Electron app-level backup
-keeps only the newest 7 bundles, so between manual dumps your recovery point objective (RPO) is
-"whenever you last ran a backup." A volume loss in that window is otherwise unrecoverable. For any
-Docker/server deployment holding real data, schedule a periodic `pg_dump` with retention.
+The command above is **ad-hoc** — nothing schedules it. The Electron app-level backup keeps only
+the newest 7 bundles, so between manual dumps your recovery point objective (RPO) is "whenever you
+last ran a backup." A volume loss in that window is otherwise unrecoverable. For any Docker/server
+deployment holding real data, schedule both the custom database dump and attachment export with
+retention.
 
-Example nightly user-crontab entry (compressed dump + 14-day retention). Install it with
+Example nightly user-crontab entry (database portion, 14-day retention). Install it with
 `crontab -e` for an account allowed to run Docker, and replace `/mnt/vision-backups` with an
-absolute path on separate storage:
+absolute path on separate storage. Add the matching attachment export and manifest to the same
+schedule before treating it as a complete backup:
 
 ```bash
 # User crontab — runs at 02:30 daily
 30 2 * * *  mkdir -p /mnt/vision-backups && cd /path/to/vision && \
-  docker compose exec -T db pg_dump -U ftm_user -Fc financial_transactions \
+  docker compose exec -T db pg_dump -U ftm_user -Fc --no-owner --no-acl financial_transactions \
     > "/mnt/vision-backups/financial_transactions-$(date +\%F).dump" && \
   find /mnt/vision-backups -name 'financial_transactions-*.dump' -mtime +14 -delete
 ```
@@ -262,8 +291,8 @@ bun run build
 # Run Electron (production)
 bun run electron:prod
 
-# Clean build
-bun run electron:clean
+# Explicit optional Docker development runtime
+bun run electron:docker
 ```
 
 ### Packaging for macOS
@@ -273,9 +302,18 @@ Vision can be packaged into a clickable macOS .app bundle with `.dmg` and `.zip`
 #### Prerequisites
 
 - **Bun and Node.js** — Bun resolves the Electron dependencies; Node.js remains available for Electron tooling. See [[#package-manager-note|Package Manager Note]] below.
-- Docker Desktop running (required at runtime)
+- PostgreSQL 18.6 build source: the checksum-pinned Postgres.app release artifact, an explicit
+  `VISION_POSTGRES_SOURCE_BIN`, or a matching Homebrew installation. Its service does not need to
+  be started.
+- Python with the repository's hash-pinned Alembic dependencies and PyInstaller 6.22.2 for the
+  standalone migration executable.
+- The Puppeteer-pinned Chrome Headless Shell artifact for native HTML-to-PDF reports.
 - macOS 11.0 or later
 - arm64 architecture (Apple Silicon)
+
+These are package-build inputs, not end-user runtime prerequisites. A built Vision application
+contains the database server and client tools, migration executable, Bun backend, production
+frontend, and report browser.
 
 #### Build Steps
 
@@ -323,29 +361,42 @@ Their transitive graph is pinned in `packaging/electron/bun.lock`; do not add a 
 
 Electron-builder's `files` and `extraResources` arrays control what gets packed inside `app.asar` vs. kept outside at `Contents/Resources/`.
 
-**Files inside asar** (`files` array in `package.json`):
+**Files inside asar** (`files` in `electron-builder-base.json`):
 
 - `main.js` — Electron main process
 - `preload.js` — Security preload bridge
+- `runtime/**/*` — Native and Docker runtime providers
 - `backup/**/*` — Backup/restore bundle utilities
 - `assets/**/*` — Frontend build output
 
 **Files outside asar** (`extraResources` array):
 
 - `i18n/` → `Contents/Resources/i18n` — Runtime i18n locale files
-- `resources/` → `Contents/Resources/resources` — Additional static resources (e.g., docker-compose.yml)
+- `resources/` → `Contents/Resources/resources` — Optional Docker Compose provider resources
+- `native-runtime/` → `Contents/Resources/native-runtime` — PostgreSQL 18.6, Chrome Headless Shell,
+  standalone migration executable, compiled backend, production frontend, migrations,
+  configuration, licence notices, and checksum manifest
 
-**Rationale:** `main.js` references i18n and resources via `process.resourcesPath` (lines 22, 204, 234). Packing them inside `app.asar` causes runtime path lookups to fail (`Cannot find module './i18n/...'`). Placing them at `Contents/Resources/` ensures they're accessible via the `process.resourcesPath` reference at runtime.
+**Rationale:** Native runtime executables and migration files must remain outside `app.asar` and
+must pass the packaged payload manifest check before use. Docker Compose resources remain in the
+repository and optional Docker packaging path; they are not required by native startup.
 
 **Configuration example:**
 
 ```json
 {
   "build": {
-    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "runtime/**/*",
+      "backup/**/*",
+      "assets/**/*"
+    ],
     "extraResources": [
       { "from": "i18n", "to": "i18n" },
-      { "from": "resources", "to": "resources" }
+      { "from": "resources", "to": "resources" },
+      { "from": "native-runtime", "to": "native-runtime" }
     ]
   }
 }
@@ -374,7 +425,16 @@ xattr -dr com.apple.quarantine /Applications/Vision.app
 
 #### Runtime Requirements
 
-The Vision desktop app spawns the Node.js backend as a child process. **Docker Desktop must be running** before launching the app.
+The Vision desktop app verifies its checksummed native payload, starts a private PostgreSQL 18.6 cluster
+on loopback, runs the normal migration runner through the bundled executable, and starts the
+packaged Bun backend as a child process. Docker Desktop, Homebrew, Postgres.app, Python, and an
+installed Chrome are not required at runtime. The provider rejects a missing or mismatched payload,
+a PostgreSQL port collision, a non-loopback listener, a cluster with the wrong data directory, or a
+foreign backend/database process identifier.
+
+Durable database files, attachments, logs, credentials, and the runtime marker live below
+`~/Library/Application Support/Vision/native/vision`. Replacing the application bundle during an
+update does not replace this data directory.
 
 ```bash
 # Check backend status in app:
@@ -414,10 +474,14 @@ The icon is located at `packaging/electron/build/icon.svg` (source vector) and c
 
 **Backend service unavailable:**
 
-- Ensure Docker Desktop is running
 - Check app logs: Settings → App → Developer → Open Logs
-- Verify Docker image is built: `cd apps/node-backend && docker build -t vision-app .`
-- Check that local Docker image is tagged: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest` (see [[#docker-composeyml-pull-policy|Docker Compose Pull Policy]] below)
+- Native mode: inspect `logs/postgres.log` and `logs/backend.log` below the Vision native
+  application-data directory. Check whether port `54329` is occupied by an unrelated service.
+- Native mode: reinstall the same Vision release if startup reports a missing, corrupt, wrong-arch,
+  or wrong-version native payload. Do not point Vision at an unknown PostgreSQL server to bypass
+  that failure.
+- Native mode: run `bun run native:db-smoke` from the source checkout for a synthetic database check
+- Docker mode only: ensure Docker Desktop is running and inspect the Compose app/database health
 
 **Icon not showing in Finder:**
 
@@ -437,7 +501,7 @@ The icon is located at `packaging/electron/build/icon.svg` (source vector) and c
 - Fix: Confirm `packaging/electron/bun.lock`, then run `bun install --frozen-lockfile --cwd packaging/electron` from the repository root
 - Rebuild with `npm run dist` from `packaging/electron/` and inspect the asar before changing dependency declarations
 
-**"ENOENT docker-compose.yml" in Contents/Resources/resources/:**
+**Docker provider: "ENOENT docker-compose.yml" in Contents/Resources/resources/:**
 
 - Cause: `resources/docker-compose.yml` not copied to `extraResources`
 - Fix: Ensure `extraResources` config includes `{ "from": "resources", "to": "resources" }`
@@ -465,12 +529,15 @@ services:
 
 **Pull policy: missing** — Docker uses a local image if it exists; only pulls from registry if not found locally. This avoids GHCR auth failures on first install.
 
-**Workflow for packaged app:**
+**Workflow for the optional packaged Docker provider:**
 
 1. In development or CI, build the image: `docker compose build` (creates `vision-app:latest`)
 2. Retag for embedded config: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
 3. Package the app: `cd packaging/electron && npm run dist` (embeds `docker-compose.yml` with `pull_policy: missing`)
-4. User installs and launches the app — compose finds local `ghcr.io/erapartner/vision:latest` image without registry access
+4. An operator explicitly selects Docker mode — Compose finds the local
+   `ghcr.io/erapartner/vision:latest` image without registry access.
+
+Normal packaged launch selects native mode and never checks this image.
 
 If you need users to pull from GHCR (e.g., published release), either:
 
@@ -479,7 +546,10 @@ If you need users to pull from GHCR (e.g., published release), either:
 
 ## Environment Variables Reference
 
-### Required Variables
+### Docker/custom deployment variables
+
+Packaged native Vision generates its own restricted runtime configuration. The following values
+are required only for Docker Compose or a custom backend deployment:
 
 | Variable            | Description                  |
 | ------------------- | ---------------------------- |
@@ -488,11 +558,11 @@ If you need users to pull from GHCR (e.g., published release), either:
 
 ### Optional Variables
 
-| Variable       | Default               | Description                              |
-| -------------- | --------------------- | ---------------------------------------- |
-| `PORT`         | 3002                  | Server port                              |
-| `LOG_LEVEL`    | info                  | Logging level (debug, info, warn, error) |
-| `CORS_ORIGINS` | http://localhost:5173 | Allowed origins                          |
+| Variable       | Default                                     | Description                              |
+| -------------- | ------------------------------------------- | ---------------------------------------- |
+| `PORT`         | 3002                                        | Server port                              |
+| `LOG_LEVEL`    | info                                        | Logging level (debug, info, warn, error) |
+| `CORS_ORIGINS` | http://localhost:5174,http://localhost:8080 | Allowed origins                          |
 
 ## Security Checklist
 
@@ -509,7 +579,7 @@ If you need users to pull from GHCR (e.g., published release), either:
 ### Health Check
 
 ```bash
-curl http://localhost:3002/api/info/health
+curl http://localhost:3002/health
 ```
 
 ### Health and Restart Semantics
@@ -586,6 +656,8 @@ docker stats
 - [[docs/adr/039-docker-container-hardening|ADR-039: Docker Container Hardening]] - Container security decisions
 - [[docs/security/container-hardening|Container Hardening Policy]] - Defense-in-depth controls and verification
 - [[docs/guides/setup|Setup Guide]] - Local development setup
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL lifecycle, cutover, and rollback
+- [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS Runtime]] - Runtime-provider decision
 - [[docs/guides/migrations|Migration Guide]] - Database schema management with Alembic
 - [[docs/guides/contributing|Contributing Guide]] - Development contributions
 - [[docs/performance/index|Performance Documentation]]

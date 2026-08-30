@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-04-28
+date: 2026-08-30
 updated: 2026-08-27
 tags:
   [
@@ -250,7 +250,10 @@ verify-destructive-migrations:
 
 **Why it's critical:**
 
-`docker-entrypoint.sh` runs `alembic upgrade head` unconditionally on every boot, so a migration in the chain reaches every self-hosted database on the next container start — with or without the application code that depends on it. `0055_drop_bank_account_string` dropped columns, a trigger and a materialized view ahead of its coupled code and **crashed startup**; `0055` is now a no-op and `0056` is its recovery. Until this job existed, the only thing preventing a repeat was a docstring and developer memory of that one incident.
+Native and Docker backend startup run Vision's guarded migration runner before accepting requests,
+so a migration in the chain reaches every installation on the next start. The runner performs the
+required `VARCHAR(64)` version-table preflight before invoking Alembic. The destructive-migration
+check prevents a repeat of the `0055_drop_bank_account_string` premature-drop incident.
 
 Flags `DROP TABLE` / `DROP COLUMN` (always), unreplaced `DROP` of a view/matview/trigger/function/type, and every `ALTER COLUMN ... TYPE`. Ignores `DROP INDEX`/`DROP CONSTRAINT`, `downgrade()` bodies, and the non-auto-applied `alembic/legacy_versions/` and `alembic/manual/` trees.
 
@@ -767,7 +770,8 @@ docker:
         {
           vision-image: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}",
         }
-    - run: alembic downgrade -1 && alembic upgrade head # migration round-trip
+    - run: bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+    - run: bun run apps/node-backend/scripts/db-migrate.js upgrade head
     - run: docker buildx imagetools create -t <semver> -t <major.minor> -t latest "$IMAGE_REF"
     - run: <assert every promoted tag resolves to the scanned digest>
 ```
@@ -784,50 +788,34 @@ docker:
 
 #### 3. **package-mac** — Build macOS Installer
 
-Builds the Electron app for macOS and generates SHA256 checksums.
+Builds the complete Docker-free Electron app for Apple Silicon and generates SHA-256 checksums.
 
 ```yaml
 package-mac:
   needs: [verify]
-  runs-on: macos-latest
+  runs-on: macos-15
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@<pinned-commit>
     - uses: ./.github/actions/setup
-    - name: Install frozen Electron dependencies without lifecycle scripts
-      run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
-    - name: Build macOS package
-      run: cd packaging/electron && npm run dist
-    - name: Generate checksum
-      run: |
-        cd dist/
-        shasum -a 256 Vision-*.zip > Vision-*.zip.sha256
-        cat Vision-*.zip.sha256
-    - name: Upload artifacts
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          dist/Vision-*.zip
-          dist/Vision-*.zip.sha256
+    - uses: actions/setup-node@<pinned-commit>
+    - uses: actions/setup-python@<pinned-commit>
+    - run: python -m pip install --require-hashes -r config/requirements.txt
+    - run: python -m pip install PyInstaller==6.22.2
+    - run: <install pinned Chrome Headless Shell>
+    - run: <download and verify pinned Postgres.app artifact>
+    - run: bun run build && cd packaging/electron && node scripts/build-native-package.js
+    - run: <stage DMG, app ZIP, source-launcher ZIP, README, and SHA-256 files>
 ```
 
 **Steps:**
 
-1. **Install:** `bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron`
-   - Uses the same committed `packaging/electron/bun.lock` as CI backend tests and release verification
-   - Keeps dependency lifecycle scripts disabled in verification and release automation
-
-2. **Build:** `cd packaging/electron && npm run dist`
-   - Runs electron-builder in distribution mode
-   - Outputs `Vision-x.y.z-arm64.dmg` and `Vision-x.y.z-arm64-mac.zip`
-
-3. **Checksum:** `shasum -a 256 Vision-*.zip > Vision-*.zip.sha256`
-   - Computes SHA256 hash of the ZIP file
-   - Format: `<hash> *<filename>` (standard sha256sum format)
-   - Example: `a1b2c3d4e5f6... *Vision-1.2.3-arm64-mac.zip`
-
-4. **Upload:** Both `.zip` and `.sha256` attached to the GitHub Release
-   - Enables checksum verification in update system
-   - See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for verification logic
+1. **Install:** resolve the two committed Bun lockfiles with release lifecycle scripts disabled.
+2. **Prepare:** use Python 3.12, the exact Alembic/PyInstaller versions, pinned Chrome Headless
+   Shell, and the checksum-verified PostgreSQL 18.6 build source.
+3. **Build:** compile the Bun backend, production frontend, migrations, browser, and private
+   PostgreSQL payload, then package the arm64 DMG and ZIP.
+4. **Checksum:** publish a sibling SHA-256 file for the DMG, native app ZIP, source-launcher ZIP,
+   and release README.
 
 **Artifacts:**
 
@@ -872,10 +860,12 @@ When a user runs Vision in **source mode** with `--useRepoMode`:
 
 1. Check release API → fetches latest from GitHub
 2. User clicks "Update & Restart"
-3. **Backup** → snapshot to `userData/pre-update-backups/`
-4. **Download** → fetch `vision-x.y.z-arm64-mac.zip` + `vision-x.y.z-arm64-mac.zip.sha256`
+3. **Backup** → create a provider-aware `.visionbak`
+4. **Download** → fetch `vision-source-launcher-x.y.z-arm64.zip` and its sibling `.sha256`
 5. **Verify** → compute SHA256, compare against sibling `.sha256` file
-6. **Extract** → run `install.sh` with `--dest-root` and `--backup-dir` flags
+6. **Extract** → validate the `unsigned/Vision/` tree and run the generated
+   rollback-capable source replacement helper; preserve the locally generated
+   `packaging/electron/native-runtime` payload
 7. **Restart** → app restarts with new version
 
 See [[docs/features/application-updates|Application Updates Feature]] for details.
@@ -886,7 +876,7 @@ When a user runs Vision in **docker mode**:
 
 1. Check release API → fetches latest from GitHub
 2. User clicks "Update & Restart"
-3. **Backup** → snapshot to `userData/pre-update-backups/`
+3. **Backup** → create a provider-aware `.visionbak`
 4. **Pull** → `docker-compose pull` fetches `ghcr.io/erapartner/vision:v1.2.3` from GHCR
 5. **Restart** → `docker-compose up -d` starts container with new image
 6. **Health poll** → verify backend is live

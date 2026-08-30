@@ -10,7 +10,7 @@ actor "User" as User
 
 package "Client" {
   rectangle "Browser  /  Electron Renderer" {
-    node "React 18 + TypeScript" as ReactApp
+    node "React 19 + TypeScript" as ReactApp
     node "Vite (Build Tool)" as Vite
     node "Tailwind CSS v4 + Radix UI" as UI
     node "React Router v6" as Router
@@ -25,102 +25,19 @@ cloud "Load Balancer / Reverse Proxy\n(production hosts only)" as Proxy
 package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
     node "Express.js" as Express
-    node "Middleware Stack" as Middleware {
-      - adminAuth (timing-safe)
-      - requestId / requestMetrics
-      - CORS / Security Headers
-      - Rate Limiter (200 req/min)
-      - Envelope normaliser
-      - Error Handler
-    }
-    node "Routes (20 files, ~148 endpoints)" as Routes {
-      - transactions / splits / tags
-      - planned-transactions
-      - categories / recipients
-      - recipientBankAccounts
-      - investments / portfolio
-      - import / attachments
-      - watchlist / market-lookup
-      - aggregations / info
-      - settings / saved-charts
-      - reports (PDF)
-      - ai (Ollama chat)
-      - admin (db, providers, endpoints, metrics)
-    }
-    node "Services" as Services {
-      - importPipeline (validate / stage / match / commit)
-      - bankAdapters (Belfius, ING, KBC, Revolut, SABB, Wise, ...)
-      - priceProviderService
-      - currencyConversion / belgianInflationService
-      - portfolioPerformanceSnapshotService
-      - quoteBackfillService
-      - recurringDetectionService
-      - recipientMerge / recipientPattern / recipientCluster
-      - materializedViewService
-      - aggregationRefresh
-      - backup (AES-256-GCM v2)
-      - aiChat (Ollama tool-loop)
-      - providerHealthService
-      - routeManifest
-      - reports (pdfkit)
-      - attachmentService
-    }
-    node "Repositories (30 files)" as Repos {
-      - transactionRepository
-      - rawTransactionRepository
-      - categoryRepository
-      - recipientRepository + recipientBankAccountRepository
-      - plannedTransactionRepository
-      - investmentRepository + portfolioTransactionRepository
-      - importBatchRepository
-      - aiChatRepository
-      - attachmentRepository
-      - providerHealthRepository
-      - savedChartsRepository
-      - splitRepository / tagRepository / watchlistRepository
-      - cashflowForecast (3 repos)
-      - settingsRepository
-      - infoRepository* (7 sub-modules)
-    }
-    node "Background Jobs" as Jobs {
-      - refreshCashflowForecastMc
-    }
+    node "Middleware Stack\nadminAuth · requestId · metrics\nCORS · rate limit · envelope · errors" as Middleware
+    node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin" as Routes
+    node "Services\nimports · prices · FX · tax · snapshots\nbackup · AI · reports · attachments" as Services
+    node "Repositories\ntransaction · recipient · planning · portfolio\nimports · AI · attachments · settings · info" as Repos
+    node "Background Jobs\nrefreshCashflowForecastMc" as Jobs
   }
 }
 
 database "PostgreSQL 18" as DB {
   node "Schema (Alembic migrations)" as SchemaInit
-  node "User-data tables" as Tables {
-    - transactions / transaction_splits / split_payments
-    - tags / transaction_tags
-    - categories / recipients / recipient_bank_accounts
-    - planned_transactions / .._executions / .._loan_schedule
-    - investments_base (+ inheritance children)
-    - portfolio_transactions_base (+ inheritance children)
-    - exchange_rates / exchange_rate_cache
-    - asset_price_history / belgian_inflation_rates
-    - portfolio_performance_snapshots
-    - cashflow_forecast_* (mc, rolling, accuracy)
-    - attachments
-    - ai_conversations
-    - provider_health
-    - import_batches / import_rows
-    - watchlist / saved_charts
-    - user_settings
-    - bank-raw tables (belfius / revolut / ing / kbc / sabb / wise / vision / manual)
-    - transaction_raw_references
-  }
-  node "Materialized Views" as MatViews {
-    - mv_monthly_summary
-    - mv_category_totals
-    - mv_cashflow_daily
-    - mv_bank_balances
-    - mv_recipient_monthly
-  }
-  node "Aggregation tables  (trigger-maintained)" as AggTables {
-    - agg_recipient_totals
-    - agg_split_outstanding
-  }
+  node "User-data tables\ntransactions · recipients · planning · portfolio\nimports · attachments · AI · provider health · settings" as Tables
+  node "Materialized Views\nmonthly summary · category totals\ncashflow daily · bank balances" as MatViews
+  node "Aggregation tables (trigger-maintained)\nrecipient totals · split outstanding" as AggTables
   node "Indexes (incl. covering partial)" as Indexes
 }
 
@@ -137,7 +54,8 @@ cloud "External Services" as External {
 }
 
 cloud "Build & Distribution" as DevToolsCloud {
-  node "Docker (postgres + app)" as Docker
+  node "Native runtime provider\n(PostgreSQL 18 + Bun lifecycle)" as NativeRuntime
+  node "Optional Docker Compose\n(postgres + app)" as Docker
   node "Bun (runtime + workspaces)" as Bun
   node "Electron (packaging/electron)" as Electron
   node "electron-builder + notarisation" as Builder
@@ -151,6 +69,14 @@ package "Client to Server" {
   User --> ReactApp : HTTPS
   ReactApp --> Proxy : REST API
   Proxy --> Express : Forward
+}
+
+package "Desktop Runtime" {
+  Electron --> NativeRuntime : packaged default
+  NativeRuntime --> Express : loopback backend
+  NativeRuntime --> DB : owner/app role connections
+  Docker --> Express : explicit provider
+  Docker --> DB : explicit provider
 }
 
 package "Server Components" {
@@ -209,6 +135,15 @@ note right of Docker
   Hardened (ADR-039): non-root, cap_drop ALL,
   read-only rootfs, no-new-privileges,
   mem_limit 4g / cpus 4.0, Trivy on every push.
+end note
+
+note right of NativeRuntime
+  Vision ships PostgreSQL 18.6, a migration executable,
+  and Chrome Headless Shell. Electron manages the private,
+  loopback-only PostgreSQL cluster and Bun backend lifecycle,
+  logs, readiness, updates, and durable runtime marker.
+  Existing Docker data uses verified custom-dump and
+  attachment staging before native activation (ADR-113).
 end note
 
 @enduml

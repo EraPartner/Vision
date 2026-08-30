@@ -1,92 +1,108 @@
 @startuml Deployment Architecture
-title Deployment Architecture
+title Deployment Architecture — Native macOS and Optional Docker
 
 !theme plain
 skinparam linetype ortho
 skinparam nodesep 40
 skinparam ranksep 60
 
-package "Development Environment" {
-  node "Local Machine" as Dev {
-    component "Frontend (Vite)" as FrontendDev
-    component "Node.js (Bun)" as BackendDev
-    component "PostgreSQL (Docker db service)" as PostgresDev
-    component "Hot Reload" as HMR
-  }
-}
-
-package "Production Environment (Docker)" {
-  node "Docker Host" as DockerHost {
-    rectangle "Docker Network" as Network {
-      container "app" as AppContainer {
-        node "Node.js Server" as NodeProd
-        node "Static Files (dist)" as Dist
-      }
-      
-      container "db" as DBContainer {
-        node "PostgreSQL 18" as PostgresProd
-        node "Data Volume" as DataVol
-      }
-    }
-  }
-  
-  node "Load Balancer" as LB
-  node "SSL/TLS Termination" as SSL
-}
-
-package "Desktop Application (Electron)" as Desktop {
-  node "Electron Main" as ElectronMain
-  node "Electron Renderer" as ElectronRenderer
-  node "Local Storage" as LocalStorage
-}
-
-cloud "External Services" as External {
-  node "ECB API" as ECB
-  node "Binance" as Binance
-  node "Yahoo Finance" as Yahoo
-  node "Kinesis" as Kinesis
-  node "Statbel/Eurostat" as Statbel
-}
-
 actor "User" as User
 
-package "Development Environment" {
-  User --> Dev : Development Access
-  Dev --> PostgresDev : localhost:5432
-  Dev --> External : Direct
+package "Native macOS (default)" as NativeMac {
+  node "Vision.app / Electron" as ElectronNative {
+    component "Electron main + renderer" as ElectronUI
+    component "Native runtime provider" as NativeProvider
+    component "Compiled Bun backend" as NativeBackend
+    component "Production frontend (dist)" as NativeFrontend
+    component "PostgreSQL 18.6 binaries" as NativePostgresBinaries
+    component "Migration executable" as NativeMigrations
+    component "Chrome Headless Shell" as NativeChrome
+  }
+  database "Vision-managed PostgreSQL 18.6\n127.0.0.1:54329" as NativePostgres
+  folder "Application Support/Vision/native/vision" as NativeData {
+    folder "postgres/data" as NativePostgresData
+    folder "attachments" as NativeAttachments
+    folder "logs + runtime marker" as NativeState
+  }
+  node "Local Ollama\n127.0.0.1:11434" as NativeOllama
 }
 
-package "Production Environment" {
-  User --> SSL : HTTPS
-  SSL --> LB : HTTP
-  LB --> AppContainer : Forward
-  AppContainer --> DBContainer : Database
-  AppContainer --> External : API Calls
-  AppContainer --> DBContainer : internal:5432
-  NodeProd --> Dist : Static Files
+package "Source Development" as SourceDev {
+  component "Vite frontend" as FrontendDev
+  component "Bun backend" as BackendDev
+  component "Electron shell" as ElectronDev
+  database "Managed development PostgreSQL 18.6\nVision Development data" as DevelopmentPostgres
 }
 
-package "Desktop Application" {
-  User --> Desktop : Desktop App
-  Desktop --> AppContainer : API Calls (embedded)
+package "Optional Docker Compose" as DockerDeployment {
+  node "Docker host" as DockerHost {
+    rectangle "app" as AppContainer {
+      component "Bun backend + production frontend" as DockerApp
+    }
+    rectangle "db" as DBContainer {
+      database "PostgreSQL 18" as DockerPostgres
+      folder "postgres_data volume" as DockerData
+    }
+    folder "attachments volume" as DockerAttachments
+  }
 }
 
-note right of AppContainer
-  Image: custom build (.)
-  Port: 3002
-  Environment: Production
+package "Browser Production" as BrowserProduction {
+  node "TLS reverse proxy" as Proxy
+  component "Vision backend + frontend" as HostedApp
+  database "PostgreSQL 18" as HostedPostgres
+}
+
+cloud "External data providers" as External
+
+User --> ElectronUI : Desktop UI
+ElectronUI --> NativeProvider : lifecycle / IPC
+NativeProvider --> NativeBackend : spawn / stop / logs
+NativeProvider --> NativePostgresBinaries : verify / spawn / stop
+NativeProvider --> NativeMigrations : schema runner
+NativeBackend --> NativeFrontend : static files
+NativeBackend --> NativePostgres : owner migration / app role
+NativePostgres --> NativePostgresData : durable cluster
+NativeBackend --> NativeAttachments : absolute durable path
+NativeBackend --> NativeChrome : PDF rendering
+NativeBackend --> NativeOllama : local AI
+NativeBackend --> External : HTTPS
+
+User --> ElectronDev : development UI
+ElectronDev --> BackendDev : native provider
+FrontendDev --> BackendDev : loopback HTTP
+BackendDev --> DevelopmentPostgres : isolated development database
+
+User --> AppContainer : explicit Docker provider
+DockerApp --> DockerPostgres
+DockerPostgres --> DockerData
+DockerApp --> DockerAttachments
+DockerApp --> External : HTTPS
+
+User --> Proxy : HTTPS
+Proxy --> HostedApp
+HostedApp --> HostedPostgres
+HostedApp --> External : HTTPS
+
+NativeProvider ..> AppContainer : opt-in cutover source
+AppContainer ..> NativeProvider : custom dump + attachment export
+
+note right of NativeProvider
+  Runtime marker prevents split-brain.
+  Existing Docker data requires a verified,
+  explicit import before native activation.
 end note
 
-note right of DBContainer
-  Image: postgres:18-alpine
-  Volume: postgres_data
-  Healthcheck: enabled
+note right of NativePostgres
+  Private data is outside Vision.app.
+  Separate admin, owner/migration, and app roles.
+  Required extensions and Alembic schema.
 end note
 
-note right of Desktop
-  Packaging: electron-builder
-  Mode: bun run electron:dev / bun run electron:prod
-  Embedded frontend + Node.js backend
+note right of DockerDeployment
+  Compose remains supported and shares
+  application, migration, and backup logic.
+  Cutover stops but never removes this source.
 end note
 
 @enduml

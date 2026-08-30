@@ -28,9 +28,10 @@ import {
 } from './setup/db.js';
 import transactionRepository from '../src/repositories/transactionRepository.js';
 import { closePool } from '../src/database/connection.js';
+import { toWireDate } from '../src/lib/dateFormat.js';
 
-/** 'YYYY-MM-DD' of a row's `date` column (pg returns DATE as a JS Date). */
-const ymd = (d) => new Date(d).toISOString().slice(0, 10);
+/** 'YYYY-MM-DD' of a row's `date` column, using the production DATE boundary. */
+const ymd = (d) => toWireDate(d);
 
 // Fixture ids, repopulated by seedCorpus() before each test.
 const cat = {}; // Food, Bills, Salary

@@ -2,9 +2,20 @@
 title: Health API
 type: api
 status: active
-date: 2026-04-19
+date: 2026-08-30
 updated: 2026-08-02
-tags: [api, health, monitoring, backend, readiness, warmup, electron, liveness, startup]
+tags:
+  [
+    api,
+    health,
+    monitoring,
+    backend,
+    readiness,
+    warmup,
+    electron,
+    liveness,
+    startup,
+  ]
 description: Health check endpoints for backend readiness and cache warmup status. GET /health is a shallow liveness probe; GET /health/detailed is the warmup readiness gate used by the Electron shell for initial navigation.
 aliases: [health endpoints, readiness check, backend health]
 ---
@@ -38,6 +49,7 @@ GET /health
 **Status:** `200 OK`
 
 **Body:**
+
 ```json
 {
   "status": "ok"
@@ -69,6 +81,7 @@ GET /health/detailed
 **Status:** `200 OK`
 
 **Body:**
+
 ```json
 {
   "status": "ready",
@@ -87,30 +100,31 @@ GET /health/detailed
 
 ### Response Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | string | Either `"ready"` (all caches warmed) or `"warming"` (still loading) |
-| `service` | string | Service identifier (always `"financial-transaction-manager-node"`) |
-| `version` | string | Application version |
-| `timestamp` | string | ISO 8601 timestamp when response was generated |
-| `caches` | object | Map of cache names to boolean warmup flags |
-| `caches.materializedViews` | boolean | The whole materialized-view lifecycle has settled — create, index, refresh (`startup/warmup.js`). **This is the primary gate used by the Electron shell for initial navigation** — it is DB-only, so it becomes true well before network-bound tasks. On a warm boot the views already exist and creation is a metadata no-op; on a first boot (or after a migration that drops a view to redefine it) it also covers building them, which is a full aggregation scan of `transactions` per view. |
-| `caches.exchangeRates` | boolean | Exchange rate cache is warm (loaded + synced from price provider) |
-| `caches.inflation` | boolean | Inflation rate cache is warm |
-| `caches.portfolioSnapshots` | boolean | Portfolio snapshot cache is warm |
-| `caches.infoCaches` | boolean | Legacy info endpoint caches are warm |
+| Field                       | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                    | string  | Either `"ready"` (all caches warmed) or `"warming"` (still loading)                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `service`                   | string  | Service identifier (always `"financial-transaction-manager-node"`)                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `version`                   | string  | Application version                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `timestamp`                 | string  | ISO 8601 timestamp when response was generated                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `caches`                    | object  | Map of cache names to boolean warmup flags                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `caches.materializedViews`  | boolean | The whole materialized-view lifecycle has settled — create, index, refresh (`startup/warmup.js`). **This is the primary gate used by the Electron shell for initial navigation** — it is DB-only, so it becomes true well before network-bound tasks. On a warm boot the views already exist and creation is a metadata no-op; on a first boot (or after a migration that drops a view to redefine it) it also covers building them, which is a full aggregation scan of `transactions` per view. |
+| `caches.exchangeRates`      | boolean | Exchange rate cache is warm (loaded + synced from price provider)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `caches.inflation`          | boolean | Inflation rate cache is warm                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `caches.portfolioSnapshots` | boolean | Portfolio snapshot cache is warm                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `caches.infoCaches`         | boolean | Legacy info endpoint caches are warm                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ### Warmup Behavior
 
 At startup, the backend initializes several caches:
 
-1. **Materialized Views** — Creates any missing view, ensures its unique index, then refreshes (`materializedViewService.js`). Deliberately *not* pre-`listen`: a missing view means a full aggregation scan of `transactions`, and reads fall back to live queries while it is absent
+1. **Materialized Views** — Creates any missing view, ensures its unique index, then refreshes (`materializedViewService.js`). Deliberately _not_ pre-`listen`: a missing view means a full aggregation scan of `transactions`, and reads fall back to live queries while it is absent
 2. **Exchange Rates** — Fetches from price provider (e.g., Fixer, ECB), populates in-memory cache
 3. **Inflation Rates** — Loads historical inflation data for tax calculations
 4. **Portfolio Snapshots** — Computes portfolio snapshots for all users
 5. **Info Caches** — Legacy aggregation caches (Phase 9 shadow mode)
 
 Each warmup task:
+
 - Runs asynchronously in the background
 - Sets its flag to `true` when complete (success or error)
 - Does not block `/health` or `/health/detailed` responses
@@ -138,20 +152,11 @@ The Electron shell (`packaging/electron/main.js`) uses `GET /health/detailed` vi
 
 ## Error Responses
 
-### Startup Failure (Alembic Not Run)
+The backend does not listen until PostgreSQL is reachable and Vision's guarded migration runner
+has completed. A migration failure is therefore a startup failure recorded in backend logs, not a
+served health response that asks the operator to run bare Alembic.
 
-If database migrations have not run:
-
-**Status:** `503 Service Unavailable`
-
-**Body:**
-```json
-{
-  "error": "Database not initialized. Run alembic upgrade head."
-}
-```
-
-### Other Errors
+### Runtime errors
 
 General database or initialization errors return HTTP 500.
 

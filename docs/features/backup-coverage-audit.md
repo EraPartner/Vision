@@ -2,7 +2,7 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-04-27
+date: 2026-08-30
 updated: 2026-08-27
 last_modified: 2026-08-27
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
@@ -117,13 +117,13 @@ All 44 user-data tables are included in the `pg_dump` SQL artifact inside every 
 
 #### Excluded Tables
 
-| Table                    | Reason                                                              |
-| ------------------------ | ------------------------------------------------------------------- |
-| `alembic_version`        | Alembic internal — re-derived on restore via `alembic upgrade head` |
-| `agg_shadow_divergences` | Dropped in migration 0009 — no longer in schema                     |
-| `feature_flags`          | Dropped in migration 0011 — no longer in schema                     |
-| `bank_statements`        | Dropped in migration 0014 — bank reconciliation feature was removed |
-| `reconciliation_entries` | Dropped in migration 0014 — bank reconciliation feature was removed |
+| Table                    | Reason                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `alembic_version`        | Alembic internal — validated and advanced by Vision's guarded migration runner |
+| `agg_shadow_divergences` | Dropped in migration 0009 — no longer in schema                                |
+| `feature_flags`          | Dropped in migration 0011 — no longer in schema                                |
+| `bank_statements`        | Dropped in migration 0014 — bank reconciliation feature was removed            |
+| `reconciliation_entries` | Dropped in migration 0014 — bank reconciliation feature was removed            |
 
 ---
 
@@ -133,7 +133,10 @@ All 44 user-data tables are included in the `pg_dump` SQL artifact inside every 
 | ------------- | ------------------------------------------------ | --------------------------------- | --------------------------------------------- |
 | Receipt files | `$ATTACHMENTS_DIR/{transaction_id}/{uuid}.{ext}` | ✅ Bundled as `attachments/` tree | Extracted to `$ATTACHMENTS_DIR` after DB load |
 
-**Default `ATTACHMENTS_DIR`:** `./data/attachments` (env-configurable via `ATTACHMENTS_DIR`).
+**Attachment root:** native mode uses the absolute
+`~/Library/Application Support/Vision/native/vision/attachments/` directory. Docker mode keeps
+its named attachment volume mounted at `/app/data/attachments`. Both reach the backend through the
+same `ATTACHMENTS_DIR` contract.
 
 **Restore safety:** Files extracted to a staging directory (`$ATTACHMENTS_DIR.staging/`) and atomically swapped on success. Rolled back on failure — original files preserved until swap completes.
 
@@ -286,10 +289,20 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
 4. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
-5. **Database Drop & Restore** — Drop existing DB via `docker exec` `dropdb`, then restore via `psql -f` with bind-mounted .sql file.
-6. **Docker Restart** — Kill and restart backend container to pick up new DB.
-7. **Health Poll** — Wait for `/health` to report ready (up to 10s).
-8. **Attachment Swap** — Extract `attachments/` to temporary staging directory, then atomically swap with `$ATTACHMENTS_DIR` on success. Rolled back on failure.
+5. **Provider Database Stage** — The active runtime provider restores into a fresh staged database.
+   Native mode creates it from `template0`, uses version-matched PostgreSQL 18 tools, stops on the
+   first error, and restores in one transaction. A no-owner restore leaves schema tables with the
+   owner/migration role, then hands only the runtime-managed materialized views to the application
+   role so their create, index, refresh, and analyze lifecycle remains least-privilege. Runtime
+   bootstrap grants restored ordinary tables and views individually and skips those app-owned
+   materialized views. Docker mode uses the equivalent provider transport.
+6. **Database Validation** — Confirm the exact Alembic head and required table inventory before the
+   live database name can change.
+7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
+   links, and compute the count and aggregate SHA-256 fingerprint.
+8. **Atomic Activation** — Stop the active writer, switch the staged database and attachment tree,
+   start the provider, and wait for database-backed `/health/detailed` readiness. Both switches keep
+   rollback state until readiness succeeds.
 9. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
 10. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
 
@@ -299,8 +312,10 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 - `INVALID_PASSPHRASE` → Wrong passphrase entered; modal shows error and allows retry (up to 3 attempts typical)
 - `BUNDLE_SCHEMA_NEWER` → User-friendly toast: "Cannot restore — backup is from a newer Vision version"
 - Other decrypt errors (corrupted file, incomplete extraction) → `openBundle()` fails; IPC returns error with details
-- Attachment swap failure → Logged but does not block restore; user can manually sync later
-- DB restore failure → Explicit error with Docker logs; attachment staging rolled back automatically
+- Attachment stage or activation failure → Restore fails; the previous attachment tree and database
+  remain active or are rolled back together
+- Database restore or detailed-readiness failure → Explicit provider error; staged database and
+  attachment state are rolled back before the writer resumes
 - Fallback source resolution: If user does not enter passphrase in modal, restore attempts `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) before throwing `PASSPHRASE_REQUIRED`
 
 **Related Code:**
@@ -347,7 +362,8 @@ Adding a table or localStorage key without updating the registries causes a CI f
 
 - No cloud/off-device sync. Bundles are local-disk only.
 - No incremental backup. Every backup is a full dump.
-- Merge-restore not supported — restore always wipes and replaces.
+- Merge-restore is not supported. Restore stages and validates a complete replacement, then uses
+  atomic activation with rollback instead of modifying the live attachment tree in place.
 - Restoring a bundle created on a **newer** schema version is blocked with a clear error. Upgrade Vision first.
 
 ---

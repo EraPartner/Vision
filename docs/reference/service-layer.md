@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-04-24
-last_modified: 2026-08-27
+date: 2026-08-30
+last_modified: 2026-08-28
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the eight sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -32,6 +32,7 @@ Repository Layer (SQL queries)
 ```
 
 **Design principles:**
+
 - Services are pure functions or function modules — no classes
 - External I/O (DB, HTTP) is encapsulated within services
 - Pure computation services have zero dependencies
@@ -64,7 +65,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ---
 
-## 1. bankAdapters.js *(deprecated shim)*
+## 1. bankAdapters.js _(deprecated shim)_
 
 **File:** [[apps/node-backend/src/services/bankAdapters.js]]  
 **Purpose:** Parses bank-specific CSV files into a unified transaction format.
@@ -78,21 +79,21 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions (re-exported from the adapter registry)
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `createAdapter` | `(bankName: string, customConfig?: object) => Function` | Parser function for the given bank |
-| `getSupportedBanks` | `() => string[]` | Non-generic adapter keys, derived from the registry (e.g. `['belfius', 'revolut', 'ing', 'bnp', 'kbc', 'vision', 'sabb', 'wise']`) |
+| Function            | Signature                                               | Returns                                                                                                                            |
+| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `createAdapter`     | `(bankName: string, customConfig?: object) => Function` | Parser function for the given bank                                                                                                 |
+| `getSupportedBanks` | `() => string[]`                                        | Non-generic adapter keys, derived from the registry (e.g. `['belfius', 'revolut', 'ing', 'bnp', 'kbc', 'vision', 'sabb', 'wise']`) |
 
 ### Supported Banks
 
-| Bank | Date Format | Key Characteristics |
-|------|-------------|-------------------|
-| Belfius | DD/MM/YYYY | Reverse balance calculation from metadata |
-| Revolut | ISO 8601 | Standard CSV with type column |
-| KBC | DD/MM/YYYY | Transaction type prefixes in recipient field |
-| Wise | ISO 8601 | Multi-currency support |
-| SABB | DD/MM/YYYY | Saudi Arabian bank format |
-| Vision | ISO 8601 | Internal self-import format |
+| Bank    | Date Format | Key Characteristics                          |
+| ------- | ----------- | -------------------------------------------- |
+| Belfius | DD/MM/YYYY  | Reverse balance calculation from metadata    |
+| Revolut | ISO 8601    | Standard CSV with type column                |
+| KBC     | DD/MM/YYYY  | Transaction type prefixes in recipient field |
+| Wise    | ISO 8601    | Multi-currency support                       |
+| SABB    | DD/MM/YYYY  | Saudi Arabian bank format                    |
+| Vision  | ISO 8601    | Internal self-import format                  |
 
 ### Key Algorithms
 
@@ -102,6 +103,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 - **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/lib/textNormalization.js]]
 
 ### Dependencies
+
 - `lib/textNormalization.js`
 - `logger.js`
 
@@ -114,11 +116,11 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `getInflationRates` | `({ startMonth, endMonth, forceRefresh?, dbOnly?, scheduleBackgroundRefresh? }) => Promise<InflationRate[]>` | Array of `{ month, rate }` objects |
-| `warmInflationCache` | `() => Promise<void>` | Loads from DB, schedules background refresh |
-| `clearInflationMemoryCache` | `() => void` | Resets all in-memory state |
+| Function                    | Signature                                                                                                    | Returns                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `getInflationRates`         | `({ startMonth, endMonth, forceRefresh?, dbOnly?, scheduleBackgroundRefresh? }) => Promise<InflationRate[]>` | Array of `{ month, rate }` objects          |
+| `warmInflationCache`        | `() => Promise<void>`                                                                                        | Loads from DB, schedules background refresh |
+| `clearInflationMemoryCache` | `() => void`                                                                                                 | Resets all in-memory state                  |
 
 ### Resolution Chain
 
@@ -150,6 +152,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 - **Cache warming:** Success logged at `info` level; fetch failures at `error` level
 
 ### Dependencies
+
 - `connection.js` (PostgreSQL)
 - `logger.js`
 
@@ -164,13 +167,13 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `convertToCurrency` | `(amount, fromCurrency, toCurrency) => number` | Amount in target currency |
-| `convertRowsToEur` | `(rows, targetCurrency, options?) => Row[]` | Batch-converted rows |
-| `warmCache` | `() => Promise<void>` | Fetches + merges + persists rates |
-| `clearMemoryCache` | `() => void` | Clears 24h cache + 90-day ECB history |
-| `backfillPortfolioHistoricalRates` | `() => Promise<void>` | Backfills missing FX rates |
+| Function                           | Signature                                      | Returns                               |
+| ---------------------------------- | ---------------------------------------------- | ------------------------------------- |
+| `convertToCurrency`                | `(amount, fromCurrency, toCurrency) => number` | Amount in target currency             |
+| `convertRowsToEur`                 | `(rows, targetCurrency, options?) => Row[]`    | Batch-converted rows                  |
+| `warmCache`                        | `() => Promise<void>`                          | Fetches + merges + persists rates     |
+| `clearMemoryCache`                 | `() => void`                                   | Clears 24h cache + 90-day ECB history |
+| `backfillPortfolioHistoricalRates` | `() => Promise<void>`                          | Backfills missing FX rates            |
 
 ### Rate Sources (Priority Order)
 
@@ -188,6 +191,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 - **Batch Conversion:** `convertRowsToEur` supports `useHistoricalRatesByDate` option with configurable `dateField`
 
 ### Dependencies
+
 - `connection.js` (PostgreSQL)
 - `logger.js`
 
@@ -200,8 +204,8 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
+| Function              | Signature                                       | Returns                         |
+| --------------------- | ----------------------------------------------- | ------------------------------- |
 | `importRecipientsCSV` | `(filePath, options?) => Promise<ImportResult>` | `{ imported, skipped, errors }` |
 | `importCategoriesCSV` | `(filePath, options?) => Promise<ImportResult>` | `{ imported, skipped, errors }` |
 
@@ -212,6 +216,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 - **Category Parsing:** Splits on `:` to extract general/detail parts
 
 ### Dependencies
+
 - `recipientRepository.js`, `categoryRepository.js`, `recipientBankAccountRepository.js`
 - `connection.js`, `logger.js`
 
@@ -224,14 +229,14 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `createTransactionHash` | `(transactionData) => string` | SHA-256 hex string |
-| `createManualTransactionHash` | `({ date, amount, recipientId, memo, bankAccount }) => string` | Hash with "manual\|" prefix |
-| `isDuplicate` | `(transactionData) => Promise<boolean>` | True if duplicate found |
-| `isDuplicateByFields` | `(date, amount, recipientName, memo) => Promise<boolean>` | Field-based check |
-| `isManualDuplicate` | `({ date, amount, recipientId, memo, bankAccount }) => Promise<{ isDuplicate, existingTransactionId }>` | Manual dedup result |
-| `recordManualRawTransaction` | `(...) => Promise<void>` | Records hash for future dedup |
+| Function                      | Signature                                                                                               | Returns                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `createTransactionHash`       | `(transactionData) => string`                                                                           | SHA-256 hex string            |
+| `createManualTransactionHash` | `({ date, amount, recipientId, memo, bankAccount }) => string`                                          | Hash with "manual\|" prefix   |
+| `isDuplicate`                 | `(transactionData) => Promise<boolean>`                                                                 | True if duplicate found       |
+| `isDuplicateByFields`         | `(date, amount, recipientName, memo) => Promise<boolean>`                                               | Field-based check             |
+| `isManualDuplicate`           | `({ date, amount, recipientId, memo, bankAccount }) => Promise<{ isDuplicate, existingTransactionId }>` | Manual dedup result           |
+| `recordManualRawTransaction`  | `(...) => Promise<void>`                                                                                | Records hash for future dedup |
 
 ### Key Algorithms
 
@@ -240,6 +245,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 - **Graceful Degradation:** Silently handles missing `manual_raw_transactions` table
 
 ### Dependencies
+
 - `connection.js` (PostgreSQL)
 - Node.js `crypto` module
 
@@ -261,14 +267,14 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `runImportPipeline` | `({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? }) => Promise<{ batchId, total, imported, duplicates, errors }>` | Import results with batch ID |
-| `createBatch` | `({ adapterName, filename?, sizeBytes?, customConfig? }) => Promise<number>` | Batch ID |
-| `stageBatch` | `({ batchId, filePath, adapterName, customConfig?, onProgress? }) => Promise<{ rowsTotal }>` | Staged row count |
-| `validateBatch` | `({ batchId, onProgress? }) => Promise<{ errors }>` | Validation error count |
-| `matchBatch` | `({ batchId, onProgress? }) => Promise<void>` | Recipients/categories matched |
-| `commitBatch` | `({ batchId, onProgress? }) => Promise<{ imported, duplicates, errors }>` | Final counts |
+| Function            | Signature                                                                                                                                     | Returns                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `runImportPipeline` | `({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? }) => Promise<{ batchId, total, imported, duplicates, errors }>` | Import results with batch ID  |
+| `createBatch`       | `({ adapterName, filename?, sizeBytes?, customConfig? }) => Promise<number>`                                                                  | Batch ID                      |
+| `stageBatch`        | `({ batchId, filePath, adapterName, customConfig?, onProgress? }) => Promise<{ rowsTotal }>`                                                  | Staged row count              |
+| `validateBatch`     | `({ batchId, onProgress? }) => Promise<{ errors }>`                                                                                           | Validation error count        |
+| `matchBatch`        | `({ batchId, onProgress? }) => Promise<void>`                                                                                                 | Recipients/categories matched |
+| `commitBatch`       | `({ batchId, onProgress? }) => Promise<{ imported, duplicates, errors }>`                                                                     | Final counts                  |
 
 ### Pipeline Phases
 
@@ -292,14 +298,15 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ### Sub-modules
 
-| Module | Export | Purpose |
-|--------|--------|---------|
-| `stage.js` | `stageBatch()` | CSV parsing and row staging |
-| `validate.js` | `validateBatch()` | Field validation and dedup detection |
-| `match.js` | `matchBatch()` | Recipient/category lookup or creation |
-| `commit.js` | `commitBatch()` | Transaction insertion and accounting |
+| Module        | Export            | Purpose                               |
+| ------------- | ----------------- | ------------------------------------- |
+| `stage.js`    | `stageBatch()`    | CSV parsing and row staging           |
+| `validate.js` | `validateBatch()` | Field validation and dedup detection  |
+| `match.js`    | `matchBatch()`    | Recipient/category lookup or creation |
+| `commit.js`   | `commitBatch()`   | Transaction insertion and accounting  |
 
 ### Dependencies
+
 - `bankAdapters.js`, `deduplication.js`, `lib/textNormalization.js`
 - `materializedViewService.js` (post-pipeline refresh)
 - `importBatchRepository.js`, `connection.js`, `logger.js`
@@ -308,6 +315,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 > [!warning] Deleted (2026-05-29)
 > The following legacy service files have been removed from the codebase (zero importers; the live path is `importPipeline/`):
+>
 > - `streamingImportService.js` — deleted
 > - `rawTransactionImportService.js` — deleted
 > - `iban.js` — deleted (IBAN logic was only used by the recipient-bank-account flow, which now handles validation inline)
@@ -318,25 +326,25 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ---
 
-## 8. calculations/loanSchedule.js  _(formerly loanRepaymentService.js)_
+## 8. calculations/loanSchedule.js _(formerly loanRepaymentService.js)_
 
 **File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]  
 **Purpose:** Generates loan repayment schedules for planned transactions.
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `validateLoanConfig` | `(config) => { errors: string[], normalized: LoanConfig }` | Validation result |
+| Function                        | Signature                                                            | Returns                    |
+| ------------------------------- | -------------------------------------------------------------------- | -------------------------- |
+| `validateLoanConfig`            | `(config) => { errors: string[], normalized: LoanConfig }`           | Validation result          |
 | `generateLoanRepaymentSchedule` | `(config) => { regular_payment_amount, first_due_date, schedule[] }` | Full amortization schedule |
 
 ### Loan Types
 
-| Type | Formula | Description |
-|------|---------|-------------|
-| **Amortizing** | `PMT = (P × r) / (1 - (1+r)^(-n))` | Standard annuity — equal payments |
-| **Fixed Principal** | `principal/n + remaining × r` | Equal principal, declining interest |
-| **Interest-Only** | `P × r` (final: `P + P × r`) | Interest only, principal at end |
+| Type                | Formula                            | Description                         |
+| ------------------- | ---------------------------------- | ----------------------------------- |
+| **Amortizing**      | `PMT = (P × r) / (1 - (1+r)^(-n))` | Standard annuity — equal payments   |
+| **Fixed Principal** | `principal/n + remaining × r`      | Equal principal, declining interest |
+| **Interest-Only**   | `P × r` (final: `P + P × r`)       | Interest only, principal at end     |
 
 ### Key Algorithms
 
@@ -344,6 +352,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - **Floating-Point Safety:** Uses `EPSILON` and `roundMoney` for monetary precision
 
 ### Dependencies
+
 - None (pure computation)
 
 ---
@@ -355,21 +364,21 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `createMaterializedViews` | `() => Promise<void>` | Creates 4 views with unique indexes |
+| Function                        | Signature             | Returns                              |
+| ------------------------------- | --------------------- | ------------------------------------ |
+| `createMaterializedViews`       | `() => Promise<void>` | Creates 4 views with unique indexes  |
 | `ensureMaterializedViewIndexes` | `() => Promise<void>` | Retroactively ensures unique indexes |
-| `refreshMaterializedViews` | `() => Promise<void>` | Refreshes all views CONCURRENTLY |
-| `scheduleRefresh` | `() => void` | Debounced refresh (1s delay) |
+| `refreshMaterializedViews`      | `() => Promise<void>` | Refreshes all views CONCURRENTLY     |
+| `scheduleRefresh`               | `() => void`          | Debounced refresh (1s delay)         |
 
 ### Materialized Views
 
-| View | Purpose |
-|------|---------|
+| View              | Purpose                             |
+| ----------------- | ----------------------------------- |
 | Monthly summaries | Aggregated income/expense per month |
-| Category totals | Spending per category per period |
-| Daily cashflow | Day-level income vs expense |
-| Bank balances | Current bank account balances |
+| Category totals   | Spending per category per period    |
+| Daily cashflow    | Day-level income vs expense         |
+| Bank balances     | Current bank account balances       |
 
 ### Key Algorithms
 
@@ -379,6 +388,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - **Fallback:** If CONCURRENTLY fails, falls back to standard refresh
 
 ### Dependencies
+
 - `connection.js`, `logger.js`
 
 ---
@@ -390,11 +400,11 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `computeAndStoreSnapshots` | `(targetCurrency) => Promise<void>` | Computes + persists daily snapshots |
-| `getSnapshots` | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Stored snapshots for date range |
-| `getLatestSnapshot` | `(currency) => Promise<Snapshot>` | Most recent snapshot |
+| Function                   | Signature                                               | Returns                             |
+| -------------------------- | ------------------------------------------------------- | ----------------------------------- |
+| `computeAndStoreSnapshots` | `(targetCurrency) => Promise<void>`                     | Computes + persists daily snapshots |
+| `getSnapshots`             | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Stored snapshots for date range     |
+| `getLatestSnapshot`        | `(currency) => Promise<Snapshot>`                       | Most recent snapshot                |
 
 ### Snapshot Fields
 
@@ -418,6 +428,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - **Batch Upsert:** 500-row batches with `ON CONFLICT (snapshot_date) DO UPDATE SET`
 
 ### Dependencies
+
 - `currencyConversionService.js`
 - `connection.js`, `logger.js`
 
@@ -430,27 +441,27 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `fetchLivePrices` | `(investments) => Promise<{ id: price }>` | Current price map |
-| `fetchLivePricesDetailed` | `(investments, options?) => Promise<{ id: { price, source } }>` | Price + source info |
-| `fetchHistoricalPrices` | `(investment, options?) => Promise<PricePoint[]>` | Historical price points |
-| `getHistoricalPriceAt` | `(points, timestampMs) => number` | Price at specific timestamp |
-| `saveHistoricalPointsToDatabase` | `(points, investment, source) => Promise<void>` | Persists sanitized points to DB |
-| `sanitizePersistedKinesisHistory` | `() => Promise<void>` | Re-sanitizes stored Kinesis history |
-| `__resetPriceCache` | `() => void` | Test-only: clears in-process cache |
+| Function                          | Signature                                                       | Returns                             |
+| --------------------------------- | --------------------------------------------------------------- | ----------------------------------- |
+| `fetchLivePrices`                 | `(investments) => Promise<{ id: price }>`                       | Current price map                   |
+| `fetchLivePricesDetailed`         | `(investments, options?) => Promise<{ id: { price, source } }>` | Price + source info                 |
+| `fetchHistoricalPrices`           | `(investment, options?) => Promise<PricePoint[]>`               | Historical price points             |
+| `getHistoricalPriceAt`            | `(points, timestampMs) => number`                               | Price at specific timestamp         |
+| `saveHistoricalPointsToDatabase`  | `(points, investment, source) => Promise<void>`                 | Persists sanitized points to DB     |
+| `sanitizePersistedKinesisHistory` | `() => Promise<void>`                                           | Re-sanitizes stored Kinesis history |
+| `__resetPriceCache`               | `() => void`                                                    | Test-only: clears in-process cache  |
 
 > **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.js|quoteBackfillService.js]] (2026-04-16)
 
 ### Providers
 
-| Provider | Assets | Batch Support |
-|----------|--------|---------------|
-| Binance | Crypto | Yes (multi-symbol) |
-| Yahoo Finance | Stocks, ETFs | Yes (multi-symbol) |
-| Kinesis | Metals, commodities | No (per-symbol) |
-| Custom JSON | Any | No (per-symbol) |
-| Manual | Any | N/A |
+| Provider      | Assets              | Batch Support      |
+| ------------- | ------------------- | ------------------ |
+| Binance       | Crypto              | Yes (multi-symbol) |
+| Yahoo Finance | Stocks, ETFs        | Yes (multi-symbol) |
+| Kinesis       | Metals, commodities | No (per-symbol)    |
+| Custom JSON   | Any                 | No (per-symbol)    |
+| Manual        | Any                 | N/A                |
 
 ### Key Algorithms
 
@@ -462,6 +473,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - **Range-Filtered Persistence (2026-04-26):** `_persistAndResolve()` filters fetched points to the requested window range `[fromMs, toMs]` before saving to the database. Providers return data beyond requested bounds; only the relevant subset is persisted to avoid accumulation of out-of-window rows that would be deleted and re-inserted on every startup. The in-memory cache retains the full provider response for reuse.
 
 ### Dependencies
+
 - `yahoo-finance2` (npm package)
 - `kinesisConfig.js`
 - `connection.js`, `logger.js`
@@ -475,19 +487,20 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `computeHoldingWindows` | `(transactions) => Window[]` | Time periods where units > 0 |
-| `sanitizeIsolatedSpikes` | `(points) => PricePoint[]` | Sanitized points (provider-agnostic spike detection) |
-| `getInvestmentsWithHoldingWindows` | `() => Promise<Investment[]>` | All unit-based investments with computed holding windows |
-| `backfillHistoricalAssetQuotes` | `() => Promise<{ processed, updated, skipped, failed }>` | Full startup backfill |
-| `refreshActiveHoldingQuotes` | `() => Promise<{ processed, updated, skipped }>` | Lightweight hourly refresh |
-| `refreshQuotesForInvestment` | `(investmentId) => Promise<void>` | Single-investment refresh (transaction-triggered) |
-| `cleanupStaleQuotes` | `(investmentWindows) => Promise<{ deleted }>` | Remove quotes outside holding windows |
+| Function                           | Signature                                                | Returns                                                  |
+| ---------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| `computeHoldingWindows`            | `(transactions) => Window[]`                             | Time periods where units > 0                             |
+| `sanitizeIsolatedSpikes`           | `(points) => PricePoint[]`                               | Sanitized points (provider-agnostic spike detection)     |
+| `getInvestmentsWithHoldingWindows` | `() => Promise<Investment[]>`                            | All unit-based investments with computed holding windows |
+| `backfillHistoricalAssetQuotes`    | `() => Promise<{ processed, updated, skipped, failed }>` | Full startup backfill                                    |
+| `refreshActiveHoldingQuotes`       | `() => Promise<{ processed, updated, skipped }>`         | Lightweight hourly refresh                               |
+| `refreshQuotesForInvestment`       | `(investmentId) => Promise<void>`                        | Single-investment refresh (transaction-triggered)        |
+| `cleanupStaleQuotes`               | `(investmentWindows) => Promise<{ deleted }>`            | Remove quotes outside holding windows                    |
 
 ### Holding Windows
 
 Quotes are persisted **only for periods when units > 0**, not based on `is_active` flag:
+
 - Computed from transaction history (buy/sell/gift/etc.)
 - Handles multiple buy/sell cycles per investment
 - Preserved across inactive investments (users can still view historical charts)
@@ -495,6 +508,7 @@ Quotes are persisted **only for periods when units > 0**, not based on `is_activ
 ### Spike Detection
 
 Uses **MAD-based statistical detection** (Median Absolute Deviation):
+
 1. Compute log-returns between consecutive points
 2. Calculate MAD of returns
 3. Identify outliers: return > 3σ (σ = 1.4826 × MAD)
@@ -505,11 +519,11 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 
 ### Three Refresh Modes
 
-| Mode | Trigger | Scope | Speed |
-|------|---------|-------|-------|
-| Startup Backfill | Application start | All investments + full history | Slow, comprehensive |
-| Hourly Refresh | `setInterval` (1h) | Open holding windows + 7-day lookback | Fast, lightweight |
-| Transaction Trigger | POST/DELETE/PATCH investment transactions | Single investment | Immediate, fire-and-forget |
+| Mode                | Trigger                                   | Scope                                 | Speed                      |
+| ------------------- | ----------------------------------------- | ------------------------------------- | -------------------------- |
+| Startup Backfill    | Application start                         | All investments + full history        | Slow, comprehensive        |
+| Hourly Refresh      | `setInterval` (1h)                        | Open holding windows + 7-day lookback | Fast, lightweight          |
+| Transaction Trigger | POST/DELETE/PATCH investment transactions | Single investment                     | Immediate, fire-and-forget |
 
 ### Key Algorithms
 
@@ -518,6 +532,7 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 - **Stale Cleanup:** Deletes quotes outside computed holding windows after backfill. Since `fetchHistoricalPrices()` now filters points to the requested `[fromMs, toMs]` window before persistence (2026-04-26), the cleanup step is more efficient — only intentional out-of-window rows are removed, not accumulated spillover from provider-returned bounds
 
 ### Dependencies
+
 - `priceProviderService.js` — Delegates `fetchHistoricalPrices()` and `fetchLivePricesDetailed()`
 - `investmentRepository.js` — Reads investment + transaction history
 - `connection.js`, `logger.js`
@@ -534,6 +549,7 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 **Current Implementation:** `importPipeline` handles raw data preservation in the **commit phase**. The pipeline's `commitBatch()` function inserts canonical transactions and raw references in a single coordinated operation with proper error handling and batch tracking.
 
 **Key features now in importPipeline:**
+
 - **Dual Storage:** Raw data in bank-specific tables + normalized transactions, linked via `raw_references`
 - **Hash-based Raw Dedup:** SHA-256 hash validation moved to **validate phase**
 - **Atomic Commits:** Transaction + raw reference insertion coordinated in single batch
@@ -550,20 +566,21 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `parseRecurrenceStep` | `(pattern) => { unit: 'day'\|'month', amount } \| undefined` | The single grammar: named cadences + `every N days` (N ≥ 1) |
-| `calculateNextDate` | `(currentDate, recurrencePattern) => Date \| null` | Next occurrence (Date-space; month steps clamp in APP_TIMEZONE) |
-| `nextOccurrenceYmd` | `(ymd, pattern) => string \| undefined` | Next occurrence (string-space `YYYY-MM-DD`; pure calendar math, DST-proof) |
-| `fastForwardYmd` | `(ymd, pattern, targetYmd) => string` | Bulk-jumps a stale day-stepped anchor to ≥ 1 step before `targetYmd`; no-op for month steps |
-| `expandOccurrences` | `(row, horizonYmd, { maxOccurrences? }) => string[]` | Horizon-inclusive occurrence list, base date first, default 500-cap |
-| `isValidPattern` | `(pattern) => boolean` | Pattern validity (= `parseRecurrenceStep` succeeds) |
-| `getSupportedPatterns` | `() => string[]` | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']` |
+| Function               | Signature                                                    | Returns                                                                                     |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `parseRecurrenceStep`  | `(pattern) => { unit: 'day'\|'month', amount } \| undefined` | The single grammar: named cadences + `every N days` (N ≥ 1)                                 |
+| `calculateNextDate`    | `(currentDate, recurrencePattern) => Date \| null`           | Next occurrence (Date-space; month steps clamp in APP_TIMEZONE)                             |
+| `nextOccurrenceYmd`    | `(ymd, pattern) => string \| undefined`                      | Next occurrence (string-space `YYYY-MM-DD`; pure calendar math, DST-proof)                  |
+| `fastForwardYmd`       | `(ymd, pattern, targetYmd) => string`                        | Bulk-jumps a stale day-stepped anchor to ≥ 1 step before `targetYmd`; no-op for month steps |
+| `expandOccurrences`    | `(row, horizonYmd, { maxOccurrences? }) => string[]`         | Horizon-inclusive occurrence list, base date first, default 500-cap                         |
+| `isValidPattern`       | `(pattern) => boolean`                                       | Pattern validity (= `parseRecurrenceStep` succeeds)                                         |
+| `getSupportedPatterns` | `() => string[]`                                             | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']`                         |
 
 > [!warning] Known (preserved) stepper divergence
 > The two steppers agree except for day-based steps whose walk starts on a DST-offset (summer) anchor and crosses APP_TIMEZONE's fall-back transition: Date-space lands a calendar day early (daily repeats the transition day) while string-space stays calendar-exact. Pinned by `tests/services/recurrenceStepper.test.js` and `tests/services/recurrenceExpandOccurrences.test.js`; changing either side changes published schedules.
 
 ### Dependencies
+
 - `lib/timezone.js` (ADR-009 helpers) — otherwise pure, no IO/DB
 
 ---
@@ -575,8 +592,8 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
+| Function                 | Signature                            | Returns                                   |
+| ------------------------ | ------------------------------------ | ----------------------------------------- |
 | `detectRecurringPattern` | `() => Promise<PatternSuggestion[]>` | Ranked suggestions with confidence scores |
 
 ### Detection Algorithm
@@ -595,6 +612,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 7. **Cross-Reference:** Check if pattern already tracked in `planned_transactions`
 
 ### Dependencies
+
 - `connection.js`, `logger.js`
 
 ---
@@ -609,6 +627,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 **Current Implementation:** `importPipeline` handles streaming imports via the **streaming endpoint** (`POST /api/import/csv/stream`). The pipeline's `runImportPipeline()` function accepts an `onProgress` callback (async) that propagates backpressure from `createSseWriter()` into the batch processing loop.
 
 **Key features now in importPipeline:**
+
 - **Phase-based Progress Events:** Staging → validating → matching → committing (not raw line counts)
 - **Async Backpressure:** Progress callbacks are `await`-ed to propagate TCP socket backpressure
 - **Adaptive Concurrency:** Row batches processed with `Math.max(2, Math.floor(poolMax / 2))` based on DB pool size
@@ -625,14 +644,14 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `cleanRecipientName` | `(recipient: string) => string` | Strips common prefixes |
-| `cleanKbcRecipientName` | `(recipient: string) => string` | KBC-specific cleaning |
-| `normalizeToUppercase` | `(name: string) => string` | Trims and uppercases |
-| `normalizeForMatching` | `(name: string) => string` | Canonical form for matching |
-| `formatAmountString` | `(amountStr: string) => number` | European number format parsing |
-| `extractCurrencyCode` | `(currencyStr: string) => string` | 3-letter ISO code extraction |
+| Function                | Signature                         | Returns                        |
+| ----------------------- | --------------------------------- | ------------------------------ |
+| `cleanRecipientName`    | `(recipient: string) => string`   | Strips common prefixes         |
+| `cleanKbcRecipientName` | `(recipient: string) => string`   | KBC-specific cleaning          |
+| `normalizeToUppercase`  | `(name: string) => string`        | Trims and uppercases           |
+| `normalizeForMatching`  | `(name: string) => string`        | Canonical form for matching    |
+| `formatAmountString`    | `(amountStr: string) => number`   | European number format parsing |
+| `extractCurrencyCode`   | `(currencyStr: string) => string` | 3-letter ISO code extraction   |
 
 ### Key Algorithms
 
@@ -641,6 +660,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 - **European Number Parsing:** Distinguishes comma-as-decimal (1.234,56) from comma-as-thousands (1,234.56) based on position of last comma vs last dot
 
 ### Dependencies
+
 - None (pure utility)
 
 ---
@@ -652,10 +672,10 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `chat` | `({ conversationId, message, model, signal }) => Promise<ChatTurn>` | Full turn object (user + tool messages + assistant response) |
-| `chatStream` | `({ conversationId, message, model, onEvent, signal }) => Promise<ChatTurn>` | Streams events + returns final turn |
+| Function     | Signature                                                                    | Returns                                                      |
+| ------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `chat`       | `({ conversationId, message, model, signal }) => Promise<ChatTurn>`          | Full turn object (user + tool messages + assistant response) |
+| `chatStream` | `({ conversationId, message, model, onEvent, signal }) => Promise<ChatTurn>` | Streams events + returns final turn                          |
 
 ### Architecture
 
@@ -673,6 +693,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 - **Abort Handling:** `AbortSignal` passed through Ollama client; on abort, in-flight assistant message marked aborted
 
 ### Dependencies
+
 - `ollamaClient` (HTTP wrapper for Ollama)
 - `aiChatRepository` (conversation + message CRUD)
 - `aiChat/tools/*` (expense, portfolio, planned, tax tools)
@@ -680,19 +701,20 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Configuration
 
-| Env | Default | Purpose |
-|-----|---------|---------|
-| `AI_CHAT_ENABLED` | `true` | Feature flag |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama base URL |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback model |
-| `AI_CHAT_RATE_LIMIT` | `30/min` | Rate limit for `/api/ai/chat` |
-| `AI_CHAT_MAX_HISTORY` | `20` | Max prior messages loaded per turn |
+| Env                    | Default                  | Purpose                            |
+| ---------------------- | ------------------------ | ---------------------------------- |
+| `AI_CHAT_ENABLED`      | `true`                   | Feature flag                       |
+| `OLLAMA_URL`           | `http://localhost:11434` | Ollama base URL                    |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b`            | Fallback model                     |
+| `AI_CHAT_RATE_LIMIT`   | `30/min`                 | Rate limit for `/api/ai/chat`      |
+| `AI_CHAT_MAX_HISTORY`  | `20`                     | Max prior messages loaded per turn |
 
 ### Error Handling
 
 Maps Ollama errors to `AiChatServiceError` with HTTP status (aiChatService.js: `ABORTED` → 499,
 every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap of `TIMEOUT` onto
 `UpstreamTimeoutError` semantics is a possible follow-up, not current behavior):
+
 - `OLLAMA_UNREACHABLE` → 502
 - `OLLAMA_TIMEOUT` → 502 (not 504 today)
 - `VALIDATION_ERROR` (tool args) → 400
@@ -721,19 +743,19 @@ framework-free and do not depend on repositories or external APIs.
 
 ## Service Classification
 
-| Category | Services |
-|----------|----------|
-| **Pure Computation** | `services/calculations/loanSchedule`, `services/calculations/forecast/*`, `lib/calculations/recurrence`, `lib/textNormalization`, `lib/filterBuilder` |
-| **External Data** | `belgianInflationService`, `currency/currencyConversionService`, `priceProviderService` |
-| **Quote Management** | `quoteBackfillService` |
-| **Import Pipeline** | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); `streamingImportService` and `rawTransactionImportService` deleted (2026-05-29) |
-| **Data Quality** | `deduplication`, `recurringDetectionService`, `recipientClusterService`, `recipientPatternService` |
-| **Identity & Aggregations** | `recipientMergeService`, `aggregationRefresh`, `materializedViewService` |
-| **Performance** | `portfolioPerformanceSnapshotService` |
-| **Storage** | `attachmentService`, `transactionExport` |
-| **Selection** | `bulkSelection` (resolves `ids[]` or `filter` for bulk endpoints) |
-| **Observability** | `providerHealthService`, `routeManifest` |
-| **AI & Natural Language** | `aiChatService` (+ `aiChat/` subdirectory) |
+| Category                    | Services                                                                                                                                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Pure Computation**        | `services/calculations/loanSchedule`, `services/calculations/forecast/*`, `lib/calculations/recurrence`, `lib/textNormalization`, `lib/filterBuilder`                                                              |
+| **External Data**           | `belgianInflationService`, `currency/currencyConversionService`, `priceProviderService`                                                                                                                            |
+| **Quote Management**        | `quoteBackfillService`                                                                                                                                                                                             |
+| **Import Pipeline**         | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); `streamingImportService` and `rawTransactionImportService` deleted (2026-05-29) |
+| **Data Quality**            | `deduplication`, `recurringDetectionService`, `recipientClusterService`, `recipientPatternService`                                                                                                                 |
+| **Identity & Aggregations** | `recipientMergeService`, `aggregationRefresh`, `materializedViewService`                                                                                                                                           |
+| **Performance**             | `portfolioPerformanceSnapshotService`                                                                                                                                                                              |
+| **Storage**                 | `attachmentService`, `transactionExport`                                                                                                                                                                           |
+| **Selection**               | `bulkSelection` (resolves `ids[]` or `filter` for bulk endpoints)                                                                                                                                                  |
+| **Observability**           | `providerHealthService`, `routeManifest`                                                                                                                                                                           |
+| **AI & Natural Language**   | `aiChatService` (+ `aiChat/` subdirectory)                                                                                                                                                                         |
 
 ## Info Repository Refactor (Net Worth)
 
@@ -755,11 +777,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ### Exported Functions
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `scheduleAggregationRefresh` | `() => void` | Debounced refresh trigger (1s delay, `.unref()` timer) |
-| `refreshPhase1Views` | `() => Promise<void>` | Runs materialized view refresh + logs |
-| `cancelPendingAggregationRefresh` | `() => void` | Clears pending debounce timer (new in 2026-04-29) |
+| Function                          | Signature             | Returns                                                |
+| --------------------------------- | --------------------- | ------------------------------------------------------ |
+| `scheduleAggregationRefresh`      | `() => void`          | Debounced refresh trigger (1s delay, `.unref()` timer) |
+| `refreshPhase1Views`              | `() => Promise<void>` | Runs materialized view refresh + logs                  |
+| `cancelPendingAggregationRefresh` | `() => void`          | Clears pending debounce timer (new in 2026-04-29)      |
 
 ### Key Behavior
 
@@ -769,6 +791,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 - **No blocking:** All timers are `.unref()`-ed, so SIGTERM exits cleanly even with pending aggregation work
 
 ### Dependencies
+
 - `materializedViewService.js`, `connection.js`, `logger.js`
 
 ---
@@ -778,11 +801,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/attachmentService.js]]
 **Purpose:** Owns the on-disk lifecycle of receipt attachments — validation, hashed-path layout, mime detection, and cleanup on transaction delete.
 
-| Function | Returns |
-|----------|---------|
-| `storeAttachment(txId, file, opts)` | Persisted attachment metadata |
-| `streamAttachment(attachmentId)` | Readable stream + content-type for downloads |
-| `removeAttachment(attachmentId)` | Deletes row + file (idempotent) |
+| Function                            | Returns                                      |
+| ----------------------------------- | -------------------------------------------- |
+| `storeAttachment(txId, file, opts)` | Persisted attachment metadata                |
+| `streamAttachment(attachmentId)`    | Readable stream + content-type for downloads |
+| `removeAttachment(attachmentId)`    | Deletes row + file (idempotent)              |
 
 **Dependencies:** `attachmentRepository.js`, `connection.js`, `node:fs/promises`, `crypto`. Lives behind `attachmentRateLimiter` (60 req/min, ADR-042).
 
@@ -793,11 +816,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/providerHealthService.js]]
 **Purpose:** Records success/error metrics for every external data source call and exposes on-demand probe endpoints for the admin observability hub (ADR-034).
 
-| Function | Returns |
-|----------|---------|
-| `recordSuccess(providerKey, latencyMs)` / `recordError(providerKey, err)` | void (fire-and-forget) |
-| `probe(providerKey)` | `{ ok, latencyMs, statusCode }` |
-| `getSummary()` | rolling-window stats grouped by provider |
+| Function                                                                  | Returns                                  |
+| ------------------------------------------------------------------------- | ---------------------------------------- |
+| `recordSuccess(providerKey, latencyMs)` / `recordError(providerKey, err)` | void (fire-and-forget)                   |
+| `probe(providerKey)`                                                      | `{ ok, latencyMs, statusCode }`          |
+| `getSummary()`                                                            | rolling-window stats grouped by provider |
 
 **Dependencies:** `providerHealthRepository.js`, `connection.js`, the price/inflation provider modules it instruments.
 
@@ -808,10 +831,10 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/recipientMergeService.js]]
 **Purpose:** Transactional merge of duplicate recipients into a primary; rewrites transaction FKs, transfers bank-account ownership, and warms aggregations.
 
-| Function | Returns |
-|----------|---------|
+| Function                                     | Returns                        |
+| -------------------------------------------- | ------------------------------ |
 | `mergeRecipients(primaryId, duplicateIds[])` | `{ mergedInto, affectedRows }` |
-| `unmergeRecipient(id)` | boolean |
+| `unmergeRecipient(id)`                       | boolean                        |
 
 **Dependencies:** `recipientRepository.js`, `recipientBankAccountRepository.js`, `transactionRepository.js`, `aggregationRefresh.js`.
 
@@ -822,8 +845,8 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/recipientClusterService.js]]
 **Purpose:** Identifies merge-candidate clusters from the recipient list using normalized-name similarity + alias overlap; powers `GET /api/recipients/clusters` and the Recipients page suggestions UI.
 
-| Function | Returns |
-|----------|---------|
+| Function             | Returns                                     |
+| -------------------- | ------------------------------------------- |
 | `findClusters(opts)` | `Array<{ primary, members[], confidence }>` |
 
 **Dependencies:** `recipientRepository.js`, `lib/textNormalization.js`.
@@ -835,14 +858,14 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/recipientPatternService.js]]
 **Purpose:** Creates, previews, caches, and applies literal-prefix, glob, and regex recipient match patterns for the import pipeline.
 
-| Function | Returns |
-|----------|---------|
-| `loadActivePatterns()` | Active patterns ordered for matching |
-| `applyPatterns(rawNames, patterns?)` | Raw-name to recipient match map |
-| `suggestPatternFromNames(names)` | Suggested literal-prefix pattern |
-| `previewPatternMatches(pattern)` | Matching raw-name preview |
-| `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle |
-| `listPatternsForRecipient(recipientId)` | Recipient pattern list |
+| Function                                            | Returns                              |
+| --------------------------------------------------- | ------------------------------------ |
+| `loadActivePatterns()`                              | Active patterns ordered for matching |
+| `applyPatterns(rawNames, patterns?)`                | Raw-name to recipient match map      |
+| `suggestPatternFromNames(names)`                    | Suggested literal-prefix pattern     |
+| `previewPatternMatches(pattern)`                    | Matching raw-name preview            |
+| `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle                    |
+| `listPatternsForRecipient(recipientId)`             | Recipient pattern list               |
 
 **Dependencies:** `connection.js`, `lib/sqlClauses.js`, `logger.js`, typed error classes.
 
@@ -851,14 +874,16 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 ## transactionExport.js
 
 **File:** [[apps/node-backend/src/services/transactionExport.js]]
-**Purpose:** Streams transaction exports (CSV + NDJSON) — paginates the source query, applies `escapeCsvValue` / formula-injection protection, and respects the same filters as `GET /api/transactions`.
+**Purpose:** Streams transaction exports (CSV + NDJSON), including ownership of the repeatable-read, read-only snapshot used by `POST /api/transactions/bulk-export`. It resolves the fixed selection, counts it, paginates the source query, applies `escapeCsvValue` / formula-injection protection, and commits or rolls back before releasing the database client.
 
-| Function | Returns |
-|----------|---------|
-| `streamCsv(res, filters)` | streams `text/csv` |
-| `streamNdjson(res, filters)` | streams `application/x-ndjson` |
+| Function                                      | Returns                                                     |
+| --------------------------------------------- | ----------------------------------------------------------- |
+| `streamCsvExport(res, query)`                 | streams `text/csv`                                          |
+| `streamNdjsonExport(res, query)`              | streams `application/x-ndjson`                              |
+| `buildIdListWhere(ids)`                       | fixed-id export clause and parameters                       |
+| `streamBulkTransactionExport(res, selection)` | resolves and streams a bulk export in one database snapshot |
 
-**Dependencies:** `transactionRepository.js`, `lib/csv.js`, `filterBuilder.js`.
+**Dependencies:** `database/connection.js`, `bulkSelection.js`, `lib/csv.js`, `lib/money.js`, `calculations/portfolioMath.js`, logger and typed errors.
 
 ---
 
@@ -867,8 +892,8 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/routeManifest.js]]
 **Purpose:** Scans the live Express router stack and emits a static manifest of every registered route (method + path + description). Drives the admin `/admin/endpoints` page and the dev observability inspector's "top endpoints" view.
 
-| Function | Returns |
-|----------|---------|
+| Function             | Returns                                |
+| -------------------- | -------------------------------------- |
 | `buildManifest(app)` | `Array<{ method, path, description }>` |
 
 **Dependencies:** Express internals only.
@@ -880,8 +905,8 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/lib/filterBuilder.js]]
 **Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
 
-| Function | Returns |
-|----------|---------|
+| Function                         | Returns           |
+| -------------------------------- | ----------------- |
 | `buildTransactionWhere(filters)` | `{ sql, params }` |
 
 **Dependencies:** none (pure).
@@ -893,8 +918,8 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/services/bulkSelection.js]]
 **Purpose:** Resolves either an explicit `ids[]` (≤500) or a `filter` object (capped at 5000 matches) into a concrete transaction id set for the bulk endpoints (`bulk-update`, `bulk-delete`, `bulk-export`, `bulk-tag`).
 
-| Function | Returns |
-|----------|---------|
+| Function                                    | Returns                       |
+| ------------------------------------------- | ----------------------------- |
 | `resolveSelection({ ids?, filter? }, opts)` | `{ ids[], count, truncated }` |
 
 **Dependencies:** `transactionRepository.js`, `filterBuilder.js`. See [[docs/features/bulk-actions|Bulk Actions Feature]].
@@ -913,24 +938,24 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 
 14 new thin service files were added to complete the boundary. Each is a pass-through delegation layer that owns orchestration, validation helpers, and future expansion points:
 
-| Service Module | Route it covers | Scope |
-|---|---|---|
-| `categoryService.js` | `categories.js` | CRUD + merge delegation |
-| `transactionService.js` | `transactions.js` | Create/update + filter delegation |
-| `recipientService.js` | `recipients.js` | CRUD + cluster/merge delegation |
-| `recipientBankAccountService.js` | `recipientBankAccounts.js` | Bank account CRUD |
-| `savedChartsService.js` | `savedCharts.js` | Chart config persistence |
-| `infoService.js` | `info/` route group | Summary/net-worth/monthly delegation |
-| `plannedTransactionService.js` | `plannedTransactions.js` | Planned CRUD + execution |
-| `settingsService.js` | `settings.js` | Settings read/write |
-| `splitService.js` | `splits.js` | Split lifecycle + payment |
-| `watchlistService.js` | `watchlist.js` | Watchlist CRUD |
-| `attachmentRecordService.js` | `attachments.js` | Attachment metadata (complements `attachmentService.js`) |
-| `importBatchService.js` | `importRoutes.js` | Batch management plus transaction-preview grouping and totals |
-| `portfolioImportBatchService.js` | `portfolioImportRoutes.js` | Portfolio batch coordination plus investment/raw/cash preview grouping and totals |
-| `routes/importBatchRoutes.js` | Both import routers | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
-| `customParserConfigService.js` | `importRoutes.js` | Named parser CRUD |
-| `portfolioTxService.js` | (reused existing) | Portfolio transaction coordination |
+| Service Module                   | Route it covers            | Scope                                                                                                           |
+| -------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `categoryService.js`             | `categories.js`            | CRUD + merge delegation                                                                                         |
+| `transactionService.js`          | `transactions.js`          | Create/update + filter delegation                                                                               |
+| `recipientService.js`            | `recipients.js`            | CRUD + cluster/merge delegation                                                                                 |
+| `recipientBankAccountService.js` | `recipientBankAccounts.js` | Bank account CRUD                                                                                               |
+| `savedChartsService.js`          | `savedCharts.js`           | Chart config persistence                                                                                        |
+| `infoService.js`                 | `info/` route group        | Summary/net-worth/monthly delegation                                                                            |
+| `plannedTransactionService.js`   | `plannedTransactions.js`   | Planned CRUD + execution                                                                                        |
+| `settingsService.js`             | `settings.js`              | Settings read/write                                                                                             |
+| `splitService.js`                | `splits.js`                | Split lifecycle + payment                                                                                       |
+| `watchlistService.js`            | `watchlist.js`             | Watchlist CRUD                                                                                                  |
+| `attachmentRecordService.js`     | `attachments.js`           | Attachment metadata (complements `attachmentService.js`)                                                        |
+| `importBatchService.js`          | `importRoutes.js`          | Batch management plus transaction-preview grouping and totals                                                   |
+| `portfolioImportBatchService.js` | `portfolioImportRoutes.js` | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
+| `routes/importBatchRoutes.js`    | Both import routers        | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
+| `customParserConfigService.js`   | `importRoutes.js`          | Named parser CRUD                                                                                               |
+| `portfolioTxService.js`          | (reused existing)          | Portfolio transaction coordination                                                                              |
 
 **Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
 
@@ -939,11 +964,11 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 ```javascript
 // routes/transactions.js
 // ✅ Allowed — import from service seam
-import { createTransaction } from '../services/transactionService.js';
+import { createTransaction } from "../services/transactionService.js";
 
 // routes/transactions.js
 // ESLint ERROR — no-repo-direct-from-route
-import { insertTransaction } from '../repositories/transactionRepository.js';
+import { insertTransaction } from "../repositories/transactionRepository.js";
 ```
 
 The lint rule inspects the resolved import path: any file under `src/routes/` importing from `src/repositories/` triggers the error. Services may still import repositories freely.
@@ -957,10 +982,10 @@ The inverse edge is now guarded too. `vision-local/no-service-import-from-repo` 
 ```javascript
 // repositories/tagRepository.js
 // ESLint ERROR — no-service-import-from-repo
-import { convertToCurrency } from '../services/currency/currencyConversionService.js';
+import { convertToCurrency } from "../services/currency/currencyConversionService.js";
 ```
 
-The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a *different* service or *widens* its import. The eight sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
+The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a _different_ service or _widens_ its import. The eight sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
 
 ---
 

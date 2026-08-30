@@ -43,6 +43,11 @@ const {
 const backupRestore = require("./backup/restore");
 const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const updater = require("./updater");
+const {
+  resolveRuntimeMode,
+  readRuntimeSelectionState,
+  createRuntimeProvider,
+} = require("./runtime");
 const { createBadgePngBuffer } = require("./badge-image");
 const {
   GITHUB_OWNER,
@@ -144,6 +149,17 @@ const __IS_DEMO = (() => {
   }
 })();
 app.setName(__IS_DEMO ? "Vision Demo" : "Vision");
+const __IS_DEVELOPMENT_PROFILE =
+  !__IS_DEMO &&
+  !app.isPackaged &&
+  process.env.VISION_DEVELOPMENT_PROFILE === "true";
+if (__IS_DEVELOPMENT_PROFILE) {
+  app.setPath(
+    "userData",
+    path.join(app.getPath("appData"), "Vision Development"),
+  );
+}
+const NATIVE_RUNTIME_ID = __IS_DEVELOPMENT_PROFILE ? "vision_dev" : "vision";
 
 // Acquire the single-instance lock as early as possible — immediately after
 // setName (the lock lives in userData, so it must run after that) and BEFORE the
@@ -226,7 +242,7 @@ if (gotSingleInstanceLock)
 if (gotSingleInstanceLock)
   (function migrateLegacyUserData() {
     try {
-      if (__IS_DEMO) return; // demo build never adopts the real app's legacy data
+      if (__IS_DEMO || __IS_DEVELOPMENT_PROFILE) return;
       const target = app.getPath("userData");
       const legacy = path.join(path.dirname(target), "vision-desktop");
       if (legacy === target) return;
@@ -364,6 +380,8 @@ function registerSecurityHeaders() {
 let appPort = DEFAULT_APP_PORT;
 let APP_URL = `http://localhost:${appPort}`;
 let HEALTH_URL = `http://localhost:${appPort}/health`;
+let runtimeMode = null;
+let activeRuntime = null;
 
 // ── Settings (persisted across launches) ─────────────────────────────────────
 const settingsPath = path.join(app.getPath("userData"), "settings.json");
@@ -467,6 +485,7 @@ backupRestore.init({
   repoRootFallback: path.resolve(__dirname, "..", ".."),
   pollHealth,
   HEALTH_POLL_BUILD_ATTEMPTS,
+  runtimeProvider: () => activeRuntime,
 });
 updater.init({
   APP_NAME,
@@ -475,6 +494,16 @@ updater.init({
   notify,
   workDir: () => workDir,
   useRepoMode: () => useRepoMode,
+  runtimeMode: () => runtimeMode,
+  stopRuntime: async () => {
+    if (activeRuntime?.mode === "native") await activeRuntime.stop();
+  },
+  startRuntime: async () => {
+    if (activeRuntime?.mode === "native") {
+      await activeRuntime.start();
+      await activeRuntime.waitUntilReady({ detailed: true });
+    }
+  },
   markQuitting: () => {
     isQuitting = true;
   },
@@ -574,8 +603,9 @@ async function repickAppPort() {
 
 // ── Repo/workDir resolution ───────────────────────────────────────────────────
 // In dev (electron . from packaging/electron/): resolve two levels up.
-// In packaged .app with repoPath setting: use the local clone (repo mode).
-// In packaged .app without repoPath: uses embedded docker-compose.yml shipped in app resources.
+// In packaged .app with repoPath setting, source-update mode may use the local
+// clone. Native runtime resources still come from the packaged application.
+// Docker mode uses the embedded Compose file only when selected explicitly.
 async function resolveWorkDir() {
   if (!app.isPackaged) {
     return path.resolve(__dirname, "..", "..");
@@ -963,7 +993,13 @@ const healthAgent = new http.Agent({
 });
 
 // Single /health request — resolves true when 2xx/3xx, false otherwise.
-function pingHealth(timeoutMs = 1500) {
+async function pingHealth(timeoutMs = 1500) {
+  if (activeRuntime) {
+    return activeRuntime
+      .health({ timeoutMs })
+      .then(() => true)
+      .catch(() => false);
+  }
   return new Promise((resolve) => {
     const req = http.get(HEALTH_URL, { agent: healthAgent }, (res) => {
       const ok = res.statusCode >= 200 && res.statusCode < 400;
@@ -1105,6 +1141,24 @@ function redactStartupDiagnostics(value) {
 }
 
 async function logStartupDiagnostics() {
+  if (activeRuntime?.mode === "native") {
+    try {
+      const log = await fs.promises.readFile(
+        activeRuntime.paths.backendLog,
+        "utf8",
+      );
+      const tail = log.split("\n").slice(-200).join("\n");
+      console.error(
+        `[startup-diagnostics] native backend log\n${redactStartupDiagnostics(tail)}`,
+      );
+    } catch (error) {
+      console.error(
+        "[startup-diagnostics] native backend log unavailable:",
+        error && error.message ? error.message : error,
+      );
+    }
+    return;
+  }
   if (!workDir) return;
   const commands = [
     {
@@ -1805,6 +1859,13 @@ function registerHandler(
 registerHandler(
   "update:pull-image",
   async () => {
+    if (runtimeMode === "native") {
+      return {
+        success: false,
+        wasNew: false,
+        error: "Docker image updates are unavailable in native runtime mode.",
+      };
+    }
     // Pin to the digest the release published BEFORE pulling, so the pull fetches
     // immutable content rather than whatever the tag currently points at. A failed
     // lookup returns null and leaves the previous reference in place, so the update
@@ -1851,7 +1912,7 @@ registerHandler(
 registerHandler(
   "update:install-shell",
   async () => {
-    if (app.isPackaged && !useRepoMode) {
+    if (app.isPackaged && !useRepoMode && runtimeMode !== "native") {
       return {
         success: false,
         error:
@@ -2038,13 +2099,21 @@ registerHandler(
         : await runRestore(resolved, { passphrase });
       return result;
     } catch (err) {
-      // Ensure app container is back up even after an error
-      const composeFileArgs = composeArgs(workDir, overrideFiles);
-      const env = { ...dockerEnv, PORT: String(appPort) };
-      run("docker", ["compose", ...composeFileArgs, "start", "app"], workDir, {
-        timeout: 120000,
-        env,
-      }).catch(() => {});
+      // Restore the writer for the selected provider only. Starting Docker here
+      // after a native restore failure would create split-brain operation.
+      if (activeRuntime?.mode !== "native") {
+        const composeFileArgs = composeArgs(workDir, overrideFiles);
+        const env = { ...dockerEnv, PORT: String(appPort) };
+        run(
+          "docker",
+          ["compose", ...composeFileArgs, "start", "app"],
+          workDir,
+          {
+            timeout: 120000,
+            env,
+          },
+        ).catch(() => {});
+      }
       return { success: false, error: String(err) };
     } finally {
       startHealthWatchdog();
@@ -2258,7 +2327,10 @@ registerHandler("recovery:retry", () => {
 
 registerHandler("recovery:open-logs", async () => {
   try {
-    const logsDir = app.getPath("logs");
+    const logsDir =
+      activeRuntime?.mode === "native"
+        ? activeRuntime.paths.logs
+        : app.getPath("logs");
     fs.mkdirSync(logsDir, { recursive: true });
     const err = await shell.openPath(logsDir);
     if (err) return { success: false, error: err };
@@ -2725,6 +2797,27 @@ async function launch() {
   //     t() falls back to the key itself — survivable for startup paths.
   const endI18n = bootMark("init_i18n");
   const persistedSettings = await loadSettings();
+  try {
+    const runtimeState = await readRuntimeSelectionState(
+      app.getPath("userData"),
+      NATIVE_RUNTIME_ID,
+    );
+    runtimeMode = resolveRuntimeMode({
+      settings: persistedSettings,
+      runtimeState,
+      isDemo: __IS_DEMO,
+    });
+  } catch (error) {
+    await dialog.showMessageBox({
+      type: "error",
+      buttons: ["OK"],
+      title: APP_NAME,
+      message: "Vision runtime configuration is invalid.",
+      detail: error && error.message ? error.message : String(error),
+    });
+    app.quit();
+    return;
+  }
   await initI18n(persistedSettings.nativeLanguage);
   endI18n();
 
@@ -2735,12 +2828,75 @@ async function launch() {
   subscribeAccentColorChanges();
 
   // 0b. Open the loading window IMMEDIATELY so the user sees something straight
-  //    away — before any Docker I/O, which can take seconds or even minutes on
-  //    a cold start. The window will navigate to APP_URL once the backend is ready.
+  //    away — before runtime I/O, which can take seconds on a cold start. The
+  //    window will navigate to APP_URL once the backend is ready.
   const endWindow = bootMark("create_window");
   createWindow();
   mainWindow.loadURL(splashDataUrl());
   endWindow();
+
+  if (runtimeMode === "native") {
+    const endNative = bootMark("native_runtime_start");
+    const repoRoot = path.resolve(__dirname, "..", "..");
+    const runtimeRoot = app.isPackaged
+      ? path.join(process.resourcesPath, "native-runtime")
+      : repoRoot;
+    const nativePayloadRoot = app.isPackaged
+      ? runtimeRoot
+      : path.join(__dirname, "native-runtime");
+    workDir = runtimeRoot;
+    try {
+      const port = await resolveAppPort();
+      appPort = port;
+      APP_URL = `http://localhost:${appPort}`;
+      HEALTH_URL = `http://localhost:${appPort}/health`;
+      activeRuntime = createRuntimeProvider("native", {
+        native: {
+          userDataDir: app.getPath("userData"),
+          repoRoot: app.isPackaged ? undefined : repoRoot,
+          runtimeRoot,
+          postgresRuntimeRoot: nativePayloadRoot,
+          browserRuntimeRoot: nativePayloadRoot,
+          alembicPath: path.join(nativePayloadRoot, "vision-alembic"),
+          allowExternalPostgres:
+            process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
+          runtimeId: NATIVE_RUNTIME_ID,
+          appPort: () => appPort,
+          requireRuntimeManifest: app.isPackaged,
+        },
+      });
+      await activeRuntime.ensureLayout();
+      await activeRuntime.importApplicationEnv(process.env);
+      setSplashStatus("splash.startingServices");
+      try {
+        await activeRuntime.start();
+      } catch (error) {
+        if (error?.code !== "PORT_COLLISION") throw error;
+        await repickAppPort();
+        await activeRuntime.start();
+      }
+      endNative();
+      setSplashStatus("splash.waitingApp");
+      pollAndLoad({ building: true });
+      if (!__IS_DEMO) setupManualShellUpdater();
+      endLaunch();
+      return;
+    } catch (error) {
+      endNative();
+      await dialog.showMessageBox({
+        type: "error",
+        buttons: [t("common.ok", null, "OK")],
+        title: APP_NAME,
+        message:
+          error?.code === "NATIVE_CUTOVER_REQUIRED"
+            ? "Existing Vision data requires an explicit native migration."
+            : t("app.failedStart", null, "Vision could not start."),
+        detail: error && error.message ? error.message : String(error),
+      });
+      app.quit();
+      return;
+    }
+  }
 
   // 1. Resolve project folder
   const endWorkDir = bootMark("resolve_work_dir");
@@ -2940,6 +3096,15 @@ async function launch() {
   ]);
   endParallelInit();
 
+  activeRuntime = createRuntimeProvider("docker", {
+    docker: {
+      compose: { checkDocker, composeStartOrUp, stopContainers },
+      workDir: () => workDir,
+      overrideFiles: () => overrideFiles,
+      appPort: () => appPort,
+    },
+  });
+
   // 3. Handle Docker not being available
   if (dockerStatus === "not-installed") {
     const { response } = await dialog.showMessageBox({
@@ -3012,7 +3177,7 @@ async function launch() {
   try {
     let result;
     try {
-      result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+      result = await activeRuntime.start({ skipBuild });
     } catch (err) {
       // A foreign process squatting the persisted appPort makes compose fail to
       // publish the app container. Re-pick a fresh port and recreate once —
@@ -3023,7 +3188,7 @@ async function launch() {
           `[port] appPort ${appPort} is held by another process; picking a fresh port and recreating`,
         );
         await repickAppPort();
-        result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+        result = await activeRuntime.start({ skipBuild });
       } else {
         throw err;
       }
@@ -3270,8 +3435,8 @@ app.on("will-quit", (e) => {
     return loadSettings();
   }
 
-  // Opt-in "keep services running on quit": leave the containers up so the
-  // next launch takes the hot path instead of a warm restart. Same dual
+  // Opt-in "keep services running on quit": leave the selected provider up so
+  // the next launch takes the hot path instead of a warm restart. Same dual
   // DB + settings.json read as resolveBackupSettings above (the backend may
   // already be shutting down by the time this runs). compose's
   // `restart: unless-stopped` policy governs reboot behaviour.
@@ -3323,9 +3488,9 @@ app.on("will-quit", (e) => {
         }
         const keepServices = await resolveKeepServicesOnQuit();
         if (keepServices) return;
-        return stopContainers(workDir, overrideFiles);
+        return activeRuntime?.stop();
       })
-      .catch((err) => console.error("docker compose down failed:", err))
+      .catch((err) => console.error("runtime shutdown failed:", err))
       .finally(() => {
         clearTimeout(forceQuitTimer);
         notify(t("app.stopped"));

@@ -4,7 +4,7 @@
 #
 # Why this exists: generate.mjs only emits the synthetic *data*. To bake it into a
 # Postgres image we need it sitting on the real, migrated schema. This spins up a
-# throwaway Postgres, runs `alembic upgrade head`, loads the data (the ADR-088
+# throwaway Postgres, runs Vision's guarded migration runner to head, loads the data (the ADR-088
 # dual-write trigger resolves each transaction's account_id onto the typed accounts
 # the generator pre-creates), then dumps schema + data.
 #
@@ -65,7 +65,7 @@ for i in $(seq 1 30); do
   sleep 1; [ "$i" -eq 30 ] && { echo "ERROR: Postgres did not become ready"; exit 1; }
 done
 
-echo "==> [2/6] alembic upgrade head ($ALEMBIC)"
+echo "==> [2/6] guarded migration runner upgrade head ($ALEMBIC)"
 # Pre-create alembic_version with a wide column. Alembic otherwise creates it as
 # varchar(32) on first run, which truncates the long revision ids (e.g.
 # 0003_import_batch_id_on_transactions = 36 chars). Empty table => alembic still
@@ -73,7 +73,7 @@ echo "==> [2/6] alembic upgrade head ($ALEMBIC)"
 # head, so no migration runs at demo runtime).
 "$PSQL" -q -h localhost -p "$PORT" -U ftm_user -d financial_transactions \
   -c "CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(128) NOT NULL CONSTRAINT alembic_version_pkc PRIMARY KEY);"
-( cd "$REPO" && DATABASE_URL="$URL" "$ALEMBIC" -c config/alembic.ini upgrade head )
+( cd "$REPO" && DATABASE_URL="$URL" ALEMBIC_BIN="$ALEMBIC" bun run apps/node-backend/scripts/db-migrate.js upgrade head )
 
 echo "==> [3/6] generate + load synthetic data"
 node "$DEMO_DB_DIR/generate.mjs" > /tmp/vision-demo-data.sql

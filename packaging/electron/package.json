@@ -6,12 +6,17 @@
   "scripts": {
     "postinstall": "install-electron",
     "start": "node ../../scripts/generate-locales.js && electron .",
-    "dist": "node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
-    "dist:arm64": "node ../../scripts/generate-locales.js && electron-builder --mac --arm64"
+    "prepare:postgres": "node scripts/prepare-postgres-runtime.js",
+    "prepare:alembic": "node scripts/prepare-alembic-runtime.js",
+    "prepare:chromium": "node scripts/prepare-chromium-runtime.js",
+    "prepare:native": "node scripts/prepare-native-runtime.js",
+    "dist": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
+    "dist:arm64": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
+    "dist:dir": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --dir"
   },
   "dependencies": {
     "archiver": "^8.0.0",
-    "yauzl": "^3.3.0"
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "electron": "^43.1.0",

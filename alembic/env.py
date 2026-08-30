@@ -6,10 +6,18 @@ from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-# Load environment variables from .env.local if present
+# Load environment variables from .env.local if present. The native macOS
+# runtime supplies an explicit generated environment and must never let a
+# source checkout's Docker-oriented .env.local redirect Alembic to another
+# database.
 config_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_local_path = os.path.join(config_dir, "config", ".env.local")
-if os.path.exists(env_local_path):
+skip_config_env_local = os.getenv("VISION_SKIP_CONFIG_ENV_LOCAL", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+if not skip_config_env_local and os.path.exists(env_local_path):
     load_dotenv(env_local_path, override=True)
 
 # Get database URL from environment variable. No credentialed fallback: shipping

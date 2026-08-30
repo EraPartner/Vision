@@ -2,10 +2,52 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-27
+date: 2026-08-30
 updated: 2026-08-26
 last_modified: 2026-08-26
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
+tags:
+  [
+    knowledge-base,
+    index,
+    project,
+    overview,
+    phase-8,
+    phase-5a,
+    phase-6,
+    phase-7,
+    phase-4,
+    phase-3,
+    phase-9,
+    phase-13,
+    aead,
+    backup-v2,
+    security-hardening,
+    offline-resilience,
+    export-filters,
+    multi-select,
+    bug-hunt-2026-04-29,
+    bug-hunt-2026-05-05,
+    startup-optimization,
+    network-reachability,
+    tailwind-v4,
+    dependencies,
+    css-architecture,
+    mount-guard,
+    react-keys,
+    decimal-safety,
+    date-safety,
+    electron-hardening,
+    belgian-tax,
+    as-filed-snapshots,
+    audit-log,
+    comparison,
+    trend-strip,
+    dev-observability,
+    devtools,
+    api-inspector,
+    devcontainer,
+    claude-code-permissions,
+  ]
 description: "Main entry point to Vision project documentation for developers and coding agents."
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
@@ -14,7 +56,7 @@ aliases: [KB, docs, documentation, knowledge base, home]
 
 > [!abstract] About This KB
 > Welcome to the Vision project documentation. This knowledge base contains architectural decisions, API documentation, guides, and all project knowledge designed for **humans**, **AI agents**, and **computer scientists**.
-> 
+>
 > **Quick Open:** Press `Ctrl/Cmd+O` to quick-open any document
 > **Search:** Use the search bar or `Cmd+Shift+F` for full-text search
 > **Graph View:** Use `Cmd+G` to explore document relationships
@@ -34,15 +76,15 @@ LIMIT 20
 
 ## Quick Start
 
-| If you're... | Start here |
-|---|---|
-| **New developer** | [[docs/getting-started|Getting Started MOC]] → [[docs/guides/setup|Setup Guide]] |
-| **Looking for an API** | [[docs/api/index|API Overview]] or [[docs/api/transactions|Transactions API]] |
-| **Making an architectural decision** | [[docs/adr/index|ADR Index]] → [[docs/adr/template|Template]] |
-| **Understanding the architecture** | [[docs/architecture/index|Architecture Overview]] |
-| **Working on a feature** | [[docs/features/index|Feature Docs]] |
-| **An AI agent** | Read [[docs/adr/index|ADRs]] first, then check [[docs/api/index|API docs]] |
-| **Computer scientist** | See [[#For Computer Scientists]] section below |
+| If you're...                         | Start here                                     |
+| ------------------------------------ | ---------------------------------------------- |
+| **New developer**                    | [[docs/getting-started                         | Getting Started MOC]] → [[docs/guides/setup | Setup Guide]]      |
+| **Looking for an API**               | [[docs/api/index                               | API Overview]] or [[docs/api/transactions   | Transactions API]] |
+| **Making an architectural decision** | [[docs/adr/index                               | ADR Index]] → [[docs/adr/template           | Template]]         |
+| **Understanding the architecture**   | [[docs/architecture/index                      | Architecture Overview]]                     |
+| **Working on a feature**             | [[docs/features/index                          | Feature Docs]]                              |
+| **An AI agent**                      | Read [[docs/adr/index                          | ADRs]] first, then check [[docs/api/index   | API docs]]         |
+| **Computer scientist**               | See [[#For Computer Scientists]] section below |
 
 ## Audience-Specific Paths
 
@@ -61,6 +103,7 @@ LIMIT 5
 ### 🤖 For AI Agents
 
 > [!tip] AI Agent Quick Reference
+>
 > 1. **Read before writing** - Check existing docs before adding new content
 > 2. **Use ADRs for decisions** - Document significant design choices in `docs/adr/`
 > 3. **Update relevant docs** - Keep API, features, and guides docs in sync with code
@@ -75,34 +118,34 @@ LIMIT 5
 > [!abstract] Algorithms & Complexity
 > This section documents the algorithmic foundations of Vision for developers interested in computational complexity, data structures, and optimization techniques.
 
-| Document | Description | Complexity |
-|----------|-------------|-------------|
-| [[docs/reference/algorithms|Algorithms & Data Structures]] | LTTB, SHA-256 deduplication, recurring detection, Modified Dietz | O(n), O(1) |
-| [[docs/reference/database-query-patterns|Database Query Patterns]] | PostgreSQL CTEs, window functions, materialized views | Index analysis |
-| [[docs/reference/data-model|Data Model]] | Entity relationships and schema design | Schema patterns |
-| [[docs/performance/chart-downsampling|Chart Downsampling]] | LTTB implementation for time-series | O(n) time, O(k) space |
-| [[docs/adr/005-materialized-views|ADR-005: Materialized Views]] | Pre-computed aggregation strategy | Query vs view trade-offs |
-| [[docs/adr/004-postgresql-table-inheritance|ADR-004: Table Inheritance]] | PostgreSQL inheritance for investments | Schema design patterns |
-| [[docs/adr/006-three-layer-architecture|ADR-006: Three-Layer Architecture]] | Routes → Services → Repositories | Layer separation patterns |
-| [[docs/adr/007-streaming-imports|ADR-007: Streaming Imports]] | SSE progress + parallel batch processing | Pipeline architecture |
+| Document                                    | Description                         | Complexity                                                       |
+| ------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| [[docs/reference/algorithms                 | Algorithms & Data Structures]]      | LTTB, SHA-256 deduplication, recurring detection, Modified Dietz | O(n), O(1)                |
+| [[docs/reference/database-query-patterns    | Database Query Patterns]]           | PostgreSQL CTEs, window functions, materialized views            | Index analysis            |
+| [[docs/reference/data-model                 | Data Model]]                        | Entity relationships and schema design                           | Schema patterns           |
+| [[docs/performance/chart-downsampling       | Chart Downsampling]]                | LTTB implementation for time-series                              | O(n) time, O(k) space     |
+| [[docs/adr/005-materialized-views           | ADR-005: Materialized Views]]       | Pre-computed aggregation strategy                                | Query vs view trade-offs  |
+| [[docs/adr/004-postgresql-table-inheritance | ADR-004: Table Inheritance]]        | PostgreSQL inheritance for investments                           | Schema design patterns    |
+| [[docs/adr/006-three-layer-architecture     | ADR-006: Three-Layer Architecture]] | Routes → Services → Repositories                                 | Layer separation patterns |
+| [[docs/adr/007-streaming-imports            | ADR-007: Streaming Imports]]        | SSE progress + parallel batch processing                         | Pipeline architecture     |
 
 ## Knowledge Areas
 
-| Area | Description |
-|------|-------------|
-| [[docs/adr/index|🏗️ Architecture Decisions]] | Major design decisions and rationale |
-| [[docs/api/index|📡 API Documentation]] | REST API endpoints and schemas |
-| [[docs/guides/index|📖 Guides]] | Setup, deployment, and contributing |
-| [[docs/features/index|⚡ Features]] | Feature documentation (Portfolio, Tax, etc.) |
-| [[docs/integrations/index|🔌 Integrations]] | External services, bank adapters |
-| [[docs/i18n/index|🌍 Localization]] | Internationalization and translations |
-| [[docs/security/index|🔒 Security]] | Security policies and practices |
-| [[docs/performance/index|🚀 Performance]] | Performance optimizations |
-| [[docs/components/index|🧩 Components]] | Frontend React components and hooks |
-| [[docs/testing/index|🧪 Testing]] | Testing strategies and patterns |
-| [[docs/architecture/index|📐 Architecture]] | System diagrams and architecture |
-| [[docs/reference/index|📚 Reference]] | Code patterns, types, algorithms, env vars |
-| [[docs/templates/index|📝 Templates]] | Documentation templates for new docs |
+| Area                      | Description                 |
+| ------------------------- | --------------------------- |
+| [[docs/adr/index          | 🏗️ Architecture Decisions]] | Major design decisions and rationale         |
+| [[docs/api/index          | 📡 API Documentation]]      | REST API endpoints and schemas               |
+| [[docs/guides/index       | 📖 Guides]]                 | Setup, deployment, and contributing          |
+| [[docs/features/index     | ⚡ Features]]               | Feature documentation (Portfolio, Tax, etc.) |
+| [[docs/integrations/index | 🔌 Integrations]]           | External services, bank adapters             |
+| [[docs/i18n/index         | 🌍 Localization]]           | Internationalization and translations        |
+| [[docs/security/index     | 🔒 Security]]               | Security policies and practices              |
+| [[docs/performance/index  | 🚀 Performance]]            | Performance optimizations                    |
+| [[docs/components/index   | 🧩 Components]]             | Frontend React components and hooks          |
+| [[docs/testing/index      | 🧪 Testing]]                | Testing strategies and patterns              |
+| [[docs/architecture/index | 📐 Architecture]]           | System diagrams and architecture             |
+| [[docs/reference/index    | 📚 Reference]]              | Code patterns, types, algorithms, env vars   |
+| [[docs/templates/index    | 📝 Templates]]              | Documentation templates for new docs         |
 
 ## 📊 PlantUML Diagrams
 
@@ -123,33 +166,33 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (56 components) + 25 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (57 components) + 26 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, native cutover, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
-| Resource | Description |
-|----------|-------------|
-| [[docs/glossary|📚 Glossary]] | Key terms, aliases, and disambiguation |
-| [[docs/tag-taxonomy|🏷️ Tag Taxonomy]] | Controlled vocabulary for KB tags |
-| [[docs/troubleshooting|🔧 Troubleshooting]] | Common issues and solutions |
-| [[docs/getting-started|🗺️ Getting Started]] | Map of Content for navigation |
-| [[docs/common-tasks|📋 Common Tasks]] | Task-oriented quick reference |
-| [[docs/diagrams/index|📊 Diagrams Index]] | All PlantUML diagrams organized by category |
-| [[docs/reference/data-model|🗃️ Data Model]] | Complete entity reference — core, portfolio, planning |
-| [[docs/reference/environment-variables|🔑 Environment Variables]] | All env vars in one place |
-| [[docs/reference/react-query-keys|🔄 React Query Keys]] | All frontend query keys |
-| [[docs/reference/frontend-routes|🛣️ Frontend Routes]] | Complete route table |
-| [[docs/reference/scripts|⚙️ Scripts Reference]] | All bun/npm commands |
-| [[docs/reference/database-triggers|🗄️ Database Triggers]] | All PostgreSQL triggers |
-| [[docs/guides/migrations|🔗 Migration Workflow]] | Alembic workflow; use `bun run db:history` for the current chain |
-| [[docs/reference/code-patterns|💻 Code Patterns]] | Standard code patterns for all layers |
-| [[docs/reference/error-codes|❌ Error Codes]] | All API error responses and status codes |
-| [[docs/reference/typescript-types|🔢 TypeScript Types]] | All frontend type definitions |
-| [[docs/reference/algorithms|🧮 Algorithms]] | LTTB, deduplication, recurring detection, currency conversion |
-| [[docs/reference/service-layer|🗂️ Service Layer]] | All 16 backend services reference |
-| [[docs/reference/database-query-patterns|🗄️ Database Query Patterns]] | PostgreSQL patterns, indexes, optimization |
-| [[docs/reference/agent-navigation-map|🗺️ Agent Navigation Map]] | File navigation by feature, layer, task |
-| [[docs/reference/frontend-api-client|🔌 Frontend API Client]] | Transport, types, and facade layers of the HTTP client (Phase 1) |
-| [[docs/reference/schema-initialization|🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization |
-| [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 163 API endpoints across 28 route files |
+| Resource                                 | Description                           |
+| ---------------------------------------- | ------------------------------------- |
+| [[docs/glossary                          | 📚 Glossary]]                         | Key terms, aliases, and disambiguation                           |
+| [[docs/tag-taxonomy                      | 🏷️ Tag Taxonomy]]                     | Controlled vocabulary for KB tags                                |
+| [[docs/troubleshooting                   | 🔧 Troubleshooting]]                  | Common issues and solutions                                      |
+| [[docs/getting-started                   | 🗺️ Getting Started]]                  | Map of Content for navigation                                    |
+| [[docs/common-tasks                      | 📋 Common Tasks]]                     | Task-oriented quick reference                                    |
+| [[docs/diagrams/index                    | 📊 Diagrams Index]]                   | All PlantUML diagrams organized by category                      |
+| [[docs/reference/data-model              | 🗃️ Data Model]]                       | Complete entity reference — core, portfolio, planning            |
+| [[docs/reference/environment-variables   | 🔑 Environment Variables]]            | All env vars in one place                                        |
+| [[docs/reference/react-query-keys        | 🔄 React Query Keys]]                 | All frontend query keys                                          |
+| [[docs/reference/frontend-routes         | 🛣️ Frontend Routes]]                  | Complete route table                                             |
+| [[docs/reference/scripts                 | ⚙️ Scripts Reference]]                | All bun/npm commands                                             |
+| [[docs/reference/database-triggers       | 🗄️ Database Triggers]]                | All PostgreSQL triggers                                          |
+| [[docs/guides/migrations                 | 🔗 Migration Workflow]]               | Alembic workflow; use `bun run db:history` for the current chain |
+| [[docs/reference/code-patterns           | 💻 Code Patterns]]                    | Standard code patterns for all layers                            |
+| [[docs/reference/error-codes             | ❌ Error Codes]]                      | All API error responses and status codes                         |
+| [[docs/reference/typescript-types        | 🔢 TypeScript Types]]                 | All frontend type definitions                                    |
+| [[docs/reference/algorithms              | 🧮 Algorithms]]                       | LTTB, deduplication, recurring detection, currency conversion    |
+| [[docs/reference/service-layer           | 🗂️ Service Layer]]                    | All 16 backend services reference                                |
+| [[docs/reference/database-query-patterns | 🗄️ Database Query Patterns]]          | PostgreSQL patterns, indexes, optimization                       |
+| [[docs/reference/agent-navigation-map    | 🗺️ Agent Navigation Map]]             | File navigation by feature, layer, task                          |
+| [[docs/reference/frontend-api-client     | 🔌 Frontend API Client]]              | Transport, types, and facade layers of the HTTP client (Phase 1) |
+| [[docs/reference/schema-initialization   | 🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization                    |
+| [[docs/reference/api-endpoint-matrix     | 📊 API Endpoint Matrix]]              | Complete matrix of all 163 API endpoints across 28 route files   |
 
 ## Recent Updates
 
@@ -160,6 +203,16 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-08-30 — Native macOS Runtime (ADR-113)
+
+Vision's normal macOS and packaged Electron runtime now ships PostgreSQL 18.6, a standalone
+migration executable, a native Bun backend, and Chrome Headless Shell. Electron manages the private
+database cluster below Vision's durable application-data directory. Docker Compose remains an
+explicit provider. Existing Docker data moves only through the opt-in importer, which verifies
+schema, row counts, attachment hashes, readiness, settings, and reports before writing the native
+runtime marker. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] and
+[[docs/architecture/electron|Electron Desktop Architecture]].
 
 ### 2026-06-10 V12 — Electron-Native Desktop Integration (ADR-072)
 
@@ -229,6 +282,7 @@ See [[docs/guides/devcontainer|Devcontainer Guide]]
 **New feature (dev builds only):** Comprehensive observability layer with zero-cost operation in production. Provides real-time API request tracking, TanStack Query metrics, and interactive inspector panel accessible via `Cmd+Shift+A`.
 
 **Architecture:**
+
 - **Event bus** (`apiEventBus.ts`) — Module-level pub-sub with `ApiRequestEvent` lifecycle events (start, success, error)
 - **Request log** (`apiRequestLog.ts`) — Ring buffer (200-entry capacity) with `useApiRequestLog()` hook
 - **Query metrics** (`queryMetrics.ts`) — Aggregates requests + TanStack Query stats; exposes `useQueryMetrics()`
@@ -237,11 +291,13 @@ See [[docs/guides/devcontainer|Devcontainer Guide]]
 - **Integration** — `apiRequest()` chokepoint emits all events; all 38 domain hooks participate automatically
 
 **Dev-Only Activation:**
+
 - `import.meta.env.DEV` guard in `App.tsx` with `React.lazy()` + `Suspense`
 - Entire devtools chunk tree-shaken in production (verified: zero devtools references in dist/)
 - Zero-cost operation when inspector closed (no subscribers to event bus)
 
 **Features:**
+
 - Virtualized request list with filter input and status/duration columns
 - Detailed request pane showing endpoint, method, status, duration, error context
 - Metrics panel with stat cards (total requests, error rate, cache hit ratio, mutation success)
@@ -251,6 +307,7 @@ See [[docs/guides/devcontainer|Devcontainer Guide]]
 - In-flight request counter on toggle button with amber pulse animation
 
 **Documentation:**
+
 - [[docs/features/dev-observability|Dev-Only Observability Feature]] — Architecture, design decisions, troubleshooting
 - [[docs/components/devtools|Devtools Components]] — Component API reference
 - [[docs/reference/code-patterns#devtools-integration-pattern|Code Patterns — Devtools Integration]]
@@ -262,6 +319,7 @@ See [[apps/frontend/src/lib/api/client.ts|API Client]], [[apps/frontend/src/App.
 **Comprehensive medium/low severity bug fixes (commit 8c651eb)** addressing correctness and UX across frontend, backend, and i18n:
 
 **Phase C (Medium Severity):**
+
 - **UpcomingPaymentsNotification** — Added `aria-label` attributes to dismiss and dismiss-all buttons for screen reader accessibility
 - **RecipientCombobox** — Added 300ms debounce on search input to prevent per-keystroke API fetches and excessive network traffic
 - **CategoriesPage** — Fixed plural key using `activeCount` (correct) instead of `items.length` for accurate active category display
@@ -272,6 +330,7 @@ See [[apps/frontend/src/lib/api/client.ts|API Client]], [[apps/frontend/src/App.
 - **api/helpers.ts** — Fixed `buildQuery` to filter `false` and empty-string values (previously only filtered `null`/`undefined`)
 
 **Phase D (Low Severity):**
+
 - **planned.js** — Added clarifying comment on ISO string lexicographic date comparison safety
 - **usePortfolio** — Introduced module-level `EMPTY_TRANSACTIONS` constant to prevent fresh array ref per render, improving memoization stability
 - **VirtualDataTable** — Wrapped `cancelEditing` in `useCallback` and added to useEffect dependencies for proper cleanup
@@ -285,12 +344,14 @@ See [[docs/reference/code-patterns#csv-record-splitter-phase-c-multi-line-field-
 ### 2026-05-05 Backend Unit Tests — Portfolio Math & Import Pipeline
 
 **New test suites:**
+
 - **Portfolio Math Tests** (`apps/node-backend/tests/portfolioMath.test.js`) — **21 tests** covering FIFO/LIFO cost basis calculation, accrued interest computation with fake timers, and snapshot spike sanitization (geometric mean) with UTC DST safety
 - **Import Pipeline Tests** (`apps/node-backend/tests/importPipeline.test.js`) — **11 tests** covering all four import orchestration phases: validateBatch, stageBatch, matchBatch, commitBatch with full error path coverage via mock database simulation
 
 **Impact:** Backend test count: 871 → **882** (+11 net; 21 portfolio math + 11 import = +32 but -21 legacy import tests removed per Phase C consolidation). Total test suite: 2109 → **2120** vitest tests.
 
 **Testing patterns established:**
+
 - Fake timers for time-sensitive calculations (`vi.useFakeTimers()` / `vi.useRealTimers()`)
 - Floating-point tolerance assertions for geometric means (`expect(...).toBeCloseTo()`)
 - Immutability assertions to verify pure functions don't mutate inputs
@@ -301,11 +362,13 @@ See [[docs/testing/test-inventory#backend-unit-tests--calculation--pipeline-2026
 ### 2026-05-03 Tailwind CSS v4 Migration & Dependency Upgrades
 
 **Major Dependency Updates:**
+
 - **Tailwind CSS**: 3.4.19 → **4.2.4** (unified PostCSS plugin architecture)
 - **Sonner (notifications)**: 1.7.4 → **2.0.7** (improved toast API, better a11y)
 - **Recharts (charts)**: 2.15.4 → **3.8.1** (retained for compatibility, inactive in new code per ADR-028)
 
 **Tailwind v4 Migration Details:**
+
 - **PostCSS config** (`apps/frontend/postcss.config.cjs`): Replaced v3's `tailwindcss: { config: ... }` plugin with unified `'@tailwindcss/postcss': {}`
 - **CSS entry point** (`apps/frontend/src/index.css`): Replaced `@tailwind base/components/utilities` with `@import "tailwindcss"; @config '../tailwind.config.ts';`
 - **@apply restrictions** (v4): Custom `.glass*` aliases now declare full CSS rules instead of using @apply (v4 restricts @apply to registered utilities only)
@@ -313,10 +376,12 @@ See [[docs/testing/test-inventory#backend-unit-tests--calculation--pipeline-2026
 - **No visual regressions**: All glass materials, surfaces, and motion utilities render identically; reduced-motion compliance maintained
 
 **ADR & Documentation:**
+
 - [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]] — Full migration details, rationale, and rollback plan
 - [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture section]] — Implementation details and references
 
 **Testing & Verification:**
+
 - `bun run build` succeeds
 - `bunx tsc --noEmit` clean (no type errors)
 - `bun run test` — all 1333+ tests pass
@@ -327,6 +392,7 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047]], [[docs/a
 ### 2026-04-28 Bank Adapter Expansion: ING Dutch-Language CSV Support
 
 **New Feature:**
+
 - **ING Bank Support**: Added Dutch-language ING bank CSV adapter for importing transaction statements
 - **Adapter Details**: Semicolon-delimited CSV with header row containing `Omzetnummer` + `Detail van de omzet` columns
 - **Supported Fields**: Account number, counterparty IBAN, transaction reference, booking date (DD/MM/YYYY), amount (EU decimal), currency, description, counterparty name, and free-text message
@@ -341,6 +407,7 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 ### 2026-04-28 Phase 13: Pivot Table Drillthrough with Multi-Category & Transaction-Type Filters
 
 **Feature Overview:**
+
 - **Pivot table drillthrough** — All non-zero cells in CategoryPivotTable now clickable; navigate to `/transactions` with pre-populated filters
 - **Category groups** — Group header cells drill through to all detail categories in that group via new `category_ids` (comma-separated) query param
 - **Single categories** — Detail row cells drill to individual category
@@ -349,12 +416,14 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 - **Zero-value cells** — Remain non-clickable (no drillthrough for empty cells)
 
 **Backend:**
+
 - New filters in `GET /api/transactions`: `category_ids` (comma-separated string, ignored if `category_id` set) and `transaction_type` (enum: 'income' | 'expense')
 - `[[apps/node-backend/src/lib/filterBuilder.js]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` forwards filter params
 - Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
 
 **Frontend:**
+
 - `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]` — Added `useNavigate` hook, `lastDayOfMonth()` helper, and `buildDrillUrl()` helper; all table cells with click handlers
 - `[[apps/frontend/src/lib/api/transactions.ts]]` — Extended `getTransactions()` params with `category_ids` and `transaction_type`
 - `[[apps/frontend/src/features/transactions/hooks/useTransactionListData.ts]]` — Extended options with `categoryIdsFilter`, `transactionTypeFilter`, passed through to API calls
@@ -363,6 +432,7 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 - Tests: 11 new tests in `[[apps/frontend/src/features/statistics/CategoryPivotTable.test.ts]]`
 
 **Documentation:**
+
 - [[docs/api/transactions#query-parameters|Transactions API]] — Documented `category_ids` and `transaction_type` params
 - [[docs/features/statistics#phase-13-additions-pivot-table-drillthrough|Statistics Feature]] — Phase 13 drillthrough details
 - [[docs/components/statistics#categorypivottable|Statistics Components]] — Updated CategoryPivotTable component docs with drillthrough behavior
@@ -372,18 +442,21 @@ See [[docs/api/transactions|Transactions API]], [[docs/features/statistics|Stati
 ### 2026-04-28 Bug-Hunt Sweep: Price Validation, Provider Health, i18n Fixes
 
 **Frontend Guard Rails:**
+
 - **WatchlistChartDialog**: Validates `target_price` and chart domain against NaN/zero; falls back to `[0, 1]` when no valid prices exist
 - **AddToWatchlistDialog**: Guards `quoteData.price` with `Number.isFinite() && > 0` before `.toFixed()` to prevent "undefined" interpolation and divide-by-zero in percentage calculations
 - **PortfolioOverviewPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce inside legend `.map()` for large portfolios
 - **PortfolioNewsFeed**: Replaced index-based React key with `article.link` (fallback `publishedAt+title`) to fix reconciliation on refetch reorder
 
 **Backend Price Provider Fixes:**
+
 - **Custom provider health**: Now records success/error metrics (was silently logging)
 - **Binance symbol coercion**: Fixed `symbol.replace(/EUR$/, 'USDT')` no-op on non-EUR symbols; now appends `USDT` only when symbol lacks known suffix
 - **Binance ticker validation**: Validates `Number.isFinite(p) && p > 0` before populating priceMap
 - **Price cache eviction**: Scheduled `sweepExpiredCacheEntries()` every 5 min (unref'd) prevents unbounded Map growth from lazy-delete only
 
 **i18n Dutch Fixes:**
+
 - Fixed corrupted `watchlist.empty`: contained ~80 escaped backslashes instead of `\n`
 - Added missing Dutch translations: `portfolio.refreshPricesFailedTitle` → "Bijwerken van koersen mislukt", `portfolio.recordTxnFailedTitle` → "Registreren van portfoliotransactie mislukt"
 - Flagged remaining untranslated `*FailedTitle` keys (categories/recipients/transactions/portfolio) as follow-up work — **resolved 2026-06-16**: all 18 `*FailedTitle` keys are now translated in `nl.json`
@@ -395,26 +468,31 @@ See [[docs/features/portfolio#price-guard-rails-2026-04-28-bug-fixes]], [[docs/f
 ### 2026-04-28 Offline Mode Resilience: Online Status Detection & Provider Timeout Safety
 
 **Frontend Online Status Detection:**
+
 - New hook `useOnlineStatus()` exposes browser `navigator.onLine` state with real-time `online`/`offline` event listeners
 - Portfolio components gate expensive queries and refetch intervals on connectivity: PortfolioNewsFeed, WatchlistPage, and dialog components all disable queries when offline
 - Dialogs use `retry: false` and `refetchOnWindowFocus: false` to prevent unhandled rejections and spinner storms during offline periods
 - Error messages check `navigator.onLine` and show user-friendly offline context instead of raw provider errors
 
 **Watchlist Graceful Degradation:**
+
 - Quotes query enabled only when online; target prices remain visible as fallback
 - Conditional refetch intervals and retry strategy based on connectivity
 - User-friendly banner showing `watchlist.quotesOffline` when quotes unavailable
 
 **Portfolio Pages Enhanced:**
+
 - `PortfolioOverviewPage.tsx` now renders `StalePricesBanner` alongside Stocks/Crypto/Metals pages (consistent stale-price UI across portfolio)
 - `PortfolioNewsFeed.tsx` shows `WifiOff` empty-state with i18n key `newsFeed.offline` when offline and no cached articles
 
 **Backend Provider Improvements:**
+
 - **Binance timeout safety**: Ticker fetch now uses `AbortSignal.timeout(8_000)` to prevent hung requests when provider unreachable
 - **Parallel provider execution**: Four provider buckets (Binance, Yahoo, Custom, Kinesis) in `fetchLivePricesDetailed()` now run in parallel via `Promise.allSettled()` instead of sequentially, reducing overall refresh latency (wall time = max instead of sum)
 - Failures in one provider no longer block others; fallback chain applied per-investment
 
 **i18n Keys (3 new):**
+
 - `newsFeed.offline` — News feed unavailable while offline
 - `watchlist.quotesOffline` — Live quotes unavailable. Showing target prices only.
 - `portfolio.refreshPricesOffline` — Offline context for refresh failure errors
@@ -424,6 +502,7 @@ See [[docs/features/portfolio#offline-resilience-stale-price-indicators--empty-s
 ### 2026-04-28 Security & Backup Hardening: v2 AEAD Encryption, Timing Attack Prevention, Install.sh Safety
 
 **Backup Format v2 Upgrade (ADR-040):**
+
 - **AES-256-GCM AEAD encryption** — Replaces v1's CBC-only confidentiality with authenticated encryption (tampering detected on decryption)
 - **Per-backup random salt** — 16 random bytes per backup (v1 used static salt); eliminates salt-reuse collisions
 - **Stronger KDF** — Scrypt N=2^15 (doubled from v1's N=2^14) for 2x brute-force resistance
@@ -431,22 +510,26 @@ See [[docs/features/portfolio#offline-resilience-stale-price-indicators--empty-s
 - **See:** [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
 
 **Admin Bearer Token Security (2026-04-28):**
+
 - **Timing-safe comparison** — Token validation now uses `crypto.timingSafeEqual()` instead of `!==` to prevent side-channel timing attacks
 - **See:** [[docs/security/data-protection|Data Protection]]
 
 **Install.sh Hardening (2026-04-28):**
+
 - **Safe defaults** — No longer pipes curl directly to bash (MITM risk)
 - **User-friendly flow** — Downloads to tempfile, prints SHA-256, prompts confirmation
 - **Opt-in legacy mode** — `VISION_ALLOW_BREW_PIPE=1` for CI/automation; optional checksum env var `VISION_BREW_INSTALL_SHA256`
 - **See:** [[docs/security/data-protection|Data Protection]]
 
 **Bank CSV Import Fixes (2026-04-28):**
+
 - **CRLF safety** — Cross-platform CSV parsing handles Windows line endings correctly
 - **EU decimal support** — `1.234,56` format now parsed correctly (was broken 1000x)
 - **Dedup memo inclusion** — Same-day same-amount same-recipient with different memos are no longer falsely deduped
 - **See:** [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|Bank Adapters]]
 
 **Pagination Bounds (2026-04-28):**
+
 - **Limit clamping** — Parsed limit values clamped to 1–max (prevents 0 or negative)
 - **Offset clamping** — Parsed offset values clamped to ≥0 (prevents negative offsets)
 - **See:** [[docs/api/transactions|Transactions API]], [[docs/api/categories|Categories API]], [[docs/api/recipients|Recipients API]]
@@ -454,6 +537,7 @@ See [[docs/features/portfolio#offline-resilience-stale-price-indicators--empty-s
 ### 2026-04-27 Encrypted Backup Restore with Passphrase Modal (Phase 2)
 
 **UX Enhancement:**
+
 - **Encrypted restore detection**: Backup restore now detects encryption via magic header without decryption
 - **Passphrase modal**: When user attempts to restore an encrypted `.visionbak.enc` file, a modal prompts for the backup passphrase before decryption
 - **Error recovery**: Wrong passphrase shows clear error message and allows retry (no silent failures)
@@ -467,15 +551,18 @@ See [[docs/features/backup-coverage-audit|Backup Coverage Audit]], [[docs/featur
 ### 2026-04-26 Minor Frontend Fixes & Bank Reconciliation Removal
 
 **Component Updates:**
+
 - **ExportDialog date picker** — Replaced native `<Input type="date">` with app's shared `<DatePicker>` component using `parseLocalDateFromYmd`/`toYmd` utilities for consistent date handling across report export dialogs.
 - **VirtualDataTable edit column width** — Action column now dynamically expands to 88px when editing (was fixed 40px), preventing button overlap during inline editing.
 - **EditInvestmentDialog TDZ fix** — Fixed temporal dead zone issue where `unitBased` was called as function instead of assigned from `isUnitBased(...)`.
 - **PerformancePage sparkline** — Sparkline "Last 30 days" now uses separate `useQuery` with fixed `period: "1m"` instead of deriving from period-specific downsampled snapshots.
 
 **CSV Import Accuracy:**
+
 - **CategoriesImportCard toast** — Fixed `total` param in import success toast to use `data.total_processed` instead of `data.imported` for correct count display.
 
 **Feature Removal (Complete):**
+
 - **Bank reconciliation feature removed** — Full stack removal including frontend page (`ReconciliationPage.tsx`), API client (`reconciliation.ts`), backend routes (`reconciliation.js`), repository (`reconciliationRepository.js`), all i18n keys, and Alembic migration `0014_drop_bank_reconciliation`. Feature docs (`docs/features/bank-reconciliation.md`, `docs/api/reconciliation.md`) already cleaned up.
 
 See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-components|Shared Components]], [[docs/features/index|Features Index]]
@@ -483,6 +570,7 @@ See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-com
 ### 2026-04-25 Docker Container Hardening
 
 **ADR-039 Acceptance:**
+
 - Non-root user (`USER bun`, UID 1000)
 - Dropped Linux capabilities (`cap_drop: [ALL]`)
 - No-new-privileges flag (`security_opt: [no-new-privileges:true]`)
@@ -498,6 +586,7 @@ See [[docs/adr/039-docker-container-hardening|ADR-039]], [[docs/security/contain
 ### 2026-04-24 Feature Flags Removed
 
 **ADR-035 Acceptance:**
+
 - Remove entire runtime-toggleable feature flag system (DB table, backend service/repo/routes, frontend page, i18n keys)
 - All features always enabled unconditionally
 - Alembic migration `0011_drop_feature_flags` drops the table while preserving history
@@ -508,6 +597,7 @@ See [[docs/adr/035-remove-feature-flags|ADR-035]]
 ### 2026-04-24 Admin Environment — Unified Observability Hub
 
 **ADR-034 Acceptance:**
+
 - **Settings Toggle**: `adminMode: boolean` in `AppSettings` Zustand store with toggle in Settings → App → Developer section
 - **Four Admin Pages**: Overview (`/admin`), Database Maintenance (`/admin/db`), Data Sources/Providers (`/admin/providers`), Endpoints Liveness (`/admin/endpoints`)
 - **Provider Health Tracking**: Passive success/error recording from 7 data sources (Binance, Yahoo, Kinesis, ECB, open.er-api, Statbel, Eurostat) + on-demand probe endpoints
@@ -522,12 +612,14 @@ See [[docs/adr/034-admin-environment|ADR-034]], [[docs/features/admin-observabil
 ### 2026-04-24 Phase 5 & 6 — PDF Polish & Localization Complete
 
 **PDF Report Export Phase 5 (Polish):**
+
 - **Paginated Footer**: Puppeteer footer template with "Vision | Confidential | page X / Y" on all content pages; theme colors interpolated as HSL literals
 - **Footer Space Management**: CSS variable `--footer-h: 28px` reserves footer area; cover page height adjusted to `calc(297mm - var(--footer-h))`
 - **Print Break Control**: `break-inside: avoid` on `.kpi-card`, `.account-card`, `.stat-row`, `.planned-day` prevents orphaning; `display: table-header-group` on `.data-table thead` repeats headers across pages
 - **Improved Layout**: Top border on `.page` (4px primary color), `break-after: avoid` on section titles/subtitles for visual separation
 
 **PDF Report Export Phase 6 (i18n) & Phase 8 (Portfolio & Tax Reports):**
+
 - **32 New Translation Keys** (Phase 6): Added `export.*` keys to `i18n/source/en.json` and `nl.ts` for dialog, period selection, section toggles, currency, and actions
 - **Full Localization**: Both English and Dutch translations for Report Type, Period (YTD/rolling/custom/year), Sections (7 financial + 6 portfolio + 7 tax), Currency, and Download actions
 - **Phase 8 Completion**: Portfolio and tax reports fully implemented with real data fetchers, SVG charts, and Belgian tax profile pass-through. All 20 export.section.* keys now mapped to complete sections (no placeholders)
@@ -544,12 +636,13 @@ See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 3-8), [[docs/a
 - **Cast Removal**: Eliminated `as any` casts in favor of type guards (AppearanceTab, GeneralTab translation keys; DashboardPage transaction types).
 - **Interface Cleanup**: Converted empty `interface X extends Y {}` to `type X = Y` (command.tsx, textarea.tsx) per `no-empty-object-type` rule.
 - **Error Context**: All re-thrown errors now use `{ cause: err }` to preserve error context in logs (ai.ts, client.ts, imports.ts).
-- **Type Specificity**: 
+- **Type Specificity**:
   - `any[]` → `Transaction[]` in DashboardPage
   - `useState<any[]>` → `useState<Recipient[]>` in RecipientsPage
   - `transactions: any[]` → `transactions: PortfolioTransaction[]` in types/portfolio.ts
 
 **Documentation Updates:**
+
 - [[docs/reference/code-patterns#typescript-type-annotation-best-practices-phase-5|TypeScript Type Annotation Best Practices]] — New section covering explicit annotations, type narrowing, and interface/type guidance.
 - [[docs/reference/code-patterns#frontend-error-handling-phase-5|Frontend Error Handling (Phase 5+)]] — Enhanced error handling section with type-safe catch patterns and error context preservation.
 - [[docs/guides/contributing#typescript-frontend|Contributing Guide TypeScript section]] — Added type-safety rules and examples.
@@ -748,11 +841,13 @@ Vision is a comprehensive **financial transaction management application** suppo
 ## Key Concepts
 
 > [!info] Transaction Amounts
+>
 > - **Negative amounts**: Expenses (money leaving your account)
 > - **Positive amounts**: Income (money entering your account)
 
 > [!info] Categories
 > Categories use `GENERAL:DETAIL` format:
+>
 > - `FOOD:GROCERIES`, `TRANSPORT:GAS`, `UTILITIES:ELECTRICITY`
 
 > [!info] Bank Adapters

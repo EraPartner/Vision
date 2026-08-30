@@ -7,6 +7,9 @@ const test = require("node:test");
 
 const main = fs.readFileSync(path.join(__dirname, "main.js"), "utf8");
 const preload = fs.readFileSync(path.join(__dirname, "preload.js"), "utf8");
+const rootPackage = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"),
+);
 
 test("native language bridge validates language and rebuilds menus", () => {
   assert.match(
@@ -58,4 +61,38 @@ test("About metadata and a non-macOS Help item are present", () => {
   );
   assert.match(main, /label: t\(["']menu.about["']/);
   assert.match(main, /click: \(\) => app\.showAboutPanel\(\)/);
+});
+
+test("native mode never starts a Docker writer from update or restore recovery", () => {
+  assert.match(
+    main,
+    /update:pull-image[\s\S]{0,500}runtimeMode === ["']native["'][\s\S]{0,300}Docker image updates are unavailable/,
+  );
+  assert.match(
+    main,
+    /activeRuntime\?\.mode !== ["']native["'][\s\S]{0,500}["']docker["'][\s\S]{0,200}["']start["']/,
+  );
+  assert.ok(
+    main.indexOf('if (runtimeMode === "native")') <
+      main.indexOf("Check Docker is installed and running"),
+    "native launch must return before the first Docker availability check",
+  );
+});
+
+test("Electron development cannot reuse packaged Vision data", () => {
+  assert.match(
+    rootPackage.scripts["electron:dev"],
+    /VISION_DEVELOPMENT_PROFILE=true/,
+  );
+  assert.match(main, /app\.setPath\(\s*["']userData["']/);
+  assert.match(main, /Vision Development/);
+  assert.match(
+    main,
+    /NATIVE_RUNTIME_ID = __IS_DEVELOPMENT_PROFILE \? ["']vision_dev["'] : ["']vision["']/,
+  );
+  assert.match(
+    main,
+    /readRuntimeSelectionState\(\s*app\.getPath\(["']userData["']\),\s*NATIVE_RUNTIME_ID/,
+  );
+  assert.match(main, /runtimeId: NATIVE_RUNTIME_ID/);
 });

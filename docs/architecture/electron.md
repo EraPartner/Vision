@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-04-27
-updated: 2026-08-27
+date: 2026-08-30
+updated: 2026-08-30
 tags:
   [
     architecture,
@@ -28,6 +28,8 @@ tags:
     encryption,
     schema-migration,
     bun,
+    native-runtime,
+    postgresql-18,
     docker-compose,
     pre-pull,
     startup,
@@ -67,8 +69,8 @@ tags:
   ]
 description: >-
   Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
-  Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application
-  update system with checksum verification (April 2026), Phase 7 backup/restore hardening with
+  native PostgreSQL 18 and Bun runtime provider, optional Docker Compose provider, backup/restore
+  bundle system (Phase 1+2), four-mode application update system with checksum verification, Phase 7 backup/restore hardening with
   concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS
   integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent
   overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot
@@ -101,8 +103,13 @@ related_code:
   [
     "packaging/electron/",
     "packaging/electron/backup/bundle.js",
+    "packaging/electron/backup/native-transport.js",
     "packaging/electron/main.js",
     "packaging/electron/preload.js",
+    "packaging/electron/runtime/index.js",
+    "packaging/electron/runtime/native.js",
+    "packaging/electron/runtime/docker.js",
+    "packaging/electron/runtime/importer.js",
     "apps/frontend/src/lib/api/electron.ts",
     "apps/frontend/src/components/layout/ElectronBridge.tsx",
     "apps/frontend/src/lib/importHandoff.ts",
@@ -120,7 +127,11 @@ related_code:
 
 ## Overview
 
-Vision runs as an Electron desktop application, bundling the React frontend and Node.js backend into a single distributable package.
+Vision runs as an Electron desktop application, bundling the React frontend, compiled Bun backend,
+PostgreSQL 18.6, migration executable, and Chrome Headless Shell into one distributable package.
+Electron manages a private PostgreSQL cluster in the durable Vision application-data directory.
+Docker Compose remains an explicit runtime provider and is not required for normal development or
+the packaged app.
 
 ---
 
@@ -173,6 +184,22 @@ This design choice means:
 - The backend is a standard Express app (testable independently)
 - The frontend is a standard React app (deployable to web)
 - Electron is just the packaging layer
+
+### Runtime Providers (ADR-113)
+
+Electron resolves one provider before it performs lifecycle or backup actions:
+
+| Provider | Backend             | PostgreSQL                                | Use                                        |
+| -------- | ------------------- | ----------------------------------------- | ------------------------------------------ |
+| `native` | Bun child process   | Bundled 18.6 server, private data cluster | Default macOS development and packaged app |
+| `docker` | Compose app service | Compose PostgreSQL 18 service             | Explicit container deployment and Demo     |
+
+The provider owns start, stop, restart, health, readiness, logs, database dump/restore, and
+attachment paths. Backup bundle and application business logic remain shared. A durable marker at
+`native/vision/runtime-state.json` prevents alternating writers. Existing Docker-era installs fail
+closed until the opt-in importer validates database counts, schema, and attachment hashes and
+activates the native marker. See [[docs/adr/113-native-macos-runtime|ADR-113]] and
+[[docs/guides/native-macos-runtime|Native macOS Runtime Guide]].
 
 ---
 
@@ -230,22 +257,53 @@ Migration is non-fatal; any error is logged and app continues.
    - `loadI18nAsync()` reads locale from `app.getLocale()`, tries resource path then fallback dir
    - Deferred from module-load init to support async `fs.promises` in preload/runtime (Phase 0)
 
-4. **Parallel Initialization** — All of the following run concurrently via `Promise.all()`:
-   - **Docker status check** — `check_docker()` pings Docker Unix socket `/_ping` (~30ms on macOS)
-   - **Port discovery** — Find open port for backend (default 3002)
-   - **Environment initialization** — Resolve workspace paths, detect dev mode
-   - **Docker image pre-pull** (packaged mode only, 2026-04-27) — Pull `ghcr.io/erapartner/vision:<tag>` if image missing locally; non-fatal, falls back to inline pull during `compose up`
-   - **Build decision** — Skip-build cache: compare Docker image ID + git working-tree state against `.vision-cache/docker-build.json`; skip `--build` if unchanged
+4. **Runtime selection** — Validate the explicit environment override, saved setting, and durable
+   runtime marker. When a marker exists it is authoritative, so an old setting or environment
+   variable cannot alternate databases after cutover. Without a marker, the explicit environment
+   or saved setting applies. Normal Vision defaults to `native`; the seeded Demo defaults to
+   `docker`.
 
-5. **Backend server** spawned as child process via `docker-compose up`
-   - If image was pulled in step 4, skip `--build` flag
-   - Emit boot mark: `pre_pull_image` (packaged mode)
+5. **Native initialization** — Before any Docker code is loaded:
+   - choose and persist an available loopback backend port;
+   - verify the packaged PostgreSQL 18.6, compiled backend, migration executable, Chrome Headless
+     Shell, and full checksum manifest;
+   - create restricted runtime directories and initialize or reuse the private PostgreSQL cluster;
+   - require PostgreSQL `listen_addresses` to be loopback-only, disable Unix sockets, and verify its
+     exact data directory;
+   - create separate cluster-administrator, owner/migration, and application roles. The owner role
+     owns schema tables and performs migrations and database-wide maintenance; the application role
+     owns only the runtime-managed materialized views in addition to its data privileges. The
+     privileged bootstrap reapplies current table and view grants relation by relation, skipping
+     those application-owned views so their ownership cannot invalidate the ordinary-table grant
+     set;
+   - create the database from `template0`, enable required extensions, and run the repository
+     migration path (`db-migrate.js` in a source checkout; its underlying `runMigrations()`
+     preflight from the packaged backend); and
+   - spawn the backend with an allowlisted child environment and argument arrays.
+
+   A missing, wrong-version, wrong-architecture, or corrupt packaged component is a hard native
+   preflight failure. A PostgreSQL port collision also fails closed rather than selecting the
+   unknown listener.
+   Existing Docker imports preserve only supported research provider keys and
+   `ADMIN_AUTH_TOKEN`; database credentials and unrelated host secrets are never copied.
+
+   Native migration children set `VISION_SKIP_CONFIG_ENV_LOCAL=true`, so a source checkout's
+   Docker-oriented `config/.env.local` cannot override the generated native database URLs.
+
+   An existing Docker-era environment without a completed native marker raises
+   `NATIVE_CUTOVER_REQUIRED`; Electron exits without creating or selecting an empty native database.
+
+   The explicit Docker provider retains its parallel Docker health, port, image, and build checks
+   before Compose starts the application service.
 
 ### Backend Startup
 
-6. **Backend startup** (inside container via `docker-entrypoint.sh` + `apps/node-backend/src/main.js`):
+6. **Backend startup** (`apps/node-backend/src/main.js`, either native Bun or the optional
+   `docker-entrypoint.sh` provider):
    - **Database connection** — `checkConnection()` polls with exponential backoff (40 attempts, 50ms→1s)
-   - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at head
+   - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at
+     head. The version-table preflight uses the owner connection in split-role mode, while the
+     application pool remains least-privilege.
    - **FX cache warmup** — Exchange rate and portfolio historical rate refresh (parallel promises)
    - **Snapshot computation** — Portfolio snapshots computed after FX data is available
    - **Info caches** — Net-worth and portfolio-performance caches warmed
@@ -310,6 +368,7 @@ Electron-builder configuration in `packaging/electron/package.json`:
       "main.js",
       "badge-image.js",
       "compose.js",
+      "runtime/**/*",
       "updater.js",
       "preload.js",
       "backup/**/*",
@@ -317,7 +376,8 @@ Electron-builder configuration in `packaging/electron/package.json`:
     ],
     "extraResources": [
       { "from": "i18n", "to": "i18n" },
-      { "from": "resources", "to": "resources" }
+      { "from": "resources", "to": "resources" },
+      { "from": "native-runtime", "to": "native-runtime" }
     ],
     "mac": {
       "target": ["dmg", "zip"],
@@ -330,9 +390,15 @@ Electron-builder configuration in `packaging/electron/package.json`:
 
 **Key Configuration Details:**
 
-- **`files`** — Packed inside `app.asar`. Must include `backup/**/*` (backup/restore bundle) and `assets/**/*` (frontend dist). If missing, runtime raises `Cannot find module './backup/bundle'`.
+- **`files`** — Packed inside `app.asar`. Must include `runtime/**/*`, `backup/**/*`, and
+  `assets/**/*`. Missing runtime or backup modules makes startup fail before data access.
 
-- **`extraResources`** — Kept outside asar at `Contents/Resources/`. Must include `i18n/` and `resources/` because `main.js` references them via `process.resourcesPath` (lines 22, 204, 234). Packing them in asar breaks runtime path resolution.
+- **`extraResources`** — Kept outside asar at `Contents/Resources/`. They include `i18n/`, optional
+  Docker `resources/`, and the executable `native-runtime/` payload.
+
+- **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend,
+  production frontend, migrations, migration runner, configuration, and checksum manifest used by
+  the default native provider.
 
 - **`pull_policy: missing`** in embedded `resources/docker-compose.yml` — Uses local Docker image if available; avoids GHCR registry auth failures on first launch.
 
@@ -373,8 +439,13 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 ### Bundled Components
 
 - React frontend (built with Vite)
-- Node.js backend (spawned as child process, not bundled)
-- PostgreSQL (external — not bundled, requires Docker Desktop)
+- Compiled Bun backend, spawned as a verified child process
+- PostgreSQL 18.6 server and version-matched client tools
+- Alembic migrations, migration configuration, guarded JS migration runner, and standalone
+  migration executable
+- Chrome Headless Shell pinned to the Electron workspace's Puppeteer version
+- Native runtime provider and checksum manifest
+- Optional Docker provider and Compose resources for explicit container deployments
 
 ---
 
@@ -537,16 +608,16 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 
 **IPC Handlers** for bundle-based backup/restore:
 
-| Handler                        | Signature                                 | Purpose                                                                                                                                                                | Status       |
-| ------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `backup:run`                   | `(destDir, frontendStateJson?)` → Promise | Create and optionally encrypt `.visionbak` bundle; returns `{ success, file, encrypted?, cleanupRemoved?, warning?, error? }`                                          | ✅ Phase 1+2 |
-| `backup:restore`               | `(bundlePath)` → Promise                  | Restore from `.visionbak` bundle; schema-checks, drops DB, loads SQL, swaps attachments, restores frontend state; returns `{ success, file?, frontendState?, error? }` | ✅ Phase 1+2 |
-| `backup:select-file`           | `()` → Promise<string>                    | Show file picker for `.visionbak` or `.visionbak.enc` selection                                                                                                        | ✅ Phase 1+2 |
-| `backup:select-dir`            | `()` → Promise<string>                    | Show folder picker for backup directory                                                                                                                                | ✅ Phase 1+2 |
-| `backup:save-settings`         | `({ backupDir, backupOnQuit })` → Promise | Persist backup settings to `settings.json`                                                                                                                             | ✅ Phase 1+2 |
-| `backup:load-settings`         | `()` → Promise                            | Load backup settings (directory, onQuit flag, encryption status)                                                                                                       | ✅ Phase 1+2 |
-| `backup:get-encryption-status` | `()` → Promise                            | Return `{ hasStoredPassphrase }`                                                                                                                                       | ✅ Phase 1+2 |
-| `backup:set-passphrase`        | `(passphrase)` → Promise                  | Set or update backup encryption passphrase (stored encrypted in `settings.json`)                                                                                       | ✅ Phase 1+2 |
+| Handler                        | Signature                                 | Purpose                                                                                                                                                         | Status                |
+| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `backup:run`                   | `(destDir, frontendStateJson?)` → Promise | Create and optionally encrypt `.visionbak` bundle; returns `{ success, file, encrypted?, cleanupRemoved?, warning?, error? }`                                   | ✅ Phase 1+2          |
+| `backup:restore`               | `(bundlePath)` → Promise                  | Restore from `.visionbak`; stage and validate a provider database and attachments, activate atomically, wait for detailed readiness, and restore frontend state | ✅ Phase 1+2 + native |
+| `backup:select-file`           | `()` → Promise<string>                    | Show file picker for `.visionbak` or `.visionbak.enc` selection                                                                                                 | ✅ Phase 1+2          |
+| `backup:select-dir`            | `()` → Promise<string>                    | Show folder picker for backup directory                                                                                                                         | ✅ Phase 1+2          |
+| `backup:save-settings`         | `({ backupDir, backupOnQuit })` → Promise | Persist backup settings to `settings.json`                                                                                                                      | ✅ Phase 1+2          |
+| `backup:load-settings`         | `()` → Promise                            | Load backup settings (directory, onQuit flag, encryption status)                                                                                                | ✅ Phase 1+2          |
+| `backup:get-encryption-status` | `()` → Promise                            | Return `{ hasStoredPassphrase }`                                                                                                                                | ✅ Phase 1+2          |
+| `backup:set-passphrase`        | `(passphrase)` → Promise                  | Set or update backup encryption passphrase (stored encrypted in `settings.json`)                                                                                | ✅ Phase 1+2          |
 
 **Frontend Integration:**
 
@@ -614,34 +685,46 @@ Three critical issues discovered during bug hunt phase were hardened:
 
 See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for detailed rationale, consequences, and testing guidance.
 
-### Application Updates (April 2026)
+### Application Updates (April–August 2026)
 
-Vision supports **three deployment modes**, each with a distinct update path. See [[docs/features/application-updates|Application Updates Feature]] for full architecture, IPC handlers, and frontend UI.
+Vision supports **four update modes**, including a Docker-independent packaged native path. See [[docs/features/application-updates|Application Updates Feature]] for full architecture, IPC handlers, and frontend UI.
 
 #### Deployment Modes
 
-| Mode       | Condition                                           | Update Method                      | Artifacts                                            |
-| ---------- | --------------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
-| **dev**    | `app.isPackaged === false && !useRepoMode`          | File watcher → Docker rebuild      | (automatic via file system)                          |
-| **source** | `app.isPackaged === true && useRepoMode === 'true'` | Shell script installer from GitHub | `vision-source-launcher-x.y.z-arm64.zip` + `.sha256` |
-| **docker** | `app.isPackaged === true` (default)                 | `docker-compose pull` → restart    | Docker image at `ghcr.io/erapartner/vision:<tag>`    |
+| Mode       | Condition                         | Update Method                          | Artifacts                                            |
+| ---------- | --------------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| **native** | Packaged app with native provider | Verified app replacement with rollback | `Vision-x.y.z-arm64-mac.zip` + `.sha256`             |
+| **dev**    | `app.isPackaged === false`        | Source restart/relaunch                | Checkout files                                       |
+| **source** | Packaged app in repository mode   | Shell script installer from GitHub     | `vision-source-launcher-x.y.z-arm64.zip` + `.sha256` |
+| **docker** | Explicit Docker provider          | Compose pull and restart               | Image at `ghcr.io/erapartner/vision:<tag>`           |
 
 #### IPC Handlers
 
-| Handler                    | Purpose                                                                    | Modes          |
-| -------------------------- | -------------------------------------------------------------------------- | -------------- |
-| `update:get-mode`          | Return deployment mode (`'dev'` \| `'source'` \| `'docker'`)               | All            |
-| `update:pre-update-backup` | Create timestamped snapshot in `userData/pre-update-backups/`              | source, docker |
-| `update:install-shell`     | Download, verify SHA256, extract, install shell update                     | source only    |
-| `update:check-release`     | Check GitHub for new release; return `{ available, version, update_mode }` | source, docker |
+| Handler                    | Purpose                                                       | Modes                  |
+| -------------------------- | ------------------------------------------------------------- | ---------------------- |
+| `update:get-mode`          | Return `native`, `dev`, `source`, or `docker`                 | All                    |
+| `update:pre-update-backup` | Create a `.visionbak` through the active runtime transport    | native, source, docker |
+| `update:install-shell`     | Download, verify, and install the native app or source update | native, source         |
+| `update:check-github`      | Check GitHub and return the current update mode               | All                    |
 
-#### Shell Installer (Source Mode)
+#### Native Installer
 
-The shell installer script (`install.sh`) included in release ZIPs:
+Native mode requires a sibling checksum, rejects path traversal, accepts only a `Vision.app`
+payload, and stops the native backend before launching the fixed installer helper. Helper-launch
+failure restarts the old backend. The helper snapshots the installed application before
+replacement; copy or relaunch failure restores the previous application. PostgreSQL and
+attachments remain in application data and are not replaced by the application archive.
+
+#### Generated Installer (Source Mode)
+
+The updater generates a fixed shell helper after it has downloaded and verified
+the source-launcher ZIP:
 
 - **Rollback strategy:** BAK_DIR snapshot created before rsync, restored on failure
+- **Native payload preservation:** the generated PostgreSQL, Alembic, and Chromium
+  payload is excluded from source-tree replacement
 - **Quarantine removal:** `xattr -rd com.apple.quarantine` applied to entire DEST_ROOT and launcher scripts
-- **Usage:** `./install.sh --dest-root /path/to/app --backup-dir /tmp/backup`
+- **Separation:** this helper is not the repository's `install.sh` source-build command
 
 #### Checksum Verification (ADR-023)
 
@@ -668,18 +751,18 @@ This reduces first-boot latency in packaged Docker mode.
 
 #### Backup-Before-Update Pattern
 
-All updates (source and docker modes) follow this sequence:
+All installable updates (native, source, and Docker modes) follow this sequence:
 
 ```
 1. User clicks "Update & Restart"
    ↓
 2. Backup phase: IPC call preUpdateBackup()
-   → Snapshot userData/ to userData/pre-update-backups/backup-{ISO8601}/
-   → Encrypt snapshot (AEAD, Phase 1+2)
+   → Create .visionbak through the active database/attachment transport
+   → Encrypt bundle when configured (AEAD, Phase 1+2)
    ↓
 3. Download phase: Fetch installer or pull image
    ↓
-4. Verify phase (source only): Check SHA256
+4. Verify phase (native and source): Check SHA256
    ↓
 5. Install phase: Extract/deploy to install directory or restart container
    ↓
@@ -803,11 +886,14 @@ The backend sets Content-Security-Policy headers appropriate for Electron:
 The root `bun install` prepares the separate Electron package outside CI. If its local binary is missing, repair it explicitly with `bun run install:electron` before launching a wrapper.
 
 ```bash
-# Development mode
+# Native development mode
 bun run electron:dev
 
 # Production mode
 bun run electron:prod
+
+# Explicit optional Docker provider
+bun run electron:docker
 ```
 
 ### Debugging
@@ -816,9 +902,11 @@ bun run electron:prod
 - **Renderer process:** Chrome DevTools (Cmd+Option+I)
 - **Backend process:** Standard Node.js debugging
 
-### Dev Rebuild File Watcher
+### Optional Docker Dev Rebuild File Watcher
 
-In dev mode, a file watcher monitors source files and triggers automatic Docker rebuild+restart on code changes:
+When the explicit Docker provider is used in development, a file watcher monitors source files and
+triggers an automatic Docker rebuild and restart. Native development restarts the Bun backend from
+the checkout and does not build a Docker image.
 
 ```javascript
 // Watches frontend, backend, packages/, i18n/source and bun lockfiles
@@ -852,9 +940,26 @@ Previously only the two `apps/` directories were watched, so edits to `packages/
 
 **Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.js` between runs — the second build should show `CACHED` on the install layer.
 
-### Quit and Container Lifecycle (June 2026)
+### Dockerfile Bun Install Retries (August 2026)
 
-The `will-quit` handler runs `docker compose stop` (not `down`) to stop containers on quit.
+Both Dockerfile dependency stages run `scripts/bun-install-with-retry.sh`. The wrapper retries a
+failed frozen install up to three times with a two-second delay. This covers transient registry or
+Bun download failures, including a tarball integrity failure caused by an incomplete download.
+
+Every attempt keeps `--frozen-lockfile` and Bun's integrity verification enabled. The wrapper does
+not rewrite the lockfile, clear the cache, or bypass a mismatch; a persistent failure still stops
+the image build after the third attempt.
+
+### Quit and Runtime Lifecycle (June–August 2026)
+
+The `will-quit` handler delegates shutdown to the selected runtime provider. Native mode sends a
+clean termination signal to the verified backend and Vision-managed PostgreSQL children, waits for
+shutdown, and uses a bounded force fallback. An explicitly configured external PostgreSQL service
+is never stopped. Docker mode runs `docker compose stop` (not `down`) to stop containers on quit.
+
+When the user enables `keepServicesOnQuit`, the shutdown call is skipped for either provider. In
+native mode this keeps both the verified Bun backend and Vision-managed PostgreSQL child alive for
+the next launch.
 
 **Why this matters:** `compose down` removes containers and the Docker network on every quit. The launcher's warm-boot fast path (`compose start`) requires containers to exist in a stopped state — if they were removed, every boot pays full container/network recreation. With `compose stop`, containers survive in the `exited` state and the next launch completes the `compose start` sub-second path rather than a full `compose up`.
 
@@ -886,9 +991,9 @@ The boot splash (`setSplashStatus()`) is now:
 - **Theme-aware** — derives the near-black base, glow, and foreground from the persisted primary palette. First launch uses the canonical emerald primary instead of the previous generic slate fallback.
 - **Branded** — the Vision mark appears above the spinner. The backend recovery page uses the same validated palette variables plus the champagne accent, so startup and failure states share one identity without weakening the error page Content Security Policy.
 - **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
-  - `splash.checkingDocker` — Docker socket probe
-  - `splash.downloading` — image pre-pull / build phase
-  - `splash.startingServices` — `compose start`/`up` in progress
+  - `splash.checkingDocker` — explicit Docker provider socket probe
+  - `splash.downloading` — Docker image pre-pull/build or packaged update phase
+  - `splash.startingServices` — native PostgreSQL/backend or Compose startup
   - `splash.waitingApp` — backend health-poll underway
 
 **i18n keys (en/nl):** `splash.checkingDocker`, `splash.downloading`, `splash.starting`, `splash.startingServices`, `splash.waitingApp`. Keys flow through `i18n/source/*.json` → `apps/frontend/src/locales/*.ts` → `packaging/electron/i18n/*.json` via `generate-locales`.
@@ -897,7 +1002,9 @@ The boot splash (`setSplashStatus()`) is now:
 
 The backend shutdown path (`httpServer.close()`) now immediately follows with `httpServer.closeIdleConnections?.()`. The Electron health watchdog uses a `keepAlive: true` agent, so an idle keep-alive socket from the shell to the backend is the norm. Without `closeIdleConnections`, `server.close()` could hang for up to the 10-second force-exit backstop waiting for the socket to time out.
 
-Additionally, the shell destroys its health-poll `keepAlive` agent on quit before sending `SIGTERM` to the containers, so the agent socket is already gone by the time the backend initiates shutdown.
+Additionally, the shell destroys its health-poll `keepAlive` agent on quit before sending the
+provider stop signal, so the agent socket is already gone by the time the backend initiates
+shutdown.
 
 ---
 
@@ -950,10 +1057,10 @@ After startup succeeds, a watchdog monitors backend health:
 The watchdog is observational. It does not restart a container whose process is still alive but
 whose Docker health status is `unhealthy`; plain Docker also does not restart on health status
 alone. Its loss/restoration IPC callbacks are exposed by preload but currently have no React
-subscriber. On initial readiness timeout, the shell starts capturing `docker compose ps --all` and
-the last 200 app/database log lines asynchronously while loading the Retry/Open Logs error page.
-This makes a repeated Alembic crash loop diagnosable without turning the shell into an automatic
-database-recovery controller.
+subscriber. On initial readiness timeout, native mode captures a redacted tail of
+`native/vision/logs/backend.log`; Docker mode captures `docker compose ps --all` and recent
+app/database logs. This makes a repeated migration or startup failure diagnosable without turning
+the shell into an automatic database-recovery controller.
 
 ### Corrupt Settings Recovery
 
@@ -1002,7 +1109,8 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 
 ### Fresh Database Installation Fails on Migration 0003
 
-**Symptom:** Packaged app boots, launches Docker container, but migration fails with FK constraint violation or string truncation error on revision `0003_import_batch_id_on_transactions`.
+**Symptom:** A fresh database fails migration with an FK constraint violation or string truncation
+error on revision `0003_import_batch_id_on_transactions`.
 
 **Root cause:** Two pre-ADR-027 squash oversights:
 
@@ -1016,13 +1124,16 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 
 See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-bugs-fixed-2026-04-27|ADR-027 follow-up: Migration Ordering Bugs Fixed]].
 
-**Verification:** Fresh packaged app with clean Docker volume should boot to head at migration `0015_recipient_match_patterns` with no FK or truncation errors.
+**Verification:** The current migration runner preflights `alembic_version VARCHAR(64)` in both
+runtime providers. A fresh synthetic native database and the optional clean Docker database should
+both migrate to the current head.
 
 ### Cannot find module './backup/bundle'
 
-**Cause:** `backup/` directory not in electron-builder `files` array.
+**Cause:** `backup/` directory is absent from the electron-builder base `files` array.
 
-**Fix:** Ensure `packaging/electron/package.json` build config includes:
+**Fix:** Ensure `packaging/electron/electron-builder-base.json` includes `backup/**/*` and
+`runtime/**/*`.
 
 ```json
 {
@@ -1073,13 +1184,14 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 }
 ```
 
-**Verification:** After build, check asar not corrupted:
+**Verification:** After build, verify `app.asar` and the external native payload manifest. The
+payload must contain the compiled backend, frontend, migrations, and migration runner.
 
 ```bash
-ls -la dist/mac-arm64/Vision.app/Contents/Resources/resources/docker-compose.yml
+node packaging/electron/scripts/prepare-native-runtime.js
 ```
 
-### registry unauthorized on first launch
+### Docker provider: registry unauthorized on first launch
 
 **Cause:** Packaged app attempted to pull Docker image from private GHCR registry without credentials.
 
@@ -1112,6 +1224,8 @@ With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the local
 ## Related
 
 - [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — hiddenInset chrome, native menu/dock, CSV handoff, system accent, vibrancy (June 2026)
+- [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS Runtime]] — PostgreSQL 18, runtime providers, cutover, and rollback
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] — operation and migration procedure
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — `enhancedEffects` toggle that gates vibrancy
 - [[docs/adr/045-electron-app-name-userData-migration|ADR-045: App Name & userData Migration]] — macOS TCC prompt fix + legacy dir migration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security + recovery design

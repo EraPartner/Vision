@@ -1,7 +1,7 @@
-import { apiRequest } from '@/lib/api/client';
-import { saveSetting, getSetting } from '@/lib/api/settings';
+import { apiRequest } from "@/lib/api/client";
+import { saveSetting, getSetting } from "@/lib/api/settings";
 
-type UpdateMode = 'source' | 'docker' | 'dev';
+type UpdateMode = "source" | "docker" | "native" | "dev";
 
 type ElectronUpdater = {
     checkRelease?: () => Promise<{
@@ -14,27 +14,71 @@ type ElectronUpdater = {
         update_mode?: UpdateMode;
         error?: string;
     }>;
-    pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }>;
-    installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
-    getMode?: () => Promise<{ mode: UpdateMode; is_packaged: boolean; use_repo_mode: boolean }>;
-    preUpdateBackup?: () => Promise<{ success: boolean; file?: string; error?: string }>;
+    pullImage: () => Promise<{
+        success: boolean;
+        wasNew: boolean;
+        error?: string;
+    }>;
+    installShellUpdate?: () => Promise<{
+        success: boolean;
+        version?: string;
+        error?: string;
+    }>;
+    getMode?: () => Promise<{
+        mode: UpdateMode;
+        is_packaged: boolean;
+        use_repo_mode: boolean;
+    }>;
+    preUpdateBackup?: () => Promise<{
+        success: boolean;
+        file?: string;
+        error?: string;
+    }>;
 };
 
 /** Snapshot of frontend localStorage keys collected before a backup. */
 type FrontendStateSnapshot = { keys: Record<string, string> };
 
 type ElectronBackup = {
-    runBackup: (destDir: string, frontendStateJson?: string | null) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
+    runBackup: (
+        destDir: string,
+        frontendStateJson?: string | null,
+    ) => Promise<{
+        success: boolean;
+        file?: string;
+        encrypted?: boolean;
+        warning?: string;
+        cleanupRemoved?: number;
+        error?: string;
+    }>;
     selectFile: () => Promise<string | null>;
     /** Accepts .visionbak, .visionbak.enc, or legacy .sql / .enc files. */
-    restoreBackup: (filePath: string, opts?: { passphrase?: string }) => Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string }>;
+    restoreBackup: (
+        filePath: string,
+        opts?: { passphrase?: string },
+    ) => Promise<{
+        success: boolean;
+        file?: string;
+        frontendState?: FrontendStateSnapshot | null;
+        error?: string;
+    }>;
     /** Detect whether a backup file is encrypted (bundle or legacy). */
     isEncrypted?: (filePath: string) => Promise<boolean>;
     selectDir: () => Promise<string | null>;
-    saveSettings: (settings: { backupDir: string; backupOnQuit: boolean }) => Promise<void>;
+    saveSettings: (settings: {
+        backupDir: string;
+        backupOnQuit: boolean;
+    }) => Promise<void>;
     loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
-    getEncryptionStatus?: () => Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>;
-    setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
+    getEncryptionStatus?: () => Promise<{
+        success: boolean;
+        secureStorageAvailable: boolean;
+        hasStoredPassphrase: boolean;
+        hasEnvPassphrase: boolean;
+    }>;
+    setPassphrase?: (
+        passphrase: string,
+    ) => Promise<{ success: boolean; available: boolean; error?: string }>;
 };
 
 type ElectronServices = {
@@ -44,7 +88,12 @@ type ElectronServices = {
 
 /** Native menu / dock menu message — see packaging/electron/main.js menuAction(). */
 export interface ElectronMenuAction {
-    action: 'navigate' | 'open-settings' | 'open-shortcuts' | 'new-transaction' | 'toggle-sidebar';
+    action:
+        | "navigate"
+        | "open-settings"
+        | "open-shortcuts"
+        | "new-transaction"
+        | "toggle-sidebar";
     payload?: unknown;
 }
 
@@ -58,14 +107,16 @@ type ElectronAPI = {
     platform: string;
     ready: () => Promise<{ success: boolean }>;
     setDockBadge: (count: number) => Promise<{ success: boolean }>;
-    setLanguage?: (language: 'en' | 'nl') => Promise<{ success: boolean }>;
+    setLanguage?: (language: "en" | "nl") => Promise<{ success: boolean }>;
     getAccentColor: () => Promise<string | null>;
     onAccentColorChanged: (cb: (color: string | null) => void) => () => void;
     onMenuAction: (cb: (message: ElectronMenuAction) => void) => () => void;
     onCsvOpen: (cb: (file: ElectronCsvFile) => void) => () => void;
     onFullScreenChange: (cb: (isFullScreen: boolean) => void) => () => void;
     /** Persist the active theme's primary colors so the next boot splash matches. */
-    persistSplashTheme?: (colors: SplashThemeColors) => Promise<{ success: boolean }>;
+    persistSplashTheme?: (
+        colors: SplashThemeColors,
+    ) => Promise<{ success: boolean }>;
 };
 
 /** HSL component strings (e.g. "158 64% 52%") for the boot-splash background/text. */
@@ -75,15 +126,18 @@ export interface SplashThemeColors {
 }
 
 function getElectronUpdater(): ElectronUpdater | undefined {
-    return (window as Window & { electronUpdater?: ElectronUpdater }).electronUpdater;
+    return (window as Window & { electronUpdater?: ElectronUpdater })
+        .electronUpdater;
 }
 
 function getElectronBackup(): ElectronBackup | undefined {
-    return (window as Window & { electronBackup?: ElectronBackup }).electronBackup;
+    return (window as Window & { electronBackup?: ElectronBackup })
+        .electronBackup;
 }
 
 function getElectronServices(): ElectronServices | undefined {
-    return (window as Window & { electronServices?: ElectronServices }).electronServices;
+    return (window as Window & { electronServices?: ElectronServices })
+        .electronServices;
 }
 
 export function getElectronAPI(): ElectronAPI | undefined {
@@ -96,17 +150,25 @@ export function isElectron(): boolean {
 
 /** True inside the Electron shell on macOS — gates traffic-light inset, dock features, accent. */
 export function isElectronMac(): boolean {
-    return getElectronAPI()?.platform === 'darwin';
+    return getElectronAPI()?.platform === "darwin";
 }
 
 /** Set the native taskbar/dock badge (0 clears). No-op outside Electron. */
 export function setDockBadge(count: number): void {
-    getElectronAPI()?.setDockBadge(count).catch(() => { /* badge is best-effort */ });
+    getElectronAPI()
+        ?.setDockBadge(count)
+        .catch(() => {
+            /* badge is best-effort */
+        });
 }
 
 /** Keep Electron-native menus and dialogs aligned with the in-app language. */
-export function setNativeLanguage(language: 'en' | 'nl'): void {
-    getElectronAPI()?.setLanguage?.(language).catch(() => { /* best-effort */ });
+export function setNativeLanguage(language: "en" | "nl"): void {
+    getElectronAPI()
+        ?.setLanguage?.(language)
+        .catch(() => {
+            /* best-effort */
+        });
 }
 
 /**
@@ -116,7 +178,11 @@ export function setNativeLanguage(language: 'en' | 'nl'): void {
  * neutral slate when nothing is persisted.
  */
 export function persistSplashTheme(colors: SplashThemeColors): void {
-    getElectronAPI()?.persistSplashTheme?.(colors).catch(() => { /* best-effort */ });
+    getElectronAPI()
+        ?.persistSplashTheme?.(colors)
+        .catch(() => {
+            /* best-effort */
+        });
 }
 
 /** macOS system accent color as RRGGBBAA hex, or null outside Electron/macOS. */
@@ -144,16 +210,20 @@ export async function checkForUpdates(): Promise<{
      * 'docker-compose', which has no in-app installer — the user runs
      * `docker compose pull` themselves.
      */
-    update_mode?: 'source' | 'docker' | 'dev' | 'docker-compose';
+    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
 }> {
     const updater = getElectronUpdater();
     if (updater?.checkRelease) {
         return updater.checkRelease();
     }
-    return apiRequest('/api/admin/update/check');
+    return apiRequest("/api/admin/update/check");
 }
 
-export async function triggerDockerUpdate(): Promise<{ success: boolean; wasNew: boolean; error?: string } | null> {
+export async function triggerDockerUpdate(): Promise<{
+    success: boolean;
+    wasNew: boolean;
+    error?: string;
+} | null> {
     const updater = getElectronUpdater();
     if (!updater) return null;
     return updater.pullImage();
@@ -177,7 +247,11 @@ export async function installShellUpdate(): Promise<{
     return updater.installShellUpdate();
 }
 
-export async function preUpdateBackup(): Promise<{ success: boolean; file?: string; error?: string } | null> {
+export async function preUpdateBackup(): Promise<{
+    success: boolean;
+    file?: string;
+    error?: string;
+} | null> {
     const updater = getElectronUpdater();
     if (!updater?.preUpdateBackup) return null;
     return updater.preUpdateBackup();
@@ -186,7 +260,14 @@ export async function preUpdateBackup(): Promise<{ success: boolean; file?: stri
 export async function runBackup(
     destDir: string,
     frontendStateJson: string | null = null,
-): Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string } | null> {
+): Promise<{
+    success: boolean;
+    file?: string;
+    encrypted?: boolean;
+    warning?: string;
+    cleanupRemoved?: number;
+    error?: string;
+} | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
     return backup.runBackup(destDir, frontendStateJson);
@@ -201,7 +282,12 @@ export async function selectBackupFile(): Promise<string | null> {
 export async function restoreBackup(
     filePath: string,
     opts?: { passphrase?: string },
-): Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string } | null> {
+): Promise<{
+    success: boolean;
+    file?: string;
+    frontendState?: FrontendStateSnapshot | null;
+    error?: string;
+} | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
     return backup.restoreBackup(filePath, opts);
@@ -227,12 +313,15 @@ export async function saveBackupSettings(settings: {
     backupDir: string;
     backupOnQuit: boolean;
 }): Promise<void> {
-    await saveSetting('backup_settings', settings);
+    await saveSetting("backup_settings", settings);
     const backup = getElectronBackup();
     if (backup) backup.saveSettings(settings).catch(() => {});
 }
 
-export async function loadBackupSettings(): Promise<{ backupDir: string; backupOnQuit: boolean } | null> {
+export async function loadBackupSettings(): Promise<{
+    backupDir: string;
+    backupOnQuit: boolean;
+} | null> {
     const backup = getElectronBackup();
     if (backup) {
         try {
@@ -242,10 +331,16 @@ export async function loadBackupSettings(): Promise<{ backupDir: string; backupO
         }
     }
     try {
-        const result = await getSetting('backup_settings');
+        const result = await getSetting("backup_settings");
         if (result?.value) {
-            const v = result.value as { backupDir?: string; backupOnQuit?: boolean };
-            return { backupDir: v.backupDir ?? '', backupOnQuit: v.backupOnQuit ?? false };
+            const v = result.value as {
+                backupDir?: string;
+                backupOnQuit?: boolean;
+            };
+            return {
+                backupDir: v.backupDir ?? "",
+                backupOnQuit: v.backupOnQuit ?? false,
+            };
         }
     } catch {
         // fall through
@@ -263,12 +358,14 @@ export async function loadBackupSettings(): Promise<{ backupDir: string; backupO
 export async function saveServicesSettings(settings: {
     keepServicesOnQuit: boolean;
 }): Promise<void> {
-    await saveSetting('services_settings', settings);
+    await saveSetting("services_settings", settings);
     const services = getElectronServices();
     if (services) services.saveSettings(settings).catch(() => {});
 }
 
-export async function loadServicesSettings(): Promise<{ keepServicesOnQuit: boolean } | null> {
+export async function loadServicesSettings(): Promise<{
+    keepServicesOnQuit: boolean;
+} | null> {
     const services = getElectronServices();
     if (services) {
         try {
@@ -278,7 +375,7 @@ export async function loadServicesSettings(): Promise<{ keepServicesOnQuit: bool
         }
     }
     try {
-        const result = await getSetting('services_settings');
+        const result = await getSetting("services_settings");
         if (result?.value) {
             const v = result.value as { keepServicesOnQuit?: boolean };
             return { keepServicesOnQuit: v.keepServicesOnQuit ?? false };

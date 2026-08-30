@@ -223,7 +223,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Audit Python dependencies
         run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt
@@ -466,7 +466,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install Alembic toolchain
         run: pip install -r config/requirements.txt
@@ -614,11 +614,11 @@ jobs:
         run: node scripts/check-compose-sync.js
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Destructive migrations — `docker-entrypoint.sh` runs `alembic upgrade head`
-  # unconditionally on every boot, so a DROP in alembic/versions/ reaches every
-  # self-hosted database on the next container start, with or without the code
-  # that depends on it. That is exactly how 0055 dropped bank_account ahead of
-  # its coupled code and crashed startup (ADR-088; 0055 neutered, 0056 recovery).
+  # Destructive migrations — native and Docker startup use the guarded migration
+  # runner before accepting requests, so a DROP in alembic/versions/ reaches every
+  # installation on its next start. That is exactly how 0055 dropped bank_account
+  # ahead of its coupled code and crashed startup (ADR-088; 0055 neutered, 0056
+  # recovery).
   # This gate makes destructive DDL state its case instead of relying on someone
   # remembering that incident.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -763,7 +763,7 @@ jobs:
     needs: [build-image]
     permissions:
       contents: read
-      security-events: write  # required to upload SARIF to GitHub Security
+      security-events: write # required to upload SARIF to GitHub Security
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
@@ -781,7 +781,7 @@ jobs:
           image-ref: vision:ci
           format: table
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: "1"
           trivyignores: .trivyignore
 
       - name: Run Trivy vulnerability scan (SARIF — upload to GitHub Security)
@@ -792,7 +792,7 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
-          exit-code: '0'
+          exit-code: "0"
           trivyignores: .trivyignore
 
       - name: Upload Trivy SARIF to GitHub Security
@@ -849,9 +849,9 @@ jobs:
           echo "Current revision before round-trip:"
           "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
           echo "Downgrading one revision..."
-          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
+          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js downgrade -1
           echo "Re-upgrading to head..."
-          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
+          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js upgrade head
           echo "Round-trip OK."
 
       - name: Tear down
@@ -916,7 +916,15 @@ jobs:
     name: CI Complete
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [changes, secrets-scan, quality-gate, trivy-scan, docker-verify, test-live-api-contracts]
+    needs:
+      [
+        changes,
+        secrets-scan,
+        quality-gate,
+        trivy-scan,
+        docker-verify,
+        test-live-api-contracts,
+      ]
     if: always()
     steps:
       - name: Check Docker-tier stages passed

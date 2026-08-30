@@ -2,7 +2,8 @@
 # Build & install "Vision Demo.app" — a full Electron build of Vision running on
 # synthetic data only, fully isolated from your real Vision.app (separate userData,
 # separate Docker project `visiondemoapp`, separate volumes, local images only).
-# Mirrors ./install.sh. Does NOT set repoPath, so the demo runs in embedded mode.
+# This is intentionally separate from native ./install.sh. It keeps the existing
+# synthetic Docker Demo provider and never selects the real Vision runtime.
 set -euo pipefail
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
@@ -43,8 +44,7 @@ docker build -t vision-demo-db:latest "$ELECTRON_DIR/demo-db"
 
 # ── 2) App image — ALWAYS rebuild from current source ─────────────────────────
 # The demo compose uses pull_policy: never, so it serves this locally-built image.
-# Rebuilding every run is what makes a re-run actually pick up your code changes
-# (mirrors how the real install.sh app rebuilds from source on each launch).
+# Rebuilding every run is what makes a re-run actually pick up code changes.
 echo "==> Building vision-app:latest from current source..."
 docker compose -f "$REPO_PATH/docker-compose.yml" build app
 docker image inspect vision-app:latest >/dev/null 2>&1 || { echo "ERROR: failed to produce vision-app:latest"; exit 1; }
@@ -52,7 +52,7 @@ docker image inspect vision-app:latest >/dev/null 2>&1 || { echo "ERROR: failed 
 # ── 3) Build Vision Demo.app ─────────────────────────────────────────────────
 echo "==> Installing Electron deps..."
 cd "$ELECTRON_DIR"
-# --frozen-lockfile: see install.sh — build from the committed bun.lock.
+# Build from the committed Electron bun.lock.
 bun install --frozen-lockfile
 echo "==> Generating locales..."
 node ../../scripts/generate-locales.js

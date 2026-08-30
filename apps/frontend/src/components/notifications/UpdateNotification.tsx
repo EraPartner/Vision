@@ -15,7 +15,7 @@ import { ArrowUpCircle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
-import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
+import { electronErrorToMessage } from "@/lib/api/electronErrorMessage";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -27,14 +27,15 @@ interface UpdateStatus {
     release_notes?: string;
     html_url?: string;
     /**
-     * 'source' | 'docker' | 'dev' come from the Electron IPC updater. The HTTP
+     * 'source' | 'docker' | 'native' | 'dev' come from the Electron IPC updater. The HTTP
      * route — the only source outside Electron — reports 'docker-compose',
      * which has no in-app installer: the operator runs `docker compose pull`.
      */
-    update_mode?: 'source' | 'docker' | 'dev' | 'docker-compose';
+    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
 }
 
-type ApplyPhase = "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
+type ApplyPhase =
+    "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
 
 export function UpdateNotification() {
     const { t } = useLanguage();
@@ -67,7 +68,7 @@ export function UpdateNotification() {
     }, [check]);
 
     const handleInstall = async () => {
-        const mode = status?.update_mode ?? 'source';
+        const mode = status?.update_mode ?? "source";
 
         // Step 1: pre-update backup (Electron only)
         if (apiClient.isElectron()) {
@@ -75,38 +76,47 @@ export function UpdateNotification() {
             try {
                 const backupResult = await apiClient.preUpdateBackup();
                 if (backupResult && !backupResult.success) {
-                    toast.error(t('update.backupFailed'), { description: electronErrorToMessage(backupResult.error, t) });
+                    toast.error(t("update.backupFailed"), {
+                        description: electronErrorToMessage(
+                            backupResult.error,
+                            t,
+                        ),
+                    });
                     setPhase("idle");
                     return;
                 }
             } catch (err) {
                 const msg = electronErrorToMessage(err, t);
-                toast.error(t('update.backupFailed'), { description: msg });
+                toast.error(t("update.backupFailed"), { description: msg });
                 setPhase("idle");
                 return;
             }
         }
 
         // Step 2: apply update based on mode
-        if (mode === 'docker') {
+        if (mode === "docker") {
             setPhase("pulling");
             try {
                 const result = await apiClient.triggerDockerUpdate();
                 if (!result?.success) {
-                    toast.error(t('update.failed'), { description: electronErrorToMessage(result?.error, t) });
+                    toast.error(t("update.failed"), {
+                        description: electronErrorToMessage(result?.error, t),
+                    });
                     setPhase("idle");
                     return;
                 }
                 setPhase("restarting");
                 setDialogOpen(false);
-                toast.success(t('update.complete'), {
-                    description: t('update.nowRunning', { version: status?.latest_version ?? '' }),
+                toast.success(t("update.complete"), {
+                    description: t("update.nowRunning", {
+                        version: status?.latest_version ?? "",
+                    }),
                     duration: 6000,
                 });
                 setPhase("done");
             } catch (err) {
                 const msg = electronErrorToMessage(err, t);
-                toast.error(t('update.failed'), { description: msg });
+                toast.error(t("update.failed"), { description: msg });
                 setPhase("idle");
             }
             return;
@@ -118,7 +128,7 @@ export function UpdateNotification() {
             const result = await apiClient.installShellUpdate();
 
             if (result === null) {
-                toast.info(t('update.reloadHint'));
+                toast.info(t("update.reloadHint"));
                 setPhase("idle");
                 setDialogOpen(false);
                 return;
@@ -128,27 +138,31 @@ export function UpdateNotification() {
             // process opened the release page instead. That is a redirect, not
             // a failure, so don't shout at the user with an error toast.
             if (result.manual_download) {
-                toast.info(t('update.manualDownload'));
+                toast.info(t("update.manualDownload"));
                 setPhase("idle");
                 setDialogOpen(false);
                 return;
             }
 
             if (!result.success) {
-                toast.error(t('update.failed'), { description: electronErrorToMessage(result.error, t) });
+                toast.error(t("update.failed"), {
+                    description: electronErrorToMessage(result.error, t),
+                });
                 setPhase("idle");
                 return;
             }
 
             setPhase("restarting");
             setDialogOpen(false);
-            toast.success(t('update.complete'), {
-                description: t('update.nowRunning', { version: result.version ?? (status?.latest_version ?? '') }),
+            toast.success(t("update.complete"), {
+                description: t("update.nowRunning", {
+                    version: result.version ?? status?.latest_version ?? "",
+                }),
                 duration: 6000,
             });
         } catch (err) {
             const msg = electronErrorToMessage(err, t);
-            toast.error(t('update.failed'), { description: msg });
+            toast.error(t("update.failed"), { description: msg });
             setPhase("idle");
         }
     };
@@ -166,11 +180,16 @@ export function UpdateNotification() {
 
     const phaseLabel = () => {
         switch (phase) {
-            case "backing-up": return t('update.backingUp');
-            case "downloading": return t('update.downloading');
-            case "pulling": return t('update.pulling');
-            case "restarting": return t('update.restarting');
-            default: return '';
+            case "backing-up":
+                return t("update.backingUp");
+            case "downloading":
+                return t("update.downloading");
+            case "pulling":
+                return t("update.pulling");
+            case "restarting":
+                return t("update.restarting");
+            default:
+                return "";
         }
     };
 
@@ -180,37 +199,57 @@ export function UpdateNotification() {
             <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setPhase("idle"); setDialogOpen(true); }}
+                onClick={() => {
+                    setPhase("idle");
+                    setDialogOpen(true);
+                }}
                 className="gap-1.5 text-warning hover:text-warning hover:bg-warning/10 font-medium text-xs h-8 px-2.5"
-                title={t('update.versionAvailable', { version: status.latest_version ?? '' })}
+                title={t("update.versionAvailable", {
+                    version: status.latest_version ?? "",
+                })}
             >
                 <ArrowUpCircle className="h-4 w-4" />
-                <span className="hidden sm:inline">{t('update.badge')}</span>
+                <span className="hidden sm:inline">{t("update.badge")}</span>
             </Button>
 
             {/* Update dialog */}
-            <Dialog open={dialogOpen} onOpenChange={(open) => { if (!isApplying) setDialogOpen(open); }}>
+            <Dialog
+                open={dialogOpen}
+                onOpenChange={(open) => {
+                    if (!isApplying) setDialogOpen(open);
+                }}
+            >
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ArrowUpCircle className="h-5 w-5 text-warning" />
-                            {t('update.title')}
+                            {t("update.title")}
                         </DialogTitle>
                         <DialogDescription>
-                            {t('update.versionAvailable', { version: status.latest_version ?? '' })}
-                            {status.current_version ? ` ${t('update.current', { version: status.current_version })}` : ""}
+                            {t("update.versionAvailable", {
+                                version: status.latest_version ?? "",
+                            })}
+                            {status.current_version
+                                ? ` ${t("update.current", { version: status.current_version })}`
+                                : ""}
                         </DialogDescription>
                     </DialogHeader>
 
                     {status.published_at && (
                         <p className="text-xs text-muted-foreground -mt-2">
-                            {t('update.released')} {formatDateStringWithAppSettings(status.published_at, appSettings.dateFormat)}
+                            {t("update.released")}{" "}
+                            {formatDateStringWithAppSettings(
+                                status.published_at,
+                                appSettings.dateFormat,
+                            )}
                         </p>
                     )}
 
                     {status.release_notes && (
                         <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-                            <p className="text-xs text-muted-foreground mb-1">{t('update.whatsNew')}</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                                {t("update.whatsNew")}
+                            </p>
                             <p className="text-foreground whitespace-pre-line line-clamp-6">
                                 {status.release_notes}
                             </p>
@@ -220,9 +259,12 @@ export function UpdateNotification() {
                     {/* Non-Electron deployments update from the command line */}
                     {!canInstallInApp && (
                         <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-                            <p className="text-muted-foreground">{t('update.dockerComposeHint')}</p>
+                            <p className="text-muted-foreground">
+                                {t("update.dockerComposeHint")}
+                            </p>
                             <code className="mt-1.5 block break-all font-mono text-xs text-foreground">
-                                docker compose pull &amp;&amp; docker compose up -d
+                                docker compose pull &amp;&amp; docker compose up
+                                -d
                             </code>
                         </div>
                     )}
@@ -245,9 +287,13 @@ export function UpdateNotification() {
                                 asChild
                                 className="mr-auto"
                             >
-                                <a href={safeHref(status.html_url)} target="_blank" rel="noopener noreferrer">
+                                <a
+                                    href={safeHref(status.html_url)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
                                     <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                                    {t('update.releaseNotes')}
+                                    {t("update.releaseNotes")}
                                 </a>
                             </Button>
                         )}
@@ -256,14 +302,24 @@ export function UpdateNotification() {
                             onClick={() => setDialogOpen(false)}
                             disabled={isApplying}
                         >
-                            {t('update.later')}
+                            {t("update.later")}
                         </Button>
                         {canInstallInApp && (
-                            <Button onClick={handleInstall} disabled={isApplying} className="gap-2">
+                            <Button
+                                onClick={handleInstall}
+                                disabled={isApplying}
+                                className="gap-2"
+                            >
                                 {isApplying ? (
-                                    <><Loader2 className="h-4 w-4 animate-spin" /> {phaseLabel()}</>
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />{" "}
+                                        {phaseLabel()}
+                                    </>
                                 ) : (
-                                    <><Download className="h-4 w-4" /> {t('update.install')}</>
+                                    <>
+                                        <Download className="h-4 w-4" />{" "}
+                                        {t("update.install")}
+                                    </>
                                 )}
                             </Button>
                         )}

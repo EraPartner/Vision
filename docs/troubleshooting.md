@@ -2,9 +2,35 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-04-21
-updated: 2026-08-19
-tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase, compose-project-name, data-loss, down-v, volume-isolation, backup-restore, docker, architecture, migrations, adr-109, adr-111, migration-0088, adr-112]
+date: 2026-08-30
+updated: 2026-08-30
+tags:
+  [
+    troubleshooting,
+    faq,
+    reference,
+    debugging,
+    phase-1,
+    electron,
+    app-naming,
+    password-mismatch,
+    keychain,
+    safe-storage,
+    macOS,
+    backup-passphrase,
+    compose-project-name,
+    data-loss,
+    down-v,
+    volume-isolation,
+    backup-restore,
+    docker,
+    architecture,
+    migrations,
+    adr-109,
+    adr-111,
+    migration-0088,
+    adr-112,
+  ]
 description: Common Vision errors and recovery steps, including database migration failures, Electron authentication failures, macOS Keychain prompts, and Docker volume safety.
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
@@ -18,13 +44,31 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 
 ### PostgreSQL won't start
 
-**Symptom:** `bun run docker:dev` fails because the database service does not become healthy.
+**Native symptom:** Vision reports a missing/corrupt runtime, a PostgreSQL port collision, or a
+private database that did not become ready.
 
-**Solutions:**
-1. Check db container logs: `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs db`
-2. Verify container status: `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps`
-3. If state is corrupted, reset dev volumes: `bun run docker:clean:reset`
-4. Ensure Docker Desktop is running and has enough disk space
+**Native actions:**
+
+1. Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.
+2. Check whether another process owns loopback port `54329`; Vision will not connect to it.
+3. Reinstall the same Vision release when payload verification fails. The durable native database
+   and attachments are outside `Vision.app` and must not be deleted.
+4. From a prepared source checkout, run the synthetic native smoke commands in
+   [[docs/guides/native-macos-runtime#lifecycle-and-diagnostics|Native macOS Runtime Guide]].
+
+Do not reset the native database or switch to Docker to bypass a failed verification.
+
+**Docker symptom:** `bun run docker:dev` fails because the database service does not become
+healthy.
+
+**Docker actions:**
+
+1. Check db container logs: `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs db`.
+2. Verify container status: `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps`.
+3. Ensure Docker Desktop is running and has enough disk space.
+
+Do not remove or reset volumes from an existing installation. A disposable clean-development
+database may be recreated only when its exact synthetic data boundary is known.
 
 ### Containers fail with entrypoint or architecture errors
 
@@ -35,13 +79,13 @@ The current official `postgres:18-alpine` ARM64 image can contain empty entrypoi
 producing the database error; see
 [docker-library/postgres#1378](https://github.com/docker-library/postgres/issues/1378).
 
-Vision.app and the command-line development stack temporarily run only PostgreSQL as
-`linux/amd64` under Docker Desktop emulation; the app image remains native. Before starting the
-real stack, Vision.app pulls and smoke-tests that exact platform in a disposable container, then
-uses `docker compose up` to recreate a database container that failed the check. The named database
-volume is preserved. If the replacement also fails, startup stops with the Docker error instead of
-waiting on the "Almost ready..." page. The app also writes a redacted `docker compose ps` and
-bounded `app`/`db` log snapshot to its main log when readiness still times out.
+This issue applies only to the explicitly selected Docker provider and the Docker command-line
+stack. Native Vision.app does not pull or start a PostgreSQL container. In Docker mode, Vision
+runs PostgreSQL as `linux/amd64` under Docker Desktop emulation while the app image remains native.
+It pulls and smoke-tests that exact database platform in a disposable container before recreating
+a database container that failed the check. The named database volume is preserved. If the
+replacement also fails, startup stops with the Docker error. Docker mode also writes a redacted
+`docker compose ps` and bounded `app`/`db` log snapshot when readiness times out.
 
 For the command-line development stack, run `bun run docker:dev:rebuild`.
 
@@ -59,19 +103,29 @@ Do not delete or reset a data volume for either error; neither error indicates d
 **Symptom:** `DATABASE_URL` connection fails.
 
 **Solutions:**
-1. Verify PostgreSQL container is running: `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db`
-2. Check `DATABASE_URL` in `.env.local` matches the actual connection string
-3. Default local backend URL: `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions`
+
+1. Native mode: inspect the recovery screen and `native/vision/logs/postgres.log`. Do not copy or
+   print `native/vision/runtime.env`.
+2. Native source development: stop the launcher cleanly, confirm port `54329` is free, then rerun
+   `bun run dev`.
+3. Docker mode: verify the optional service with
+   `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db`.
+4. A backend-only source run must receive an explicit connection through the documented
+   environment layering. Do not guess a URL or password.
 
 ### Migration fails
 
 **Symptom:** `bun run db:upgrade` throws an error.
 
 **Solutions:**
-1. Check current version: `alembic current`
-2. View pending migrations: `alembic history --verbose`
+
+1. Check current version: `bun run db:current`
+2. View pending migrations: `bun run db:history`
 3. If stuck mid-migration, Alembic auto-rolls back (PostgreSQL transactional DDL)
-4. For manual recovery: `alembic downgrade -1` then retry
+4. Preserve a logical backup and run pending writes through `bun run db:upgrade` only.
+
+Do not use a bare Alembic write, downgrade, stamp, reset, or manual version-table change to bypass
+the failure. Vision's migration runner performs a required `VARCHAR(64)` version-table preflight.
 
 ### ADR-109 conversion reports transactions for missing investments
 
@@ -126,12 +180,14 @@ four-decimal validation in `splitRepository.addPayment`; see
 
 ### Port already in use
 
-**Symptom:** `EADDRINUSE` on port 3002 (backend) or 5173 (frontend).
+**Symptom:** `EADDRINUSE` on port 3002 (backend), 54329 (native PostgreSQL), or 8080 (frontend).
 
 **Solutions:**
-1. Find the process: `lsof -i :3002` or `lsof -i :5173`
-2. Kill it: `kill <PID>`
-3. Or change the port in `.env.local`
+
+1. Find the process: `lsof -i :3002`, `lsof -i :54329`, or `lsof -i :8080`.
+2. Stop the owning application cleanly. Use `kill <PID>` only for a known development process.
+3. Or use the documented development-only port override. Packaged Vision fails closed instead of
+   connecting to an unknown listener.
 
 ## Database
 
@@ -140,15 +196,18 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** App errors about missing columns or tables.
 
 **Solutions:**
-1. Run `alembic upgrade head` to apply all pending migrations
-2. Check `alembic_version` table for current schema version
-3. Alembic is the authoritative source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — `schemaInit.js` was deleted in Phase 1
+
+1. Create or verify a logical backup before recovery.
+2. Run `bun run db:upgrade` so the guarded migration preflight is applied.
+3. Check `alembic_version` read-only for the current schema revision.
+4. Alembic is the authoritative source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — `schemaInit.js` was deleted in Phase 1.
 
 ### Sequence drift on portfolio transactions
 
 **Symptom:** Duplicate key error on `portfolio_transactions_base_id_seq`.
 
 **Solutions:**
+
 1. The repository auto-heals this by resyncing the sequence
 2. If it persists: `SELECT setval('portfolio_transactions_base_id_seq', (SELECT MAX(id) FROM portfolio_transactions_base) + 1);`
 
@@ -159,6 +218,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** Dashboard or portfolio charts show empty.
 
 **Solutions:**
+
 1. Check browser console for errors
 2. Verify API is running and returning data
 3. Check widget visibility settings (user may have hidden the widget)
@@ -169,6 +229,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** Added/deleted transaction doesn't appear in table.
 
 **Solutions:**
+
 1. Ensure React Query invalidation includes the correct query key:
    - `transactions` for standard table
    - `transactions-virtual` for virtual table
@@ -179,6 +240,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** Typing in search box doesn't filter results.
 
 **Solutions:**
+
 1. Check if `onSearchChange` callback is properly wired
 2. Verify search query is being sent to the API
 3. Check for 300ms debounce delay (`SEARCH_DEBOUNCE_MS` from `@/hooks/useDebounce`) — search is not instant
@@ -190,6 +252,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** `429 Too Many Requests` responses.
 
 **Solutions:**
+
 1. Standard limit: 100 req/min, export/patch: 30 req/min
 2. Check `X-RateLimit-*` headers for current usage
 3. Increase limits in middleware config if needed (development only)
@@ -199,6 +262,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** CSV import times out or fails for large files.
 
 **Solutions:**
+
 1. Use the streaming import endpoint: `POST /api/import/csv/stream`
 2. Streaming import processes in batches of 20 rows
 3. Check server memory limits for very large files (>100K rows)
@@ -208,6 +272,7 @@ four-decimal validation in `splitRepository.addPayment`; see
 **Symptom:** Investment prices not updating.
 
 **Solutions:**
+
 1. Price cache TTL: 5 minutes for live prices
 2. Force refresh: call `POST /api/admin/investments/update-prices`
 3. Check provider configuration in `priceProviderService.js`
@@ -223,23 +288,12 @@ four-decimal validation in `splitRepository.addPayment`; see
 
 **Solution:** This is **fixed in version 2026-05-02+**. The app now calls `app.setName('Vision')` at startup and automatically migrates legacy userData. See [[docs/adr/045-electron-app-name-userData-migration|ADR-045]] for details.
 
-**Recovery for already-broken installs:**
-
-If you're seeing this error and cannot wait for an app update:
-
-1. **Delete the corrupted docker volume:**
-   ```bash
-   docker volume rm embedded_compose_db_data   # or vision_postgres_data if in repo mode
-   ```
-
-2. **Restore from your most recent backup** (if available):
-   - Open Settings → Backup
-   - Select a recent backup file and click "Restore"
-   - Follow the passphrase prompt if the backup is encrypted
-
-3. **Relaunch Vision.app**
-   - The app will recreate the docker volume with fresh credentials
-   - Backend authentication should now succeed
+**Recovery for already-broken Docker installs:** stop the application writer but leave PostgreSQL
+available. Create a final custom-format logical dump and attachment export before changing any
+configuration. Repair the credential mismatch against the preserved database or restore a verified
+`.visionbak` into a separate database. Do not remove the Docker volume: it is the rollback source.
+Native Vision uses a different private cluster and the explicit cutover importer described in
+[[docs/guides/native-macos-runtime|Native macOS Runtime Guide]].
 
 **Prevention:** Ensure you update to version 2026-05-02 or later. The migration helper automatically detects and renames legacy userData directories on first launch.
 
@@ -254,10 +308,12 @@ If you're seeing this error and cannot wait for an app update:
 1. **Always Allow** — In the Keychain dialog, click **Always Allow** instead of Allow. This creates a permanent Keychain access exception for Vision Safe Storage and suppresses future prompts.
 
 2. **Use the `VISION_BACKUP_PASSPHRASE` environment variable** — Set the passphrase as an env var instead of storing it in the Keychain. Vision reads this variable first and skips `safeStorage` entirely:
+
    ```bash
    # In a launcher script or launchd plist:
    export VISION_BACKUP_PASSPHRASE="your-passphrase-here"
    ```
+
    This is especially useful for automation or when the unsigned-app prompt is unacceptable.
 
 3. **Remove the stored passphrase** — Open Settings → Backup, clear the encryption passphrase. Vision's lazy safeStorage access means it will not touch the Keychain at all when no passphrase is stored.
@@ -274,6 +330,7 @@ If you're seeing this error and cannot wait for an app update:
 **Symptom:** `docker compose up` fails.
 
 **Solutions:**
+
 1. Check logs: `docker compose logs app`
 2. Verify `.env` file exists with required variables
 3. Check container state and restarts: `docker compose ps`
@@ -284,7 +341,9 @@ If you're seeing this error and cannot wait for an app update:
 **Symptom:** App starts but tables are missing.
 
 **Solutions:**
-1. The `docker-entrypoint.sh` runs `alembic upgrade head` on startup (both fresh DB and migration cases)
+
+1. `docker-entrypoint.sh` starts the Bun backend, whose guarded migration runner upgrades the schema
+   on startup (both fresh DB and migration cases).
 2. Check entrypoint logs for migration errors
 3. On a fresh DB, the baseline migration `0001_initial_database_schema.py` creates all 27 tables, enums, indexes, and triggers ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]])
 
@@ -292,26 +351,33 @@ If you're seeing this error and cannot wait for an app update:
 
 **Symptom:** The app starts cleanly but every page is empty — 0 transactions/accounts. `docker volume inspect vision_postgres_data --format '{{.CreatedAt}}'` shows a recent timestamp, and all three `vision_*` named volumes share that exact create time.
 
-**Cause:** `docker-compose.yml` sets no `name:`, so the compose project defaults to this directory's basename → **`vision`**, whose `postgres_data` volume holds the **real** database — and it's shared by the packaged Vision.app, the dev stack, *and* anyone running the CI/e2e compose commands from the repo. A `docker compose down -v` (or `docker volume rm vision_postgres_data`, or a mis-scoped `bun run docker:clean:reset`) run from this directory destroys it; the next `up` recreates it empty. This wiped real data on 2026-07-06.
+**Cause:** In the legacy Docker-backed desktop design, `docker-compose.yml` defaulted the Compose
+project to this directory's basename, **`vision`**. Its `postgres_data` volume could therefore be
+shared by the old packaged Docker provider, the Docker dev stack, and a mis-scoped local Compose
+command. Removing those volumes recreated an empty database. This wiped real data on 2026-07-06.
+Native Vision now uses a separate private PostgreSQL cluster and never mounts this volume, but the
+preserved Docker volume remains irreplaceable rollback data during migration.
 
 **Recovery:**
+
 1. Restore the latest real-data `.visionbak` bundle (Settings → Backup → Restore). Real-data bundles are ~1 MB+; an empty-DB backup is ~28 KB, so pick by size/date. Requires `backupOnQuit`/periodic backups to have been enabled.
 2. No migration is needed if the bundle's `schemaHead` (in `metadata.json`) equals the current alembic head.
 
 **Prevention:**
+
 1. Never run `down -v` / `volume rm` against project `vision` from the repo dir.
 2. For e2e/CI/clean-slate stacks use an isolated project so their volumes are separate: `COMPOSE_PROJECT_NAME=vision_e2e docker compose … up -d` (baked into `.github/workflows/{ci,e2e}.yml`), or `docker-compose.clean.yml` (separate `vision_postgres_data_clean` volume).
 3. Keep `backupOnQuit` on and back up off-machine (the iCloud copy is what enabled recovery).
 
 ## Common Error Messages
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `VALIDATION_ERROR` | Request body failed validation | Check required fields and types in API docs |
-| `DUPLICATE_ENTRY` | Trying to create a duplicate record | Check deduplication logic or use update instead |
-| `NOT_FOUND` | Resource doesn't exist | Verify ID and check if soft-deleted |
-| `RATE_LIMITED` | Too many requests | Wait and retry, check rate limits |
-| `INTERNAL_ERROR` | Server-side bug | Check server logs, report with reproduction steps |
+| Error              | Cause                               | Solution                                          |
+| ------------------ | ----------------------------------- | ------------------------------------------------- |
+| `VALIDATION_ERROR` | Request body failed validation      | Check required fields and types in API docs       |
+| `DUPLICATE_ENTRY`  | Trying to create a duplicate record | Check deduplication logic or use update instead   |
+| `NOT_FOUND`        | Resource doesn't exist              | Verify ID and check if soft-deleted               |
+| `RATE_LIMITED`     | Too many requests                   | Wait and retry, check rate limits                 |
+| `INTERNAL_ERROR`   | Server-side bug                     | Check server logs, report with reproduction steps |
 
 ## Related
 

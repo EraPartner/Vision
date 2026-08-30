@@ -1,159 +1,141 @@
-# Vision __VERSION__ — macOS
+# Vision **VERSION** — macOS
 
-Vision is a self-hosted financial transaction manager. Everything runs on
-your machine — your data never leaves your computer.
-
-The `Vision.app` is an Electron shell that starts and supervises a small
-Docker container stack (Postgres + the Vision backend). You run one app,
-not three.
+Vision is a self-hosted financial transaction manager. The native macOS application keeps its
+database and attachments on your Mac. Normal installation and daily use do not require Docker,
+Homebrew, Postgres.app, Python, or a separately installed Chrome.
 
 ## What's in this release
 
-| File | Purpose |
-|---|---|
-| `Vision-__VERSION__-arm64.dmg` | The application installer (Apple Silicon) |
-| `Vision-__VERSION__-arm64-mac.zip` | Same app as a zip; alternative to the DMG |
-| `vision-setup.command` | One-time dependency installer (run before first launch) |
-| `README.md` | This file |
-| `*.sha256` | Checksums for each artifact above |
+| File                               | Purpose                                           |
+| ---------------------------------- | ------------------------------------------------- |
+| `Vision-__VERSION__-arm64.dmg`     | Application installer for Apple Silicon           |
+| `Vision-__VERSION__-arm64-mac.zip` | Same application as a ZIP; alternative to the DMG |
+| `README.md`                        | This file                                         |
+| `*.sha256`                         | SHA-256 checksums for each release artifact       |
+
+The application contains PostgreSQL 18.6, the Vision backend, the production frontend, the
+migration runner, and Chrome Headless Shell for PDF reports. PostgreSQL data and attachments are
+stored outside the application bundle so replacing `Vision.app` does not replace user data.
 
 ## Requirements
 
-- macOS 12 (Monterey) or newer
-- Apple Silicon (M1 / M2 / M3 / M4)
-- ~5 GB free disk space — Docker Desktop ~3 GB, Vision image ~1 GB, the
-  database grows with your data
-- Internet connection on **first** launch only
+- macOS 12 Monterey or newer
+- Apple Silicon
+- Enough free disk space for the application, private PostgreSQL cluster, attachments, and backups
+- An internet connection only when downloading Vision or using an integration that itself needs it
 
-## First-time install (~5–10 min)
+## Install
 
-### 1. Verify the downloads (optional but recommended)
+### 1. Verify the download
 
 ```sh
 shasum -a 256 -c Vision-__VERSION__-arm64.dmg.sha256
-shasum -a 256 -c vision-setup.command.sha256
 ```
 
-Each line should end with `OK`.
+The line must end with `OK`.
 
-### 2. Run the setup script
+### 2. Install the app
 
-The script installs Docker Desktop if you don't have it and pre-downloads
-the Vision container image. The Vision app itself does not download
-hundreds of megabytes on first launch — this script does, while you can
-see progress in a Terminal window.
+1. Open `Vision-__VERSION__-arm64.dmg`.
+2. Drag `Vision.app` to `/Applications`.
+3. Eject the disk image.
+4. Right-click `/Applications/Vision.app`, select **Open**, then confirm **Open**.
 
-In Finder:
+The one-time right-click is expected while releases use an ad-hoc signature instead of an Apple
+Developer ID. Later launches can use a normal double-click.
 
-1. Right-click `vision-setup.command` → **Open** → **Open**.
-   (Required because the script is unsigned. Only needed the first time.)
-2. A Terminal window opens and runs the script. It will:
-   - Install Docker Desktop if missing
-   - Start Docker
-   - Pull the Vision container image
-3. Wait for `Setup complete.` (5–10 min on a normal connection).
+### 3. First launch
 
-If you prefer the command line:
+Vision verifies its packaged runtime before it creates data. It then:
 
-```sh
-bash ~/Downloads/vision-setup.command
-```
+1. initializes a private PostgreSQL 18 cluster on loopback;
+2. creates separate cluster-administrator, migration-owner, and application roles;
+3. runs the normal Vision migration runner;
+4. starts the native backend and waits for detailed readiness; and
+5. opens the UI only after the database is ready.
 
-### 3. Install the app
+An interrupted first launch is resumable. If the private PostgreSQL port is already occupied,
+Vision fails closed and records a diagnostic instead of connecting to the unknown server.
 
-1. Double-click `Vision-__VERSION__-arm64.dmg`.
-2. Drag `Vision.app` to the `Applications` folder.
-3. Eject the DMG (drag it to the Trash).
+## Existing Docker installation
 
-### 4. First launch
+Vision does not automatically point a native installation at an empty database when Docker data is
+present. Use the documented opt-in Docker-to-native importer only after creating a final logical
+dump and attachment export. It verifies schema, table counts, attachment hashes, health, settings,
+reports, and representative workflows before writing the native cutover marker.
 
-Right-click `Vision.app` in `/Applications` → **Open** → **Open**.
+The importer stops the old application writer but preserves the stopped Docker services and
+volumes as a rollback source. Never run `docker compose down -v`, remove the database or attachment
+volumes, or run a database reset during migration. After the first native write, the Docker copy is
+stale and a data-preserving rollback requires a reverse logical migration.
 
-> macOS shows **"Vision.app cannot be opened because the developer cannot
-> be verified."** because the build is signed with an ad-hoc signature
-> (free) rather than an Apple Developer ID (paid). The right-click → Open
-> bypass is only needed on the **first** launch. After that, double-click
-> works like any other app.
-
-The first launch does:
-
-1. Starts the Postgres + backend containers
-2. Waits for them to become healthy
-3. Loads the UI in the Electron window
-
-First launch: 10 – 30 seconds. Subsequent launches: 5 – 10 seconds.
+See the repository's Native macOS Runtime Guide for the exact preflight, cutover, and rollback
+commands.
 
 ## Daily use
 
-Double-click `Vision.app`. That's it.
-
-When you quit Vision, the Docker containers keep running in the
-background so the next launch is instant. To stop them, open Docker
-Desktop and stop the `vision` project (or quit Docker Desktop).
+Open `Vision.app`. Vision starts its private PostgreSQL server and backend, checks readiness, and
+serves the production frontend over loopback. By default, quitting Vision cleanly stops both child
+processes. The **Keep services running on quit** preference deliberately leaves them running for a
+faster next launch.
 
 ## Updating
 
-1. Download the new release's `.dmg` and `vision-setup.command`.
-2. Re-run `vision-setup.command` (it pulls the new image version).
-3. Drag the new `Vision.app` over `/Applications/Vision.app`. Finder will
-   ask to replace.
-4. Open the app.
+Use Vision's update action or replace `Vision.app` with the application from the new DMG. Native
+updates verify and stage the new application, stop the native backend, atomically replace the app,
+and retain a rollback copy until the new version opens. They do not pull a Docker image.
 
-Your settings, attachments, and database are preserved across updates.
+The durable application-data directory remains in place across updates. Do not delete it as part of
+an application update.
 
-## Where your data lives
+## Where data lives
 
-| Location | Contents |
-|---|---|
-| `~/Library/Application Support/Vision/` | Settings, embedded `docker-compose.yml`, logs |
-| Docker volume `vision_postgres_data` | The Postgres database (transactions, accounts, …) |
-| Docker volume `vision_attachments_data` | Files you've attached to transactions |
-| Docker volume `vision_vision_cache_data` | Backend cache; safe to delete |
+| Location                                                                | Contents                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------- |
+| `~/Library/Application Support/Vision/native/vision/postgres/data/`     | Private PostgreSQL cluster                        |
+| `~/Library/Application Support/Vision/native/vision/attachments/`       | Transaction attachments                           |
+| `~/Library/Application Support/Vision/native/vision/runtime.env`        | Generated native connection settings; mode `0600` |
+| `~/Library/Application Support/Vision/native/vision/logs/`              | Backend and PostgreSQL logs                       |
+| `~/Library/Application Support/Vision/native/vision/runtime-state.json` | Active provider and cutover marker                |
 
-## Backup & restore
+The original Docker volumes remain separate when an installation was migrated.
 
-Use the in-app **Backup → Export** menu. It writes a `.visionbak` file
-containing the database and your attachments. Importing on a fresh
-install restores everything.
+## Backup and restore
 
-For an offline backup of just the database:
+Use the in-app backup controls to create a `.visionbak` file. Native mode preserves the existing
+bundle format, optional AES-256-GCM encryption, supported frontend/localStorage state, PostgreSQL
+data, and attachments. Restore rejects a newer schema, stages a fresh database and attachment tree,
+and activates them only after validation. A failed activation rolls both back.
 
-```sh
-docker compose -p vision exec db pg_dump -U ftm_user financial_transactions \
-  > vision-$(date +%F).sql
-```
+Keep at least one backup outside `~/Library/Application Support/Vision` before uninstalling or
+performing a rollback.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| **"Vision.app is damaged and can't be opened"** | In Terminal: `xattr -cr /Applications/Vision.app` then try again. Or right-click → Open → Open. |
-| **App hangs on "Starting Docker…"** | Open Docker Desktop, wait for the whale icon to turn green, then quit and reopen Vision. |
-| **"Image pull failed" on first launch** | Check internet, then re-run `vision-setup.command`. |
-| **Window opens blank, no UI** | Quit Vision. In Terminal: `docker compose -p vision -f "$HOME/Library/Application Support/Vision/embedded_compose/docker-compose.yml" logs --tail=200 app` and read the last error. |
-| **Reset everything** | Quit the app, then: `rm -rf "$HOME/Library/Application Support/Vision"; docker compose -p vision down -v` |
-| **"vision-setup.command" can't be opened** | Right-click → Open → Open (Gatekeeper). Or `bash vision-setup.command`. |
+| Symptom                                                              | Action                                                                                                                               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                                                    |
+| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.                                        |
+| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override.                                   |
+| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.                                              |
+| **A Docker-to-native import was interrupted**                        | Keep both application writers stopped and rerun the documented cutover command so its persisted recovery state can roll back safely. |
 
 ## Uninstall
 
-```sh
-rm -rf /Applications/Vision.app
-rm -rf "$HOME/Library/Application Support/Vision"
-docker compose -p vision down -v
-docker rmi ghcr.io/erapartner/vision:__VERSION__
-```
+Quit Vision, confirm its native services have stopped, and move `/Applications/Vision.app` to the
+Trash. This leaves the application-data directory intact so the database and attachments remain
+recoverable.
 
-You can additionally remove Docker Desktop if you don't use it for
-anything else: drag `/Applications/Docker.app` to the Trash.
+Deleting `~/Library/Application Support/Vision` permanently deletes the native database,
+attachments, logs, and migration state. Do that only after verifying a restorable backup. Removing
+Vision does not remove or modify preserved Docker volumes.
 
-## Why is the app unsigned?
+## Optional Docker provider
 
-Apple's Developer ID program costs $99/year. Until that is in place, the
-app uses an **ad-hoc** signature — enough for macOS to load the binary,
-not enough for Gatekeeper to trust it without a one-time
-right-click → Open. There is no security difference once you have run the
-app once and accepted it.
+Docker Compose remains available for explicit server, Demo, continuous-integration, and local
+container deployments. It is a separate runtime provider, not a dependency of the native package.
+Do not activate Docker and native writers at the same time.
 
-## Source code & issues
+## Source code and issues
 
 https://github.com/EraPartner/Vision

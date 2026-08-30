@@ -2,8 +2,18 @@
 title: Schema Initialization Reference
 type: reference
 status: archived
-date: 2026-04-21
-tags: [reference, database, schema, initialization, postgresql, startup, archived, phase-1]
+date: 2026-08-30
+tags:
+  [
+    reference,
+    database,
+    schema,
+    initialization,
+    postgresql,
+    startup,
+    archived,
+    phase-1,
+  ]
 description: Legacy schema initialization reference — ARCHIVED. Schema is now initialized by Alembic migrations (ADR-027).
 aliases: [schema init, database initialization, table creation, startup schema]
 related_code:
@@ -28,7 +38,7 @@ Application startup now flows through Alembic:
 ```
 Application Start → checkConnection() → runMigrations()
                                          ↓
-                                    alembic upgrade head
+                              guarded Alembic upgrade to head
                                          ↓
                                     refreshMaterializedViews()
 ```
@@ -75,10 +85,10 @@ Tables are created in this order to respect foreign key dependencies:
 
 Triggers are created/updated using `CREATE OR REPLACE FUNCTION` and `CREATE OR REPLACE TRIGGER`:
 
-| Trigger | Table | Purpose |
-|---------|-------|---------|
+| Trigger              | Table            | Purpose                                            |
+| -------------------- | ---------------- | -------------------------------------------------- |
 | `investments_update` | investments_base | Propagates updates to child tables via inheritance |
-| Various | Multiple tables | Auto-update `updated_at` timestamps |
+| Various              | Multiple tables  | Auto-update `updated_at` timestamps                |
 
 ## Compatibility Views
 
@@ -98,4 +108,3 @@ Indexes are created for frequently queried columns:
 - [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — current migration strategy
 - [[docs/adr/002-database-schema|ADR-002: Database Schema]] — schema design decisions
 - [[docs/guides/migrations|Database Migration Guide]] — how to create and run migrations
-

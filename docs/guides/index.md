@@ -2,7 +2,8 @@
 title: Guides Index
 type: guides-index
 status: active
-date: 2026-03-31
+date: 2026-08-30
+updated: 2026-08-30
 tags: [guides, index, how-to]
 description: Setup, development, deployment, and contribution guides for the Vision project
 aliases: [guides, how-to, getting started]
@@ -25,7 +26,9 @@ SORT title ASC
 ## By Category
 
 ### Getting Started
+
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Docker-free PostgreSQL 18, Electron lifecycle, cutover, and rollback
 - [[docs/guides/devcontainer\|Devcontainer Guide]] - Isolated dev environment for Claude Code `--dangerously-skip-permissions`
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 
@@ -39,7 +42,8 @@ SORT title ASC
 - [[docs/guides/debugging|Debugging Guide]] - Error handling, debugging techniques, common failure modes
 
 ### Deployment & Release
-- [[docs/guides/deployment\|Deployment Guide]] - Production deployment (Docker, Electron)
+
+- [[docs/guides/deployment\|Deployment Guide]] - Production deployment (native macOS, Docker, Electron)
 - [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] - GitHub Actions workflows for testing, building, and releasing (April 2026)
 
 ## Troubleshooting
@@ -52,6 +56,7 @@ SORT title ASC
 - [[docs/tag-taxonomy\|Tag Taxonomy]] - Controlled vocabulary for KB tags
 
 ### KB Maintenance
+
 - [[docs/guides/kb-maintenance\|KB Maintenance Guide]] - How to keep docs in sync with code
 - [[docs/guides/ai-agent-kb-usage\|AI Agent KB Usage]] - How AI agents should use MCP tools
 

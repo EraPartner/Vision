@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-26
-last-updated: 2026-08-26
-last_updated_timestamp: 2026-08-26T00:00:00Z
+updated: 2026-08-30
+last-updated: 2026-08-30
+last_updated_timestamp: 2026-08-30T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -49,13 +49,13 @@ Vision uses comprehensive testing to ensure code quality and prevent regressions
 
 ## Testing Stack
 
-| Tool | Purpose | Location |
-|------|---------|----------|
-| **Vitest** | Backend unit tests; frontend unit/integration tests | `apps/node-backend/tests/`, `apps/frontend/src/` |
-| **React Testing Library** | Frontend component unit and integration tests | `apps/frontend/src/` |
-| **MSW** | Network mocking at the HTTP boundary (component-integration tests) | `apps/frontend/src/test/msw/` |
-| **Playwright** | E2E tests for critical user flows w/ real backend | `apps/frontend/e2e/` |
-| **Bun** | Test runner | `package.json` |
+| Tool                      | Purpose                                                            | Location                                         |
+| ------------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| **Vitest**                | Backend unit tests; frontend unit/integration tests                | `apps/node-backend/tests/`, `apps/frontend/src/` |
+| **React Testing Library** | Frontend component unit and integration tests                      | `apps/frontend/src/`                             |
+| **MSW**                   | Network mocking at the HTTP boundary (component-integration tests) | `apps/frontend/src/test/msw/`                    |
+| **Playwright**            | E2E tests for critical user flows w/ real backend                  | `apps/frontend/e2e/`                             |
+| **Bun**                   | Test runner                                                        | `package.json`                                   |
 
 ## Running Tests
 
@@ -77,7 +77,7 @@ bun vitest run --test-name-pattern="testName"
 
 #### Against a real Postgres
 
-Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0)) **skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper — it starts a throwaway `postgres:18-alpine` container, migrates it to head, exports the environment and runs vitest, then removes the container on exit:
+Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0)) **skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper. It prefers installed PostgreSQL 18 tools, initializes a private cluster under the system temporary directory, binds it only to loopback, migrates it to head, runs Vitest, and removes the cluster on exit. It does not start or require the Homebrew service. Docker remains an automatic fallback and can also be selected explicitly:
 
 ```bash
 # Whole backend suite, DB-backed cases included
@@ -86,11 +86,18 @@ bun run test:db
 # A single DB-backed suite (arguments are forwarded to vitest)
 bun run test:db tests/services/transferReconciliation.db.test.js
 
-# Keep the container after the run to inspect it
+# Force the optional Docker provider
+VISION_TEST_DB_PROVIDER=docker bun run test:db
+
+# Keep the generated cluster or container after the run to inspect diagnostics
 VISION_TEST_DB_KEEP=1 bun run test:db
 ```
 
-Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. If `TEST_DATABASE_URL` is already exported the script normally uses that database as-is and starts no container. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database when its container has no usable pre-existing Docker daemon; see [[.codex/cloud/README|Codex cloud environment]]. That one managed database is reset and migrated before each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set URLs remain caller-managed and are never reset.
+Requires the Python Alembic toolchain (`pip install -r config/requirements.txt`) because migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. The migration runner uses an explicit `ALEMBIC_BIN` first, then a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a runnable repository `venv`, and finally `alembic` on `PATH`. It probes a candidate before selecting it, so a stale container-created virtual environment cannot cause an `ENOENT` failure.
+
+PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on `PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. Set `VISION_TEST_DB_PROVIDER=native` or `docker` to require one provider; the default is `auto`. `VISION_TEST_DB_PORT` selects the loopback port and fails closed on a collision.
+
+If `TEST_DATABASE_URL` is already exported, the script normally uses that database as-is and starts no provider. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database when its container has no usable pre-existing Docker daemon; see [[.codex/cloud/README|Codex cloud environment]]. That one managed database is reset and migrated before each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set URLs remain caller-managed and are never reset.
 
 #### The skip banner
 
@@ -107,9 +114,9 @@ A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, a
 
 - Counts are derived from the run, never hardcoded; a module counts as DB-backed when its source imports `tests/setup/db.js` (so `tests/services/aggregationRefresh.test.js` is included despite not being named `*.db.test.js`).
 - Silent when `TEST_DATABASE_URL` is set, so `bun run test:db` and CI stay clean.
-- Attached in `vitest.config.js` through a `configureVitest` plugin hook that *appends* to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config: `bun run test`, a bare `bun vitest run`, and the pre-push hook.
+- Attached in `vitest.config.js` through a `configureVitest` plugin hook that _appends_ to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config: `bun run test`, a bare `bun vitest run`, and the pre-push hook.
 
-The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file, `tests/setup/db.js`, or `alembic/versions/**` — and degrades to a loud warning (never a failed push) when Docker or Alembic are unavailable. Skip it with `SKIP_DB_TESTS=1`.
+The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file, `tests/setup/db.js`, or `alembic/versions/**` — and degrades to a loud warning (never a failed push) when neither PostgreSQL 18 nor Docker is available, or when Alembic is unavailable. Skip it with `SKIP_DB_TESTS=1`.
 
 ### Frontend Tests
 
@@ -222,17 +229,20 @@ apps/frontend/
 Render a full page with Vision's real provider stack, mock the network via MSW, drive with userEvent, assert on the DOM. This is the fastest layer that exercises data flow, hooks, and routes together without spinning up a backend server.
 
 **Key files:**
+
 - [[docs/testing/frontend-component-integration|Complete guide]] — conventions, patterns, coverage goals, and advanced RTL/MSW patterns
 - `apps/frontend/src/test/renderWithApp.tsx` — Provider stack mirror (QueryClient, contexts, routing)
 - `apps/frontend/src/test/msw/server.ts` — MSW server + default handlers
 - `apps/frontend/src/test-setup.ts` — MSW lifecycle wiring
 
 **Why MSW instead of vi.mock():**
+
 - Centralizes API contract (ADR-026 envelope shape)
 - Avoids Bun/Vitest mock-bleed gotcha
 - Tests exercise the real `apiClient` (retries, timeouts, envelope unwrap)
 
 **Advanced patterns (2026-04-30):**
+
 - **Handler ordering:** Register specific routes before wildcard patterns — MSW evaluates handlers FIFO
 - **Stale elements:** Just `await findByRole(...)` (don't assert `.toBeInTheDocument()` on result) when component re-mounts
 - **Multiple elements:** Use `findAllByRole` when same element appears in multiple locations
@@ -241,6 +251,7 @@ Render a full page with Vision's real provider stack, mock the network via MSW, 
 See [[docs/testing/frontend-component-integration#msw--rtl-advanced-patterns-2026-04-30|Advanced Patterns]] for details.
 
 **Example:**
+
 ```tsx
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
@@ -250,11 +261,13 @@ import { server } from "@/test/msw/server";
 import TransactionsPage from "@/pages/TransactionsPage";
 
 describe("TransactionsPage", () => {
-    it("renders with empty data", async () => {
-        renderWithApp(<TransactionsPage />);
-        const heading = await screen.findByRole("heading", { name: /transactions/i });
-        expect(heading).toBeInTheDocument();
+  it("renders with empty data", async () => {
+    renderWithApp(<TransactionsPage />);
+    const heading = await screen.findByRole("heading", {
+      name: /transactions/i,
     });
+    expect(heading).toBeInTheDocument();
+  });
 });
 ```
 
@@ -263,11 +276,11 @@ See [[docs/testing/frontend-component-integration|Component-Integration Tests]] 
 ### Unit Tests
 
 ```javascript
-import { describe, it, expect } from 'vitest';
-import { myFunction } from '../src/module.js';
+import { describe, it, expect } from "vitest";
+import { myFunction } from "../src/module.js";
 
-describe('myFunction', () => {
-  it('should do something', () => {
+describe("myFunction", () => {
+  it("should do something", () => {
     const result = myFunction(input);
     expect(result).toBe(expected);
   });
@@ -279,6 +292,7 @@ describe('myFunction', () => {
 Test custom React hooks in isolation using `renderHook` from React Testing Library. Hook tests verify return values, state mutations, side effects, and integration with external dependencies (timers, window events, API calls).
 
 **Test files (5 new, 2026-05-01–2026-05-03):**
+
 - `apps/frontend/src/hooks/__tests__/useUtilityHooks.test.ts` (13 tests)
 - `apps/frontend/src/hooks/__tests__/useChartCurrencyFormatter.test.ts` (5 tests)
 - `apps/frontend/src/hooks/__tests__/usePlannedPayments.test.ts` (8 tests)
@@ -288,6 +302,7 @@ Test custom React hooks in isolation using `renderHook` from React Testing Libra
 **Key patterns:**
 
 1. **Fake timers for delay-based hooks:**
+
    ```typescript
    describe("useDebounce", () => {
      beforeEach(() => vi.useFakeTimers());
@@ -307,18 +322,22 @@ Test custom React hooks in isolation using `renderHook` from React Testing Libra
    ```
 
 2. **DOM event hooks:**
+
    ```typescript
    describe("useOnlineStatus", () => {
      it("responds to offline event", () => {
        const { result } = renderHook(() => useOnlineStatus());
        expect(result.current).toBe(true);
-       act(() => { window.dispatchEvent(new Event("offline")); });
+       act(() => {
+         window.dispatchEvent(new Event("offline"));
+       });
        expect(result.current).toBe(false);
      });
    });
    ```
 
 3. **API-dependent hooks with MSW:**
+
    ```typescript
    it("fetches and refetches data", async () => {
      const { result } = renderHook(() => usePlannedPayments(), { wrapper: makeWrapper() });
@@ -328,6 +347,7 @@ Test custom React hooks in isolation using `renderHook` from React Testing Libra
    ```
 
 4. **TanStack Query hooks with provider:**
+
    ```typescript
    function makeWrapper() {
      return function Wrapper({ children }) {
@@ -344,7 +364,8 @@ Test custom React hooks in isolation using `renderHook` from React Testing Libra
    ```typescript
    // @vitest-environment jsdom
    vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
-     const actual = await importOriginal<typeof import("@/contexts/LanguageContext")>();
+     const actual =
+       await importOriginal<typeof import("@/contexts/LanguageContext")>();
      const { default: enDict } = await import("@/locales/en");
      return {
        ...actual,
@@ -375,6 +396,7 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
 **Key patterns:**
 
 1. **Hook guard (error boundary test):**
+
    ```typescript
    it("throws when used outside provider", () => {
      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -386,26 +408,30 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
    ```
 
 2. **Loading state verification:**
+
    ```typescript
    it("isLoading is true on initial render", () => {
-     const { result } = renderHook(() => useTaxProfile(), { wrapper: makeWrapper() });
+     const { result } = renderHook(() => useTaxProfile(), {
+       wrapper: makeWrapper(),
+     });
      expect(result.current.isLoading).toBe(true);
    });
 
    it("isLoading becomes false after data loads", async () => {
-     const { result } = renderHook(() => useTaxProfile(), { wrapper: makeWrapper() });
+     const { result } = renderHook(() => useTaxProfile(), {
+       wrapper: makeWrapper(),
+     });
      await waitFor(() => expect(result.current.isLoading).toBe(false));
    });
    ```
 
 3. **State mutation with MSW:**
+
    ```typescript
-   server.use(
-     http.post(`${API_BASE}/api/settings`, () =>
-       ok({ saved: true }),
-     ),
-   );
-   const { result } = renderHook(() => useSettings(), { wrapper: makeWrapper() });
+   server.use(http.post(`${API_BASE}/api/settings`, () => ok({ saved: true })));
+   const { result } = renderHook(() => useSettings(), {
+     wrapper: makeWrapper(),
+   });
    await act(async () => {
      await result.current.saveSetting("key", "value");
    });
@@ -413,6 +439,7 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
    ```
 
 4. **Zustand store reset (no provider needed):**
+
    ```typescript
    beforeEach(() => {
      useSettingsStore.setState({
@@ -436,6 +463,7 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
    ```
 
 **Test files (2026-05-03):**
+
 - `apps/frontend/src/contexts/__tests__/BelgianTaxProfileContext.test.tsx` (8 tests)
 - `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx` (12 tests)
 - `apps/frontend/src/contexts/__tests__/LanguageContext.test.tsx` (6 tests)
@@ -447,16 +475,16 @@ Total: 37 context tests, all passing.
 ### Integration Tests
 
 ```javascript
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from "vitest";
 
-describe('API Endpoints', () => {
+describe("API Endpoints", () => {
   beforeAll(async () => {
     // Setup test database
   });
 
-  it('should create transaction', async () => {
-    const response = await fetch('/api/transactions', {
-      method: 'POST',
+  it("should create transaction", async () => {
+    const response = await fetch("/api/transactions", {
+      method: "POST",
       body: JSON.stringify(data),
     });
     expect(response.status).toBe(201);
@@ -467,9 +495,9 @@ describe('API Endpoints', () => {
 ### Mocking
 
 ```javascript
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
-vi.mock('../src/database/connection.js', () => ({
+vi.mock("../src/database/connection.js", () => ({
   query: vi.fn().mockResolvedValue({ rows: [] }),
 }));
 ```
@@ -481,13 +509,15 @@ vi.mock('../src/database/connection.js', () => ({
 >
 > **Impact:** Component-integration tests that assert error UI must use `{ timeout: 5000 }` in `findByText` / `findByRole` calls to outlast the `apiRequest` retry backoff cycle (~1500ms) plus React's render/update time.
 >
-> **Affected test files:** 
+> **Affected test files:**
+>
 > - `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`
 > - `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`
 > - `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`
 > - `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`
 >
 > **Example pattern:**
+>
 > ```typescript
 > server.use(
 >     http.get(`${API_BASE}/api/planned-transactions`, () =>
@@ -506,6 +536,7 @@ vi.mock('../src/database/connection.js', () => ({
 All route tests must validate the unified API response envelope. When testing route handlers:
 
 **Mock response helper:**
+
 ```javascript
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
@@ -520,31 +551,43 @@ function mockResponse() {
 ```
 
 **Testing success responses:**
+
 ```javascript
-it('should return 201 on successful import', async () => {
+it("should return 201 on successful import", async () => {
   importCSVWithRawStorage.mockResolvedValue({
-    total_processed: 5, imported: 4, duplicates: 1, errors: 0, status: 'completed',
+    total_processed: 5,
+    imported: 4,
+    duplicates: 1,
+    errors: 0,
+    status: "completed",
   });
 
-  const req = { file: { path: '/tmp/test.csv', originalname: 'test.csv' }, query: { bank_name: 'belfius' }, body: {} };
+  const req = {
+    file: { path: "/tmp/test.csv", originalname: "test.csv" },
+    query: { bank_name: "belfius" },
+    body: {},
+  };
   const res = mockResponse();
-  await routeHandlers['post:/csv'](req, res);
+  await routeHandlers["post:/csv"](req, res);
 
   expect(res.status).toHaveBeenCalledWith(201);
   const body = res.json.mock.calls[0][0];
   expect(body.ok).toBe(true);
-  expect(body.data.total_processed).toBe(5);  // Access wrapped data
-  expect(body.data.status).toBe('completed');
+  expect(body.data.total_processed).toBe(5); // Access wrapped data
+  expect(body.data.status).toBe("completed");
 });
 ```
 
 **Testing validation errors:**
+
 ```javascript
-it('should return 400 when no file uploaded', async () => {
-  const req = { file: null, query: { bank_name: 'belfius' }, body: {} };
+it("should return 400 when no file uploaded", async () => {
+  const req = { file: null, query: { bank_name: "belfius" }, body: {} };
   const res = mockResponse();
 
-  await expect(routeHandlers['post:/csv'](req, res)).rejects.toBeInstanceOf(ValidationError);
+  await expect(routeHandlers["post:/csv"](req, res)).rejects.toBeInstanceOf(
+    ValidationError,
+  );
 });
 ```
 
@@ -559,7 +602,7 @@ With Vitest 4, some module mocks must preserve constructor-compatible behavior w
 Example pattern (used for `yahoo-finance2`):
 
 ```javascript
-vi.mock('yahoo-finance2', () => ({
+vi.mock("yahoo-finance2", () => ({
   default: vi.fn().mockImplementation(function MockYahooFinance() {
     return {
       quote: mockYahooQuote,
@@ -579,6 +622,7 @@ Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
 > **Root Cause:** The `vi.resetAllMocks()` helper only resets the mock state but does not drain queued `...Once` call stubs. With Bun's context model, the queue persists across test boundaries.
 
 **Detection pattern:**
+
 - Test N passes all assertions
 - Test N+1 calls a mocked function that has `mockResolvedValueOnce` queued from Test N
 - Test N+1 unexpectedly receives the stale value from Test N instead of its own mock value
@@ -590,6 +634,7 @@ Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
 2. **Remove unconsumed `...Once` stubs:** If a test sets up `mockResolvedValueOnce` but the mock is not called (either by early return, skip, or parameter validation), the stub persists to the next test. **Delete unconsumed calls.**
 
    Example (BAD):
+
    ```javascript
    describe('getPortfolioHoldings', () => {
      it('test 1', async () => {
@@ -607,14 +652,16 @@ Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
    ```
 
    Example (GOOD):
+
    ```javascript
-   it('test 2', async () => {
+   it("test 2", async () => {
      investmentRepository.getAll.mockResolvedValueOnce([]); // replaces stale queue
-     await getPortfolioHoldings.run({ assetClass: 'stock' });
+     await getPortfolioHoldings.run({ assetClass: "stock" });
    });
    ```
 
 3. **Use `mockResolvedValue` (permanent) for multiple calls:** If a test makes multiple calls to the same mock, prefer a permanent return value:
+
    ```javascript
    investmentRepository.getAll.mockResolvedValue([]); // used for all calls
    ```
@@ -628,6 +675,7 @@ Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
    ```
 
 **Why this matters:**
+
 - Silent failures: A test consumes a stale mock and passes when it should fail.
 - Cross-test pollution: Fixes are localized to individual tests, not the root cause.
 - CI flakiness: Other tests may pass locally but fail in CI depending on test order.
@@ -641,6 +689,7 @@ Reference: [[apps/node-backend/tests/aiChatTools.test.js]] (fixed 2026-04-25: re
 Regression testing for non-trivial calculations (loan amortization, recurrence expansion, timezone boundary conversions, etc.). Store input + expected output as JSON fixtures.
 
 **Fixture layout:**
+
 ```
 tests/golden/__fixtures__/
 ├── loanSchedule/amortizing-standard.input.json
@@ -650,14 +699,15 @@ tests/golden/__fixtures__/
 ```
 
 **Usage in vitest:**
-```javascript
-import { describe, it } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
-import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.js';
 
-describe('loanSchedule golden', () => {
-  it('amortizing-standard', async () => {
-    await runGolden('loanSchedule/amortizing-standard', (input) =>
+```javascript
+import { describe, it } from "vitest";
+import { runGolden } from "../golden/runGolden.js";
+import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.js";
+
+describe("loanSchedule golden", () => {
+  it("amortizing-standard", async () => {
+    await runGolden("loanSchedule/amortizing-standard", (input) =>
       generateLoanSchedule(input),
     );
   });
@@ -665,6 +715,7 @@ describe('loanSchedule golden', () => {
 ```
 
 **Updating fixtures:**
+
 ```bash
 UPDATE_GOLDENS=1 bun vitest run loanSchedule.test.js
 ```
@@ -678,11 +729,12 @@ Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern]], [[apps/node-
 Opt-in shared Postgres pool for tests that need a real database. Resolved via `TEST_DATABASE_URL` environment variable.
 
 **Setup:**
-```javascript
-import { describe, it, beforeAll, afterAll } from 'vitest';
-import { getTestPool, closeTestPool, hasTestDatabase } from '../setup/db.js';
 
-describe('transactionRepository', () => {
+```javascript
+import { describe, it, beforeAll, afterAll } from "vitest";
+import { getTestPool, closeTestPool, hasTestDatabase } from "../setup/db.js";
+
+describe("transactionRepository", () => {
   let pool;
 
   beforeAll(() => {
@@ -693,16 +745,17 @@ describe('transactionRepository', () => {
     await closeTestPool();
   });
 
-  it.skipIf(!pool)('should insert and fetch transaction', async () => {
-    const result = await pool.query('SELECT 1');
+  it.skipIf(!pool)("should insert and fetch transaction", async () => {
+    const result = await pool.query("SELECT 1");
     expect(result.rows).toHaveLength(1);
   });
 });
 ```
 
 **Self-skipping pattern (recommended):**
+
 ```javascript
-it.skipIf(!hasTestDatabase())('database-dependent test', async () => {
+it.skipIf(!hasTestDatabase())("database-dependent test", async () => {
   // test code
 });
 ```
@@ -711,19 +764,19 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 
 **Where the database comes from:**
 
-| Context | Provider | Migrated by |
-|---------|----------|-------------|
-| CI — `Test (Backend)` job | `services.postgres` (`postgres:18-alpine`) in `.github/workflows/ci.yml` | "Migrate the test database to head" step |
-| Local | throwaway container started by `scripts/with-test-db.sh` (`bun run test:db`) | the same script |
-| Codex cloud without a Docker daemon | native PostgreSQL 18 provisioned by `.codex/cloud/provision-test-db.sh` | cloud setup and maintenance scripts |
+| Context                             | Provider                                                                                                                            | Migrated by                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| CI — `Test (Backend)` job           | `services.postgres` (`postgres:18-alpine`) in `.github/workflows/ci.yml`                                                            | "Migrate the test database to head" step |
+| Local                               | private native PostgreSQL 18 cluster, with Docker as an optional fallback, started by `scripts/with-test-db.sh` (`bun run test:db`) | the same script                          |
+| Codex cloud without a Docker daemon | native PostgreSQL 18 provisioned by `.codex/cloud/provision-test-db.sh`                                                             | cloud setup and maintenance scripts      |
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 
-**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the *test* pool (`getTestPool()`), but the code under test queries through the *app* pool (`src/database/connection.js`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
+**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.js`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
 
 **Cleanup convention.** Prefer per-test `DELETE` of the tables the suite touches over `TRUNCATE ... CASCADE`: the cascade off `transactions` reaches a dozen unrelated tables and costs ~350 ms per test in ACCESS EXCLUSIVE locks versus ~3 ms for targeted deletes. A wrapping transaction is the other option, but it does not suit services that open their own `withTransaction` or that reconcile the whole corpus rather than a scoped batch — there, other tests' rows would still be visible. Whatever the strategy, the suite must leave no rows behind.
 
-**Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the *no-DB* figure deliberately — see the comment there before bumping them.
+**Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the _no-DB_ figure deliberately — see the comment there before bumping them.
 
 **Migrations are required, and a bare `alembic upgrade head` will not do it.** Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, and this chain's revision identifiers are longer, so a fresh database dies on the third revision with `value too long for type character varying(32)`. Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.js`), which runs the same `runMigrations()` path the app runs on boot and preflights that table at `VARCHAR(64)` first. All version-table-writing npm scripts (`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset`, and the backend workspace's `db:migrate*`) now route through that same wrapper — see [[docs/reference/scripts|Scripts Reference]].
 
@@ -744,8 +797,8 @@ Property tests complement golden fixtures by locking **invariants** rather than 
 **Example skeleton:**
 
 ```javascript
-import { describe, it, expect } from 'vitest';
-import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.js';
+import { describe, it, expect } from "vitest";
+import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
 
 const CENT = 0.01;
 
@@ -760,11 +813,11 @@ function seeded(seed) {
   };
 }
 
-describe('loanSchedule principal invariant', () => {
-  it('sum(principal) ≈ principal within 1¢ across all loan_types', () => {
-    const rng = seeded(0xC0FFEE);
+describe("loanSchedule principal invariant", () => {
+  it("sum(principal) ≈ principal within 1¢ across all loan_types", () => {
+    const rng = seeded(0xc0ffee);
     for (let i = 0; i < 200; i++) {
-      const input = randomCase(rng);          // bounded random generator
+      const input = randomCase(rng); // bounded random generator
       const schedule = generateLoanRepaymentSchedule(input);
       const paid = schedule.reduce((s, r) => s + r.principal_amount, 0);
       expect(Math.abs(paid - input.principal)).toBeLessThanOrEqual(CENT);
@@ -775,14 +828,14 @@ describe('loanSchedule principal invariant', () => {
 
 **Invariants locked in Phase 8:**
 
-| Module | Invariant | Test |
-|---|---|---|
-| `loanSchedule.js` | `sum(principal_amount) ≈ principal ±1¢`; 0% APR; final remaining == 0 | [[apps/node-backend/tests/property/loanSchedule.property.test.js]] |
-| `recurrence.js` | Strict monotonic advance + `iterate(n) == iterate(n-1) + step`; Jan-31 clamp | [[apps/node-backend/tests/property/recurrence.property.test.js]] |
-| `splits.js` | `split.amount == sum(payments) + remaining`; overpayment blocked; zero-balance filtered | [[apps/node-backend/tests/property/splits.property.test.js]] |
-| `aggregation/monthly.js` | `sum(monthly income/expense/net) == yearly ±1¢`; net identity | [[apps/node-backend/tests/property/monthlyYearly.property.test.js]] |
-| `aggregation/category.js` | `sum(by_category) + excluded_total == grand_total ±1¢` | [[apps/node-backend/tests/property/categoryTotal.property.test.js]] |
-| `calculations/currency.js` | `convert(convert(x, A, B), B, A) ≈ x`; EUR→EUR identity; triangulation | [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]] |
+| Module                     | Invariant                                                                               | Test                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `loanSchedule.js`          | `sum(principal_amount) ≈ principal ±1¢`; 0% APR; final remaining == 0                   | [[apps/node-backend/tests/property/loanSchedule.property.test.js]]      |
+| `recurrence.js`            | Strict monotonic advance + `iterate(n) == iterate(n-1) + step`; Jan-31 clamp            | [[apps/node-backend/tests/property/recurrence.property.test.js]]        |
+| `splits.js`                | `split.amount == sum(payments) + remaining`; overpayment blocked; zero-balance filtered | [[apps/node-backend/tests/property/splits.property.test.js]]            |
+| `aggregation/monthly.js`   | `sum(monthly income/expense/net) == yearly ±1¢`; net identity                           | [[apps/node-backend/tests/property/monthlyYearly.property.test.js]]     |
+| `aggregation/category.js`  | `sum(by_category) + excluded_total == grand_total ±1¢`                                  | [[apps/node-backend/tests/property/categoryTotal.property.test.js]]     |
+| `calculations/currency.js` | `convert(convert(x, A, B), B, A) ≈ x`; EUR→EUR identity; triangulation                  | [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]] |
 
 **When to add a property test vs. a golden fixture:**
 
@@ -808,21 +861,21 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 ### Backend
 
-| Category | Examples |
-|----------|----------|
-| **Validation** | Input sanitization, ID validation, date parsing |
-| **Services** | Currency conversion, deduplication, recurring detection |
-| **Routes** | CRUD operations, edge cases, error handling |
+| Category         | Examples                                                         |
+| ---------------- | ---------------------------------------------------------------- |
+| **Validation**   | Input sanitization, ID validation, date parsing                  |
+| **Services**     | Currency conversion, deduplication, recurring detection          |
+| **Routes**       | CRUD operations, edge cases, error handling                      |
 | **Split Routes** | Split amount bounds, batch validation, owed CSV export responses |
-| **Adapters** | Bank CSV parsing, normalization |
+| **Adapters**     | Bank CSV parsing, normalization                                  |
 
 ### Frontend
 
-| Category | Examples |
-|----------|----------|
-| **Components** | Rendering, user interactions |
-| **Hooks** | State management, data fetching |
-| **Forms** | Validation, submission |
+| Category       | Examples                        |
+| -------------- | ------------------------------- |
+| **Components** | Rendering, user interactions    |
+| **Hooks**      | State management, data fetching |
+| **Forms**      | Validation, submission          |
 
 ### Recent Additions
 
@@ -902,41 +955,39 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 
 describe("ComponentIntegration", () => {
-    it("renders with default handlers", async () => {
-        renderWithApp(<MyComponent />);
-        expect(await screen.findByRole("heading")).toBeInTheDocument();
-    });
+  it("renders with default handlers", async () => {
+    renderWithApp(<MyComponent />);
+    expect(await screen.findByRole("heading")).toBeInTheDocument();
+  });
 
-    it("overrides endpoint per test", async () => {
-        const user = userEvent.setup();
-        server.use(
-            http.post("http://localhost:3002/api/foo", () =>
-                ok({ id: 42, message: "success" }),
-            ),
-        );
-        renderWithApp(<MyComponent />);
-        await user.click(screen.getByRole("button"));
-        await waitFor(() => expect(screen.getByText("success")).toBeInTheDocument());
-    });
+  it("overrides endpoint per test", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post("http://localhost:3002/api/foo", () =>
+        ok({ id: 42, message: "success" }),
+      ),
+    );
+    renderWithApp(<MyComponent />);
+    await user.click(screen.getByRole("button"));
+    await waitFor(() =>
+      expect(screen.getByText("success")).toBeInTheDocument(),
+    );
+  });
 
-    it("spies on async handlers (e.g., toast.error)", async () => {
-        const user = userEvent.setup();
-        const toastSpy = vi.spyOn(toast, "error");
+  it("spies on async handlers (e.g., toast.error)", async () => {
+    const user = userEvent.setup();
+    const toastSpy = vi.spyOn(toast, "error");
 
-        server.use(
-            http.post("http://localhost:3002/api/foo", () =>
-                err(409, "Conflict"),
-            ),
-        );
-        renderWithApp(<MyComponent />);
-        await user.click(screen.getByRole("button"));
+    server.use(
+      http.post("http://localhost:3002/api/foo", () => err(409, "Conflict")),
+    );
+    renderWithApp(<MyComponent />);
+    await user.click(screen.getByRole("button"));
 
-        await waitFor(() =>
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/conflict/i),
-            ),
-        );
-    });
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/conflict/i)),
+    );
+  });
 });
 ```
 
@@ -970,11 +1021,13 @@ Four key testing gotchas discovered during Phase A completion:
 ### Phase C: Accessibility & Visual Regression (2026-04-30) — COMPLETE
 
 **Accessibility Checks (Axe-Core):**
+
 - Every smoke test in `smoke.spec.ts` calls `checkA11y(page)` using `@axe-core/playwright@4.11.2`
 - Scans for WCAG 2.1 violations (fails on critical/serious, warns on minor/warning)
 - Integrated into all 5 smoke tests (dashboard, transactions, import, planned, portfolio)
 
 **Visual Regression Tests:**
+
 - New `visual.spec.ts` captures full-page screenshots of 5 critical pages
 - Playwright `toHaveScreenshot({ fullPage: true })` with 2% pixel tolerance
 - Baselines stored in `apps/frontend/e2e/__screenshots__/`
@@ -986,12 +1039,14 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 ### Phase D: Coverage Threshold Ratchet & Contract Tests (2026-04-30, updated 2026-05-02) — COMPLETE
 
 **Coverage Threshold Ratchet** (`apps/frontend/vite.config.ts`):
+
 - Thresholds updated from placeholder (8/5/3/8) to actual Phase C levels (17/11/10/18)
 - Comment explains these are regression-prevention gates, not aspirational targets
 - Bump per phase after adding meaningful tests
 - Prevents silent coverage erosion across test suite enhancements
 
 **Contract Tests** (`apps/frontend/src/test/msw/contracts.test.ts`) — Expanded 2026-05-02:
+
 - Node-env Vitest suite (no jsdom needed) with **40 tests** (expanded from 16)
 - Organized into **three test suites:**
 
@@ -1017,6 +1072,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
   - Covers both GET and mutation endpoints
 
 **Schemas covered:**
+
 - Paginated list items: `{ items[], total, limit, offset, links[] }` (categories, recipients, transactions, planned-transactions, investments) with strict per-field schemas
 - Resource items: CategoryItemSchema, RecipientItemSchema, TransactionItemSchema, InvestmentItemSchema, PlannedTransactionItemSchema (all with explicit field types, not passthrough)
 - Delete responses: `{ message, links[] }` with optional transaction-specific `details`
@@ -1028,6 +1084,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 - Error envelope: `{ ok: false, error: { message, code? } }` per ADR-026
 
 **MSW Fixture Stubs** (`apps/frontend/src/test/msw/handlers.ts`) — Expanded 2026-05-02:
+
 - Exported 5 new stub constants matching backend formatters:
   - `TRANSACTION_STUB` — Complete transaction item with all fields (balance: null, updated_at: null)
   - `CATEGORY_STUB` — Complete category with `category_name` derived field
@@ -1038,6 +1095,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 - Prevents hand-rolling fixture data in tests; ensures consistency across handlers
 
 **Why contract tests matter:**
+
 - E1 strict schemas catch fixture field mismatches (type, nullability, required fields)
 - E2 mutation coverage ensures endpoints return items, not stripped payloads
 - E3 error coverage validates error envelope across all status codes and endpoint types
@@ -1045,6 +1103,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 - Catches breaking schema changes before they break component tests
 
 **Maintenance:**
+
 - Backend schema change → update corresponding Zod schema in E1 before shipping
 - New boot-time endpoint → add default MSW handler + contract test in E1/E2/E3 as applicable
 - Fixture-to-schema mismatch → contract test fails; fix the fixture, never weaken the schema
@@ -1055,6 +1114,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 **Goal:** Detect frontend regressions from backend contract changes. Scope: every endpoint the frontend calls is covered by both MSW contract tests and live-API contract tests.
 
 **What landed:**
+
 - **MSW handlers expanded** to ~50 previously-unstubbed endpoints (admin, aggregations, AI chat, attachments, categories, imports, info, investments, recipients, reports, splits, transactions, watchlist, planned-transactions)
 - **Contract tests expanded** (`apps/frontend/src/test/msw/contracts.test.ts`): 16 → **120 tests** (E1: 10 list schemas, E2: 15 mutation contracts, E3: 4 error envelopes)
 - **Live-API contract tests** (`apps/frontend/src/test/live-contracts/live-contracts.test.ts`): 13 → **37 tests** (skipped locally unless `LIVE_API_BASE` set; run on CI against real backend)
@@ -1089,6 +1149,7 @@ See [[docs/testing/test-inventory#phase-f3--dialog-completeness-sweep-2026-05-02
 **Goal:** Push browser-only edges (real backdrop, real focus trap, network drift, a11y scanning) to Playwright.
 
 **What landed (3 new e2e specs, 32 new tests):**
+
 - `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category/Recipient/Planned create, persist-after-reload invariant)
 - `e2e/a11y.spec.ts` — Originally 9 page scans; the current shared catalog has 11, including Tax (zero critical or serious violations required)
 - `e2e/network-drift.spec.ts` — Originally 10 page checks; it now consumes the same 11-page catalog and catches frontend → backend route mismatches
@@ -1104,6 +1165,7 @@ See [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-
 **Goal:** Cover invariants (parser round-trips, envelope passthrough) and verify UI survives transient backend faults.
 
 **What landed (3 new files, 14 new vitest tests):**
+
 - `src/test/property/currency.property.test.ts` — 8 fast-check properties for `parseLocaleNumber` invariants
 - `src/test/property/envelope.property.test.ts` — 4 properties for `unwrapEnvelope` per ADR-026
 - `src/test/property/chaos-resilience.test.tsx` — 2 chaos tests wrapping endpoints with random latency + 503 errors
@@ -1115,9 +1177,10 @@ See [[docs/testing/test-inventory#phase-f5--property--chaos-tests-2026-05-02|Pha
 
 ### Phase F6: Mutation Testing Harness (2026-05-02) — COMPLETE
 
-**Goal:** Measure test *quality* (do tests catch realistic faults?) beyond *coverage*.
+**Goal:** Measure test _quality_ (do tests catch realistic faults?) beyond _coverage_.
 
 **What landed:**
+
 - `stryker.config.json` — Vitest runner, TypeScript checker, scoped to `src/utils/currency.ts` + `src/lib/api/client.ts`
 - `package.json` script: `"test:mutation": "stryker run"` (opt-in, not in CI yet)
 - Dev deps: `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker`
@@ -1142,15 +1205,15 @@ Reference: [[docs/testing/frontend-component-integration|Component-Integration T
 ### Validation Tests
 
 ```javascript
-describe('validateId', () => {
-  it('should accept valid positive integers', () => {
-    expect(validateId('1')).toEqual({ valid: true, value: 1 });
+describe("validateId", () => {
+  it("should accept valid positive integers", () => {
+    expect(validateId("1")).toEqual({ valid: true, value: 1 });
   });
 
-  it('should reject invalid IDs', () => {
-    expect(validateId('0').valid).toBe(false);
-    expect(validateId('-1').valid).toBe(false);
-    expect(validateId('abc').valid).toBe(false);
+  it("should reject invalid IDs", () => {
+    expect(validateId("0").valid).toBe(false);
+    expect(validateId("-1").valid).toBe(false);
+    expect(validateId("abc").valid).toBe(false);
   });
 });
 ```
@@ -1158,19 +1221,19 @@ describe('validateId', () => {
 ### API Route Tests
 
 ```javascript
-describe('POST /api/transactions', () => {
-  it('should create transaction', async () => {
-    const res = await apiClient.post('/transactions', {
-      transaction_date: '2025-03-18',
-      amount: -50.00,
+describe("POST /api/transactions", () => {
+  it("should create transaction", async () => {
+    const res = await apiClient.post("/transactions", {
+      transaction_date: "2025-03-18",
+      amount: -50.0,
       recipient_id: 1,
     });
     expect(res.status).toBe(201);
   });
 
-  it('should reject invalid data', async () => {
-    const res = await apiClient.post('/transactions', {
-      amount: -50.00,
+  it("should reject invalid data", async () => {
+    const res = await apiClient.post("/transactions", {
+      amount: -50.0,
       // Missing required fields
     });
     expect(res.status).toBe(400);
@@ -1186,10 +1249,10 @@ Use descriptive names that explain what is being tested:
 
 ```javascript
 // ✅ Good
-it('should return 400 when amount is missing')
+it("should return 400 when amount is missing");
 
 // ❌ Bad
-it('test1')
+it("test1");
 ```
 
 ### AAA Pattern
@@ -1197,7 +1260,7 @@ it('test1')
 Follow Arrange-Act-Assert:
 
 ```javascript
-it('should calculate correctly', () => {
+it("should calculate correctly", () => {
   // Arrange
   const input = { amount: 100, rate: 0.1 };
 
@@ -1220,14 +1283,14 @@ it('should calculate correctly', () => {
 
 ```javascript
 // ❌ Bad - relies on time
-it('should process within 100ms', () => {
+it("should process within 100ms", () => {
   const start = Date.now();
   process();
   expect(Date.now() - start).toBeLessThan(100);
 });
 
 // ✅ Good - tests behavior, not timing
-it('should process data correctly', () => {
+it("should process data correctly", () => {
   const result = process();
   expect(result).toEqual(expected);
 });
@@ -1292,6 +1355,7 @@ Validation run (passed): `bun vitest run tests/rateLimiter.test.js tests/routes/
 - [[apps/node-backend/tests/routes/transactions.test.js]] adds route coverage for `normalize_to_eur` conversion path behavior, duplicate detection (`409`), and unresolved recipient/category validation branches in patch flow.
 
 Validation runs (passed):
+
 - `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
 - `npm test -- --coverage`
 
@@ -1309,13 +1373,11 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[ap
 
 Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
-
 ### Incremental coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] now includes historical miss-cache coverage to ensure duplicate historical-rate DB lookups are avoided for repeated misses.
 - Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (`74.18/59.54/78.47/77.68`).
-
 
 ### Incremental backend repository coverage addendum (2026-04-11)
 
@@ -1340,7 +1402,6 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 - Latest coverage snapshot: statements **76.84%**, branches **61.72%**, functions **80.74%**, lines **80.29%**.
 - Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
 
-
 ### Incremental backend test addendum (2026-04-11, adapter + raw import branches)
 
 > [!info] Phase C Update (April 2026)
@@ -1358,6 +1419,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
   - generic bank delegation via orchestrator
 
 **Legacy tests (Phase C, removed 2026-05-29):**
+
 - `rawTransactionImportService.test.js` — Deleted (file and test removed together)
 - `streamingImportService.test.js` — Deleted (file and test removed together)
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
@@ -1366,8 +1428,8 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 
 Validation runs (Phase C):
-- `bun vitest run tests/routes/import.test.js` — Route-level import test suite with orchestrator mocks
 
+- `bun vitest run tests/routes/import.test.js` — Route-level import test suite with orchestrator mocks
 
 ### Incremental backend info-route test addendum (2026-04-11)
 
@@ -1387,6 +1449,7 @@ Validation runs (Phase C):
 - Date-sensitive assertions now use deterministic fake timers for stable route behavior validation.
 
 Validation runs (passed):
+
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
@@ -1404,7 +1467,6 @@ Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[app
   - `npm test -- --coverage` (827 tests)
 - Coverage snapshot after full run: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 
-
 ### Incremental backend coverage addendum (2026-04-11, managed loop safe/sequential)
 
 - Managed loop coverage run completed with stop condition met.
@@ -1412,6 +1474,7 @@ Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[app
 - Latest passing suite snapshot: **54 test files**, **871 tests passing**.
 
 Expanded/updated test files:
+
 - [[apps/node-backend/tests/routes/marketLookup.test.js]]
 - [[apps/node-backend/tests/priceProviderService.test.js]]
 - [[apps/node-backend/tests/investmentRepository.test.js]]
@@ -1421,6 +1484,7 @@ Expanded/updated test files:
 - [[apps/node-backend/tests/materializedViewService.test.js]]
 
 Coverage loop artifacts:
+
 - [[.claude/baselines/test-coverage-baseline-20260411-101903.md]]
 - [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
 
@@ -1444,14 +1508,19 @@ Added comprehensive component-integration test coverage for VirtualDataTable, Vi
 **Key Patterns Established:**
 
 - **Mock LanguageContext with async factory:** Import locale dictionary synchronously for test speed
+
   ```typescript
   vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
     const { default: enDict } = await import("@/locales/en");
-    return { ...actual, useLanguage: () => ({ t: (key) => enDict[key] ?? key }) };
+    return {
+      ...actual,
+      useLanguage: () => ({ t: (key) => enDict[key] ?? key }),
+    };
   });
   ```
 
 - **Mock TanStack React Virtual to render all items unconditionally:** Avoids DOM layout measurement requirement
+
   ```typescript
   vi.mock("@tanstack/react-virtual", () => ({
     useVirtualizer: ({ count }) => ({
@@ -1498,6 +1567,7 @@ Comprehensive dialog and modal testing patterns established across 11 new test f
 **Key Testing Patterns (2026-05-01):**
 
 **Within-Dialog Scoping for Ambiguous Triggers:**
+
 ```typescript
 // Problem: "Add Investment" button appears both as dialog trigger and inside dialog
 // Solution: Use within(dialog) to scope selector to inside the dialog
@@ -1513,6 +1583,7 @@ await user.click(addFromMarketBtn);
 ```
 
 **Icon-Only Button Finding by Index:**
+
 ```typescript
 // Problem: "Edit" button is icon-only (no accessible name)
 // Solution: within(container).getAllByRole("button")[N] by index
@@ -1523,6 +1594,7 @@ await user.click(editBtn);
 ```
 
 **Combobox Selection by Index:**
+
 ```typescript
 // Problem: Multiple combobox components in CustomChartBuilderModal
 // Solution: getAllByRole("combobox")[N] by positional index
@@ -1533,6 +1605,7 @@ await user.click(screen.getByRole("option", { name: /food:groceries/i }));
 ```
 
 **Raw Fetch vs. apiClient Exception (WatchlistChartDialog):**
+
 ```typescript
 // WatchlistChartDialog uses raw fetch() instead of apiClient
 // MSW handlers must use HttpResponse.json() directly (no ok() envelope)
@@ -1544,6 +1617,7 @@ server.use(
 ```
 
 **Controlled Dialog with onOpenChange Callback:**
+
 ```typescript
 const onOpenChange = vi.fn();
 renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
@@ -1554,6 +1628,7 @@ await waitFor(() =>
 ```
 
 **Multi-Step Form with Step Navigation:**
+
 ```typescript
 // TaxProfileDialog uses step indicator buttons to jump steps
 renderWithApp(<TaxProfileDialog />);
@@ -1567,6 +1642,7 @@ expect(screen.getByText(/household income/i)).toBeInTheDocument();
 ```
 
 **Confirm Dialogs within Dialogs (RecipientPatternsDialog):**
+
 ```typescript
 // RecipientPatternsDialog has delete patterns with confirm modal
 const deleteBtn = within(patternRow).getAllByRole("button")[1]; // Trash icon
@@ -1578,6 +1654,7 @@ expect(server.use).toHaveBeenCalled(); // Verify DELETE was called
 ```
 
 **Test File Header and Infrastructure:**
+
 ```typescript
 // @vitest-environment jsdom
 import { describe, it, vi, beforeEach, afterEach } from "vitest";
@@ -1588,6 +1665,7 @@ import { server } from "@/test/msw/server";
 ```
 
 **Form Validation Pattern:**
+
 ```typescript
 // Submit button disabled until required fields + selections made
 const saveBtn = screen.getByRole("button", { name: /save/i });
@@ -1604,6 +1682,7 @@ expect(saveBtn).not.toBeDisabled(); // Now enabled
 ```
 
 **API Call Verification with vi.spyOn:**
+
 ```typescript
 // Verify correct endpoint and payload
 const postSpy = vi.spyOn(apiClient, "post");
@@ -1706,6 +1785,7 @@ describe("UpdateNotification", () => {
 ```
 
 **Key points:**
+
 - Install mock in `beforeEach`, **not** in test body (ensures fresh per-test)
 - Delete in `afterEach` to prevent bleed to next test
 - Component's `apiClient.isElectron()` checks `window.electronUpdater` existence
@@ -1733,10 +1813,10 @@ describe("BackupTab", () => {
   it("calls onChange when directory is selected", async () => {
     const user = userEvent.setup();
     renderWithApp(<BackupTabHarness />);
-    
+
     const selectDirBtn = screen.getByRole("button", { name: /select directory/i });
     await user.click(selectDirBtn);
-    
+
     // window.electronBackup.selectDir resolves; onChange fires
     await waitFor(() => {
       expect(screen.getByText(/backup directory selected/i)).toBeInTheDocument();
@@ -1746,6 +1826,7 @@ describe("BackupTab", () => {
 ```
 
 **Key points:**
+
 - Harness holds state locally; component re-renders on `onChange`
 - Simpler than attempting `rerender()` with new props
 - Test drives UI changes through callbacks, not prop mutations
@@ -1781,13 +1862,13 @@ describe("RestoreFromBackupCard", () => {
 
   it("restores backup without triggering page reload", async () => {
     renderWithApp(<RestoreFromBackupCard />);
-    
+
     // Simulate backup file selection and restoration
     // The 3s reload timer is stubbed; test completes without reload
     await waitFor(() => {
       expect(screen.getByText(/backup restored/i)).toBeInTheDocument();
     });
-    
+
     // Verify reload was NOT called (timer was suppressed)
     expect(window.location.reload).not.toHaveBeenCalled();
   });
@@ -1795,6 +1876,7 @@ describe("RestoreFromBackupCard", () => {
 ```
 
 **Key points:**
+
 - Use `vi.stubGlobal()` instead of `vi.mock()` for globals (avoids module-wide effects)
 - Check timer duration: suppress long timers, allow short ones (Radix uses `requestAnimationFrame` and sub-second timers)
 - Restore with `vi.unstubAllGlobals()` in `afterEach`
@@ -1803,6 +1885,7 @@ describe("RestoreFromBackupCard", () => {
 ### Pattern Integration
 
 **UpdateNotification (Electron stub + partial timers):**
+
 ```typescript
 // Install Electron stub to route to shell update path
 // Stub 3s version-check timeout to prevent async hangs
@@ -1810,6 +1893,7 @@ describe("RestoreFromBackupCard", () => {
 ```
 
 **RestoreFromBackupCard (Electron stub + partial timers):**
+
 ```typescript
 // Install window.electronBackup stub for IPC calls
 // Stub 3s reload timer to avoid test breakage
@@ -1817,6 +1901,7 @@ describe("RestoreFromBackupCard", () => {
 ```
 
 **ChatConversationList (textbox role pattern):**
+
 ```typescript
 // Rename dialog opens with initial value pre-filled
 // Radix onOpenChange(true) doesn't fire for initially-open dialogs in tests
@@ -1868,6 +1953,7 @@ Covers portfolio cost basis calculations (FIFO/LIFO), accrued interest computati
    - **UTC day-walk DST safety:** Validates that UTC-based date iteration produces exactly 3 days across European spring-forward boundary (2024-03-31)
 
 **Key patterns:**
+
 - `vi.useFakeTimers()` for deterministic clock control in accrued interest tests
 - `expect(...).toBeCloseTo()` for floating-point geometric-mean assertions
 - Immutability assertions: `sanitizeSnapshotSpikes(input)` does not mutate input array
@@ -1903,6 +1989,7 @@ Covers all four import pipeline phases with comprehensive mocking and error path
    - Insert error via SAVEPOINT rollback recorded as error
 
 **Mocking strategy:**
+
 - `vi.mock()` for database/connection, logger, adapters, normalization, recipientPatternService, aggregationRefresh
 - `withTransaction.mockImplementation(async (fn) => fn(mockClient))` for transaction simulation
 - `mockClient.query` chained mocks for INSERT/SELECT/UPDATE sequences

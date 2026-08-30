@@ -7,9 +7,9 @@ that removes `transactions.bank_account` / `planned_transactions.bank_account`, 
 
 ## Why this lives here and not in `alembic/versions/`
 
-The app runs `alembic upgrade head` **on boot**. A chain migration that drops the column
-would auto-apply on the next start — without the coupled code — and crash startup. That
-already happened: `0055_drop_bank_account_string` was neutralized to a no-op and
+Vision's guarded migration runner applies the Alembic chain to `head` **on boot**. A chain
+migration that drops the column would auto-apply on the next start — without the coupled code —
+and crash startup. That already happened: `0055_drop_bank_account_string` was neutralized to a no-op and
 `0056_restore_bank_account_after_premature_drop` is its recovery. So the drop is delivered
 here as a **manually-run script**, applied in lockstep with the decoupled code.
 
@@ -25,6 +25,10 @@ here as a **manually-run script**, applied in lockstep with the decoupled code.
    migration 0082; nothing here needs it switched to `account_id` any more.
 
 ## Apply / roll back
+
+This out-of-band contract operation is unrelated to the Docker-to-native runtime migration. Do not
+run it as part of native cutover. On any future approved use, stop every application writer and
+create a fresh logical database dump and attachment export before applying it.
 
 ```bash
 # Apply (after the preconditions). Wrapped in a transaction; aborts if the soak guard fails.
@@ -52,6 +56,7 @@ string → set `account_id` directly (the trigger that resolved string→id is d
 > `accountRepository.resolveOrCreateByName` — the trigger's own identity, lower(btrim), with the
 > JS pre-trim in SQL-btrim semantics (U+0020 only, NOT `String#trim()`) so JS-side and
 > trigger-side resolution can never fork one label into two accounts:
+>
 > - **Import commit** resolves each chunk's labels INSIDE the chunk transaction (minted accounts
 >   roll back with a failed chunk, like trigger minting always did) and writes `account_id`
 >   explicitly next to the string.
@@ -67,6 +72,7 @@ string → set `account_id` directly (the trigger that resolved string→id is d
 > What still touches the string — BY DESIGN until the drop, because the sync trigger derives
 > `account_id` FROM `bank_account`, so pre-drop writers must keep providing it — i.e. the small
 > code half that must ship IN LOCKSTEP with `up.sql`:
+>
 > - `repositories/transactionRepository.js` `create()` / `insertImportedRow()` and
 >   `services/importPipeline/commit.js` `bulkInsertPlanned()` — drop the `bank_account` column
 >   from the INSERTs (each already resolves/writes `account_id`; `create()` will need to resolve
@@ -84,6 +90,7 @@ string → set `account_id` directly (the trigger that resolved string→id is d
 >   `manual_raw_transactions.bank_account` (deduplication.js hash + mirror).
 
 ### Leave alone — a DIFFERENT concept (recipient bank accounts, NOT the txn column)
+
 `recipient_bank_accounts` table + `repositories/recipientBankAccountRepository.js`,
 `services/recipientBankAccountService.js`, `routes/recipientBankAccounts.js`. These model a
 recipient's IBANs and are unrelated to `transactions.bank_account`. Files that touch **both**
@@ -92,6 +99,7 @@ recipient's IBANs and are unrelated to `transactions.bank_account`. Files that t
 `repositories/accountRepository.js`, `backup/coverage.js`.
 
 ### 1. Materialized view — already done (migration 0082)
+
 - `mv_bank_balances` was a dead view (zero readers) and has been dropped: removed from
   `services/materializedViewService.js`'s managed set and dropped by migration 0082. Nothing
   reads it, so there is no consumer to switch. The account-balance / bank-balances reads
@@ -99,6 +107,7 @@ recipient's IBANs and are unrelated to `transactions.bank_account`. Files that t
   not the MV. `up.sql` step 2 is now just a defensive `DROP … IF EXISTS`.
 
 ### 2. Reads — derive the label from `account_id` — DONE (2026-08-02)
+
 `repositories/transactionRepository.js`, `repositories/plannedTransactionRepository.js`,
 `repositories/infoRepositoryNetWorth.js`, `repositories/infoRepositoryStatistics.js`,
 `repositories/splitRepository.js`,
@@ -113,20 +122,23 @@ free-text bank branch all resolve through `account_id` → `accounts.name`),
 write-path whitelist — see the lockstep list above.)
 
 ### 3. Writes — set `account_id` instead of the string — import DONE (dual-write); rest ships with the drop
+
 `services/importPipeline/stage.js`, `services/importPipeline/validate.js`,
 `services/importPipeline/commit.js`, `services/importPipeline/adapters/generic.js`,
 `services/accountMergeService.js`, `services/dataImportService.js` (txn-column half only).
-The CSV adapters still *parse* a bank-account field from the file — keep the parse, but resolve it
+The CSV adapters still _parse_ a bank-account field from the file — keep the parse, but resolve it
 to `account_id` at write time (the same name→account mapping the trigger does today) rather than
 storing the string.
 
 ### 4. After code is decoupled
+
 - Ship the lockstep write-side change (see the 2026-08-02 note above) with the drop.
 - Run the full backend suite + a manual import/dedup/net-worth smoke.
 - Confirm the soak query returns 0 in the target DB.
 - Apply `up.sql`. Keep `down.sql` ready until you've confirmed a healthy boot.
 
 ## Dry-run record (2026-08-02, throwaway DB)
+
 `up.sql` applied cleanly to a head-migrated (0086) scratch database seeded through the
 dual-write path (soak gate passed with data present); all flipped readers ran green against the
 dropped schema; `down.sql` re-derived every string from `accounts.name` byte-identically and the
@@ -136,6 +148,7 @@ arbiter matches no unique index since 0066 → 42P10 on every first-seen label (
 regression); it now restores the HEAD (0083) function verbatim.
 
 ## Blast radius
+
 Irreversible drop of two nullable columns + their indexes + the dual-write trigger
 (`mv_bank_balances` is already gone since migration 0082 — step 2 is a defensive no-op).
 Recovery = `down.sql` (re-derives losslessly from `accounts.name`). Not a chain migration — never

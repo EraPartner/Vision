@@ -50,7 +50,6 @@ jobs:
       # No image artifact here — compose builds the `app` image implicitly
       # (fresh runner → no cached image), so current source runs.
       #
-      # SECRET_KEY: the backend requires one; any 32+ char test value works.
       # VISION_DEV=true enables the app's sanctioned dev/test bypass (skips
       # rate limiting) so the suite's rapid full-page navigation across every
       # route doesn't trip the 30/min per-route limiters (e.g. exchange-rates)
@@ -61,7 +60,6 @@ jobs:
         uses: ./.github/actions/compose-up
         with:
           extra-env: |
-            SECRET_KEY=ci_test_secret_key_minimum_32_chars_!
             VISION_DEV=true
           health-attempts: "60"
           health-interval: "2"

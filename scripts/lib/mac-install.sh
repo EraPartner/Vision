@@ -3,11 +3,10 @@
 # Source this file after REPO_PATH is set:
 #   source "$REPO_PATH/scripts/lib/mac-install.sh"
 #
-# These factor out the three blocks that were duplicated (and could drift)
-# between the two installers: the Docker-daemon wait loop, the "find the built
-# .app" candidate scan, and the remove/copy/de-quarantine install block. The
-# surrounding user-facing messages stay in each caller so their exact output is
-# preserved.
+# These factor out the shared Docker-Demo wait loop, the built-app candidate
+# scan, and the copy/de-quarantine install block. Normal Vision installation no
+# longer calls the Docker helper; Vision Demo remains an explicitly isolated
+# Docker deployment.
 
 # Wait up to ~60s (30 × 2s) for the Docker daemon to come up. Callers handle the
 # "starting…" / "ready" / failure messaging so each script keeps its own wording.
@@ -44,8 +43,8 @@ install_app_bundle() {
   appname="$(basename "$dest" .app)"
   echo "==> Installing to $dest..."
   if [ -d "$dest" ]; then
-    # Best-effort: quit a running copy first so we're not replacing a live bundle
-    # (and its Docker stack) out from under a running process. Ignored if not running.
+    # Best-effort: quit a running copy first so its native children can shut down
+    # cleanly before the application bundle is replaced. Ignored if not running.
     osascript -e "tell application \"$appname\" to quit" >/dev/null 2>&1 || true
     rm -rf "$dest"
   fi

@@ -3,9 +3,9 @@
 
 Why this exists
 ---------------
-`docker-entrypoint.sh` runs `alembic upgrade head` UNCONDITIONALLY on every boot, so anything
-landing in `alembic/versions/` reaches every self-hosted database on the next container start --
-before, or without, the app code that depends on the change. That already broke production once:
+Native and Docker backend startup run Vision's guarded migration runner before accepting requests,
+so anything landing in `alembic/versions/` reaches every installation on its next start -- before,
+or without, the app code that depends on the change. That already broke production once:
 `0055_drop_bank_account_string` dropped columns + a trigger + a matview ahead of its coupled code
 and crashed startup; `0055` is now a no-op and `0056` is its recovery (doctrine in ADR-088). The
 fix at the time was a docstring and a convention -- nothing stopped a recurrence.
@@ -80,7 +80,10 @@ SQL_ALWAYS = [
     ("DROP SCHEMA", re.compile(r"\bDROP\s+SCHEMA\b", re.I)),
     ("DROP DATABASE", re.compile(r"\bDROP\s+DATABASE\b", re.I)),
     # `SET DATA TYPE` is the spelled-out form; both rewrite the column.
-    ("ALTER COLUMN TYPE", re.compile(r"\bALTER\s+COLUMN\s+\S+\s+(?:SET\s+DATA\s+)?TYPE\b", re.I)),
+    (
+        "ALTER COLUMN TYPE",
+        re.compile(r"\bALTER\s+COLUMN\s+\S+\s+(?:SET\s+DATA\s+)?TYPE\b", re.I),
+    ),
 ]
 
 # `replaceable`: a DROP of a derived//code object. Exempt when the same upgrade() recreates
@@ -88,12 +91,29 @@ SQL_ALWAYS = [
 SQL_REPLACEABLE = [
     (
         "DROP MATERIALIZED VIEW",
-        re.compile(r"\bDROP\s+MATERIALIZED\s+VIEW\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I),
+        re.compile(
+            r"\bDROP\s+MATERIALIZED\s+VIEW\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)",
+            re.I,
+        ),
     ),
-    ("DROP VIEW", re.compile(r"\bDROP\s+VIEW\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I)),
-    ("DROP TRIGGER", re.compile(r"\bDROP\s+TRIGGER\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I)),
-    ("DROP FUNCTION", re.compile(r"\bDROP\s+FUNCTION\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"(]+)", re.I)),
-    ("DROP TYPE", re.compile(r"\bDROP\s+TYPE\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I)),
+    (
+        "DROP VIEW",
+        re.compile(r"\bDROP\s+VIEW\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I),
+    ),
+    (
+        "DROP TRIGGER",
+        re.compile(r"\bDROP\s+TRIGGER\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I),
+    ),
+    (
+        "DROP FUNCTION",
+        re.compile(
+            r"\bDROP\s+FUNCTION\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"(]+)", re.I
+        ),
+    ),
+    (
+        "DROP TYPE",
+        re.compile(r"\bDROP\s+TYPE\b(?:\s+IF\s+EXISTS)?\s+(?P<name>[\w.\"]+)", re.I),
+    ),
 ]
 
 # Any CREATE of a named object, used to detect the DROP-then-CREATE replace idiom.
@@ -148,7 +168,10 @@ def _exempt_lines(tree: ast.Module) -> set[int]:
     """
     exempt: set[int] = set()
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "downgrade":
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "downgrade"
+        ):
             exempt.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
     return exempt
 
@@ -158,8 +181,12 @@ def scan_file(path: Path) -> list[Finding]:
     lines = source.splitlines()
     try:
         tree = ast.parse(source, filename=str(path))
-    except SyntaxError as exc:  # a migration that cannot be parsed cannot be vouched for
-        return [Finding(path, exc.lineno or 1, "unparseable", f"could not parse: {exc.msg}")]
+    except (
+        SyntaxError
+    ) as exc:  # a migration that cannot be parsed cannot be vouched for
+        return [
+            Finding(path, exc.lineno or 1, "unparseable", f"could not parse: {exc.msg}")
+        ]
 
     exempt = _exempt_lines(tree)
 
@@ -185,7 +212,12 @@ def scan_file(path: Path) -> list[Finding]:
             continue
         if attr in OP_DESTRUCTIVE:
             findings.append(
-                Finding(path, node.lineno, OP_DESTRUCTIVE[attr], f"{OP_DESTRUCTIVE[attr]}(...)")
+                Finding(
+                    path,
+                    node.lineno,
+                    OP_DESTRUCTIVE[attr],
+                    f"{OP_DESTRUCTIVE[attr]}(...)",
+                )
             )
         elif attr == "alter_column" and any(kw.arg == "type_" for kw in node.keywords):
             findings.append(
@@ -208,14 +240,24 @@ def scan_file(path: Path) -> list[Finding]:
         if isinstance(node, ast.JoinedStr) or (
             isinstance(node, ast.Constant) and isinstance(node.value, str)
         ):
-            sql_line_nos.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+            sql_line_nos.update(
+                range(node.lineno, (node.end_lineno or node.lineno) + 1)
+            )
     docstring_lines: set[int] = set()
-    for scope in [tree] + [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.ClassDef))]:
+    for scope in [tree] + [
+        n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.ClassDef))
+    ]:
         body = getattr(scope, "body", None)
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+        ):
             if isinstance(body[0].value.value, str):
                 first = body[0].value
-                docstring_lines.update(range(first.lineno, (first.end_lineno or first.lineno) + 1))
+                docstring_lines.update(
+                    range(first.lineno, (first.end_lineno or first.lineno) + 1)
+                )
     sql_line_nos -= docstring_lines
 
     created = {
@@ -231,14 +273,18 @@ def scan_file(path: Path) -> list[Finding]:
         text = lines[line_no - 1]
         for label, pattern in SQL_ALWAYS:
             if pattern.search(text):
-                findings.append(Finding(path, line_no, label, f"raw SQL: {text.strip()[:100]}"))
+                findings.append(
+                    Finding(path, line_no, label, f"raw SQL: {text.strip()[:100]}")
+                )
         for label, pattern in SQL_REPLACEABLE:
             m = pattern.search(text)
             if not m:
                 continue
             if _normalize_object_name(m.group("name")) in created:
                 continue  # DROP-then-CREATE of the same object == replace, not destruction
-            findings.append(Finding(path, line_no, label, f"raw SQL: {text.strip()[:100]}"))
+            findings.append(
+                Finding(path, line_no, label, f"raw SQL: {text.strip()[:100]}")
+            )
 
     return [f for f in findings if not _has_marker(lines, f.line)]
 
@@ -254,7 +300,9 @@ def all_findings(directory: Path) -> tuple[list[Finding], int]:
 
 # ── Self-test ────────────────────────────────────────────────────────────────────────────────
 
-_SELF_TEST_HEADER = '"""Fixture migration."""\n\nfrom alembic import op\nimport sqlalchemy as sa\n\n'
+_SELF_TEST_HEADER = (
+    '"""Fixture migration."""\n\nfrom alembic import op\nimport sqlalchemy as sa\n\n'
+)
 
 SELF_TEST_CASES: list[tuple[str, str, int]] = [
     (
@@ -264,7 +312,7 @@ SELF_TEST_CASES: list[tuple[str, str, int]] = [
     ),
     (
         "marked op.drop_column passes",
-        'def upgrade() -> None:\n    # destructive-ok: readers flipped to account_id in 0051 (ADR-088)\n'
+        "def upgrade() -> None:\n    # destructive-ok: readers flipped to account_id in 0051 (ADR-088)\n"
         '    op.drop_column("transactions", "bank_account")\n\n\ndef downgrade() -> None:\n    pass\n',
         0,
     ),
@@ -335,8 +383,9 @@ SELF_TEST_CASES: list[tuple[str, str, int]] = [
     ),
     (
         "a marker cannot launder a drop far below it",
-        'def upgrade() -> None:\n    # destructive-ok: this reason belongs to the statement right below it\n'
-        '    op.drop_column("t", "a")\n' + "".join(f"    op.execute('SELECT {i}')\n" for i in range(12))
+        "def upgrade() -> None:\n    # destructive-ok: this reason belongs to the statement right below it\n"
+        '    op.drop_column("t", "a")\n'
+        + "".join(f"    op.execute('SELECT {i}')\n" for i in range(12))
         + '    op.drop_column("t", "b")\n\n\ndef downgrade() -> None:\n    pass\n',
         1,
     ),
@@ -388,7 +437,10 @@ def main(argv: list[str]) -> int:
         return run_self_test()
 
     if not VERSIONS_DIR.is_dir():
-        print(f"{TAG} ERROR: {VERSIONS_DIR} not found (run from anywhere in the repo).", file=sys.stderr)
+        print(
+            f"{TAG} ERROR: {VERSIONS_DIR} not found (run from anywhere in the repo).",
+            file=sys.stderr,
+        )
         return 1
 
     findings, file_count = all_findings(VERSIONS_DIR)
@@ -396,19 +448,24 @@ def main(argv: list[str]) -> int:
     if "--list" in argv:
         for f in findings:
             print(f"{f.rel()}:{f.line}: {f.kind} -- {f.detail}")
-        print(f"{TAG} {len(findings)} unmarked finding(s) across {file_count} migration(s).")
+        print(
+            f"{TAG} {len(findings)} unmarked finding(s) across {file_count} migration(s)."
+        )
         return 0
 
     if findings:
-        print(f"{TAG} ERROR: destructive DDL without a `destructive-ok:` marker:", file=sys.stderr)
+        print(
+            f"{TAG} ERROR: destructive DDL without a `destructive-ok:` marker:",
+            file=sys.stderr,
+        )
         print("", file=sys.stderr)
         for f in findings:
             print(f"  {f.rel()}:{f.line}", file=sys.stderr)
             print(f"      {f.kind}: {f.detail}", file=sys.stderr)
         print(
             "\n"
-            "  Every file in alembic/versions/ is applied by `alembic upgrade head` on the next\n"
-            "  container boot -- on every self-hosted database, whether or not the code that\n"
+            "  Every file in alembic/versions/ is applied by the guarded migration runner on the\n"
+            "  next application boot, whether or not the code that\n"
             "  depends on it has shipped. That is how 0055 crashed startup (ADR-088).\n"
             "\n"
             "  Either:\n"

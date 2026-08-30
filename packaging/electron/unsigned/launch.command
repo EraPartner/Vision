@@ -68,8 +68,6 @@ if ! command -v bun >/dev/null 2>&1; then
   fi
 fi
 
-open -a Docker || true
-
 cd "$ROOT_DIR"
 
 # Ensure project deps are installed (root + packaging/electron) so the electron binary exists
@@ -101,6 +99,21 @@ if [ ! -x "$ROOT_DIR/packaging/electron/node_modules/.bin/electron" ]; then
   osascript -e 'display dialog "Vision could not install its dependencies, so the app cannot start. Check your network connection and run this launcher again." buttons {"OK"} default button "OK"'
   echo "ERROR: packaging/electron/node_modules/.bin/electron is missing after install; aborting."
   exit 1
+fi
+
+# The source launcher keeps its generated native services outside release ZIPs.
+# Prepare them on first use or after an explicit local cleanup. This validates
+# PostgreSQL 18.6, creates the standalone Alembic executable, and installs the
+# pinned Chrome Headless Shell used for PDF reports. It never starts Homebrew's
+# PostgreSQL service and it does not invoke Docker.
+if [ ! -x "$ROOT_DIR/packaging/electron/native-runtime/vision-alembic" ] ||
+   [ ! -f "$ROOT_DIR/packaging/electron/native-runtime/postgres/runtime.json" ] ||
+   [ ! -f "$ROOT_DIR/packaging/electron/native-runtime/chromium/runtime.json" ]; then
+  echo "Preparing Vision's private native services..."
+  if ! bun run native:prepare; then
+    osascript -e 'display dialog "Vision could not prepare its native PostgreSQL, migration, and PDF services. Review the Terminal output and the native macOS setup guide, then run the launcher again." buttons {"OK"} default button "OK"'
+    exit 1
+  fi
 fi
 
 exec bun run electron:prod

@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-04-26
+date: 2026-08-30
 updated: 2026-06-18
 tags:
   - api
@@ -62,10 +62,17 @@ Get system health and initialization status.
 **Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve administration status" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Failed to retrieve administration status"
+  }
+}
 ```
 
 Implementation note:
+
 - Internal route refactor extracted `formatAdminStatusPayload(isConnected, tableCount)` to centralize status payload construction while preserving response shape and status codes ([[apps/node-backend/src/routes/admin.js]]).
 
 ---
@@ -89,7 +96,10 @@ Verify database connection and initialization status.
 **Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Administrative operation failed" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Administrative operation failed" }
+}
 ```
 
 ---
@@ -100,9 +110,9 @@ Reset the database (requires explicit confirmation).
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `force` | boolean | Yes | Must be `true` to confirm destructive operation |
+| Parameter | Type    | Required | Description                                     |
+| --------- | ------- | -------- | ----------------------------------------------- |
+| `force`   | boolean | Yes      | Must be `true` to confirm destructive operation |
 
 **Response:** `200 OK`
 
@@ -119,7 +129,13 @@ Reset the database (requires explicit confirmation).
 **Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Database reset endpoint disabled" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Database reset endpoint disabled"
+  }
+}
 ```
 
 **Response:** `400 Bad Request`
@@ -155,7 +171,13 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
 **Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to sanitize Kinesis history" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Failed to sanitize Kinesis history"
+  }
+}
 ```
 
 ---
@@ -166,9 +188,9 @@ Retrieve current database table statistics.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `table` | string | Optional: specific table name; omit for all tables |
+| Parameter | Type   | Description                                        |
+| --------- | ------ | -------------------------------------------------- |
+| `table`   | string | Optional: specific table name; omit for all tables |
 
 **Response:** `200 OK`
 
@@ -199,6 +221,7 @@ Retrieve current database table statistics.
 ```
 
 **Important Note on Row Counts:**
+
 - `live_rows` and `dead_rows` are estimates from PostgreSQL's `pg_stat_user_tables` view, not authoritative counts
 - These estimates are updated when VACUUM ANALYZE is executed; between runs, the values reflect the last known statistics
 - All tables display their current row count estimates regardless of vacuum/analyze history (newly created tables may show zero until their first VACUUM ANALYZE)
@@ -207,7 +230,13 @@ Retrieve current database table statistics.
 **Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve database statistics" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Failed to retrieve database statistics"
+  }
+}
 ```
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] for details.
@@ -220,10 +249,10 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | No | Specific table name to vacuum; omit to vacuum all |
-| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM |
+| Parameter | Type    | Required          | Description                                       |
+| --------- | ------- | ----------------- | ------------------------------------------------- |
+| `table`   | string  | No                | Specific table name to vacuum; omit to vacuum all |
+| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM                          |
 
 **Response:** `200 OK`
 
@@ -250,10 +279,17 @@ Run `VACUUM ANALYZE` on one or all tables.
 **Response:** `409 Conflict` (VACUUM already running)
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "VACUUM already running. Please wait." } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "VACUUM already running. Please wait."
+  }
+}
 ```
 
 **Implementation note:**
+
 - Uses raw database client (not connection pool) because VACUUM cannot run inside a transaction
 - See [[docs/features/database-maintenance|Database Maintenance Feature]] for architectural details
 
@@ -269,9 +305,9 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `table` | Table name (validated against `pg_stat_user_tables`; 400 if unknown) |
+| Parameter | Description                                                          |
+| --------- | -------------------------------------------------------------------- |
+| `table`   | Table name (validated against `pg_stat_user_tables`; 400 if unknown) |
 
 **Response:** `200 OK` — envelope `{ ok: true, data: { table, columns, primaryKey } }`
 
@@ -307,20 +343,23 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 
 **Column fields:**
 
-| Field | Description |
-|-------|-------------|
-| `name` | Column name |
-| `dataType` | PostgreSQL `data_type` from `information_schema.columns` |
-| `udtName` | `udt_name` (useful for arrays, domains, enums) |
-| `nullable` | True when column allows NULL |
-| `hasDefault` | True when column has a DEFAULT expression |
-| `generated` | True when column is a generated/computed column |
-| `writable` | False for PK columns and generated columns — the UI skips these in edit forms |
+| Field        | Description                                                                   |
+| ------------ | ----------------------------------------------------------------------------- |
+| `name`       | Column name                                                                   |
+| `dataType`   | PostgreSQL `data_type` from `information_schema.columns`                      |
+| `udtName`    | `udt_name` (useful for arrays, domains, enums)                                |
+| `nullable`   | True when column allows NULL                                                  |
+| `hasDefault` | True when column has a DEFAULT expression                                     |
+| `generated`  | True when column is a generated/computed column                               |
+| `writable`   | False for PK columns and generated columns — the UI skips these in edit forms |
 
 **Response:** `400 Bad Request` (unknown or system table)
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unknown table: pg_secret" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Unknown table: pg_secret" }
+}
 ```
 
 ---
@@ -333,20 +372,20 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `table` | Table name (validated against `pg_stat_user_tables`) |
+| Parameter | Description                                          |
+| --------- | ---------------------------------------------------- |
+| `table`   | Table name (validated against `pg_stat_user_tables`) |
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `limit` | integer | 100 | Rows per page (max 500) |
-| `offset` | integer | 0 | Row offset for pagination |
-| `orderBy` | string | primary key | Column to sort by (validated against `information_schema.columns`) |
-| `dir` | `asc` \| `desc` | `asc` | Sort direction |
-| `where` | string | — | Raw WHERE clause appended to the query; `;` is rejected to prevent statement chaining |
-| `filters` | JSON string | — | JSON array of `{column, op, value}` filter objects (see ops below) |
+| Parameter | Type            | Default     | Description                                                                           |
+| --------- | --------------- | ----------- | ------------------------------------------------------------------------------------- |
+| `limit`   | integer         | 100         | Rows per page (max 500)                                                               |
+| `offset`  | integer         | 0           | Row offset for pagination                                                             |
+| `orderBy` | string          | primary key | Column to sort by (validated against `information_schema.columns`)                    |
+| `dir`     | `asc` \| `desc` | `asc`       | Sort direction                                                                        |
+| `where`   | string          | —           | Raw WHERE clause appended to the query; `;` is rejected to prevent statement chaining |
+| `filters` | JSON string     | —           | JSON array of `{column, op, value}` filter objects (see ops below)                    |
 
 **Supported filter `op` values:** `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE `%value%`), `startsWith` (ILIKE `value%`), `isnull`, `notnull`.
 
@@ -360,7 +399,14 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
     "columns": ["id", "amount", "description", "date", "category_id"],
     "primaryKey": ["id"],
     "rows": [
-      { "id": 1, "amount": "-42.50", "description": "Groceries", "date": "2026-06-15", "category_id": 3, "__xmin": "7421836" }
+      {
+        "id": 1,
+        "amount": "-42.50",
+        "description": "Groceries",
+        "date": "2026-06-15",
+        "category_id": 3,
+        "__xmin": "7421836"
+      }
     ],
     "total": 2453,
     "limit": 100,
@@ -382,17 +428,29 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `table` | Table name (validated against `pg_stat_user_tables`) |
+| Parameter | Description                                          |
+| --------- | ---------------------------------------------------- |
+| `table`   | Table name (validated against `pg_stat_user_tables`) |
 
 **Request Body:**
 
 ```json
 {
   "changes": [
-    { "op": "insert", "values": { "amount": "-15.00", "description": "Coffee", "date": "2026-06-18" } },
-    { "op": "update", "pk": { "id": 42 }, "xmin": "7421836", "set": { "description": "Updated desc" } },
+    {
+      "op": "insert",
+      "values": {
+        "amount": "-15.00",
+        "description": "Coffee",
+        "date": "2026-06-18"
+      }
+    },
+    {
+      "op": "update",
+      "pk": { "id": 42 },
+      "xmin": "7421836",
+      "set": { "description": "Updated desc" }
+    },
     { "op": "delete", "pk": { "id": 99 }, "xmin": "7310022" }
   ],
   "dryRun": false
@@ -401,13 +459,13 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 **Change shapes:**
 
-| Field | `insert` | `update` | `delete` |
-|-------|----------|----------|----------|
-| `op` | `"insert"` | `"update"` | `"delete"` |
-| `values` | Required — column/value map | — | — |
-| `pk` | — | Required — primary key map | Required — primary key map |
-| `xmin` | — | Optional — optimistic-concurrency token from `/rows` response | Optional — optimistic-concurrency token |
-| `set` | — | Required — columns to change | — |
+| Field    | `insert`                    | `update`                                                      | `delete`                                |
+| -------- | --------------------------- | ------------------------------------------------------------- | --------------------------------------- |
+| `op`     | `"insert"`                  | `"update"`                                                    | `"delete"`                              |
+| `values` | Required — column/value map | —                                                             | —                                       |
+| `pk`     | —                           | Required — primary key map                                    | Required — primary key map              |
+| `xmin`   | —                           | Optional — optimistic-concurrency token from `/rows` response | Optional — optimistic-concurrency token |
+| `set`    | —                           | Required — columns to change                                  | —                                       |
 
 **Optimistic concurrency (`xmin`):** When supplied, the row is locked `FOR UPDATE` and its current PostgreSQL `xmin` compared to the client's token. A mismatch (row was modified by another write since the client loaded it) or a missing row returns `409 Conflict`. Omitting `xmin` skips the check (last-write-wins).
 
@@ -420,8 +478,14 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
     "dryRun": true,
     "count": 2,
     "statements": [
-      { "op": "insert", "preview": "INSERT INTO \"transactions\" (\"amount\", \"description\") VALUES ($1, $2)" },
-      { "op": "update", "preview": "UPDATE \"transactions\" SET \"description\" = $1 WHERE \"id\" = $2" }
+      {
+        "op": "insert",
+        "preview": "INSERT INTO \"transactions\" (\"amount\", \"description\") VALUES ($1, $2)"
+      },
+      {
+        "op": "update",
+        "preview": "UPDATE \"transactions\" SET \"description\" = $1 WHERE \"id\" = $2"
+      }
     ]
   }
 }
@@ -448,11 +512,11 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 **Error responses:**
 
-| Status | Scenario |
-|--------|----------|
-| `400` | Unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
-| `409` | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation |
-| `500` | Unexpected database error (rolled back) |
+| Status | Scenario                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------- |
+| `400`  | Unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
+| `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                  |
+| `500`  | Unexpected database error (rolled back)                                                           |
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
@@ -467,6 +531,7 @@ See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[do
 Check for application updates via GitHub Releases API.
 
 **Network Timeout (2026-04-26):**
+
 - GitHub fetch timeout: **5000ms** (5 seconds)
 - If GitHub is unreachable, endpoint returns a generic "No published releases found" response rather than failing with a network error
 - Uses `https.get()` with `timeout` option and `req.on('timeout', ...)` handler that calls `req.destroy()`
@@ -497,10 +562,14 @@ Check for application updates via GitHub Releases API.
 **Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Administrative operation failed" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Administrative operation failed" }
+}
 ```
 
 Implementation notes:
+
 - Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
 - The endpoint behavior is unchanged: same no-release fallback payload, same up-to-date comparison (`latest === current` or `latest === v${current}`), and same response fields ([[apps/node-backend/src/routes/admin.js]]).
 
@@ -530,7 +599,7 @@ Apply update and restart the application (backwards compatibility endpoint).
 ```json
 {
   "success": true,
-  "note": "Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required."
+  "note": "Updates are managed by the Vision desktop app for the active runtime provider. No manual action is required."
 }
 ```
 
@@ -583,8 +652,8 @@ Trigger an active on-demand health probe for a single provider.
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
+| Parameter  | Description                          |
+| ---------- | ------------------------------------ |
 | `provider` | Provider key (e.g. `binance`, `ecb`) |
 
 **Response:** `200 OK`
@@ -629,7 +698,10 @@ The probe updates the `provider_health` row (calls `recordSuccess` or `recordErr
 **Response:** `400 Bad Request` (unknown provider)
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unknown provider: unknown-name" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Unknown provider: unknown-name" }
+}
 ```
 
 ---
@@ -660,6 +732,7 @@ Retrieve rolling request metrics per route from the in-memory window (last 15 mi
 ```
 
 **Notes:**
+
 - Metrics are in-memory only and reset on backend restart
 - Routes with zero traffic in the window are omitted
 - `error_rate` is `errors / count` (0–1)
@@ -685,6 +758,7 @@ Return a static manifest of all registered Express routes.
 ```
 
 **Notes:**
+
 - Generated by scanning the Express router stack at startup via `routeManifest.js`
 - Reflects all routes registered at boot time; does not update dynamically
 - Used by the frontend to display the full route matrix, joined with live metrics from `/api/admin/metrics/requests`
@@ -709,6 +783,7 @@ Return the static route manifest annotated with a `live: true` flag for each ent
 ```
 
 **Notes:**
+
 - Identical source data as `GET /api/admin/endpoints` (same `getRouteManifest()` call), with each entry extended by `live: true`
 - Intended for health/monitoring tooling that needs a single endpoint confirming the route manifest is served and all entries are live
 
@@ -716,10 +791,10 @@ Return the static route manifest annotated with a `live: true` flag for each ent
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `APP_VERSION` | Current application version |
-| `APP_IMAGE_TAG` | Docker image tag (fallback for version) |
+| Variable           | Description                                                       |
+| ------------------ | ----------------------------------------------------------------- |
+| `APP_VERSION`      | Current application version                                       |
+| `APP_IMAGE_TAG`    | Docker image tag (fallback for version)                           |
 | `ADMIN_AUTH_TOKEN` | Optional Bearer token required for `/api/admin/*` routes when set |
 
 ## Security and Rate Limiting
@@ -749,10 +824,10 @@ This means only the host machine can reach the backend — devices on the same W
 
 Admin endpoints are subject to specialized rate limiting:
 
-| Endpoint Type | Rate Limit | Limiter | Reason |
-|---------------|-----------|---------|--------|
-| **GET** (observability reads) | 500/min | `adminRateLimiter` | Admin hub makes 5-6 parallel reads on load |
-| **POST** (destructive mutations) | 30/min | `adminMutateLimiter` | Database reset, VACUUM, provider probes, Kinesis sanitization |
+| Endpoint Type                    | Rate Limit | Limiter              | Reason                                                        |
+| -------------------------------- | ---------- | -------------------- | ------------------------------------------------------------- |
+| **GET** (observability reads)    | 500/min    | `adminRateLimiter`   | Admin hub makes 5-6 parallel reads on load                    |
+| **POST** (destructive mutations) | 30/min     | `adminMutateLimiter` | Database reset, VACUUM, provider probes, Kinesis sanitization |
 
 See [[docs/security/rate-limiting|Rate Limiting]] for full details and response headers.
 
@@ -766,6 +841,7 @@ Code links: [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/s
 ## Test Coverage Notes (2026-04-10)
 
 Recent backend tests validate admin update behavior for:
+
 - `GET /api/admin/update/check`: GitHub releases response parsing, version resolution precedence (`APP_VERSION` then `APP_IMAGE_TAG`), no-release fallback payload, and invalid JSON path returning sanitized `500`.
 - `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart`: expected success response contracts.
 

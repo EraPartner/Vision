@@ -28,22 +28,27 @@
  *     :"var" placeholders.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { setTimeout as sleep } from 'node:timers/promises';
-import pg from 'pg';
-import { logger } from '../config/logger.js';
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
+import pg from "pg";
+import { logger } from "../config/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // repo root: apps/node-backend/src/database/ -> ../../../.. (mirrors migrate.js;
 // in the Docker image this resolves to /app, where the Dockerfile copies
 // docker/postgres-init/ alongside alembic/).
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
+  ? path.resolve(process.env.VISION_RUNTIME_ROOT)
+  : path.resolve(__dirname, "..", "..", "..", "..");
 
 const GRANTS_TEMPLATE_PATH = path.join(
-  REPO_ROOT, 'docker', 'postgres-init', 'app-role-grants.sql.tpl'
+  REPO_ROOT,
+  "docker",
+  "postgres-init",
+  "app-role-grants.sql.tpl",
 );
 
 /**
@@ -80,7 +85,7 @@ function parseDbUrl(url) {
     return {
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
-      database: decodeURIComponent(parsed.pathname.replace(/^\//, '')),
+      database: decodeURIComponent(parsed.pathname.replace(/^\//, "")),
     };
   } catch {
     return null;
@@ -99,7 +104,7 @@ function quoteIdent(name) {
  * @param {string} value
  */
 function quoteLiteral(value) {
-  return `E'${value.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+  return `E'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 }
 
 /**
@@ -110,18 +115,76 @@ function quoteLiteral(value) {
  * @returns {string[]}
  */
 export function renderGrantStatements({ appRole, ownerRole, dbName }) {
-  const template = readFileSync(GRANTS_TEMPLATE_PATH, 'utf8');
+  const template = readFileSync(GRANTS_TEMPLATE_PATH, "utf8");
   const substituted = template
-    .split(':"app_role"').join(quoteIdent(appRole))
-    .split(':"owner_role"').join(quoteIdent(ownerRole))
-    .split(':"db_name"').join(quoteIdent(dbName));
+    .split(':"app_role"')
+    .join(quoteIdent(appRole))
+    .split(':"owner_role"')
+    .join(quoteIdent(ownerRole))
+    .split(':"db_name"')
+    .join(quoteIdent(dbName));
   return substituted
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('--'))
-    .join('\n')
-    .split(';')
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
+    .split(";")
     .map((stmt) => stmt.trim())
     .filter(Boolean);
+}
+
+/**
+ * Apply the template's current-table grant relation by relation.
+ *
+ * PostgreSQL treats materialized views as tables for `ON ALL TABLES`. Vision's
+ * runtime-managed materialized views are deliberately owned by the app role so
+ * it can refresh them. Once that ownership handoff has happened, the migration
+ * role can no longer grant privileges on those views and PostgreSQL rejects the
+ * entire broad GRANT before granting ordinary tables. Expanding the statement
+ * lets app-owned objects be skipped and isolates any third-party ownership
+ * failure to that one relation.
+ *
+ * @param {PgOneShotClient} client
+ * @param {string} appRole
+ * @param {typeof logger} log
+ * @returns {Promise<number>} number of relation-specific grant failures
+ */
+async function grantCurrentRelations(client, appRole, log) {
+  const result = await client.query(`
+    SELECT
+      namespace.nspname AS schema_name,
+      relation.relname AS relation_name,
+      relation.relkind,
+      pg_get_userbyid(relation.relowner) AS owner_name
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+    ORDER BY relation.relname
+  `);
+  let failures = 0;
+  for (const row of result.rows) {
+    if (row.owner_name === appRole) continue;
+    const privileges =
+      row.relkind === "m" ? "SELECT" : "SELECT, INSERT, UPDATE, DELETE";
+    const relation = `${quoteIdent(row.schema_name)}.${quoteIdent(row.relation_name)}`;
+    try {
+      await client.query(
+        `GRANT ${privileges} ON TABLE ${relation} TO ${quoteIdent(appRole)}`,
+      );
+    } catch (err) {
+      failures++;
+      log.warn(
+        `[role-bootstrap] grant failed (${/** @type {any} */ (err).message}) for relation ${relation}`,
+      );
+    }
+  }
+  return failures;
+}
+
+/** @param {string} statement */
+function isAllTablesGrant(statement) {
+  return /\bON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\b/i.test(statement);
 }
 
 /**
@@ -132,11 +195,17 @@ export function renderGrantStatements({ appRole, ownerRole, dbName }) {
  * @param {any} err
  */
 function isRetryableConnectError(err) {
-  const transportCodes = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'];
+  const transportCodes = [
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ETIMEDOUT",
+  ];
   return (
-    err?.code === '57P03' // cannot_connect_now: server is starting up
-    || transportCodes.includes(err?.code)
-    || /Connection terminated/i.test(err?.message || '')
+    err?.code === "57P03" || // cannot_connect_now: server is starting up
+    transportCodes.includes(err?.code) ||
+    /Connection terminated/i.test(err?.message || "")
   );
 }
 
@@ -166,15 +235,15 @@ async function connectPrivileged(migrationsUrl, maxAttempts, log) {
       await client.end().catch(() => {});
       if (!isRetryableConnectError(err)) {
         log.warn(
-          `[role-bootstrap] cannot connect as the migration role (${err.message}) — `
-          + 'skipping least-privilege bootstrap. Check DATABASE_URL_MIGRATIONS.'
+          `[role-bootstrap] cannot connect as the migration role (${err.message}) — ` +
+            "skipping least-privilege bootstrap. Check DATABASE_URL_MIGRATIONS.",
         );
         return null;
       }
       if (attempt === maxAttempts) {
         log.warn(
-          `[role-bootstrap] database not reachable after ${maxAttempts} attempts (${err.message}) — `
-          + 'skipping least-privilege bootstrap.'
+          `[role-bootstrap] database not reachable after ${maxAttempts} attempts (${err.message}) — ` +
+            "skipping least-privilege bootstrap.",
         );
         return null;
       }
@@ -201,41 +270,50 @@ async function connectPrivileged(migrationsUrl, maxAttempts, log) {
  * @param {typeof logger} [opts.log]
  * @returns {Promise<BootstrapResult>}
  */
-export async function ensureAppRole({ databaseUrl, migrationsUrl, maxAttempts = 40, log = logger }) {
+export async function ensureAppRole({
+  databaseUrl,
+  migrationsUrl,
+  maxAttempts = 40,
+  log = logger,
+}) {
   try {
     if (!migrationsUrl || migrationsUrl === databaseUrl) {
       // Single-role setup (the pre-existing default): the runtime pool holds
       // full DDL rights. Deliberately not a warning — this is every install
       // that predates the three-variable setup, and it must boot unchanged.
       log.info(
-        '[role-bootstrap] DATABASE_URL_MIGRATIONS not set — single-role database setup. '
-        + 'See .env.example for the least-privilege (ftm_app) configuration.'
+        "[role-bootstrap] DATABASE_URL_MIGRATIONS not set — single-role database setup. " +
+          "See .env.example for the least-privilege (ftm_app) configuration.",
       );
-      return { status: 'skipped', reason: 'single-role' };
+      return { status: "skipped", reason: "single-role" };
     }
 
     const appConn = parseDbUrl(databaseUrl);
     const migConn = parseDbUrl(migrationsUrl);
     if (!appConn || !migConn) {
-      log.warn('[role-bootstrap] could not parse DATABASE_URL / DATABASE_URL_MIGRATIONS — skipping bootstrap.');
-      return { status: 'skipped', reason: 'unparseable-url' };
+      log.warn(
+        "[role-bootstrap] could not parse DATABASE_URL / DATABASE_URL_MIGRATIONS — skipping bootstrap.",
+      );
+      return { status: "skipped", reason: "unparseable-url" };
     }
     if (appConn.user === migConn.user) {
       log.info(
-        `[role-bootstrap] DATABASE_URL and DATABASE_URL_MIGRATIONS use the same role (${appConn.user}) — nothing to bootstrap.`
+        `[role-bootstrap] DATABASE_URL and DATABASE_URL_MIGRATIONS use the same role (${appConn.user}) — nothing to bootstrap.`,
       );
-      return { status: 'skipped', reason: 'same-role' };
+      return { status: "skipped", reason: "same-role" };
     }
     if (!appConn.user || !appConn.password) {
-      log.warn('[role-bootstrap] DATABASE_URL carries no credentials — skipping bootstrap.');
-      return { status: 'skipped', reason: 'no-credentials' };
+      log.warn(
+        "[role-bootstrap] DATABASE_URL carries no credentials — skipping bootstrap.",
+      );
+      return { status: "skipped", reason: "no-credentials" };
     }
     if (appConn.database !== migConn.database) {
       log.warn(
-        `[role-bootstrap] DATABASE_URL (${appConn.database}) and DATABASE_URL_MIGRATIONS (${migConn.database}) `
-        + 'point at different databases — refusing to bootstrap across databases.'
+        `[role-bootstrap] DATABASE_URL (${appConn.database}) and DATABASE_URL_MIGRATIONS (${migConn.database}) ` +
+          "point at different databases — refusing to bootstrap across databases.",
       );
-      return { status: 'degraded', reason: 'database-mismatch' };
+      return { status: "degraded", reason: "database-mismatch" };
     }
 
     // Render the grant set BEFORE touching the database: creating the role and
@@ -250,57 +328,62 @@ export async function ensureAppRole({ databaseUrl, migrationsUrl, maxAttempts = 
       });
     } catch (err) {
       log.warn(
-        `[role-bootstrap] cannot read grant template ${GRANTS_TEMPLATE_PATH} (${/** @type {any} */ (err).message}) — skipping bootstrap.`
+        `[role-bootstrap] cannot read grant template ${GRANTS_TEMPLATE_PATH} (${/** @type {any} */ (err).message}) — skipping bootstrap.`,
       );
-      return { status: 'error', reason: 'grants-template-unreadable' };
+      return { status: "error", reason: "grants-template-unreadable" };
     }
 
     const client = await connectPrivileged(migrationsUrl, maxAttempts, log);
-    if (!client) return { status: 'unavailable', reason: 'privileged-connect-failed' };
+    if (!client)
+      return { status: "unavailable", reason: "privileged-connect-failed" };
 
     try {
       const roleRes = await client.query(
-        'SELECT rolsuper FROM pg_roles WHERE rolname = $1', [appConn.user]
+        "SELECT rolsuper FROM pg_roles WHERE rolname = $1",
+        [appConn.user],
       );
       let roleExists = roleRes.rows.length > 0;
-      const appRoleIsSuperuser = roleExists && roleRes.rows[0].rolsuper === true;
+      const appRoleIsSuperuser =
+        roleExists && roleRes.rows[0].rolsuper === true;
       if (appRoleIsSuperuser) {
         log.warn(
-          `[role-bootstrap] app role ${appConn.user} is a SUPERUSER — least-privilege is not in effect. `
-          + 'Point DATABASE_URL at a non-superuser role.'
+          `[role-bootstrap] app role ${appConn.user} is a SUPERUSER — least-privilege is not in effect. ` +
+            "Point DATABASE_URL at a non-superuser role.",
         );
       }
 
       let created = false;
       if (!roleExists) {
         const privRes = await client.query(
-          'SELECT (rolsuper OR rolcreaterole) AS can_create FROM pg_roles WHERE rolname = current_user'
+          "SELECT (rolsuper OR rolcreaterole) AS can_create FROM pg_roles WHERE rolname = current_user",
         );
         if (privRes.rows[0]?.can_create !== true) {
           log.warn(
-            `[role-bootstrap] app role ${appConn.user} does not exist and the migration role lacks CREATEROLE — `
-            + 'cannot bootstrap it. Create the role manually (see docker/postgres-init/01-app-role.sh for the intended shape) '
-            + 'or the runtime pool will fail to connect.'
+            `[role-bootstrap] app role ${appConn.user} does not exist and the migration role lacks CREATEROLE — ` +
+              "cannot bootstrap it. Create the role manually (see docker/postgres-init/01-app-role.sh for the intended shape) " +
+              "or the runtime pool will fail to connect.",
           );
-          return { status: 'degraded', reason: 'no-createrole' };
+          return { status: "degraded", reason: "no-createrole" };
         }
         try {
           await client.query(
-            `CREATE ROLE ${quoteIdent(appConn.user)} LOGIN PASSWORD ${quoteLiteral(appConn.password)} `
-            + 'NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'
+            `CREATE ROLE ${quoteIdent(appConn.user)} LOGIN PASSWORD ${quoteLiteral(appConn.password)} ` +
+              "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
           );
           created = true;
-          log.info(`[role-bootstrap] created least-privilege application role ${appConn.user}.`);
+          log.info(
+            `[role-bootstrap] created least-privilege application role ${appConn.user}.`,
+          );
         } catch (err) {
-          if (/** @type {any} */ (err).code === '42710') {
+          if (/** @type {any} */ (err).code === "42710") {
             // duplicate_object: raced another boot — the role now exists.
             roleExists = true;
           } else {
             log.warn(
-              `[role-bootstrap] CREATE ROLE ${appConn.user} failed (${/** @type {any} */ (err).message}) — `
-              + 'continuing without least-privilege bootstrap.'
+              `[role-bootstrap] CREATE ROLE ${appConn.user} failed (${/** @type {any} */ (err).message}) — ` +
+                "continuing without least-privilege bootstrap.",
             );
-            return { status: 'degraded', reason: 'create-role-failed' };
+            return { status: "degraded", reason: "create-role-failed" };
           }
         }
       }
@@ -314,26 +397,34 @@ export async function ensureAppRole({ databaseUrl, migrationsUrl, maxAttempts = 
       let grantFailures = 0;
       for (const stmt of grantStatements) {
         try {
+          if (isAllTablesGrant(stmt)) {
+            grantFailures += await grantCurrentRelations(
+              client,
+              appConn.user,
+              log,
+            );
+            continue;
+          }
           await client.query(stmt);
         } catch (err) {
           grantFailures++;
           log.warn(
-            `[role-bootstrap] grant failed (${/** @type {any} */ (err).message}): ${stmt.slice(0, 120)}`
+            `[role-bootstrap] grant failed (${/** @type {any} */ (err).message}): ${stmt.slice(0, 120)}`,
           );
         }
       }
       if (grantFailures === 0 && created) {
         log.info(`[role-bootstrap] grant set applied to ${appConn.user}.`);
       }
-      return { status: created ? 'created' : 'exists', grantFailures };
+      return { status: created ? "created" : "exists", grantFailures };
     } finally {
       await client.end().catch(() => {});
     }
   } catch (err) {
     // Absolute backstop — this function must never take the boot path down.
     logger.warn(
-      `[role-bootstrap] unexpected error (${/** @type {any} */ (err)?.message}) — continuing boot without bootstrap.`
+      `[role-bootstrap] unexpected error (${/** @type {any} */ (err)?.message}) — continuing boot without bootstrap.`,
     );
-    return { status: 'error', reason: 'unexpected' };
+    return { status: "error", reason: "unexpected" };
   }
 }

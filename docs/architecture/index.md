@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-04-27
-updated: 2026-08-26
+date: 2026-08-30
+updated: 2026-08-30
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -28,61 +28,61 @@ The diagrams are organized into categories:
 
 Located in `docs/diagrams/`:
 
-| Diagram | Description | File |
-|---------|-------------|------|
-| Domain Model | Core entities (Transaction, Recipient, Category, Tag, etc.) with relationships | `backend-domain-model.puml` |
-| Repository Layer | Data access repositories | `backend-repository-layer.puml` |
-| Service Layer | Business logic services | `backend-service-layer.puml` |
-| API Layer | Express routes and middleware | `backend-api-layer.puml` |
-| Database Schema | Full ERD with all tables | `backend-database-schema.puml` |
+| Diagram          | Description                                                                    | File                            |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| Domain Model     | Core entities (Transaction, Recipient, Category, Tag, etc.) with relationships | `backend-domain-model.puml`     |
+| Repository Layer | Data access repositories                                                       | `backend-repository-layer.puml` |
+| Service Layer    | Business logic services                                                        | `backend-service-layer.puml`    |
+| API Layer        | Express routes and middleware                                                  | `backend-api-layer.puml`        |
+| Database Schema  | Full ERD with all tables                                                       | `backend-database-schema.puml`  |
 
 ## Backend Flow Diagrams
 
-| Diagram | Description | File |
-|---------|-------------|------|
-| Import Pipeline | CSV import with bank adapters and deduplication | `import-pipeline.puml` |
-| Import Sequence | Detailed import sequence diagram | `import-sequence.puml` |
-| Currency Conversion | Exchange rate fetching and caching | `currency-conversion-flow.puml` |
-| Price Provider | Investment price updates from external APIs | `price-provider-flow.puml` |
-| Recurring Detection | Automatic recurring transaction detection | `recurring-detection-flow.puml` |
-| Materialized Views | View refresh on startup and schedules | `materialized-view-flow.puml` |
-| AI Chat Tool Loop | Ollama tool-call loop with repository dispatch | `ai-chat-tool-loop.puml` |
-| Backup AEAD Encryption | AES-256-GCM v2 bundle create + restore (ADR-040) | `backup-aead-encryption.puml` |
-| Dev Observability | API event bus → ring buffer → Cmd+Shift+A Inspector | `dev-observability-flow.puml` |
+| Diagram                | Description                                         | File                            |
+| ---------------------- | --------------------------------------------------- | ------------------------------- |
+| Import Pipeline        | CSV import with bank adapters and deduplication     | `import-pipeline.puml`          |
+| Import Sequence        | Detailed import sequence diagram                    | `import-sequence.puml`          |
+| Currency Conversion    | Exchange rate fetching and caching                  | `currency-conversion-flow.puml` |
+| Price Provider         | Investment price updates from external APIs         | `price-provider-flow.puml`      |
+| Recurring Detection    | Automatic recurring transaction detection           | `recurring-detection-flow.puml` |
+| Materialized Views     | View refresh on startup and schedules               | `materialized-view-flow.puml`   |
+| AI Chat Tool Loop      | Ollama tool-call loop with repository dispatch      | `ai-chat-tool-loop.puml`        |
+| Backup AEAD Encryption | AES-256-GCM v2 bundle create + restore (ADR-040)    | `backup-aead-encryption.puml`   |
+| Dev Observability      | API event bus → ring buffer → Cmd+Shift+A Inspector | `dev-observability-flow.puml`   |
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (55 components) and 24 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (57 components) and 26 end-to-end flows, including the native runtime and verified Docker-to-native cutover. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 
-| Diagram | Description | File |
-|---------|-------------|------|
-| Component Structure | UI components and feature modules | `frontend-component-structure.puml` |
-| State Management | React Context + React Query | `frontend-state-management.puml` |
-| Data Flow | API client and type system | `frontend-data-flow.puml` |
-| Pages & Routes | React Router structure | `frontend-pages-routes.puml` |
+| Diagram              | Description                             | File                                 |
+| -------------------- | --------------------------------------- | ------------------------------------ |
+| Component Structure  | UI components and feature modules       | `frontend-component-structure.puml`  |
+| State Management     | React Context + React Query             | `frontend-state-management.puml`     |
+| Data Flow            | API client and type system              | `frontend-data-flow.puml`            |
+| Pages & Routes       | React Router structure                  | `frontend-pages-routes.puml`         |
 | Transaction Creation | Sequence flow for creating transactions | `transaction-creation-sequence.puml` |
-| Transaction State | Transaction lifecycle states | `transaction-state.puml` |
+| Transaction State    | Transaction lifecycle states            | `transaction-state.puml`             |
 
 ## System-Wide Diagrams
 
-| Diagram | Description | File |
-|---------|-------------|------|
-| API Communication | Frontend ↔ Backend request flow | `api-communication.puml` |
-| System Architecture | Complete system overview | `system-architecture.puml` |
-| Deployment Architecture | Docker, production, desktop | `deployment-architecture.puml` |
-| Use Case | User interactions overview | `use-case-diagram.puml` |
+| Diagram                 | Description                     | File                           |
+| ----------------------- | ------------------------------- | ------------------------------ |
+| API Communication       | Frontend ↔ Backend request flow | `api-communication.puml`       |
+| System Architecture     | Complete system overview        | `system-architecture.puml`     |
+| Deployment Architecture | Docker, production, desktop     | `deployment-architecture.puml` |
+| Use Case                | User interactions overview      | `use-case-diagram.puml`        |
 
 ## Sequence & State Diagrams
 
-| Diagram | Description | File |
-|---------|-------------|------|
-| Import Sequence | Detailed CSV import flow | `import-sequence.puml` |
-| Recipient Merge | Recipient merge/unmerge workflow | `recipient-merge-sequence.puml` |
-| Transaction Creation | Transaction creation sequence | `transaction-creation-sequence.puml` |
-| PlannedTransaction State | PlannedTransaction lifecycle | `planned-transaction-state.puml` |
-| Transaction State | Transaction lifecycle states | `transaction-state.puml` |
+| Diagram                  | Description                      | File                                 |
+| ------------------------ | -------------------------------- | ------------------------------------ |
+| Import Sequence          | Detailed CSV import flow         | `import-sequence.puml`               |
+| Recipient Merge          | Recipient merge/unmerge workflow | `recipient-merge-sequence.puml`      |
+| Transaction Creation     | Transaction creation sequence    | `transaction-creation-sequence.puml` |
+| PlannedTransaction State | PlannedTransaction lifecycle     | `planned-transaction-state.puml`     |
+| Transaction State        | Transaction lifecycle states     | `transaction-state.puml`             |
 
 ## Architecture Documentation
 
@@ -92,6 +92,7 @@ Detailed architectural analysis:
 - [[docs/architecture/frontend-architecture|Frontend Architecture]] - Frontend-specific diagrams
 - [[docs/architecture/deep-dive|Architecture Deep Dive]] - Design patterns, data flow, system organization
 - [[docs/architecture/electron|Electron Desktop Architecture]] - Electron packaging, IPC, security
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - PostgreSQL 18 lifecycle, cutover, backup, and rollback
 - [[docs/architecture/trade-offs|System Design Trade-offs]] - Analysis of key architectural trade-offs and alternatives
 
 ## Regenerating Diagrams
@@ -116,26 +117,27 @@ To add a new diagram:
 
 The monolithic `apps/frontend/src/lib/api.ts` (1553 lines) was split into 13 domain modules for better maintainability:
 
-| Module | Responsibility |
-|--------|-----------------|
-| `transactions.ts` | Transaction CRUD operations |
-| `categories.ts` | Category management |
-| `recipients.ts` | Recipient CRUD + merge/unmerge |
-| `planned.ts` | Planned transaction operations |
-| `investments.ts` | Portfolio & investment management |
-| `imports.ts` | CSV import pipeline |
-| `settings.ts` | Application settings |
-| `aggregations.ts` | Data aggregation queries |
-| `charts.ts` | Saved chart operations |
-| `market.ts` | Market data lookup |
-| `ai.ts` | AI chat functionality |
-| `portfolio.ts` | Portfolio transactions |
-| `info.ts` | Statistics & net worth |
-| `api.ts` | Barrel re-export (backward compat) |
+| Module            | Responsibility                     |
+| ----------------- | ---------------------------------- |
+| `transactions.ts` | Transaction CRUD operations        |
+| `categories.ts`   | Category management                |
+| `recipients.ts`   | Recipient CRUD + merge/unmerge     |
+| `planned.ts`      | Planned transaction operations     |
+| `investments.ts`  | Portfolio & investment management  |
+| `imports.ts`      | CSV import pipeline                |
+| `settings.ts`     | Application settings               |
+| `aggregations.ts` | Data aggregation queries           |
+| `charts.ts`       | Saved chart operations             |
+| `market.ts`       | Market data lookup                 |
+| `ai.ts`           | AI chat functionality              |
+| `portfolio.ts`    | Portfolio transactions             |
+| `info.ts`         | Statistics & net worth             |
+| `api.ts`          | Barrel re-export (backward compat) |
 
 All modules share `client.ts` (transport layer) and `types.ts` (envelope + error types).
 
 Documentation:
+
 - [[docs/reference/frontend-api-client|Frontend API Client Architecture]]
 - [[docs/reference/code-patterns#api-client-pattern|API Client Pattern]]
 
@@ -149,12 +151,14 @@ bun run generate:types
 ```
 
 Benefits:
+
 - Single source of truth for API contract
 - Auto-generated TypeScript types (never manually edited)
 - Type safety: breaking changes caught at compile time
 - IDE autocomplete for all endpoints
 
 Documentation:
+
 - [[docs/adr/031-openapi-type-generation-frontend|ADR-031: OpenAPI Type Generation]]
 - `openapi.yaml` — Authoritative API spec
 
@@ -163,14 +167,17 @@ Documentation:
 New safe utilities for monetary and date operations:
 
 **Decimal (Phase 2.1):**
+
 - `apps/frontend/src/lib/decimal.ts` — `parseDecimal()` for form input parsing
 - Replaced 46+ `parseFloat()` calls on monetary values
 
 **Timezone (Phase 2.3):**
+
 - `apps/frontend/src/lib/timezone.ts` — `parseYmd()`, `todayYmd()`, `daysBetween()`
 - Fixed YYYY-MM-DD string parsing (no more UTC midnight shift)
 
 Documentation:
+
 - [[docs/reference/code-patterns#decimal-pattern-frontend-phase-22|Decimal Pattern]]
 - [[docs/reference/code-patterns#timezone-safe-date-utilities-frontend-phase-23|Timezone Pattern]]
 
@@ -184,6 +191,7 @@ The backend repository layer completed a major refactoring in Phase 3.1:
 - **Shared Utilities**: Helpers consolidate duplicated patterns (date formatting, rounding, category merging, row mapping)
 
 Documentation:
+
 - [[docs/reference/repository-layer|Repository Layer Reference]] - Complete reference with dependency map
 - [[docs/performance/index|Performance Index]] - Phase 3.1 batch FX optimization details
 
@@ -192,6 +200,7 @@ Documentation:
 ImportPage component refactored from monolithic 1019 lines to modular architecture:
 
 **Structure:**
+
 - `apps/frontend/src/pages/ImportPage.tsx` (35 lines) — Thin orchestrator
 - `apps/frontend/src/features/imports/` (6 components + 1 hook, ~914 lines):
   - `TransactionImportCard.tsx` (394 lines) — CSV import, SSE progress, column mapper, exports
@@ -202,6 +211,7 @@ ImportPage component refactored from monolithic 1019 lines to modular architectu
   - `useAdapters.ts` (28 lines) — Shared hook prevents duplicate API calls
 
 **Benefits:**
+
 - High cohesion: each component has single responsibility
 - Low coupling: no prop-drilling; state stays with owner
 - Testability: each card independently testable
@@ -213,29 +223,35 @@ ImportPage component refactored from monolithic 1019 lines to modular architectu
 **Issue:** CSV exports in different routes had inconsistent or missing formula injection protection.
 
 **Resolution:**
+
 - New shared utility: [[apps/node-backend/src/lib/csv.js|csv.js]] with `escapeCsvValue()` and `neutralizeCsvFormula()`
 - Centralizes CWE-1236 protection: prefixes dangerous leading chars (`=`, `+`, `-`, `@`) with `'`
 - Updated routes: `transactions.js` (GET `/api/transactions/export/csv`) and `splits.js` (GET `/api/splits/owed/:id/export/csv`)
 - All exports now use the shared utility, eliminating duplication and ensuring consistent security
 
 Documentation:
+
 - [[docs/reference/code-patterns#safe-csv-export-pattern-phase-5|Safe CSV Export Pattern]]
 - [[docs/security/input-validation#csv-formula-injection-prevention-cwe-1236|CSV Formula Injection Prevention]]
 
 ### Query Parallelization & Performance
 
 **Changes:**
+
 - `transactions.js` (PATCH): Recipient/category resolution now uses `Promise.all` instead of sequential awaits
 - `splits.js`: Batch audit-trail writes parallelized via `Promise.all`
+
 ### Bug Fixes
 
 **admin.js:** Fixed VACUUM error handler returning 500 instead of 403
+
 - Error: `throw new AppError(msg, 403)` was dropping the status code because `AppError` constructor expects `(msg, opts)` shape
 - Fix: Changed to `throw new ForbiddenError(msg)` for proper 403 response
 
 ### Response Envelope Harmonization
 
 Documentation:
+
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]]
 
 ## Electron Desktop Backup Architecture (Phase 1+2)
@@ -250,11 +266,15 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 └── frontend-state.json  # localStorage snapshot (theme, preferences)
 ```
 
-**Optional Encryption:** AES-256-CBC per-bundle encryption with pbkdf2 key derivation → `.visionbak.enc`
+**Optional Encryption:** AES-256-GCM with PBKDF2 key derivation for current bundles. The restore
+reader retains AES-256-CBC compatibility for legacy encrypted `.visionbak` files.
 
 **IPC Handlers (8 total):** New handlers in `packaging/electron/main.js`:
+
 - `backup:run` — Create bundle with optional encryption
-- `backup:restore` — Restore bundle; schema-checks, drops DB, swaps attachments, hydrates localStorage
+- `backup:restore` — Restore bundle; rejects newer schemas, stages database and attachments behind
+  the selected runtime provider, atomically activates them, rolls back on failure, and hydrates
+  supported localStorage
 - `backup:select-file` / `backup:select-dir` — Native file/folder dialogs
 - `backup:save-settings` / `backup:load-settings` — Persist backup config
 - `backup:get-encryption-status` / `backup:set-passphrase` — Manage encryption
@@ -262,12 +282,14 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 **Schema Safety:** On restore, compares bundle schema against current schema. If bundle is newer, blocks restore with `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
 
 **Frontend Integration:**
+
 - `apps/frontend/src/lib/api/electron.ts` — TypeScript wrapper types and functions
 - `apps/frontend/src/features/settings/sections/BackupSection.tsx` — UI for backup/restore, passphrase management, error handling
 
 **Coverage:** All 31 user-data tables + attachments + localStorage keys. CI test enforces coverage on every migration.
 
 Documentation:
+
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]] — Coverage matrix, bundle format, restore process
 - [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
 - [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
@@ -280,17 +302,17 @@ The diagnosis: the "AI-generated" look is sameness (one shadow depth, one radius
 
 **Current base design token values** (verified from source):
 
-| Token / class | Value |
-|---|---|
-| `--radius` | `0.625rem` |
-| `Card` base radius | `rounded-[0.75rem]` |
-| `--ease-out-quint` | `cubic-bezier(0.32, 0.72, 0, 1)` |
-| `--ease-out-expo` | `cubic-bezier(0.32, 0.72, 0, 1)` |
-| `.press-feedback:active` | `scale(0.97)` |
-| `.tabular-nums` letter-spacing | `-0.006em` |
-| `--primary` (light) | `164 78% 26%` (jewel emerald) |
-| `--primary` (dark) | `160 74% 52%` (jewel emerald) |
-| `--ring` / `--sidebar-primary` / `--sidebar-ring` | mirror `--primary` per mode |
+| Token / class                                     | Value                            |
+| ------------------------------------------------- | -------------------------------- |
+| `--radius`                                        | `0.625rem`                       |
+| `Card` base radius                                | `rounded-[0.75rem]`              |
+| `--ease-out-quint`                                | `cubic-bezier(0.32, 0.72, 0, 1)` |
+| `--ease-out-expo`                                 | `cubic-bezier(0.32, 0.72, 0, 1)` |
+| `.press-feedback:active`                          | `scale(0.97)`                    |
+| `.tabular-nums` letter-spacing                    | `-0.006em`                       |
+| `--primary` (light)                               | `164 78% 26%` (jewel emerald)    |
+| `--primary` (dark)                                | `160 74% 52%` (jewel emerald)    |
+| `--ring` / `--sidebar-primary` / `--sidebar-ring` | mirror `--primary` per mode      |
 
 **Glass elevation differentiation** — `glass-regular` (cards) vs `glass-elevated` (hero tiles) now have distinct shadow signatures. The previous state had nearly identical parameters on both tiers:
 
@@ -306,6 +328,7 @@ Glass backgrounds, blur levels, border, and `backdrop-filter` are untouched.
 **Deferred**: Apple's label-opacity text hierarchy (1.0/0.6/0.3/0.18) — needs a token-level change to avoid inconsistency with existing `muted-foreground` opacity variants.
 
 Documentation:
+
 - [[docs/adr/105-apple-refined-visual-pass|ADR-105: Apple-refined visual pass]]
 
 ## Dense-Fintech Visual Skin — VITE_SKIN_V2 flag (June 2026, ADR-104)
@@ -318,6 +341,7 @@ Documentation:
 **Activation**: build-time `VITE_SKIN_V2=true` env flag (ADR-030 `booleanEnv`, **default `false`**) or `localStorage` override `vision_skin_v2`. Dev console helper: `window.__setSkinV2(true | false | undefined)`.
 
 **What skin-v2 currently changes** (surviving scope after the revert):
+
 - `--gain` → Okabe-Ito green `162 84% 30%` (light) / `160 65% 52%` (dark)
 - `--loss` → Okabe-Ito vermillion `24 85% 45%` (light) / `24 90% 62%` (dark)
 
@@ -329,6 +353,7 @@ These are always paired with explicit +/− signs and directional arrows in comp
 > The ADR-075 visual-effects tier system (`fx-reduced`, `fx-static-atmosphere`) composes correctly with both ADR-104 and ADR-105. Tier system operates on `backdrop-filter` presence and aurora animation; neither this flag nor the base-design changes touch those mechanisms.
 
 Documentation:
+
 - [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: Dense-fintech skin (revised)]]
 - [[docs/reference/code-patterns#scoped-skin-behind-a-flag-pattern-adr-104|Code Patterns — Scoped-skin flag pattern]]
 
@@ -345,6 +370,7 @@ Documentation:
 - **Route preload**: `lib/routePreload.ts` shared by `App.tsx` lazy() and `AppSidebar` hover prefetch.
 
 Documentation:
+
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] (June 2026)
 - [[docs/architecture/frontend-architecture|Frontend Architecture — Design System section]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] (updated)
@@ -364,12 +390,14 @@ The baseline liquid-glass aesthetic (ADR-017) was further tuned in the Tailwind 
 - **CSS Architecture**: Tailwind CSS v4 (4.2.4) with unified `@tailwindcss/postcss` plugin
 
 **Tailwind v4 Updates (May 2026):**
+
 - **PostCSS Config** — Simplified to `{ '@tailwindcss/postcss': {}, autoprefixer: {} }`
 - **CSS Entry Point** — Uses `@import "tailwindcss"` + `@config` directives (replaces v3's `@tailwind base/components/utilities`)
 - **@apply Restrictions** — Custom `.glass*` aliases now declare full CSS rules; v4 restricts @apply to registered utilities only
 - **Font Optimization** — Static weights replace variable fonts for reduced payload
 
 Documentation:
+
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
@@ -403,6 +431,7 @@ Documentation:
 ## May 2026 Recent Decisions (ADRs 053–058)
 
 **Belgian Tax Correctness & Historical Viewing:**
+
 - [[docs/adr/053-belgian-pit-exemption-bracket-correction|ADR-053]] — Exemption-bracket calculation correction
 - [[docs/adr/054-belgian-regional-own-home-credits|ADR-054]] — Regional own-home credits (Flemish woonbonus, Walloon chèque habitat)
 - [[docs/adr/055-belgian-tax-income-source-filtering|ADR-055]] — Taxable income source filtering for graph visualization

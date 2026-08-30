@@ -13,12 +13,12 @@
     "main.js",
     "badge-image.js",
     "compose.js",
+    "runtime/**/*",
     "updater.js",
+    "native-update-installer.js",
     "preload.js",
     "backup/**/*",
     "assets/**/*"
   ],
-  "extraResources": [
-    { "from": "i18n", "to": "i18n" }
-  ]
+  "extraResources": [{ "from": "i18n", "to": "i18n" }]
 }

@@ -346,9 +346,9 @@ jobs:
           echo "Current revision before round-trip:"
           "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
           echo "Downgrading one revision..."
-          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
+          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js downgrade -1
           echo "Re-upgrading to head..."
-          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
+          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js upgrade head
           echo "Round-trip OK."
 
       - name: Tear down the release candidate stack
@@ -435,7 +435,7 @@ jobs:
     name: Build mac .app + DMG
     needs: [verify]
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -451,14 +451,46 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup Python (for the self-contained migration runtime)
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned migration build dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r config/requirements.txt
+          python -m pip install PyInstaller==6.22.2
+
       - name: Generate locales (writes packaging/electron/i18n)
         run: CI=1 bun run generate-locales
+
+      - name: Install pinned native report browser
+        run: |
+          set -euo pipefail
+          BROWSER_PATH=$(apps/node-backend/node_modules/.bin/puppeteer browsers install \
+            chrome-headless-shell@150.0.7871.24 \
+            --format '{{path}}')
+          test -x "$BROWSER_PATH"
+          printf 'VISION_CHROMIUM_SOURCE=%s\n' "$BROWSER_PATH" >> "$GITHUB_ENV"
 
       - name: Install electron deps and build .app + DMG
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          POSTGRES_APP_URL: https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-2.9.6-14-15-16-17-18.dmg
+          POSTGRES_APP_SHA256: ee67776540fb0d29cbd119ea4db4cac3c182349ed53048fdf79766a588ac86b3
         run: |
           set -euo pipefail
+          bun run build
+          PG_DMG="$RUNNER_TEMP/postgres-app-2.9.6.dmg"
+          PG_MOUNT="$RUNNER_TEMP/postgres-app-2.9.6"
+          curl -sSfL --retry 3 --retry-all-errors -o "$PG_DMG" "$POSTGRES_APP_URL"
+          echo "$POSTGRES_APP_SHA256  $PG_DMG" | shasum -a 256 -c -
+          mkdir -p "$PG_MOUNT"
+          hdiutil attach -nobrowse -readonly -mountpoint "$PG_MOUNT" "$PG_DMG"
+          trap 'hdiutil detach "$PG_MOUNT" >/dev/null' EXIT
+          export VISION_POSTGRES_SOURCE_BIN="$PG_MOUNT/Postgres.app/Contents/Versions/18/bin"
+          export VISION_PYTHON_BIN="$(command -v python)"
           cd packaging/electron
           # Hardened install for the shipped artifact: pin to the committed
           # lockfile (--frozen-lockfile) and block transitive lifecycle scripts
@@ -469,7 +501,9 @@ jobs:
           # 4a671a3 and bun.lock is the only committed lockfile, so `npm ci` here
           # had no lockfile left to install from.
           bun install --frozen-lockfile --ignore-scripts
-          npx electron-builder --mac --arm64 --publish never
+          node scripts/build-native-package.js
+          hdiutil detach "$PG_MOUNT"
+          trap - EXIT
 
       - name: Stage release artifacts
         env:
@@ -484,9 +518,6 @@ jobs:
                     || ls packaging/electron/dist/*-mac.zip | head -1)
           cp "$DMG_SRC" "$OUT/Vision-${VER}-arm64.dmg"
           cp "$ZIP_SRC" "$OUT/Vision-${VER}-arm64-mac.zip"
-          sed "s/__VERSION__/${VER}/g" packaging/release/vision-setup.command \
-            > "$OUT/vision-setup.command"
-          chmod +x "$OUT/vision-setup.command"
           sed "s/__VERSION__/${VER}/g" packaging/release/README.md \
             > "$OUT/README.md"
 
@@ -539,7 +570,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist/release
-          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip vision-setup.command README.md; do
+          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip README.md; do
             shasum -a 256 "$f" > "${f}.sha256"
             echo "--- ${f} ---"
             cat "${f}.sha256"
@@ -592,6 +623,5 @@ jobs:
             dist/mac/Vision-*.dmg
             dist/mac/Vision-*.zip
             dist/mac/vision-source-launcher-*.zip
-            dist/mac/vision-setup.command
             dist/mac/README.md
             dist/mac/*.sha256

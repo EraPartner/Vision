@@ -45,7 +45,7 @@ type UpdateStatus = {
     release_notes?: string;
     html_url?: string;
     /** 'docker-compose' comes from the HTTP route — non-Electron, no in-app installer. */
-    update_mode?: "source" | "docker" | "dev" | "docker-compose";
+    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
     error?: string;
 } | null;
 

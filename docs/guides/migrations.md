@@ -2,12 +2,33 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-04-21
-updated: 2026-08-09
-tags: [guide, database, migrations, alembic, postgresql, phase-1, destructive-ddl, ci, performance]
+date: 2026-08-30
+updated: 2026-08-30
+tags:
+  [
+    guide,
+    database,
+    migrations,
+    alembic,
+    postgresql,
+    phase-1,
+    destructive-ddl,
+    ci,
+    performance,
+  ]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
-related_code: ["alembic/", "alembic/env.py", "alembic/manual/", "alembic/script.py.mako", "config/alembic.ini", "docker-entrypoint.sh", "scripts/check-destructive-migrations.py", "apps/node-backend/src/database/migrate.js"]
+related_code:
+  [
+    "alembic/",
+    "alembic/env.py",
+    "alembic/manual/",
+    "alembic/script.py.mako",
+    "config/alembic.ini",
+    "docker-entrypoint.sh",
+    "scripts/check-destructive-migrations.py",
+    "apps/node-backend/src/database/migrate.js",
+  ]
 ---
 
 # Database Migration Guide
@@ -16,13 +37,13 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 
 ## Quick Reference
 
-| Command | Script | Description |
-|---------|--------|-------------|
-| `alembic upgrade head` | `bun run db:upgrade` | Run all pending migrations |
-| `alembic revision -m "message"` | `bun run db:revision -- "message"` | Create a new migration |
-| `alembic current` | `bun run db:current` | Check current schema version |
-| `alembic history` | `bun run db:history` | View full migration chain |
-| `alembic downgrade -1` | `bun run db:downgrade` | Rollback last migration |
+| Action                        | Repository command                 |
+| ----------------------------- | ---------------------------------- |
+| Run all pending migrations    | `bun run db:upgrade`               |
+| Create a migration            | `bun run db:revision -- "message"` |
+| Check current schema revision | `bun run db:current`               |
+| View the migration chain      | `bun run db:history`               |
+| Disposable rollback test only | `bun run db:downgrade -- <target>` |
 
 > [!warning] Don't invoke bare `alembic` for anything that writes the version table
 > Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
@@ -66,17 +87,18 @@ def downgrade():
 # Using the convenience script (recommended)
 bun run db:revision -- "add_new_column_to_transactions"
 
-# Or directly with Alembic
-alembic revision -m "add_new_column_to_transactions"
 ```
 
-This creates a new file in `alembic/versions/` with an auto-incrementing number prefix.
+This creates a new file in `alembic/versions/` with an auto-incrementing number prefix. Use the
+repository's `db-migrations` skill for schema work.
 
 ### Best Practices
 
 1. **Always provide a downgrade** — Every migration should be reversible
 2. **Test both directions** — Run `upgrade` and `downgrade` locally before committing
-3. **Assume it runs unattended** — `docker-entrypoint.sh` runs `alembic upgrade head` on every container start, so anything in `alembic/versions/` applies to every installation on the next restart, before the coupled code necessarily ships. Never write a migration whose safety depends on someone choosing when to run it; application code must not trigger migrations either
+3. **Assume it runs unattended** — native and Docker startup call the guarded migration runner, so
+   anything in `alembic/versions/` applies on the next application start. Never write a migration
+   whose safety depends on an operator choosing a separate time to run it.
 4. **Use idempotent operations** — Where possible, check if changes already exist before applying
 5. **Handle dependencies** — For view/trigger changes, drop dependencies before altering types, then recreate
 6. **Mark destructive DDL** — Anything that drops or retypes needs a `destructive-ok:` marker, or it belongs out-of-band; see [[#destructive-ddl-and-the-destructive-ok-marker|below]]
@@ -85,7 +107,9 @@ This creates a new file in `alembic/versions/` with an auto-incrementing number 
 ## Destructive DDL and the `destructive-ok` marker
 
 > [!danger] Migrations in `alembic/versions/` auto-apply on boot
-> `docker-entrypoint.sh` runs `alembic upgrade head` **unconditionally on every container start**. A migration is therefore not "shipped when someone runs it" — it reaches every self-hosted database on the next restart, *whether or not the application code that depends on it has been deployed*. There is no soak window, no staging tier, and no DBA in the loop.
+> Native and Docker startup run `apps/node-backend/scripts/db-migrate.js`, which performs the
+> `VARCHAR(64)` preflight and then upgrades to head. A migration therefore reaches every
+> installation on its next start. There is no separate operator-controlled soak window.
 
 This is not hypothetical. `0055_drop_bank_account_string` was written as a "gated, apply-after-soak" contract-phase migration and dropped `transactions.bank_account`, `planned_transactions.bank_account`, the dual-write trigger and `mv_bank_balances`. Because it sat in the chain, it applied immediately — without the coupled read/write code — and **crashed startup**. `0055` is now a no-op, `0056_restore_bank_account_after_premature_drop` is its recovery, and the doctrine is recorded in [[docs/adr/088-account-entity|ADR-088]].
 
@@ -123,17 +147,17 @@ A destructive change whose safety depends on code being deployed first goes in `
 
 The checker is `scripts/check-destructive-migrations.py`, enforced by the `verify-destructive-migrations` CI job (parallel to `verify-compose-sync`) and runnable locally with `bun run db:check-destructive`.
 
-| Flagged | Not flagged |
-|---------|-------------|
-| `op.drop_table` / `DROP TABLE` (always — recreating still loses rows) | `DROP INDEX` / `op.drop_index` — rebuildable, holds no data |
-| `op.drop_column` / `DROP COLUMN` (always) | `DROP CONSTRAINT` / `op.drop_constraint` — loosens the schema, destroys nothing |
-| `DROP MATERIALIZED VIEW` / `VIEW` / `TRIGGER` / `FUNCTION` / `TYPE` — *unless the same `upgrade()` recreates an object of that name* (DROP-then-CREATE is a replace, not a destruction) | `DROP DEFAULT` / `DROP NOT NULL` |
-| `op.alter_column(..., type_=...)` and raw `ALTER COLUMN ... TYPE` — **always**, widening or not | anything inside `downgrade()` — the rollback path is destructive by definition |
-| | `alembic/legacy_versions/` and `alembic/manual/` — neither auto-applies |
+| Flagged                                                                                                                                                                                 | Not flagged                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `op.drop_table` / `DROP TABLE` (always — recreating still loses rows)                                                                                                                   | `DROP INDEX` / `op.drop_index` — rebuildable, holds no data                     |
+| `op.drop_column` / `DROP COLUMN` (always)                                                                                                                                               | `DROP CONSTRAINT` / `op.drop_constraint` — loosens the schema, destroys nothing |
+| `DROP MATERIALIZED VIEW` / `VIEW` / `TRIGGER` / `FUNCTION` / `TYPE` — _unless the same `upgrade()` recreates an object of that name_ (DROP-then-CREATE is a replace, not a destruction) | `DROP DEFAULT` / `DROP NOT NULL`                                                |
+| `op.alter_column(..., type_=...)` and raw `ALTER COLUMN ... TYPE` — **always**, widening or not                                                                                         | anything inside `downgrade()` — the rollback path is destructive by definition  |
+|                                                                                                                                                                                         | `alembic/legacy_versions/` and `alembic/manual/` — neither auto-applies         |
 
 Type changes are flagged unconditionally because static analysis cannot tell `NUMERIC(15,2) → NUMERIC(18,4)` (safe) from `NUMERIC(18,4) → NUMERIC(8,2)` (silent truncation). Writing the marker is cheaper than the checker guessing wrong.
 
-Migrations that shipped before this gate existed carry retroactive markers recording *why they were safe at the time* — they are annotations, not new permissions. The marker binds to a statement, not to a file, so adding a new drop to an old migration is still caught.
+Migrations that shipped before this gate existed carry retroactive markers recording _why they were safe at the time_ — they are annotations, not new permissions. The marker binds to a statement, not to a file, so adding a new drop to an old migration is still caught.
 
 Self-test the checker with `python3 scripts/check-destructive-migrations.py --self-test`; list current findings without failing with `--list`.
 
@@ -151,7 +175,8 @@ The costs are paid **once**, on the first boot after an update (`migrate.js` cac
 - **Per-migration transactions.** `alembic/env.py` passes `transaction_per_migration=True` on PostgreSQL, so each migration commits on its own. A kill mid-chain loses only the in-flight migration; the next boot resumes from the last committed revision instead of re-running everything.
 - **A 10-minute execFile budget, overridable.** `migrate.js` defaults to `600_000` ms and honours `VISION_MIGRATE_TIMEOUT_MS` (`0` disables it). Because progress is durable per-migration, a timeout mid-chain is a pause, not a rollback.
 - **`autocommit_block()`.** Since each migration owns its transaction, `op.get_context().autocommit_block()` can suspend it for statements PostgreSQL refuses to run transactionally — `CREATE INDEX CONCURRENTLY` above all. Everything inside such a block must be individually idempotent: it is already committed if a later statement fails.
-- **A post-migration `ANALYZE`.** After a real (non-cached) upgrade, `migrate.js` ANALYZEs `transactions` and `asset_price_history`, so a migration that rewrote either one does not hand the planner stale statistics. Any *other* table you rewrite in full is yours to `ANALYZE`.
+- **A post-migration `ANALYZE`.** After a real (non-cached) upgrade, `migrate.js` ANALYZEs `transactions` and `asset_price_history`, so a migration that rewrote either one does not hand the planner stale statistics. In a split-role install this and the startup analysis of ordinary `public` tables use the owner/migration connection; the application role is not granted broad maintenance rights. Any _other_ table you rewrite in full is yours to `ANALYZE`.
+- **Split-role privilege repair.** Owner-role default privileges grant the application role data access to tables and sequences created by later migrations. Startup also reapplies privileges to every current ordinary table and view individually. It skips objects already owned by the application role, including the runtime-managed materialized views, so one ownership exception cannot cause PostgreSQL to reject the entire current-table grant set.
 
 ### The expensive shapes, and what to write instead
 
@@ -169,7 +194,7 @@ op.execute("ALTER TABLE transactions VALIDATE CONSTRAINT chk_transactions_curren
 
 `0046_currency_integrity` + `0049_validate_currency_checks` is the worked pair. Note what 0049 also does: it wraps the `VALIDATE` in a `DO` block that catches `check_violation`, because a bare failure would abort boot and strand an end user at the Electron error page with psql-only recovery. A validation that can legitimately fail on real data belongs inside that guard.
 
-**`SET NOT NULL`.** On its own this is a full verification scan under `ACCESS EXCLUSIVE`. PostgreSQL will skip that scan if an *already-validated* `CHECK (col IS NOT NULL)` exists on the table, so on a big table the cheap route is: add `CHECK (col IS NOT NULL) NOT VALID` → `VALIDATE CONSTRAINT` (non-blocking) → `SET NOT NULL` (instant) → drop the now-redundant CHECK. `0022_updated_at_not_null_defaults` is the counter-example: nine tables, a full-row `UPDATE` backfill followed by a bare `SET NOT NULL`, and it is the single heaviest touch of `asset_price_history` in the chain.
+**`SET NOT NULL`.** On its own this is a full verification scan under `ACCESS EXCLUSIVE`. PostgreSQL will skip that scan if an _already-validated_ `CHECK (col IS NOT NULL)` exists on the table, so on a big table the cheap route is: add `CHECK (col IS NOT NULL) NOT VALID` → `VALIDATE CONSTRAINT` (non-blocking) → `SET NOT NULL` (instant) → drop the now-redundant CHECK. `0022_updated_at_not_null_defaults` is the counter-example: nine tables, a full-row `UPDATE` backfill followed by a bare `SET NOT NULL`, and it is the single heaviest touch of `asset_price_history` in the chain.
 
 **Backfilling a column.** A single `UPDATE` over a large table rewrites every row into a new tuple version, writes the whole table to WAL, maintains every index on it, and holds one long transaction the whole time. Batch it over id ranges inside an `autocommit_block()`, with a guard that makes each batch idempotent so an interrupted run resumes:
 
@@ -191,9 +216,9 @@ with op.get_context().autocommit_block():
 
 `0050_add_accounts_entity` is the worked example (50 000-row id ranges; the `IS NULL` guard makes an interrupted backfill resume where it stopped on the next boot, and the range keying keeps every batch a cheap PK range scan however sparse the id space is).
 
-**Building an index.** A plain `CREATE INDEX` scans the heap under a `SHARE` lock that blocks writes for the duration — true even for a tiny partial index, because the *heap* scan is what costs (`0036`, `0044`, `0053` all pay this). Use `CREATE INDEX CONCURRENTLY` inside an `autocommit_block()`. Note the caveat `IF NOT EXISTS` does not cover: an interrupted concurrent build leaves an **INVALID** index behind that `IF NOT EXISTS` would happily keep forever. Copy `_create_index_concurrently()` from `0050_add_accounts_entity`, which checks `pg_index.indisvalid`, keeps a valid index, drops an invalid one, and only then rebuilds. Also: build indexes *after* a backfill, never before — otherwise every batch pays index maintenance.
+**Building an index.** A plain `CREATE INDEX` scans the heap under a `SHARE` lock that blocks writes for the duration — true even for a tiny partial index, because the _heap_ scan is what costs (`0036`, `0044`, `0053` all pay this). Use `CREATE INDEX CONCURRENTLY` inside an `autocommit_block()`. Note the caveat `IF NOT EXISTS` does not cover: an interrupted concurrent build leaves an **INVALID** index behind that `IF NOT EXISTS` would happily keep forever. Copy `_create_index_concurrently()` from `0050_add_accounts_entity`, which checks `pg_index.indisvalid`, keeps a valid index, drops an invalid one, and only then rebuilds. Also: build indexes _after_ a backfill, never before — otherwise every batch pays index maintenance.
 
-**Changing a column type.** `ALTER COLUMN ... TYPE` rewrites the table *and* every index on it under `ACCESS EXCLUSIVE`, and drops dependent views first (`0025_fix_numeric_precision` retypes `transactions.amount` and has to drop and recreate the materialized views around it). There is no cheap in-place variant. If the change is avoidable, avoid it; if it is not, expect the rewrite and `ANALYZE` afterwards.
+**Changing a column type.** `ALTER COLUMN ... TYPE` rewrites the table _and_ every index on it under `ACCESS EXCLUSIVE`, and drops dependent views first (`0025_fix_numeric_precision` retypes `transactions.amount` and has to drop and recreate the materialized views around it). There is no cheap in-place variant. If the change is avoidable, avoid it; if it is not, expect the rewrite and `ANALYZE` afterwards.
 
 **Materialized views.** Do not rebuild them from a migration. `DROP MATERIALIZED VIEW` alone is metadata-only; the runtime service (`materializedViewService.js`) recreates and populates any missing view from the **post-listen** warmup, off the boot critical path, and reads fall back to live queries in the meantime. `0084` and `0085` are the pattern: drop only, let the app rebuild. A migration that recreates a view instead puts a full aggregation scan of `transactions` back in front of `/health`.
 
@@ -210,54 +235,48 @@ with op.get_context().autocommit_block():
 ```bash
 # Run all pending migrations
 bun run db:upgrade
-
-# Or directly
-alembic upgrade head
 ```
 
 ### Production (Docker)
 
-Migrations run automatically on container startup via `docker-entrypoint.sh`:
+Migrations run automatically on container startup:
 
-1. Waits for PostgreSQL to be ready
-2. Runs `alembic upgrade head` unconditionally (bootstraps fresh DB via baseline migration 0001, or applies pending migrations to existing DB)
-3. Starts the backend application
+1. `docker-entrypoint.sh` starts the Bun backend.
+2. The backend waits for PostgreSQL.
+3. `apps/node-backend/scripts/db-migrate.js` performs the version-table preflight and upgrades to
+   head before the application accepts requests.
 
 **Note:** As of Phase 1 (2026-04-21), `schemaInit.js` has been removed. Alembic is now the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
 To run manually in production:
 
 ```bash
-docker compose exec app /app/venv/bin/python3 -m alembic -c /app/config/alembic.ini upgrade head
+docker compose exec app bun run apps/node-backend/scripts/db-migrate.js upgrade
 ```
 
 ### Checking Status
 
 ```bash
 # Current schema version
-alembic current
+bun run db:current
 
 # Full migration history
-alembic history
+bun run db:history
 
 # Show pending migrations
-alembic history --verbose
+venv/bin/alembic -c config/alembic.ini history --verbose
 ```
 
-## Rolling Back
+## Rollback testing
 
 ```bash
-# Rollback one migration
-alembic downgrade -1
-
-# Rollback to specific revision
-alembic downgrade <revision_id>
-
-# Rollback all (dangerous!)
-alembic downgrade base
+# Disposable test database only; the guarded runner still performs the preflight
+bun run db:downgrade -- <revision_id>
 ```
 
-> **Warning:** Downgrading in production may cause data loss. Always backup before rolling back.
+> [!danger] Do not downgrade a live Vision database
+> Operational rollback uses a verified logical backup or reverse logical migration into a fresh
+> database. A destructive Alembic downgrade is only for disposable migration tests.
 
 ## Baseline (0001) Schema Scope
 
@@ -292,7 +311,7 @@ On PostgreSQL each migration runs in its **own** transaction (`env.py` sets `tra
 
 ### "Target database is not up to date"
 
-Run `alembic upgrade head` to apply pending migrations.
+Run `bun run db:upgrade` to apply pending migrations through Vision's guarded runner.
 
 ### Version Conflict
 

@@ -24,7 +24,7 @@ COPY packages/types/package.json ./packages/types/
 # file; it must exist or the install fails. It self-no-ops when there is no git
 # work tree (the case here — .git is excluded by .dockerignore). Stable file, so
 # copying it before install does not meaningfully churn the cache layer.
-COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
+COPY scripts/setup-git-hooks.js scripts/bun-install-with-retry.sh ./scripts/
 # Skip Puppeteer's browser downloads. The frozen workspace install resolves the
 # backend's `puppeteer` dependency even though this stage only builds the
 # frontend, and Puppeteer's postinstall would otherwise fetch Chrome +
@@ -33,7 +33,7 @@ COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
 # binaries — so the download is dead weight and an unnecessary network
 # dependency that makes the build flaky.
 ENV PUPPETEER_SKIP_DOWNLOAD=true
-RUN bun install --frozen-lockfile
+RUN sh scripts/bun-install-with-retry.sh --frozen-lockfile
 
 # Workspace sources + locale inputs after the install layer (cache-friendly).
 COPY packages ./packages
@@ -97,7 +97,7 @@ COPY packages/types/package.json ./packages/types/
 # The root `prepare` lifecycle script runs on `bun install` and invokes this
 # file; it must exist or the install fails. It self-no-ops without a git work
 # tree (the case here — .git is excluded by .dockerignore).
-COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
+COPY scripts/setup-git-hooks.js scripts/bun-install-with-retry.sh ./scripts/
 # Skip ALL Puppeteer browser downloads — the runtime uses the Alpine system
 # chromium via PUPPETEER_EXECUTABLE_PATH (set below), never Puppeteer's bundled
 # binaries. PUPPETEER_SKIP_CHROMIUM_DOWNLOAD only covers the legacy full-Chrome
@@ -106,7 +106,7 @@ COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
 # and the build hermetic (no dependency on Google's chrome-for-testing CDN).
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_SKIP_DOWNLOAD=true
-RUN bun install --frozen-lockfile --production
+RUN sh scripts/bun-install-with-retry.sh --frozen-lockfile --production
 
 # Workspace package sources — the node_modules/@vision/* symlinks created by
 # the install above resolve into these paths at runtime.

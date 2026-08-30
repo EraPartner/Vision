@@ -2,7 +2,7 @@
 title: Ollama Integration
 type: integration
 status: active
-date: 2026-04-19
+date: 2026-08-30
 updated: 2026-08-25
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
@@ -27,12 +27,12 @@ related_code: ["apps/node-backend/src/integrations/ollama/client.js", "apps/node
 
 Singleton factory: `getOllamaClient()` — creates and caches a client using `settings.ollama.url` on first use.
 
-| Method | Returns | Notes |
-|--------|---------|-------|
-| `healthCheck()` | `{ reachable, baseUrl, modelCount? }` or `{ reachable, baseUrl, error, code }` | Never throws — returns `reachable:false` on failure |
-| `listModels({ signal })` | normalized model array | Throws a coded `OllamaError` on failure |
-| `chat({ model, messages, tools, options, signal })` | normalized content, tool calls, and usage fields | Non-streaming — full response in one shot, with raw response attached |
-| `chatStream({ model, messages, tools, options, signal, onToken })` | normalized content, tool calls, and usage fields | Streams token callbacks; resolves with the assembled response |
+| Method                                                             | Returns                                                                        | Notes                                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `healthCheck()`                                                    | `{ reachable, baseUrl, modelCount? }` or `{ reachable, baseUrl, error, code }` | Never throws — returns `reachable:false` on failure                   |
+| `listModels({ signal })`                                           | normalized model array                                                         | Throws a coded `OllamaError` on failure                               |
+| `chat({ model, messages, tools, options, signal })`                | normalized content, tool calls, and usage fields                               | Non-streaming — full response in one shot, with raw response attached |
+| `chatStream({ model, messages, tools, options, signal, onToken })` | normalized content, tool calls, and usage fields                               | Streams token callbacks; resolves with the assembled response         |
 
 `listModels`, `chat`, and `chatStream` accept an `AbortSignal` so callers can cancel in-flight work. `healthCheck` uses its fixed health timeout and accepts no options.
 
@@ -79,16 +79,16 @@ Request and response log lines inside `chatStream` were downgraded from `info` t
 
 `OllamaError extends Error` with `code` field. Codes:
 
-| Code | Meaning |
-|------|---------|
+| Code            | Meaning                                                 |
+| --------------- | ------------------------------------------------------- |
 | `NETWORK_ERROR` | Connection refused, DNS failure, or another fetch error |
-| `TIMEOUT` | Request or stream-idle deadline exceeded |
-| `ABORTED` | AbortSignal fired — normal for client disconnect |
-| `HTTP_ERROR` | Ollama returned a non-success HTTP status |
-| `INVALID_JSON` | Non-JSON response or malformed NDJSON chunk |
-| `INVALID_INPUT` | Chat was called without a message array |
-| `NO_BODY` | Streaming response had no readable body |
-| `STREAM_ERROR` | Stream reading failed for another reason |
+| `TIMEOUT`       | Request or stream-idle deadline exceeded                |
+| `ABORTED`       | AbortSignal fired — normal for client disconnect        |
+| `HTTP_ERROR`    | Ollama returned a non-success HTTP status               |
+| `INVALID_JSON`  | Non-JSON response or malformed NDJSON chunk             |
+| `INVALID_INPUT` | Chat was called without a message array                 |
+| `NO_BODY`       | Streaming response had no readable body                 |
+| `STREAM_ERROR`  | Stream reading failed for another reason                |
 
 The service layer maps these to `AiChatServiceError` with the appropriate HTTP status (see [[docs/api/ai|AI Chat API]] error table).
 
@@ -121,13 +121,17 @@ See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and
 
 ## Configuration
 
-| Env | Default | Purpose |
-|-----|---------|---------|
-| `OLLAMA_URL` | `http://localhost:11434` | Base URL |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | Fallback model |
-| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | Time-to-first-chunk budget (connect + prompt-eval phase) |
-| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000` | Max inactivity between chunks; timer re-arms per chunk; total generation time is unbounded |
-| `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | `healthCheck()` connection timeout |
+| Env                             | Default                  | Purpose                                                                                    |
+| ------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| `OLLAMA_URL`                    | `http://localhost:11434` | Base URL                                                                                   |
+| `OLLAMA_DEFAULT_MODEL`          | `llama3.1:8b`            | Fallback model                                                                             |
+| `OLLAMA_REQUEST_TIMEOUT_MS`     | `600000`                 | Time-to-first-chunk budget (connect + prompt-eval phase)                                   |
+| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000`                 | Max inactivity between chunks; timer re-arms per chunk; total generation time is unbounded |
+| `OLLAMA_HEALTH_TIMEOUT_MS`      | `3000`                   | `healthCheck()` connection timeout                                                         |
+
+Native macOS mode fixes the default to `http://127.0.0.1:11434` in the backend child environment.
+It does not use `host.docker.internal`. The optional Docker provider may use its existing host
+bridge when Ollama runs outside the container.
 
 ## Offline Handling
 
