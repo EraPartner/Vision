@@ -57,7 +57,6 @@ updates:
         patterns: ["*"]
 
   # Packaged-app embedded compose: postgres + the GHCR app image.
-  # (resources-demo uses only local pull_policy:never images, so nothing to track.)
   - package-ecosystem: "docker"
     directory: "/packaging/electron/resources"
     schedule:

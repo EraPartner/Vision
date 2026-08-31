@@ -351,6 +351,9 @@ jobs:
       - name: Verify endpoint matrix count matches openapi.yaml
         run: bun run check-endpoint-matrix
 
+      - name: Test repository scripts
+        run: bun run test:scripts
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Build — verify the frontend production bundle compiles
   # ─────────────────────────────────────────────────────────────────────────────
@@ -486,6 +489,9 @@ jobs:
 
       - name: Install electron workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
+
+      - name: Run Electron and native-runtime contract tests
+        run: bun run test:electron
 
       - name: Run backend tests with coverage
         run: cd apps/node-backend && bun vitest run --coverage
@@ -650,6 +656,9 @@ jobs:
     name: Quality Gate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     needs:
       - changes
       - commitlint
@@ -667,12 +676,18 @@ jobs:
       - verify-destructive-migrations
     if: always()
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+
       - name: Check all gates passed
         # Values reach the script through env, never via ${{ }} interpolation
         # into `run:` — same convention as the rest of this workflow.
         env:
           EVENT_NAME: ${{ github.event_name }}
           RESULTS: ${{ toJson(needs.*.result) }}
+          EVENT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -684,32 +699,11 @@ jobs:
           # special-casing the docs-only path — that would put docs-only PRs
           # straight back to permanently blocked.
           #
-          # 'cancelled' is tolerated too, but ONLY on a pull_request run and ONLY
-          # when nothing reports 'failure'. Reason: the `concurrency` block above
-          # sets `cancel-in-progress` for pull_request events, so pushing twice in
-          # quick succession cancels the first run's in-flight jobs BY DESIGN.
-          # Failing on that painted a red gate on runs where nothing broke (seen
-          # six times across PRs #163/#165), which trains reviewers to ignore the
-          # gate. GitHub exposes no cancellation reason to the job, so the two
-          # conditions above are the discriminator we have:
-          #   • pull_request only — a cancelled push/main run stays red, which the
-          #     concurrency block relies on ("every main commit gets a full
-          #     verdict, needed for bisecting").
-          #   • no 'failure' anywhere — a real break alongside a cancel is still
-          #     a real break.
-          # A superseded run's green is harmless because branch protection tracks
-          # the head SHA, and the push that superseded this run moved it.
-          if echo "$RESULTS" | grep -q '"failure"'; then
-            echo "Quality gate failed. Job results: $RESULTS"
-            exit 1
-          fi
-          if echo "$RESULTS" | grep -q '"cancelled"'; then
-            if [ "$EVENT_NAME" != "pull_request" ]; then
-              echo "Quality gate failed: job(s) cancelled on a '$EVENT_NAME' run, where cancellation is never routine. Job results: $RESULTS"
-              exit 1
-            fi
-            echo "::warning title=Superseded run::Job(s) cancelled and nothing failed — treating this as a run superseded by a newer push (see the concurrency block). Job results: $RESULTS"
-          fi
+          # A cancelled dependency is tolerated only when the live PR head has
+          # moved away from this run's event SHA. Equal SHA, push events, missing
+          # event identity, dependency failure, and GitHub API failure all fail
+          # closed. Both aggregation jobs call the same tested policy script.
+          node scripts/ci-cancellation-policy.js
           echo "All quality gates passed."
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -916,6 +910,9 @@ jobs:
     name: CI Complete
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     needs:
       [
         changes,
@@ -927,6 +924,8 @@ jobs:
       ]
     if: always()
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+
       - name: Check Docker-tier stages passed
         # Values reach the script through env, never via ${{ }} interpolation
         # into `run:` — same convention as the rest of this workflow.
@@ -934,6 +933,11 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
           ALL_RESULTS: ${{ toJson(needs.*.result) }}
+          RESULTS: ${{ toJson(needs.*.result) }}
+          EVENT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           SECRETS_SCAN_RESULT: ${{ needs.secrets-scan.result }}
           QUALITY_GATE_RESULT: ${{ needs.quality-gate.result }}
@@ -947,27 +951,9 @@ jobs:
           echo "secrets-scan:            $SECRETS_SCAN_RESULT"
           echo "quality-gate:            $QUALITY_GATE_RESULT"
 
-          # 'cancelled' is tolerated below, but ONLY on a pull_request run and
-          # ONLY when no job in this gate's `needs` reports 'failure'. Reason:
-          # the `concurrency` block at the top of this file sets
-          # `cancel-in-progress` for pull_request events, so pushing twice in
-          # quick succession cancels the first run's in-flight jobs BY DESIGN,
-          # and this gate used to paint a red required check on runs where
-          # nothing broke (seen six times across PRs #163/#165). GitHub exposes
-          # no cancellation reason to the job, so these two conditions are the
-          # discriminator we have:
-          #   • pull_request only — a cancelled push/main run stays red, which
-          #     the concurrency block relies on (every main commit needs a full
-          #     verdict for bisecting).
-          #   • no 'failure' anywhere — a real break alongside a cancel is still
-          #     a real break, and the whole Quality-Gate tier folds into
-          #     `quality-gate`'s own result, so an upstream break is visible here.
-          # A superseded run's green is harmless: branch protection tracks the
-          # head SHA, and the push that superseded this run moved it.
-          #
-          # This does NOT loosen 'skipped'. See `require` below.
           tolerate_cancelled=false
-          if [ "$EVENT_NAME" = "pull_request" ] && ! echo "$ALL_RESULTS" | grep -q '"failure"'; then
+          if echo "$ALL_RESULTS" | grep -q '"cancelled"'; then
+            node scripts/ci-cancellation-policy.js
             tolerate_cancelled=true
           fi
 

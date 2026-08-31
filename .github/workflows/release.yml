@@ -195,6 +195,9 @@ jobs:
       - name: Install electron workspace dependencies (required for backend tests)
         run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
 
+      - name: Run Electron and native-runtime contract tests
+        run: bun run test:electron
+
       - name: Run backend tests
         run: bun run test
 
@@ -314,6 +317,7 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
+          trivyignores: .trivyignore
 
       # The migration round-trip ci.yml's docker-verify job runs, which this
       # pipeline had no equivalent of. `docker-entrypoint.sh` runs `alembic
@@ -594,6 +598,9 @@ jobs:
     permissions:
       contents: write # required to create releases and upload assets
       packages: read
+      id-token: write # required for GitHub artifact attestations
+      attestations: write
+      artifact-metadata: write
     steps:
       - name: Download mac release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
@@ -609,6 +616,14 @@ jobs:
 
       - name: List downloaded artifacts
         run: find dist/ -type f | sort
+
+      - name: Attest macOS release artifacts
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            dist/mac/Vision-*.dmg
+            dist/mac/Vision-*-arm64-mac.zip
+            dist/mac/vision-source-launcher-*.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v2
