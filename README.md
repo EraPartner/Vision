@@ -103,6 +103,23 @@ directory on first launch. See
 [`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for
 data migration and rollback.
 
+For a fully isolated application with deterministic synthetic data, build and install
+**Vision Demo**:
+
+```bash
+./install-demo.sh
+open "/Applications/Vision Demo.app"
+```
+
+Vision Demo uses its own bundled native PostgreSQL runtime below
+`~/Library/Application Support/Vision Demo/native/vision_demo`. It does not require Docker and
+cannot access the real Vision database. Restore its canonical dataset with
+`bun run demo:reset-native`, then quit and reopen the Demo app.
+
+Both macOS installers build the production frontend in a private temporary directory and remove
+that staging directory on exit. They do not depend on, reuse, or clear the repository's shared
+`dist` directory.
+
 ### Option B — Docker Compose (any platform)
 
 ```bash
@@ -190,6 +207,7 @@ bun run build                # production frontend build (generates locales firs
 bun run build:dev            # dev-mode frontend build
 bun run preview              # preview production build
 bun run dist                 # build + package Electron .app
+bun run demo:reset-native    # request a canonical synthetic Demo reset on next launch
 
 # Linting & types
 bun run lint                 # frontend ESLint

@@ -2,8 +2,8 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-08-30
-updated: 2026-08-27
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   [
     guide,
@@ -85,7 +85,7 @@ The workflow intentionally has no top-level path filter. Documentation-only chan
 produce the required `CI Complete` check; an internal changes job skips only work that is genuinely
 unnecessary.
 
-**Permissions:** Minimal per-job basis; most jobs run with `contents: read` only.
+**Permissions:** Minimal per-job basis; most jobs run with `contents: read` only. The two aggregation gates additionally receive `pull-requests: read` so they can verify whether a cancelled pull-request run was actually superseded by a newer head SHA.
 
 ### Jobs
 
@@ -219,7 +219,9 @@ verify-compose-sync:
 
 The comparison lives in **`scripts/check-compose-sync.js`** (Node stdlib only — no toolchain setup, so it also runs from `.githooks/pre-push` before `bun install`). It replaced two byte-identical inline `awk` copies, one here and one in `release.yml`'s `verify` job, which could drift apart and had no local equivalent. The awk version also never stopped at the next top-level block, so any key added after `volumes:` (e.g. a `networks:` section) would have been counted as a volume name; the script parses indentation, block scalars and comments instead. Run it locally with `bun run check-compose-sync`.
 
-`packaging/electron/resources-demo/docker-compose.yml` is deliberately **not** compared: it pins its own project name (`visiondemoapp`) to keep demo volumes isolated from real data.
+Vision Demo no longer has a Compose copy. Its package uses the isolated native runtime and a
+verified deterministic seed ([[docs/adr/114-native-deterministic-demo-runtime|ADR-114]]), so this
+check compares only the optional production Docker provider with the root Compose deployment.
 
 **Why it's critical:**
 
@@ -580,18 +582,14 @@ quality-gate:
     - verify-destructive-migrations
   if: always()
   steps:
+    - uses: actions/checkout@v4
     - name: Check all gates passed
-      run: |
-        results='${{ toJson(needs.*.result) }}'
-        if echo "$results" | grep -qE '"(failure|cancelled)"'; then
-          echo "Quality gate failed"
-          exit 1
-        fi
+      run: node scripts/ci-cancellation-policy.js
 ```
 
 **Checks:**
 
-- All fourteen prerequisite jobs must avoid failure or cancellation: `changes`, `commitlint`, `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`, `verify-destructive-migrations`
+- All fourteen prerequisite jobs must avoid failure. A cancellation passes only for a pull-request run whose event head differs from the live PR head, proving that a newer push superseded it; equal heads, push runs, missing event data, and GitHub API failures fail closed.
 - Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
 - Blocks expensive Docker image build until quality gates are green
 
@@ -606,16 +604,20 @@ Final aggregation gate that combines all Docker-intensive CI stages (image scann
 ```yaml
 ci-complete:
   name: CI Complete
-  needs: [trivy-scan, docker-verify, test-live-api-contracts]
+  needs:
+    [
+      changes,
+      secrets-scan,
+      quality-gate,
+      trivy-scan,
+      docker-verify,
+      test-live-api-contracts,
+    ]
   if: always()
   steps:
+    - uses: actions/checkout@v4
     - name: Check Docker-tier stages passed
-      run: |
-        results='${{ toJson(needs.*.result) }}'
-        if echo "$results" | grep -qE '"(failure|cancelled)"'; then
-          echo "CI failed in Docker tier"
-          exit 1
-        fi
+      run: node scripts/ci-cancellation-policy.js
 ```
 
 **Why separate from quality-gate?**
@@ -638,7 +640,11 @@ ci-complete:
 3. Set "ci-complete" as the single required status check
 4. Remove individual job names if previously set (ci-complete is the sufficient check)
 
-**Failure:** Indicates failure in Docker-tier scanning or container health; must be fixed before merging.
+Both aggregation jobs use the same tested cancellation policy. A dependency cancellation is accepted only when the GitHub API reports that the pull request now points at a different head SHA. A cancellation on the current head can therefore never manufacture a green required check.
+
+The policy truth table and the workflow wiring contract live in `scripts/tests/ci-cancellation-policy.test.js`. `bun run test:scripts` runs that suite with the other repository-script tests locally and in the required `verify-generated` CI job.
+
+**Failure:** Indicates failure in Docker-tier scanning or container health, a cancellation on the current head, or an inability to verify supersession; it must be fixed before merging.
 
 ---
 
@@ -736,7 +742,7 @@ verify:
 4. **Dependency audit:** No HIGH or CRITICAL vulnerabilities (JS + Python) in release
 5. **Lint + type-check:** frontend ESLint/`tsc`, backend ESLint, backend JSDoc `tsc --checkJs` **and** the `noImplicitAny` ratchet
 6. **Generated artifacts:** `validate-locales`, locale drift, OpenAPI type drift, endpoint-matrix count — the same four assertions as CI's `verify-generated`
-7. **Tests:** backend + frontend with coverage
+7. **Tests:** Electron/native-runtime contracts, backend tests, and frontend tests with coverage
 
 This job mirrors CI's quality tier on purpose: a tag can be pushed on a commit that never passed CI, so these are the only gates in that case.
 
@@ -763,6 +769,7 @@ docker:
       with:
         {
           image-ref: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}",
+          trivyignores: ".trivyignore",
         }
     - run: docker pull "$IMAGE_REF" # candidate, by digest
     - uses: ./.github/actions/compose-up # boot the candidate
@@ -776,7 +783,7 @@ docker:
     - run: <assert every promoted tag resolves to the scanned digest>
 ```
 
-**Why by digest first:** the image used to be pushed with all of its tags — including `latest` — _before_ Trivy ran, so a HIGH/CRITICAL finding failed the job with the vulnerable image already serving `latest`. `push: false` + `load: true` is not an option: buildx cannot load a multi-platform index into the local docker daemon. An untagged candidate is reachable only by digest, so nothing users pull moves until the scan and the migration round-trip pass. `imagetools create` copies the index by digest, so the semver tags and `latest` point at the _same_ index — attestations included — that was scanned and that the release asset names; the final step asserts exactly that.
+**Why by digest first:** the image used to be pushed with all of its tags — including `latest` — _before_ Trivy ran, so a HIGH/CRITICAL finding failed the job with the vulnerable image already serving `latest`. `push: false` + `load: true` is not an option: buildx cannot load a multi-platform index into the local docker daemon. An untagged candidate is reachable only by digest, so nothing users pull moves until the scan and the migration round-trip pass. `imagetools create` copies the index by digest, so the semver tags and `latest` point at the _same_ index — attestations included — that was scanned and that the release asset names; the final step asserts exactly that. The release and CI Trivy gates both load `.trivyignore`, so the repository has one reviewed accepted-risk policy.
 
 **Publishes:**
 
@@ -837,12 +844,24 @@ release:
   needs: [docker, package-mac]
   runs-on: ubuntu-latest
   steps:
+    - name: Attest macOS release artifacts
+      uses: actions/attest@<pinned-commit> # v4
+      with:
+        subject-path: |
+          dist/mac/Vision-*.dmg
+          dist/mac/Vision-*-arm64-mac.zip
+          dist/mac/vision-source-launcher-*.zip
     - name: Create release
       uses: softprops/action-gh-release@v1
       with:
         draft: false
         prerelease: false
 ```
+
+The release job grants `id-token: write`, `attestations: write`, and `artifact-metadata: write` only
+at this final boundary. Checksums remain available for offline verification; GitHub attestations bind
+the three executable archives to this repository and release workflow. After a live release, verify
+one with `gh attestation verify <artifact> --repo EraPartner/Vision`.
 
 **Result:**
 
@@ -998,5 +1017,6 @@ curl http://localhost:3002/health
 
 - [[docs/features/application-updates|Application Updates Feature]] — Update modes and user-facing UI
 - [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Checksum strategy
+- [[docs/adr/116-gated-release-candidate-promotion|ADR-116: Gated Release Candidate Promotion and Artifact Attestation]] — Candidate-digest and attestation policy
 - [[docs/guides/deployment|Deployment Guide]] — Production deployment options
 - [[docs/guides/testing|Testing Guide]] — Test structure and coverage requirements

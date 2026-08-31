@@ -3,7 +3,7 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-06-24
-updated: 2026-08-27
+updated: 2026-08-31
 tags:
   [
     components,
@@ -197,7 +197,7 @@ The FX-aware realized/unrealized rows are gated on `holding.currency !== targetC
 
 See [[docs/features/portfolio#unified-fx-aware-pl-in-investmentdetaildialog-2026-06-28|Portfolio — Unified FX-Aware P&L]] for the full description of the computation logic.
 
-Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/lib/dateUtils.ts]]
 
 ### EditInvestmentDialog
 
@@ -347,7 +347,7 @@ Adds a new investment directly from market lookup results.
 - Default generated note date now follows app date format + locale
 - Transaction date form input remains persisted as `YYYY-MM-DD` for data consistency
 
-Code links: [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/lib/dateUtils.ts]]
 
 ### Metals Support Notes
 

@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Category management for organizing transactions with UNIQUE constraint and atomic assignment
-date: 2026-04-16
-updated: 2026-08-09
+date: 2026-08-31
+updated: 2026-08-31
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
@@ -29,16 +29,17 @@ consumers (category pickers, the categories page) are never silently truncated.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| limit | integer | — (unbounded) | Optional page size (clamped: 1–1000). Omit together with offset for the full list |
-| offset | integer | 0 | Items to skip (clamped: ≥0). Sending either limit or offset opts into pagination |
-| general | string | null | Filter by general category |
-| detail | string | null | Filter by detail category |
-| active | boolean | true | Show active/inactive |
-| search | string | null | Search in name |
+| Parameter | Type    | Default       | Description                                                                       |
+| --------- | ------- | ------------- | --------------------------------------------------------------------------------- |
+| limit     | integer | — (unbounded) | Optional page size (clamped: 1–1000). Omit together with offset for the full list |
+| offset    | integer | 0             | Items to skip (clamped: ≥0). Sending either limit or offset opts into pagination  |
+| general   | string  | null          | Filter by general category                                                        |
+| detail    | string  | null          | Filter by detail category                                                         |
+| active    | boolean | true          | Show active/inactive                                                              |
+| search    | string  | null          | Search in name                                                                    |
 
 **Response** (unpaginated request — no `limit`/`offset` fields echoed):
+
 ```json
 {
   "items": [
@@ -62,6 +63,7 @@ When the request paginates (explicit `limit`/`offset`), the body additionally ca
 `"limit"` and `"offset"`, and `total` stays the full match count.
 
 Implementation note:
+
 - Unpaginated requests skip the `COUNT(*)` round-trip entirely (`total` = row count); paginated requests fetch the page and the count ([[apps/node-backend/src/routes/categories.js]]).
 
 ### POST /api/categories
@@ -69,6 +71,7 @@ Implementation note:
 Create a new category or get existing category.
 
 **Request Body:**
+
 ```json
 {
   "general": "FOOD",
@@ -82,15 +85,23 @@ Create a new category or get existing category.
 **Behavior:** Returns existing category if "GENERAL:DETAIL" combination already exists (idempotent create-or-get).
 
 Implementation note:
+
 - Repository `createOrGet` now uses `INSERT ... ON CONFLICT (general, detail) DO NOTHING RETURNING *` with existing-row fallback lookup, preserving idempotent create-or-get semantics while reducing race-window risk and extra round-trips under concurrent requests ([[apps/node-backend/src/repositories/categoryRepository.js]]).
 
-**Response:** 201 if created, 200 if existing category returned.
+**Response:** `201` with `created: true` if created; `200` with `created: false` if the existing
+category is returned. The boolean is part of the response data alongside the category fields.
 
 ### POST /api/categories/assign
 
-Assign a category to multiple recipients by name.
+> [!warning] Deprecated compatibility endpoint
+> Resolve the category first and use `POST /api/categories/:id/assign` for new callers. This
+> name-based form remains available so existing clients can resolve-or-create a category and assign
+> it in one request.
+
+Assign a name-resolved category to multiple recipients.
 
 **Request Body:**
+
 ```json
 {
   "category_general": "FOOD",
@@ -102,12 +113,16 @@ Assign a category to multiple recipients by name.
 **Required Fields:** category_general, category_detail, recipient_ids
 
 **Response:**
+
 ```json
 {
-  "updated_recipients": [...],
+  "updated_recipients": 3,
   "links": []
 }
 ```
+
+For compatibility, `recipient_ids` also accepts one integer. The response count reports how many
+recipient rows were updated.
 
 ### GET /api/categories/:id
 
@@ -118,6 +133,7 @@ Retrieve a single category by ID.
 Update a category.
 
 **Request Body:**
+
 ```json
 {
   "description": "Updated description",
@@ -133,20 +149,35 @@ Permanently delete a category (hard delete).
 
 ### POST /api/categories/:id/assign
 
-Assign a category to multiple recipients by ID.
+Canonical resource-action endpoint. Assign the identified category to multiple recipients.
 
 **Request Body:**
+
 ```json
 {
   "recipient_ids": [1, 2, 3]
 }
 ```
 
+For compatibility, `recipient_ids` also accepts one integer.
+
+**Response:**
+
+```json
+{
+  "updated_recipients": 3,
+  "links": []
+}
+```
+
+The response count reports how many recipient rows were updated.
+
 ## Category Format
 
 Categories use the format: `GENERAL:DETAIL`
 
 Examples:
+
 - `FOOD:GROCERIES`
 - `FOOD:RESTAURANTS`
 - `TRANSPORT:GAS`

@@ -3,7 +3,18 @@ title: Saved Charts Feature
 type: feature
 status: active
 date: 2026-06-26
-tags: [feature, saved-charts, charts, customization, statistics, recipients, tags, ranked-chart, all-sources]
+tags:
+  [
+    feature,
+    saved-charts,
+    charts,
+    customization,
+    statistics,
+    recipients,
+    tags,
+    ranked-chart,
+    all-sources,
+  ]
 description: User-defined custom charts that persist across sessions, supporting mixed category, recipient, and tag series, multiple chart variants (including ranked bar), dynamic all-source flags with top-N capping, yearly buckets, and date-range filters
 aliases: [custom charts, chart presets, saved chart configurations]
 related_code:
@@ -38,9 +49,9 @@ Tags (see [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]) are th
 ### TypeScript Types
 
 ```typescript
-type ChartType = 'line' | 'bar' | 'area';
-type ChartVariant = 'default' | 'stacked' | 'grouped' | 'ranked';
-type TimeBucket = 'monthly' | 'yearly';
+type ChartType = "line" | "bar" | "area";
+type ChartVariant = "default" | "stacked" | "grouped" | "ranked";
+type TimeBucket = "monthly" | "yearly";
 
 interface SavedChart {
   id: number;
@@ -78,55 +89,58 @@ interface SavedChartCreate {
 
 ### Database Table: `saved_charts`
 
-| Column | Type | Default | Description |
-|--------|------|---------|-------------|
-| `id` | SERIAL | — | Primary key |
-| `name` | VARCHAR | — | User-defined chart name |
-| `chart_type` | VARCHAR | `'line'` | `'line'`, `'bar'`, or `'area'` |
-| `chart_variant` | VARCHAR | `'default'` | `'default'`, `'stacked'`, `'grouped'`, or `'ranked'` |
-| `time_bucket` | VARCHAR | `'monthly'` | `'monthly'` or `'yearly'` (ignored when `chart_variant = 'ranked'`) |
-| `category_ids` | INTEGER[] | `'{}'` | Category IDs to include as series (ignored when `all_categories = true`) |
-| `recipient_ids` | INTEGER[] | `'{}'` | Recipient IDs to include as series (ignored when `all_recipients = true`) |
-| `tag_ids` | INTEGER[] | `'{}'` | Tag IDs to include as series (ignored when `all_tags = true`) |
-| `all_categories` | BOOLEAN | `false` | When `true`, chart all categories dynamically (ignores `category_ids`) |
-| `all_recipients` | BOOLEAN | `false` | When `true`, chart all recipients dynamically (ignores `recipient_ids`) |
-| `all_tags` | BOOLEAN | `false` | When `true`, chart all tags dynamically (ignores `tag_ids`) |
-| `date_range_start` | DATE | NULL | Filter periods from this date (inclusive) |
-| `date_range_end` | DATE | NULL | Filter periods to this date (inclusive) |
-| `created_at` | TIMESTAMP | — | Creation timestamp |
-| `updated_at` | TIMESTAMP | — | Last update timestamp |
+| Column             | Type      | Default     | Description                                                               |
+| ------------------ | --------- | ----------- | ------------------------------------------------------------------------- |
+| `id`               | SERIAL    | —           | Primary key                                                               |
+| `name`             | VARCHAR   | —           | User-defined chart name                                                   |
+| `chart_type`       | VARCHAR   | `'line'`    | `'line'`, `'bar'`, or `'area'`                                            |
+| `chart_variant`    | VARCHAR   | `'default'` | `'default'`, `'stacked'`, `'grouped'`, or `'ranked'`                      |
+| `time_bucket`      | VARCHAR   | `'monthly'` | `'monthly'` or `'yearly'` (ignored when `chart_variant = 'ranked'`)       |
+| `category_ids`     | INTEGER[] | `'{}'`      | Category IDs to include as series (ignored when `all_categories = true`)  |
+| `recipient_ids`    | INTEGER[] | `'{}'`      | Recipient IDs to include as series (ignored when `all_recipients = true`) |
+| `tag_ids`          | INTEGER[] | `'{}'`      | Tag IDs to include as series (ignored when `all_tags = true`)             |
+| `all_categories`   | BOOLEAN   | `false`     | When `true`, chart all categories dynamically (ignores `category_ids`)    |
+| `all_recipients`   | BOOLEAN   | `false`     | When `true`, chart all recipients dynamically (ignores `recipient_ids`)   |
+| `all_tags`         | BOOLEAN   | `false`     | When `true`, chart all tags dynamically (ignores `tag_ids`)               |
+| `date_range_start` | DATE      | NULL        | Filter periods from this date (inclusive)                                 |
+| `date_range_end`   | DATE      | NULL        | Filter periods to this date (inclusive)                                   |
+| `created_at`       | TIMESTAMP | —           | Creation timestamp                                                        |
+| `updated_at`       | TIMESTAMP | —           | Last update timestamp                                                     |
 
 Migrations: `alembic/versions/0017_saved_charts_recipients_variants.py` (categories + recipients, safe defaults) · `alembic/versions/0063_saved_charts_tag_ids.py` (`tag_ids INTEGER[] NOT NULL DEFAULT '{}'`, additive) · `alembic/versions/0064_saved_charts_all_source_flags.py` (`all_categories`, `all_recipients`, `all_tags BOOLEAN NOT NULL DEFAULT false`, additive).
 
 ### Valid (chart_type, chart_variant) Combinations
 
-| chart_type | chart_variant | Valid |
-|------------|---------------|-------|
-| `line` | `default` | ✓ |
-| `line` | `stacked` | ✗ — rejected 400 |
-| `line` | `grouped` | ✗ — rejected 400 |
-| `line` | `ranked` | ✗ — rejected 400 |
-| `bar` | `default` | ✓ |
-| `bar` | `stacked` | ✓ — StackedBarChart |
-| `bar` | `grouped` | ✓ — BarChart multi-series |
-| `bar` | `ranked` | ✓ — horizontal bar per entity, sorted high→low by total spend |
-| `area` | `default` | ✓ |
-| `area` | `stacked` | ✓ — AreaChart stacked mode |
-| `area` | `grouped` | ✗ — rejected 400 |
-| `area` | `ranked` | ✗ — rejected 400 |
+| chart_type | chart_variant | Valid                                                         |
+| ---------- | ------------- | ------------------------------------------------------------- |
+| `line`     | `default`     | ✓                                                             |
+| `line`     | `stacked`     | ✗ — rejected 400                                              |
+| `line`     | `grouped`     | ✗ — rejected 400                                              |
+| `line`     | `ranked`      | ✗ — rejected 400                                              |
+| `bar`      | `default`     | ✓                                                             |
+| `bar`      | `stacked`     | ✓ — StackedBarChart                                           |
+| `bar`      | `grouped`     | ✓ — BarChart multi-series                                     |
+| `bar`      | `ranked`      | ✓ — horizontal bar per entity, sorted high→low by total spend |
+| `area`     | `default`     | ✓                                                             |
+| `area`     | `stacked`     | ✓ — AreaChart stacked mode                                    |
+| `area`     | `grouped`     | ✗ — rejected 400                                              |
+| `area`     | `ranked`      | ✗ — rejected 400                                              |
 
 ## API Endpoints
 
 ### GET /api/saved-charts
+
 ### POST /api/saved-charts
+
 ### PATCH /api/saved-charts/:id
+
 ### DELETE /api/saved-charts/:id
 
 See [[docs/api/savedCharts]] for full contracts.
 
 ### GET /api/aggregations/recipient-pivot
 
-Per-recipient spending keyed by period, used by `useRecipientPivot` to power recipient series in custom charts. Accepts `?bucket=monthly|yearly&start=YYYY-MM-DD&end=YYYY-MM-DD&excluded_recipient_ids=…`.
+Per-recipient spending keyed by period, used by `useRecipientPivot` to power recipient series in custom charts. Accepts `?bucket=monthly|yearly&start=YYYY-MM-DD&end=YYYY-MM-DD&excluded_recipient_ids=…`. Selecting either a primary recipient or one of its aliases includes the full primary-recipient cluster; overlapping selections are deduplicated and the series is labeled with the primary recipient.
 
 ### GET /api/aggregations/tag-pivot
 
@@ -139,14 +153,14 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
 
 ## Frontend Hooks
 
-| Hook | Purpose |
-|------|---------|
-| `useSavedCharts()` | Fetches all saved charts (query key `['saved-charts']`) |
-| `useCreateSavedChart()` | Creates chart, invalidates cache |
-| `useUpdateSavedChart()` | Updates chart by ID |
-| `useDeleteSavedChart()` | Deletes chart by ID |
+| Hook                       | Purpose                                                                                                                                                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useSavedCharts()`         | Fetches all saved charts (query key `['saved-charts']`)                                                                                                                                                                                       |
+| `useCreateSavedChart()`    | Creates chart, invalidates cache                                                                                                                                                                                                              |
+| `useUpdateSavedChart()`    | Updates chart by ID                                                                                                                                                                                                                           |
+| `useDeleteSavedChart()`    | Deletes chart by ID                                                                                                                                                                                                                           |
 | `useRecipientPivot(chart)` | Per-chart hook; enabled when `recipient_ids.length > 0` **or** `all_recipients = true`; when all-flag is set, calls API with no recipient filter and skips client-side id filtering; cache key includes `'all'` token when all-flag is active |
-| `useTagPivot(chart)` | Per-chart hook; enabled when `tag_ids.length > 0` **or** `all_tags = true`; when all-flag is set, calls `GET /api/aggregations/tag-pivot?all=true` and skips client-side id filtering; cache key includes `'all'` token |
+| `useTagPivot(chart)`       | Per-chart hook; enabled when `tag_ids.length > 0` **or** `all_tags = true`; when all-flag is set, calls `GET /api/aggregations/tag-pivot?all=true` and skips client-side id filtering; cache key includes `'all'` token                       |
 
 ## Rendering
 

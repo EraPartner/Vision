@@ -3,9 +3,28 @@ title: Observability Layer (API Inspector)
 type: feature
 status: active
 date: 2026-06-18
-tags: [feature, frontend, observability, devtools, api-inspector, admin-mode, metrics, performance-monitoring, phase-x]
+tags:
+  [
+    feature,
+    frontend,
+    observability,
+    devtools,
+    api-inspector,
+    admin-mode,
+    metrics,
+    performance-monitoring,
+    phase-x,
+  ]
 description: Observability layer providing real-time API request tracking, query metrics, and request inspector panel. Built on a module-level pub-sub bus, shipped as a lazy chunk that loads only when activated. Enabled in dev builds (import.meta.env.DEV / VITE_DEVTOOLS) or at runtime via the Admin Mode toggle (works in the packaged Electron app and release image). Includes Inspector hotkey (Cmd+Shift+A), RequestList, RequestDetail, MetricsPanel, and TanStack React Query DevTools integration.
-aliases: [devtools, dev observability, api inspector, request log, query metrics, observability]
+aliases:
+  [
+    devtools,
+    dev observability,
+    api inspector,
+    request log,
+    query metrics,
+    observability,
+  ]
 ---
 
 # Observability Layer (API Inspector)
@@ -38,15 +57,15 @@ Exports a module-scoped event emitter that:
 ```typescript
 // Event shape
 type ApiRequestEvent = {
-  phase: 'start' | 'success' | 'error';
+  phase: "start" | "success" | "error";
   requestId: string;
   endpoint: string;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  durationMs?: number;           // Only on success/error
-  status?: number;               // Only on success/error
-  errorCode?: string;            // Only on error
-  errorMessage?: string;         // Only on error
-  timestamp: number;             // ms since epoch
+  method: "GET" | "POST" | "PATCH" | "DELETE";
+  durationMs?: number; // Only on success/error
+  status?: number; // Only on success/error
+  errorCode?: string; // Only on error
+  errorMessage?: string; // Only on error
+  timestamp: number; // ms since epoch
 };
 ```
 
@@ -69,14 +88,14 @@ Subscribes to both the API event bus and TanStack Query's QueryCache + MutationC
 
 **Metrics exposed:**
 
-| Metric | Calculation |
-|--------|-----------|
-| `totalRequests` | Count of all requests (in-flight + completed) |
-| `errorRate` | `(errorCount / totalRequests) * 100` |
-| `slowRequests` | Array of requests with `durationMs > 1000` |
-| `topEndpoints` | Top 10 endpoints by request count with p50/p95 latencies |
-| `cacheHitRatio` | Query cache hits / (hits + misses) × 100 |
-| `mutationSuccessRate` | Successful mutations / total mutations × 100 |
+| Metric                | Calculation                                              |
+| --------------------- | -------------------------------------------------------- |
+| `totalRequests`       | Count of all requests (in-flight + completed)            |
+| `errorRate`           | `(errorCount / totalRequests) * 100`                     |
+| `slowRequests`        | Array of requests with `durationMs > 1000`               |
+| `topEndpoints`        | Top 10 endpoints by request count with p50/p95 latencies |
+| `cacheHitRatio`       | Query cache hits / (hits + misses) × 100                 |
+| `mutationSuccessRate` | Successful mutations / total mutations × 100             |
 
 Call `initQueryMetrics(queryClient)` on app startup to wire QueryCache subscriptions.
 
@@ -106,10 +125,10 @@ Orchestrator component that:
 
 Floating 520×480px panel (z-index 9999) with two tabs:
 
-| Tab | Content |
-|-----|---------|
+| Tab          | Content                                                     |
+| ------------ | ----------------------------------------------------------- |
 | **Requests** | Split-pane view: RequestList (left) + RequestDetail (right) |
-| **Metrics** | MetricsPanel with stat cards and top-endpoints table |
+| **Metrics**  | MetricsPanel with stat cards and top-endpoints table        |
 
 **Request List:** `[[apps/frontend/src/components/devtools/RequestList.tsx]]`
 
@@ -161,6 +180,18 @@ The single `apiRequest()` chokepoint now:
 
 This ensures all 38 domain hooks (`useTransactions`, `usePortfolio`, etc.) automatically participate in observability without any changes to their implementations.
 
+### Backend log correlation
+
+The backend `requestId` middleware seeds an `AsyncLocalStorage` request context
+after it validates or generates the `X-Request-Id` value. The shared logger adds
+that ambient `requestId` to service, repository, scheduler, and route log
+metadata created by the same asynchronous request chain. Logs outside an HTTP
+request omit the field. A call that supplies an explicit `requestId` keeps that
+value, which supports process-level error handlers without duplicate fields.
+
+This makes the request ID shown by the API Inspector usable to filter backend
+container logs without passing the Express request object through domain code.
+
 ## Activation
 
 **File:** `[[apps/frontend/src/App.tsx]]`
@@ -178,10 +209,12 @@ They appear when **any** of these is true:
 
 ```tsx
 const isDevtoolsBuildEnabled =
-  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === "true";
 
 const DevtoolsRoot = lazy(() =>
-  import('@/components/devtools/DevtoolsRoot').then((m) => ({ default: m.DevtoolsRoot })),
+  import("@/components/devtools/DevtoolsRoot").then((m) => ({
+    default: m.DevtoolsRoot,
+  })),
 );
 
 function DevtoolsGate() {
@@ -205,17 +238,17 @@ function DevtoolsGate() {
 
 ## Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| **Module-level pub-sub** | Zero-cost operation; no subscription overhead when inspector closed |
-| **Ring buffer (200 entries)** | Balances history depth with memory footprint |
-| **X-Request-Id header** | Correlates frontend request lifecycle with backend logs |
-| **@tanstack/react-virtual** | Efficient rendering of hundreds of requests without lag |
-| **Cmd+Shift+A hotkey** | Avoids conflicts with `Cmd+Shift+I` (browser DevTools) on all platforms |
-| **No state persistence** | Inspector state lost on reload (suitable for an opt-in observability tool) |
-| **Runtime + build gating** | Build flags (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep it always-on in dev; the runtime `adminMode` toggle exposes it in any build, including the packaged Electron app |
-| **Lazy DevtoolsRoot** | Separate chunk fetched only when the gate renders it — zero load cost until dev build or Admin Mode is on |
-| **shadcn tokens** | Inspector automatically inherits theme (dark/light) from app settings |
+| Decision                      | Rationale                                                                                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Module-level pub-sub**      | Zero-cost operation; no subscription overhead when inspector closed                                                                                                         |
+| **Ring buffer (200 entries)** | Balances history depth with memory footprint                                                                                                                                |
+| **X-Request-Id header**       | Correlates frontend request lifecycle with backend logs                                                                                                                     |
+| **@tanstack/react-virtual**   | Efficient rendering of hundreds of requests without lag                                                                                                                     |
+| **Cmd+Shift+A hotkey**        | Avoids conflicts with `Cmd+Shift+I` (browser DevTools) on all platforms                                                                                                     |
+| **No state persistence**      | Inspector state lost on reload (suitable for an opt-in observability tool)                                                                                                  |
+| **Runtime + build gating**    | Build flags (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep it always-on in dev; the runtime `adminMode` toggle exposes it in any build, including the packaged Electron app |
+| **Lazy DevtoolsRoot**         | Separate chunk fetched only when the gate renders it — zero load cost until dev build or Admin Mode is on                                                                   |
+| **shadcn tokens**             | Inspector automatically inherits theme (dark/light) from app settings                                                                                                       |
 
 ## Related Documentation
 
@@ -227,6 +260,7 @@ function DevtoolsGate() {
 ## Troubleshooting
 
 ### Inspector won't open
+
 - In a production/Electron build, enable **Admin Mode** (Settings → About) — the
   floating "API" toggle appears bottom-right once it is on
 - In dev, verify `import.meta.env.DEV` is true (dev server) or `VITE_DEVTOOLS=true`
@@ -234,11 +268,13 @@ function DevtoolsGate() {
 - Ensure app is inside `<QueryClientProvider>`
 
 ### No requests appearing in list
+
 - Verify API calls are going through `apiRequest()` chokepoint
 - Check "Requests" tab is active
 - Try making a transaction query or API call manually
 
 ### Metrics show zero
+
 - Call `initQueryMetrics(queryClient)` in DevtoolsRoot useEffect (default: auto-initialized)
 - Verify QueryCache is attached to `queryClient` instance
 

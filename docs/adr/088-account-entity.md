@@ -10,9 +10,11 @@ aliases: [account entity, accounts table, account_id, bank_account replacement]
 # ADR-088: Account Entity (replace the `bank_account` string)
 
 ## Status
+
 Proposed
 
 ## Date
+
 2026-06-18
 
 ## Context
@@ -22,7 +24,7 @@ on both `transactions` and `planned_transactions`. That string is load-bearing i
 should not be:
 
 - The **running-balance ledger** is a window function `SUM(amount) OVER (PARTITION BY
-  bank_account …)` in `transactionRepository.js` — the partition key *is* the account.
+bank_account …)` in `transactionRepository.js` — the partition key _is_ the account.
 - **Bank balances + 12-month history** (`infoRepositoryBanks.getBankBalances`) group by the
   string with `DISTINCT ON (bank_account)` and a per-account LATERAL probe.
 - **Transfer detection** (ADR-083) requires two legs on `bank_account IS DISTINCT FROM` each
@@ -31,7 +33,7 @@ should not be:
   normalization — so "KBC", "KBC ", and a re-typed IBAN are three different "accounts".
 - **Statistics, filters, and materialized views** group/filter on the same string.
 
-Because the identifier is a string, there is no place to attach anything an account *is*: a type
+Because the identifier is a string, there is no place to attach anything an account _is_: a type
 (checking vs brokerage vs mortgage), a balance you can reconcile against, holdings, an owner, or
 a liability sign. Three workspaces (Budgeting · Portfolio · Research) each grew their own notion
 of "where money lives" — bank balances on the budgeting side, a single global portfolio on the
@@ -46,7 +48,7 @@ import (095), and portfolio income statistics (096). None of those are possible 
 is just a string.
 
 This is distinct from `recipient_bank_accounts` (counterparty IBANs, ADR-015 / ADR-087): those
-describe *who you paid*, not *where your money is*. The new `accounts` entity is the user's own
+describe _who you paid_, not _where your money is_. The new `accounts` entity is the user's own
 accounts.
 
 ## Decision
@@ -57,7 +59,7 @@ Create a first-class `accounts` table and migrate the `bank_account` string onto
 ### Data model
 
 Create `accounts` with its identity columns **plus the orthogonal flag columns** up front (their
-*semantics* are activated in ADR-089, but shipping the columns now avoids a second table
+_semantics_ are activated in ADR-089, but shipping the columns now avoids a second table
 rewrite):
 
 - Identity: `id`, `name`, `display_name`, `institution`, `currency`, `is_active`,
@@ -65,7 +67,7 @@ rewrite):
 - Flags (defaults in parentheses): `type` (`'checking'`), `liquidity_class`, `spendable`
   (`true`), `in_net_worth` (`true`), `tax_wrapper`, `owner` (`'me'`), `multi_currency_cash`
   (`false`), `has_cash_sleeve` (`true`), `funding_account_id` (nullable self-FK, `ON DELETE
-  SET NULL`).
+SET NULL`).
 - `currency` follows the ADR-086 convention: `NOT NULL DEFAULT 'EUR'` + ISO `^[A-Z]{3}$` CHECK.
 
 Add a nullable `account_id` to `transactions` and `planned_transactions`, **`ON DELETE
@@ -95,13 +97,14 @@ ADR-091, not a hard delete).
   CI-enforced `docs/reference/api-endpoint-matrix.md`).
 - A **workspace-agnostic top-level "Accounts" hub** (sibling to AI Chat, above the workspace
   switcher) is the one canonical place to manage accounts and see each account's cash + holdings
-  + debt + reconciliation. Per-account detail and CRUD mirror the existing
-  Categories/Recipients patterns. The free-text bank field in the transaction editor and the
-  import column mapper become an **account combobox with "create new."**
+  - debt + reconciliation. Per-account detail and CRUD mirror the existing
+    Categories/Recipients patterns. The free-text bank field in the transaction editor and the
+    import column mapper become an **account combobox with "create new."**
 
 ## Consequences
 
 **Positive**
+
 - Accounts gain a stable identity, so everything downstream in the epic (type/owner, cash
   sleeve, per-account lots, liabilities, net worth, reconciliation, brokerage import) has
   something real to attach to. The three workspaces share one spine.
@@ -110,6 +113,7 @@ ADR-091, not a hard delete).
   data loss.
 
 **Negative / cost**
+
 - **High blast radius.** The string is read in the running-balance ledger, bank balances,
   transfers, import, statistics, filters, and the MVs — every site must flip together or pages
   will disagree.
@@ -117,15 +121,17 @@ ADR-091, not a hard delete).
 - A new API surface + a new top-level UI area + i18n strings (en/nl).
 
 **Risks / mitigations**
-- *Drop-string is irreversible* → gate it behind a dual-write soak and parity checks
+
+- _Drop-string is irreversible_ → gate it behind a dual-write soak and parity checks
   (running-balance and `getBankBalances` must be byte-identical pre/post flip on a seeded DB)
   before contracting.
-- *Backfill mis-grouping* (whitespace/case) → trim+normalize when creating the backfilled rows;
+- _Backfill mis-grouping_ (whitespace/case) → trim+normalize when creating the backfilled rows;
   the user can merge accounts afterward via the hub.
-- *Migrations are not auto-run* → ship the revision + rollback and let the user apply
+- _Migrations are not auto-run_ → ship the revision + rollback and let the user apply
   (per project convention).
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]] (MV/agg sites move to `account_id`)
@@ -170,9 +176,9 @@ Three latent bugs discovered during a data-integrity audit of the ADR-088 dual-w
 
 The function is replaced in place with `CREATE OR REPLACE`:
 
-| `TG_OP` | Behaviour |
-|---------|-----------|
-| `INSERT` | Unchanged: `INSERT INTO accounts ON CONFLICT DO NOTHING`, then resolve `account_id`. Import pipeline relies on this for first-seen accounts. |
+| `TG_OP`  | Behaviour                                                                                                                                                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INSERT` | Unchanged: `INSERT INTO accounts ON CONFLICT DO NOTHING`, then resolve `account_id`. Import pipeline relies on this for first-seen accounts.                     |
 | `UPDATE` | Lookup-only: `SELECT id FROM accounts WHERE name = acct_name`. If a match exists, set `NEW.account_id`; if not, leave `account_id` unchanged. **Never creates.** |
 
 The two trigger bindings on `transactions` and `planned_transactions` require no change — the
@@ -216,6 +222,7 @@ string-based display code always see the current label.
 ### Consequences
 
 **Positive**
+
 - Stale or mistyped `bank_account` edits can no longer spawn phantom accounts.
 - Splitting a transaction and then shrinking its `amount` below the split total is now caught at
   the DB level, not silently accepted.
@@ -223,6 +230,7 @@ string-based display code always see the current label.
   bank-balances widget, and any string-based filter show the new name immediately.
 
 **Negative / cost**
+
 - Existing phantom accounts already created by the pre-0062 trigger are not auto-cleaned; users
   may need to merge them via `POST /api/accounts/:id/merge` (see [[docs/api/accounts|Accounts API]]).
 - The rename propagation updates every `bank_account` string on all owned transactions in one
@@ -240,7 +248,7 @@ filed account bugs to this ADR's unfinished migration: the contract step never r
 (`0055_drop_bank_account_string.py` is a deliberate no-op after the premature drop broke boot;
 `0056` restored the string), stragglers still read the string (list filter/search
 `t.bank_account ILIKE`, `mv_bank_balances` grain-keyed on `(bank_account, currency)`), and
-account identity is enforced case-*sensitively* while writers disagree on casing (transaction
+account identity is enforced case-_sensitively_ while writers disagree on casing (transaction
 paths UPPER the label; `accountService.create/update` only trim — `POST /api/accounts`
 "Checking" + import "CHECKING" mint two accounts). Two decisions (D1, D5) were taken on
 2026-07-10; this addendum records them and pins the contract preconditions.
@@ -252,11 +260,11 @@ behavior of `sync_account_id_from_bank_account()` is **kept** (import onboarding
 zero-ceremony; an explicit "new accounts" review step was considered and rejected). In exchange,
 account identity becomes case-insensitive and whitespace-insensitive everywhere:
 
-| Surface | Change |
-|---------|--------|
-| Uniqueness | `uq_accounts_name` replaced by a unique expression index on `lower(btrim(name))`; stored `name` keeps the user's casing for display |
-| Trigger | INSERT's `ON CONFLICT` retargets the expression index; lookup compares `lower(btrim(...))` on both sides (closes the filed case-sensitive INSERT/UPDATE findings) |
-| Service layer | `accountService.create/update` and `accountRepository.resolveOrCreateByName` normalize with the same expression (closes the unfiled trim-vs-UPPER gap) |
+| Surface         | Change                                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Uniqueness      | `uq_accounts_name` replaced by a unique expression index on `lower(btrim(name))`; stored `name` keeps the user's casing for display                                                                          |
+| Trigger         | INSERT's `ON CONFLICT` retargets the expression index; lookup compares `lower(btrim(...))` on both sides (closes the filed case-sensitive INSERT/UPDATE findings)                                            |
+| Service layer   | `accountService.create/update` and `accountRepository.resolveOrCreateByName` normalize with the same expression (closes the unfiled trim-vs-UPPER gap)                                                       |
 | Blank-on-UPDATE | An UPDATE clearing `bank_account` now also NULLs `account_id` — the row stops counting toward an account whose label was removed (resolves the filed 0062 stale-account edge, decided rather than left open) |
 
 Manual entry forms still move to an account picker with an explicit-create escape hatch (a UX
@@ -266,7 +274,7 @@ resolves case-insensitively.
 **b) D5 — account lifecycle: active → closed → (only-if-empty) deleted.** "Close" = archive:
 `is_active = false` plus a new `closed_at TIMESTAMPTZ` stamped at close time. Hard DELETE is
 allowed only when zero rows reference the account; the existing FK-RESTRICT 409 stays, and both
-the API error and the UI route the user to *close* instead of dead-ending (the
+the API error and the UI route the user to _close_ instead of dead-ending (the
 `useAccounts.ts` delete-error comment becomes actual behavior).
 
 **c) Contract runbook — preconditions to drop `bank_account`.** The contract step remains
@@ -288,6 +296,7 @@ Until all four hold, **no new code may bind to the `bank_account` string** — n
 via `account_id`/join.
 
 > [!update] 2026-08-02 — status of the four preconditions
+>
 > 1. Holds by construction (sync trigger + rename propagation); the up.sql soak gate enforces
 >    the string-without-FK half, and the DB suites pin it.
 > 2. **Done.** All backend readers (list/count filters, free-text search, sort-by-bank,
@@ -310,16 +319,35 @@ via `account_id`/join.
 ### Consequences
 
 **Positive**
+
 - Casing/whitespace can no longer split one real-world account into two rows, from any writer.
 - The contract step has a definition of done instead of an indefinite dual-write.
 - Close-vs-delete is finally a modeled lifecycle rather than a 409 surprise.
 
 **Negative / cost**
-- Implicit minting keeps its residual risk: a *differently-worded* label (not just re-cased) still
+
+- Implicit minting keeps its residual risk: a _differently-worded_ label (not just re-cased) still
   mints a new account on first import; merge remains the cleanup for that.
 - The expression-index swap needs a one-time duplicate check (existing rows differing only by
   case must be merged before the index can be created).
 - `closed_at` is a schema addition (small revision; rollback drops the column).
+
+### Addendum (2026-08-31): compatibility identity at the dual-write boundary
+
+Transaction responses project `bank_account` from `accounts.name`, so callers receive the
+canonical stored account spelling even when an older transaction row retained different casing.
+This is presentation normalization; `account_id` remains the stable identity.
+
+The manual-entry deduplication hash deliberately keeps its historical raw `bank_account` input.
+Changing that recipe in place would make every stored hash incomparable with a newly computed
+one. A future identity-based recipe therefore requires an explicit backfill or a versioned
+dual-hash compatibility window; this residue does not justify silently invalidating existing
+deduplication history.
+
+The backup round-trip dependency concern is resolved by workspace installation parity: the
+backend suite can resolve the Electron packaging workspace's `archiver` and `yauzl` dependencies
+and exercises all archive round-trip cases. Missing optional workspace installation is treated as
+an environment setup failure, not as a reason for those tests to self-skip.
 
 **Related:** the multi-currency decision that re-grains `mv_bank_balances` lives in
 [[docs/adr/089-account-typed-model|ADR-089 addendum]]; the enable decision for the holdings half

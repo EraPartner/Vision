@@ -3,11 +3,39 @@ title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
 date: 2026-08-25
-updated: 2026-08-25
-tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035, migration-0038, migration-0080, migration-0082, adr-068]
+updated: 2026-08-31
+tags:
+  [
+    performance,
+    database,
+    materialized-views,
+    aggregations,
+    optimization,
+    phase-1,
+    migration-0035,
+    migration-0038,
+    migration-0080,
+    migration-0082,
+    adr-068,
+  ]
 description: Current PostgreSQL materialized views and trigger-maintained tables for dashboard aggregation, including the retired recipient and bank-balance caches.
-aliases: [materialized views, pre-computed queries, dashboard optimization, aggregation tables, trigger-maintained tables]
-related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py", "alembic/versions/0038_drop_mv_recipient_monthly.py", "alembic/versions/0080_drop_agg_recipient_totals.py", "alembic/versions/0082_drop_mv_bank_balances.py"]
+aliases:
+  [
+    materialized views,
+    pre-computed queries,
+    dashboard optimization,
+    aggregation tables,
+    trigger-maintained tables,
+  ]
+related_code:
+  [
+    "apps/node-backend/src/services/aggregationRefresh.js",
+    "apps/node-backend/src/services/materializedViewService.js",
+    "alembic/versions/0035_add_recipient_aggregations.py",
+    "alembic/versions/0038_drop_mv_recipient_monthly.py",
+    "alembic/versions/0080_drop_agg_recipient_totals.py",
+    "alembic/versions/0082_drop_mv_bank_balances.py",
+  ]
 ---
 
 # Materialized Views & Aggregation Strategy
@@ -20,10 +48,10 @@ See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the full architectu
 
 ### Two Maintenance Strategies
 
-| Strategy | Use Case | Maintenance | Latency | Examples |
-|----------|----------|-------------|---------|----------|
-| **Materialized Views** | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily` (`mv_recipient_monthly` was dropped in 0038; `mv_bank_balances` was dropped for good in 0082) |
-| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables | Automatic via row-level triggers | <1ms | `agg_split_outstanding` (`agg_recipient_totals` was dropped in 0080) |
+| Strategy                      | Use Case                                                             | Maintenance                       | Latency   | Examples                                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------- | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Materialized Views**        | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily` (`mv_recipient_monthly` was dropped in 0038; `mv_bank_balances` was dropped for good in 0082) |
+| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables        | Automatic via row-level triggers  | <1ms      | `agg_split_outstanding` (`agg_recipient_totals` was dropped in 0080)                                                                                          |
 
 ## Materialized Views in Vision
 
@@ -52,6 +80,7 @@ GROUP BY month_start, month, year, t.currency, c.id
 **Fast Path (Recent Months Only):**
 
 `getMonthlyFinancialSummary()` in `infoRepositoryMonthly.js` uses a fast-path optimization to read from `mv_monthly_summary` when all of the following conditions are met:
+
 - `allTime=false` (default; requesting recent months only, not full history)
 - No category exclusions (`excluded_category_ids` is empty)
 - No recipient exclusions (`excluded_recipient_ids` is empty)
@@ -129,6 +158,7 @@ Outstanding balance per split (original minus paid).
 **PK:** `split_id`
 
 **Maintained by:**
+
 - `fn_trg_split_sync()` on `transaction_splits`
 - `fn_trg_split_payment_sync()` on `split_payments`
 
@@ -137,9 +167,10 @@ Outstanding balance per split (original minus paid).
 **Use case:** Owed-balance endpoint (Phase 4), dashboard balance widget
 
 **Example:** When a split payment is recorded:
+
 ```javascript
 // App code does nothing special — triggers handle it:
-await query('INSERT INTO split_payments (split_id, amount) VALUES (...)');
+await query("INSERT INTO split_payments (split_id, amount) VALUES (...)");
 // Automatically: agg_split_outstanding.outstanding_amount updated in <1ms
 ```
 
@@ -147,40 +178,48 @@ await query('INSERT INTO split_payments (split_id, amount) VALUES (...)');
 
 ## Refresh Strategy
 
-All refreshes are orchestrated via a single entrypoint: **`aggregationRefresh.js`** (`refreshAggregations()`, `scheduleAggregationRefresh()`).
+Application mutation refreshes are orchestrated through **`aggregationRefresh.js`**. Startup and explicit maintenance may call `materializedViewService` directly.
 
-### Manual Refresh (Bulk Operations)
+### Explicit Full Refresh (Maintenance)
 
-After bulk imports or mass updates, trigger a full refresh:
+Explicit maintenance that must wait for current projections can trigger a full refresh:
 
 ```javascript
-import { refreshAggregations } from './services/aggregationRefresh.js';
+import { refreshAggregations } from "./services/aggregationRefresh.js";
 
-// After import completes:
+// Explicit maintenance operation:
 await refreshAggregations();
-// Refreshes all legacy + Phase-1 MVs in parallel (~100–200ms typical)
+// Refreshes the three managed MVs, then clears forecast caches.
 ```
 
 **What it does:**
+
 - Delegates legacy views (`mv_monthly_summary`, `mv_category_totals`, etc.) to `materializedViewService.refreshMaterializedViews()`
 - `mv_recipient_monthly` is no longer refreshed — it was dropped in migration `0038` (June 2026, ADR-068)
 - No-op for trigger-maintained tables (they update automatically)
+
+### Import Completion
+
+An import does not await the full materialized-view scans. After transfer reconciliation, it awaits both attempts made by `clearForecastMcCaches()` and calls `scheduleMaterializedViewRefresh()` once. Each invalidation failure is logged and non-fatal, so the response confirms durable canonical rows and attempted forecast-cache invalidation, while MV-backed monthly and category projections remain eventually consistent until the scheduled refresh completes.
+
+The materialized-view scheduler uses a five-second trailing debounce and a ten-second maximum wait for a continuous burst. Refresh execution time and a possible wait behind an in-flight refresh are additional. A successful refresh clears the process statistics cache again after the views switch snapshots, preventing a request during refresh from preserving the old projection.
 
 ### Debounced Refresh (Single-Row Mutations)
 
 After editing or deleting a single transaction:
 
 ```javascript
-import { scheduleAggregationRefresh } from './services/aggregationRefresh.js';
+import { scheduleAggregationRefresh } from "./services/aggregationRefresh.js";
 
 // In route handler after mutation:
-await scheduleAggregationRefresh();
-// Coalesces rapid changes into one refresh (1s debounce)
+scheduleAggregationRefresh();
+// Coalesces rapid changes into one MV refresh.
 ```
 
 **Behavior:**
-- First call schedules refresh in 1 second
-- Additional calls within 1s don't queue more refreshes (coalescing)
+
+- The MV rebuild uses a five-second trailing debounce and a ten-second burst cap
+- The forecast-cache clear uses its own one-second trailing debounce
 - Triggers fire immediately (trigger-maintained tables stay in sync)
 - MV refresh happens once per debounce window
 
@@ -193,6 +232,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_summary;
 ```
 
 **Requirements:**
+
 - Unique index must exist on the view
 - View must have been populated at least once
 - No overlapping CONCURRENTLY refreshes on the same view
@@ -203,8 +243,8 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_summary;
 try {
   await query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`);
 } catch (err) {
-  if (err.message.includes('has not been populated')) {
-    await query(`REFRESH MATERIALIZED VIEW ${view}`);  // Blocks reads during refresh
+  if (err.message.includes("has not been populated")) {
+    await query(`REFRESH MATERIALIZED VIEW ${view}`); // Blocks reads during refresh
   }
 }
 ```
@@ -216,31 +256,31 @@ The orchestrator prevents refresh storms during concurrent user activity:
 ```javascript
 // Scenario: 10 users edit transactions simultaneously
 // Each calls scheduleAggregationRefresh()
-// Result: 1 refresh at end of 1s window (not 10)
+// Result: 1 refresh at the end of the coalescing window (not 10)
 
 // Behind the scenes:
-let phase1InFlight = false;
-let phase1Queued = false;
+let refreshInFlight = false;
+let refreshQueued = false;
 
 // First call:
-phase1InFlight = true;  // Lock acquired
+refreshInFlight = true; // Lock acquired
 // ... refresh runs ...
-phase1InFlight = false; // Lock released
+refreshInFlight = false; // Lock released
 
 // If calls arrived during refresh:
-if (phase1Queued) {
-  phase1Queued = false;
-  // Schedule another refresh (deferred)
+if (refreshQueued) {
+  refreshQueued = false;
+  // Start one deferred rerun after 500 ms
 }
 ```
 
 ## Performance Benefits
 
-| Query Type | Without MV | With MV |
-|------------|-----------|---------|
-| Monthly summary | ~500ms | ~5ms |
-| Category totals | ~800ms | ~3ms |
-| Daily cashflow | ~400ms | ~4ms |
+| Query Type      | Without MV | With MV |
+| --------------- | ---------- | ------- |
+| Monthly summary | ~500ms     | ~5ms    |
+| Category totals | ~800ms     | ~3ms    |
+| Daily cashflow  | ~400ms     | ~4ms    |
 
 ## Indexes
 
@@ -256,25 +296,30 @@ ON mv_monthly_summary (month_start, currency, category_id_key);
 ### After Bulk Import
 
 ```javascript
-import { refreshAggregations } from './services/aggregationRefresh.js';
+import {
+  clearForecastMcCaches,
+  scheduleMaterializedViewRefresh,
+} from "./services/aggregationRefresh.js";
 
 // In import service, after all transactions inserted:
-await refreshAggregations();
-logger.info('All aggregations refreshed');
+await reconcileTransfers();
+await clearForecastMcCaches();
+scheduleMaterializedViewRefresh();
+// The response may now return; the MV rebuild is asynchronous.
 ```
 
 ### After Single-Row Mutation
 
 ```javascript
-import { scheduleAggregationRefresh } from './services/aggregationRefresh.js';
+import { scheduleAggregationRefresh } from "./services/aggregationRefresh.js";
 
 // In transaction route handler:
-app.patch('/api/transactions/:id', async (req, res) => {
+app.patch("/api/transactions/:id", async (req, res) => {
   const updated = await transactionService.update(req.params.id, req.body);
-  
+
   // Schedule debounced refresh (doesn't block response)
-  scheduleAggregationRefresh().catch(err => logger.error('Refresh failed', err));
-  
+  scheduleAggregationRefresh();
+
   res.json(updated);
 });
 ```
@@ -285,23 +330,28 @@ For additional safety, schedule a full refresh nightly:
 
 ```javascript
 // In a cron job or scheduled task:
-setInterval(async () => {
-  logger.info('Running nightly aggregation refresh');
-  await refreshAggregations();
-}, 24 * 60 * 60 * 1000);
+setInterval(
+  async () => {
+    logger.info("Running nightly aggregation refresh");
+    await refreshAggregations();
+  },
+  24 * 60 * 60 * 1000,
+);
 ```
 
 ## Best Practices
 
 ### For Materialized Views
+
 1. **Use for read-heavy queries** — Ideal for dashboard aggregations
 2. **Balance freshness vs. performance** — Don't refresh too frequently; use debounce for single-row edits
 3. **Use unique indexes** — Required for concurrent refresh; prevents duplicate rows
 4. **Monitor refresh times** — Long refreshes may indicate need for indexing on source tables
 5. **Set scope appropriately** — e.g., `mv_monthly_summary` retains recent months, while all-time requests use live SQL
-6. **Understand scope limitations** — MVs retain recent months only, not all-time history. Queries requesting `allTime=true` (full transaction history) must always use live SQL, not MVs. Fast-path optimizations check this condition and fall back to live SQL when needed (see `mv_monthly_summary` fast path in [[#mv-monthly-summary]])
+6. **Understand scope limitations** — `mv_monthly_summary` and `mv_cashflow_daily` retain bounded recent windows, while `mv_category_totals` is all-time. Queries requesting `allTime=true` bypass the bounded monthly-summary fast path and use live SQL.
 
 ### For Trigger-Maintained Tables
+
 1. **Never call refresh from app code** — Triggers maintain these automatically
 2. **Document in code** — Mark aggregates with a comment such as `// Maintained by agg_split_outstanding triggers`
 3. **Verify trigger firing** — If aggregates look stale, check that triggers are enabled: `SELECT * FROM pg_trigger WHERE NOT tgisinternal`
@@ -312,7 +362,7 @@ setInterval(async () => {
 
 ## Timezone Awareness
 
-All aggregation queries (especially MVs) that bucket by date use `AT TIME ZONE 'APP_TIMEZONE'` to ensure consistent bucketing with the application's configured timezone. See [[docs/adr/009-timezone-policy|ADR-009]] for details.
+Materialized views aggregate the canonical `transactions.date` DATE column. Timestamp-based application queries follow [[docs/adr/009-timezone-policy|ADR-009]] before values reach that date boundary.
 
 ```sql
 -- CORRECT: Uses APP_TIMEZONE (e.g., Europe/Brussels)

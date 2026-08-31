@@ -5,9 +5,31 @@ status: active
 date: 2026-06-20
 updated: 2026-08-27
 last_modified: 2026-08-27
-tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
+tags:
+  [
+    feature,
+    portfolio,
+    import,
+    csv,
+    brokerage,
+    trades,
+    portfolio-import,
+    instrument-matching,
+    review,
+    type-normalizer,
+    deduplication,
+    fx,
+    adr-078,
+    adr-074,
+    adr-066,
+    migration-0040,
+    migration-0041,
+    migration-0057,
+    account-id,
+    adr-091,
+  ]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
-description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
+description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, occurrence-aware field deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
 related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
@@ -56,6 +78,10 @@ Key design points:
 
 Parses the uploaded CSV using the `portfolioGenericAdapter` (the only adapter; no pre-configured bank adapters exist for portfolio CSVs). Raw rows are stored in `portfolio_import_staging_rows`. The adapter reads columns according to the `column_mapping` in the config.
 
+The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
+transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
+sequence. Portfolio parsing and its INSERT column set stay in this module.
+
 Progress event: `{ phase: 'staging', current, total, percent }`
 
 ### 2. Validate
@@ -63,10 +89,11 @@ Progress event: `{ phase: 'staging', current, total, percent }`
 **Module:** [[apps/node-backend/src/services/portfolioImportPipeline/validate.js]]
 
 For each staged row:
+
 - Parses the date using `date_format`.
 - Resolves the transaction type via `portfolioTypeNormalizer` (see §Type Normalization below).
 - Validates numeric fields (units, price, amount, fees, taxes, fx_rate).
-- Applies field-based deduplication: a row is a duplicate if an identical `(date, symbol, units, amount, currency)` combination already exists in `portfolio_transactions`.
+- Validates the row identity used later by commit deduplication. Destination comparison is deferred until commit so repeated rows can be matched by occurrence instead of collapsed by existence.
 - Marks invalid rows with `error_detail` without aborting the batch.
 
 Progress event: `{ phase: 'validating', current, total, errors, percent }`
@@ -87,6 +114,7 @@ For each valid staged row, attempts to find an existing `investments` record:
 > ISIN lookup and fuzzy/Levenshtein matching are explicitly out of scope for this iteration. The review step covers the long tail of unrecognized symbols.
 
 Auto-commit condition (checked after this phase):
+
 - All rows matched (`unresolved == 0`)
 - No errors (`errors == 0`)
 
@@ -109,10 +137,11 @@ When all rows are resolved, the user clicks **Commit** → `POST /api/portfolio/
 **Module:** [[apps/node-backend/src/services/portfolioImportPipeline/commit.js]]
 
 For each valid, resolved staged row:
+
 - Calls `portfolioTransactionRepository.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
 - **Account assignment:** if the batch has `account_id` set (migration 0057), each committed `portfolio_transaction` inherits that `account_id` so all lots from this import belong to the specified brokerage account.
 - **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.js]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
-- **Intra-batch deduplication**: a Set tracks `(date,symbol,units,amount,currency)` hashes committed so far in the batch; a duplicate row within the same upload is counted as `duplicate` and not inserted.
+- **Occurrence-aware deduplication**: each trade identity includes `(investment, date, type, amount, units, account, currency)`. The i-th occurrence in the uploaded statement is paired with the i-th matching destination row. This preserves legitimate identical fills on first import, makes a complete reimport a no-op, and inserts only missing occurrences after a partial import.
 - Per-row errors (oversell, missing investment after override, FX failure) are recorded as `rows_error` without aborting the batch.
 
 Progress event: `{ phase: 'committing', current, total, imported, duplicates, errors, percent }`
@@ -137,7 +166,7 @@ The routing is deterministic from the row and decided at validate time; a statem
 
 **Accepted trade-off** (per the ADR-095 addendum): D6 cash rows live in the ledger, not in portfolio analytics — an account-level distribution does not count toward current per-instrument income statistics or the portfolio-side tax figures; category-based ledger reporting covers it. Conversely, an instrument-attached dividend's cash does not appear in the ledger (ADR-090 synthetic legs were deleted per ADR-108) — reconciliation of the sleeve's true cash balance for trade-driven flows is WP-C4 territory.
 
-**Cash-row dedup identity:** a cash row dedups on `(account, date, signed amount, memo)` by **occurrence matching**, not existence — a statement may legitimately repeat one identity (e.g. two identical per-exchange custody fees on one date whose descriptions weren't mapped into `note`), so the i-th occurrence in a batch is a duplicate only if the ledger already held more than i matching rows before the run; both fees land on first import, and a re-import of the same statement is still a complete no-op. The legacy absolute-amount branch (recognizing pre-sign-fix positive withdrawals) applies only to untyped deposit/withdrawal rows — D6 rows match the signed amount only, so a new −10 fee never dedups against an unrelated +10 row sharing date and memo.
+**Cash-row dedup identity:** a cash row dedups on `(account, date, signed amount, currency, memo)` by **occurrence matching**, not existence — a statement may legitimately repeat one identity (e.g. two identical per-exchange custody fees on one date whose descriptions weren't mapped into `note`), so the i-th occurrence in a batch is a duplicate only if the ledger already held more than i matching rows before the run; both fees land on first import, and a re-import of the same statement is still a complete no-op. The legacy absolute-amount branch (recognizing pre-sign-fix positive withdrawals) applies only to untyped deposit/withdrawal rows — D6 rows match the signed amount only, so a new −10 fee never dedups against an unrelated +10 row sharing date and memo.
 
 **Rollback** treats D6 rows exactly like other cash rows: `route` travels with `committed_txn_id`, so `rollbackBatch` deletes them from `transactions` (never the portfolio table) and resets staging to `matched`.
 
@@ -152,17 +181,18 @@ Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, sign
 Converts raw CSV type strings → canonical `portfolio_txn_type` values:
 
 **Resolution order:**
+
 1. User-provided `type_mapping` (e.g. `{"Koop":"buy","Verkoop":"sell"}`).
 2. Built-in alias table (covers common English and NL/DE variations):
 
-| Canonical | Aliases recognized |
-|-----------|-------------------|
-| `buy` | buy, purchase, koop, kauf, aankoop |
-| `sell` | sell, sale, verkoop, verkauf |
-| `dividend` | dividend, div, dividende |
-| `fee` | fee, commission, kosten, gebühr |
-| `tax` | tax, withholding, belasting |
-| `interest` | interest, rente, zinsen |
+| Canonical  | Aliases recognized                 |
+| ---------- | ---------------------------------- |
+| `buy`      | buy, purchase, koop, kauf, aankoop |
+| `sell`     | sell, sale, verkoop, verkauf       |
+| `dividend` | dividend, div, dividende           |
+| `fee`      | fee, commission, kosten, gebühr    |
+| `tax`      | tax, withholding, belasting        |
+| `interest` | interest, rente, zinsen            |
 
 3. If the type string is non-empty but unknown after both steps → **row error** (not a silent default). The error detail names the unrecognized value.
 4. If no `type_column` is mapped at all → `default_type` from the config is used (default `buy`).
@@ -174,12 +204,9 @@ Converts raw CSV type strings → canonical `portfolio_txn_type` values:
 
 ## Deduplication
 
-Two layers prevent duplicate portfolio_transactions:
+Commit compares each staged trade with the count of destination rows sharing `(investment, date, type, amount, units, account, currency)`. It also counts how many times that identity has occurred in the current statement. An occurrence is a duplicate only when a corresponding destination occurrence already exists. This avoids both failure modes of a boolean or hash guard: cross-account trades remain distinct, and byte-identical same-account fills are not silently dropped.
 
-1. **Field-based** (validate phase): checks `portfolio_transactions` for an existing row with identical `(date, investment_id, units, amount, currency)`. Marks the staging row as `duplicate` before commit.
-2. **Intra-batch** (commit phase): a Set tracks hashes of committed rows within the current upload run. A second row with the same `(date, symbol, units, amount, currency)` in the same CSV file is counted as `duplicate`.
-
-There is no SHA-256 hash column on `portfolio_transactions` (unlike `transactions.tx_hash`). The field-based check is sufficient because brokerage trade records have stable numeric identities.
+Cash rows use the same rule with `(account, date, signed amount, currency, memo)`. There is no SHA-256 hash column on `portfolio_transactions`; staging `tx_hash` is provenance and is not used to collapse repeated occurrences during commit.
 
 ---
 
@@ -195,6 +222,7 @@ CREATE UNIQUE INDEX uq_custom_parser_configs_name_kind
 ```
 
 The `kind` discriminator (`'transaction'` | `'portfolio'`) means:
+
 - Transaction parsers and portfolio parsers are stored in the same table but kept separate.
 - Uniqueness is per-kind: a parser named "My Bank" can exist as both a transaction parser and a portfolio parser simultaneously.
 - `GET /api/portfolio/import/parsers` filters `WHERE kind = 'portfolio'`.
@@ -212,10 +240,10 @@ Portfolio CSV Import is accessible under **Portfolio → Tools → Import portfo
 
 ### Pages
 
-| Page | Route | Purpose |
-|------|-------|---------|
-| `PortfolioImportPage` | `/portfolio/import` | Column mapper, file upload, parser picker, brokerage account picker |
-| `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows |
+| Page                        | Route                               | Purpose                                                             |
+| --------------------------- | ----------------------------------- | ------------------------------------------------------------------- |
+| `PortfolioImportPage`       | `/portfolio/import`                 | Column mapper, file upload, parser picker, brokerage account picker |
+| `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows                            |
 
 ### Atomic group resolution
 
@@ -240,10 +268,10 @@ See [[docs/api/portfolio-imports#POST /api/portfolio/import/batches/:id/rows/inv
 
 ### Components
 
-| Component | Purpose |
-|-----------|---------|
-| `PortfolioCsvColumnMapper` | Maps CSV columns to portfolio fields; shows `FileHeadersPanel` preview |
-| `InvestmentCombobox` | Searchable combobox for picking or creating an investment during review |
+| Component                  | Purpose                                                                 |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `PortfolioCsvColumnMapper` | Maps CSV columns to portfolio fields; shows `FileHeadersPanel` preview  |
+| `InvestmentCombobox`       | Searchable combobox for picking or creating an investment during review |
 
 ### i18n
 
@@ -262,12 +290,14 @@ New `portfolioImport.*` keys in `i18n/source/en.json` and `i18n/source/nl.json`.
 Two new tables, authored in migration 0040 (not yet applied — user must run `bun run db:revision`):
 
 **`portfolio_import_batches`** — mirrors `import_batches` with portfolio-specific defaults:
+
 - Standard status lifecycle (`pending → staging → … → complete | failed | aborted | awaiting_review`)
 - `default_asset_class` and `default_type` columns store batch-level config defaults
 - `account_id` FK → `accounts` (nullable) — destination brokerage account; committed lots inherit this value (**migration 0057, authored, not applied**)
 - Included in `BACKUP_COVERED_TABLES`
 
 **`portfolio_import_staging_rows`** — mirrors `import_staging_rows` with portfolio-shaped columns:
+
 - `type`, `symbol`, `name`, `units`, `price`, `amount`, `fees`, `taxes`, `currency`, `fx_rate`
 - `resolved_investment_id` FK → investments (set by matchInvestments phase)
 - `user_override_investment_id` FK → investments (set by investment-override endpoint)

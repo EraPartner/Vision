@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-08-30
-last_modified: 2026-08-28
+last_modified: 2026-08-31
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the eight sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -304,6 +304,10 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 | `validate.js` | `validateBatch()` | Field validation and dedup detection  |
 | `match.js`    | `matchBatch()`    | Recipient/category lookup or creation |
 | `commit.js`   | `commitBatch()`   | Transaction insertion and accounting  |
+
+`importStageLifecycle.js` owns the staging transition, 500-row chunk loop, progress events, and
+created-batch ID normalization shared by the bank and portfolio import pipelines. Each pipeline
+retains its adapter selection and domain-specific staging INSERT.
 
 ### Dependencies
 
@@ -874,16 +878,16 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 ## transactionExport.js
 
 **File:** [[apps/node-backend/src/services/transactionExport.js]]
-**Purpose:** Streams transaction exports (CSV + NDJSON), including ownership of the repeatable-read, read-only snapshot used by `POST /api/transactions/bulk-export`. It resolves the fixed selection, counts it, paginates the source query, applies `escapeCsvValue` / formula-injection protection, and commits or rolls back before releasing the database client.
+**Purpose:** Builds export SQL from route-validated filter models and streams transaction exports (CSV + NDJSON), including ownership of the repeatable-read, read-only snapshot used by `POST /api/transactions/bulk-export`. It resolves the fixed selection, counts it, paginates the source query, applies `escapeCsvValue` / formula-injection protection, and commits or rolls back before releasing the database client.
 
 | Function                                      | Returns                                                     |
 | --------------------------------------------- | ----------------------------------------------------------- |
-| `streamCsvExport(res, query)`                 | streams `text/csv`                                          |
-| `streamNdjsonExport(res, query)`              | streams `application/x-ndjson`                              |
+| `streamCsvExport(res, filters)`               | builds the WHERE model and streams `text/csv`               |
+| `streamNdjsonExport(res, filters)`            | builds the WHERE model and streams `application/x-ndjson`   |
 | `buildIdListWhere(ids)`                       | fixed-id export clause and parameters                       |
 | `streamBulkTransactionExport(res, selection)` | resolves and streams a bulk export in one database snapshot |
 
-**Dependencies:** `database/connection.js`, `bulkSelection.js`, `lib/csv.js`, `lib/money.js`, `calculations/portfolioMath.js`, logger and typed errors.
+**Dependencies:** `database/connection.js`, `bulkSelection.js`, `lib/filterBuilder.js`, `lib/csv.js`, `lib/money.js`, `calculations/portfolioMath.js`, logger and typed errors.
 
 ---
 
@@ -941,7 +945,7 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 | Service Module                   | Route it covers            | Scope                                                                                                           |
 | -------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `categoryService.js`             | `categories.js`            | CRUD + merge delegation                                                                                         |
-| `transactionService.js`          | `transactions.js`          | Create/update + filter delegation                                                                               |
+| `transactionService.js`          | `transactions.js`          | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
 | `recipientService.js`            | `recipients.js`            | CRUD + cluster/merge delegation                                                                                 |
 | `recipientBankAccountService.js` | `recipientBankAccounts.js` | Bank account CRUD                                                                                               |
 | `savedChartsService.js`          | `savedCharts.js`           | Chart config persistence                                                                                        |

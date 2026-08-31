@@ -538,14 +538,15 @@ entity "import_batches" as import_batches {
   created_at : timestamptz
 }
 
-entity "import_rows" as import_rows {
+entity "import_staging_rows" as import_staging_rows {
   * id : bigserial <<PK>>
-  * batch_id : integer <<FK>>
+  * batch_id : bigint <<FK>>
   * row_index : integer
-  raw : jsonb
-  candidate_recipient_id : integer
-  override_recipient_id : integer
-  decision : text
+  raw_data : text
+  resolved_recipient_id : integer <<FK>>
+  resolved_bank_account_id : integer <<FK>>
+  user_override_recipient_id : integer <<FK>>
+  status : text
 }
 
 entity "custom_parser_configs" as custom_parser_configs {
@@ -717,7 +718,10 @@ attachments }o--|| transactions
 transaction_tags }o--|| transactions
 transaction_tags }o--|| tags
 provider_health ..> "external\nproviders" : observes
-import_rows }o--|| import_batches
+import_staging_rows }o--|| import_batches
+import_staging_rows }o--o| recipients : resolved_recipient_id
+import_staging_rows }o--o| recipients : user_override_recipient_id
+import_staging_rows }o--o| recipient_bank_accounts : resolved_bank_account_id
 portfolio_import_staging_rows }o--|| portfolio_import_batches
 portfolio_import_staging_rows }o--o| investments : resolved_investment_id
 portfolio_import_staging_rows }o--o| investments : user_override_investment_id

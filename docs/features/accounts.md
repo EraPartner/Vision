@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-08-26
+updated: 2026-08-31
 tags:
   [
     feature,
@@ -85,6 +85,21 @@ SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS 
 - The wire field is `running_balance` (present only under `include_balance=true`); it is distinct from the row's stored `balance` column, which is import-pipeline-only (see [[docs/features/transactions|Transactions]]).
 - This route is the first frontend consumer of `include_balance` on the JSON list endpoint; the flag previously fed only the CSV export.
 
+The full-prefix window and OFFSET pagination are retained deliberately. A
+page-local or simple keyset query cannot calculate the same balance without a
+separate opening-prefix aggregate, and current ledger latency does not justify
+that extra protocol. The repository also retains `SELECT t.*` because
+`transactionRepository.getAll()` is a shared enriched-row primitive used by the
+HTTP list, tax deduction candidates, and AI expense, insight, and tax tools.
+Narrowing it safely requires a consumer audit or a dedicated list projection,
+not an assumption based only on the route formatter. Revisit both the
+pagination/window shape and full-row projection when production query telemetry
+shows a sustained ledger-list p95 above 250 ms, plans spill the running window
+to disk, or profiling attributes at least 10% of response time or payload bytes
+to unused transaction columns. The replacement must prove byte-equivalent
+balances at every page boundary and preserve every internal consumer's required
+fields.
+
 ### `?since=YYYY-MM-DD` deep-link
 
 `/accounts/:id?since=2026-06-03` narrows the ledger to rows dated on/after the given day (a dismissible banner shows the active narrowing). This is the landing target for the Reconcile dialog's _"Show transactions since {statement date}"_ exit (wired since WP-B1's completion). Rows are compared as plain `YYYY-MM-DD` strings (no local-midnight shift), and Load-more stops once rows older than the cut-off are loaded.
@@ -100,16 +115,16 @@ fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Show
 
 ## Reconcile
 
-The drift badge/chip (`statement_balance − computed_balance`, ADR-094) opens the Reconcile dialog. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
+The drift badge/chip (`statement_balance − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
 
 The dialog:
 
-- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − computed`, rounded to cents half-away-from-zero for display while `statement_balance` stores `NUMERIC(18,4)` after migration 0088). _Save reading_ PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
-- **Accept computed balance** — rewrite the stored statement figure to the computed one (no transaction created).
+- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − reconcilable balance`, rounded to cents half-away-from-zero for display while `statement_balance` stores `NUMERIC(18,4)` after migration 0088). _Save reading_ PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
+- **Accept computed balance** — rewrite the stored statement figure to the native reconciliation base (`reconcilable_balance`; no transaction created).
 - **Add adjustment transaction** — keep the statement as truth; the server stamps one balancing ledger row.
 - **Show transactions since {date}** — deep-links to `/accounts/:id?since={statement date}` (the fresh reading's date when one is entered, else the stored anchor's).
 
-When a fresh reading is entered, both resolutions PATCH it first so the resolved drift equals the preview; a reading that already matches the ledger (inside the server's half-cent epsilon) is saved without a reconcile call. Resolutions go through `POST /api/accounts/:id/reconcile` and collapse the drift to 0. On new accounts the statement fields no longer appear in the create dialog — a starting figure is recorded via the opening-balance field; later statements arrive through Reconcile (edit-Advanced keeps the raw fields).
+When a fresh reading is entered, both resolutions PATCH it first so the resolved drift equals the preview; a reading that already matches the ledger (inside the server's half-cent epsilon) is saved without a reconcile call. Resolutions go through `POST /api/accounts/:id/reconcile` and collapse the drift to 0. On new accounts the statement fields no longer appear in the create dialog — a starting figure is recorded via the opening-balance field; invalid non-empty amounts block account creation with localized feedback instead of silently dropping the opening entry. Later statements arrive through Reconcile (edit-Advanced keeps the raw fields).
 
 ## Lifecycle: edit · opening balance · merge · close · archive · delete
 

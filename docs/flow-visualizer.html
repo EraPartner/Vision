@@ -1263,7 +1263,7 @@
             "sub": "bundled PostgreSQL 18.6 · Bun · migrations · Chrome",
             "kind": "build",
             "path": "packaging/electron/runtime/",
-            "desc": "Default macOS provider. Verifies the bundled PostgreSQL 18.6, migration, backend, and Chrome Headless Shell payloads; manages a private loopback cluster with distinct administrator, owner, and application roles; and owns readiness, logs, backup transport, verified cutover, and the split-brain marker (ADR-113).",
+            "desc": "Default macOS provider. Verifies the bundled PostgreSQL 18.6, migration, backend, and Chrome Headless Shell payloads; manages private loopback clusters with distinct administrator, owner, and application roles; owns readiness, logs, backup transport, verified cutover, and the split-brain marker (ADR-113); and atomically activates the isolated deterministic Vision Demo seed (ADR-114).",
             "x": 760,
             "y": 852
           },
@@ -1489,7 +1489,7 @@
               {
                 "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "INSERT INTO import_batches, import_rows",
+                "payload": "INSERT INTO import_batches, import_staging_rows",
                 "annotation": "Raw rows persisted so the user can review or rollback later."
               },
               {
@@ -1545,8 +1545,8 @@
               {
                 "from": "sv.import",
                 "to": "sv.matview",
-                "payload": "refreshMaterializedViews()",
-                "annotation": ">100 rows \u2192 synchronous refresh, else fire-and-forget."
+                "payload": "clearForecastMcCaches(); scheduleMaterializedViewRefresh()",
+                "annotation": "Forecast-cache invalidation is attempted before the response; failures are non-fatal. One coalesced MV rebuild runs asynchronously after reconciliation."
               },
               {
                 "from": "be.routes",
@@ -2431,6 +2431,56 @@
                 "to": "fe.pages",
                 "payload": "reloaded production frontend after /health/detailed",
                 "annotation": "The renderer returns only after the selected runtime is ready."
+              }
+            ]
+          },
+          {
+            "id": "native-demo-seed",
+            "name": "Build and activate the native Demo seed",
+            "category": "Deployment",
+            "summary": "The Demo build migrates a disposable native database, packages a verified synthetic dump, then first launch atomically activates it only after exact counts and readiness pass.",
+            "steps": [
+              {
+                "from": "build.release",
+                "to": "build.native",
+                "payload": "isolated VISION_FRONTEND_DIST · build-native-package.js --demo",
+                "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; build-native-package.js prepares the normal native payload from it, then invokes build-demo-seed.js before Electron Builder."
+              },
+              {
+                "from": "build.native",
+                "to": "db.postgres",
+                "payload": "disposable PostgreSQL 18 · guarded migration to head · data-only seed SQL",
+                "annotation": "build-demo-seed.js uses the packaged PostgreSQL and migration executable; native.js applies generate.mjs output as the owner with ON_ERROR_STOP and one transaction."
+              },
+              {
+                "from": "db.postgres",
+                "to": "build.native",
+                "payload": "custom-format dump + schema + all table counts + SHA-256 manifest",
+                "annotation": "The build rejects generator count drift and validates the archive before replacing the generated demo-seed directory."
+              },
+              {
+                "from": "electron",
+                "to": "build.electron",
+                "payload": "Vision Demo marker · runtime id vision_demo · PostgreSQL port 54330",
+                "annotation": "packaging/electron/main.js always selects the isolated native provider for Demo and never imports real Vision environment values."
+              },
+              {
+                "from": "build.electron",
+                "to": "build.native",
+                "payload": "prepareNativeDemo(demo-seed) · checksum and dump validation",
+                "annotation": "runtime/native-demo.js retries interrupted switches, detects seed or reset changes, and refuses any application-data path outside Vision Demo."
+              },
+              {
+                "from": "build.native",
+                "to": "db.postgres",
+                "payload": "transactional staging restore · exact table verification · atomic database rename",
+                "annotation": "The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
+              },
+              {
+                "from": "build.electron",
+                "to": "fe.pages",
+                "payload": "/health/detailed ready · finalize seed marker or rollback",
+                "annotation": "Successful readiness finalizes the switch and reset request; any start or verification failure restores the previous Demo database before Electron exits."
               }
             ]
           },

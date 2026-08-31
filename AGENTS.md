@@ -14,9 +14,9 @@ The Bun-workspaces monorepo uses React 19, TypeScript, Vite, Tailwind and Radix 
 Node/Bun, Express and PostgreSQL on the backend; Vitest for backend tests; and Electron for the
 desktop app.
 
-| Workspace | Path |
-|---|---|
-| `vision-frontend` | `apps/frontend/` |
+| Workspace                            | Path                 |
+| ------------------------------------ | -------------------- |
+| `vision-frontend`                    | `apps/frontend/`     |
 | `financial-transaction-manager-node` | `apps/node-backend/` |
 
 Use `bun run --filter '<workspace>' <script>` for filtered commands.
@@ -78,14 +78,15 @@ replace these rules.
   do not synchronize with the host. Never copy `~/.codex/auth.json` into the container. Treat
   changes under container `~/.codex/` as ephemeral and report them before the session ends; tracked
   repository files under `.agents/` and `.codex/` persist through the workspace mount.
-- On the EraPartner macOS host, browser-driven visual review uses the Vision Demo app and synthetic
-  data, never the real financial stack. Launch it with `open "/Applications/Vision Demo.app"` and
-  rebuild it with `./install-demo.sh` after relevant code changes. Discover its persisted random
-  port from `appPort` in the Demo settings or Docker, then check `/health`.
-- Do not wipe or mutate the Demo database merely to make it boot. If Alembic reports overlapping
-  heads, inspect the volume and `alembic_version` rows, identify the stray older stamp, and obtain
-  approval before deleting that exact row. A volume wipe is destructive and always requires
-  explicit approval.
+- On the EraPartner macOS host, browser-driven visual review uses the native Vision Demo app and
+  synthetic data, never the real financial stack. Launch it with
+  `open "/Applications/Vision Demo.app"` and rebuild it with `./install-demo.sh` after relevant
+  code changes. Discover its persisted random backend port from `appPort` in the Demo settings,
+  then check `/health`. Its PostgreSQL cluster is isolated below
+  `~/Library/Application Support/Vision Demo/native/vision_demo`; Docker is not involved.
+- Do not wipe or mutate the Demo database merely to make it boot. Inspect the native Demo logs and
+  seed activation state first. When a canonical synthetic reset is intended, use
+  `bun run demo:reset-native` and reopen the Demo app. Never apply that workflow to real Vision.
 - Charts render lazily. Scroll a chart into view before capturing an in-viewport screenshot and
   store browser artifacts under `.playwright-mcp/`.
 - Codex browser tooling is the supported replacement for Claude's Playwright plugin. There is no
@@ -144,18 +145,18 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 
 ## Key paths
 
-| Path | Purpose |
-|---|---|
-| `apps/frontend/src/` | React frontend |
-| `apps/node-backend/src/main.js` | Backend entry point |
-| `alembic/versions/` | Database migrations |
-| `config/` | Shared tool configuration |
-| `i18n/source/` | Locale source files |
-| `apps/frontend/src/locales/` | Generated locales |
-| `packaging/electron/` | Desktop shell |
-| `docs/` | Obsidian knowledge base |
-| `.devcontainer/` | Hardened development sandbox |
-| `.agents/skills/implement-todo-batch/` | Cloud-first bounded TODO batch orchestration |
+| Path                                      | Purpose                                       |
+| ----------------------------------------- | --------------------------------------------- |
+| `apps/frontend/src/`                      | React frontend                                |
+| `apps/node-backend/src/main.js`           | Backend entry point                           |
+| `alembic/versions/`                       | Database migrations                           |
+| `config/`                                 | Shared tool configuration                     |
+| `i18n/source/`                            | Locale source files                           |
+| `apps/frontend/src/locales/`              | Generated locales                             |
+| `packaging/electron/`                     | Desktop shell                                 |
+| `docs/`                                   | Obsidian knowledge base                       |
+| `.devcontainer/`                          | Hardened development sandbox                  |
+| `.agents/skills/implement-todo-batch/`    | Cloud-first bounded TODO batch orchestration  |
 | `.agents/prompts/implement-todo-batch.md` | Short kickoff for one TODO batch pull request |
 
 When an authorized local publication workflow uses direct commits, commit to `main` unless the user

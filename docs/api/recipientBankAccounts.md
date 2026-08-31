@@ -2,7 +2,8 @@
 title: Recipient Bank Accounts API
 type: endpoint
 status: active
-date: 2026-04-11
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   - api
   - recipients
@@ -36,15 +37,15 @@ List all bank accounts for a recipient.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type   | Description                     |
+| ------------- | ------ | ------------------------------- |
 | `recipientId` | number | Recipient ID (positive integer) |
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `active` | boolean | `true` | Set to `false` to include inactive accounts |
+| Parameter | Type    | Default | Description                                 |
+| --------- | ------- | ------- | ------------------------------------------- |
+| `active`  | boolean | `true`  | Set to `false` to include inactive accounts |
 
 **Response:** `200 OK`
 
@@ -76,19 +77,19 @@ Create or retrieve a bank account for a recipient.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type   | Description                     |
+| ------------- | ------ | ------------------------------- |
 | `recipientId` | number | Recipient ID (positive integer) |
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `account_number` | string | Yes | Bank account number or IBAN |
-| `bank_name` | string | No | Bank name |
-| `address` | string | No | Bank address |
-| `account_label` | string | No | Custom label for the account |
-| `set_as_primary` | boolean | No | Set this as the primary account |
+| Field            | Type    | Required | Description                     |
+| ---------------- | ------- | -------- | ------------------------------- |
+| `account_number` | string  | Yes      | Bank account number or IBAN     |
+| `bank_name`      | string  | No       | Bank name                       |
+| `address`        | string  | No       | Bank address                    |
+| `account_label`  | string  | No       | Custom label for the account    |
+| `set_as_primary` | boolean | No       | Set this as the primary account |
 
 **Response:** `201 Created` (new account)
 
@@ -102,7 +103,8 @@ Create or retrieve a bank account for a recipient.
   "account_label": "Savings Account",
   "is_primary": false,
   "is_active": true,
-  "created_at": "2025-01-20T10:00:00Z"
+  "created_at": "2025-01-20T10:00:00Z",
+  "created": true
 }
 ```
 
@@ -113,6 +115,7 @@ Create or retrieve a bank account for a recipient.
   "id": 1,
   "recipient_id": 1,
   "account_number": "BE68539007547034",
+  "created": false,
   ...
 }
 ```
@@ -120,7 +123,13 @@ Create or retrieve a bank account for a recipient.
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required field: account_number" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Missing required field: account_number"
+  }
+}
 ```
 
 ---
@@ -131,17 +140,17 @@ Update a bank account's details.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `recipientId` | number | Recipient ID (positive integer) |
-| `accountId` | number | Bank account ID (positive integer) |
+| Field         | Type   | Description                        |
+| ------------- | ------ | ---------------------------------- |
+| `recipientId` | number | Recipient ID (positive integer)    |
+| `accountId`   | number | Bank account ID (positive integer) |
 
 **Request Body:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `bank_name` | string | New bank name |
-| `address` | string | New bank address |
+| Field           | Type   | Description       |
+| --------------- | ------ | ----------------- |
+| `bank_name`     | string | New bank name     |
+| `address`       | string | New bank address  |
 | `account_label` | string | New account label |
 
 **Response:** `200 OK`
@@ -162,7 +171,10 @@ Update a bank account's details.
 **Error Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Bank account not found" }
+}
 ```
 
 ---
@@ -173,10 +185,10 @@ Soft delete (deactivate) a bank account.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `recipientId` | number | Recipient ID (positive integer) |
-| `accountId` | number | Bank account ID (positive integer) |
+| Field         | Type   | Description                        |
+| ------------- | ------ | ---------------------------------- |
+| `recipientId` | number | Recipient ID (positive integer)    |
+| `accountId`   | number | Bank account ID (positive integer) |
 
 **Response:** `200 OK` — the deactivated bank account. A soft delete keeps the row, so the
 updated entity is returned rather than a `204` (see
@@ -195,7 +207,10 @@ updated entity is returned rather than a `204` (see
 **Error Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Bank account not found" }
+}
 ```
 
 ---
@@ -206,10 +221,10 @@ Set a bank account as the primary account for a recipient.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `recipientId` | number | Recipient ID (positive integer) |
-| `accountId` | number | Bank account ID (positive integer) |
+| Field         | Type   | Description                        |
+| ------------- | ------ | ---------------------------------- |
+| `recipientId` | number | Recipient ID (positive integer)    |
+| `accountId`   | number | Bank account ID (positive integer) |
 
 **Response:** `200 OK`
 
@@ -228,7 +243,13 @@ Set a bank account as the primary account for a recipient.
 **Error Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found or does not belong to this recipient" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Bank account not found or does not belong to this recipient"
+  }
+}
 ```
 
 ## IBAN Support

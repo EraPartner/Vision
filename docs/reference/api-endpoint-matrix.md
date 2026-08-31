@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-27
-updated: 2026-08-26
-last_modified: 2026-08-26
+date: 2026-08-31
+updated: 2026-08-31
+last_modified: 2026-08-31
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
@@ -107,40 +107,40 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST   | `/api/transactions/transfers`            | Manually confirm a transfer pair `{aId,bId}`                                                                                                                                                                                                                                                                                                                                                                                                                                               | —          | [[docs/features/transfers\|Transfers]]       |
 | DELETE | `/api/transactions/transfers/:id`        | Clear a transfer mark (and its peer)                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —          | [[docs/features/transfers\|Transfers]]       |
 | GET    | `/api/tags`                              | List tags; `?is_active=true\|false`                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —          | [[docs/features/tags\|Tags]]                 |
-| POST   | `/api/tags`                              | Find-or-create tag by slug (upsert)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —          | [[docs/features/tags\|Tags]]                 |
+| POST   | `/api/tags`                              | Find-or-create tag by slug; response includes `created`                                                                                                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/features/tags\|Tags]]                 |
 | PATCH  | `/api/tags/:id`                          | Update tag color or is_active                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —          | [[docs/features/tags\|Tags]]                 |
 | DELETE | `/api/tags/:id`                          | Soft-delete tag (`is_active=false`)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —          | [[docs/features/tags\|Tags]]                 |
 
 ## Categories (7 endpoints)
 
-| Method | Path                         | Description                  | Rate Limit | Doc                                 |
-| ------ | ---------------------------- | ---------------------------- | ---------- | ----------------------------------- |
-| GET    | `/api/categories`            | List with filtering          | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories`            | Create or get existing       | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories/assign`     | Assign to recipients by name | —          | [[docs/api/categories\|Categories]] |
-| GET    | `/api/categories/:id`        | Get single                   | —          | [[docs/api/categories\|Categories]] |
-| PATCH  | `/api/categories/:id`        | Update                       | —          | [[docs/api/categories\|Categories]] |
-| DELETE | `/api/categories/:id`        | Hard delete                  | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories/:id/assign` | Assign to recipients by ID   | —          | [[docs/api/categories\|Categories]] |
+| Method | Path                         | Description                                              | Rate Limit | Doc                                 |
+| ------ | ---------------------------- | -------------------------------------------------------- | ---------- | ----------------------------------- |
+| GET    | `/api/categories`            | List with filtering                                      | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories`            | Create or get existing; response includes `created`      | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories/assign`     | Deprecated name-resolved assignment compatibility route  | —          | [[docs/api/categories\|Categories]] |
+| GET    | `/api/categories/:id`        | Get single                                               | —          | [[docs/api/categories\|Categories]] |
+| PATCH  | `/api/categories/:id`        | Update                                                   | —          | [[docs/api/categories\|Categories]] |
+| DELETE | `/api/categories/:id`        | Hard delete                                              | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories/:id/assign` | Canonical category resource action: assign to recipients | —          | [[docs/api/categories\|Categories]] |
 
 ## Recipients (14 endpoints)
 
-| Method | Path                                      | Description                               | Rate Limit | Doc                                 |
-| ------ | ----------------------------------------- | ----------------------------------------- | ---------- | ----------------------------------- |
-| GET    | `/api/recipients`                         | List with filtering                       | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients`                         | Create or get existing                    | —          | [[docs/api/recipients\|Recipients]] |
-| GET    | `/api/recipients/:id`                     | Get single                                | —          | [[docs/api/recipients\|Recipients]] |
-| PATCH  | `/api/recipients/:id`                     | Update                                    | —          | [[docs/api/recipients\|Recipients]] |
-| DELETE | `/api/recipients/:id`                     | Hard delete                               | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/merge`               | Merge aliases into primary                | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/unmerge`             | Unmerge from primary                      | —          | [[docs/api/recipients\|Recipients]] |
-| GET    | `/api/recipients/:id/aliases`             | Get aliases                               | —          | [[docs/api/recipients\|Recipients]] |
-| GET    | `/api/recipients/clusters`                | Identify merge-candidate clusters         | —          | [[docs/api/recipients\|Recipients]] |
-| GET    | `/api/recipients/:id/patterns`            | List matching patterns for recipient      | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/patterns`            | Create matching pattern                   | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/patterns/preview`    | Preview transactions matched by a pattern | —          | [[docs/api/recipients\|Recipients]] |
-| PATCH  | `/api/recipients/:id/patterns/:patternId` | Update pattern                            | —          | [[docs/api/recipients\|Recipients]] |
-| DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern                            | —          | [[docs/api/recipients\|Recipients]] |
+| Method | Path                                      | Description                                         | Rate Limit | Doc                                 |
+| ------ | ----------------------------------------- | --------------------------------------------------- | ---------- | ----------------------------------- |
+| GET    | `/api/recipients`                         | List with filtering                                 | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients`                         | Create or get existing; response includes `created` | —          | [[docs/api/recipients\|Recipients]] |
+| GET    | `/api/recipients/:id`                     | Get single                                          | —          | [[docs/api/recipients\|Recipients]] |
+| PATCH  | `/api/recipients/:id`                     | Update                                              | —          | [[docs/api/recipients\|Recipients]] |
+| DELETE | `/api/recipients/:id`                     | Hard delete                                         | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/merge`               | Merge aliases into primary                          | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/unmerge`             | Unmerge from primary                                | —          | [[docs/api/recipients\|Recipients]] |
+| GET    | `/api/recipients/:id/aliases`             | Get aliases                                         | —          | [[docs/api/recipients\|Recipients]] |
+| GET    | `/api/recipients/clusters`                | Identify merge-candidate clusters                   | —          | [[docs/api/recipients\|Recipients]] |
+| GET    | `/api/recipients/:id/patterns`            | List matching patterns for recipient                | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/patterns`            | Create matching pattern                             | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/patterns/preview`    | Preview transactions matched by a pattern           | —          | [[docs/api/recipients\|Recipients]] |
+| PATCH  | `/api/recipients/:id/patterns/:patternId` | Update pattern                                      | —          | [[docs/api/recipients\|Recipients]] |
+| DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern                                      | —          | [[docs/api/recipients\|Recipients]] |
 
 ## Planned Transactions (8 endpoints) — Phase 3 / Phase 6 / June 2026
 
@@ -222,9 +222,9 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 
 | Method | Path                                                    | Description                                                                  | Rate Limit | Doc                           |
 | ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------------------- |
-| POST   | `/api/import/csv`                                       | Import CSV                                                                   | —          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/csv`                                       | Import CSV; multipart body values override query fallbacks                   | —          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/csv/custom`                                | Import with custom mapping                                                   | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/csv/stream`                                | SSE streaming import                                                         | —          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/csv/stream`                                | SSE streaming import; multipart body values override query fallbacks         | —          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/recipients`                                | Bulk import recipients                                                       | —          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/categories`                                | Bulk import categories                                                       | —          | [[docs/api/imports\|Imports]] |
 | GET    | `/api/import/batches`                                   | List import batches                                                          | —          | [[docs/api/imports\|Imports]] |
@@ -233,7 +233,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | GET    | `/api/import/batches/:id/preview`                       | Review preview (groups + categories)                                         | ADR-046    | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/batches/:id/rows/:rowId/override`          | Override recipient on staged row                                             | —          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row                                              | ADR-046    | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch                                                        | —          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch; derived materialized views refresh asynchronously     | ADR-115    | [[docs/api/imports\|Imports]] |
 | GET    | `/api/import/parsers`                                   | List saved custom parser configs (ADR-066)                                   | —          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/parsers`                                   | Create saved parser; 409 on duplicate name; 400 if required columns missing  | —          | [[docs/api/imports\|Imports]] |
 | PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —          | [[docs/api/imports\|Imports]] |
@@ -289,13 +289,13 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 
 ## Recipient Bank Accounts (5 endpoints)
 
-| Method | Path                                                       | Description            | Rate Limit | Doc                                               |
-| ------ | ---------------------------------------------------------- | ---------------------- | ---------- | ------------------------------------------------- |
-| GET    | `/api/recipients/:id/bank-accounts`                        | List                   | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
-| POST   | `/api/recipients/:id/bank-accounts`                        | Create or get existing | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
-| PATCH  | `/api/recipients/:id/bank-accounts/:accountId`             | Update                 | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
-| DELETE | `/api/recipients/:id/bank-accounts/:accountId`             | Soft delete            | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
-| POST   | `/api/recipients/:id/bank-accounts/:accountId/set-primary` | Set primary            | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
+| Method | Path                                                       | Description                                         | Rate Limit | Doc                                               |
+| ------ | ---------------------------------------------------------- | --------------------------------------------------- | ---------- | ------------------------------------------------- |
+| GET    | `/api/recipients/:id/bank-accounts`                        | List                                                | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
+| POST   | `/api/recipients/:id/bank-accounts`                        | Create or get existing; response includes `created` | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
+| PATCH  | `/api/recipients/:id/bank-accounts/:accountId`             | Update                                              | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
+| DELETE | `/api/recipients/:id/bank-accounts/:accountId`             | Soft delete                                         | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
+| POST   | `/api/recipients/:id/bank-accounts/:accountId/set-primary` | Set primary                                         | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
 
 ## Splits (11 endpoints)
 
@@ -326,7 +326,7 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | ------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
 | GET    | `/api/admin`                                      | Admin status                                                                                                              | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/database/init`                        | Verify DB connection                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/reset`                       | Reset database                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/reset`                       | Reset database; JSON body `force: true` is authoritative                                                                  | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/update/check`                         | Check for updates                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                        | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
@@ -365,7 +365,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/average-vs-current`         | Average vs. current period metrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/bank-balances`              | Account balances and history; account rows expose canonical `account_id` for entity joins                                                                                                                                                                                                                                                                                                                                                                                                                                      | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast`          | N-month forward cash flow from planned transactions (Phase 6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —          | [[docs/api/aggregations\|Aggregations]] |
-| GET    | `/api/aggregations/sankey`                     | Directed income→category flow graph for d3-sankey (Phase 7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/api/aggregations\|Aggregations]] |
+| GET    | `/api/aggregations/sankey`                     | Balanced income/funding-gap→spending→category flow graph for d3-sankey, with stable category IDs and localized reserved labels (Phase 7)                                                                                                                                                                                                                                                                                                                                                                                       | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-methods`  | Multi-method cash flow forecast for current month (Phase 10 + F, 8 forecasting methods: 7 base + inverse-MSE ensemble + walk-forward backtest; Phase G adds `include_breakdown` param for per-category breakdown)                                                                                                                                                                                                                                                                                                              | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-rolling`  | Rolling-window forecast: past `days_back` days actuals + next `days_forward` days statistical projection on a date axis (defaults 90/90, max 365 each, sum ≤ 730). Reuses 8-method engine with date-keyed payload, window-relative cumulative anchor; rolling-specific MC defaults (500 paths, P25/P75 percentiles) lower cost for broad horizons; accepts `include_backtest` param for lazy-loaded walk-forward backtest diagnostics (only enabled when user opens diagnostics sheet); uses MC rolling cache with 6-hour TTL. | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D)                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —          | [[docs/api/aggregations\|Aggregations]] |
@@ -400,7 +400,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | ------ | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ |
 | GET    | `/api/ai/status`            | Ollama reachability + default model                                                                         | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/models`            | Installed Ollama models (pass-through)                                                                      | —          | [[docs/api/ai\|AI Chat]] |
-| GET    | `/api/ai/conversations`     | List conversations (newest first)                                                                           | —          | [[docs/api/ai\|AI Chat]] |
+| GET    | `/api/ai/conversations`     | List conversations newest-first; optional `limit`/`offset` pages, legacy full list when omitted             | —          | [[docs/api/ai\|AI Chat]] |
 | POST   | `/api/ai/conversations`     | Create empty conversation (pre-created before streaming to avoid PENDING bookkeeping)                       | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/conversations/:id` | Conversation with messages                                                                                  | —          | [[docs/api/ai\|AI Chat]] |
 | PATCH  | `/api/ai/conversations/:id` | Rename                                                                                                      | —          | [[docs/api/ai\|AI Chat]] |

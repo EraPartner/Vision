@@ -2,8 +2,8 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-08-30
-updated: 2026-08-30
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   [
     guide,
@@ -36,7 +36,7 @@ This guide covers setting up Vision for local development.
 | PostgreSQL build source           | 18.6    | One-time native payload input; its host service does not need to run |
 | [Python](https://www.python.org/) | 3.12    | One-time Alembic executable build with pinned project requirements   |
 | [Node.js](https://nodejs.org/)    | 20+     | Electron packaging tooling                                           |
-| [Docker](https://www.docker.com/) | Latest  | Optional Compose deployment and synthetic Demo runtime only          |
+| [Docker](https://www.docker.com/) | Latest  | Optional Compose deployment only                                     |
 
 ## Quick Start
 
@@ -141,20 +141,39 @@ The application will be available at:
 - **Frontend**: http://localhost:8080 (or the next free Vite port)
 - **Backend API**: http://localhost:3002
 
+### 5. Build the isolated Demo app
+
+```bash
+./install-demo.sh
+open "/Applications/Vision Demo.app"
+```
+
+The Demo build reuses the native payload and generates a deterministic synthetic PostgreSQL seed
+against the current Alembic head. The installed app keeps its database, attachments, settings,
+logs, and runtime marker below `~/Library/Application Support/Vision Demo`, separate from both
+real Vision and Docker. Use `bun run demo:reset-native` and reopen the app to restore the canonical
+dataset.
+
+`install.sh` and `install-demo.sh` stage the production frontend in a fresh private temporary
+directory. The staging path is passed to the native payload builder through
+`VISION_FRONTEND_DIST` and is removed when the installer exits, so an existing repository `dist`
+directory cannot make an application build fail or contribute stale files.
+
 ## Development Commands
 
 ### Root Commands
 
-| Command                   | Description                                                  |
-| ------------------------- | ------------------------------------------------------------ |
-| `bun run dev`             | Run both backend and frontend                                |
-| `bun run electron:dev`    | Run Electron against isolated Vision Development native data |
-| `bun run electron:docker` | Run Electron with the optional Docker provider               |
-| `bun run build`           | Production build (generates locales)                         |
-| `bun run build:dev`       | Development build                                            |
-| `bun run lint`            | ESLint on frontend                                           |
-| `bun run test`            | Run all backend tests                                        |
-| `bun run test:watch`      | Watch mode for tests                                         |
+| Command                     | Description                                                  |
+| --------------------------- | ------------------------------------------------------------ |
+| `bun run dev`               | Run both backend and frontend                                |
+| `bun run electron:dev`      | Run Electron against isolated Vision Development native data |
+| `bun run electron:docker`   | Run Electron with the optional Docker provider               |
+| `bun run build`             | Production build (generates locales)                         |
+| `bun run build:dev`         | Development build                                            |
+| `bun run lint`              | ESLint on frontend                                           |
+| `bun run test`              | Run all backend tests                                        |
+| `bun run test:watch`        | Watch mode for tests                                         |
+| `bun run demo:reset-native` | Reset Vision Demo to its canonical seed on next launch       |
 
 ### Database Commands
 

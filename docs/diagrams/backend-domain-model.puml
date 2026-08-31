@@ -297,9 +297,10 @@ package "Storage & Observability (May 2026)" {
     +batch_id: integer <<FK>>
     +row_index: integer
     +raw: jsonb
-    +candidate_recipient_id: integer
-    +override_recipient_id: integer
-    +decision: text
+    +resolved_recipient_id: integer <<FK>>
+    +resolved_bank_account_id: integer <<FK>>
+    +user_override_recipient_id: integer <<FK>>
+    +status: text
   }
 
   class ExchangeRateCache {
@@ -362,6 +363,8 @@ Transaction "1" --> "0..1" TransactionRawReference : references
 
 Transaction "1" o-- "*" Attachment : "has receipts"
 ImportBatch "1" o-- "*" ImportRow : contains
+ImportRow "*" --> "0..1" Recipient : resolved / overridden recipient
+ImportRow "*" --> "0..1" RecipientBankAccount : resolved bank account
 Recipient "1" --> "0..1" AggRecipientTotals : "trigger-maintained"
 
 @enduml

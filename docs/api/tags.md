@@ -2,8 +2,8 @@
 title: Tags API
 type: api
 status: active
-date: 2026-05-08
-updated: 2026-08-09
+date: 2026-08-31
+updated: 2026-08-31
 tags: [api, tags, tagging, orthogonal-dimension, adr-052, bulk-tag]
 description: REST endpoints for transaction tags — a slug-based orthogonal labelling dimension introduced in ADR-052 (May 2026). Tag attachment to transactions is performed via the bulk endpoint on /api/transactions.
 aliases: [tags api, transaction tags api, /api/tags]
@@ -22,13 +22,13 @@ related_code:
 
 ```jsonc
 {
-  "id":         42,
-  "slug":       "subscription",
-  "name":       "Subscription",
-  "color":      "#10b981",
-  "is_active":  true,
+  "id": 42,
+  "slug": "subscription",
+  "name": "Subscription",
+  "color": "#10b981",
+  "is_active": true,
   "created_at": "2026-05-08T14:22:01.123Z",
-  "updated_at": "2026-05-08T14:22:01.123Z"
+  "updated_at": "2026-05-08T14:22:01.123Z",
 }
 ```
 
@@ -36,12 +36,12 @@ All responses use the unified envelope (`{ ok, data, meta? }` / `{ ok, error, me
 
 ## Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`    | `/api/tags`              | List tags. Query: `active=true` (default) / `false` / `all`. Pagination is opt-in: omit `limit`/`offset` for the complete list. |
-| `POST`   | `/api/tags`              | Find-or-create tag by slug (idempotent upsert). A `name` is slugified via `lib/slugify.js`; if the slug already exists, its row is reactivated and the colour is updated. |
-| `PATCH`  | `/api/tags/:id`          | Update `color` and/or `is_active`. |
-| `DELETE` | `/api/tags/:id`          | Soft-delete by setting `is_active=false`. Existing transaction associations are preserved. |
+| Method   | Path            | Description                                                                                                                                                               |
+| -------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/tags`     | List tags. Query: `active=true` (default) / `false` / `all`. Pagination is opt-in: omit `limit`/`offset` for the complete list.                                           |
+| `POST`   | `/api/tags`     | Find-or-create tag by slug (idempotent upsert). A `name` is slugified via `lib/slugify.js`; if the slug already exists, its row is reactivated and the colour is updated. |
+| `PATCH`  | `/api/tags/:id` | Update `color` and/or `is_active`.                                                                                                                                        |
+| `DELETE` | `/api/tags/:id` | Soft-delete by setting `is_active=false`. Existing transaction associations are preserved.                                                                                |
 
 ### `GET /api/tags`
 
@@ -66,10 +66,12 @@ Response (`200`, unpaginated request):
 Body:
 
 ```jsonc
-{ "name": "Subscription", "color": "#10b981" }   // color optional
+{ "name": "Subscription", "color": "#10b981" } // color optional
 ```
 
-Response (`201`) returns the created or reactivated tag.
+Response data always includes `created`: it is `true` only for a new tag and `false` when an
+existing active or inactive tag is returned. New and reactivated tags use `201`; an existing
+active tag uses `200`. The existing `reactivated` metadata remains available independently.
 
 ### `PATCH /api/tags/:id`
 
@@ -109,10 +111,10 @@ See the [[docs/api/transactions#post-apitransactionsbulk-tag|Transactions API ·
 
 ## Error codes
 
-| HTTP | `error.code` | When |
-|------|--------------|------|
-| 400  | `VALIDATION_ERROR` | Empty name, invalid colour, missing body field. |
-| 404  | `NOT_FOUND`        | `PATCH` / `DELETE` against an unknown id. |
+| HTTP | `error.code`       | When                                                                                               |
+| ---- | ------------------ | -------------------------------------------------------------------------------------------------- |
+| 400  | `VALIDATION_ERROR` | Empty name, invalid colour, missing body field.                                                    |
+| 404  | `NOT_FOUND`        | `PATCH` / `DELETE` against an unknown id.                                                          |
 | 409  | `CONFLICT`         | (Reserved — find-or-create is idempotent so a write-time conflict does not surface to the client.) |
 
 ## Related

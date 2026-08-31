@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-27
-last_modified: 2026-08-27
+updated: 2026-08-31
+last_modified: 2026-08-31
 tags:
   [
     feature,
@@ -310,17 +310,27 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 #### 1. **Staging** (`stageBatch`)
 
 - Parse CSV via bank adapter (Belfius, Revolut, KBC, SABB, Wise, Vision, or custom)
+- The Belfius, KBC, ING, BNP, Revolut, Vision, and generic adapters normalize ISO-shaped currency
+  cells to uppercase. Blank or malformed free text becomes `EUR` immediately for Vision; the other
+  six stage `NULL`, which the commit phase defaults to `EUR`, instead of reaching the database
+  currency constraint as a raw error.
 - Store parsed rows in the `import_staging_rows` table (the original CSV line is retained in the
   `raw_data` column)
 - Emit progress events: `{ phase: 'staging', current, total }`
+
+The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
+transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
+sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 #### 2. **Validation** (`validateBatch`)
 
 - Check required fields (date, recipient, amount)
 - Parse amounts and dates to canonical form
-- Compute each row's `tx_hash` and flag rows whose hash already exists in the canonical
-  `transactions` table or collides with an earlier row in the same batch (see _Deduplication_ below;
-  there are no per-bank raw tables in this path)
+- Compute each row's `tx_hash` and flag rows that collide with an earlier row in the same batch.
+  When the adapter retained a literal `raw_data` record, that record is the complete hash input.
+  Rows without `raw_data` use `date|amount|recipient|memo|currency`, with blank currency represented
+  by the commit phase's `EUR` default. Existing-transaction checks happen during commit (see
+  _Deduplication_ below; there are no per-bank raw tables in this path).
 - Mark invalid rows with error details
 - Emit progress events: `{ phase: 'validating', current, total, errors }`
 
@@ -329,6 +339,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Look up or create recipients
 - Look up or create categories (via recipient default or explicit mapping)
 - Resolve recipient aliases
+- Persist the automatic recipient match as a nullable foreign key. Migration 0091 also constrains the reserved `resolved_bank_account_id` field, although the current runtime does not populate or consume that field. Deleting either referenced parent clears only the affected stored resolution instead of leaving a dangling id; clearing the recipient match returns the row to review unless a user override still resolves it.
 - **Unresolved rows stay `'matched'` (2026-08-09):** a row whose `recipient_raw` is blank or unnormalizable gets `status='matched'` with a NULL `resolved_recipient_id` — deliberately, because `'matched'` is the only staging status the review preview (`getPreviewRows`) and the recipient/category override endpoints accept, so it is what keeps the row visible and fixable on `ImportReviewPage`. `prepareImport` forces `awaiting_review` whenever `unresolved > 0`; commit decides any row still lacking a recipient into `'error'` (see phase 4).
 - Emit progress events: `{ phase: 'matching', current, total }`
 
@@ -336,7 +347,9 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
-- **Transaction Hash Deduplication (2026-05-14):** Transaction INSERT statements now include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The `tx_hash` is computed from `date|amount|recipient|memo|bank_account` and stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch deduplication tracks committed hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
+- **Transaction Hash Deduplication (2026-05-14; currency fallback hardened 2026-08-31):** Transaction INSERT statements include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The hash uses the literal retained source record when available, or the currency-aware fallback identity described above. It is stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch validation tracks hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
+- **Deleted batch metadata (2026-08-31):** deleting an `import_batches` row sets its committed transactions' `import_batch_id` to NULL but does not delete the transactions. Those orphaned rows remain eligible for field dedup even when the incoming source hash differs, so deleting history metadata cannot make an existing transaction silently re-importable. The differing-hash exemption applies only to two rows still owned by the same batch.
+- **Poison-row fallback (decision 2026-08-31):** a failed speculative bulk INSERT rolls its chunk back and replays that chunk through per-row savepoints. Vision retains this bounded amplification because it preserves valid siblings and exact per-row error reporting. The chunk cap is 1,000 rows; optimize by subdivision only if production import profiles show this exceptional path is material.
 - Errors are captured and logged per row (the current pipeline does **not** write per-bank raw
   tables — the original CSV line stays in `import_staging_rows.raw_data`)
 - **Unresolved-recipient decision (2026-08-09):** before any chunk is planned, `commitBatch` marks every drained row whose effective recipient (`user_override_recipient_id ?? resolved_recipient_id`) is missing as `status='error'` with `error_message` `"unresolved recipient — no recipient was matched or assigned in review"`, and counts it into `rows_error`. Previously such rows were attempted against `transactions.recipient_id NOT NULL`, surfacing as a 23502 constraint error — and, post-batching (#142), demoting the row's whole chunk from the bulk-INSERT path to the per-row replay.
@@ -346,14 +359,15 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 
 #### 5. **Aggregation Refresh** (post-pipeline)
 
-- Synchronously refresh materialized views (as of Phase 12 Bugfix Sweep)
-- Awaits aggregation refresh before import response is sent
-- Ensures `/api/aggregations/*` endpoints see new data immediately in the response
-- Previously fire-and-forget; now blocking to guarantee consistency
+- After canonical rows are durable and transfer reconciliation has been attempted, the pipeline awaits invalidation of both six-hour forecast Monte Carlo caches.
+- It then schedules one coalesced refresh of the three managed materialized views. The import response does not wait for those full-table scans.
+- The materialized-view scheduler uses a five-second trailing delay with a ten-second maximum wait for a continuous mutation burst. Refresh duration and any wait behind an in-flight refresh are additional.
+- Canonical transaction reads are immediately consistent. MV-backed monthly and category projections are eventually consistent and may return the previous snapshot until the scheduled refresh completes.
+- Refresh failures remain non-fatal to the durable import and are logged. A later mutation, explicit maintenance refresh, or startup warmup provides another refresh opportunity.
 
 #### 6. **Auto-Link Planned Payments** (post-commit, June 2026)
 
-After committed rows are inserted and aggregations refreshed, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.js]]:
+After committed rows are inserted, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.js]]. Transfer reconciliation and the asynchronous materialized-view refresh follow at the orchestrator boundary:
 
 - Runs only when `app_settings.autoClearPlannedOnMatch` is `true` (default).
 - Checks each newly committed transaction against active, unexecuted planned payments using the moderate tolerance rule (same recipient cluster, same sign, ±5 % amount, ±5 calendar days). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]] for the full matching spec.
@@ -420,13 +434,13 @@ Text processing utilities for import and recipient matching:
 
 Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|recipient|memo|bank_account` for raw table dedup, and direct field matching for the legacy path.
 
-**Memo inclusion (2026-04-28):** All deduplication checks now include trimmed `memo` field:
+**Memo inclusion (2026-04-28; whitespace aligned 2026-08-31):** All deduplication checks now include trimmed `memo` field:
 
 - `isDuplicate()` — Hash-based check includes memo
 - `isDuplicateByFields()` — Field-based check includes memo
 - `isManualDuplicate()` — Field-fallback path includes `COALESCE(TRIM(memo), '')` matching
 - **Impact:** Two same-day same-amount same-recipient purchases with different memos are no longer falsely deduped. Example: "SUPERMARKET ABC" on 2026-04-28 for €50 + memo "Groceries" vs. the same transaction with memo "Household" are now distinct.
-- **Database:** Per-row dedup query in `services/importPipeline/commit.js` updated to match memo via `COALESCE(TRIM(t.memo), '')` against `(row.memo ?? '').trim()`
+- **Database:** Stored memos use `BTRIM` over the ASCII whitespace set and incoming memos use JavaScript `trim()`. Spaces, tabs, and line whitespace at either edge therefore do not create a false distinction.
 
 ---
 
@@ -445,21 +459,33 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 - Date formats converted to YYYY-MM-DD
 - Amounts normalized (handle different decimal separators)
 - Text normalized (trimming, encoding)
+- Currency cells from Belfius, KBC, ING, BNP, Revolut, Vision, and generic imports are normalized
+  through the shared `normalizeIsoCurrency()` boundary: ISO-shaped values are uppercased. Blank or
+  malformed values use `EUR`; Vision applies that default in its adapter, while the other six stage
+  `NULL` for the commit boundary to default. SABB derives a fixed or embedded code; Wise retains its
+  separate source/target currency parsing.
 - Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.js]]).
 
 ### 3. Deduplication
 
-Uses SHA-256 hash of:
+Uses SHA-256 over the literal `raw_data` source record when an adapter retained one. The fallback
+for rows without a raw record is:
 
 ```
-date|amount|recipient|memo|bank_account
+date|amount|recipient|memo|currency
 ```
+
+Blank currency and `EUR` intentionally share the same fallback identity because commit resolves
+both to `EUR`. The fallback does not silently uppercase direct staging values; adapter normalization
+owns that boundary, so invalid direct staging data still fails visibly.
 
 Duplicate detection checks:
 
-1. Hash comparison with existing raw transactions
-2. Date + Amount + Recipient field matching
-3. Bank-specific deduplication strategies
+1. Intra-batch `tx_hash` equality during validation
+2. A cross-batch canonical field key over date, amount, recipient, memo, resolved account, and
+   currency during commit
+3. The canonical `transactions.tx_hash` partial unique index during insert, which closes concurrent
+   import races
 
 ### 4. Category Detection (ADR-046)
 
@@ -500,13 +526,23 @@ CREATE UNIQUE INDEX uq_transactions_tx_hash
   ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
 ```
 
-**Hash computation:** SHA-256 of `date|amount|recipient|memo|bank_account` (same as legacy bank-specific dedup).
+**Hash computation:** SHA-256 of the literal staged `raw_data` record when present. If a producer
+does not retain a raw record, the fallback is `date|amount|recipient|memo|currency`, with blank
+currency represented as `EUR`.
+
+Existing transaction hashes are not rewritten or backfilled when the fallback identity changes.
+Re-import compatibility instead comes from the commit phase's canonical field match, which compares
+date, amount, recipient, memo, resolved account, and currency even when the old and new hashes differ.
+This avoids adopting an ambiguous legacy currency-blind hash while keeping old same-currency imports
+idempotent. Newly generated hashes remain race-safe under the partial unique index.
 
 **Conflict handling:**
 
 - `INSERT ... ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` (race-safe)
-- If insert fails with UNIQUE violation, the existing transaction's `id` is returned (idempotent)
-- Enables safe concurrent imports without cross-import duplicate checking
+- A conflict returns no inserted row, so the staged row is marked as a duplicate; it does not return
+  the existing transaction's ID.
+- The pre-insert cross-batch field match preserves idempotence when compatible rows carry different
+  historical hashes, while the unique index closes races between concurrent imports.
 
 ### Bank-Specific Raw Table Hashes (Legacy — write-orphaned)
 

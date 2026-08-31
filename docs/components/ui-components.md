@@ -69,7 +69,7 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 
 | Class             | Blur | Usage                                                                                                                                                                                                        |
 | ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.glass-thin`     | 12px | Subtle controls, top chrome, and sticky table headers                                                                                                                                                        |
+| `.glass-thin`     | 12px | Subtle standalone controls and top chrome; nested table/composer chrome stays opaque                                                                                                                         |
 | `.glass-regular`  | 20px | **All content / chart / stat / state cards** (role-based glass, June 2026 — see note below); also AI-chat panes                                                                                              |
 | `.glass-chrome`   | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur                                                                      |
 | `.glass-thick`    | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
@@ -77,14 +77,8 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
 
-> [!info] June 2026 — `.glass-sticky-col` (tier-aware frozen-column helper)
-> A `position: sticky` first column inside a glass card needs a background opaque enough to occlude the value cells scrolling beneath it. Plain `bg-card` reads as a matte slab against the translucent card; a per-cell **gradient** is worse (it bands row-to-row down the stack of frozen cells); and `saturate()` over the blur amplifies the aurora behind the card into a muddy tint on the narrow column. `.glass-sticky-col` instead uses a **flat** tint that blends into the card material plus a plain (no-saturate) backdrop blur, scaled by the visual-effects tier (ADR-075):
->
-> - **reduced** (`.fx-reduced`) / `prefers-reduced-transparency` / no `backdrop-filter` support → fully opaque `hsl(var(--card))`, no blur.
-> - **standard** (base) → `hsl(var(--card) / 0.72)` + `blur(12px)`.
-> - **enhanced** (`.fx-enhanced`) → `hsl(var(--card) / 0.55)` + `blur(16px)` — the card glass reads softly through the column.
->
-> The freeze edge is a **soft drop shadow** (`box-shadow: 7px 0 12px -9px …`) — a depth cue, not a hairline border (an earlier hairline read as a "weird border"). `VisualEffectsController` also tags `<html>` with `fx-enhanced` (standard carries no tier class — it is the CSS base). Used by the Category Pivot Table (`CategoryPivotTable.tsx`) on its frozen Category column: header, group/detail rows, and total row.
+> [!info] August 2026 — opaque frozen-column and nested-chrome policy
+> A `position: sticky` first column must occlude value cells scrolling beneath it, but applying a backdrop filter to every sticky `<td>` creates one live blur region per rendered row. `.table-sticky-col` therefore uses opaque `card` color plus the existing soft freeze-edge shadow, with no blur in any effects tier. The Category Pivot Table uses it for header, group/detail, and total cells. AI tool-table headers and the chat composer follow the same rule when nested inside an already-glass card: opaque semantic card color and borders preserve contrast without re-blurring the parent surface.
 
 > [!info] June 2026 — Role-based glass broadening (no ADR yet; a future ADR may formalize this)
 > ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened to a **role-based** model: the base `Card` now carries `glass-regular` so content/chart/stat/state peers shine consistently. Dense tables, forms, placeholders, callouts, and nested cards opt out with their own opaque surface classes. GPU trade-off: card-dense pages can exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt. Profile the packaged Electron app on Apple Silicon before each release.
@@ -152,18 +146,18 @@ Dense table shells override the base material with an opaque surface. They do no
 
 ### Canvas-Text Legibility Guarantee (June 2026)
 
-Text rendered directly over the aurora canvas can be washed out when a bright blob drifts behind a glyph — especially visible at aurora peaks in dark mode. A background-colored text-shadow halo restores local contrast exactly at the intersection, and is invisible over surfaces that already match the background.
+Text rendered directly over the aurora canvas can be washed out when a bright blob drifts behind a glyph — especially visible at aurora peaks in dark mode. A single background-colored text-shadow halo restores local contrast on the canonical page title and subtitle without adding two blurred paint layers to every heading and descendant text node.
 
 **Scope**: The halo is applied in dark mode only (`.dark`-scoped). Light mode text is darker than any canvas peak so it needs no supplement.
 
 **Coverage**:
 
 - `dark:` `h1`, `h2`, `h3`, `.font-display` — unconditionally, app-wide
-- `.canvas-text` subtree — all `h1/h2/h3/p/span/div` children inside the subtree receive the same halo
+- `.page-header-title` and `.page-header-subtitle` — the two direct PageHeader text roles receive the halo
 
 **Muted text lift**: Inside a `.canvas-text` subtree, `.text-muted-foreground` is lifted to `foreground/0.72` in dark mode. Muted text is tuned for card surfaces and can fall below legibility comfort at aurora peaks; this selective lift keeps subtitles readable without affecting muted text elsewhere. Applied with `!important` because the rule lives in `@layer base` and must outrank the utilities layer.
 
-**`PageHeader` integration**: `PageHeader` (`components/shared/PageHeader.tsx`) applies `canvas-text` to its root wrapper, so every page's title + subtitle area is covered automatically without per-page changes.
+**`PageHeader` integration**: `PageHeader` (`components/shared/PageHeader.tsx`) applies `canvas-text` to its root wrapper for the muted-text lift and marks its title/subtitle with the two narrow halo roles. Action controls and arbitrary nested spans/divs do not inherit a text shadow.
 
 **ShaderAurora opacity (dark mode)**: `ShaderAurora`'s `<canvas>` element uses `dark:opacity-50` (previously `dark:opacity-80`). The reduced opacity keeps the WebGL aurora atmospheric without overpowering the text halo at peak brightness.
 
@@ -214,7 +208,7 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 **AppLayout.tsx** — Main app container:
 
 - Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`. Sets `data-workspace` on the liquid canvas for workspace-aware hue swaps (premium v3).
-- Conditionally renders `ShaderAurora` inside the liquid canvas when the effective ADR-075 visual-effects tier is `enhanced`. The CSS aurora blobs are always rendered underneath as a fallback.
+- Conditionally renders `ShaderAurora` inside the liquid canvas when the effective ADR-075 visual-effects tier is `enhanced`. After a drawable WebGL program exists, `ShaderAurora` adds `fx-webgl-live` and the CSS blobs remain visible underneath as a static fallback. Context loss or teardown removes the class immediately, so the CSS fallback resumes animating when WebGL is unavailable.
 - Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set; passive scroll listener sets the attribute. Also shows page title (from `PageTitleContext`) past 96px scroll (premium v3).
 - Mounts `CommandPalette` with topbar ⌘K trigger button.
 - Mounts `ShortcutsOverlay` (`?` key) alongside `CommandPalette` (premium v3).

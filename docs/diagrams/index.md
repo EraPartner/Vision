@@ -2,7 +2,7 @@
 title: Diagrams Index
 type: reference
 status: active
-date: 2026-08-30
+date: 2026-08-31
 tags: [diagrams, index, plantuml, uml, reference]
 description: Complete index of all PlantUML diagrams in Vision - organized by category with descriptions and use cases
 aliases: [diagram index, UML diagrams, plantuml diagrams]
@@ -78,7 +78,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A single-page HTML companion to these PlantUML diagrams — click a flow on the left, see the path light up, step through it, and read the payload + annotation at each hop.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 57 components / 26 flows including transactions, imports, portfolio, AI chat, backup, native cutover (ADR-113), admin (incl. db-data-edit ADR-101), build/release, dev observability, sign-in, custom CSV parsers, cashflow forecast, app update, macro series fetch (ADR-082), research aggregation, close-account (ADR-091).
+- **Coverage:** 57 components / 27 flows including transactions, imports, portfolio, AI chat, backup, native cutover (ADR-113), native Demo seed activation (ADR-114), admin (incl. db-data-edit ADR-101), build/release, dev observability, sign-in, custom CSV parsers, cashflow forecast, app update, macro series fetch (ADR-082), research aggregation, close-account (ADR-091).
 - **Extending:** edit the JSON block at the bottom of the HTML (schema documented inline).
 - **Shortcuts:** ←/→ step, Space play, R restart, A show all, Esc clear.
 

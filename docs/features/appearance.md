@@ -67,14 +67,14 @@ All color tokens use HSL (Hue, Saturation, Lightness) components stored as CSS c
 
 ```css
 :root {
-  --primary-h: 161;     /* Hue (0-360) */
-  --primary-s: 83%;     /* Saturation (0-100%) */
-  --primary-l: 54%;     /* Lightness (0-100%) */
-  
+  --primary-h: 161; /* Hue (0-360) */
+  --primary-s: 83%; /* Saturation (0-100%) */
+  --primary-l: 54%; /* Lightness (0-100%) */
+
   --accent-h: 73;
   --accent-s: 87%;
   --accent-l: 74%;
-  
+
   /* ... ~25 additional tokens for surfaces, borders, text, etc. */
 }
 ```
@@ -262,6 +262,7 @@ curl -X PUT http://localhost:3002/api/settings \
 ### Backend Validation
 
 The backend enforces:
+
 - `variant` must be one of the five allowed values
 - `mode` must be `'light'`, `'dark'`, `'system'`, or `'schedule'`
 - If `mode` is `'schedule'`, `schedule.lightFrom` and `schedule.darkFrom` must match `HH:MM`
@@ -305,6 +306,7 @@ All keys are translated in `i18n/source/en.json` and `i18n/source/nl.json`, with
 ### High Contrast Variant
 
 Meets WCAG AAA accessibility standards:
+
 - Navy (`hsl(240, 100%, 20%)`) primary on light backgrounds exceeds 7:1 contrast ratio
 - Neon green accent is distinguishable for colorblind users
 
@@ -315,6 +317,7 @@ Meets WCAG AAA accessibility standards:
 ### Reduced Motion
 
 All theme transitions respect `prefers-reduced-motion`:
+
 - If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects; `startViewTransition` is skipped
 - Schedule mode does not animate between light/dark; transitions are instant
 
@@ -327,11 +330,11 @@ All theme transitions respect `prefers-reduced-motion`:
 
 `AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` (default `'standard'`) and `AppSettings.autoAdaptDisplay: boolean` (default `true`), both persisted in the Zustand settings store (`stores/settingsStore.ts`) and applied on dialog Save in Settings → Appearance.
 
-| Tier | Effect |
-|------|--------|
-| `reduced` | No backdrop-filter glass (near-opaque surfaces), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
-| `standard` | CSS aurora blobs + glass materials. Unchanged default look. |
-| `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy. |
+| Tier       | Effect                                                                                                                                        |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reduced`  | No backdrop-filter glass (near-opaque surfaces), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
+| `standard` | CSS aurora blobs + glass materials. Unchanged default look.                                                                                   |
+| `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy.                                                                                                |
 
 **Effective tier**: `reduced` while `autoAdaptDisplay` is on and the window sits on a large display; otherwise the chosen tier. Turning `autoAdaptDisplay` off is the explicit "don't touch my effects" override.
 
@@ -362,26 +365,27 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 ### Application points
 
 **`VisualEffectsController`** (`components/layout/VisualEffectsController.tsx`) — renders null, mounted in `AppLayout`. Tags `<html>`:
+
 - `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
 - `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle. Since 2026-08-09 the WebGL `ShaderAurora` participates too: `AppLayout` passes the same condition as a `staticAtmosphere` prop and the canvas holds a single static frame instead of looping (before this, its ~30 fps redraw kept forcing the full-backdrop recomposite the class exists to avoid).
 
 **`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`, passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then `enhanced`).
 
-**`ElectronBridge`** — gates the `vibrancy` html class on the *effective* tier (so vibrancy also drops on large displays when auto-adapt is on).
+**`ElectronBridge`** — gates the `vibrancy` html class on the _effective_ tier (so vibrancy also drops on large displays when auto-adapt is on).
 
 **`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor. Draw-loop decisions are centralised in the pure `resolveAuroraMode` (`components/layout/shaderAuroraMode.ts`): lost context → stopped (CSS blobs are the fallback and keep animating); reduced-motion or `staticAtmosphere` → single held frame (static outranks the idle pause); window blurred / tab hidden → stopped keeping the last frame; otherwise loop. A `staticAtmosphere` prop change re-runs the decision without tearing down the GL context, so dragging the window between displays freezes/resumes the canvas in place.
 
 ### Key files
 
-| File | Role |
-|------|------|
-| `apps/frontend/src/lib/visualEffects.ts` | `isLargeDisplay()`, `resolveEffectiveTier()` (4-arg, incl. session override) |
-| `apps/frontend/src/hooks/useVisualEffectsTier.ts` | Resize + 5s poll hook; reads `sessionTierOverride` from store |
-| `apps/frontend/src/components/layout/VisualEffectsController.tsx` | `<html>` class manager |
-| `apps/frontend/src/components/layout/shaderAuroraMode.ts` | Pure `resolveAuroraMode()` — ShaderAurora loop/static/stopped decision |
-| `apps/frontend/src/components/layout/__tests__/shaderAuroraMode.test.ts` | 10 unit tests for the mode decision |
-| `apps/frontend/src/stores/settingsStore.ts` | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
-| `apps/frontend/src/lib/__tests__/visualEffects.test.ts` | 17 unit tests (13 original + 4 override cases) |
+| File                                                                     | Role                                                                          |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `apps/frontend/src/lib/visualEffects.ts`                                 | `isLargeDisplay()`, `resolveEffectiveTier()` (4-arg, incl. session override)  |
+| `apps/frontend/src/hooks/useVisualEffectsTier.ts`                        | Resize + 5s poll hook; reads `sessionTierOverride` from store                 |
+| `apps/frontend/src/components/layout/VisualEffectsController.tsx`        | `<html>` class manager                                                        |
+| `apps/frontend/src/components/layout/shaderAuroraMode.ts`                | Pure `resolveAuroraMode()` — ShaderAurora loop/static/stopped decision        |
+| `apps/frontend/src/components/layout/__tests__/shaderAuroraMode.test.ts` | 10 unit tests for the mode decision                                           |
+| `apps/frontend/src/stores/settingsStore.ts`                              | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
+| `apps/frontend/src/lib/__tests__/visualEffects.test.ts`                  | 17 unit tests (13 original + 4 override cases)                                |
 
 ### Migration from enhancedEffects boolean
 
@@ -400,15 +404,18 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 **Aurora blob alpha tokens (CSS fallback, dark mode)**: `--aurora-primary-alpha: 0.13`, `--aurora-accent-alpha: 0.10`, `--aurora-wash-alpha: 0.08`. This reduces the brightness ceiling the text legibility halo has to overcome.
 
-**Canvas-text legibility guarantee (dark mode)**: A background-colored text-shadow halo is applied globally in dark mode to `h1/h2/h3/.font-display` and to any subtree marked `.canvas-text`. `PageHeader` applies `canvas-text`, so every page's title/subtitle area is covered automatically. Muted text (`.text-muted-foreground`) inside `.canvas-text` subtrees is lifted to `foreground/0.72` in dark mode. All three measures are `.dark`-scoped; light mode is structurally unaffected.
+**Canvas-text legibility guarantee (dark mode)**: A single background-colored text-shadow halo is limited to `PageHeader`'s `.page-header-title` and `.page-header-subtitle` roles. The former global heading rule and broad `.canvas-text` descendant selector were removed because they painted two blurred shadows on every nested span/div. `PageHeader` keeps `canvas-text` for the muted-text lift (`foreground/0.72`) only. These measures are `.dark`-scoped; light mode is structurally unaffected.
+
+**Enhanced aurora ownership**: Enhanced mode uses the WebGL shader as the live animator only after `ShaderAurora` has built a drawable program and marks the root `fx-webgl-live`. The two CSS aurora blobs remain visible as a static fallback layer but run with `animation: none` while that class is present. Failed initialization, context loss, and teardown remove the class so the fallback resumes.
 
 See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|Canvas-Text Legibility Guarantee]] for full details.
 
 **Liquid-glass sidebar**: `.glass-chrome` background alphas were lowered to 0.55→0.72 (light) / 0.55→0.74 (dark), allowing the aurora and Electron vibrancy to glow through the sidebar blur. A `@supports not (backdrop-filter)` rule keeps a near-opaque fallback for browsers without blur support. See [[docs/components/ui-components#glass-chrome-sidebar-transparency-june-2026|glass-chrome entry]] for token values.
 
-**Vibrancy gate**: `ElectronBridge` gates the `vibrancy` html class on the *effective* tier. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`; body becomes translucent (`hsl(var(--background) / 0.72)`) only when the effective tier is `enhanced`. This means vibrancy is automatically disabled on large displays even if the chosen tier is `enhanced`. See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
+**Vibrancy gate**: `ElectronBridge` gates the `vibrancy` html class on the _effective_ tier. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`; body becomes translucent (`hsl(var(--background) / 0.72)`) only when the effective tier is `enhanced`. This means vibrancy is automatically disabled on large displays even if the chosen tier is `enhanced`. See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
 
 **i18n keys** (en + nl):
+
 - Added (ADR-075 original): `settings.appearance.visualEffects`, `settings.appearance.visualEffects.reduced`, `settings.appearance.visualEffects.standard`, `settings.appearance.visualEffects.enhanced`, `settings.appearance.visualEffectsHint`, `settings.appearance.autoAdaptDisplay`, `settings.appearance.autoAdaptDisplayHint`
 - Added (addendum 2026-06-12): `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`
 - Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`
@@ -426,12 +433,12 @@ Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hook
 
 When enabled, `ThemeContext` re-applies `applyThemePalette` (resets all variant tokens) and then **overlays** the macOS system accent color onto five CSS custom properties:
 
-| Property | Role |
-|----------|------|
-| `--primary` / `--primary-foreground` | Buttons, links, active indicators |
-| `--ring` | Focus rings |
-| `--sidebar-primary` / `--sidebar-primary-foreground` | Sidebar active-item highlight |
-| `--sidebar-ring` | Sidebar focus ring |
+| Property                                             | Role                              |
+| ---------------------------------------------------- | --------------------------------- |
+| `--primary` / `--primary-foreground`                 | Buttons, links, active indicators |
+| `--ring`                                             | Focus rings                       |
+| `--sidebar-primary` / `--sidebar-primary-foreground` | Sidebar active-item highlight     |
+| `--sidebar-ring`                                     | Sidebar focus ring                |
 
 Because `applyThemePalette` runs first, the overlay **composes with all five theme variants and both light/dark modes** — it is not a sixth variant.
 
@@ -462,10 +469,10 @@ Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contex
 
 `AppSettings.colorblindGainLoss: boolean` (default `false`) controls whether the `.skin-v2` root class is applied to `<html>`:
 
-| Value | Palette | CSS class on `<html>` |
-|-------|---------|----------------------|
-| `false` (default) | Classic: gold gain (`--accent`), red loss (`--destructive`) | `.skin-v2` absent |
-| `true` | Okabe-Ito colorblind-safe: green gain `#009E73`, orange/vermillion loss `#D55E00` | `.skin-v2` applied |
+| Value             | Palette                                                                           | CSS class on `<html>` |
+| ----------------- | --------------------------------------------------------------------------------- | --------------------- |
+| `false` (default) | Classic: gold gain (`--accent`), red loss (`--destructive`)                       | `.skin-v2` absent     |
+| `true`            | Okabe-Ito colorblind-safe: green gain `#009E73`, orange/vermillion loss `#D55E00` | `.skin-v2` applied    |
 
 `AppSettingsProvider` (`contexts/AppSettingsContext.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` immediately on settings hydration and again whenever the value changes, keeping the DOM class in sync with the stored preference.
 
@@ -485,14 +492,14 @@ The gain/loss palette is now surfaced as two always-defined CSS custom propertie
 ```css
 /* tokens.css — base (classic/legacy) */
 :root {
-  --gain: var(--accent);       /* variant-aware gold in default theme */
-  --loss: var(--destructive);  /* variant-aware red */
+  --gain: var(--accent); /* variant-aware gold in default theme */
+  --loss: var(--destructive); /* variant-aware red */
 }
 
 /* skin-v2.css — Okabe-Ito overrides (active when .skin-v2 is on <html>) */
 :root.skin-v2 {
-  --gain: 162 84% 30%;   /* #009E73 green (light) */
-  --loss: 24 85% 45%;    /* #D55E00 orange/vermillion (light) */
+  --gain: 162 84% 30%; /* #009E73 green (light) */
+  --loss: 24 85% 45%; /* #D55E00 orange/vermillion (light) */
 }
 .dark:root.skin-v2 {
   --gain: 160 65% 52%;
@@ -524,13 +531,13 @@ loss: 'hsl(var(--loss) / <alpha-value>)',
 
 This enables opacity-aware utilities that follow the toggle automatically:
 
-| Utility example | Use case |
-|----------------|---------|
-| `text-gain` / `text-loss` | Text color for positive/negative numbers |
-| `bg-gain/12` / `bg-loss/12` | Subtle background tint on stat cards |
-| `from-gain/20` / `from-loss/20` | Gradient starts for trend tiles |
+| Utility example                 | Use case                                  |
+| ------------------------------- | ----------------------------------------- |
+| `text-gain` / `text-loss`       | Text color for positive/negative numbers  |
+| `bg-gain/12` / `bg-loss/12`     | Subtle background tint on stat cards      |
+| `from-gain/20` / `from-loss/20` | Gradient starts for trend tiles           |
 | `ring-gain/25` / `ring-loss/25` | Focus rings on gain/loss-colored controls |
-| `border-loss/30` | Loss-colored border at low opacity |
+| `border-loss/30`                | Loss-colored border at low opacity        |
 
 **Charts**: gain/loss fills and strokes now use `hsl(var(--gain))` / `hsl(var(--loss))` strings (reactive via CSS; no JS hook required). `DeltaPill` and approximately 35 component/page files were swept to route gain/loss-semantic colors through these tokens instead of raw `text-success` / `text-destructive` / `text-accent` / `--primary`.
 
@@ -538,6 +545,7 @@ This enables opacity-aware utilities that follow the toggle automatically:
 
 > [!warning] Gain/loss color rule for contributors
 > Any gain/loss-semantic color MUST use one of:
+>
 > - `text-gain` / `text-loss` (or other `gain`/`loss` Tailwind utilities with opacity variants)
 > - `hsl(var(--gain))` / `hsl(var(--loss))` inline/in CSS
 >
@@ -559,6 +567,7 @@ This enables opacity-aware utilities that follow the toggle automatically:
 The build flag (`VITE_SKIN_V2`, default `false`) sets the initial `.skin-v2` class state before React mounts (FOUC prevention). Once the user's stored `colorblindGainLoss` setting hydrates, it overrides the build-flag value via `AppSettingsProvider`. The default setting is `false` (classic), matching the build flag default; users opt in to colorblind-safe via **Settings → Appearance → Accessibility → Gain & loss colors → Colorblind-safe (orange loss)**.
 
 **Priority order:**
+
 ```
 Stored colorblindGainLoss setting (post-hydration)
   > localStorage override vision_skin_v2 (dev/QA)
@@ -567,13 +576,13 @@ Stored colorblindGainLoss setting (post-hydration)
 
 ### i18n keys
 
-| Key | EN value |
-|-----|---------|
-| `settings.group.accessibility` | "Accessibility" |
-| `settings.appearance.gainLossColors` | "Gain & loss colors" |
-| `settings.appearance.gainLossColorsHint` | Hint describing the difference between modes |
-| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
-| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
+| Key                                             | EN value                                     |
+| ----------------------------------------------- | -------------------------------------------- |
+| `settings.group.accessibility`                  | "Accessibility"                              |
+| `settings.appearance.gainLossColors`            | "Gain & loss colors"                         |
+| `settings.appearance.gainLossColorsHint`        | Hint describing the difference between modes |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)"              |
+| `settings.appearance.gainLossColors.classic`    | "Classic (red loss)"                         |
 
 Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
 

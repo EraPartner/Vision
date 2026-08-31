@@ -4,9 +4,49 @@ type: feature
 status: active
 date: 2026-08-25
 updated: 2026-08-26
-tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, phase-8, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation, portfolio, tax]
+tags:
+  [
+    feature,
+    export,
+    reporting,
+    pdf,
+    statistics,
+    phase-3,
+    phase-4,
+    phase-5,
+    phase-6,
+    phase-7,
+    phase-8,
+    puppeteer,
+    export-dialog,
+    ui,
+    pdf-polish,
+    pagination,
+    footer,
+    i18n,
+    filter-exclusions,
+    dual-chart,
+    comparison,
+    white-bar-fix,
+    table-overflow-fix,
+    page-continuation,
+    portfolio,
+    tax,
+  ]
 description: Comprehensive PDF report export for financial, portfolio, and tax data. Cover page, theme-aware styling, modular section renderers. Phase 4 adds ExportDialog UI. Phase 5 adds pagination/footer/print-break polish. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers, belgianRulesSummary, and taxProfile/precomputedPIT pass-through.
-aliases: [pdf export, financial report, portfolio report, tax report, report download, PDF generation, export dialog, report dialog, pagination, footer]
+aliases:
+  [
+    pdf export,
+    financial report,
+    portfolio report,
+    tax report,
+    report download,
+    PDF generation,
+    export dialog,
+    report dialog,
+    pagination,
+    footer,
+  ]
 related_code:
   - apps/node-backend/src/services/reports/
   - apps/node-backend/src/routes/reports.js
@@ -21,7 +61,7 @@ related_code:
 
 > [!abstract] Overview
 > Phase 3: Comprehensive PDF financial report generation with Puppeteer rendering, modular section architecture, theme-aware styling, and period filtering.
-> 
+>
 > Phase 4 (April 2026): Unified ExportDialog UI component for report configuration, deployed to Statistics, Tax Overview, and Stocks pages. Supports report type selection, five period presets (YTD, rolling 3/12, calendar year, custom range), per-type section toggles, and currency selection.
 >
 > Phase 5 (April 2026): PDF polish improvements — paginated footer with page numbering, theme-aware footer styling, enhanced print break control (`break-inside: avoid` on card elements), and repeating table headers across page breaks.
@@ -46,6 +86,7 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports with
 ### Implementation Details
 
 **Backend (Node.js):**
+
 - `dataFetcher.js` fetches `filteredMonthly` and `exclusions` metadata when exclusion arrays are non-empty
 - `generateReport()` passes `excludedCategoryIds` and `excludedRecipientIds` through the pipeline
 - `index.js` (`buildCoverHtml`) renders exclusion metadata ("X categories excluded, Y recipients excluded") on cover
@@ -53,10 +94,12 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports with
 - `categoryBreakdown.js` and `topRecipients.js` now render dual charts using `.chart-pair` layout when exclusions are present
 
 **Frontend (React):**
+
 - `ExportDialog.tsx` reads active exclusions from `useSettings()` context when `exclusionScope` is `'everywhere'` or `'statistics'`
 - `postReportDownload()` forwards `excludedCategoryIds` and `excludedRecipientIds` in POST body
 
 **CSS:**
+
 - `@page { margin: 0 0 28px 0 }` — Fixed CSS page rule (was `margin: 0`) to align Chrome layout engine with Puppeteer physical 28px footer margin, eliminating table overflow into footer
 - `.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; }` — Two-column side-by-side chart layout with print-break protection
 - `.chart-pair-label { ... break-after: avoid; }` — Keeps chart labels with their charts across page boundaries
@@ -76,6 +119,7 @@ Migrations (if needed) are handled via existing alembic; no new tables added. Ex
 ### Overview
 
 Phase 6 adds full localization support for the PDF export feature with 32 new translation keys covering:
+
 - Dialog UI labels (title, description, report type, period, sections, currency)
 - Period preset labels (YTD, rolling 3/12, calendar year, custom range)
 - Section toggle labels (executive summary, cashflow trend, category breakdown, top recipients, bank balances, rolling averages, planned outlook)
@@ -86,17 +130,20 @@ All keys added to `i18n/source/en.json` and `i18n/source/nl.json`, with generate
 ### i18n Key Additions (Phase 6)
 
 **Dialog & Controls:**
+
 - `export.title` — "Export PDF Report"
 - `export.description` — "Configure your report, then download it as a PDF."
 - `export.openDialog` — "Export PDF"
 
 **Report Type Selection:**
+
 - `export.reportType` — "Report Type"
 - `export.reportType.financial` — "Financial"
 - `export.reportType.portfolio` — "Portfolio"
 - `export.reportType.tax` — "Tax"
 
 **Period Selection:**
+
 - `export.period` — "Period"
 - `export.period.ytd` — "Year to Date"
 - `export.period.rolling3` — "Last 3 Months"
@@ -108,6 +155,7 @@ All keys added to `i18n/source/en.json` and `i18n/source/nl.json`, with generate
 - `export.period.to` — "To"
 
 **Section Toggles:**
+
 - `export.sections` — "Sections"
 - `export.sections.all` — "All"
 - `export.section.executiveSummary` — "Executive Summary"
@@ -122,6 +170,7 @@ All keys added to `i18n/source/en.json` and `i18n/source/nl.json`, with generate
 - `export.section.taxBreakdown` — "Tax Breakdown"
 
 **Currency & Actions:**
+
 - `export.currency` — "Currency"
 - `export.download` — "Download PDF"
 - `export.downloading` — "Generating…"
@@ -152,13 +201,17 @@ Phase 5 adds professional pagination and layout enhancements to PDF reports:
 **Solution:** Two-part approach in `buildBaseCss()`:
 
 1. **@page rule background (primary fix):**
+
    ```css
-   @page { 
-     size: A4 portrait; 
-     margin: 0 0 28px 0; 
-     background: hsl(var(--surface));  /* NEW: Paints entire canvas including margin boxes */
+   @page {
+     size: A4 portrait;
+     margin: 0 0 28px 0;
+     background: hsl(
+       var(--surface)
+     ); /* NEW: Paints entire canvas including margin boxes */
    }
    ```
+
    This fills the complete page canvas, including the margin area where the Puppeteer footer renders, eliminating the white strip.
 
 2. **html and body background (supporting fix):**
@@ -168,7 +221,7 @@ Phase 5 adds professional pagination and layout enhancements to PDF reports:
      -webkit-print-color-adjust: exact;
      print-color-adjust: exact;
    }
-   
+
    body {
      background: hsl(var(--surface));
      -webkit-print-color-adjust: exact;
@@ -195,6 +248,7 @@ Phase 5 adds professional pagination and layout enhancements to PDF reports:
    - Starts on a fresh physical page; tables begin at the top without orphaning rows
 
 **CSS Class Added:**
+
 ```css
 .page-continuation {
   padding: 32px 52px 56px;
@@ -204,12 +258,14 @@ Phase 5 adds professional pagination and layout enhancements to PDF reports:
 ```
 
 This ensures:
+
 - Charts render on their own page boundary
 - Tables always start at the top of a fresh physical page
 - No rows overflow into the footer zone
 - Visual continuity maintained (no green top border repeated on continuation pages)
 
 **Affected Sections:**
+
 - `apps/node-backend/src/services/reports/sections/categoryBreakdown.js` — Chart on page 1, table on page 2 (continuation)
 - `apps/node-backend/src/services/reports/sections/topRecipients.js` — Charts on page 1, table + month-over-month on page 2+ (continuation)
 
@@ -225,7 +281,8 @@ This ensures:
 The footer template is a Puppeteer-isolated HTML fragment (no CSS custom properties from report HTML). Theme colors are interpolated as `hsl()` literals:
 
 ```html
-<div style="
+<div
+  style="
   box-sizing: border-box;
   width: 100%;
   height: 28px;
@@ -237,11 +294,14 @@ The footer template is a Puppeteer-isolated HTML fragment (no CSS custom propert
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   color: hsl(var(--muted));
   border-top: 1px solid hsl(var(--border));
-">
+"
+>
   <span style="font-weight: 600; color: hsl(var(--primary));">Vision</span>
   <span>Confidential</span>
   <span>
-    <span class="pageNumber"></span>&thinsp;/&thinsp;<span class="totalPages"></span>
+    <span class="pageNumber"></span>&thinsp;/&thinsp;<span
+      class="totalPages"
+    ></span>
   </span>
 </div>
 ```
@@ -280,7 +340,7 @@ interface ExportDialogProps {
    * Defaults to 'financial'.
    * Set to 'portfolio' in StocksPage, 'tax' in TaxOverviewPage.
    */
-  defaultType?: 'financial' | 'portfolio' | 'tax';
+  defaultType?: "financial" | "portfolio" | "tax";
 }
 ```
 
@@ -307,26 +367,27 @@ interface ExportDialogProps {
 
 ### Pages Using ExportDialog
 
-| Page | Path | Default Type | Position |
-|------|------|--------------|----------|
-| Statistics | `apps/frontend/src/pages/StatisticsPage.tsx` | `financial` | PageHeader actions (left of WidgetVisibilityDialog) |
-| Tax Overview | `apps/frontend/src/pages/TaxOverviewPage.tsx` | `tax` | PageHeader actions (alongside TaxProfileDialog) |
-| Stocks | `apps/frontend/src/pages/portfolio/StocksPage.tsx` | `portfolio` | PageHeader actions (alongside AddInvestmentDialog) |
-| Portfolio Overview | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | `portfolio` | PageHeader actions (first action slot) |
+| Page               | Path                                                          | Default Type | Position                                            |
+| ------------------ | ------------------------------------------------------------- | ------------ | --------------------------------------------------- |
+| Statistics         | `apps/frontend/src/pages/StatisticsPage.tsx`                  | `financial`  | PageHeader actions (left of WidgetVisibilityDialog) |
+| Tax Overview       | `apps/frontend/src/pages/TaxOverviewPage.tsx`                 | `tax`        | PageHeader actions (alongside TaxProfileDialog)     |
+| Stocks             | `apps/frontend/src/pages/portfolio/StocksPage.tsx`            | `portfolio`  | PageHeader actions (alongside AddInvestmentDialog)  |
+| Portfolio Overview | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | `portfolio`  | PageHeader actions (first action slot)              |
 
 ### Period Presets
 
-| Preset | API Equivalent | UI Label |
-|--------|---|---|
-| `ytd` | `{ kind: 'ytd' }` | Year to Date |
-| `rolling3` | `{ kind: 'rolling', months: 3 }` | Last 3 Months |
-| `rolling12` | `{ kind: 'rolling', months: 12 }` | Last 12 Months (default) |
-| `year` | `{ kind: 'year', year: YYYY }` | Specific Year (year input) |
-| `custom` | `{ kind: 'custom', from: YYYY-MM-DD, to: YYYY-MM-DD }` | Custom Range (from/to inputs) |
+| Preset      | API Equivalent                                         | UI Label                      |
+| ----------- | ------------------------------------------------------ | ----------------------------- |
+| `ytd`       | `{ kind: 'ytd' }`                                      | Year to Date                  |
+| `rolling3`  | `{ kind: 'rolling', months: 3 }`                       | Last 3 Months                 |
+| `rolling12` | `{ kind: 'rolling', months: 12 }`                      | Last 12 Months (default)      |
+| `year`      | `{ kind: 'year', year: YYYY }`                         | Specific Year (year input)    |
+| `custom`    | `{ kind: 'custom', from: YYYY-MM-DD, to: YYYY-MM-DD }` | Custom Range (from/to inputs) |
 
 ### Section Toggles
 
 **Financial Report (7 sections):**
+
 - Executive Summary
 - Cashflow Trend
 - Category Breakdown
@@ -336,6 +397,7 @@ interface ExportDialogProps {
 - Planned Outlook
 
 **Portfolio Report (6 sections):**
+
 - Portfolio Summary
 - Portfolio Allocation
 - Top Holdings
@@ -344,6 +406,7 @@ interface ExportDialogProps {
 - Dividend Income
 
 **Tax Report (7 sections):**
+
 - Tax Summary
 - Tax Type Breakdown
 - Tax by Asset Class
@@ -449,7 +512,15 @@ Generate a theme-aware financial PDF report with Puppeteer rendering.
 {
   "currency": "EUR",
   "period": { "kind": "rolling", "months": 12 },
-  "sections": ["executiveSummary", "cashflowTrend", "categoryBreakdown", "topRecipients", "bankBalances", "rollingAverages", "plannedOutlook"],
+  "sections": [
+    "executiveSummary",
+    "cashflowTrend",
+    "categoryBreakdown",
+    "topRecipients",
+    "bankBalances",
+    "rollingAverages",
+    "plannedOutlook"
+  ],
   "theme": {
     "primary": "250 84% 60%",
     "accent": "280 84% 60%",
@@ -519,9 +590,9 @@ Generate a tax PDF report with 7 data-backed sections. Extends the base schema w
 
 **Additional Request Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `taxProfile` | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian tax profile; echoed into `belgianRulesSummary` |
+| Field            | Type              | Description                                                                                                                                                                     |
+| ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `taxProfile`     | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian tax profile; echoed into `belgianRulesSummary`                                                                                 |
 | `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets?: { label?, rate?, taxableIncome?, taxAmount? }[] }` — PIT calculation from frontend; rendered as bracket table in `belgianRulesSummary` |
 
 When `taxProfile` is omitted, the `belgianRulesSummary` section renders only the static bracket tables without a PIT block.
@@ -556,7 +627,7 @@ renderHtmlToPdf(html, {
 const footerTemplate = buildFooterTemplate(theme);
 const pdf = await renderHtmlToPdf(html, {
   footerTemplate,
-  margin: { top: '0', right: '0', bottom: '28px', left: '0' },
+  margin: { top: "0", right: "0", bottom: "28px", left: "0" },
 });
 ```
 
@@ -579,6 +650,7 @@ const pdf = await renderHtmlToPdf(html, {
    - Gracefully handles failures (returns null for failed sources)
    - Wraps aggregation results + repository data
    - Exports `filterMonthsByPeriod()` utility for section renderers
+   - The portfolio fetcher also builds the executive-summary and monthly-performance view models; section renderers only format those prepared values
 
 4. **Section Renderers** (`apps/node-backend/src/services/reports/sections/`)
    - Each renderer is a pure function: `(data, { currency, period }) → HTML string`
@@ -586,13 +658,14 @@ const pdf = await renderHtmlToPdf(html, {
    - Default sections list: all except plannedOutlook (customizable)
    - Each section uses shared helpers (formatters, SVG chart builders)
 
-4. **Theme System** (`apps/node-backend/src/services/reports/themeCss.js` + `sectionHelpers.js`)
+5. **Theme System** (`apps/node-backend/src/services/reports/themeCss.js` + `sectionHelpers.js`)
    - CSS custom properties (HSL) resolved from frontend theme tokens
+   - Missing or invalid tokens fall back to the shared `@vision/types/reportThemeDefaults` light or dark palette
    - Built-in CSS classes: `.kpi-grid`, `.data-table`, `.account-grid`, etc.
    - Shared formatters: `fmtCurrency()`, `fmtDate()`, `fmtPct()`, `fmtMonthLabel()`
    - SVG chart builders: `svgGroupedBarChart()`, `svgHorizontalBars()`
 
-5. **Puppeteer Renderer** (`apps/node-backend/src/services/reports/puppeteerRenderer.js`)
+6. **Puppeteer Renderer** (`apps/node-backend/src/services/reports/puppeteerRenderer.js`)
    - `renderHtmlToPdf(html, opts)` → Promise<Buffer>
    - Accepts optional `opts.footerTemplate`, `opts.headerTemplate`, `opts.margin` (Phase 5)
    - Uses Puppeteer headless Chrome with print-to-PDF
@@ -600,23 +673,23 @@ const pdf = await renderHtmlToPdf(html, {
 
 ### Report Types
 
-| Type | Status | Sections |
-|------|--------|----------|
-| `financial` | Implemented (Phase 3) | 7 renderers complete |
-| `portfolio` | Implemented (Phase 8) | 6 renderers (executive summary, allocation, top holdings, performance trend, asset class detail, dividend income) |
-| `tax` | Implemented (Phase 8) | 7 renderers (executive summary, type breakdown, by asset class, monthly trend, top investments by cost, fee breakdown, Belgian rules summary) |
+| Type        | Status                | Sections                                                                                                                                      |
+| ----------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `financial` | Implemented (Phase 3) | 7 renderers complete                                                                                                                          |
+| `portfolio` | Implemented (Phase 8) | 6 renderers (executive summary, allocation, top holdings, performance trend, asset class detail, dividend income)                             |
+| `tax`       | Implemented (Phase 8) | 7 renderers (executive summary, type breakdown, by asset class, monthly trend, top investments by cost, fee breakdown, Belgian rules summary) |
 
 ### Default Section Order
 
 ```javascript
 const DEFAULT_FINANCIAL_SECTIONS = [
-  'executiveSummary',       // KPI + per-month table
-  'cashflowTrend',          // Grouped bars + data
-  'categoryBreakdown',      // Horizontal bars + table
-  'topRecipients',          // Top merchants + MoM
-  'bankBalances',           // Account cards + summary
-  'rollingAverages',        // 6-month trend
-  'plannedOutlook',         // Next month planned
+  "executiveSummary", // KPI + per-month table
+  "cashflowTrend", // Grouped bars + data
+  "categoryBreakdown", // Horizontal bars + table
+  "topRecipients", // Top merchants + MoM
+  "bankBalances", // Account cards + summary
+  "rollingAverages", // 6-month trend
+  "plannedOutlook", // Next month planned
 ];
 ```
 
@@ -636,6 +709,7 @@ const DEFAULT_FINANCIAL_SECTIONS = [
 **Location:** `apps/frontend/src/lib/api/reports.ts`
 
 The frontend client assembles the POST request with:
+
 - Selected currency
 - Report type and period
 - Section selections (or empty for defaults)
@@ -645,19 +719,19 @@ Example:
 
 ```typescript
 const response = await fetch(`${API_BASE}/reports/financial`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    currency: 'EUR',
-    period: { kind: 'rolling', months: 12 },
+    currency: "EUR",
+    period: { kind: "rolling", months: 12 },
     sections: [], // Empty = use defaults
     theme: {
-      primary: '250 84% 60%',
-      surface: '0 0% 98%',
-      text: '0 0% 18%',
+      primary: "250 84% 60%",
+      surface: "0 0% 98%",
+      text: "0 0% 18%",
       // ... other tokens
-    }
-  })
+    },
+  }),
 });
 
 const blob = await response.blob();
@@ -699,12 +773,12 @@ The report preview or export dialog passes the app's current theme tokens to the
 
 CSS `break-inside: avoid` prevents orphaning of cards and rows across page boundaries:
 
-| Element | CSS Property | Purpose |
-|---------|--------------|---------|
-| `.kpi-card` | `break-inside: avoid` | Prevents KPI card split across pages |
-| `.account-card` | `break-inside: avoid` | Keeps account balance cards intact |
-| `.stat-row` | `break-inside: avoid` | Keeps individual stat rows together |
-| `.planned-day` | `break-inside: avoid` | Keeps planned transaction day groups intact |
+| Element             | CSS Property                  | Purpose                                                                   |
+| ------------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `.kpi-card`         | `break-inside: avoid`         | Prevents KPI card split across pages                                      |
+| `.account-card`     | `break-inside: avoid`         | Keeps account balance cards intact                                        |
+| `.stat-row`         | `break-inside: avoid`         | Keeps individual stat rows together                                       |
+| `.planned-day`      | `break-inside: avoid`         | Keeps planned transaction day groups intact                               |
 | `.data-table thead` | `display: table-header-group` | Repeats table headers on every page (CSS fallback for `thead` visibility) |
 
 ### Styling System
@@ -720,6 +794,7 @@ All sections inherit:
 ### Print CSS Enhancements (Phase 5 & Phase 7)
 
 **Base CSS** (`apps/node-backend/src/services/reports/index.js`):
+
 - `html { background: hsl(var(--surface)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }` — Ensures surface color fills the entire page canvas including `@page` margin boxes, eliminating the white bar above the Puppeteer footer (Phase 5 fix).
 - `@page { margin: 0 0 28px 0; }` — Fixed CSS page rule to align Chrome layout engine with Puppeteer physical 28px footer margin, reserving explicit space for footer without content overflow.
 - `.cover` height: `calc(297mm - var(--footer-h))` reserves footer space on cover
@@ -731,23 +806,53 @@ All sections inherit:
 
 ```css
 /* Print break control — prevent orphaning across pages */
-.kpi-card     { break-inside: avoid; }
-.account-card { break-inside: avoid; }
-.stat-row     { break-inside: avoid; }
-.planned-day  { break-inside: avoid; }
+.kpi-card {
+  break-inside: avoid;
+}
+.account-card {
+  break-inside: avoid;
+}
+.stat-row {
+  break-inside: avoid;
+}
+.planned-day {
+  break-inside: avoid;
+}
 
 /* Table pagination across pages */
-.data-table thead { display: table-header-group; }           /* Repeat headers on overflow pages */
-.data-table tr { break-inside: avoid; page-break-inside: avoid; }  /* Dual fallback: CSS and legacy */
-.data-table td { word-break: break-word; }                    /* Wrap text instead of overflow */
-.data-table td:nth-child(2) { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-table thead {
+  display: table-header-group;
+} /* Repeat headers on overflow pages */
+.data-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+} /* Dual fallback: CSS and legacy */
+.data-table td {
+  word-break: break-word;
+} /* Wrap text instead of overflow */
+.data-table td:nth-child(2) {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Dual-chart comparison pair (Phase 7) */
-.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; page-break-inside: avoid; }
-.chart-pair-label { break-after: avoid; page-break-after: avoid; }
+.chart-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.chart-pair-label {
+  break-after: avoid;
+  page-break-after: avoid;
+}
 ```
 
 These rules ensure:
+
 - Cards and rows stay on the same page (no orphaning)
 - Tables repeat their header on every page when content overflows
 - Dual charts remain side-by-side across page boundaries (no orphaning of chart pairs)
@@ -764,15 +869,15 @@ These rules ensure:
 
 The report fetches all data in parallel via `fetchFinancialData()`:
 
-| Component | Source |
-|-----------|--------|
-| Executive Summary | `computeMonthlySummary()` → per-month totals |
-| Cashflow Trend | Same as above |
-| Categories | `computeCategoryBreakdown()` → top category breakdown |
-| Recipients | `computeRecipientInsights()` → top merchants + MoM |
-| Bank Balances | `computeBankBalances()` → account balances |
-| Rolling Averages | `computeAverageVsCurrent()` → 6-month rolling trend |
-| Planned Outlook | `infoRepository.getPlannedExpensesNextMonth()` → next-month transactions |
+| Component         | Source                                                                   |
+| ----------------- | ------------------------------------------------------------------------ |
+| Executive Summary | `computeMonthlySummary()` → per-month totals                             |
+| Cashflow Trend    | Same as above                                                            |
+| Categories        | `computeCategoryBreakdown()` → top category breakdown                    |
+| Recipients        | `computeRecipientInsights()` → top merchants + MoM                       |
+| Bank Balances     | `computeBankBalances()` → account balances                               |
+| Rolling Averages  | `computeAverageVsCurrent()` → 6-month rolling trend                      |
+| Planned Outlook   | `infoRepository.getPlannedExpensesNextMonth()` → next-month transactions |
 
 ## Performance
 

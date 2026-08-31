@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-08-30
-updated: 2026-06-18
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   - api
   - admin
@@ -108,11 +108,14 @@ Verify database connection and initialization status.
 
 Reset the database (requires explicit confirmation).
 
-**Query Parameters:**
+**Request Body:**
 
-| Parameter | Type    | Required | Description                                     |
-| --------- | ------- | -------- | ----------------------------------------------- |
-| `force`   | boolean | Yes      | Must be `true` to confirm destructive operation |
+```json
+{ "force": true }
+```
+
+The JSON body is authoritative. `?force=true` remains a deprecated compatibility fallback for
+older clients; if both are supplied, the body wins.
 
 **Response:** `200 OK`
 
@@ -132,7 +135,7 @@ Reset the database (requires explicit confirmation).
 {
   "ok": false,
   "error": {
-    "code": "APP_ERROR",
+    "code": "NOT_FOUND",
     "message": "Database reset endpoint disabled"
   }
 }
@@ -142,11 +145,14 @@ Reset the database (requires explicit confirmation).
 
 ```json
 {
-  "message": "Database reset requires force=true parameter",
-  "details": {
-    "error": "Set force=true query parameter to confirm reset (DESTRUCTIVE)"
-  },
-  "links": []
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Database reset requires force=true in the request body",
+    "details": {
+      "hint": "Set force=true in the JSON request body to confirm reset (DESTRUCTIVE)"
+    }
+  }
 }
 ```
 

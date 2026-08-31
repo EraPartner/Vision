@@ -4,7 +4,7 @@ type: testing
 status: active
 date: 2026-04-30
 last_modified: 2026-08-26
-updated: 2026-08-26
+updated: 2026-08-31
 last-updated: 2026-08-26
 last_updated_timestamp: 2026-08-26T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -55,7 +55,7 @@ aliases:
 related_code:
   - apps/frontend/src/hooks/useStatistics.test.ts
   - apps/frontend/src/features/transactions/addTransactionForm.test.ts
-  - apps/frontend/src/components/shared/dateUtils.test.ts
+  - apps/frontend/src/lib/dateUtils.test.ts
   - apps/frontend/src/features/tax/__tests__/SuggestedDeductionsCard.test.tsx
   - apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx
   - apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx
@@ -74,49 +74,50 @@ This document tracks the current state of test coverage across the Vision codeba
 
 ### Infrastructure (Phase A)
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `renderWithApp` | `apps/frontend/src/test/renderWithApp.tsx` | Render helper mirroring `App.tsx` provider tree; swaps BrowserRouter → MemoryRouter; fresh per-test QueryClient (retry: false, staleTime: 0) |
-| `msw/server` | `apps/frontend/src/test/msw/server.ts` | MSW server setup with `setupServer(...defaultHandlers)` |
-| `msw/handlers` | `apps/frontend/src/test/msw/handlers.ts` | Default HTTP handlers covering boot endpoints; exports `ok()` / `err()` helpers per ADR-026 envelope |
-| Test setup | `apps/frontend/src/test-setup.ts` | MSW lifecycle + jsdom polyfills (PointerEvent, pointer capture, scrollIntoView) for Radix UI compatibility |
-| Coverage gate | `apps/frontend/vite.config.ts` | V8 provider; include components/hooks/lib/pages/utils; exclude tests + d.ts; **Phase D thresholds**: statements 17 / branches 11 / functions 10 / lines 18 (ratchet gates, bump per phase) |
-| Contract tests | `apps/frontend/src/test/msw/contracts.test.ts` | **Phase D**: Node-env Vitest suite (16 tests) validating MSW default handlers match backend response shapes via Zod schemas |
+| Component       | Location                                       | Purpose                                                                                                                                                                                    |
+| --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `renderWithApp` | `apps/frontend/src/test/renderWithApp.tsx`     | Render helper mirroring `App.tsx` provider tree; swaps BrowserRouter → MemoryRouter; fresh per-test QueryClient (retry: false, staleTime: 0)                                               |
+| `msw/server`    | `apps/frontend/src/test/msw/server.ts`         | MSW server setup with `setupServer(...defaultHandlers)`                                                                                                                                    |
+| `msw/handlers`  | `apps/frontend/src/test/msw/handlers.ts`       | Default HTTP handlers covering boot endpoints; exports `ok()` / `err()` helpers per ADR-026 envelope                                                                                       |
+| Test setup      | `apps/frontend/src/test-setup.ts`              | MSW lifecycle + jsdom polyfills (PointerEvent, pointer capture, scrollIntoView) for Radix UI compatibility                                                                                 |
+| Coverage gate   | `apps/frontend/vite.config.ts`                 | V8 provider; include components/hooks/lib/pages/utils; exclude tests + d.ts; **Phase D thresholds**: statements 17 / branches 11 / functions 10 / lines 18 (ratchet gates, bump per phase) |
+| Contract tests  | `apps/frontend/src/test/msw/contracts.test.ts` | **Phase D**: Node-env Vitest suite (16 tests) validating MSW default handlers match backend response shapes via Zod schemas                                                                |
 
 #### MSW Default Handlers (Phase A Update)
 
 Expanded to cover additional boot-time endpoints so more pages render without per-test setup:
 
-| Endpoint | Response Shape | Added |
-|----------|---|---|
-| `/api/settings`, `/api/settings/:key` | Success envelope with empty data | Phase 0 |
-| `/api/info`, `/api/info/health` | Version/commit/buildDate metadata | Phase 0 |
-| `/api/categories`, `/api/recipients`, `/api/transactions` | Paginated list envelope (items: [], total: 0) | Phase 0 |
-| `/api/planned` | Empty array | Phase 0 |
-| `/api/planned-transactions` | Paginated list envelope | **Phase A** |
-| `/api/investments` | Paginated list envelope | **Phase A** |
-| `/api/aggregations/:name` | Null envelope | **Phase A** |
-| `/api/info/exchange-rates` | { rates, fallback_rates, base, date } | **Phase A** |
-| `/api/market/news` | { articles: [] } | **Phase A** |
-| `/api/import/batches` | { items: [], total: 0, limit, offset } | **Phase A** |
-| `/api/admin/endpoint-liveness` | { items: [], total: 0 } | Phase 0 |
+| Endpoint                                                  | Response Shape                                | Added       |
+| --------------------------------------------------------- | --------------------------------------------- | ----------- |
+| `/api/settings`, `/api/settings/:key`                     | Success envelope with empty data              | Phase 0     |
+| `/api/info`, `/api/info/health`                           | Version/commit/buildDate metadata             | Phase 0     |
+| `/api/categories`, `/api/recipients`, `/api/transactions` | Paginated list envelope (items: [], total: 0) | Phase 0     |
+| `/api/planned`                                            | Empty array                                   | Phase 0     |
+| `/api/planned-transactions`                               | Paginated list envelope                       | **Phase A** |
+| `/api/investments`                                        | Paginated list envelope                       | **Phase A** |
+| `/api/aggregations/:name`                                 | Null envelope                                 | **Phase A** |
+| `/api/info/exchange-rates`                                | { rates, fallback_rates, base, date }         | **Phase A** |
+| `/api/market/news`                                        | { articles: [] }                              | **Phase A** |
+| `/api/import/batches`                                     | { items: [], total: 0, limit, offset }        | **Phase A** |
+| `/api/admin/endpoint-liveness`                            | { items: [], total: 0 }                       | Phase 0     |
 
 ### Hook Unit Tests (2026-05-01, updated 2026-08-26)
 
 Six hook unit test files cover shared and feature-local hooks:
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `useUtilityHooks.test.ts` | 13 | `useDebounce` (fake timers, delay reset), `useCountUp` (RAF animation), `useOnlineStatus` (window events), `useIsMobile` (matchMedia mock) |
-| `useChartCurrencyFormatter.test.ts` | 5 | Pure Zustand-backed computation hook: currency formatting logic |
-| `usePlannedPayments.test.ts` | 8 | Plain fetch hook with apiClient spies; loading, error, add/delete/update/refetch paths |
-| `useQueryHooks.test.tsx` | 13 | TanStack Query hooks: `useBankAccounts`, `useSavedCharts` (queries + mutations), `useOllamaStatus`, `useOllamaModels`, `useCurrencyConverter`; uses QueryClientProvider + LanguageProvider wrappers |
-| `portfolio/__tests__/useInvestments.test.ts` | 25 | **NEW 2026-05-03**: `useInvestmentsQuery` (3 tests), `usePortfolioTransactionsQuery` (5 tests), `useInvestmentMutations` (17 tests: addInvestment, updateInvestment, deleteInvestment, addTransaction, deleteTransaction, updateTransaction, refreshPrices with live/stale/cached toast notifications, isRefreshingPrices pending state) |
-| `features/splits/owes/__tests__/useRecentRecipientTransactions.test.tsx` | 4 | Recipient-group request contract, response-body totals, duplicate suppression, raw-page offsets, concurrency guard, and missing-total fallback |
+| File                                                                     | Tests | Coverage                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useUtilityHooks.test.ts`                                                | 13    | `useDebounce` (fake timers, delay reset), `useCountUp` (RAF animation), `useOnlineStatus` (window events), `useIsMobile` (matchMedia mock)                                                                                                                                                                                               |
+| `useChartCurrencyFormatter.test.ts`                                      | 5     | Pure Zustand-backed computation hook: currency formatting logic                                                                                                                                                                                                                                                                          |
+| `usePlannedPayments.test.ts`                                             | 8     | Plain fetch hook with apiClient spies; loading, error, add/delete/update/refetch paths                                                                                                                                                                                                                                                   |
+| `useQueryHooks.test.tsx`                                                 | 13    | TanStack Query hooks: `useBankAccounts`, `useSavedCharts` (queries + mutations), `useOllamaStatus`, `useOllamaModels`, `useCurrencyConverter`; uses QueryClientProvider + LanguageProvider wrappers                                                                                                                                      |
+| `portfolio/__tests__/useInvestments.test.ts`                             | 25    | **NEW 2026-05-03**: `useInvestmentsQuery` (3 tests), `usePortfolioTransactionsQuery` (5 tests), `useInvestmentMutations` (17 tests: addInvestment, updateInvestment, deleteInvestment, addTransaction, deleteTransaction, updateTransaction, refreshPrices with live/stale/cached toast notifications, isRefreshingPrices pending state) |
+| `features/splits/owes/__tests__/useRecentRecipientTransactions.test.tsx` | 4     | Recipient-group request contract, response-body totals, duplicate suppression, raw-page offsets, concurrency guard, and missing-total fallback                                                                                                                                                                                           |
 
 **Total hook tests (phase E8+):** 6 files, **68 tests**, all passing
 
 **Key patterns used:**
+
 - `// @vitest-environment jsdom` for DOM-dependent hooks
 - `vi.useFakeTimers()` / `vi.useRealTimers()` for timing-sensitive hooks
 - `renderHook` + `act` + `waitFor` for async hook state
@@ -128,29 +129,30 @@ Six hook unit test files cover shared and feature-local hooks:
 
 ### Earlier Hook & Component Tests
 
-| File | Type | What It Tests |
-|------|------|---------------|
-| `apps/frontend/src/hooks/useStatistics.test.ts` | Hook test | `useStatistics` hook behavior, exclusion toggles, data processing |
-| `apps/frontend/src/features/transactions/addTransactionForm.test.ts` | Unit test | Transaction form validation logic (Zod schema) |
-| `apps/frontend/src/components/shared/dateUtils.test.ts` | Unit test | Date formatting utilities with various app settings |
-| `apps/frontend/src/features/tax/__tests__/SuggestedDeductionsCard.test.tsx` | Component test | SuggestedDeductionsCard rendering and interactions |
-| `apps/frontend/src/utils/currency.test.ts` | Unit test | Currency formatting utilities (`formatCurrency`, `formatCurrencyCompact`, `parseLocaleNumber`). NEW (2026-05-08): Added unit test for single-comma + 3-digit tail as US thousands separator (e.g., "1,000" → 1000) |
+| File                                                                        | Type           | What It Tests                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/hooks/useStatistics.test.ts`                             | Hook test      | `useStatistics` hook behavior, exclusion toggles, data processing                                                                                                                                                  |
+| `apps/frontend/src/features/transactions/addTransactionForm.test.ts`        | Unit test      | Transaction form validation logic (Zod schema)                                                                                                                                                                     |
+| `apps/frontend/src/lib/dateUtils.test.ts`                                   | Unit test      | Date formatting utilities with various app settings                                                                                                                                                                |
+| `apps/frontend/src/features/tax/__tests__/SuggestedDeductionsCard.test.tsx` | Component test | SuggestedDeductionsCard rendering and interactions                                                                                                                                                                 |
+| `apps/frontend/src/utils/currency.test.ts`                                  | Unit test      | Currency formatting utilities (`formatCurrency`, `formatCurrencyCompact`, `parseLocaleNumber`). NEW (2026-05-08): Added unit test for single-comma + 3-digit tail as US thousands separator (e.g., "1,000" → 1000) |
 
 ### Context Unit Tests (2026-05-03)
 
 New context unit test coverage added for frontend state management providers:
 
-| File | Type | Tests | What It Tests |
-|------|------|-------|---------------|
-| `apps/frontend/src/contexts/__tests__/BelgianTaxProfileContext.test.tsx` | Context test | 8 | Tax profile context: hook guard, loading state, settings fetch, profile mutations |
-| `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx` | Context test | 12 | Settings contexts: `useAppSettings` (4 tests), `useSettings` (4 tests), `useTheme` (4 tests) with Zustand store operations |
-| `apps/frontend/src/contexts/__tests__/LanguageContext.test.tsx` | Context test | 6 | Language context: hook guard, initial state, language switching |
-| `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx` | Context test | 5 | Settings preload: API fetch integration, loading state, settings load |
-| `apps/frontend/src/contexts/__tests__/WorkspaceContext.test.tsx` | Context test | 6 | Workspace context: hook guard, workspace state, switching |
+| File                                                                     | Type         | Tests | What It Tests                                                                                                              |
+| ------------------------------------------------------------------------ | ------------ | ----- | -------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/contexts/__tests__/BelgianTaxProfileContext.test.tsx` | Context test | 8     | Tax profile context: hook guard, loading state, settings fetch, profile mutations                                          |
+| `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx`         | Context test | 12    | Settings contexts: `useAppSettings` (4 tests), `useSettings` (4 tests), `useTheme` (4 tests) with Zustand store operations |
+| `apps/frontend/src/contexts/__tests__/LanguageContext.test.tsx`          | Context test | 6     | Language context: hook guard, initial state, language switching                                                            |
+| `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx`   | Context test | 5     | Settings preload: API fetch integration, loading state, settings load                                                      |
+| `apps/frontend/src/contexts/__tests__/WorkspaceContext.test.tsx`         | Context test | 6     | Workspace context: hook guard, workspace state, switching                                                                  |
 
 **Total context unit tests:** 5 test files, 37 tests, all passing (2026-05-03)
 
 **Key patterns used:**
+
 - `// @vitest-environment jsdom` per-file comment for DOM-dependent contexts
 - React Testing Library `renderHook` + `waitFor` + `act` for context state mutations
 - MSW for HTTP-level mocking in preload/tax profile contexts
@@ -163,15 +165,16 @@ New context unit test coverage added for frontend state management providers:
 
 Three new dialog component integration test files added to `apps/frontend/src/features/` and `apps/frontend/src/components/shared/__tests__/`:
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx` | 11 | Create mode: trigger renders, opens, shows general/detail/description fields, cancel closes, submit closes on success, validation blocks empty general. **NEW (2026-05-03): shows error toast when server returns 422 validation error** (vi.spyOn + MSW err(422)). Edit mode: open=true renders, initialValues populate, onSave called with uppercase-trimmed values, cancel calls onOpenChange(false) |
-| `apps/frontend/src/features/recipients/__tests__/AddRecipientDialog.test.tsx` | 8 | Create-only recipient dialog: trigger renders, opens, shows name/notes fields, cancel closes, submit closes on success, empty name blocks submit, notes included in submission. **NEW (2026-05-03): shows error toast when server returns 422 validation error** (vi.spyOn + MSW err(422)) |
-| `apps/frontend/src/components/shared/__tests__/WidgetVisibilityDialog.test.tsx` | 8 | Fully prop-driven widget visibility dialog: trigger shows visible count, opens on click, lists all widgets, toggle calls setWidgetVisible, Show All/Hide All/Reset buttons call correct callbacks |
+| File                                                                            | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx`    | 11    | Create mode: trigger renders, opens, shows general/detail/description fields, cancel closes, submit closes on success, validation blocks empty general. **NEW (2026-05-03): shows error toast when server returns 422 validation error** (vi.spyOn + MSW err(422)). Edit mode: open=true renders, initialValues populate, onSave called with uppercase-trimmed values, cancel calls onOpenChange(false) |
+| `apps/frontend/src/features/recipients/__tests__/AddRecipientDialog.test.tsx`   | 8     | Create-only recipient dialog: trigger renders, opens, shows name/notes fields, cancel closes, submit closes on success, empty name blocks submit, notes included in submission. **NEW (2026-05-03): shows error toast when server returns 422 validation error** (vi.spyOn + MSW err(422))                                                                                                              |
+| `apps/frontend/src/components/shared/__tests__/WidgetVisibilityDialog.test.tsx` | 8     | Fully prop-driven widget visibility dialog: trigger shows visible count, opens on click, lists all widgets, toggle calls setWidgetVisible, Show All/Hide All/Reset buttons call correct callbacks                                                                                                                                                                                                       |
 
 **Total dialog integration tests:** 3 test files, **27 tests**, all passing (updated 2026-05-03 with 422 error handling tests)
 
 **Key patterns used:**
+
 - `// @vitest-environment jsdom` per-file comment for Radix UI dialog rendering
 - React Testing Library `renderWithApp` + `userEvent` for interaction testing
 - `waitFor` + `findByRole` for async state assertions
@@ -186,27 +189,27 @@ This table preserves the original Phase A inventory with later row-level updates
 complete current manifest. Use the filesystem and Vitest collection for current file and test
 totals.
 
-| File | Type | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` | Component-integration | 18 | Empty-list, error state, Add Transaction dialog, form submission, export JSON success/error toasts |
-| `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx` | Component-integration | 23 | Page heading, CSV import workflow, bank source selection, file input handling |
-| `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx` | Component-integration | 32 | EN/NL switching across 8 pages with i18n validation |
-| `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx` | Component-integration | 16 | Tax profile dialog, employment step selection, deduction workflow |
-| `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx` | Component-integration | 11 | Dialog open/close, form submission, recipient/category selection, duplicate detection (409), **validation error handling (422)** (2026-05-03) |
-| `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx` | Component-integration | 16 | Page render, New Payment dialog, form submission, loan scheduling, error states |
-| `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx` | Component-integration | 14 | Page heading, empty state, summary rendering |
-| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx` | Component-integration | 21 | Owes/splits tracking, Record Payment dialog, Settle all workflow, export CSV success/error toasts |
-| `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx` | Component-integration | 25 | Admin dashboard, provider health, endpoint liveness, database, update checks |
-| `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Component-integration | 18 | Category list, add/edit/delete dialogs, validation |
-| `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Component-integration | 18 | Recipient list, add/edit/delete dialogs, validation, insights button |
-| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Component-integration | 18 | Statistics tabs, including recipient analytics |
-| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Component-integration | 69 | Investments, Performance, Net Worth pages with data loading and chart states |
-| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Component-integration | 18 | Landing page, quick stats, recent activity, error states (full error + partial warning) |
-| `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | Component-integration | 15 | AI chat interface, message submission, error handling |
-| `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Component-integration | 12 | Market data lookup, quote search, news display |
-| `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx` | Component-integration | 14 | Import staging, transaction preview, conflict resolution |
-| `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx` | Component-integration | 12 | Database operations, view refresh, cache clearing |
-| `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx` | Component-integration | 5 | 404 page, navigation fallback |
+| File                                                                              | Type                  | Tests | Coverage                                                                                                                                      |
+| --------------------------------------------------------------------------------- | --------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx`         | Component-integration | 18    | Empty-list, error state, Add Transaction dialog, form submission, export JSON success/error toasts                                            |
+| `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx`               | Component-integration | 23    | Page heading, CSV import workflow, bank source selection, file input handling                                                                 |
+| `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx`           | Component-integration | 32    | EN/NL switching across 8 pages with i18n validation                                                                                           |
+| `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx`          | Component-integration | 16    | Tax profile dialog, employment step selection, deduction workflow                                                                             |
+| `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx`     | Component-integration | 11    | Dialog open/close, form submission, recipient/category selection, duplicate detection (409), **validation error handling (422)** (2026-05-03) |
+| `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`      | Component-integration | 16    | Page render, New Payment dialog, form submission, loan scheduling, error states                                                               |
+| `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx`    | Component-integration | 14    | Page heading, empty state, summary rendering                                                                                                  |
+| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx`                 | Component-integration | 21    | Owes/splits tracking, Record Payment dialog, Settle all workflow, export CSV success/error toasts                                             |
+| `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx`               | Component-integration | 25    | Admin dashboard, provider health, endpoint liveness, database, update checks                                                                  |
+| `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`           | Component-integration | 18    | Category list, add/edit/delete dialogs, validation                                                                                            |
+| `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`           | Component-integration | 18    | Recipient list, add/edit/delete dialogs, validation, insights button                                                                          |
+| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`           | Component-integration | 18    | Statistics tabs, including recipient analytics                                                                                                |
+| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Component-integration | 69    | Investments, Performance, Net Worth pages with data loading and chart states                                                                  |
+| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx`            | Component-integration | 18    | Landing page, quick stats, recent activity, error states (full error + partial warning)                                                       |
+| `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx`               | Component-integration | 15    | AI chat interface, message submission, error handling                                                                                         |
+| `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx`         | Component-integration | 12    | Market data lookup, quote search, news display                                                                                                |
+| `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx`         | Component-integration | 14    | Import staging, transaction preview, conflict resolution                                                                                      |
+| `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx`        | Component-integration | 12    | Database operations, view refresh, cache clearing                                                                                             |
+| `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx`                 | Component-integration | 5     | 404 page, navigation fallback                                                                                                                 |
 
 **Historical result:** the Phase A set was green when completed. Counts in this snapshot are not a
 current whole-tree total.
@@ -216,12 +219,14 @@ current whole-tree total.
 Added two error-state integration tests to DashboardPage to verify error handling when stats APIs fail:
 
 **Test 1: "shows full error state when stats API fails and no cached data exists"**
+
 - Mocks both `/api/aggregations/monthly-summary` and `/api/info/transaction-count` to return HTTP 500
 - Asserts that when both stats fail and no cached data exists (`hasAnyData = false`), the page renders the `dashboard.errorLoading` subtitle
 - Pattern: `server.use()` per-test MSW overrides returning ADR-026 error envelopes via `err(500, "db unavailable")`
 - Uses 5000ms timeout to account for apiRequest retry backoff
 
 **Test 2: "shows partial data warning when stats fail but transactions are available"**
+
 - Same stats API failures (both return 500), but overrides `/api/transactions` to return one item using `TRANSACTION_STUB`
 - Asserts that when stats fail but `hasAnyData = true` (transactions available), the page renders the `dashboard.partialDataWarning` banner instead
 - Verifies the partial error path: "Some dashboard data could not be loaded..."
@@ -236,10 +241,12 @@ Added two error-state integration tests to DashboardPage to verify error handlin
 **Export endpoint coverage closing:** Final integration test gaps closed with export endpoint tests.
 
 **TransactionsPage export JSON tests (2 new):**
+
 - `Export JSON shows success toast when download succeeds` — `GET /api/transactions/export/json` success path with toast verification ✓
 - `Export JSON shows error toast when download fails` — `GET /api/transactions/export/json` error path (HTTP 500) with toast verification ✓
 
 **OwesPage export CSV tests (2 new):**
+
 - `Export CSV shows success toast when download succeeds` — `GET /api/splits/owed/:id/export/csv` success path in recipient detail view ✓
 - `Export CSV shows error toast when download fails` — `GET /api/splits/owed/:id/export/csv` error path in recipient detail view ✓
 
@@ -248,6 +255,7 @@ Added two error-state integration tests to DashboardPage to verify error handlin
 **Related documentation:** [[docs/testing/frontend-component-integration#frontend-export-tests-2026-05-02|Frontend Export Tests section]], [[docs/testing/testing#frontend-error-state-test-timeout-gotcha-apirequest-retry-loop|apiRequest Retry Gotcha]], [[docs/testing/frontend-component-integration#error-state-tests-account-for-apirequest-retry-backoff|Error-State Test Timeout Pattern]]
 
 **Historical test suite metrics (2026-05-02 snapshot):**
+
 - Frontend component-integration tests: 20 test files, 376 tests, all passing (updated with AdminPages + PortfolioPages expansions)
 - Backend tests: 54+ files, 871+ tests, all passing
 - Total: 376 frontend + 871+ backend = 1247+ tests across 74+ files
@@ -255,10 +263,12 @@ Added two error-state integration tests to DashboardPage to verify error handlin
 ### AdminPages and PortfolioPages Test Expansions (2026-05-02)
 
 **PortfolioPages.integration.test.tsx expansion (69 tests total, +15 from prior baseline):**
+
 - Fixed 3 previously-failing tests related to toast assertion arg count and button name regex
 - File now passes with all 69 tests green
 
 **AdminPages.integration.test.tsx expansion (25 tests total, +8 new data-rendering tests):**
+
 - `ProviderHealthPage renders provider row when API returns data` — `/api/admin/providers/health` success, renders provider label
 - `ProviderHealthPage shows failing provider with non-zero consecutive_failures` — Error badge display for `consecutive_failures > 0`
 - `ProviderHealthPage renders gracefully when API returns 500` — Graceful error state when health API fails
@@ -301,25 +311,28 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
 
 ### Contract Tests (Phase D, updated 2026-05-02)
 
-| File | Type | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/test/msw/contracts.test.ts` | Contract validation | 40 | Validates MSW default handlers match backend response shapes via strict per-field Zod schemas (E1), mutation endpoints return items (E2), error envelopes conform to ADR-026 (E3) |
+| File                                           | Type                | Tests | Coverage                                                                                                                                                                          |
+| ---------------------------------------------- | ------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/test/msw/contracts.test.ts` | Contract validation | 40    | Validates MSW default handlers match backend response shapes via strict per-field Zod schemas (E1), mutation endpoints return items (E2), error envelopes conform to ADR-026 (E3) |
 
 **Test organization (40 tests across 3 suites):**
 
 **E1: Strict list item schemas (10 tests)**
+
 - Empty list envelope is valid (5 tests: one per resource type)
 - Item shape matches strict Zod schema (5 tests: one per resource type)
 - Resources tested: categories, recipients, transactions, planned-transactions, investments
 - Each schema validates all fields with explicit types, nullability, and constraints (no `.passthrough()`)
 
 **E2: Mutation handler contracts (15 tests)**
+
 - POST response matches item schema (5 tests: one per resource type)
 - PATCH response matches item schema (5 tests: one per resource type)
 - DELETE response matches delete response schema (5 tests: one per resource type)
 - Delete schema includes optional transaction-specific `details` field
 
 **E3: Error envelope compliance (4 tests)**
+
 - 500 error response conforms to `{ ok: false, error: { message } }`
 - 404 error response with optional `code` field
 - 422 mutation error response with `code` field
@@ -327,6 +340,7 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
 - Validates ADR-026 error envelope across status codes and endpoint types
 
 **Schemas tested:**
+
 - Settings: key-value store
 - Info/Health: app metadata and liveness
 - Categories, Recipients, Transactions, Planned-Transactions, Investments: paginated `{ items[], total, limit, offset, links[] }` with strict per-field item schemas
@@ -345,6 +359,7 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
 - Error envelope (ADR-026): `{ ok: false, error: { message: string, code?: string } }`
 
 **MSW Fixture Stubs** (`apps/frontend/src/test/msw/handlers.ts`):
+
 - Exported 5 stub constants (TRANSACTION_STUB, CATEGORY_STUB, RECIPIENT_STUB, INVESTMENT_STUB, PLANNED_TRANSACTION_STUB)
 - All 15 mutation handlers use stubs (POST/PATCH return stub; DELETE returns message envelope)
 - Mutation handlers added: 5 POST, 5 PATCH, 5 DELETE for transactions, categories, recipients, investments, planned-transactions
@@ -355,9 +370,9 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
 
 New comprehensive unit test coverage for the frontend API client layer:
 
-| File | Type | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/lib/api/client.test.ts` | Unit tests | 46 | Backoff delay (3), request ID generation (2), ApiClientError (3), error envelope parsing (9), envelope unwrapping (5), retryable status codes (2), query building (4), exclusion query (5), apiRequest orchestration (7) |
+| File                                       | Type       | Tests | Coverage                                                                                                                                                                                                                 |
+| ------------------------------------------ | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/lib/api/client.test.ts` | Unit tests | 46    | Backoff delay (3), request ID generation (2), ApiClientError (3), error envelope parsing (9), envelope unwrapping (5), retryable status codes (2), query building (4), exclusion query (5), apiRequest orchestration (7) |
 
 **Test suite breakdown:**
 
@@ -372,6 +387,7 @@ New comprehensive unit test coverage for the frontend API client layer:
 - **apiRequest** (7 tests) — GET success with data unwrap; 204 returns undefined; non-OK throws ApiClientError; POST does not retry (1 call only); GET retries + succeeds on attempt 2; GET exhausts retries → ApiClientError; VALIDATION_ERROR skips retries despite retries=2
 
 **Key testing patterns:**
+
 - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` for backoff delay testing with fake clock
 - `vi.stubGlobal()` for testing crypto.randomUUID fallback
 - MSW `server.use()` per-test overrides for HTTP interception via `http.get()`/`http.post()`
@@ -388,18 +404,20 @@ New comprehensive unit test coverage for the frontend API client layer:
 
 New comprehensive unit test coverage for the portfolio investment hooks:
 
-| File | Type | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/hooks/portfolio/__tests__/useInvestments.test.ts` | Hook unit tests | 25 | `useInvestmentsQuery` (3 tests), `usePortfolioTransactionsQuery` (5 tests), `useInvestmentMutations` (17 tests: 3 investment mutations, 4 transaction mutations, 1 refresh-prices query) |
+| File                                                                 | Type            | Tests | Coverage                                                                                                                                                                                 |
+| -------------------------------------------------------------------- | --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/hooks/portfolio/__tests__/useInvestments.test.ts` | Hook unit tests | 25    | `useInvestmentsQuery` (3 tests), `usePortfolioTransactionsQuery` (5 tests), `useInvestmentMutations` (17 tests: 3 investment mutations, 4 transaction mutations, 1 refresh-prices query) |
 
 **Test suite breakdown:**
 
 **useInvestmentsQuery (3 tests)**
+
 - Fetches investments on success with proper envelope unwrap
 - Passes `limit: 500` and `active: false` to API (query params validation)
 - Exposes error state on network/API failure
 
 **usePortfolioTransactionsQuery (5 tests)**
+
 - Idle state when `investmentIds` array is empty (deferred query)
 - Uses bulk endpoint (`getPortfolioTransactionsBulk`) when investment IDs provided
 - Passes comma-separated `investment_ids` string to bulk endpoint (param formatting)
@@ -407,6 +425,7 @@ New comprehensive unit test coverage for the portfolio investment hooks:
 - Flattens transactions from multiple investments in fallback mode (array concatenation)
 
 **useInvestmentMutations (17 tests)**
+
 - **addInvestment** (2 tests) — calls `createInvestment` with payload; error path calls `toast.error`
 - **updateInvestment** (2 tests) — calls `updateInvestment(id, payload)`; error path calls `toast.error`
 - **deleteInvestment** (2 tests) — calls `deleteInvestment(id)`; error path calls `toast.error`
@@ -416,6 +435,7 @@ New comprehensive unit test coverage for the portfolio investment hooks:
 - **refreshPrices** (4 tests) — calls `refreshInvestmentPrices`; shows `toast.success` when all prices are "live"; shows `toast.warning` when any source is "cached" or "historical_fallback"; shows `toast.error` on API failure; pending state verified via `isRefreshingPrices` flag
 
 **Key testing patterns:**
+
 - `// @vitest-environment jsdom` per-file directive (jsdom requirement for hooks)
 - `vi.mock("@/contexts/LanguageContext")` with async factory importing `@/locales/en` for synchronous `t()` function
 - `makeWrapper()` returns `QueryClientProvider` only (LanguageContext mocked, no provider needed)
@@ -435,13 +455,14 @@ New comprehensive unit test coverage for the portfolio investment hooks:
 
 New component integration test coverage for the VirtualDataTable shared component, the most complex table component in Vision:
 
-| File | Type | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/components/shared/__tests__/VirtualDataTable.test.tsx` | Component-integration | 23 | Rendering (title, subtitle, headers, rows, empty states, actions slot, footer count), local search (placeholder, filtering, no-results, clear), server-side search (placeholder change, 200ms debounce, pre-debounce no-fire), server-side sort (asc/desc/clear cycling), inline editing (enter edit mode, cancel, Escape key, Enter to save with onRowUpdate callback), clear-all button |
+| File                                                                      | Type                  | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------- | --------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/components/shared/__tests__/VirtualDataTable.test.tsx` | Component-integration | 23    | Rendering (title, subtitle, headers, rows, empty states, actions slot, footer count), local search (placeholder, filtering, no-results, clear), server-side search (placeholder change, 200ms debounce, pre-debounce no-fire), server-side sort (asc/desc/clear cycling), inline editing (enter edit mode, cancel, Escape key, Enter to save with onRowUpdate callback), clear-all button |
 
 **Test suite breakdown:**
 
 **Rendering (6 tests)**
+
 - Title and subtitle rendering
 - Column headers display
 - Row data rendering (mocked virtualizer renders all items unconditionally)
@@ -451,22 +472,26 @@ New component integration test coverage for the VirtualDataTable shared componen
 - Footer count display ("X of Y loaded")
 
 **Local Search (4 tests)**
+
 - Search input placeholder: "Search across all columns..."
 - Filtering rows updates footer to "1 of 3 shown (filtered)"
 - No-results state: "No results match your filters."
 - Clear search button (X icon) restores all rows
 
 **Server-Side Search (3 tests)**
+
 - Placeholder changes to "Search database..." when `onSearchChange` callback provided
 - `onSearchChange` called after 200ms debounce (with `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync()`)
 - Pre-debounce call at 199ms does not fire callback
 
 **Server-Side Sort (3 tests)**
+
 - First column header click → `onSortChange("name", "asc")`
 - Second click on same column → `onSortChange("name", "desc")`
 - Third click on same column → `onSortChange(null, null)` to clear sort
 
 **Inline Editing (5 tests)**
+
 - Double-click row enters edit mode (textbox inputs appear for editable columns)
 - Cancel button (destructive red X) restores view mode; 1 textbox remains (search input)
 - Escape key cancels editing without saving
@@ -474,10 +499,12 @@ New component integration test coverage for the VirtualDataTable shared componen
 - All row indices account for search input textbox being first (offset by 1)
 
 **Clear All Button (2 tests)**
+
 - "Clear all" button appears after any search query
 - Clicking "Clear all" clears search state and hides the button
 
 **Key testing patterns:**
+
 - `vi.mock("@/contexts/LanguageContext")` with async factory importing `@/locales/en` for synchronous translations
 - `vi.mock("@tanstack/react-virtual")` to unconditionally render all virtual items (avoids DOM layout measurement requirement)
 - `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync()` for debounce testing (200ms search delay)
@@ -497,11 +524,11 @@ Three new deep component-integration test files covering multi-step dialogs and 
 
 **Infrastructure note:** `apps/frontend/src/test-setup.ts` updated to call `cleanup()` from `@testing-library/react` inside `afterEach`. Vitest does not auto-register React Testing Library cleanup the way Jest does; without it, Radix UI portals rendered into `document.body` leak across tests causing `aria-hidden` contamination and spurious element matches.
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Dialog open; Save disabled when name empty; Save disabled with name but no selection; Save enabled when name + category selected; create mode POST + `onOpenChange(false)`; edit mode pre-populated; edit mode PATCH + close; cancel/close calls `onOpenChange(false)`; recipients loaded from API and shown |
-| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Dialog open; renders unlinked transactions list; shows empty state; link button calls PATCH and closes; unlink button calls PATCH and closes; search filters transactions; confirm-unlink dialog shown; cancel from confirm-unlink stays open; error toast on API failure |
-| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; step indicator buttons jump to step; `initialStep` prop opens directly to specified step |
+| File                                                                               | Tests | Coverage                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9     | Dialog open; Save disabled when name empty; Save disabled with name but no selection; Save enabled when name + category selected; create mode POST + `onOpenChange(false)`; edit mode pre-populated; edit mode PATCH + close; cancel/close calls `onOpenChange(false)`; recipients loaded from API and shown                      |
+| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx`      | 9     | Dialog open; renders unlinked transactions list; shows empty state; link button calls PATCH and closes; unlink button calls PATCH and closes; search filters transactions; confirm-unlink dialog shown; cancel from confirm-unlink stays open; error toast on API failure                                                         |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx`               | 10    | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; step indicator buttons jump to step; `initialStep` prop opens directly to specified step |
 
 **Total E13 tests:** 3 files, **28 tests**, all passing
 
@@ -527,39 +554,39 @@ Eleven new dialog and modal component integration test files added across portfo
 
 **Portfolio Dialog Tests (6 files, 60 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/portfolio/__tests__/AddPortfolioTxnDialog.test.tsx` | 10 | Trigger-based dialog; adds portfolio transaction (buy/sell/etc.); calls `POST /api/investments/:id/transactions`; validates form fields; handles submission and closes |
-| `apps/frontend/src/features/portfolio/__tests__/EditPortfolioTxnDialog.test.tsx` | 10 | Controlled dialog via props; edits portfolio transaction; calls `PATCH /api/investments/transactions/:id`; type field is disabled in edit mode; cancel calls `onOpenChange(false)` |
-| `apps/frontend/src/features/portfolio/__tests__/AddToWatchlistDialog.test.tsx` | 8 | Controlled dialog; adds symbol to watchlist; calls `GET /api/market/search` + `POST /api/watchlist`; search/selection flow; form validation |
-| `apps/frontend/src/features/portfolio/__tests__/WatchlistChartDialog.test.tsx` | 7 | Trigger-based dialog; uses raw `fetch()` (not apiClient); MSW handlers use `HttpResponse.json()` directly without `ok()` envelope for `GET /api/market/chart`; chart data rendering |
-| `apps/frontend/src/features/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 7 | Trigger-based dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence |
-| `apps/frontend/src/features/portfolio/__tests__/InvestmentDetailDialog.test.tsx` | 9 | Trigger-based dialog; default trigger label is "Details"; icon-only Pencil/Trash action buttons found by index; delete confirmation; edit/view modes |
-| `apps/frontend/src/features/portfolio/__tests__/AddInvestmentFromMarketDialog.test.tsx` | 9 | Trigger-based dialog; multi-step (choose → new/transaction); `existingInvestment` prop enables transaction step; scoped `within(dialog)` to avoid trigger button ambiguity; market search integration |
+| File                                                                                    | Tests | Coverage                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/portfolio/__tests__/AddPortfolioTxnDialog.test.tsx`         | 10    | Trigger-based dialog; adds portfolio transaction (buy/sell/etc.); calls `POST /api/investments/:id/transactions`; validates form fields; handles submission and closes                                |
+| `apps/frontend/src/features/portfolio/__tests__/EditPortfolioTxnDialog.test.tsx`        | 10    | Controlled dialog via props; edits portfolio transaction; calls `PATCH /api/investments/transactions/:id`; type field is disabled in edit mode; cancel calls `onOpenChange(false)`                    |
+| `apps/frontend/src/features/portfolio/__tests__/AddToWatchlistDialog.test.tsx`          | 8     | Controlled dialog; adds symbol to watchlist; calls `GET /api/market/search` + `POST /api/watchlist`; search/selection flow; form validation                                                           |
+| `apps/frontend/src/features/portfolio/__tests__/WatchlistChartDialog.test.tsx`          | 7     | Trigger-based dialog; uses raw `fetch()` (not apiClient); MSW handlers use `HttpResponse.json()` directly without `ok()` envelope for `GET /api/market/chart`; chart data rendering                   |
+| `apps/frontend/src/features/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 7     | Trigger-based dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence                                                                        |
+| `apps/frontend/src/features/portfolio/__tests__/InvestmentDetailDialog.test.tsx`        | 9     | Trigger-based dialog; default trigger label is "Details"; icon-only Pencil/Trash action buttons found by index; delete confirmation; edit/view modes                                                  |
+| `apps/frontend/src/features/portfolio/__tests__/AddInvestmentFromMarketDialog.test.tsx` | 9     | Trigger-based dialog; multi-step (choose → new/transaction); `existingInvestment` prop enables transaction step; scoped `within(dialog)` to avoid trigger button ambiguity; market search integration |
 
 **Recipients Dialog Tests (1 file, 10 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/recipients/__tests__/RecipientPatternsDialog.test.tsx` | 10 | Controlled dialog; CRUD for recipient match patterns; Trash delete button is icon-only (no accessible name) — found via `within(patternRow).getAllByRole("button")[1]`; confirm uses `useConfirmDialog` hook with `DELETE /api/recipients/:id/patterns/:patternId`; add pattern, edit, delete workflows |
+| File                                                                               | Tests | Coverage                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/recipients/__tests__/RecipientPatternsDialog.test.tsx` | 10    | Controlled dialog; CRUD for recipient match patterns; Trash delete button is icon-only (no accessible name) — found via `within(patternRow).getAllByRole("button")[1]`; confirm uses `useConfirmDialog` hook with `DELETE /api/recipients/:id/patterns/:patternId`; add pattern, edit, delete workflows |
 
 **Statistics Dialog Tests (1 file, 9 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9 | Modal (not Dialog) with create/edit modes; `GET /api/saved-charts` + `POST /api/saved-charts`; form validation (name required, selection required); category/recipient selection via combobox; index-based selection pattern for comboboxes |
+| File                                                                               | Tests | Coverage                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9     | Modal (not Dialog) with create/edit modes; `GET /api/saved-charts` + `POST /api/saved-charts`; form validation (name required, selection required); category/recipient selection via combobox; index-based selection pattern for comboboxes |
 
 **Planned Dialog Tests (1 file, 9 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx` | 9 | Controlled dialog; links a planned transaction to an existing bank transaction; calls `onExecute(paymentId, txnId, date)` on confirm; candidates fetched from `GET /api/transactions`; search/filtering; unlink confirmation |
+| File                                                                          | Tests | Coverage                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx` | 9     | Controlled dialog; links a planned transaction to an existing bank transaction; calls `onExecute(paymentId, txnId, date)` on confirm; candidates fetched from `GET /api/transactions`; search/filtering; unlink confirmation |
 
 **Tax Dialog Tests (1 file, 10 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10 | Trigger-based Radix **Sheet** (not Dialog); 4-step form (employment → income → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
+| File                                                                 | Tests | Coverage                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10    | Trigger-based Radix **Sheet** (not Dialog); 4-step form (employment → income → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
 
 **Total E14 tests:** 11 files, **88 tests**, all passing
 
@@ -588,39 +615,39 @@ Six new frontend dialog and wizard component integration test files added. Tests
 
 **Onboarding Wizard Tests (1 file, 11 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/onboarding/__tests__/OnboardingWizard.test.tsx` | 11 | Multi-step wizard (welcome → bank → categories → tour → backup); full flow completion; `onComplete()` callback; bank step calls `GET /api/info/supported-adapters` — returns `{ adapters, total_count }` envelope shape (not caught by default handlers, requires `server.use()` override); navigation prev/next between steps; form validation per step |
+| File                                                                        | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/onboarding/__tests__/OnboardingWizard.test.tsx` | 11    | Multi-step wizard (welcome → bank → categories → tour → backup); full flow completion; `onComplete()` callback; bank step calls `GET /api/info/supported-adapters` — returns `{ adapters, total_count }` envelope shape (not caught by default handlers, requires `server.use()` override); navigation prev/next between steps; form validation per step |
 
 **Notifications and Update Tests (1 file, 8 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/components/notifications/__tests__/UpdateNotification.test.tsx` | 8 | Version check via `GET /api/admin/update/check`; three install paths: web (reload hint), Electron (`window.electronUpdater.installShellUpdate`), Docker (pullImage instruction); requires stubbing `window.electronUpdater` global in `beforeEach` per-test; cleanup in `afterEach`; platform detection via `apiClient.isElectron()` check |
+| File                                                                               | Tests | Coverage                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/components/notifications/__tests__/UpdateNotification.test.tsx` | 8     | Version check via `GET /api/admin/update/check`; three install paths: web (reload hint), Electron (`window.electronUpdater.installShellUpdate`), Docker (pullImage instruction); requires stubbing `window.electronUpdater` global in `beforeEach` per-test; cleanup in `afterEach`; platform detection via `apiClient.isElectron()` check |
 
 **AI Chat Conversation List Tests (1 file, 10 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/ai-chat/__tests__/ChatConversationList.test.tsx` | 10 | List of AI chat conversations with `onSelect(id\|null)` callback; rename dialog calls `PATCH /api/ai/conversations/:id`; delete with confirm calls `DELETE /api/ai/conversations/:id`; selected-conversation deletion clears selection via `onSelect(null)`; uses `getByRole("textbox")` instead of `getByDisplayValue` to avoid Radix dialog-open timing issues (initial value populates via `onOpenChange(true)` callback which doesn't fire for initially-open dialogs in tests) |
+| File                                                                         | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/ai-chat/__tests__/ChatConversationList.test.tsx` | 10    | List of AI chat conversations with `onSelect(id\|null)` callback; rename dialog calls `PATCH /api/ai/conversations/:id`; delete with confirm calls `DELETE /api/ai/conversations/:id`; selected-conversation deletion clears selection via `onSelect(null)`; uses `getByRole("textbox")` instead of `getByDisplayValue` to avoid Radix dialog-open timing issues (initial value populates via `onOpenChange(true)` callback which doesn't fire for initially-open dialogs in tests) |
 
 **Backup Restoration Tests (1 file, 8 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/onboarding/__tests__/RestoreFromBackupCard.test.tsx` | 8 | **Electron-only component** — returns `null` on web; uses `window.electronBackup` IPC (not HTTP); tests install/uninstall Electron stubs in `beforeEach`, restore in `afterEach`; partial `setTimeout` stub to prevent 3s `window.location.reload()` from breaking test isolation (stubs reload timer, keeps sub-second timers real for Radix); encrypted backup path triggers passphrase dialog |
+| File                                                                             | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/features/onboarding/__tests__/RestoreFromBackupCard.test.tsx` | 8     | **Electron-only component** — returns `null` on web; uses `window.electronBackup` IPC (not HTTP); tests install/uninstall Electron stubs in `beforeEach`, restore in `afterEach`; partial `setTimeout` stub to prevent 3s `window.location.reload()` from breaking test isolation (stubs reload timer, keeps sub-second timers real for Radix); encrypted backup path triggers passphrase dialog |
 
 **Settings Backup Tab Tests (1 file, 9 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/settings/sections/__tests__/BackupSection.test.tsx` | 9 | Settings tab with **Electron-only branch** — `apiClient.isElectron()` check; routes through `window.electronBackup` IPC (runBackup, selectDir, setPassphrase); controlled component with `value` + `onChange` props — wrapped in small **stateful harness component** holding state instead of feeding props directly to test (enables onChange to update parent state); success/error toast assertions |
+| File                                                                            | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/settings/sections/__tests__/BackupSection.test.tsx` | 9     | Settings tab with **Electron-only branch** — `apiClient.isElectron()` check; routes through `window.electronBackup` IPC (runBackup, selectDir, setPassphrase); controlled component with `value` + `onChange` props — wrapped in small **stateful harness component** holding state instead of feeding props directly to test (enables onChange to update parent state); success/error toast assertions |
 
 **Import History Tests (1 file, 8 tests):**
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `apps/frontend/src/features/imports/__tests__/ImportHistoryCard.test.tsx` | 8 | Bank import history list; `GET /api/import/batches` covered in MSW defaultHandlers; rollback via AlertDialog calls `DELETE /api/import/batches/:id`; pagination triggers when `total > PAGE_SIZE` (10); import status rendering |
+| File                                                                      | Tests | Coverage                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/features/imports/__tests__/ImportHistoryCard.test.tsx` | 8     | Bank import history list; `GET /api/import/batches` covered in MSW defaultHandlers; rollback via AlertDialog calls `DELETE /api/import/batches/:id`; pagination triggers when `total > PAGE_SIZE` (10); import status rendering |
 
 **Total E15 tests:** 6 files, **54 tests**, all passing
 
@@ -639,9 +666,13 @@ Six new frontend dialog and wizard component integration test files added. Tests
 
 New golden-fixture unit tests for the extracted `portfolioTax.ts` pure estimator module:
 
-| File | Area | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` | Portfolio-tax estimators | 12 | Golden-output cases locking all ten exported functions (`recordedTaxesForYear`, `recordedFeesForYear`, `enrichInvestmentCosts`, `computeTobRecorded`, `computeTobAutoEstimate`, `computeTacrEstimate`, `computeRealizedGainSplit`, `computeReyndersEstimate`, `computeCgtEstimate`, `computeDividendWht`) to 8 decimal places. Verifies Decimal-accumulation correctness across multiple transactions in different currencies. `ConvertFn` injected as a simple identity stub. |
+| File                                                                  | Area                                 | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------- | ------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts`     | Portfolio-tax estimators             | 12    | Golden-output cases locking all ten exported functions (`recordedTaxesForYear`, `recordedFeesForYear`, `enrichInvestmentCosts`, `computeTobRecorded`, `computeTobAutoEstimate`, `computeTacrEstimate`, `computeRealizedGainSplit`, `computeReyndersEstimate`, `computeCgtEstimate`, `computeDividendWht`) to 8 decimal places. Verifies Decimal-accumulation correctness across multiple transactions in different currencies. `ConvertFn` injected as a simple identity stub. |
+| `apps/frontend/src/lib/belgianTax/__tests__/costBreakdown.test.ts`    | Portfolio tax/fee bucketing          | 1     | Pins year filtering, conversion, transaction-type categories, and manual adjustments.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `apps/frontend/src/lib/belgianTax/__tests__/exportTaxYearCsv.test.ts` | Tax-year CSV export                  | 3     | Pins live/frozen/filed metadata, profile and calculation sections, requested currency, and CSV escaping.                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/frontend/src/lib/belgianTax/__tests__/socialSecurity.test.ts`   | Employee and special social security | 2     | Direct coverage of employment-type rates, filing-status tables, and non-subject income.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `apps/frontend/src/lib/belgianTax/__tests__/propertyTax.test.ts`      | Regional property-tax estimate       | 2     | Direct coverage of additional residences, per-residence regions, and explicit centimes overrides.                                                                                                                                                                                                                                                                                                                                                                              |
 
 **Related documentation:** [[docs/features/belgian-tax#portfoliotaxts--pure-portfolio-tax-estimators-2026-05-29|Belgian Tax: portfolioTax.ts]], [[docs/features/portfolio-tax#pure-estimator-module-2026-05-29|Portfolio Tax: Pure Estimator Module]]
 
@@ -649,41 +680,41 @@ New golden-fixture unit tests for the extracted `portfolioTax.ts` pure estimator
 
 New unit tests for the `chartAria.ts` accessibility helper module:
 
-| File | Area | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` | Chart aria-label generation | 6 | `summarizeSeriesChart` (empty data, single series, multiple series), `summarizeProportionChart` (empty + populated), `summarizeSparkline` (point count). Asserts that generated labels include chart type, dimension count, and series names. |
+| File                                                              | Area                        | Tests | Coverage                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------- | --------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` | Chart aria-label generation | 6     | `summarizeSeriesChart` (empty data, single series, multiple series), `summarizeProportionChart` (empty + populated), `summarizeSparkline` (point count). Asserts that generated labels include chart type, dimension count, and series names. |
 
 **Related documentation:** [[docs/components/charts#generated-aria-label-summaries-2026-05-29|Chart Primitives: Generated aria-label Summaries]]
 
 ### Test Suite Summary (2026-05-01, Phase F1 backend-drift detection 2026-05-02)
 
-| Layer | Files | Tests | Status |
-|-------|-------|-------|--------|
-| Dialog integration tests (Phase A) | 3 | 27 | All passing (NEW 2026-05-03: AddCategoryDialog +1 (422 error), AddRecipientDialog +1 (422 error), WidgetVisibilityDialog) |
-| Phase A (Component-Integration) | 20 | 381 | All passing (COMPLETE, updated 2026-05-03 with dialog 422 tests and AddTransactionDialog 422 test) |
-| Phase B/C (E2E + a11y + visual) | 2 | 5 smoke + visual | All passing |
-| Phase D (Contract tests) | 1 | 40 | All passing (EXPANDED: E1 strict schemas 10, E2 mutations 15, E3 error envelopes 4) |
-| Phase E8+ (Hook unit tests) | 5 | 64 | All passing (NEW 2026-05-03: useInvestments portfolio hook; earlier: useDebounce, useCountUp, useOnlineStatus, useIsMobile, useChartCurrencyFormatter, usePlannedPayments, useQueryHooks) |
-| Phase E10 (API client unit tests) | 1 | 46 | All passing (NEW: backoff delay, request ID, error parsing, envelope unwrap, apiRequest orchestration) |
-| Phase E11 (VirtualDataTable integration tests) | 1 | 23 | All passing (NEW: rendering, local search, server search/sort, inline editing, clear-all) |
-| Phase E13 (Deep component-integration) | 3 | 28 | All passing (NEW 2026-05-01: CustomChartBuilderModal 9, LinkTransactionDialog 9, TaxProfileDialog 10) |
-| Phase E14 (Portfolio/Recipients/Statistics/Planned/Tax dialogs) | 11 | 88 | All passing (NEW 2026-05-01: Portfolio 6 files 60 tests, Recipients 1 file 10 tests, Statistics 1 file 9 tests, Planned 1 file 9 tests, Tax 1 file 10 tests) |
-| Phase E15 (Onboarding/Notification/Chat/Backup/Import dialogs) | 6 | 54 | All passing (NEW 2026-05-01: OnboardingWizard 11, UpdateNotification 8, ChatConversationList 10, RestoreFromBackupCard 8, BackupTab 9, ImportHistoryCard 8) |
-| Phase E16 (Edge-coverage sweep) | 30 | +101 | All passing (NEW 2026-05-02): per-surface fills covering Escape close, Submit error, data-state open guard, keyboard nav, 4xx/5xx page errors, refetch invalidation, context mutation/boot/persistence error paths |
-| Context unit tests | 5 | 37 | All passing (NEW: Belgian tax, app settings, language, preload, workspace contexts) |
-| Earlier unit/component tests | 6+ | 10+ | All passing (utils, hooks, components) |
-| Phase F1 (Backend drift detection) | 4 | +57 vitest, +24 live, +9 Playwright | All passing (NEW 2026-05-02): MSW contract + live-API contract + Playwright dialog/page e2e |
-| Phase F2 (Stale refetch / mutation invalidation) | 4 | +6 | All passing (NEW 2026-05-02): RecipientsPage create, OwesPage settle-all, Watchlist delete, CryptoPage create, StocksPage create, StatisticsPage year-param contract |
-| Phase F3 (Dialog field validation + submit error) | 5 | +6 | All passing (NEW 2026-05-02): TransactionInfoDialog cancel-no-submit, AddInvestmentFromMarketDialog blank-name guard, LinkTransactionDialog disabled-no-selection + execute-failure-keeps-open, ExecutionHistoryDialog 5xx tolerance, CustomChartBuilderModal POST 5xx stays open |
-| Phase F4 (Playwright parity expansion) | 3 | +13 mutations + 11 a11y + 11 network-drift Playwright | NEW 2026-05-02: e2e/mutations-parity.spec.ts (CRUD lifecycles in real browser), e2e/a11y.spec.ts (axe WCAG 2.1 A/AA scans on 11 pages, including Tax), e2e/network-drift.spec.ts (boot-time fetch listener catching 5xx/4xx drift on the same catalog) |
-| Phase F5 (Property + chaos) | 3 | +14 vitest | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts) |
-| Phase F6 (Mutation testing — Stryker) | config + harness | runs on `bun run test:mutation` | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating) |
-| Phase F7 (Coverage matrix gap-fill) | 3 | +5 | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches) |
-| Portfolio tax pure-module tests (2026-05-29) | 1 | 12 | All passing (NEW: portfolioTax.ts golden-output cases, 8 dp precision, Decimal accumulation) |
-| Chart aria-label helper tests (2026-05-29) | 1 | 6 | All passing (NEW: summarizeSeriesChart, summarizeProportionChart, summarizeSparkline) |
-| **Frontend Total** | **83** | **1256** | **All passing (Phase F1–F7 complete + 2026-05-29: portfolio-tax pure-module +12, chart-aria +6)** |
-| **Backend** | 56+ | 882+ | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests) |
-| **Grand Total** | **139+** | **2138** | **All passing (1256 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)** |
+| Layer                                                           | Files            | Tests                                                 | Status                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------- | ---------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dialog integration tests (Phase A)                              | 3                | 27                                                    | All passing (NEW 2026-05-03: AddCategoryDialog +1 (422 error), AddRecipientDialog +1 (422 error), WidgetVisibilityDialog)                                                                                                                                                         |
+| Phase A (Component-Integration)                                 | 20               | 381                                                   | All passing (COMPLETE, updated 2026-05-03 with dialog 422 tests and AddTransactionDialog 422 test)                                                                                                                                                                                |
+| Phase B/C (E2E + a11y + visual)                                 | 2                | 5 smoke + visual                                      | All passing                                                                                                                                                                                                                                                                       |
+| Phase D (Contract tests)                                        | 1                | 40                                                    | All passing (EXPANDED: E1 strict schemas 10, E2 mutations 15, E3 error envelopes 4)                                                                                                                                                                                               |
+| Phase E8+ (Hook unit tests)                                     | 5                | 64                                                    | All passing (NEW 2026-05-03: useInvestments portfolio hook; earlier: useDebounce, useCountUp, useOnlineStatus, useIsMobile, useChartCurrencyFormatter, usePlannedPayments, useQueryHooks)                                                                                         |
+| Phase E10 (API client unit tests)                               | 1                | 46                                                    | All passing (NEW: backoff delay, request ID, error parsing, envelope unwrap, apiRequest orchestration)                                                                                                                                                                            |
+| Phase E11 (VirtualDataTable integration tests)                  | 1                | 23                                                    | All passing (NEW: rendering, local search, server search/sort, inline editing, clear-all)                                                                                                                                                                                         |
+| Phase E13 (Deep component-integration)                          | 3                | 28                                                    | All passing (NEW 2026-05-01: CustomChartBuilderModal 9, LinkTransactionDialog 9, TaxProfileDialog 10)                                                                                                                                                                             |
+| Phase E14 (Portfolio/Recipients/Statistics/Planned/Tax dialogs) | 11               | 88                                                    | All passing (NEW 2026-05-01: Portfolio 6 files 60 tests, Recipients 1 file 10 tests, Statistics 1 file 9 tests, Planned 1 file 9 tests, Tax 1 file 10 tests)                                                                                                                      |
+| Phase E15 (Onboarding/Notification/Chat/Backup/Import dialogs)  | 6                | 54                                                    | All passing (NEW 2026-05-01: OnboardingWizard 11, UpdateNotification 8, ChatConversationList 10, RestoreFromBackupCard 8, BackupTab 9, ImportHistoryCard 8)                                                                                                                       |
+| Phase E16 (Edge-coverage sweep)                                 | 30               | +101                                                  | All passing (NEW 2026-05-02): per-surface fills covering Escape close, Submit error, data-state open guard, keyboard nav, 4xx/5xx page errors, refetch invalidation, context mutation/boot/persistence error paths                                                                |
+| Context unit tests                                              | 5                | 37                                                    | All passing (NEW: Belgian tax, app settings, language, preload, workspace contexts)                                                                                                                                                                                               |
+| Earlier unit/component tests                                    | 6+               | 10+                                                   | All passing (utils, hooks, components)                                                                                                                                                                                                                                            |
+| Phase F1 (Backend drift detection)                              | 4                | +57 vitest, +24 live, +9 Playwright                   | All passing (NEW 2026-05-02): MSW contract + live-API contract + Playwright dialog/page e2e                                                                                                                                                                                       |
+| Phase F2 (Stale refetch / mutation invalidation)                | 4                | +6                                                    | All passing (NEW 2026-05-02): RecipientsPage create, OwesPage settle-all, Watchlist delete, CryptoPage create, StocksPage create, StatisticsPage year-param contract                                                                                                              |
+| Phase F3 (Dialog field validation + submit error)               | 5                | +6                                                    | All passing (NEW 2026-05-02): TransactionInfoDialog cancel-no-submit, AddInvestmentFromMarketDialog blank-name guard, LinkTransactionDialog disabled-no-selection + execute-failure-keeps-open, ExecutionHistoryDialog 5xx tolerance, CustomChartBuilderModal POST 5xx stays open |
+| Phase F4 (Playwright parity expansion)                          | 3                | +13 mutations + 11 a11y + 11 network-drift Playwright | NEW 2026-05-02: e2e/mutations-parity.spec.ts (CRUD lifecycles in real browser), e2e/a11y.spec.ts (axe WCAG 2.1 A/AA scans on 11 pages, including Tax), e2e/network-drift.spec.ts (boot-time fetch listener catching 5xx/4xx drift on the same catalog)                            |
+| Phase F5 (Property + chaos)                                     | 3                | +14 vitest                                            | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts)    |
+| Phase F6 (Mutation testing — Stryker)                           | config + harness | runs on `bun run test:mutation`                       | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating)                                                                                |
+| Phase F7 (Coverage matrix gap-fill)                             | 3                | +5                                                    | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches)    |
+| Portfolio tax pure-module tests (2026-05-29)                    | 1                | 12                                                    | All passing (NEW: portfolioTax.ts golden-output cases, 8 dp precision, Decimal accumulation)                                                                                                                                                                                      |
+| Chart aria-label helper tests (2026-05-29)                      | 1                | 6                                                     | All passing (NEW: summarizeSeriesChart, summarizeProportionChart, summarizeSparkline)                                                                                                                                                                                             |
+| **Frontend Total**                                              | **83**           | **1256**                                              | **All passing (Phase F1–F7 complete + 2026-05-29: portfolio-tax pure-module +12, chart-aria +6)**                                                                                                                                                                                 |
+| **Backend**                                                     | 56+              | 882+                                                  | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests)                                                                                                                                                                                     |
+| **Grand Total**                                                 | **139+**         | **2138**                                              | **All passing (1256 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)**                                                                                                                                                                 |
 
 ### Phase F1 — Backend Drift Detection Sweep (2026-05-02)
 
@@ -702,15 +733,15 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **How drift is caught now:**
 
-| Type of backend change | Test that fires |
-|---|---|
-| Field renamed in response payload | MSW contract test (Zod schema mismatch) AND live-API contract test |
-| Field type changed | Same as above |
-| Endpoint removed | Live-API contract fails on `HTTP 404 / envelope.ok=false` |
-| New required query param | Live-API contract fails on `4xx` |
-| Page crashes from undefined data | `critical-flows.spec.ts` `pageerror` listener |
-| Dialog behavior regression (focus/escape/backdrop) | `dialogs-edge.spec.ts` |
-| Visual layout drift | Manual `visual-chromium` screenshot comparison |
+| Type of backend change                             | Test that fires                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------ |
+| Field renamed in response payload                  | MSW contract test (Zod schema mismatch) AND live-API contract test |
+| Field type changed                                 | Same as above                                                      |
+| Endpoint removed                                   | Live-API contract fails on `HTTP 404 / envelope.ok=false`          |
+| New required query param                           | Live-API contract fails on `4xx`                                   |
+| Page crashes from undefined data                   | `critical-flows.spec.ts` `pageerror` listener                      |
+| Dialog behavior regression (focus/escape/backdrop) | `dialogs-edge.spec.ts`                                             |
+| Visual layout drift                                | Manual `visual-chromium` screenshot comparison                     |
 
 **Coverage delta this phase:** baseline 1147 → **1204** vitest tests (+57 contract-level, no jsdom regressions). +24 live-API tests (skipped locally, run on CI). +9 Playwright tests across 2 new files.
 
@@ -720,14 +751,14 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **What landed (6 new tests across 4 page files):**
 
-| Page | Mutation | Test |
-|------|----------|------|
-| `RecipientsPage` | POST `/api/recipients` | Asserts `getCalls > before` after Add Recipient submit |
-| `OwesPage` | POST `/api/splits/owed/:id/settle-all` | Asserts both `/api/splits/owed` AND `/api/splits/owed/1` GET counters increment after settle-all |
-| `WatchlistPage` | DELETE `/api/watchlist/:id` | Asserts watchlist GET refires after trash icon click |
-| `CryptoPage` | POST `/api/investments` | Asserts investments GET refires after create-investment submit |
-| `StocksPage` | POST `/api/investments` | Asserts investments GET refires after type-selector → details → create flow |
-| `StatisticsPage` | year filter contract | Asserts monthly-summary handler is called with year query param (drift guard) |
+| Page             | Mutation                               | Test                                                                                             |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `RecipientsPage` | POST `/api/recipients`                 | Asserts `getCalls > before` after Add Recipient submit                                           |
+| `OwesPage`       | POST `/api/splits/owed/:id/settle-all` | Asserts both `/api/splits/owed` AND `/api/splits/owed/1` GET counters increment after settle-all |
+| `WatchlistPage`  | DELETE `/api/watchlist/:id`            | Asserts watchlist GET refires after trash icon click                                             |
+| `CryptoPage`     | POST `/api/investments`                | Asserts investments GET refires after create-investment submit                                   |
+| `StocksPage`     | POST `/api/investments`                | Asserts investments GET refires after type-selector → details → create flow                      |
+| `StatisticsPage` | year filter contract                   | Asserts monthly-summary handler is called with year query param (drift guard)                    |
 
 **Pattern:** stub GET handler that increments a `getCalls` counter; capture `before` baseline after initial render; perform mutation; `await waitFor(() => expect(getCalls).toBeGreaterThan(before))`. Catches missing `queryClient.invalidateQueries` calls in mutation `onSuccess` handlers.
 
@@ -737,15 +768,15 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **What landed (6 new tests across 5 dialog files):**
 
-| Dialog | Validation test | Submit-error test |
-|--------|-----------------|-------------------|
-| `TransactionInfoDialog` | Edit memo → Cancel → no PATCH (drop-edit guard) | — (mutateAsync rejection causes unhandled rejection in jsdom; covered by useUpdateTransaction unit test) |
-| `AddInvestmentFromMarketDialog` | Blank name → no POST (existing `if (!form.name.trim()) return` guard) | (existing in earlier batch) |
-| `LinkTransactionDialog` | "Link & Execute" disabled with no radio selected | onExecute rejection → dialog stays open (no `onOpenChange(false)`) |
-| `MergeRecipientsDialog` | (existing: button-disabled when no primary AND no alias) | (existing: merge error does not close dialog) |
-| `ExecutionHistoryDialog` | — (read-only viewer, no form) | transactions GET 5xx → dialog renders; no crash |
-| `TaxProfileDialog` | (N/A — uses `BelgianTaxProfileContext`, no API) | (N/A) |
-| `CustomChartBuilderModal` | (existing: Save disabled with no name / no category) | POST `/api/saved-charts` 5xx → `onOpenChange(false)` not called |
+| Dialog                          | Validation test                                                       | Submit-error test                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `TransactionInfoDialog`         | Edit memo → Cancel → no PATCH (drop-edit guard)                       | — (mutateAsync rejection causes unhandled rejection in jsdom; covered by useUpdateTransaction unit test) |
+| `AddInvestmentFromMarketDialog` | Blank name → no POST (existing `if (!form.name.trim()) return` guard) | (existing in earlier batch)                                                                              |
+| `LinkTransactionDialog`         | "Link & Execute" disabled with no radio selected                      | onExecute rejection → dialog stays open (no `onOpenChange(false)`)                                       |
+| `MergeRecipientsDialog`         | (existing: button-disabled when no primary AND no alias)              | (existing: merge error does not close dialog)                                                            |
+| `ExecutionHistoryDialog`        | — (read-only viewer, no form)                                         | transactions GET 5xx → dialog renders; no crash                                                          |
+| `TaxProfileDialog`              | (N/A — uses `BelgianTaxProfileContext`, no API)                       | (N/A)                                                                                                    |
+| `CustomChartBuilderModal`       | (existing: Save disabled with no name / no category)                  | POST `/api/saved-charts` 5xx → `onOpenChange(false)` not called                                          |
 
 **Skipped intentionally:**
 
@@ -760,11 +791,11 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **What landed (3 new e2e specs, 32 new tests across 9–13 pages):**
 
-| File | Coverage |
-|------|----------|
-| `e2e/mutations-parity.spec.ts` | Full CRUD lifecycle in a real browser (Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant). 4 tests. |
-| `e2e/a11y.spec.ts` | Axe WCAG 2.1 A/AA scan on 11 key pages (Dashboard, Transactions, Import, Categories, Recipients, Statistics, Owes, Tax, PortfolioOverview, Watchlist, Planned). Asserts zero `impact: critical` or `serious` violations. Uses `@axe-core/playwright`. 11 tests. |
-| `e2e/network-drift.spec.ts` | `page.on("response")` listener flags any `/api/` 5xx or unexpected 4xx during page boot. Uses the same 11-page catalog as axe. Catches frontend → backend route mismatches that contract tests can't see (because the route never gets called by the test). 11 tests. |
+| File                           | Coverage                                                                                                                                                                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/mutations-parity.spec.ts` | Full CRUD lifecycle in a real browser (Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant). 4 tests.                                                                                                  |
+| `e2e/a11y.spec.ts`             | Axe WCAG 2.1 A/AA scan on 11 key pages (Dashboard, Transactions, Import, Categories, Recipients, Statistics, Owes, Tax, PortfolioOverview, Watchlist, Planned). Asserts zero `impact: critical` or `serious` violations. Uses `@axe-core/playwright`. 11 tests.       |
+| `e2e/network-drift.spec.ts`    | `page.on("response")` listener flags any `/api/` 5xx or unexpected 4xx during page boot. Uses the same 11-page catalog as axe. Catches frontend → backend route mismatches that contract tests can't see (because the route never gets called by the test). 11 tests. |
 
 `test:e2e` discovers these specs through the non-visual `chromium` project, so later non-visual `e2e/*.spec.ts` files join the suite without another package-script edit. `visual.spec.ts` is isolated in the manual `visual-chromium` project.
 
@@ -774,17 +805,17 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **What landed (3 new files, 14 new vitest tests):**
 
-| File | Coverage |
-|------|----------|
+| File                                          | Coverage                                                                                                                                                                                                                         |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/test/property/currency.property.test.ts` | `fast-check` properties for `parseLocaleNumber`: number passthrough, null/empty → NaN, US format round-trip, EU format round-trip, paren = negation, currency-symbol stripping, internal whitespace, never-throws. 8 properties. |
-| `src/test/property/envelope.property.test.ts` | Properties for `unwrapEnvelope` (ADR-026): `{ok:true,data:X}` → X, non-envelope passthrough, primitive passthrough, never-throws. 4 properties. |
-| `src/test/property/chaos-resilience.test.tsx` | Wraps `/api/transactions` and `/api/recipients` with `chaos()` (random latency + 503) and asserts the page still renders without crashing. 2 tests. |
+| `src/test/property/envelope.property.test.ts` | Properties for `unwrapEnvelope` (ADR-026): `{ok:true,data:X}` → X, non-envelope passthrough, primitive passthrough, never-throws. 4 properties.                                                                                  |
+| `src/test/property/chaos-resilience.test.tsx` | Wraps `/api/transactions` and `/api/recipients` with `chaos()` (random latency + 503) and asserts the page still renders without crashing. 2 tests.                                                                              |
 
 **New harness:** `src/test/msw/chaos.ts` — `chaos(handler)` decorator that injects random latency + a configurable error rate. Tunables via env: `VISION_CHAOS_ERROR_RATE`, `VISION_CHAOS_LATENCY_MS`, `VISION_CHAOS_SEED`. Deterministic (mulberry32 PRNG) when seed is fixed.
 
 ### Phase F6 — Mutation Testing (Stryker, 2026-05-02)
 
-**Goal:** measure test suite *quality* (do tests catch realistic faults?) not just *coverage* (do tests touch the line?).
+**Goal:** measure test suite _quality_ (do tests catch realistic faults?) not just _coverage_ (do tests touch the line?).
 
 **What landed:**
 
@@ -804,20 +835,20 @@ A coverage-matrix audit found stale claims (matrix said contexts had ZERO tests;
 
 **What landed (101 new tests across 30 files):**
 
-| Surface | Edge cases added |
-|---|---|
-| `SettingsContexts` | AppSettings + Settings boot fetch fail (4xx/5xx via spyOn), mutation error logged but state preserved, debounced persistence, theme idempotence |
-| `SettingsPreloadContext` | 4xx-like and 5xx-like spy-rejection paths, multi-consumer cache fan-out |
-| `WorkspaceContext` | sessionStorage write success and failure, corrupted stored value handling |
-| `LanguageContext` | missing-param interpolation, idempotent setLanguage, en↔nl roundtrip |
+| Surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Edge cases added                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SettingsContexts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | AppSettings + Settings boot fetch fail (4xx/5xx via spyOn), mutation error logged but state preserved, debounced persistence, theme idempotence               |
+| `SettingsPreloadContext`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 4xx-like and 5xx-like spy-rejection paths, multi-consumer cache fan-out                                                                                       |
+| `WorkspaceContext`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | sessionStorage write success and failure, corrupted stored value handling                                                                                     |
+| `LanguageContext`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | missing-param interpolation, idempotent setLanguage, en↔nl roundtrip                                                                                          |
 | `AddToWatchlistDialog`, `WatchlistChartDialog`, `ExecutionHistoryDialog`, `DashboardSettingsDialog`, `WidgetVisibilityDialog`, `TaxProfileDialog`, `ExportDialog`, `SplitTransactionDialog`, `AddRecipientDialog`, `LinkTransactionDialog`, `InvestmentDetailDialog`, `MergeRecipientsDialog`, `PortfolioTaxAdjustmentsDialog`, `EditPortfolioTxnDialog`, `AddPortfolioTxnDialog`, `EditInvestmentDialog`, `AddCategoryDialog`, `RecipientPatternsDialog`, `CustomChartBuilderModal`, `TransactionInfoDialog`, `AddInvestmentFromMarketDialog` | Escape closes (where not already covered), `data-state="open"` modality guard, first-focusable keyboard-nav check, submit-error toast/dialog-stays-open paths |
-| `TransactionsPage` | 401/404 error surfacing, no error banner with paginated data, refetch behaviour around dialog flows |
-| `RecipientsPage` | 404 error surfacing, large-list rendering does not crash |
-| `PlannedPaymentsPage`, `AIChatPage`, `CategoriesPage`, `DashboardPage`, `ImportPage`, `OwesPage`, `TaxOverviewPage`, `ImportReviewPage`, `DbMaintenancePage`, `PortfolioOverviewPage` | 4xx tolerance check + refetch verification (where applicable) |
-| `StatisticsPage` | 4xx surfacing on monthly aggregation, empty-state heading rendering |
-| `MarketLookupPage` | 4xx tolerance for unknown symbol, 5xx tolerance for news endpoint |
-| `AdminPages` (Overview / ProviderHealth / EndpointLiveness) | 4xx tolerance for each admin endpoint |
-| `PortfolioPages` (Stocks / Performance / NetWorth / Watchlist / ExchangeRates) | 4xx tolerance for each portfolio endpoint |
+| `TransactionsPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 401/404 error surfacing, no error banner with paginated data, refetch behaviour around dialog flows                                                           |
+| `RecipientsPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 404 error surfacing, large-list rendering does not crash                                                                                                      |
+| `PlannedPaymentsPage`, `AIChatPage`, `CategoriesPage`, `DashboardPage`, `ImportPage`, `OwesPage`, `TaxOverviewPage`, `ImportReviewPage`, `DbMaintenancePage`, `PortfolioOverviewPage`                                                                                                                                                                                                                                                                                                                                                          | 4xx tolerance check + refetch verification (where applicable)                                                                                                 |
+| `StatisticsPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 4xx surfacing on monthly aggregation, empty-state heading rendering                                                                                           |
+| `MarketLookupPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 4xx tolerance for unknown symbol, 5xx tolerance for news endpoint                                                                                             |
+| `AdminPages` (Overview / ProviderHealth / EndpointLiveness)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 4xx tolerance for each admin endpoint                                                                                                                         |
+| `PortfolioPages` (Stocks / Performance / NetWorth / Watchlist / ExchangeRates)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 4xx tolerance for each portfolio endpoint                                                                                                                     |
 
 **Skipped intentionally:**
 
@@ -846,14 +877,17 @@ bun run test
 
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
 
+- `apps/node-backend/tests/connection.test.js` covers pool and retry utilities plus ambient transaction routing, unique nested savepoints, caught-inner rollback, rollback-error preservation, and released-client invalidation.
+- `apps/node-backend/tests/helpers/repoMocks.test.js` pins parity for the shared ambient transaction mock used by repository and service tests.
+
 ### Backend Unit Tests — Calculation & Pipeline (2026-05-05)
 
 Two new backend test suites covering portfolio math and import pipeline orchestration:
 
-| File | Area | Tests | Coverage |
-|------|------|-------|----------|
-| `apps/node-backend/tests/portfolioMath.test.js` | Portfolio calculations | 21 | **calculateCostBasisFIFO** (4 tests): empty txns, buy-only accumulation, FIFO lot exhaustion, oversell with sellRatio scaling; **calculateCostBasisLIFO** (3 tests): empty txns, LIFO-vs-FIFO realized gain inversion, oversell proportional proceeds scaling; **calculateAccruedInterest** (6 tests with fake timers): zero rate/principal/txns, exact 365-day simple interest, interest-payment-date start, future-date guard; **sanitizeSnapshotSpikes** (4 tests + 1 DST safety test): non-array null-guard, short-array reference-return, geometric-mean spike replacement (high needle + low trough), immutability assertion, UTC day-walk DST safety across spring-forward |
-| `apps/node-backend/tests/importPipeline.test.js` | Import orchestration | 11 | **validateBatch** (4 tests): field validation (tx_date, amount nulls, non-numeric), error summary; **stageBatch** (2 tests): unknown-adapter throw, multi-row parse with rows_total count; **matchBatch** (2 tests): pattern-matched row source=pattern, unresolved recipient_raw=null; **commitBatch** (3 tests): clean insert with aggregation refresh, duplicate detection skips refresh, SAVEPOINT rollback on insert error |
+| File                                             | Area                   | Tests | Coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------ | ---------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/node-backend/tests/portfolioMath.test.js`  | Portfolio calculations | 21    | **calculateCostBasisFIFO** (4 tests): empty txns, buy-only accumulation, FIFO lot exhaustion, oversell with sellRatio scaling; **calculateCostBasisLIFO** (3 tests): empty txns, LIFO-vs-FIFO realized gain inversion, oversell proportional proceeds scaling; **calculateAccruedInterest** (6 tests with fake timers): zero rate/principal/txns, exact 365-day simple interest, interest-payment-date start, future-date guard; **sanitizeSnapshotSpikes** (4 tests + 1 DST safety test): non-array null-guard, short-array reference-return, geometric-mean spike replacement (high needle + low trough), immutability assertion, UTC day-walk DST safety across spring-forward |
+| `apps/node-backend/tests/importPipeline.test.js` | Import orchestration   | 11    | **validateBatch** (4 tests): field validation (tx_date, amount nulls, non-numeric), error summary; **stageBatch** (2 tests): unknown-adapter throw, multi-row parse with rows_total count; **matchBatch** (2 tests): pattern-matched row source=pattern, unresolved recipient_raw=null; **commitBatch** (3 tests): clean insert with aggregation refresh, duplicate detection skips refresh, SAVEPOINT rollback on insert error                                                                                                                                                                                                                                                   |
 
 **Key testing patterns:**
 
@@ -880,78 +914,80 @@ Two new backend test suites covering portfolio math and import pipeline orchestr
 The Transaction Tags feature test suite is now **complete and passing**. All test files have been fixed to align with the tag query mocks added during feature implementation.
 
 **Summary:**
+
 - **Backend:** 95/95 test files pass (1522/1527 tests pass, 5 skipped)
 - **Frontend:** 82/84 files pass (1272/1310 pass, 1 pre-existing timeout unrelated to tags)
 - **Coverage:** No regressions introduced
 
 **Test fixes applied:**
 
-| File | Area | Fix |
-|------|------|-----|
-| `apps/node-backend/tests/filterBuilder.test.js` | Filter builder | Fixed assertion in `buildTransactionWhere — tagSlugs > produces no clause when tagSlugs is empty`: changed `expect(sql).toBe('')` to `expect(sql).not.toContain('transaction_tags')` (filterBuilder always initializes clauses with `['1=1']`) |
-| `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction repository | Added `mockResolvedValueOnce({ rows: [] })` for new tag queries in `getAll`, `getById`, `create`, and `update`; updated `toHaveBeenCalledTimes` from 3→4 in getAll/getById/update-loan tests, 2→3 in update-no-fields test |
-| `apps/node-backend/src/backup/coverage.js` | Backup coverage | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES` |
-| `apps/node-backend/tests/routes/transactions.test.js` | Transactions route | Added `'tags'` to expected fields array in NDJSON export test |
-| `apps/node-backend/tests/routes/tags.test.js` | Tags route | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file |
+| File                                                           | Area                           | Fix                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/node-backend/tests/filterBuilder.test.js`                | Filter builder                 | Fixed assertion in `buildTransactionWhere — tagSlugs > produces no clause when tagSlugs is empty`: changed `expect(sql).toBe('')` to `expect(sql).not.toContain('transaction_tags')` (filterBuilder always initializes clauses with `['1=1']`) |
+| `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction repository | Added `mockResolvedValueOnce({ rows: [] })` for new tag queries in `getAll`, `getById`, `create`, and `update`; updated `toHaveBeenCalledTimes` from 3→4 in getAll/getById/update-loan tests, 2→3 in update-no-fields test                     |
+| `apps/node-backend/src/backup/coverage.js`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
+| `apps/node-backend/tests/routes/transactions.test.js`          | Transactions route             | Added `'tags'` to expected fields array in NDJSON export test                                                                                                                                                                                  |
+| `apps/node-backend/tests/routes/tags.test.js`                  | Tags route                     | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file                                                                                                                                       |
 
 **Related documentation:**
+
 - [[docs/features/tags|Transaction Tags Feature]]
 - [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052: Tags as Orthogonal Dimension]]
 
 ### Recently Updated Backend Coverage (2026-04-26)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| `apps/node-backend/tests/priceProviderRegistry.test.js` | Price providers (Kinesis) | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability |
-| `apps/node-backend/tests/sseWriter.test.js` | SSE backpressure (Phase 3.2) | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format |
+| File                                                    | Area                         | Coverage Added                                                                                                                       |
+| ------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/node-backend/tests/priceProviderRegistry.test.js` | Price providers (Kinesis)    | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability   |
+| `apps/node-backend/tests/sseWriter.test.js`             | SSE backpressure (Phase 3.2) | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format |
 
 ### Earlier Backend Coverage (2026-04-10)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| `apps/node-backend/tests/config.test.js` | Config/security | `ADMIN_AUTH_TOKEN` mapping + trim behavior |
-| `apps/node-backend/tests/routes/investments.test.js` | Performance/regression | Bulk transactions cache-key includes `limit` |
-| `apps/node-backend/tests/routes/transactions.test.js` | Security | CSV formula neutralization + sanitized route errors |
-| `apps/node-backend/tests/routes/import.test.js` | Security | Sanitized import errors and stream error expectations |
-| `apps/node-backend/tests/routes/admin.test.js` | Security | Sanitized admin errors and auth behavior assertions |
-| `apps/node-backend/tests/routes/info.test.js` | Security/perf | `/api/info/refresh-views` route + limiter assertions |
+| File                                                  | Area                   | Coverage Added                                        |
+| ----------------------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| `apps/node-backend/tests/config.test.js`              | Config/security        | `ADMIN_AUTH_TOKEN` mapping + trim behavior            |
+| `apps/node-backend/tests/routes/investments.test.js`  | Performance/regression | Bulk transactions cache-key includes `limit`          |
+| `apps/node-backend/tests/routes/transactions.test.js` | Security               | CSV formula neutralization + sanitized route errors   |
+| `apps/node-backend/tests/routes/import.test.js`       | Security               | Sanitized import errors and stream error expectations |
+| `apps/node-backend/tests/routes/admin.test.js`        | Security               | Sanitized admin errors and auth behavior assertions   |
+| `apps/node-backend/tests/routes/info.test.js`         | Security/perf          | `/api/info/refresh-views` route + limiter assertions  |
 
 ## Coverage Gaps
 
 ### High-Priority Missing Tests
 
-| Area | Files | Why It Matters |
-|------|-------|----------------|
-| **Bank adapters** | `bankAdapters.js` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests |
-| ~~**Import pipeline**~~ | ~~`importPipeline/*.js`~~ | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.js`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
-| **Portfolio math utilities** | ~~`portfolioMath.js`~~ | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety |
-| **Deduplication** | `deduplication.js` | SHA-256 hashing and field-based matching logic |
-| **Recurring detection** | `recurringDetectionService.js` | Complex interval detection algorithm |
-| **Currency conversion** | `currencyConversionService.js` | Multi-source rate resolution, historical rates |
-| **Materialized views** | `materializedViewService.js` | Call coalescing, concurrent refresh |
-| **Loan repayment** | `loanRepaymentService.js` | Amortization calculations for 3 loan types |
-| **Text normalization** | `textNormalization.js` | Recipient name cleaning, European number parsing |
+| Area                         | Files                                          | Why It Matters                                                                                                                                                    |
+| ---------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bank adapters**            | `bankAdapters.js` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests                                                                                       |
+| ~~**Import pipeline**~~      | ~~`importPipeline/*.js`~~                      | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.js`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
+| **Portfolio math utilities** | ~~`portfolioMath.js`~~                         | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety                                         |
+| **Deduplication**            | `deduplication.js`                             | SHA-256 hashing and field-based matching logic                                                                                                                    |
+| **Recurring detection**      | `recurringDetectionService.js`                 | Complex interval detection algorithm                                                                                                                              |
+| **Currency conversion**      | `currencyConversionService.js`                 | Multi-source rate resolution, historical rates                                                                                                                    |
+| **Materialized views**       | `materializedViewService.js`                   | Call coalescing, concurrent refresh                                                                                                                               |
+| **Loan repayment**           | `loanRepaymentService.js`                      | Amortization calculations for 3 loan types                                                                                                                        |
+| **Text normalization**       | `textNormalization.js`                         | Recipient name cleaning, European number parsing                                                                                                                  |
 
 ### Medium-Priority Missing Tests
 
-| Area | Files | Why It Matters |
-|------|-------|----------------|
-| **Repository layer** | All 13 repositories | SQL query correctness, edge cases |
-| **Route handlers** | All 14 route files | Request validation, error responses |
+| Area                          | Files                                        | Why It Matters                                                                                                                                            |
+| ----------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Repository layer**          | All 13 repositories                          | SQL query correctness, edge cases                                                                                                                         |
+| **Route handlers**            | All 14 route files                           | Request validation, error responses                                                                                                                       |
 | ~~**Portfolio performance**~~ | ~~`portfolioPerformanceSnapshotService.js`~~ | ✓ **COVERED** (2026-05-18) — parity regression tests: savings accrual, real-estate appreciation, bond interest-payment clock reset, latest-day unit price |
-| ~~**IBAN validation**~~ | ~~`iban.js`~~ | Deleted 2026-05-29 (`iban.js` and `iban.test.js` removed) |
-| **Recurrence service** | `recurrenceService.js` | Date calculation for patterns |
+| ~~**IBAN validation**~~       | ~~`iban.js`~~                                | Deleted 2026-05-29 (`iban.js` and `iban.test.js` removed)                                                                                                 |
+| **Recurrence service**        | `recurrenceService.js`                       | Date calculation for patterns                                                                                                                             |
 
 ### Frontend Missing Tests
 
-| Area | Files | Why It Matters |
-|------|-------|----------------|
-| **Net Worth page** | `NetWorthPage.tsx` | Complex chart domain computation |
-| **Statistics page** | `StatisticsPage.tsx` | Multiple chart interactions |
-| **Portfolio hooks** | `usePortfolio.ts` | Data fetching and processing |
-| ~~**VirtualDataTable**~~ | ~~`VirtualDataTable.tsx`~~ | ✓ **COVERED** (2026-05-01) — 23 tests (E11) |
-| ~~**Contexts**~~ | ~~All 7 contexts~~ | ✓ **COVERED** (2026-05-03) |
-| ~~**API client**~~ | ~~`api.ts`~~ | ✓ **COVERED** (2026-05-01) — 46 unit tests (E10) |
+| Area                     | Files                      | Why It Matters                                   |
+| ------------------------ | -------------------------- | ------------------------------------------------ |
+| **Net Worth page**       | `NetWorthPage.tsx`         | Complex chart domain computation                 |
+| **Statistics page**      | `StatisticsPage.tsx`       | Multiple chart interactions                      |
+| **Portfolio hooks**      | `usePortfolio.ts`          | Data fetching and processing                     |
+| ~~**VirtualDataTable**~~ | ~~`VirtualDataTable.tsx`~~ | ✓ **COVERED** (2026-05-01) — 23 tests (E11)      |
+| ~~**Contexts**~~         | ~~All 7 contexts~~         | ✓ **COVERED** (2026-05-03)                       |
+| ~~**API client**~~       | ~~`api.ts`~~               | ✓ **COVERED** (2026-05-01) — 46 unit tests (E10) |
 
 ## Running Tests
 
@@ -979,19 +1015,19 @@ bun vitest run --test-name-pattern="testName"
 
 ### Backend route and middleware coverage updates (2026-04-10)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| `apps/node-backend/tests/rateLimiter.test.js` | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (500/min), `adminMutateLimiter` (30/min), `importRateLimiter` (20/min) |
-| `apps/node-backend/tests/routes/admin.test.js` | Admin API | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
-| `apps/node-backend/tests/routes/marketLookup.test.js` | Market API | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance |
+| File                                                  | Area                | Coverage Added                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/node-backend/tests/rateLimiter.test.js`         | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (500/min), `adminMutateLimiter` (30/min), `importRateLimiter` (20/min)                             |
+| `apps/node-backend/tests/routes/admin.test.js`        | Admin API           | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
+| `apps/node-backend/tests/routes/marketLookup.test.js` | Market API          | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance                                                                      |
 
 ### Backend coverage additions (2026-04-11)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| [[apps/node-backend/tests/currencyConversionService.test.js]] | Currency conversion service | Unsupported-currency fallback, `warmCache` dual-API failure fallback, ECB 90-day historical backfill |
-| [[apps/node-backend/tests/routes/plannedTransactions.test.js]] | Planned transactions route | Loan term bounds validation, patch `recipient_name`/`category_name` name-to-id resolution, loan toggle-off schedule/field clearing |
-| [[apps/node-backend/tests/routes/transactions.test.js]] | Transactions route | `normalize_to_eur` conversion path, duplicate detection `409`, unresolved recipient/category validation branches in patch flow |
+| File                                                           | Area                        | Coverage Added                                                                                                                     |
+| -------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [[apps/node-backend/tests/currencyConversionService.test.js]]  | Currency conversion service | Unsupported-currency fallback, `warmCache` dual-API failure fallback, ECB 90-day historical backfill                               |
+| [[apps/node-backend/tests/routes/plannedTransactions.test.js]] | Planned transactions route  | Loan term bounds validation, patch `recipient_name`/`category_name` name-to-id resolution, loan toggle-off schedule/field clearing |
+| [[apps/node-backend/tests/routes/transactions.test.js]]        | Transactions route          | `normalize_to_eur` conversion path, duplicate detection `409`, unresolved recipient/category validation branches in patch flow     |
 
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
@@ -999,19 +1035,19 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 
 ### Test Updates (2026-04-22)
 
-| File | Area | Changes |
-|------|------|---------|
+| File                                              | Area       | Changes                                                                                                                                                                                                                      |
+| ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/routes/import.test.js]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
-| [[apps/node-backend/src/routes/marketLookup.js]] | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError |
+| [[apps/node-backend/src/routes/marketLookup.js]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
 
 ### Backend coverage additions (2026-04-11, repository/schema)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| [[apps/node-backend/tests/categoryRepository.test.js]] | Category repository | `createOrGet` normalization, insert success (`created: true`), conflict fallback returning existing enriched category (`created: false`) |
-| [[apps/node-backend/tests/plannedTransactionRepository.test.js]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries |
+| File                                                             | Area                           | Coverage Added                                                                                                                           |
+| ---------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [[apps/node-backend/tests/categoryRepository.test.js]]           | Category repository            | `createOrGet` normalization, insert success (`created: true`), conflict fallback returning existing enriched category (`created: false`) |
+| [[apps/node-backend/tests/plannedTransactionRepository.test.js]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries                         |
 
 > [!note] Schema initialization test archived
 > `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
@@ -1020,19 +1056,17 @@ Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests
 
 Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
 
-
 ### Incremental backend coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] adds a historical miss-cache regression scenario, verifying repeated historical misses do **not** cause duplicate DB lookups.
 - Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (overall `74.18/59.54/78.47/77.68`).
 
-
 ### Backend coverage addendum (2026-04-11, repository deep-branching)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| [[apps/node-backend/tests/categoryRepository.test.js]] | Category repository | `getAll` filtered+enriched branch, `getCount`, `getById` null return, `update` no-op + normalization, `hardDelete`, `assignToRecipients` |
+| File                                                             | Area                           | Coverage Added                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [[apps/node-backend/tests/categoryRepository.test.js]]           | Category repository            | `getAll` filtered+enriched branch, `getCount`, `getById` null return, `update` no-op + normalization, `hardDelete`, `assignToRecipients`                                                                                                                                                                                                     |
 | [[apps/node-backend/tests/plannedTransactionRepository.test.js]] | Planned transaction repository | `getAll` rows-present hydration path (executions + loan schedule), `getById` null/hydrated, `create` loan success + rollback on schedule failure + non-loan no-schedule insert, `update` sanitized fallback + null update + hydration, `hardDelete` true/false, `addExecution` explicit/default date, `replaceLoanSchedule` success/rollback |
 
 Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
@@ -1041,20 +1075,20 @@ Coverage snapshot after this cycle: overall `76.84/61.72/80.74/80.29` (statement
 
 Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
 
-
 ### Backend coverage addendum (2026-04-11, adapters + raw import service)
 
 > [!info] Phase C Update (April 2026)
 > These tests predate the Phase C consolidation of importService, streamingImportService, and rawTransactionImportService into `importPipeline`. Tests have been refactored to mock the unified orchestrator; see Phase C addendum below.
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| [[apps/node-backend/tests/wiseAdapter.test.js]] | Bank adapters | Wise adapter parsing/normalization paths |
-| [[apps/node-backend/tests/sabbAdapter.test.js]] | Bank adapters | SABB adapter parsing/normalization paths |
-| [[apps/node-backend/tests/visionAdapter.test.js]] | Bank adapters | Vision adapter parsing/normalization paths |
+| File                                              | Area                    | Coverage Added                                                                                       |
+| ------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| [[apps/node-backend/tests/wiseAdapter.test.js]]   | Bank adapters           | Wise adapter parsing/normalization paths                                                             |
+| [[apps/node-backend/tests/sabbAdapter.test.js]]   | Bank adapters           | SABB adapter parsing/normalization paths                                                             |
+| [[apps/node-backend/tests/visionAdapter.test.js]] | Bank adapters           | Vision adapter parsing/normalization paths                                                           |
 | [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
 
 Removed tests (2026-05-29):
+
 - `rawTransactionImportService.test.js` — Deleted (file and implementation removed)
 - `streamingImportService.test.js` — Deleted (file and implementation removed)
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
@@ -1062,14 +1096,14 @@ Removed tests (2026-05-29):
 
 Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]
 
-
 ### Backend coverage addendum (2026-04-11, info routes)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
+| File                                            | Area                                   | Coverage Added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [[apps/node-backend/tests/routes/info.test.js]] | Info routes + cache warm orchestration | Route-level dependency mocks (DB, recurring detection, materialized views, FX cache helpers, portfolio snapshots); `GET /recurring-patterns` fallback semantics; `GET /exchange-rates` stale/current refresh branching + warm-failure warning + DB `500`; `POST /exchange-rates/refresh` success/error; `POST /refresh-views` success/failure; `GET /portfolio-performance` mapping/default date range/invalid-currency EUR fallback/error `500`; `warmInfoCaches` prewarm + failure-isolation/logging |
 
 Validation runs (passed):
+
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
@@ -1079,11 +1113,12 @@ Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-back
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
+| File                                                               | Area                             | Coverage Added                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/portfolioTransactionRepository.test.js]] | Portfolio transaction repository | `getAllByInvestmentIds` empty-normalized-id return, id/type sanitization + clamped pagination limits, omitted type/limit branch; `getCount` single-id + type, normalized-id-array path, all-invalid-ids type-only path; `getSummary` grouped summary row return |
 
 Validation runs (passed):
+
 - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
 - `npm test -- --coverage` (827 tests)
 
@@ -1091,26 +1126,26 @@ Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; reposito
 
 Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
 
-
 ### Backend coverage additions (2026-05-18, snapshot valuation parity)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
+| File                                                                    | Area                                | Coverage Added                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio snapshot valuation parity | Regression tests locking savings accrual formula (`principal × rate × days / (100 × 365)`), real-estate appreciation summed from `appreciation` transactions, bond `interest` transaction resetting the accrual clock, and latest-day unit-based snapshot using `investments.current_price` not stale history |
 
 ### Backend coverage additions (2026-04-11, managed loop safe/sequential)
 
-| File | Area | Coverage Added |
-|------|------|----------------|
-| [[apps/node-backend/tests/routes/marketLookup.test.js]] | Market lookup routes | Expanded quote/news route branch and response-shape coverage |
-| [[apps/node-backend/tests/priceProviderService.test.js]] | Price provider service | Expanded provider-resolution and price-history handling branches |
-| [[apps/node-backend/tests/investmentRepository.test.js]] | Investment repository | Expanded repository compatibility and query-path coverage |
-| [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Streaming import backpressure, orchestrator integration, error-path coverage |
-| [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio performance snapshot service | Expanded snapshot generation and edge-case branch coverage |
-| [[apps/node-backend/tests/infoRepository.test.js]] | Info repository | Expanded aggregation and conversion-path coverage |
-| [[apps/node-backend/tests/materializedViewService.test.js]] | Materialized view service | Expanded refresh/coalescing and failure-path coverage |
+| File                                                                    | Area                                   | Coverage Added                                                               |
+| ----------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| [[apps/node-backend/tests/routes/marketLookup.test.js]]                 | Market lookup routes                   | Expanded quote/news route branch and response-shape coverage                 |
+| [[apps/node-backend/tests/priceProviderService.test.js]]                | Price provider service                 | Expanded provider-resolution and price-history handling branches             |
+| [[apps/node-backend/tests/investmentRepository.test.js]]                | Investment repository                  | Expanded repository compatibility and query-path coverage                    |
+| [[apps/node-backend/tests/routes/import.test.js]]                       | Import routes (Phase C)                | Streaming import backpressure, orchestrator integration, error-path coverage |
+| [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio performance snapshot service | Expanded snapshot generation and edge-case branch coverage                   |
+| [[apps/node-backend/tests/infoRepository.test.js]]                      | Info repository                        | Expanded aggregation and conversion-path coverage                            |
+| [[apps/node-backend/tests/materializedViewService.test.js]]             | Materialized view service              | Expanded refresh/coalescing and failure-path coverage                        |
 
 Coverage snapshot after managed loop stop condition:
+
 - Statements: **87.78%**
 - Branches: **75.00%**
 - Functions: **91.71%**
@@ -1118,18 +1153,20 @@ Coverage snapshot after managed loop stop condition:
 - Passing tests: **54 files**, **871 tests**
 
 Loop artifacts:
+
 - [[.claude/baselines/test-coverage-baseline-20260411-101903.md]]
 - [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
 
 ## Frontend Phase D: Coverage Threshold Ratchet & Contract Tests (2026-04-30, expanded 2026-05-02)
 
-| File | Area | Changes |
-|------|------|---------|
-| `apps/frontend/vite.config.ts` | Coverage gate | Updated thresholds from placeholder (8/5/3/8) to Phase C actual (17/11/10/18); added comment explaining ratchet gates prevent regression |
-| `apps/frontend/src/test/msw/handlers.ts` | MSW fixture | Fixed `/api/portfolio/summary` handler to return proper typed stub with all required fields (currency, computed_at, totals{10 numeric fields}, summaries[]) instead of empty object; **Expanded 2026-05-02**: Added 5 exported stub constants (TRANSACTION_STUB, CATEGORY_STUB, RECIPIENT_STUB, INVESTMENT_STUB, PLANNED_TRANSACTION_STUB) and 15 mutation handlers (POST/PATCH/DELETE for all 5 resource types) |
+| File                                           | Area           | Changes                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/vite.config.ts`                 | Coverage gate  | Updated thresholds from placeholder (8/5/3/8) to Phase C actual (17/11/10/18); added comment explaining ratchet gates prevent regression                                                                                                                                                                                                                                                                                        |
+| `apps/frontend/src/test/msw/handlers.ts`       | MSW fixture    | Fixed `/api/portfolio/summary` handler to return proper typed stub with all required fields (currency, computed_at, totals{10 numeric fields}, summaries[]) instead of empty object; **Expanded 2026-05-02**: Added 5 exported stub constants (TRANSACTION_STUB, CATEGORY_STUB, RECIPIENT_STUB, INVESTMENT_STUB, PLANNED_TRANSACTION_STUB) and 15 mutation handlers (POST/PATCH/DELETE for all 5 resource types)                |
 | `apps/frontend/src/test/msw/contracts.test.ts` | Contract tests | **Original:** Node-env Vitest suite with 16 tests, one per default MSW handler; validates ADR-026 envelope + Zod schemas; catches fixture-to-backend drifts immediately. **Expanded 2026-05-02 to 40 tests in 3 suites:** E1 (strict list item schemas, 10 tests), E2 (mutation contracts, 15 tests), E3 (error envelope compliance, 4 tests). All item schemas replaced `.passthrough()` with strict per-field Zod validation. |
 
 **Coverage snapshot (Phase D):**
+
 - Statements: **17.82%** (Phase C baseline, ratcheted to 17)
 - Branches: **11.75%** (Phase C baseline, ratcheted to 11)
 - Functions: **11.03%** (Phase C baseline, ratcheted to 10)
@@ -1138,6 +1175,7 @@ Loop artifacts:
 **Total frontend tests (Phase D):** 24 test files, 421 tests (376 component-integration/E2E + 40 contract + 5 smoke), all passing (2026-05-02 update: 40 contract tests expanded from 16)
 
 **Rationale for contract test expansion:**
+
 - **E1 (Strict schemas):** Validates empty paginated envelopes and real fixture items against strict per-field Zod schemas (no `.passthrough()`); catches type mismatches, nullability errors, and missing fields
 - **E2 (Mutations):** Ensures all POST/PATCH/DELETE endpoints return properly typed item objects or delete response envelopes; prevents stripped or malformed payload responses
 - **E3 (Error envelopes):** Validates ADR-026 error envelope across multiple HTTP status codes and endpoint types; ensures consistent error handling across API
@@ -1147,6 +1185,7 @@ Loop artifacts:
 - Catches breaking changes in backend before they break component tests
 
 **When to add new contract tests:**
+
 1. New boot-time endpoint added → add MSW default handler + corresponding contract test (E1 for GETs, E2 for mutations)
 2. Backend schema changes → update Zod schema in `contracts.test.ts` before shipping; never weaken schema
 3. New mutation endpoint → add to `defaultHandlers` with stub fixture + E2 tests (POST/PATCH/DELETE)

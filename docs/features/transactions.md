@@ -25,7 +25,7 @@ Transactions represent any financial movement - from grocery shopping to salary 
 | Field          | Type      | Description                                                                                                                           |
 | -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `date`         | date      | Transaction date (YYYY-MM-DD)                                                                                                         |
-| `bank_account` | string    | Source/destination bank account                                                                                                       |
+| `bank_account` | string    | Canonical display name of the linked account; use `account_id` as the stable identity                                                 |
 | `recipient_id` | number    | Linked recipient                                                                                                                      |
 | `amount`       | number    | Transaction amount                                                                                                                    |
 | `memo`         | string    | Transaction description                                                                                                               |
@@ -225,7 +225,7 @@ hint (en/nl).
 Implementation note:
 
 - Backend route parsing/normalization for list filters is centralized in `parseTransactionListQuery`, preserving existing defaults and coercion behavior while reducing duplicate parsing logic ([[apps/node-backend/src/routes/transactions.js]]).
-- Backend non-`uncategorised` list path now uses repository one-query pagination (`getAllWithCount`) instead of separate list and count queries, reducing DB round-trips while preserving filters/totals/response shape ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- Backend non-`uncategorised` list path uses a top-N data query plus a narrow filtered count (`getAllWithCount`) instead of a window count. Identical filters share the count for two seconds across page requests. Transaction CRUD and committed imports invalidate it; merge repoints and other direct SQL writers are bounded by the same short expiry. Filters, totals, and response shape are preserved ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - Backend `uncategorised=true` list path now uses dedicated repository one-query pagination (`getUncategorisedWithCount`) instead of route-level dual queries, reducing route round-trips ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - The uncategorised queue applies the caller's full row-compatible filter set. `recipientGroupId`, `tagSlugs`, `transactionType`, `amountMin`, `amountMax` and `amountSigned` were previously parsed by the route and then dropped by the repository, so filtering the queue by tag or amount range narrowed neither the rows nor the total. Those row-compatible filters now narrow both halves through the same `buildTransactionWhere` the main list uses; `categoryIds`, which was dropped at the same boundary, narrows `total` only. `search` and `transactionId`, which previously narrowed only `total`, now also narrow the returned queue rows. `recipientId` on the rows half is alias-inclusive (matching the main list and the queue's own total, where it already was), while only `categoryId` and `categoryIds` remain deliberately total-only because a category filter cannot narrow a set defined by having no effective category. `total` still counts without the uncategorised predicate, so it is not the size of the queue.
 - PATCH name-resolution and CSV export DB-access helpers now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports, preserving route behavior while removing avoidable import overhead on hot paths ([[apps/node-backend/src/routes/transactions.js]]).
@@ -448,6 +448,13 @@ Transactions feed into various analytics views:
 ## Rate Limiting
 
 Heavy operations (export, batch updates) are rate-limited to protect database performance.
+
+Non-date transaction ordering remains an explicit low-frequency compatibility
+path. Memo and currency sorts, plus effective recipient/category label sorts,
+compute their keys over the filtered result; the indexed date/id order remains
+the default. Adding dedicated indexes or a candidate-page query is deferred
+until production telemetry crosses the thresholds in
+[[docs/performance/index#Accepted Scale Boundaries|Performance Documentation]].
 
 ---
 

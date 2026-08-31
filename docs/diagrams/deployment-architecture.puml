@@ -1,5 +1,5 @@
 @startuml Deployment Architecture
-title Deployment Architecture — Native macOS and Optional Docker
+title Deployment Architecture — Native macOS, Native Demo, and Optional Docker
 
 !theme plain
 skinparam linetype ortho
@@ -25,6 +25,18 @@ package "Native macOS (default)" as NativeMac {
     folder "logs + runtime marker" as NativeState
   }
   node "Local Ollama\n127.0.0.1:11434" as NativeOllama
+}
+
+package "Native Vision Demo (synthetic)" as NativeDemo {
+  node "Vision Demo.app" as DemoElectron {
+    component "Electron + shared native payload" as DemoRuntime
+    artifact "demo-seed.dump\n+ validation manifest" as DemoSeed
+  }
+  database "Isolated Demo PostgreSQL 18.6\n127.0.0.1:54330" as DemoPostgres
+  folder "Application Support/Vision Demo/native/vision_demo" as DemoData {
+    folder "postgres/data" as DemoPostgresData
+    folder "attachments + logs + seed marker" as DemoState
+  }
 }
 
 package "Source Development" as SourceDev {
@@ -68,6 +80,12 @@ NativeBackend --> NativeChrome : PDF rendering
 NativeBackend --> NativeOllama : local AI
 NativeBackend --> External : HTTPS
 
+User --> DemoRuntime : synthetic desktop UI
+DemoRuntime --> DemoSeed : verify checksum / schema / counts
+DemoRuntime --> DemoPostgres : staged restore + backend lifecycle
+DemoPostgres --> DemoPostgresData : isolated durable cluster
+DemoRuntime --> DemoState : attachments / logs / activation state
+
 User --> ElectronDev : development UI
 ElectronDev --> BackendDev : native provider
 FrontendDev --> BackendDev : loopback HTTP
@@ -97,6 +115,13 @@ note right of NativePostgres
   Private data is outside Vision.app.
   Separate admin, owner/migration, and app roles.
   Required extensions and Alembic schema.
+end note
+
+note right of NativeDemo
+  Demo always selects native and never reads Vision data.
+  First launch, reset, or seed change activates a
+  deterministic custom dump with rollback until detailed
+  readiness succeeds (ADR-114).
 end note
 
 note right of DockerDeployment

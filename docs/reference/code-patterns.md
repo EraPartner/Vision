@@ -3,7 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-08-27
+updated: 2026-08-31
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
@@ -342,7 +342,12 @@ const elapsed = daysBetween(startDate, endDate); // → 5.5 (days)
 
 ## Shared Date Utilities (Frontend, Phase 12 Bugfix Sweep)
 
-**Source:** [[apps/frontend/src/components/shared/dateUtils.ts|dateUtils.ts]]
+**Source:** [[apps/frontend/src/lib/dateUtils.ts|dateUtils.ts]]
+
+Pure date parsing and formatting belongs in `src/lib`, not in the component
+tree. Import those helpers from `@/lib/dateUtils`. For calendar-date strings,
+`@/lib/timezone` is the canonical narrow entry point: it re-exports
+`parseLocalDateFromYmd` as `parseYmd` and `toYmd`, and owns `todayYmd`.
 
 The `parseLocalDateFromYmd()` function safely parses ISO date strings with defensive input validation:
 
@@ -351,7 +356,7 @@ import {
   parseLocalDateFromYmd,
   toYmd,
   formatDistanceToNow,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 
 // Parse YYYY-MM-DD safely; returns new Date(NaN) for invalid input
 const date = parseLocalDateFromYmd("2026-04-22"); // → Date at 00:00:00 local time
@@ -397,7 +402,7 @@ import {
   appLanguageToLocale,
   CHART_DATE_PATTERNS,
   formatDate,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 
 const { language } = useLanguage();
 const monthLabelLocale = appLanguageToLocale(language); // 'nl' → 'nl-NL', else 'en-US'
@@ -728,6 +733,21 @@ export default router;
 | **Route ordering**     | Static routes (e.g., `/providers`) BEFORE `/:id` routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Rate limiting**      | Per-route limiters for heavy endpoints (e.g., export, search)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Export**             | `export default router`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+### Action endpoint naming
+
+Use exactly two action shapes:
+
+- Resource action: `POST /<collection>/:id/<verb>`, for example
+  `POST /categories/:id/assign` or `POST /planned-transactions/:id/execute`.
+- Collection action: `POST /<collection>/<verb-noun>`, for example
+  `POST /investments/refresh-prices` or `POST /transactions/bulk-delete`.
+
+New bulk collection actions use `bulk-<verb>`. Existing compatibility paths are not templates for
+new routes: `POST /splits/batch`, `POST /info/exchange-rates/refresh`, and
+`POST /info/inflation-rates/refresh` retain their historical names. Do not create both a resource
+action and an equivalent collection action. The historical `POST /categories/assign` name-resolved
+form is deprecated; new callers use the canonical `POST /categories/:id/assign` resource action.
 
 ---
 
@@ -1205,6 +1225,29 @@ export const apiClient = new ApiClient();
 **Source:** [[apps/node-backend/src/routes/aggregations.js|aggregations.js]], [[apps/node-backend/src/routes/info.js|info.js]]
 
 Query parameters from `req.query.*` are always strings (or string arrays if multi-valued). Safe parsing requires explicit validation, bounds checking, and fallback defaults to prevent type coercion bugs.
+
+### Pattern: `parseBooleanQueryParam()`
+
+All backend boolean query parameters use
+`lib/httpParams.js#parseBooleanQueryParam`. The accepted compatibility
+spellings are `true` / `1` and `false` / `0`, including primitive booleans and
+numbers in listener-free tests. Missing, empty, multi-valued, or unrecognised
+values use the endpoint's explicit default. New clients should emit the
+canonical `true` or `false` strings.
+
+```js
+import { parseBooleanQueryParam } from "../lib/httpParams.js";
+
+const includeBalance = parseBooleanQueryParam(req.query.include_balance);
+const active = parseBooleanQueryParam(req.query.active, true);
+```
+
+Do not compare `req.query` values to boolean strings in a route or controller.
+The `active=all` collection mode is a deliberate, documented exception on
+accounts and tags only; those two routes handle `all` before calling the shared
+boolean parser. It is not a third API-wide boolean spelling. Destructive
+confirmation bodies may intentionally require an exact `true` rather than use
+this query helper.
 
 ### Pattern: `parseIntClamped()`
 
@@ -1894,23 +1937,27 @@ function DashboardStatCards() {
 
 Single entrypoint for refreshing PostgreSQL aggregations (materialized views + trigger-maintained tables).
 
-### Full Refresh (After Bulk Operations)
+### Bulk Import Tail
 
 After bulk imports or mass updates:
 
 ```js
-import { refreshAggregations } from "../services/aggregationRefresh.js";
+import {
+  clearForecastMcCaches,
+  scheduleMaterializedViewRefresh,
+} from "../services/aggregationRefresh.js";
 
 // In import service:
 await bulkInsertTransactions(transactions);
-await refreshAggregations(); // Refreshes all MVs in parallel
-logger.info("Aggregations refreshed");
+await reconcileTransfers();
+await clearForecastMcCaches();
+scheduleMaterializedViewRefresh(); // Five-second trailing debounce, ten-second cap
 ```
 
 **What it does:**
 
-- Refreshes legacy MVs via `materializedViewService.refreshMaterializedViews()`
-- Refreshes Phase-1 MVs (`mv_recipient_monthly`) in parallel
+- Keeps forecast cache invalidation synchronous with import completion
+- Schedules the three managed MVs without blocking the response
 - No-op for trigger-maintained tables (automatic updates)
 
 ### Debounced Refresh (Single-Row Mutations)
@@ -1925,9 +1972,7 @@ app.patch("/api/transactions/:id", async (req, res) => {
   const updated = await transactionService.update(req.params.id, req.body);
 
   // Fire-and-forget debounced refresh
-  scheduleAggregationRefresh().catch((err) =>
-    logger.error("Scheduled refresh failed", { error: err?.message }),
-  );
+  scheduleAggregationRefresh();
 
   res.json(updated);
 });
@@ -1935,19 +1980,19 @@ app.patch("/api/transactions/:id", async (req, res) => {
 
 **Behavior:**
 
-- Coalesces rapid changes into one refresh (1s debounce)
+- Coalesces rapid changes into one MV refresh (five-second trailing debounce, ten-second cap)
 - Fire-and-forget (doesn't block response)
-- Triggers maintain `agg_recipient_totals` and `agg_split_outstanding` automatically
+- Triggers maintain `agg_split_outstanding` automatically
 
 ### Exported Surface
 
 ```js
 import aggregationService, {
-  TRIGGER_MAINTAINED_TABLES, // ['agg_recipient_totals', 'agg_split_outstanding']
+  TRIGGER_MAINTAINED_TABLES, // ['agg_split_outstanding']
 } from "./aggregationRefresh.js";
 
 await aggregationService.refreshAggregations();
-await aggregationService.scheduleAggregationRefresh();
+aggregationService.scheduleAggregationRefresh();
 ```
 
 ---
@@ -2591,6 +2636,12 @@ DB_MAX_OVERFLOW=30       # poolMax=30
 
 ## SSE Backpressure Pattern (Phase 3.2)
 
+Successful long-running streams use `complete` as the terminal event. AI chat also emits the
+historical `done` event immediately after `complete` for one compatibility window; new clients
+normalize both to one semantic completion and must deduplicate before notifying consumers. Error
+events always carry `{ detail, code }`. Payload field casing remains endpoint-local during this
+migration: import events are snake_case, while the grandfathered AI router remains camelCase.
+
 **Source:** [[apps/node-backend/src/lib/sse.js|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
 
 For long-running streaming responses (AI chat, CSV import progress), propagate TCP backpressure from the HTTP client into the server's event-generation loop to prevent unbounded write buffer growth and memory exhaustion.
@@ -2818,20 +2869,20 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 }
 ```
 
-`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. Pass the callback client explicitly when that makes the boundary clearer. Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
+`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. A nested `withTransaction` reuses that client and receives a unique savepoint, so an inner failure can be caught without opening an independent transaction or poisoning the outer one. Nested calls must be awaited sequentially: concurrent siblings are rejected after the active savepoint settles because one PostgreSQL client cannot safely interleave savepoint lifetimes. Deeper nesting remains lexical. Pass the callback client explicitly when that makes the boundary clearer. Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
 
 ### Key Conventions
 
-| Pattern            | Rule                                                                                                                                    |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release                                                       |
-| Row locking        | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access                                                        |
-| Dependency order   | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate)                    |
-| Conflict dedup     | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication                                                         |
-| Error handling     | `ROLLBACK` on any error; caller receives clear error message                                                                            |
-| Fallback reads     | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID                            |
-| Validation first   | Validate all inputs before `BEGIN` to fail fast                                                                                         |
-| Nested work        | Reuse the ambient transaction and `withSavepointIfInTransaction` for per-item isolation; do not start an independent nested transaction |
+| Pattern            | Rule                                                                                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release                                                                         |
+| Row locking        | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access                                                                          |
+| Dependency order   | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate)                                      |
+| Conflict dedup     | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication                                                                           |
+| Error handling     | `ROLLBACK` on any error; caller receives clear error message                                                                                              |
+| Fallback reads     | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID                                              |
+| Validation first   | Validate all inputs before `BEGIN` to fail fast                                                                                                           |
+| Nested work        | Nested `withTransaction` calls reuse the ambient client under unique savepoints; use `withSavepointIfInTransaction` directly for named per-item isolation |
 
 ### When to Use
 

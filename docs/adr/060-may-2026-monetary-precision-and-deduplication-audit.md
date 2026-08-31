@@ -3,7 +3,19 @@ title: ADR-060 - May 2026 Monetary Precision & Deduplication Audit
 type: adr
 status: Accepted
 date: 2026-05-14
-tags: [adr, backend, precision, decimal, deduplication, import, portfolio, performance, bug-fixes, may-2026-audit]
+tags:
+  [
+    adr,
+    backend,
+    precision,
+    decimal,
+    deduplication,
+    import,
+    portfolio,
+    performance,
+    bug-fixes,
+    may-2026-audit,
+  ]
 description: Systematic audit extending Decimal.js enforcement to portfolio aggregation, import precision, and database deduplication; adds tx_hash UNIQUE constraint for race-safe dedup
 aliases: [adr-060, may-2026-audit, monetary-precision-audit, tx-hash-dedup]
 ---
@@ -11,9 +23,11 @@ aliases: [adr-060, may-2026-audit, monetary-precision-audit, tx-hash-dedup]
 # ADR-060: May 2026 Monetary Precision & Deduplication Audit
 
 ## Status
+
 Accepted
 
 ## Date
+
 2026-05-14
 
 ## Context
@@ -48,6 +62,7 @@ export function roundMoney(v, places=2)  // Round to N decimal places (banker's 
 ```
 
 **Usage:**
+
 - `multiply(fxRate, amount)` for currency conversions (FX multiplier, portfolio aggregation)
 - `divide(totalAmount, units)` for per-unit costs, per-row allocation (split distribution, fee sharing)
 - `roundMoney(value, 8)` for extended precision (e.g., `belgianInflationService.js` now rounds `monthly_rate` to 8 DP before DB persist)
@@ -55,6 +70,7 @@ export function roundMoney(v, places=2)  // Round to N decimal places (banker's 
 ### 3. Frontend Decimal Module
 
 Added `apps/frontend/src/lib/decimal.ts` mirroring backend `money.js` for form parsing and display calculations. Frontend uses Decimal for:
+
 - `SplitTransactionDialog.tsx`: Split amount input validation
 - `usePortfolioCalculations.ts`: Frontend aggregation hooks (fixes `totalSellProceeds` scaling bug via Decimal division)
 
@@ -64,19 +80,21 @@ Added `apps/frontend/src/lib/decimal.ts` mirroring backend `money.js` for form p
 
 ```sql
 ALTER TABLE transactions ADD COLUMN tx_hash TEXT;
-CREATE UNIQUE INDEX uniq_transactions_tx_hash 
+CREATE UNIQUE INDEX uniq_transactions_tx_hash
   ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
 ```
 
 **Hash computation:** SHA-256 of `date|amount|recipient|memo|bank_account` (matches legacy bank-specific dedup).
 
 **Race-safe conflict handling:**
+
 - `INSERT ... ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id`
 - Concurrent imports no longer need cross-import duplicate checking; per-batch intra-dedup via in-memory Set tracks committed hashes
 - Validation phase marks second rows with identical `tx_hash` as `duplicate` in the same batch
 - `prepareImport` now requires `unresolved > 0` to trigger review (blank-recipient batches no longer auto-commit)
 
 **Benefits:**
+
 - Idempotent transaction INSERT across retries (same hash → same row returned)
 - Database enforces uniqueness; no application-level dedup race conditions
 - Legacy bank-specific raw tables preserved for audit trail but superseded by canonical `tx_hash` enforcement
@@ -84,6 +102,7 @@ CREATE UNIQUE INDEX uniq_transactions_tx_hash
 ### 5. Timezone Consistency (ADR-009 Enforcement)
 
 All date bucketing now strictly uses APP_TIMEZONE:
+
 - `cashflowForecast.js`: Month windows anchored to APP_TIMEZONE via `toAppTz()` / `appDateStringToUtc()`
 - `infoRepositoryPlanned.js`: Month boundaries derived in APP_TIMEZONE
 - `recurringDetectionService.js`: Recurrence next-date advanced in UTC, bucketed via APP_TIMEZONE
@@ -93,14 +112,17 @@ All date bucketing now strictly uses APP_TIMEZONE:
 ### 6. Database Connection Robustness
 
 **Connection**:
+
 - `query()` retry restricted to read-only statements; mutating statements fail-fast
 - `withTransaction()` destroys client if ROLLBACK throws (prevents stale connection)
 
 **Graceful shutdown**:
+
 - `main.js` `shutdown()` calls `server.close()` to drain in-flight requests before exit
 - Double-signal guard + 10-second force-exit timeout
 
 **Repository improvements**:
+
 - `investmentRepository.updatePrice()` checks schema before update (inheritance-aware)
 - `deduplication.js` `isDuplicate()` uses LEFT JOIN + COALESCE instead of subquery for recipient matching
 - `splitRepository.js` auto-settle compares ROUND(SUM, 2) >= ROUND(ts.amount, 2) for exact 2-DP matching
@@ -139,6 +161,7 @@ All date bucketing now strictly uses APP_TIMEZONE:
 ### 10. Deferred Product Decisions (Left As-Is)
 
 Not included in this audit (require product decisions):
+
 - ~~`KAU_EUR`→`KAU_USD` historical FX conversion~~ **COMPLETED (May 2026, follow-up)**
 - `portfolioMath.calculateCostBasis()` weighted-avg vs FIFO/LIFO discrepancy (accounting-policy decision)
 - `refreshCashflowForecastMc.js` `includeBacktest: true` (docstring corrected, behavior unchanged)
@@ -190,6 +213,7 @@ Not included in this audit (require product decisions):
 ## Rollback
 
 If critical issues arise:
+
 1. `tx_hash` column can be left NULL (constraint allows NULL values via WHERE clause)
 2. `divide()`, `multiply()` functions remain backward-compatible; any caller can switch to native arithmetic if needed
 3. Timezone changes are in SQL aggregations; reverting MV definitions removes `AT TIME ZONE` wrapping
@@ -210,7 +234,7 @@ If critical issues arise:
 
 ### Context
 
-This ADR audited *arithmetic*, not column types, and migration `0025_fix_numeric_precision.py`
+This ADR audited _arithmetic_, not column types, and migration `0025_fix_numeric_precision.py`
 retyped only `transactions.amount` to NUMERIC(18,4). Every sibling money column stayed
 NUMERIC(15,2): `transactions.balance`, `planned_transactions.amount`,
 `transaction_splits.amount` / `split_payments.amount` / `agg_split_outstanding.*`, the loan
@@ -223,13 +247,15 @@ domain precision for money columns.**
 
 ### Decision
 
-One alignment revision widens the (15,2) sibling money columns to (18,4) — a safe metadata-level
-retype for in-range values, no data rewrite. New money columns are created at (18,4) from day
+One alignment revision widens the (15,2) sibling money columns to (18,4). This is value-safe for
+in-range data, but the scale increase rewrites each affected table and its indexes under an
+`ACCESS EXCLUSIVE` lock; migration 0088 groups each table's columns into one rewrite and refreshes
+planner statistics afterwards. New money columns are created at (18,4) from day
 one; concretely, the `account_statement_balances` side table from the
 [[docs/adr/089-account-typed-model|ADR-089 addendum]] (accounts-rewrite Phase C) ships at (18,4).
 `import_staging_rows.amount` stays (20,4) (wider than its commit target is harmless).
 Display/rounding behavior is unchanged — banker's-rounding at the edges per this ADR's main body;
-the widening removes *storage* truncation, not presentation rounding.
+the widening removes _storage_ truncation, not presentation rounding.
 
 **Rollback:** re-narrow with `USING round(col, 2)` (lossy only for values that actually used the
 extra precision).
@@ -241,3 +267,33 @@ extra precision).
 - Planned→executed copies and statement figures are precision-symmetric with `transactions.amount`.
 - Ships as part of the accounts rewrite (Phase A/C window), one revision, migration not auto-run
   per project convention.
+
+---
+
+## Addendum (2026-08-31): import-dedup lifecycle and remaining precision boundaries
+
+### Import dedup decisions
+
+- The differing-source-hash exemption is same-batch only. A transaction whose batch metadata was
+  deleted (`import_batch_id IS NULL`) remains a field-dedup candidate; deleting history metadata
+  must not make a durable transaction re-importable.
+- Stored and incoming memo identities ignore surrounding ASCII whitespace, including tabs.
+- A failed speculative 1,000-row bulk commit keeps the per-row savepoint replay. The extra work is
+  bounded to an exceptional chunk and preserves exact sibling/error semantics; subdivision is a
+  future performance option, not a correctness requirement.
+
+### Precision boundaries
+
+- D7 governs transaction-ledger money. `investments.cadastral_income` remains `NUMERIC(12,2)`
+  because Belgian cadastral income is entered and filed in cents. Persisted portfolio snapshot
+  account and FX-neutral display totals remain `NUMERIC(18,2)` because they are presentation
+  snapshots, while source lots, rates, and live calculations retain their higher precision.
+- Migration 0088 downgrade is explicitly destructive. Its independent two-decimal rounding can
+  temporarily differ from `original - paid = outstanding` by one cent; restoring the legacy sync
+  function and the next split mutation re-establishes the aggregate. Operators requiring an
+  immediate exact aggregate must rebuild that derived table after downgrade.
+- Storage, settlement, and auto-settlement stay four-decimal exact. Currency UI deliberately shows
+  cents, so a non-zero sub-cent outstanding amount can display as `0.00` until settled; this is a
+  display boundary, not a write-off.
+- Revolut fee provenance renders at least two and up to four decimals. It no longer truncates a
+  source fee that uses the domain's sub-cent precision.

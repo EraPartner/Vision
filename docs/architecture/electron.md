@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-08-30
-updated: 2026-08-30
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   [
     architecture,
@@ -185,20 +185,23 @@ This design choice means:
 - The frontend is a standard React app (deployable to web)
 - Electron is just the packaging layer
 
-### Runtime Providers (ADR-113)
+### Runtime Providers (ADR-113 and ADR-114)
 
 Electron resolves one provider before it performs lifecycle or backup actions:
 
-| Provider | Backend             | PostgreSQL                                | Use                                        |
-| -------- | ------------------- | ----------------------------------------- | ------------------------------------------ |
-| `native` | Bun child process   | Bundled 18.6 server, private data cluster | Default macOS development and packaged app |
-| `docker` | Compose app service | Compose PostgreSQL 18 service             | Explicit container deployment and Demo     |
+| Provider | Backend             | PostgreSQL                                | Use                                                        |
+| -------- | ------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| `native` | Bun child process   | Bundled 18.6 server, private data cluster | Default macOS development, packaged app, and isolated Demo |
+| `docker` | Compose app service | Compose PostgreSQL 18 service             | Explicit container deployment                              |
 
 The provider owns start, stop, restart, health, readiness, logs, database dump/restore, and
 attachment paths. Backup bundle and application business logic remain shared. A durable marker at
 `native/vision/runtime-state.json` prevents alternating writers. Existing Docker-era installs fail
 closed until the opt-in importer validates database counts, schema, and attachment hashes and
-activates the native marker. See [[docs/adr/113-native-macos-runtime|ADR-113]] and
+activates the native marker. Vision Demo always uses a separate `vision_demo` native runtime and
+deterministic seed; it ignores stale Docker selection. See
+[[docs/adr/113-native-macos-runtime|ADR-113]],
+[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]], and
 [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]].
 
 ---
@@ -260,8 +263,8 @@ Migration is non-fatal; any error is logged and app continues.
 4. **Runtime selection** — Validate the explicit environment override, saved setting, and durable
    runtime marker. When a marker exists it is authoritative, so an old setting or environment
    variable cannot alternate databases after cutover. Without a marker, the explicit environment
-   or saved setting applies. Normal Vision defaults to `native`; the seeded Demo defaults to
-   `docker`.
+   or saved setting applies. Normal Vision defaults to `native`. The seeded Demo always selects
+   its isolated native runtime so stale settings cannot create two Demo writers.
 
 5. **Native initialization** — Before any Docker code is loaded:
    - choose and persist an available loopback backend port;
@@ -280,6 +283,8 @@ Migration is non-fatal; any error is logged and app continues.
      migration path (`db-migrate.js` in a source checkout; its underlying `runMigrations()`
      preflight from the packaged backend); and
    - spawn the backend with an allowlisted child environment and argument arrays.
+   - launch managed PostgreSQL initialization and the server with an explicit portable `C` locale,
+     independent of locale values inherited from the macOS application launcher.
 
    A missing, wrong-version, wrong-architecture, or corrupt packaged component is a hard native
    preflight failure. A PostgreSQL port collision also fails closed rather than selecting the
@@ -292,6 +297,14 @@ Migration is non-fatal; any error is logged and app continues.
 
    An existing Docker-era environment without a completed native marker raises
    `NATIVE_CUTOVER_REQUIRED`; Electron exits without creating or selecting an empty native database.
+
+   For Vision Demo, the native branch verifies the packaged seed checksum and custom-format dump,
+   restores a fresh staging database when the seed changes or reset is requested, compares the
+   schema and all table counts, then starts the backend. It finalizes the atomic database switch
+   only after detailed readiness and stable user-data counts. The post-start `user_settings`
+   comparison excludes only the runtime-owned `transfers_backfilled` and
+   `fx_full_history_repair_done` maintenance markers; ordinary settings remain protected. Failure
+   restores the previous Demo database before startup exits.
 
    The explicit Docker provider retains its parallel Docker health, port, image, and build checks
    before Compose starts the application service.
@@ -323,7 +336,15 @@ Migration is non-fatal; any error is logged and app continues.
 > [!info] Why `/health/detailed` for initial navigation only
 > `GET /health` (shallow liveness) returns 200 the moment Express listens — before `refreshMaterializedViews()` and other warmup tasks finish. Navigating on that caused a cold-start blank dashboard until a restart. The health watchdog and restart/update flows still use the shallow `/health` probe because "is the backend process alive?" is the right question for those paths. See [[docs/api/health|Health API]] for the distinction between `status: warming` and `status: ready`.
 
-8. **Create BrowserWindow** with sandbox enabled + loading frontend
+8. **Create BrowserWindow and verify the renderer handoff**:
+   - await the initial frontend navigation before treating it as loaded;
+   - require the existing `app:renderer-ready` signal after React mounts;
+   - if that signal does not arrive within `VISION_RENDERER_READY_TIMEOUT_MS` (default 12 seconds),
+     reload the document once while bypassing Chromium's cache; and
+   - if the retry also fails, replace the indefinite boot splash with the localized recovery page.
+     The preload bridge records only structural failure metadata such as the failure kind, error
+     name, asset basename, and line number. It never records a full URL, error message, credentials,
+     application data, or localStorage contents.
 
 9. **Watchdog Loop** starts (10s interval):
    - Polls `GET /health` continuously
@@ -400,6 +421,10 @@ Electron-builder configuration in `packaging/electron/package.json`:
   production frontend, migrations, migration runner, configuration, and checksum manifest used by
   the default native provider.
 
+- **`demo-seed/`** — Vision Demo only. Contains a PostgreSQL custom-format dump and checksum/count
+  manifest produced from a migrated disposable database. The data-only SQL generator remains a
+  build input and is not shipped as the active database.
+
 - **`pull_policy: missing`** in embedded `resources/docker-compose.yml` — Uses local Docker image if available; avoids GHCR registry auth failures on first launch.
 
 #### Icon
@@ -445,6 +470,7 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
   migration executable
 - Chrome Headless Shell pinned to the Electron workspace's Puppeteer version
 - Native runtime provider and checksum manifest
+- Vision Demo's deterministic seed dump and validation manifest in Demo packages
 - Optional Docker provider and Compose resources for explicit container deployments
 
 ---
@@ -481,6 +507,13 @@ Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`
 `sendToApp(channel, payload)` in main queues messages until the renderer has mounted its listeners. The queue drains the moment the renderer calls `electronAPI.ready()` (via `ipcMain.handle('app:renderer-ready')`). The `rendererReady` flag resets on window close and on **real document navigations/reloads** — detected via the `did-start-navigation` event filtered to `details.isMainFrame && !details.isSameDocument`.
 
 This prevents lost IPC messages when the OS fires an `open-file` event (Finder "Open With" or dock drop) before the React app has mounted.
+
+The same signal also closes the startup handoff. A bounded watchdog reloads once with Chromium's
+cache bypassed if the document loads but React never reports ready. A second timeout opens the
+recovery page with `app.rendererErrorPageMessage`. `did-fail-load`, `render-process-gone`, early
+script or stylesheet load failures, runtime errors, and unhandled promise rejections write only
+privacy-safe structural fields to `logs/main.log`. This makes an otherwise silent infinite splash
+diagnosable without exposing application state.
 
 > [!warning] `did-start-loading` must NOT be used here (fixed 2026-06-11)
 > `did-start-loading` fires for same-document navigations (React Router `pushState` calls) as well as real page loads. The renderer only calls `app:renderer-ready` once per document, so resetting `rendererReady` on a same-document navigation permanently jams `pendingAppMessages` — every subsequent menu bar action, dock menu click, and CSV open-file handoff silently queues forever and never reaches the renderer. The fix is `did-start-navigation` with the `isSameDocument` guard, which only resets on actual document loads and reloads.
@@ -1012,7 +1045,8 @@ shutdown.
 
 ### Error Page
 
-If backend is unavailable at startup, `error.html` displays (strings localized via `app.*` i18n keys since 2026-06-11):
+If the backend is unavailable at startup, or the frontend does not complete its renderer-ready
+handoff after one cache-bypass retry, `error.html` displays localized `app.*` strings:
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -1028,6 +1062,8 @@ If backend is unavailable at startup, `error.html` displays (strings localized v
 validator used by the splash. `error.js` re-validates those query values before
 setting the three palette custom properties. The page ships its own emerald and
 champagne defaults, so malformed or missing palette input still remains branded.
+Backend failures use `app.errorPageMessage`; renderer handoff failures use
+`app.rendererErrorPageMessage`. Both offer the same bounded retry and log-opening actions.
 
 ### Demo Application Identity
 
@@ -1038,6 +1074,15 @@ remain distinguishable in Applications, the Dock, and system dialogs. The
 committed SVG is the editable source; `scripts/pack-iconset.cjs` packs validated
 PNG representations into the ICNS container without changing the production
 icon.
+
+The Demo app uses `~/Library/Application Support/Vision Demo/native/vision_demo`, PostgreSQL port
+`54330`, and a dedicated role/database namespace. Production Vision uses `native/vision` and port
+`54329`. The package contains the same native PostgreSQL, migration, Bun backend, frontend, and
+Chrome Headless Shell payload as production plus the deterministic `demo-seed` resource. First
+launch and seed updates use a staged database-name switch with rollback until detailed readiness
+passes. `bun run demo:reset-native` requests the same verified seed activation on the next launch.
+No Demo startup or installer path invokes Docker. See
+[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]].
 
 **Try again** → Re-runs health poll from current state (`recovery:retry` IPC)
 **Open logs** → Opens app logs directory (`recovery:open-logs` IPC)

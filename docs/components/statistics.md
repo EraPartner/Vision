@@ -36,6 +36,13 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 
 The page acts as a thin orchestrator with lazy-loading and memoization:
 
+CategoryPivotTable intentionally defaults to all years and keeps automatic
+browser column sizing. This preserves complete-history visibility and the
+current width/scroll geometry; period-column windowing would change those
+dimensions because body values participate in table layout. The accepted scale
+boundary and measurable revisit threshold are documented in
+[[docs/performance/index#Accepted Scale Boundaries|Performance Documentation]].
+
 ```tsx
 import { lazy, Suspense, useMemo } from "react";
 

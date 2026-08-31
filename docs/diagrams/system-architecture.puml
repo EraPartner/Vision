@@ -144,6 +144,8 @@ note right of NativeRuntime
   logs, readiness, updates, and durable runtime marker.
   Existing Docker data uses verified custom-dump and
   attachment staging before native activation (ADR-113).
+  Vision Demo reuses this provider with an isolated runtime,
+  port, and deterministic seed activated atomically (ADR-114).
 end note
 
 @enduml

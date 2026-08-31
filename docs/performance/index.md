@@ -3,7 +3,7 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-last_modified: 2026-08-25
+last_modified: 2026-08-31
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -24,6 +24,8 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-08-31: route-only Radix packages removed from the boot vendor chunk** — `[[apps/frontend/vite.config.ts]]` now assigns the 15 primitives used by the application shell or preloaded Dashboard route to the stable `radix-ui` chunk. Seven route-only primitives follow Rollup's route-level splitting instead of being hoisted solely because they share the `@radix-ui` namespace. Back-to-back production builds of the same tree measured 435.02 to 428.62 KiB gzip for the boot graph. Total compressed assets increased from 961.09 to 963.26 KiB because natural splitting adds small chunk overhead; this measured trade-off keeps 6.40 KiB off the critical boot path. The existing Lucide icon chunk remains because removing it increased both fragmentation and total asset size. The broader worktree still exceeds the 420/940 KiB guards, so those regressions remain visible rather than being hidden by a budget increase.
 
 **2026-08-25: default Dashboard route and critical fonts preloaded at build time** — `[[apps/frontend/src/build-support/defaultRoutePreload.ts]]` walks the production chunk graph and injects only the Dashboard's static closure not already covered by the entry graph. The same build-bundle pass resolves the hashed Inter 400 and Fraunces 600 WOFF2 assets and emits font preloads with the deployment base; other weights and WOFF fallbacks remain CSS-discovered. This removes serial route and critical-font discovery round trips on a cold web visit. Dynamic locale, AI chat, and motion-feature chunks stay lazy. Fresh root and `/vision/` production builds measured a 399.76 KiB gzip boot graph and 914.35/914.30 KiB gzip total JavaScript/CSS assets; the 420 KiB preload and 940 KiB total guards both pass. The latency benefit is primarily for remote web deployments; it is smaller on Electron or a local-area network.
 
@@ -49,14 +51,63 @@ SORT title ASC
 
 ## Optimization Strategies
 
-| Strategy | Documentation | Impact |
-|----------|---------------|--------|
-| **Server-Computed Responses** | [[docs/adr/008-performance-page-server-computed-response|ADR-008]] | Pre-computed metrics on backend reduce client overhead |
-| **In-Memory Caching** | [[docs/performance/caching-strategies|Caching Strategies]] | Reduces API calls for exchange rates and prices |
-| **Materialized Views** | [[docs/performance/materialized-views|Materialized Views]] | Pre-computed dashboard aggregations |
-| **Chart Downsampling** | [[docs/performance/chart-downsampling|Chart Downsampling]] | LTTB algorithm for large time-series data |
-| **Database Indexes** | [[docs/adr/002-database-schema|Schema Indexes]] | Optimized query performance |
-| **Virtual Scrolling** | [[docs/components/shared-components|VirtualDataTable]] | Efficient rendering of large tables |
+| Strategy                      | Documentation                                            | Impact               |
+| ----------------------------- | -------------------------------------------------------- | -------------------- |
+| **Server-Computed Responses** | [[docs/adr/008-performance-page-server-computed-response | ADR-008]]            | Pre-computed metrics on backend reduce client overhead |
+| **In-Memory Caching**         | [[docs/performance/caching-strategies                    | Caching Strategies]] | Reduces API calls for exchange rates and prices        |
+| **Materialized Views**        | [[docs/performance/materialized-views                    | Materialized Views]] | Pre-computed dashboard aggregations                    |
+| **Chart Downsampling**        | [[docs/performance/chart-downsampling                    | Chart Downsampling]] | LTTB algorithm for large time-series data              |
+| **Database Indexes**          | [[docs/adr/002-database-schema                           | Schema Indexes]]     | Optimized query performance                            |
+| **Virtual Scrolling**         | [[docs/components/shared-components                      | VirtualDataTable]]   | Efficient rendering of large tables                    |
+
+## Accepted Scale Boundaries
+
+Some low-frequency paths deliberately preserve simpler or more complete
+semantics until production measurements justify extra complexity:
+
+- Statistics category/recipient/tag pivots remain all-time by default. A
+  five-minute, inflight-deduplicated statistics cache absorbs repeat visits and
+  is synchronously invalidated by transaction reconciliation/refresh and
+  category or recipient mutation funnels; tag-only changes fall back to the
+  five-minute time-to-live. A rolling default would silently hide older history,
+  so revisit the cold-query shape only if a representative dataset shows p95
+  above 500 ms, more than 50,000 intermediate aggregate rows, or more than 25
+  MiB of process-memory growth per miss. Exact per-date foreign-exchange
+  conversion remains binding.
+- CategoryPivotTable retains the all-years default and browser auto-sized
+  columns. Windowing its period columns would change widths and scroll geometry
+  because body values participate in automatic table layout. Revisit with a
+  user-visible fixed-width or latest-year design only if an instrumented
+  supported dataset exceeds 5,000 mounted cells or a 100 ms React commit p95.
+- Transaction sorts by memo, currency, effective recipient name, or effective
+  category label retain their expression sort over the filtered result. A
+  semantics-preserving stored-key or equivalent indexed redesign is deferred
+  until sort-aware application telemetry or a representative PostgreSQL
+  benchmark shows a 250 ms p95 for one of those sorts, or non-date ordering
+  exceeds 5% of transaction-list calls. Date/id ordering remains the indexed
+  default.
+- The cold Electron splash keeps the current menu and dock setup ahead of
+  window creation. Live measurements put a typical first splash near 340 ms,
+  of which no more than about 150 ms is application-controlled; moving the
+  setup would save at most about 100 ms while making platform integration race
+  the first window. Revisit only if a supported macOS build records a median
+  spawn-to-first-paint above 500 ms or more than 200 ms inside Vision-owned
+  startup marks. Electron framework initialization remains outside this budget.
+- The frontend keeps Recharts inside the already-lazy AI chat route instead of
+  adding a second fallback boundary around individual tool-result charts. The
+  critical Inter and Fraunces fonts are preloaded by the production build, and
+  runtime Zod validation plus the application-wide Belgian tax profile stay in
+  the boot graph because they enforce shared contracts and settings. Revisit a
+  nested chart split or provider deferral if the AI chat route exceeds 125 KiB
+  gzip, its post-fetch interaction p95 exceeds 500 ms on a supported machine,
+  or the existing boot-graph budget fails because of either dependency.
+- The desktop package retains `archiver` for backup creation. Its former
+  redundant direct transitive dependencies have already been removed; replacing
+  the mature writer solely to reduce an ASAR index of roughly 2,100 files would
+  trade backup compatibility for a measured low-single-digit-millisecond
+  startup concern. Revisit if packaged `node_modules` exceeds 10,000 ASAR
+  entries, ASAR-open profiling exceeds 25 ms p95, or those modules add more than
+  25 MiB to the installed application.
 
 ## Cache Layers
 

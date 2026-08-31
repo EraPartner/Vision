@@ -7,7 +7,22 @@ description: CSV import of brokerage/exchange trades into portfolio_transactions
 date: 2026-06-18
 updated: 2026-08-26
 last_modified: 2026-08-26
-tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
+tags:
+  [
+    api,
+    portfolio,
+    import,
+    csv,
+    portfolio-import,
+    portfolio-parser,
+    brokerage,
+    trades,
+    review,
+    adr-078,
+    account-id,
+    adr-091,
+    migration-0057,
+  ]
 status: active
 aliases: [portfolio-imports-api, portfolio-csv-import, brokerage-import]
 related_code:
@@ -52,34 +67,35 @@ One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201
 
 **Form Data:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `file` | File | Yes | CSV file (max 50 MB) |
-| `adapter_name` | string | No | Display label for the import source (written as `bank_account` on portfolio_transactions) |
-| `date_format` | string | No | Python strptime format; default `%Y-%m-%d` |
-| `separator` | string | No | Single-character CSV delimiter; default `,` |
-| `encoding` | string | No | File encoding; default `utf-8` |
-| `skip_rows` | integer | No | Header rows to skip; default `0` |
-| `date_column` | string | Yes | CSV header name for the trade date |
-| `type_column` | string | No | CSV header name for the transaction type (buy/sell/dividend/…) |
-| `symbol_column` | string | No* | CSV header name for the ticker symbol |
-| `name_column` | string | No* | CSV header name for the instrument name |
-| `units_column` | string | No | CSV header name for number of units |
-| `price_column` | string | No | CSV header name for unit price |
-| `amount_column` | string | No | CSV header name for total amount |
-| `fees_column` | string | No | CSV header name for transaction fees |
-| `taxes_column` | string | No | CSV header name for taxes/withholding |
-| `currency_column` | string | No | CSV header name for trade currency |
-| `fx_rate_column` | string | No | CSV header name for EUR FX rate |
-| `note_column` | string | No | CSV header name for a free-text note |
-| `default_asset_class` | string | Yes | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond` |
-| `default_type` | string | No | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest` |
-| `type_mapping` | string | No | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`) |
+| Field                 | Type    | Required | Description                                                                                                               |
+| --------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `file`                | File    | Yes      | CSV file (max 50 MB)                                                                                                      |
+| `adapter_name`        | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                 |
+| `date_format`         | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                |
+| `separator`           | string  | No       | Single-character CSV delimiter; default `,`                                                                               |
+| `encoding`            | string  | No       | File encoding; default `utf-8`                                                                                            |
+| `skip_rows`           | integer | No       | Header rows to skip; default `0`                                                                                          |
+| `date_column`         | string  | Yes      | CSV header name for the trade date                                                                                        |
+| `type_column`         | string  | No       | CSV header name for the transaction type (buy/sell/dividend/…)                                                            |
+| `symbol_column`       | string  | No*      | CSV header name for the ticker symbol                                                                                     |
+| `name_column`         | string  | No*      | CSV header name for the instrument name                                                                                   |
+| `units_column`        | string  | No       | CSV header name for number of units                                                                                       |
+| `price_column`        | string  | No       | CSV header name for unit price                                                                                            |
+| `amount_column`       | string  | No       | CSV header name for total amount                                                                                          |
+| `fees_column`         | string  | No       | CSV header name for transaction fees                                                                                      |
+| `taxes_column`        | string  | No       | CSV header name for taxes/withholding                                                                                     |
+| `currency_column`     | string  | No       | CSV header name for trade currency                                                                                        |
+| `fx_rate_column`      | string  | No       | CSV header name for EUR FX rate                                                                                           |
+| `note_column`         | string  | No       | CSV header name for a free-text note                                                                                      |
+| `default_asset_class` | string  | Yes      | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond`                                      |
+| `default_type`        | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest` |
+| `type_mapping`        | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)   |
 
 > [!warning] Symbol or name required
 > At least one of `symbol_column` or `name_column` must be provided. Both may be mapped simultaneously for best matching.
 
 **201 Response — committed:**
+
 ```json
 {
   "ok": true,
@@ -94,6 +110,7 @@ One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201
 ```
 
 **202 Response — awaiting review:**
+
 ```json
 {
   "ok": true,
@@ -132,10 +149,11 @@ event: complete
 data: {"batch_id":"42","total":150,"imported":148,"duplicates":1,"errors":1}
 
 event: error
-data: {"message":"date_column is required"}
+data: {"detail":"date_column is required","code":"VALIDATION_ERROR"}
 ```
 
 Progress percent mapping:
+
 - `staging` → 0–40 %
 - `validating` → 40–55 %
 - `matching` → 55–70 %
@@ -157,6 +175,7 @@ canonical `{items, total}` body; this list is unpaginated, so `total` is the
 row count.
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -198,6 +217,7 @@ row count.
 Create a new saved portfolio parser configuration.
 
 **Request Body:**
+
 ```json
 {
   "name": "Degiro Trades",
@@ -216,9 +236,9 @@ Create a new saved portfolio parser configuration.
 
 **Responses:**
 
-| Status | Meaning |
-|--------|---------|
-| `201 Created` | Parser created; body contains the record |
+| Status         | Meaning                                          |
+| -------------- | ------------------------------------------------ |
+| `201 Created`  | Parser created; body contains the record         |
 | `409 Conflict` | A portfolio parser with that name already exists |
 
 ---
@@ -229,12 +249,12 @@ Update an existing saved portfolio parser. Both `name` and `config` are optional
 
 **Responses:**
 
-| Status | Meaning |
-|--------|---------|
-| `200 OK` | Parser updated |
-| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
-| `404 Not Found` | No portfolio parser with that id |
-| `409 Conflict` | Another portfolio parser already uses the requested `name` |
+| Status            | Meaning                                                    |
+| ----------------- | ---------------------------------------------------------- |
+| `200 OK`          | Parser updated                                             |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above)              |
+| `404 Not Found`   | No portfolio parser with that id                           |
+| `409 Conflict`    | Another portfolio parser already uses the requested `name` |
 
 ---
 
@@ -244,11 +264,11 @@ Delete a saved portfolio parser.
 
 **Responses:**
 
-| Status | Meaning |
-|--------|---------|
-| `204 No Content` | Deleted successfully |
+| Status            | Meaning                                       |
+| ----------------- | --------------------------------------------- |
+| `204 No Content`  | Deleted successfully                          |
 | `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
-| `404 Not Found` | No portfolio parser with that id |
+| `404 Not Found`   | No portfolio parser with that id              |
 
 ---
 
@@ -259,6 +279,7 @@ Delete a saved portfolio parser.
 List portfolio import batches, newest first.
 
 **Query Parameters:**
+
 - `limit` (integer, optional) — max rows to return (default 50, clamped to 200)
 - `offset` (integer, optional) — pagination offset (default 0)
 
@@ -276,11 +297,11 @@ Get a single portfolio import batch with full status and row counts.
 
 Rollback a batch. Deletes all `portfolio_transactions` committed by this batch and marks the batch status as `aborted`. Only settled or review-waiting batches can be rolled back; `awaiting_review` batches can be aborted without effect on portfolio transactions. The service rechecks the state while holding the same batch lock used by review resolution, so a concurrent group resolution cannot create a holding during rollback.
 
-| Status | Meaning |
-|--------|---------|
-| `200 OK` | Rollback completed; body reports `{ deleted }` |
-| `400 Bad Request` | Malformed id, batch already aborted, or batch still in progress |
-| `404 Not Found` | Batch does not exist, including when it disappeared before the locked recheck |
+| Status            | Meaning                                                                       |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `200 OK`          | Rollback completed; body reports `{ deleted }`                                |
+| `400 Bad Request` | Malformed id, batch already aborted, or batch still in progress               |
+| `404 Not Found`   | Batch does not exist, including when it disappeared before the locked recheck |
 
 ---
 
@@ -289,7 +310,7 @@ Rollback a batch. Deletes all `portfolio_transactions` committed by this batch a
 When the pipeline detects unresolved instruments (symbol not found in `investments`) it leaves the batch in `awaiting_review` and the SSE stream emits a `review_required` event. These endpoints let the client inspect, assign instruments, and commit.
 
 > [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
-> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR`.
+> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is _not_ `int32`). Anything else returns `400 VALIDATION_ERROR`.
 >
 > These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.js`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 >
@@ -301,17 +322,17 @@ Returns staging rows grouped by investment (or by distinct raw symbol/name for u
 
 **Response envelope `data`:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `batch_id` | number | Positive safe-integer batch identifier |
-| `groups[]` | array | One entry per resolved investment, case-insensitive unresolved raw symbol/name, or the shared cash group |
-| `groups[].is_cash` | boolean | `true` for brokerage cash rows, which never require a holding |
-| `groups[].investment_id` | `number \| null` | Matched or overridden investment. `null` = unresolved. |
-| `groups[].investment_name` / `investment_symbol` / `investment_asset_class` | strings or null | Resolved holding metadata |
-| `groups[].raw_symbol` / `raw_name` | strings or null | First raw instrument identity for unresolved groups; null for cash |
-| `groups[].row_count` | integer | Number of staging rows in the group |
-| `groups[].rows[]` | array | Per-row status, route, date, type, raw instrument, units, price, amount, fees, taxes, currency, FX rate, note, match source, `error_message`, and override id |
-| `totals` | object | `{symbol, name_exact, unresolved, error}` row counts; error rows count only as errors |
+| Field                                                                       | Type             | Description                                                                                                                                                   |
+| --------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `batch_id`                                                                  | number           | Positive safe-integer batch identifier                                                                                                                        |
+| `groups[]`                                                                  | array            | One entry per resolved investment, case-insensitive unresolved raw symbol/name, or the shared cash group                                                      |
+| `groups[].is_cash`                                                          | boolean          | `true` for brokerage cash rows, which never require a holding                                                                                                 |
+| `groups[].investment_id`                                                    | `number \| null` | Matched or overridden investment. `null` = unresolved.                                                                                                        |
+| `groups[].investment_name` / `investment_symbol` / `investment_asset_class` | strings or null  | Resolved holding metadata                                                                                                                                     |
+| `groups[].raw_symbol` / `raw_name`                                          | strings or null  | First raw instrument identity for unresolved groups; null for cash                                                                                            |
+| `groups[].row_count`                                                        | integer          | Number of staging rows in the group                                                                                                                           |
+| `groups[].rows[]`                                                           | array            | Per-row status, route, date, type, raw instrument, units, price, amount, fees, taxes, currency, FX rate, note, match source, `error_message`, and override id |
+| `totals`                                                                    | object           | `{symbol, name_exact, unresolved, error}` row counts; error rows count only as errors                                                                         |
 
 ---
 
@@ -320,10 +341,13 @@ Returns staging rows grouped by investment (or by distinct raw symbol/name for u
 Resolve an unmatched staging row by linking it to an existing investment or requesting that a new investment be created.
 
 **Request Body:**
+
 ```json
 { "investment_id": 12 }
 ```
+
 or
+
 ```json
 { "create_new": true }
 ```
@@ -334,11 +358,11 @@ When `create_new: true`, a new investment record is created from this row's `sym
 
 **Responses:**
 
-| Status | Meaning |
-|--------|---------|
-| `200 OK` | Override applied; body contains the updated row |
+| Status            | Meaning                                                                          |
+| ----------------- | -------------------------------------------------------------------------------- |
+| `200 OK`          | Override applied; body contains the updated row                                  |
 | `400 Bad Request` | Malformed batch id, row id or `investment_id`, or `create_new` validation failed |
-| `404 Not Found` | Batch or staging row not found |
+| `404 Not Found`   | Batch or staging row not found                                                   |
 
 ---
 
@@ -379,11 +403,11 @@ or:
 
 When `created` is `true`, `data.investment` also contains the created holding.
 
-| Status | Meaning |
-|--------|---------|
-| `200 OK` | Every requested row resolved to one investment |
+| Status            | Meaning                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `200 OK`          | Every requested row resolved to one investment                                                                                            |
 | `400 Bad Request` | Malformed ids, empty/duplicate/oversized row set, invalid resolution mode, non-reviewable batch, or create-new row set already overridden |
-| `404 Not Found` | Investment or requested row missing, cross-batch, or no longer reviewable; nothing changed |
+| `404 Not Found`   | Investment or requested row missing, cross-batch, or no longer reviewable; nothing changed                                                |
 
 ---
 
@@ -408,6 +432,7 @@ Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not ye
 > Any row still unresolved at commit time is recorded as an error row and is not inserted into `portfolio_transactions`. The batch completes with non-zero `rows_error`.
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -422,9 +447,9 @@ Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not ye
 
 **Responses:**
 
-| Status | Meaning |
-|--------|---------|
-| `200 OK` | Commit completed (check `errors` field) |
+| Status         | Meaning                                               |
+| -------------- | ----------------------------------------------------- |
+| `200 OK`       | Commit completed (check `errors` field)               |
 | `409 Conflict` | Batch is not in `awaiting_review` or `matched` status |
 
 ---

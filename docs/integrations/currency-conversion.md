@@ -16,6 +16,7 @@ Vision provides multi-currency support with conversion to EUR or another request
 ## Overview
 
 The currency conversion service handles all currency-related operations, including:
+
 - Fetching live exchange rates
 - Converting transaction amounts to a requested target currency
 - Handling currencies not covered by ECB
@@ -98,42 +99,42 @@ For date-aware conversion requests, the service also opportunistically queries E
 
 ### ECB Currencies (Primary)
 
-| Code | Currency |
-|------|----------|
-| EUR | Euro |
-| USD | US Dollar |
-| GBP | British Pound |
-| CHF | Swiss Franc |
-| JPY | Japanese Yen |
-| SEK | Swedish Krona |
-| NOK | Norwegian Krone |
-| DKK | Danish Krone |
-| PLN | Polish Zloty |
-| CZK | Czech Koruna |
-| HUF | Hungarian Forint |
-| RON | Romanian Leu |
-| TRY | Turkish Lira |
-| AUD | Australian Dollar |
-| CAD | Canadian Dollar |
-| CNY | Chinese Yuan |
-| INR | Indian Rupee |
-| BRL | Brazilian Real |
+| Code | Currency          |
+| ---- | ----------------- |
+| EUR  | Euro              |
+| USD  | US Dollar         |
+| GBP  | British Pound     |
+| CHF  | Swiss Franc       |
+| JPY  | Japanese Yen      |
+| SEK  | Swedish Krona     |
+| NOK  | Norwegian Krone   |
+| DKK  | Danish Krone      |
+| PLN  | Polish Zloty      |
+| CZK  | Czech Koruna      |
+| HUF  | Hungarian Forint  |
+| RON  | Romanian Leu      |
+| TRY  | Turkish Lira      |
+| AUD  | Australian Dollar |
+| CAD  | Canadian Dollar   |
+| CNY  | Chinese Yuan      |
+| INR  | Indian Rupee      |
+| BRL  | Brazilian Real    |
 
 ### Supplementary Currencies
 
-| Code | Currency |
-|------|----------|
-| AED | UAE Dirham |
-| SAR | Saudi Riyal |
-| KWD | Kuwaiti Dinar |
-| QAR | Qatari Riyal |
-| BHD | Bahraini Dinar |
-| OMR | Omani Rial |
-| PKR | Pakistani Rupee |
-| EGP | Egyptian Pound |
-| NGN | Nigerian Naira |
-| MAD | Moroccan Dirham |
-| KES | Kenyan Shilling |
+| Code | Currency        |
+| ---- | --------------- |
+| AED  | UAE Dirham      |
+| SAR  | Saudi Riyal     |
+| KWD  | Kuwaiti Dinar   |
+| QAR  | Qatari Riyal    |
+| BHD  | Bahraini Dinar  |
+| OMR  | Omani Rial      |
+| PKR  | Pakistani Rupee |
+| EGP  | Egyptian Pound  |
+| NGN  | Nigerian Naira  |
+| MAD  | Moroccan Dirham |
+| KES  | Kenyan Shilling |
 
 ---
 
@@ -146,6 +147,7 @@ GET /api/info/exchange-rates
 ```
 
 Response:
+
 ```json
 {
   "source": "ecb",
@@ -188,15 +190,16 @@ import {
   clearMemoryCache,
   backfillPortfolioHistoricalRates,
   FALLBACK_RATES,
-} from './services/currency/currencyConversionService.js';
+} from "./services/currency/currencyConversionService.js";
 ```
 
 This is the canonical direct path (moved from `services/calculations/currency.js` in Phase 0). The service is the **active implementation** for all currency conversion operations.
 
 **Legacy import (removed):**
+
 ```javascript
 // This path has been removed — use direct import above
-import { convertToCurrency } from './services/calculations/currency.js';
+import { convertToCurrency } from "./services/calculations/currency.js";
 ```
 
 ### Cache Management
@@ -213,17 +216,17 @@ const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 Convert multiple rows at once:
 
 ```javascript
-import { convertRowsToEur } from './services/currency/currencyConversionService.js';
+import { convertRowsToEur } from "./services/currency/currencyConversionService.js";
 
-const converted = await convertRowsToEur(transactions, 'USD');
+const converted = await convertRowsToEur(transactions, "USD");
 ```
 
 Date-aware conversion can be enabled for row sets that contain a date column:
 
 ```javascript
-const converted = await convertRowsToEur(rows, 'USD', {
+const converted = await convertRowsToEur(rows, "USD", {
   useHistoricalRatesByDate: true,
-  dateField: 'day'
+  dateField: "day",
 });
 ```
 
@@ -232,32 +235,33 @@ const converted = await convertRowsToEur(rows, 'USD', {
 Convert N row groups in a single `convertRowsToEur()` call to eliminate redundant `exchange_rates` database queries:
 
 ```javascript
-import { batchConvertGroupsWithHistoricalRateFallback } from './repositories/infoRepositoryHelpers.js';
+import { batchConvertGroupsWithHistoricalRateFallback } from "./repositories/infoRepositoryHelpers.js";
 
 // Merge multiple independent row groups (e.g., current balances + history)
 // with a `_batchGroup` tag for later splitting
 const groups = [
-  { _batchGroup: 'current', currency: 'USD', amount: 5000, date: '2026-04-23' },
-  { _batchGroup: 'current', currency: 'GBP', amount: 3000, date: '2026-04-23' },
-  { _batchGroup: 'history', currency: 'USD', amount: 4500, date: '2026-04-01' },
-  { _batchGroup: 'history', currency: 'GBP', amount: 2800, date: '2026-04-01' },
+  { _batchGroup: "current", currency: "USD", amount: 5000, date: "2026-04-23" },
+  { _batchGroup: "current", currency: "GBP", amount: 3000, date: "2026-04-23" },
+  { _batchGroup: "history", currency: "USD", amount: 4500, date: "2026-04-01" },
+  { _batchGroup: "history", currency: "GBP", amount: 2800, date: "2026-04-01" },
 ];
 
 // Single batch conversion + single exchange_rates query
 const converted = await batchConvertGroupsWithHistoricalRateFallback(
   groups,
-  'EUR',
-  'date' // dateField for historical lookup
+  "EUR",
+  "date", // dateField for historical lookup
 );
 
 // Split results back by _batchGroup
-const currentConverted = converted.filter(r => r._batchGroup === 'current');
-const historyConverted = converted.filter(r => r._batchGroup === 'history');
+const currentConverted = converted.filter((r) => r._batchGroup === "current");
+const historyConverted = converted.filter((r) => r._batchGroup === "history");
 ```
 
 **Benefit**: Converts N independent row groups in 1 `exchange_rates` query instead of N queries.
 
 **Example savings** (Phase 3.1 info endpoints):
+
 - `getCashflowComparison`: Saved 3 redundant `exchange_rates` queries
 - `getBankBalances`: Saved 1 redundant `exchange_rates` query
 
@@ -273,14 +277,14 @@ When `useHistoricalRatesByDate: true` and the exact (or nearest) historical rate
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `used_fallback_rate` | `boolean` | `true` when a fallback to current rates occurred |
-| `fallback_reason` | `string` | Always `"historical_rate_missing"` when set |
+| Field                | Type      | Description                                                                        |
+| -------------------- | --------- | ---------------------------------------------------------------------------------- |
+| `used_fallback_rate` | `boolean` | `true` when historical lookup falls back to a current rate or no rate is available |
+| `fallback_reason`    | `string`  | Always `"historical_rate_missing"` when set                                        |
 
 A `WARN`-level log entry is also emitted: `Historical FX missing, falling back to current rate` with `{ currency, date }` metadata.
 
-Callers (e.g. portfolio history aggregator) can expose these fields to the frontend so affected rows are clearly labeled. Rows where the rate resolved normally carry neither field.
+These two fields are an internal service diagnostic, not part of any repository view model, HTTP response, OpenAPI schema, or frontend contract. Current repositories intentionally project them away. When a current fallback rate exists, operators can observe the matching `Historical FX missing...` warning; if no rate exists, the service emits the corresponding unsupported-source or unsupported-target warning instead. The application-level FX status banner is provider-wide and does not observe these per-row historical diagnostics. Current recipient and money views therefore do not badge individual fallback-converted rows. A future per-row badge must first add an explicit API contract instead of depending on these internal fields. Rows where the rate resolved normally carry neither field.
 
 **Cache invalidation after backfill:** `backfillPortfolioHistoricalRates()` calls `clearHistoricalCache()` after inserting new rates, ensuring the in-memory historical index reflects the newly stored rows on the next conversion.
 
@@ -292,15 +296,17 @@ Callers (e.g. portfolio history aggregator) can expose these fields to the front
 2. **Current-rate mode** (`useHistoricalRatesByDate=false` or `rowDate` is null): Returns in-memory rate without warning
 3. **Historical mode** with date present:
    - Try in-memory historical index (fastest)
-   - Try ECB 90-day fetch + nearest-DB lookup via `getRate()`
+   - For currencies absent from the stored index, resolve every distinct requested date from one ECB 90-day/full-history feed pair, then persist all resolved points with one set-based write
    - Fall back to current rate only if historical source is unavailable
    - Emit `WARN` log + set `fellBack: true` only when fallback occurs
 4. **No rate found anywhere** (historical and current rates both missing): Sets `fellBack: true` so the frontend fallback indicator displays correctly
 
 **Previous bugs (fixed):**
+
 - EUR rows incorrectly warned because EUR is filtered from `exchange_rates` saves
 - Rows with `rowDate=null` always triggered warning path
 - Short-circuit before ECB/DB fallback when historical index lacked currency
+- Reusing the first fetched rate for every date of an unindexed currency; fetched rates now remain date-specific and row-order invariant
 - When no rate was found in any source, `fellBack` was incorrectly set to `false` instead of `true`, preventing frontend fallback indicator display
 
 ---
@@ -315,11 +321,11 @@ Callers (e.g. portfolio history aggregator) can expose these fields to the front
 
 Three new startup phases run once (guarded by flags in `user_settings`):
 
-| Phase | What it does | Guard flag |
-|-------|-------------|------------|
-| **One-time repair** | Identifies rows in `exchange_rates` that were previously written as nearest-rate guesses (before ADR-074) and overwrites them with correct ECB full-history values. Safe because no manual rate-entry path exists. | `fx_full_history_repair_done` |
-| **Gap fill** | Fills any (currency, date) pairs missing from `exchange_rates` using the ECB full-history feed. Does **not** persist guessed/nearest rates — only exact-date or on-or-before confirmed ECB values. | Internal per-run tracking |
-| **Bulk stamp** | Iterates all `portfolio_transactions` (including legacy `portfolio_transactions_base` layout) that have `currency ≠ EUR` and no `fx_rate_to_eur` set, and writes the on-or-before stored rate (≤7-day lookback). Never blocks on HTTP — uses only already-stored `exchange_rates` rows. | None (idempotent upsert) |
+| Phase               | What it does                                                                                                                                                                                                                                                                            | Guard flag                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **One-time repair** | Identifies rows in `exchange_rates` that were previously written as nearest-rate guesses (before ADR-074) and overwrites them with correct ECB full-history values. Safe because no manual rate-entry path exists.                                                                      | `fx_full_history_repair_done` |
+| **Gap fill**        | Fills any (currency, date) pairs missing from `exchange_rates` using the ECB full-history feed. Does **not** persist guessed/nearest rates — only exact-date or on-or-before confirmed ECB values.                                                                                      | Internal per-run tracking     |
+| **Bulk stamp**      | Iterates all `portfolio_transactions` (including legacy `portfolio_transactions_base` layout) that have `currency ≠ EUR` and no `fx_rate_to_eur` set, and writes the on-or-before stored rate (≤7-day lookback). Never blocks on HTTP — uses only already-stored `exchange_rates` rows. | None (idempotent upsert)      |
 
 If the app starts offline, the repair and gap-fill phases are skipped (the `fx_full_history_repair_done` flag is not set), so they will retry on the next online startup.
 
@@ -330,9 +336,9 @@ When a portfolio transaction is created or edited without an explicit `fx_rate_t
 Generic amount conversion:
 
 ```javascript
-import { convertToCurrency } from './services/currency/currencyConversionService.js';
+import { convertToCurrency } from "./services/currency/currencyConversionService.js";
 
-const amountInSar = await convertToCurrency(125, 'USD', 'SAR');
+const amountInSar = await convertToCurrency(125, "USD", "SAR");
 ```
 
 ---
@@ -344,6 +350,7 @@ No configuration required - service auto-initializes on startup.
 Startup triggers a background sparse historical backfill for portfolio transaction dates.
 
 **Optional environment variables:**
+
 - None currently required
 
 ---
@@ -357,6 +364,7 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 
 **Startup Behavior When Offline (May 2026):**
 During server startup, a network reachability probe determines if the host has internet connectivity. When offline is detected:
+
 - **Exchange rate cache warmup skipped**: `warmExchangeRateCache()` is not called
 - **Portfolio historical FX backfill skipped**: `backfillPortfolioHistoricalRates()` is not called
 - **No API timeouts**: Avoids 5–15s hang on ECB/Open Exchange Rates APIs
@@ -385,12 +393,12 @@ The portfolio snapshot builder (`snapshotBuilder.js`) owns a separate, lightweig
 
 Key differences from `currencyConversionService`:
 
-| Concern | `currencyConversionService` | `snapshotBuilder` internal lookup |
-|---|---|---|
-| Data source | ECB + Open Exchange Rates → DB + in-memory cache | `exchange_rates` table only (bulk preload) |
-| Lookup granularity | Per-conversion call | Binary-search in pre-sorted per-currency day arrays |
-| Fallback | In-memory cache → hardcoded constants | Latest `is_latest` rate |
-| Scope | All backend services | Snapshot day-walk only |
+| Concern            | `currencyConversionService`                      | `snapshotBuilder` internal lookup                   |
+| ------------------ | ------------------------------------------------ | --------------------------------------------------- |
+| Data source        | ECB + Open Exchange Rates → DB + in-memory cache | `exchange_rates` table only (bulk preload)          |
+| Lookup granularity | Per-conversion call                              | Binary-search in pre-sorted per-currency day arrays |
+| Fallback           | In-memory cache → hardcoded constants            | Latest `is_latest` rate                             |
+| Scope              | All backend services                             | Snapshot day-walk only                              |
 
 The `is_latest` rows in `exchange_rates` are the same rows consumed by `currencyConversionService`'s `warmCache()`, so the latest-day snapshot always uses the same rate as the live portfolio summary endpoint, ensuring the headline portfolio value reconciles between Net Worth and Portfolio Overview.
 

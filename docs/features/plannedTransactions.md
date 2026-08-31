@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-08-27
+updated: 2026-08-31
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -190,7 +190,7 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Pattern date labels in `RecurringDetectionPanel` follow app `dateFormat` + locale settings
 - Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
 
-Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
 
 ---
 
@@ -372,6 +372,8 @@ Calculates next occurrence dates for recurring planned transactions. Pure calcul
 
 **Implementation Details (2026-04-25):** Month-end clamping uses a double-modulo pattern `((targetMonthIndex % 12) + 12) % 12` to normalize negative month indices to their zero-based month equivalents (e.g., `-1` → `11` for December). This ensures that month arithmetic in TZ-aware contexts correctly handles month overflow/underflow before converting back to UTC.
 
+Day-based recurrence also advances on the `APP_TIMEZONE` wall-clock calendar rather than by a fixed 24-hour UTC duration. Daily and weekly schedules therefore keep their calendar dates across the autumn daylight-saving transition; daily expansion neither repeats the fall-back day nor drops an inclusive horizon date.
+
 #### Recurrence advancement: sticky month-end clamp (2026-06-11)
 
 When `POST /:id/execute` advances a recurring planned transaction it calls `calculateNextDate(baseDate, recurrence_pattern)` where `baseDate` is the row's current `planned_date`. The next date is then stored via `toAppDateString(nextDate)`.
@@ -429,7 +431,7 @@ Analyzes transaction history to detect recurring payment patterns and suggests p
 
 **Detection Algorithm:**
 
-1. Groups transactions by recipient
+1. Groups transactions by canonical recipient and flow direction. Transactions recorded under aliases roll up to the primary recipient and use its name; planned-payment matching uses the same recipient-cluster root.
 2. Calculates intervals between consecutive transactions
 3. Computes interval statistics: mean, **median (true median, averaging two middle values for even-length arrays)**, standard deviation
 4. Matches against known patterns (weekly, biweekly, monthly, quarterly, yearly) with tolerance

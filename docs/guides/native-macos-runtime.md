@@ -2,7 +2,8 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-08-30
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   [
     guide,
@@ -110,7 +111,46 @@ same isolated `Vision Development/native/vision_dev` database. It cannot acquire
 Vision single-instance lock or use packaged Vision's application-data directory.
 
 Use `bun run electron:docker` for the explicit Docker development provider. The seeded Vision Demo
-continues to use Docker until a separate native demo seeder is selected.
+uses the same native provider with a separate deterministic database; see
+[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]].
+
+## Native Vision Demo
+
+`./install-demo.sh` builds and installs `/Applications/Vision Demo.app`. The build creates a
+disposable PostgreSQL 18 cluster, migrates it with Vision's guarded runner, applies the data-only
+synthetic generator in one transaction, verifies its row counts, and packages a custom-format
+dump plus a checksum manifest. The host PostgreSQL service and Docker do not need to be running.
+The installer builds the frontend in a private temporary directory, passes it to the native
+payload builder with `VISION_FRONTEND_DIST`, and removes the staging directory on exit. It does
+not reuse or clear the repository's shared `dist` directory.
+
+Vision Demo has no path or port overlap with real Vision:
+
+| Item             | Vision Demo                                 |
+| ---------------- | ------------------------------------------- |
+| Application data | `~/Library/Application Support/Vision Demo` |
+| Native runtime   | `native/vision_demo/`                       |
+| PostgreSQL       | `127.0.0.1:54330`                           |
+| Dataset          | Packaged deterministic synthetic seed       |
+
+First launch, an explicit reset, or a changed packaged seed restores into a staging database. The
+schema, table set, and every exact table count must match the manifest before the backend starts.
+The previous Demo database remains available until detailed readiness and stable row-count checks
+pass. That post-start check excludes only the documented runtime-owned
+`transfers_backfilled` and `fx_full_history_repair_done` maintenance-marker rows from the
+`user_settings` count. Ordinary settings and every other protected user-data count must remain
+unchanged. A failed or interrupted activation rolls back automatically.
+
+To restore the canonical synthetic dataset deliberately:
+
+```bash
+bun run demo:reset-native
+open "/Applications/Vision Demo.app"
+```
+
+The command writes a reset request only. Quit a running Demo first; the next launch performs and
+verifies the database switch. The former Demo Docker volume is not imported because it contains
+only replaceable synthetic data. The native Demo never reads, writes, or removes that volume.
 
 ## Lifecycle and Diagnostics
 
@@ -118,6 +158,10 @@ Electron owns normal start and clean shutdown. The runtime provider exposes idem
 restart, health, readiness, and log paths. The packaged app validates its PostgreSQL, browser,
 migration, and backend payload manifest before initializing durable state. The packaged migration
 executable also self-tests the modules loaded dynamically by the external Alembic environment.
+Vision launches its managed PostgreSQL initialization and server processes with the portable `C`
+locale. Invalid or unavailable locale values inherited from the macOS application launcher cannot
+prevent PostgreSQL from reaching readiness; this does not change the application's display
+language or regional formatting.
 Useful synthetic checks are:
 
 ```bash
@@ -130,9 +174,11 @@ The smoke commands use temporary application-data directories and uniquely named
 databases. They do not touch packaged Vision, the production native cluster, or Docker volumes.
 `native:db-smoke` validates discovery, roles, migrations, dump/restore, schema counts, and
 attachment hashing. `native:isolated-smoke` creates a disposable PostgreSQL 18 cluster and runs the
-full API and backup/restore smoke on random loopback ports. It removes only that synthetic cluster
+frontend, API, and backup/restore smoke on random loopback ports. The frontend check fetches the
+packaged HTML shell, requests its real JavaScript entry with gzip enabled, and verifies that the
+response decodes with the expected JavaScript content type. It removes only that synthetic cluster
 after a successful run. On failure, it reports and retains the temporary diagnostic directory and
-prints a bounded, sanitized PostgreSQL log tail. `native:smoke` runs the backend and API workflow
+prints bounded, sanitized log tails. `native:smoke` runs the same backend and frontend workflow
 through the prepared native payload.
 
 To prove that the exact payload inside a packaged application boots, set
@@ -259,6 +305,23 @@ snapshot as Docker mode. The database transport uses PostgreSQL tools directly. 
 fresh database and attachment tree, validates them, restores runtime-managed materialized-view
 ownership to the application role, stops the backend, activates both, waits for detailed readiness,
 and rolls both back on failure.
+
+## Startup Recovery and Logs
+
+After the native backend becomes ready, Electron waits for the React renderer to report that it has
+mounted. If the frontend remains on the boot splash for 12 seconds, Electron reloads it once while
+bypassing Chromium's cache. If the second attempt also fails, Vision replaces the splash with a
+recovery page instead of waiting forever. **Try again** repeats the normal readiness and renderer
+handoff; **Open logs** opens the application log directory.
+
+The relevant files are `~/Library/Application Support/Vision/logs/main.log` for Electron and
+`~/Library/Application Support/Vision/native/vision/logs/backend.log` for the backend. Vision Demo
+uses the corresponding paths under `~/Library/Application Support/Vision Demo`. Renderer startup
+diagnostics contain only structural metadata such as an error kind or asset basename. They exclude
+full URLs, error messages, credentials, localStorage, and application data.
+
+`VISION_RENDERER_READY_TIMEOUT_MS` can shorten or lengthen the 12-second renderer watchdog for
+development diagnostics. It does not change database or backend readiness timeouts.
 
 ## Updates, Reports, and Ollama
 

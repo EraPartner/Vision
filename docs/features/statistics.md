@@ -354,6 +354,14 @@ Two new query parameters added to `GET /api/transactions`:
 
 **Component:** `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]`
 
+The pivot intentionally opens on all years and keeps browser auto-sized period
+columns. This preserves complete-history visibility and the current width and
+scroll geometry. The all-time backend pivots are protected by the shared
+five-minute statistics cache; a rolling date default is not applied because it
+would silently omit history. The measurable reopen thresholds for cold queries
+and table rendering are recorded in [[docs/performance/index#Accepted Scale
+Boundaries|Performance Documentation]].
+
 **Helpers:**
 
 - `lastDayOfMonth(period: string): string` — Computes the last day of a month (e.g., `2026-03` → `2026-03-31`)

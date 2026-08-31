@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-27
+updated: 2026-08-31
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image. 2026-08-27: its gain/loss card wash is the shared TrendHue motif.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -269,14 +269,14 @@ interface CashFlowComparisonChartProps {
 
 ### Date Label Formatting
 
-- Semantic date-label UX pass adds shared month helpers in [[apps/frontend/src/components/shared/dateUtils.ts]]:
+- Semantic date-label UX pass adds shared month helpers in [[apps/frontend/src/lib/dateUtils.ts]]:
   - `formatMonthYearWithAppSettings(date, appDateFormat, locale?)`
   - `formatMonthLabelWithLocale(date, locale?, width?)`
 - [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] now uses the month-year helper for chart labels (avoids overly detailed full dates while respecting settings)
 - [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] x-axis readability for dense month labels is reinforced with `interval="preserveStartEnd"` and `minTickGap={20}`
 - The retired `CashFlowComparisonChart.tsx` and [[apps/frontend/src/pages/DashboardPage.tsx]] used the month-year helper for cashflow month descriptions.
 
-Current code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Current code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/lib/dateUtils.ts]]
 
 ---
 

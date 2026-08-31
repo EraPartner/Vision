@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-27
+updated: 2026-08-31
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -18,6 +18,8 @@ related_code:
   - apps/frontend/src/lib/belgianTax/socialSecurity.ts
   - apps/frontend/src/lib/belgianTax/propertyTax.ts
   - apps/frontend/src/lib/belgianTax/portfolioTax.ts
+  - apps/frontend/src/lib/belgianTax/costBreakdown.ts
+  - apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts
   - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
   - apps/node-backend/src/services/belgianInflationService.js
 ---
@@ -37,15 +39,17 @@ Vision includes Belgian-specific tax features to support local tax filing requir
 
 Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by concern:
 
-| Module              | Responsibility                                                              |
-| ------------------- | --------------------------------------------------------------------------- |
-| `types.ts`          | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions    |
-| `constants.ts`      | Year-keyed `BelgianTaxYearTable` (IY 2024, IY 2025) — brackets, caps, rates |
-| `pit.ts`            | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge      |
-| `socialSecurity.ts` | Employee SS + step-function special social security contribution (CSSS)     |
-| `propertyTax.ts`    | Indexed cadastral × regional rate × centimes additionnels                   |
-| `portfolioTax.ts`   | Pure portfolio-tax estimators (see below)                                   |
-| `index.ts`          | Public re-exports                                                           |
+| Module                | Responsibility                                                              |
+| --------------------- | --------------------------------------------------------------------------- |
+| `types.ts`            | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions    |
+| `constants.ts`        | Year-keyed `BelgianTaxYearTable` (IY 2024, IY 2025) — brackets, caps, rates |
+| `pit.ts`              | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge      |
+| `socialSecurity.ts`   | Employee SS + step-function special social security contribution (CSSS)     |
+| `propertyTax.ts`      | Indexed cadastral × regional rate × centimes additionnels                   |
+| `portfolioTax.ts`     | Pure portfolio-tax estimators (see below)                                   |
+| `costBreakdown.ts`    | Shared transaction tax and fee bucketing for portfolio-tax views            |
+| `exportTaxYearCsv.ts` | Pure filed/frozen tax-year CSV serialization                                |
+| `index.ts`            | Explicit supported public re-exports; year-table internals stay private     |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
 
@@ -395,7 +399,7 @@ type BelgianTaxProfileSnapshotMeta = {
 
 ### CSV export
 
-`exportTaxYearCsv` (in `apps/frontend/src/lib/tax/exportTaxYearCsv.ts`) is a pure module that serialises a year's profile + calculation into a three-section CSV (metadata header, profile inputs, calculation breakdown). Values flow through `displayCalculationForYear` so filed/frozen years export their frozen numbers verbatim. Triggered from `YearActionsMenu` via the shared `downloadBlob` helper — no backend involvement.
+`exportTaxYearCsv` (in `apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts`) is a pure module that serialises a year's profile + calculation into a three-section CSV (metadata header, profile inputs, calculation breakdown). Values flow through `displayCalculationForYear` so filed/frozen years export their frozen numbers verbatim. Triggered from `YearActionsMenu` via the shared `downloadBlob` helper — no backend involvement.
 
 ### Behavioral rules
 

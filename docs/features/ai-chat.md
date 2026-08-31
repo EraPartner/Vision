@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-08-27
-last_modified: 2026-08-27
+updated: 2026-08-31
+last_modified: 2026-08-31
 tags:
   [
     feature,
@@ -34,6 +34,8 @@ related_code:
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/repositories/aiChatRepository.js",
     "apps/node-backend/src/integrations/ollama/client.js",
+    "packages/types/src/aiChat.js",
+    "packages/types/src/aiChat.d.ts",
     "apps/frontend/src/pages/AIChatPage.tsx",
     "apps/frontend/src/features/ai-chat/",
     "apps/frontend/src/hooks/useAIChat.ts",
@@ -87,10 +89,13 @@ Frontend /ai-chat
   └── OllamaStatusBanner        (shown when unreachable)
 
 Backend /api/ai
-  ├── routes/ai.js             (SSE endpoint + CRUD)
-  ├── services/aiChatService.js (orchestrator)
+  ├── routes/ai.js             (SSE pass-through + CRUD + terminal events)
+  ├── services/aiChatService.js (orchestrator; emits public stream events)
   ├── integrations/ollama/client.js (HTTP wrapper, stream)
   └── services/aiChat/tools/*  (registry → existing repositories)
+
+Shared contract
+  └── @vision/types/aiChat     (runtime event names + TypeScript payload shapes)
 ```
 
 ### Client-Side Stream State Model
@@ -142,19 +147,29 @@ Backend /api/ai
 
 Index: `ai_messages(conversation_id, created_at)` for ordered retrieval.
 
+Conversation history has no automatic time-based retention. Deleting a
+conversation is the explicit user-controlled retention action and cascades its
+messages; the application does not silently remove model, tool, or audit
+context. Revisit an opt-in retention setting if the AI tables exceed 10% of a
+workspace database or add more than 30 seconds to a measured backup, with
+preview and export before deletion.
+
 ### API Endpoints
 
-| Endpoint                    | Methods            | Description                                                         |
-| --------------------------- | ------------------ | ------------------------------------------------------------------- |
-| `/api/ai/status`            | GET                | Ollama health + configured URL                                      |
-| `/api/ai/models`            | GET                | List available models from the configured Ollama instance           |
-| `/api/ai/conversations`     | GET, POST          | List conversations; create a new one                                |
-| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete                               |
-| `/api/ai/chat`              | POST (SSE)         | Stream events: `token`, `tool_call`, `tool_result`, `done`, `error` |
+| Endpoint                    | Methods            | Description                                                                                |
+| --------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| `/api/ai/status`            | GET                | Ollama health + configured URL                                                             |
+| `/api/ai/models`            | GET                | List available models from the configured Ollama instance                                  |
+| `/api/ai/conversations`     | GET, POST          | List conversations; create a new one                                                       |
+| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete                                                      |
+| `/api/ai/chat`              | POST               | Run one chat turn and return the completed JSON payload                                    |
+| `/api/ai/chat/stream`       | POST (SSE)         | Stream events: `token`, `tool_call`, `tool_result`, `complete`, deprecated `done`, `error` |
+
+The frontend, backend service, and route use the shared `@vision/types/aiChat` contract. It also owns the supported tool-result envelope and `renderAs` vocabulary. The service emits public `user_message`, `token`, `tool_call`, and `tool_result` frames directly. The route passes them through and adds canonical terminal `complete`, the deprecated byte-equivalent `done` compatibility alias, or `error`. New clients normalize and deduplicate the two success names before updating stream state.
 
 ## Tool Registry (30 tools across 6 domains)
 
-Tools are declared with JSON Schema params. Backend validates args before dispatch with the hand-rolled helpers in `services/aiChat/tools/_validate.js` (`parseDate`, `parseEnum`, `parsePositiveInt`) — not Zod, despite what this page said before 2026-08-11. `parsePositiveInt` delegates to the shared `validateId` (see [[docs/security/input-validation#parsePositiveInt (AI-chat tool arguments)|Input Validation]]), so a malformed `categoryId`/`recipientId`/`plannedId` is an error the model can correct rather than a silent hit on the wrong record. Results capped at 500 rows by default. Each tool returns `{ok, data, meta, renderAs}` where `renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering.
+Tools are declared with JSON Schema params. Backend validates args before dispatch with the hand-rolled helpers in `services/aiChat/tools/_validate.js` (`parseDate`, `parseEnum`, `parsePositiveInt`) — not Zod, despite what this page said before 2026-08-11. `parsePositiveInt` delegates to the shared `validateId` (see [[docs/security/input-validation#parsePositiveInt (AI-chat tool arguments)|Input Validation]]), so a malformed `categoryId`/`recipientId`/`plannedId` is an error the model can correct rather than a silent hit on the wrong record. Results capped at 500 rows by default. Each tool returns `{ok, data, meta}`; optional `meta.renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering. Omitting the hint uses the JSON fallback.
 
 ### Expenses (11 tools)
 
@@ -223,6 +238,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 | Switch model              | Select in composer dropdown                                    | Persists on conversation; next send uses new model                                                                                                                                                                                                                                        |
 | Toggle tools              | Click wrench icon in composer                                  | Toggles `useTools` state; when OFF, next sends pass `useTools: false` to backend, disabling tool-calling                                                                                                                                                                                  |
 | Switch conversation       | Click in list                                                  | Updates URL param `?c=<id>` (or removes if deselecting); re-subscribes to new conversation's stream state; prior stream continues running in background                                                                                                                                   |
+| Load older conversations  | Click **Load more** below the sidebar list                     | Fetches the next 50-row page; the API keeps a full `total` count and the list appends the page without replacing newer conversations                                                                                                                                                      |
 | Navigate away & return    | Browser back/forward or sidebar nav                            | URL param `?c=<id>` restored; if stream was in-flight, sidebar indicator still visible; auto-selects stream (effect watches `streamingIds`) so user can see it complete                                                                                                                   |
 | Deep-link to conversation | Open `?c=<id>` in new tab/bookmark                             | Page loads, hydrates URL state, fetches conversation detail, shows messages + any in-flight streaming                                                                                                                                                                                     |
 
@@ -230,16 +246,23 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 ### Settings
 
-| Setting               | Type   | Default                  | Description                                              |
-| --------------------- | ------ | ------------------------ | -------------------------------------------------------- |
-| `aiChat.defaultModel` | string | `llama3.1:8b`            | Model pre-selected on new conversations                  |
-| `aiChat.ollamaUrl`    | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
+| Setting                     | Type   | Default                  | Description                                              |
+| --------------------------- | ------ | ------------------------ | -------------------------------------------------------- |
+| `aiChat.defaultModel`       | string | `llama3.1:8b`            | Model pre-selected on new conversations                  |
+| `aiChat.ollamaUrl`          | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
+| `ollama.numCtx`             | number | `8192`                   | Ollama context window passed to every chat request       |
+| `aiChat.contextBudgetChars` | number | `24000`                  | Approximate prompt-history character budget              |
+| `aiChat.maxToolResultChars` | number | `6000`                   | Per-tool-result character cap in model context           |
 
 ### Environment Variables
 
 - `OLLAMA_URL` — base URL for the Ollama HTTP API
 - `OLLAMA_DEFAULT_MODEL` — fallback model if user hasn't set one
+- `OLLAMA_NUM_CTX` — Ollama context window sent as `options.num_ctx` (default 8192)
 - `AI_CHAT_RATE_LIMIT` — per-minute cap on `/api/ai/chat` (default 30)
+- `AI_CHAT_MAX_HISTORY` — hard upper bound on prior messages considered (default 30)
+- `AI_CHAT_CONTEXT_BUDGET_CHARS` — approximate character budget for prior messages (default 24000)
+- `AI_CHAT_MAX_TOOL_RESULT_CHARS` — per-result model-context cap (default 6000)
 
 ## Edge Cases
 
@@ -254,7 +277,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **Conversation switch does not abort prior stream** — when user clicks a new conversation in the list, the sidebar updates `selectedId` via `setSelectedId` (which updates URL), but the prior conversation's stream **keeps running in the background**. The new conversation's message list renders clean because `useSendChatMessage(selectedId)` is keyed to the new `selectedId`.
 - **Ollama unreachable** — `GET /api/ai/status` returns `{ok: false}`; frontend shows one `OllamaStatusBanner` with a localized setup hint and guide link, without repeating the failure in the page header or exposing the raw connection error as primary UI copy; composer disabled. Loading and ready states still appear in the header.
 - **Model not pulled** — Ollama returns 404 on chat request; surface "Model not installed. Run `ollama pull <model>` or pick another." in the banner.
-- **Context window overflow** — service trims history to last N turns + tool-result summaries; adds a `system` note when truncation happens.
+- **Context window overflow** — the service first applies the message-count ceiling, then admits history newest-first under an approximate character budget after reserving the system prompt and current user request. The newest history item is shortened instead of dropped when only part fits. Ollama receives the configured `num_ctx` for both streaming and non-streaming calls.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
 - **LLM emits invalid args** — `ToolValidationError` returned as a `tool` error `{code: 'VALIDATION_ERROR', field, message}` naming the field and the received value; LLM retries with corrected args (up to 2 retries before giving up).
 - **Tool failure without detail** — `ToolResultCard` uses the localized `aiChat.toolFailed` fallback instead of hardcoded English.
@@ -264,7 +287,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **Retry semantics** — `retryLastTurn: true` requires an existing conversation. Model turns are serialized per conversation, so a retry submitted while the original request is finishing waits and then re-reads persisted history. The service finds the latest persisted user row, rebuilds model context from before that turn, and does not append or re-emit the user row. If an assistant response exists by then, it rejects the retry with `TURN_ALREADY_COMPLETE`; the frontend refreshes the transcript and retires the frozen draft so the completed persisted answer is shown.
 - **Late completion after cancel or retry** — a per-conversation generation counter ignores events and promise rejection from an older request, so stale work cannot overwrite the newer stream state.
 - **Rate limit tripped** — 429 with `Retry-After`; composer shows cooldown hint.
-- **Long tool result** — capped to 500 rows; LLM informed in `tool_result.meta.truncated = true` so it can mention the cap.
+- **Long tool result** — query output remains capped to 500 rows. Before model replay, an oversized result keeps its `ok`, `meta`, and `error` envelope and replaces `data` with truncation metadata plus a bounded preview. The full result remains persisted for the application and audit trail.
 - **Schema drift** — tool integration tests in CI catch repository signature changes before merge.
 - **Delete race condition** — when deleting a selected conversation, frontend clears `selectedId` (removes URL param) **before** awaiting the mutation to prevent the UI from refetching the deleted conversation. Backend uses `removeQueries` before `invalidateQueries` to ensure no overlapping detail-fetch requests trigger 404 spam in logs.
 - **Tools disabled** — when `useTools: false` is sent, the backend skips tool schema building and passes `tools: undefined` to Ollama; the model returns text only, bypassing the entire tool loop.
@@ -282,7 +305,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 - `[ai] streamChat start` — sent when beginning SSE fetch.
 - `[ai] streamChat response` — logged on stream open with event target details.
-- `[ai] streamChat event` — per SSE event (user_message, token, tool_call, tool_result, done, error).
+- `[ai] streamChat event` — per normalized SSE event (user_message, token, tool_call, tool_result, done, error); wire `complete` and compatibility `done` appear once here as semantic `done`.
 
 Enable via browser DevTools (Console tab) or server-side log aggregation.
 

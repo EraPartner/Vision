@@ -46,6 +46,7 @@ related_code:
 Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign). Returns a binary stream (`application/pdf`), not the standard [[docs/adr/026-unified-api-response-envelope|ADR-026 JSON envelope]].
 
 **Key Features:**
+
 - **Modular sections**: 7 financial section renderers (executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook)
 - **Theme-aware styling**: CSS custom properties (HSL) from frontend theme tokens
 - **Period filtering**: YTD, rolling N months, custom date range, or specific year
@@ -85,6 +86,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 ### Phase 5 Fixes — White Bar & Table Overflow (2026-04-27)
 
 **Fix 1: White Bar in Page Margin Area**
+
 - **Root Cause**: Chromium's footer iframe occupies less vertical space than the 28px bottom `@page` margin. The `html` element's background does not propagate to `@page` margin boxes, leaving a white gap at the bottom of every page in dark mode.
 - **Solution**: Two-part approach in `buildBaseCss()`:
   1. **@page rule background (primary fix)**: Added `background: hsl(var(--surface))` to the `@page { margin: 0 0 28px 0; }` rule. This paints the entire page canvas, including margin boxes, eliminating the white strip.
@@ -93,6 +95,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 - **Result**: Surface color now fills the entire page canvas, including margin boxes, eliminating the white bar and providing seamless visual continuity around the footer in both light and dark themes.
 
 **Fix 2: Table Overflow into Footer**
+
 - **Root Cause**: Large tables in `categoryBreakdown` and `topRecipients` sections would overflow rows into the Puppeteer footer zone when page breaks occurred near the table start.
 - **Solution**: Split both section renderers into two consecutive divs using new `.page-continuation` CSS class:
   1. **Chart page** (`.page.page-break`): Title, subtitle, and all chart(s); explicit page break
@@ -142,12 +145,14 @@ Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the fron
 **Current protection (defense-in-depth):**
 
 1. **Route boundary (Zod):** Each theme token field is validated against `HSL_COMPONENT_RE` before the request body is accepted:
+
    ```
    ^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$
    ```
+
    Example of a valid value: `"250 84% 60%"` (hue degrees, saturation %, lightness %).
 
-2. **Sink-level guard (`themeCss.js`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value.
+2. **Sink-level guard (`themeCss.js`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value. The fallback palette comes from `@vision/types/reportThemeDefaults`, which is also used by the frontend's default theme. This keeps a partial or rejected report palette aligned with the application's default light and dark palettes.
 
 Both guards are exported (`HSL_COMPONENT_RE`) and covered by [[apps/node-backend/tests/themeCss.test.js]].
 
@@ -169,7 +174,14 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 {
   "currency": "EUR",
   "period": { "kind": "rolling", "months": 12 },
-  "sections": ["executiveSummary", "cashflowTrend", "categoryBreakdown", "topRecipients", "bankBalances", "rollingAverages"],
+  "sections": [
+    "executiveSummary",
+    "cashflowTrend",
+    "categoryBreakdown",
+    "topRecipients",
+    "bankBalances",
+    "rollingAverages"
+  ],
   "theme": {
     "primary": "250 84% 60%",
     "accent": "280 84% 60%",
@@ -196,14 +208,14 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 
 **Request Fields**
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `currency` | string | `EUR` | 3-letter ISO currency code (e.g., EUR, USD, GBP) |
-| `period` | object | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below) |
-| `sections` | array | `[]` (uses defaults) | List of section IDs to include; empty = default sections |
-| `theme` | object | `{}` | Theme tokens (HSL values); omit to use defaults |
-| `excludedCategoryIds` | integer array | `[]` | Category IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
-| `excludedRecipientIds` | integer array | `[]` | Recipient IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
+| Field                  | Type          | Default                           | Description                                                                                                                                   |
+| ---------------------- | ------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency`             | string        | `EUR`                             | 3-letter ISO currency code (e.g., EUR, USD, GBP)                                                                                              |
+| `period`               | object        | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below)                                                                                                  |
+| `sections`             | array         | `[]` (uses defaults)              | List of section IDs to include; empty = default sections                                                                                      |
+| `theme`                | object        | `{}`                              | Theme tokens (HSL values); omit to use defaults                                                                                               |
+| `excludedCategoryIds`  | integer array | `[]`                              | Category IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison)  |
+| `excludedRecipientIds` | integer array | `[]`                              | Recipient IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
 
 **Period Options**
 
@@ -214,15 +226,15 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 
 **Available Sections**
 
-| Section ID | Description |
-|-----------|-------------|
-| `executiveSummary` | KPI grid + per-month table |
-| `cashflowTrend` | Grouped bar chart (income vs expenses) + data table |
-| `categoryBreakdown` | Horizontal bars of top categories + ranked table |
-| `topRecipients` | Top merchants/recipients + month-over-month change badges |
-| `bankBalances` | Account balance cards + net position summary |
-| `rollingAverages` | 6-month rolling average vs current month pace |
-| `plannedOutlook` | Next-month planned transactions grouped by date |
+| Section ID          | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `executiveSummary`  | KPI grid + per-month table                                |
+| `cashflowTrend`     | Grouped bar chart (income vs expenses) + data table       |
+| `categoryBreakdown` | Horizontal bars of top categories + ranked table          |
+| `topRecipients`     | Top merchants/recipients + month-over-month change badges |
+| `bankBalances`      | Account balance cards + net position summary              |
+| `rollingAverages`   | 6-month rolling average vs current month pace             |
+| `plannedOutlook`    | Next-month planned transactions grouped by date           |
 
 **Default Sections (when `sections` is omitted or empty)**
 
@@ -259,17 +271,17 @@ Additionally, `categoryBreakdown` and `topRecipients` sections show a `.filter-n
 **Example Request (with filters)**
 
 ```javascript
-const response = await fetch('/api/reports/financial', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+const response = await fetch("/api/reports/financial", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    currency: 'EUR',
-    period: { kind: 'rolling', months: 12 },
+    currency: "EUR",
+    period: { kind: "rolling", months: 12 },
     sections: [],
-    theme: { /* theme tokens */ },
-    excludedCategoryIds: [5, 7],      // Exclude Travel, Subscriptions
-    excludedRecipientIds: [12, 18]    // Exclude Amazon, Netflix
-  })
+    theme: {/* theme tokens */},
+    excludedCategoryIds: [5, 7], // Exclude Travel, Subscriptions
+    excludedRecipientIds: [12, 18], // Exclude Amazon, Netflix
+  }),
 });
 
 const blob = await response.blob();
@@ -284,14 +296,14 @@ Generate a portfolio PDF report with 6 data-backed sections (Phase 8).
 
 **Available Sections:**
 
-| Section ID | Description |
-|---|---|
-| `portfolioExecutiveSummary` | KPI grid: total value, invested, unrealised P/L, realised P/L, dividends YTD, return % |
-| `portfolioAllocation` | Asset-class breakdown (stocks/ETFs, crypto, metals, cash) via horizontal bars + table |
-| `topHoldings` | Top 10 holdings by current value |
-| `performanceTrend` | Line chart overlaying portfolio value vs invested + inflation-adjusted; per-month table |
-| `assetClassDetail` | Grouped bar chart (invested vs value) per asset class + P/L summary |
-| `dividendIncome` | Monthly dividend bar chart + top dividend-paying investments |
+| Section ID                  | Description                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `portfolioExecutiveSummary` | KPI grid: total value, invested, unrealised P/L, realised P/L, dividends YTD, return %  |
+| `portfolioAllocation`       | Asset-class breakdown (stocks/ETFs, crypto, metals, cash) via horizontal bars + table   |
+| `topHoldings`               | Top 10 holdings by current value                                                        |
+| `performanceTrend`          | Line chart overlaying portfolio value vs invested + inflation-adjusted; per-month table |
+| `assetClassDetail`          | Grouped bar chart (invested vs value) per asset class + P/L summary                     |
+| `dividendIncome`            | Monthly dividend bar chart + top dividend-paying investments                            |
 
 ### POST /api/reports/tax
 
@@ -314,28 +326,33 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
     "taxableIncome": 45000,
     "totalTax": 12300,
     "brackets": [
-      { "label": "25%", "rate": 0.25, "taxableIncome": 15200, "taxAmount": 3800 }
+      {
+        "label": "25%",
+        "rate": 0.25,
+        "taxableIncome": 15200,
+        "taxAmount": 3800
+      }
     ]
   }
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `taxProfile` | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary` |
+| Field            | Type              | Description                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `taxProfile`     | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary`                                                                                                                                                                                                                                                                            |
 | `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. **`brackets[].rate` is in PERCENT units** (`25` = 25%), unlike the server-side `belgianTaxTables.js` rates, which are fractions (`0.30` = 30%). |
 
 **Available Sections:**
 
-| Section ID | Description |
-|---|---|
-| `taxExecutiveSummary` | KPI grid: total taxes paid, fees, net cost, dividend WHT, TOB, effective rate |
-| `taxTypeBreakdown` | Horizontal bars of tax components (TOB, dividend WHT, sell tax, fees, other) |
-| `taxByAssetClass` | Grouped bar chart (taxes vs fees) per asset class |
-| `taxMonthlyTrend` | Monthly grouped bars (taxes and fees) |
-| `topInvestmentsByCost` | Top 15 investments ranked by total taxes + fees |
-| `feeBreakdown` | Fee aggregation by asset class |
-| `belgianRulesSummary` | Static bracket/exemption/TOB-rate tables; PIT summary block when `precomputedPIT` supplied |
+| Section ID             | Description                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `taxExecutiveSummary`  | KPI grid: total taxes paid, fees, net cost, dividend WHT, TOB, effective rate              |
+| `taxTypeBreakdown`     | Horizontal bars of tax components (TOB, dividend WHT, sell tax, fees, other)               |
+| `taxByAssetClass`      | Grouped bar chart (taxes vs fees) per asset class                                          |
+| `taxMonthlyTrend`      | Monthly grouped bars (taxes and fees)                                                      |
+| `topInvestmentsByCost` | Top 15 investments ranked by total taxes + fees                                            |
+| `feeBreakdown`         | Fee aggregation by asset class                                                             |
+| `belgianRulesSummary`  | Static bracket/exemption/TOB-rate tables; PIT summary block when `precomputedPIT` supplied |
 
 **Period and tax-year normalisation:**
 
@@ -350,31 +367,32 @@ Kept for backward compatibility; falls back to legacy PDFKit renderer.
 
 **Query Parameters**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | `EUR` | 3-letter ISO currency code |
-| `target_currency` | string | — | Alternative name for currency (accepted for compatibility) |
+| Parameter         | Type   | Default | Description                                                |
+| ----------------- | ------ | ------- | ---------------------------------------------------------- |
+| `currency`        | string | `EUR`   | 3-letter ISO currency code                                 |
+| `target_currency` | string | —       | Alternative name for currency (accepted for compatibility) |
 
 **Deprecated.** Use POST endpoint instead to access theme customization and section selection.
 
 ## Frontend Usage
 
 ```typescript
-import { downloadFinancialReport } from '@/lib/api/reports';
+import { downloadFinancialReport } from "@/lib/api/reports";
 
 // Simple download with defaults
 await downloadFinancialReport();
 
 // Custom options
 await downloadFinancialReport({
-  currency: 'USD',
-  period: { kind: 'ytd' },
-  sections: ['executiveSummary', 'cashflowTrend', 'categoryBreakdown'],
-  theme: { /* custom theme tokens */ }
+  currency: "USD",
+  period: { kind: "ytd" },
+  sections: ["executiveSummary", "cashflowTrend", "categoryBreakdown"],
+  theme: {/* custom theme tokens */},
 });
 ```
 
 The frontend helper:
+
 1. Resolves active theme tokens from DOM CSS custom properties
 2. Assembles POST body with user selections
 3. Fetches as a Blob
@@ -396,6 +414,7 @@ No `apiRequest` wrapper is used because the response is a binary stream.
 ### Data Sources
 
 All fetched in parallel via Promise.allSettled:
+
 - `computeMonthlySummary()` — per-month totals
 - `computeCategoryBreakdown()` — category spending
 - `computeRecipientInsights()` — top merchants
@@ -423,4 +442,4 @@ Backend gracefully closes Puppeteer browser on SIGINT/SIGTERM via `closePuppetee
 
 - [[docs/features/pdf-report-export|PDF Report Export feature doc]] — user-facing feature
 - [[docs/api/aggregations|Aggregations API]] — source data endpoints
-- [[docs/adr/026-unified-api-response-envelope|ADR-026]] — why this route does *not* use the standard envelope
+- [[docs/adr/026-unified-api-response-envelope|ADR-026]] — why this route does _not_ use the standard envelope

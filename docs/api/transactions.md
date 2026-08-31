@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-08-27
-last_modified: 2026-06-28
+updated: 2026-08-31
+last_modified: 2026-08-31
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -75,7 +75,7 @@ Notes:
 - `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.js]]).
 - `include_balance=true` computes a `balance` field via SQL window function `SUM(amount) OVER (ORDER BY date ASC)` instead of JavaScript post-processing ([[apps/node-backend/src/routes/transactions.js]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
-- Non-`uncategorised` list requests now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips; filters, totals, and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- Non-`uncategorised` list requests use a top-N data query plus a narrow count query (`getAllWithCount`) instead of `COUNT(*) OVER ()`, so PostgreSQL can stop the row query at `LIMIT`. Identical normalized filters share their count for two seconds across page and page-size changes, including concurrent requests. Transaction CRUD and committed imports clear the cache. Merge repoints and other direct SQL writers can leave `total` briefly stale until the two-second bound expires. Filters and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - `uncategorised=true` list requests now use a dedicated single-round-trip repository path (`getUncategorisedWithCount`) instead of route-level dual queries; uncategorised row filtering and historical total-count semantics are preserved ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - **`uncategorised=true` honours the full row-compatible filter set (fixed 2026-08-13 and 2026-08-21).** `recipient_group_id`, `tags`, `transaction_type`, `amount_min`, `amount_max` (and `amount_signed`) were parsed by the route but dropped by `getUncategorisedWithCount`, so both the listed rows and `total` were computed over a wider set than the request named — a tag- or amount-filtered queue answered with every uncategorised row and an unfiltered count. Those row-compatible filters now narrow **both** halves, built by the same `buildTransactionWhere` the main list uses; `category_ids`, which was dropped at the same boundary, narrows `total` only. `search` and `transaction_id`, which previously narrowed only `total`, now also narrow the returned queue rows. Two consequences worth knowing: `recipient_id` now resolves aliases on the rows as it always did on the total (the queue and its count can no longer disagree), while only `category_id` and `category_ids` remain total-only because a category filter cannot narrow a set defined by having no effective category. The queue itself is unchanged: active rows whose 3-level effective category is NULL, regardless of `active=false` ([[apps/node-backend/src/repositories/transactionRepository.js]]).
 - The same uncategorised path honours `sort_by`, `sort_dir`, and `include_balance`; custom ordering keeps the date/id tie-breakers used by the main list, and running balances remain partitioned by account. The plain repository query used by the AI expenses tool now shares the same filter builder instead of maintaining a narrower predicate copy ([[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -175,12 +175,12 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Runnin
 
 Implementation note:
 
-- CSV/JSON export filter construction (`buildExportFilters`) now delegates to the shared `buildTransactionWhere` from `filterBuilder.js` after parsing the query with `parseTransactionListQuery`. Result: both export endpoints accept the same filter set as `GET /api/transactions` (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
+- Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.js` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/services/transactionExport.js]]).
 - Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
-- CSV/JSON export filter construction supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
-- Shared `EXPORT_JOINS_SQL` constant and `buildExportProbeSql()` ensure existence-probe queries join `recipients`/`categories` exactly like the chunk query — fixes a latent bug where `recipient_name`/`search` filters would crash the probe (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
-- CSV export row escaping/assembly and filename creation are handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
-- CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
+- CSV/JSON export request parsing supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
+- Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting ([[apps/node-backend/src/services/transactionExport.js]]).
+- CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.js]]).
+- CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.js]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/export/json
@@ -235,7 +235,7 @@ Both export endpoints share `buildExportFilters`, so the strict id-param contrac
 
 Implementation note:
 
-- JSON export uses shared filter-building and chunk-SQL helpers (`buildExportFilters`, `buildExportChunkSql`, `buildTransactionExportJsonFilename`) for consistency with CSV export. `buildExportFilters` constructs precise SQL filters delegating to `buildTransactionWhere` with a 50-entry cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
+- JSON export uses route-level filter parsing plus the shared SQL/streaming pipeline in `transactionExport.js`, including the 50-entry list cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/services/transactionExport.js]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id
@@ -265,6 +265,10 @@ Retrieve a single transaction by ID.
   "links": []
 }
 ```
+
+`bank_account` is the canonical display name projected from the linked `accounts` row. Its casing
+may therefore differ from the legacy string stored on the transaction. Use `account_id` for stable
+identity and joins.
 
 ### POST /api/transactions
 
@@ -320,9 +324,8 @@ Update an existing transaction.
 
 Implementation notes:
 
-- Internal PATCH flow now delegates to extracted helpers for payload normalization and name→id resolution (`normalizeTransactionPatchFields`, `resolveRecipientNameToId`, `resolveCategoryNameToId`, `parseRouteId`) while preserving status codes and response messages.
-- Recipient/category name-resolution and CSV export DB access now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports; endpoint behavior, payloads, and validation messages remain unchanged ([[apps/node-backend/src/routes/transactions.js]]).
-- Recipient/category name-resolution checks in PATCH now run concurrently and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without changing validation outcomes ([[apps/node-backend/src/routes/transactions.js]]).
+- Internal PATCH flow delegates payload normalization to route helpers and passes the validated model to `transactionService`, which owns name resolution, persistence, and reconciliation while preserving status codes and response messages.
+- Recipient/category name-resolution checks in PATCH run concurrently inside `transactionService` through the recipient/category service seams and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without database or write orchestration in the route ([[apps/node-backend/src/services/transactionService.js]]).
 - Repository update path now returns the enriched updated row in a single CTE query (`WITH updated ... SELECT ...`) instead of `UPDATE` + follow-up `getById` round-trip; response shape and not-found semantics are unchanged ([[apps/node-backend/src/repositories/transactionRepository.js]]).
 - PATCH route internal errors now return sanitized generic details instead of leaking backend exception strings ([[apps/node-backend/src/routes/transactions.js]]).
 

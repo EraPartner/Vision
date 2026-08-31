@@ -18,7 +18,7 @@ related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/
 
 Accounts (ADR-088) replace the implicit free-text `bank_account` string with a real entity that
 is the spine across all three workspaces — budgeting cash (the transactions ledger), portfolio
-holdings, and liabilities. An account is the user's *own* account; this is distinct from
+holdings, and liabilities. An account is the user's _own_ account; this is distinct from
 `recipient_bank_accounts` (counterparty IBANs).
 
 During the dual-write phase a database trigger (migration 0051) keeps `transactions.account_id`
@@ -36,11 +36,11 @@ List accounts.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| active | `true` \| `false` \| `all` | `true` | Filter by active status |
-| limit | integer | — (unbounded) | Page size, capped at 1000 |
-| offset | integer | `0` | Rows to skip |
+| Parameter | Type                       | Default       | Description               |
+| --------- | -------------------------- | ------------- | ------------------------- |
+| active    | `true` \| `false` \| `all` | `true`        | Filter by active status   |
+| limit     | integer                    | — (unbounded) | Page size, capped at 1000 |
+| offset    | integer                    | `0`           | Rows to skip              |
 
 Returns `{ items: Account[], total, links }`. Pagination is **opt-in**: send neither
 `limit` nor `offset` and the response holds every matching account (`total` = that
@@ -79,15 +79,16 @@ balance while the stored date is `NULL`, or clearing only the date, both return 
 
 **`funding_account_id` validation** (`assertFundingAccountValid`,
 `apps/node-backend/src/services/accountService.js`), all 400:
+
 - Not a positive integer (and not `null`): `funding_account_id must be a positive integer`. The
   shape rule is `validateId`'s — a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11,
   breaking for malformed ids). It was `Number.isInteger(Number(value))`, which rejects `12abc` but
-  reads `1e3` as 1000 and `0x10` as 16, so the existence check below saw a real, *different*
+  reads `1e3` as 1000 and `0x10` as 16, so the existence check below saw a real, _different_
   account and passed it.
 - Equal to the account's own id (self-funding): `funding_account_id cannot reference the account
-  itself`.
+itself`.
 - Doesn't reference an existing account: `funding_account_id N does not reference an existing
-  account`.
+account`.
 - Would close a funding cycle: walking the funding chain upward from the proposed parent reaches
   the account being edited (A→B→A, or a longer chain A→B→C→A) →
   `funding_account_id N would create a funding cycle`. This check is effectively **PATCH-only**:
@@ -113,10 +114,12 @@ decision (`PATCH { in_net_worth: true }`).
 > [!info] Account rename propagates to transactions (2026-06-25)
 > When the `name` field is included in the update body, `accountRepository.update()` atomically
 > propagates the new name to the denormalized `bank_account` string on all owned rows:
+>
 > ```sql
 > UPDATE transactions SET bank_account = $newName WHERE account_id = $accountId;
 > UPDATE planned_transactions SET bank_account = $newName WHERE account_id = $accountId;
 > ```
+>
 > This keeps the display label in the bank-balances widget, transaction filters, and the
 > dual-write trigger lookup consistent with `accounts.name`. The propagation is part of the same
 > database transaction as the accounts row update. See [[docs/adr/088-account-entity|ADR-088 addendum]].
@@ -172,7 +175,12 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
 {
   "into": 2,
   "source": 1,
-  "reassigned": { "transactions": 120, "planned": 2, "portfolio": 0, "funding": 1 },
+  "reassigned": {
+    "transactions": 120,
+    "planned": 2,
+    "portfolio": 0,
+    "funding": 1
+  },
   "projectedBalance": 1234.5,
   "projectedBalanceCurrency": "EUR",
   "stampsInterleaved": true
@@ -192,7 +200,7 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
 
 `400` if `into` is missing or not a strict positive integer id (changed 2026-08-11: it was parsed
 with `Number(...)`, so `?into=1e3` arrived as a well-formed **1000** and previewed a merge into an
-account nobody named; `12abc`, `12.5`, `0x10`, ` 5 `, `0` and `-4` are now 400s too) or equals `:id`; `404` if either account does
+account nobody named; `12abc`, `12.5`, `0x10`, `5`, `0` and `-4` are now 400s too) or equals `:id`; `404` if either account does
 not exist. Intended for the merge dialog (WP-B5) to show a confirmation summary and warn before
 an interleaving merge.
 
@@ -217,6 +225,14 @@ warning (amber) tone rather than destructive, with its own tooltip (i18n key
 header, and the dashboard `BankBalancesWidget` chips. See
 [[docs/adr/094-balance-reconciliation-drift|ADR-094]] for the drift semantics.
 
+The API defines `drift` as `statement_balance − reconcilable_balance`, not against the
+FX-converted reporting `computed_balance`. The reconciliation base uses the declared account
+currency partition whenever it exists, including at exactly zero. Zero and sub-cent partitions
+are filtered only for the fallback when the declared partition is absent: one remaining funded
+foreign partition is treated as a mislabelled single-currency account; otherwise the base is zero
+in the declared currency. `POST /api/accounts/:id/reconcile` accepts that base or creates an
+adjustment in its `reconcilable_currency`, leaving all other currency partitions unchanged.
+
 ### AddAccountDialog — name-required guard
 
 The Create/Save button in `AddAccountDialog`
@@ -234,10 +250,10 @@ allowed -- the note is informational only.
 
 ### i18n keys (2026-06-21)
 
-| Key | Purpose |
-|-----|---------|
-| `accounts.balanceTooltip` | Tooltip on the balance figure in the account card |
-| `accounts.driftTooltip` | Tooltip on a fresh drift badge |
+| Key                          | Purpose                                                               |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `accounts.balanceTooltip`    | Tooltip on the balance figure in the account card                     |
+| `accounts.driftTooltip`      | Tooltip on a fresh drift badge                                        |
 | `accounts.mergeTypeMismatch` | Amber note in MergeAccountDialog when target type differs from source |
 
 Later additions (drift badge rework, WP-B1 completion): `accounts.driftBadge` ("Drift {amount}"),

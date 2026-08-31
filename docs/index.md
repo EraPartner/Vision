@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-08-30
-updated: 2026-08-26
-last_modified: 2026-08-26
+date: 2026-08-31
+updated: 2026-08-31
+last_modified: 2026-08-31
 tags:
   [
     knowledge-base,
@@ -166,7 +166,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (57 components) + 26 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, native cutover, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (57 components) + 27 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, native cutover, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |
@@ -203,6 +203,15 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-08-31 — Native Vision Demo (ADR-114)
+
+Vision Demo now packages the same native PostgreSQL, migration, backend, frontend, and report
+runtime as production with a separate `vision_demo` data root. Its deterministic synthetic seed
+is built against the current migration head, checksummed, restored transactionally, verified by
+exact table counts, and activated only after detailed readiness. Docker remains optional for
+normal Vision deployments but is no longer part of Demo build or startup. See
+[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]].
 
 ### 2026-08-30 — Native macOS Runtime (ADR-113)
 

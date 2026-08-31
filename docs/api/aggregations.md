@@ -58,16 +58,16 @@ related_code:
 >
 > **Absent or empty is unchanged and is not an error:** omitting the param, or sending `?excluded_category_ids=`, still means "no filter" and answers 200 with the unfiltered dataset. An empty list and a list with a bad element are deliberately different cases.
 >
-> This changed on 2026-08-11: the parser was `.map(Number).filter(Number.isFinite)`, so a bad element was **dropped**, not rejected. `?excluded_category_ids=12abc` yielded `[]` and switched the exclusion off entirely — the endpoint answered 200 with a *different dataset than the caller asked for* and nothing surfaced, while `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named. Clients sending plain integers are unaffected. `mc_percentiles[]` is **not** an id param and keeps the lenient parser. Full accept set: [[docs/security/input-validation#Repeatable ID Query Params (aggregations)|Input Validation]].
+> This changed on 2026-08-11: the parser was `.map(Number).filter(Number.isFinite)`, so a bad element was **dropped**, not rejected. `?excluded_category_ids=12abc` yielded `[]` and switched the exclusion off entirely — the endpoint answered 200 with a _different dataset than the caller asked for_ and nothing surfaced, while `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named. Clients sending plain integers are unaffected. `mc_percentiles[]` is **not** an id param and keeps the lenient parser. Full accept set: [[docs/security/input-validation#Repeatable ID Query Params (aggregations)|Input Validation]].
 
 ## Endpoint Details
 
-| Property | Value |
-|----------|-------|
-| **Base Path** | `/api/aggregations` |
-| **Methods** | GET (read-only) |
-| **Authentication** | None |
-| **Rate Limit** | 600 req/min (`aggregationRateLimiter`; bypassed in development) |
+| Property           | Value                                                           |
+| ------------------ | --------------------------------------------------------------- |
+| **Base Path**      | `/api/aggregations`                                             |
+| **Methods**        | GET (read-only)                                                 |
+| **Authentication** | None                                                            |
+| **Rate Limit**     | 600 req/min (`aggregationRateLimiter`; bypassed in development) |
 
 ## Response Envelope
 
@@ -92,18 +92,18 @@ All endpoints follow the unified response envelope (ADR-026) with a nested aggre
 
 **Transport envelope** (outer `ok`, outer `meta`):
 
-| Field | Meaning |
-|-------|---------|
-| `ok` | Always `true` on success |
+| Field            | Meaning                            |
+| ---------------- | ---------------------------------- |
+| `ok`             | Always `true` on success           |
 | `meta.requestId` | Correlation ID for request tracing |
 
 **Aggregation envelope** (inner `data`, inner `meta`):
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `data.data` | object | Endpoint-specific aggregation result (see endpoint sections) |
-| `data.meta.source` | `'mv' \| 'live' \| 'cache'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions or custom params); `'cache'` = served from 6-hour TTL cache (Phase E cash flow forecast only) |
-| `data.meta.computedAt` | ISO 8601 timestamp | When the aggregation was computed or cached |
+| Field                  | Type                        | Meaning                                                                                                                                                                                                                        |
+| ---------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `data.data`            | object                      | Endpoint-specific aggregation result (see endpoint sections)                                                                                                                                                                   |
+| `data.meta.source`     | `'mv' \| 'live' \| 'cache'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions or custom params); `'cache'` = served from 6-hour TTL cache (Phase E cash flow forecast only) |
+| `data.meta.computedAt` | ISO 8601 timestamp          | When the aggregation was computed or cached                                                                                                                                                                                    |
 
 **Frontend unwrapping:** After `unwrapEnvelope()` strips the outer `ok/meta` layer, consumers receive `{ data, meta: { source, computedAt } }` (the aggregation envelope).
 
@@ -121,12 +121,12 @@ Summary of financial totals per month.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude from totals |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude from totals |
-| `all_time` | boolean | false | When `true`, return full all-time history; when `false`, return recent months only. Always bypasses MV fast-path and uses live SQL for complete accuracy |
+| Parameter                  | Type      | Default | Description                                                                                                                                              |
+| -------------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive)                                                                                                        |
+| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude from totals                                                                                                                        |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude from totals                                                                                                                        |
+| `all_time`                 | boolean   | false   | When `true`, return full all-time history; when `false`, return recent months only. Always bypasses MV fast-path and uses live SQL for complete accuracy |
 
 **Response (data field):**
 
@@ -138,16 +138,16 @@ Summary of financial totals per month.
       "year": 2026,
       "period_start": "2026-01-01",
       "period_end": "2026-01-31",
-      "total_spending": -1200.00,
-      "total_income": 3500.00,
-      "net_amount": 2300.00,
+      "total_spending": -1200.0,
+      "total_income": 3500.0,
+      "net_amount": 2300.0,
       "transaction_count": 42
     }
   ],
   "summary": {
-    "total_spending": -4800.00,
-    "total_income": 14000.00,
-    "net_amount": 9200.00,
+    "total_spending": -4800.0,
+    "total_income": 14000.0,
+    "net_amount": 9200.0,
     "transaction_count": 168,
     "period_start": "2026-01-01",
     "period_end": "2026-04-16"
@@ -161,7 +161,7 @@ Summary of financial totals per month.
 const envelope = await apiClient.getAggregationMonthlySummary({
   excluded_category_ids: [5, 10],
   excluded_recipient_ids: [3],
-  currency: 'EUR'
+  currency: "EUR",
 });
 // envelope.data.months[n] → latest month with transaction_count > 0
 // envelope.meta.source → 'mv' or 'live'
@@ -183,9 +183,9 @@ Spending totals by category.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency |
+| Parameter  | Type   | Default | Description     |
+| ---------- | ------ | ------- | --------------- |
+| `currency` | string | EUR     | Target currency |
 
 **Response (data field):**
 
@@ -196,13 +196,13 @@ Spending totals by category.
       "id": 5,
       "name": "Groceries",
       "count": 28,
-      "total": 420.50
+      "total": 420.5
     },
     {
       "id": null,
       "name": "[Uncategorized]",
       "count": 3,
-      "total": 45.00
+      "total": 45.0
     }
   ]
 }
@@ -221,11 +221,11 @@ Top merchants and month-over-month spending changes. Supports the same exclusion
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude (applied via `COALESCE(t.category_id, r.default_category_id)`) |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude (applied via `COALESCE(pr.id, r.id)` to resolve cluster roots) |
+| Parameter                  | Type      | Default | Description                                                                          |
+| -------------------------- | --------- | ------- | ------------------------------------------------------------------------------------ |
+| `currency`                 | string    | EUR     | Target currency                                                                      |
+| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude (applied via `COALESCE(t.category_id, r.default_category_id)`) |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude (applied via `COALESCE(pr.id, r.id)` to resolve cluster roots) |
 
 **Response (data field):**
 
@@ -235,7 +235,7 @@ Top merchants and month-over-month spending changes. Supports the same exclusion
     {
       "recipientId": 12,
       "name": "SuperMart",
-      "totalSpend": 850.00,
+      "totalSpend": 850.0,
       "transactionCount": 14,
       "avgAmount": 60.71,
       "firstSeen": "2025-06-01",
@@ -246,8 +246,8 @@ Top merchants and month-over-month spending changes. Supports the same exclusion
     {
       "recipientId": 12,
       "name": "SuperMart",
-      "currentSpend": 125.00,
-      "previousSpend": 98.50,
+      "currentSpend": 125.0,
+      "previousSpend": 98.5,
       "changePercent": 26.88
     }
   ]
@@ -264,11 +264,11 @@ Current vs. historical daily flow (with and without planned transactions).
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+| Parameter                  | Type      | Default | Description           |
+| -------------------------- | --------- | ------- | --------------------- |
+| `currency`                 | string    | EUR     | Target currency       |
+| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude |
 
 **Response (data field):**
 
@@ -279,12 +279,12 @@ Current vs. historical daily flow (with and without planned transactions).
   "month": 4,
   "year": 2026,
   "without_planned": [
-    { "day": 1, "average": 50.00, "current": null },
-    { "day": 16, "average": 75.00, "current": 65.50 }
+    { "day": 1, "average": 50.0, "current": null },
+    { "day": 16, "average": 75.0, "current": 65.5 }
   ],
   "with_planned": [
-    { "day": 1, "average": 50.00, "current": 55.00 },
-    { "day": 16, "average": 75.00, "current": 120.50 }
+    { "day": 1, "average": 50.0, "current": 55.0 },
+    { "day": 16, "average": 75.0, "current": 120.5 }
   ]
 }
 ```
@@ -299,19 +299,19 @@ Average metrics vs. current period (always computed live in Phase 2).
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency |
+| Parameter  | Type   | Default | Description     |
+| ---------- | ------ | ------- | --------------- |
+| `currency` | string | EUR     | Target currency |
 
 **Response (data field):**
 
 ```json
 {
-  "averageDailySpend": 75.00,
-  "currentDailySpend": 82.50,
+  "averageDailySpend": 75.0,
+  "currentDailySpend": 82.5,
   "percentChange": 10.0,
-  "averageMonthlySpend": 2250.00,
-  "currentMonthlySpend": 1320.00
+  "averageMonthlySpend": 2250.0,
+  "currentMonthlySpend": 1320.0
 }
 ```
 
@@ -333,9 +333,9 @@ change.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency |
+| Parameter  | Type   | Default | Description     |
+| ---------- | ------ | ------- | --------------- |
+| `currency` | string | EUR     | Target currency |
 
 > [!info] History granularity changed to daily (2026-06-11)
 > The `history` and `total_history` arrays previously used monthly `{ month: 'YYYY-MM' }` points. They now emit one point per calendar day (`{ date: 'YYYY-MM-DD' }`) over the last 12 months, using a `LATERAL` probe to find the latest recorded balance ≤ each day. **The `month` field is gone; use `date` instead.**
@@ -350,7 +350,7 @@ change.
     {
       "account_id": 42,
       "bank_account": "IBAN:BE12345678901234",
-      "balance": 5230.50,
+      "balance": 5230.5,
       "transaction_count": 156,
       "first_transaction": "2025-03-01",
       "last_transaction": "2026-04-10"
@@ -359,14 +359,14 @@ change.
   "total_net_position": 12450.75,
   "history": {
     "IBAN:BE12345678901234": [
-      { "date": "2026-04-08", "balance": 4800.00 },
-      { "date": "2026-04-09", "balance": 4800.00 },
-      { "date": "2026-04-10", "balance": 5230.50 }
+      { "date": "2026-04-08", "balance": 4800.0 },
+      { "date": "2026-04-09", "balance": 4800.0 },
+      { "date": "2026-04-10", "balance": 5230.5 }
     ]
   },
   "total_history": [
-    { "date": "2026-04-08", "balance": 9500.00 },
-    { "date": "2026-04-09", "balance": 9500.00 },
+    { "date": "2026-04-08", "balance": 9500.0 },
+    { "date": "2026-04-09", "balance": 9500.0 },
     { "date": "2026-04-10", "balance": 12450.75 }
   ]
 }
@@ -382,14 +382,14 @@ Per-recipient aggregated spending data with category and time-bucket filtering, 
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
-| `bucket` | string | monthly | `monthly` or `yearly` |
-| `recipient_ids[]` | integer[] | [] | Recipients to include (if empty, all included) |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
-| `start_date` | string | null | Inclusive ISO date filter start (`YYYY-MM-DD`) |
-| `end_date` | string | null | Inclusive ISO date filter end (`YYYY-MM-DD`) |
+| Parameter                  | Type      | Default | Description                                                                                                                                                                                                                     |
+| -------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive)                                                                                                                                                                               |
+| `bucket`                   | string    | monthly | `monthly` or `yearly`                                                                                                                                                                                                           |
+| `recipient_ids[]`          | integer[] | []      | Recipients to include (if empty, all included). Selecting a primary or any alias includes the full primary-recipient cluster; overlapping selections from one cluster are deduplicated and the series uses the primary id/name. |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude                                                                                                                                                                                                           |
+| `start_date`               | string    | null    | Inclusive ISO date filter start (`YYYY-MM-DD`)                                                                                                                                                                                  |
+| `end_date`                 | string    | null    | Inclusive ISO date filter end (`YYYY-MM-DD`)                                                                                                                                                                                    |
 
 The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
 
@@ -404,7 +404,7 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
       "periods": [
         {
           "period": "2026-01",
-          "total": 425.50,
+          "total": 425.5,
           "count": 8
         },
         {
@@ -422,16 +422,16 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
       "periods": [
         {
           "period": "2026-01",
-          "total": 85.00,
+          "total": 85.0,
           "count": 2
         },
         {
           "period": "2026-02",
-          "total": 92.50,
+          "total": 92.5,
           "count": 2
         }
       ],
-      "total": 177.50,
+      "total": 177.5,
       "count": 4
     }
   ]
@@ -440,27 +440,27 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `recipients[]` | array | Per-recipient aggregated series |
-| `recipient_id` | number | Recipient ID |
-| `recipient_name` | string | Recipient display name |
-| `periods[]` | array | Time-bucketed spending (monthly/yearly) |
-| `period` | string | Period key (YYYY-MM for monthly, YYYY for yearly) |
-| `total` | number | Recipient spending in this period |
-| `count` | number | Transaction count in this period |
-| `total` | number | Total recipient spending across all periods |
-| `count` | number | Total transaction count |
+| Field            | Type   | Meaning                                           |
+| ---------------- | ------ | ------------------------------------------------- |
+| `recipients[]`   | array  | Per-recipient aggregated series                   |
+| `recipient_id`   | number | Recipient ID                                      |
+| `recipient_name` | string | Recipient display name                            |
+| `periods[]`      | array  | Time-bucketed spending (monthly/yearly)           |
+| `period`         | string | Period key (YYYY-MM for monthly, YYYY for yearly) |
+| `total`          | number | Recipient spending in this period                 |
+| `count`          | number | Transaction count in this period                  |
+| `total`          | number | Total recipient spending across all periods       |
+| `count`          | number | Total transaction count                           |
 
 **Frontend Usage:**
 
 ```typescript
 const envelope = await getAggregationRecipientPivot({
-  currency: 'EUR',
-  bucket: 'monthly',
+  currency: "EUR",
+  bucket: "monthly",
   recipient_ids: [10, 11],
-  start_date: '2026-01-01',
-  end_date: '2026-03-31'
+  start_date: "2026-01-01",
+  end_date: "2026-03-31",
 });
 
 // envelope.data.recipientPivot['2026-01'] → RecipientPivotItem[]
@@ -481,14 +481,14 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tag_ids[]` | integer[] | Conditional | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`. |
-| `all` | boolean | No | Alias: `all_tags`. When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
-| `bucket` | string | No (default: `monthly`) | `monthly` or `yearly` |
-| `start_date` | string | No | Inclusive ISO date filter start (`YYYY-MM-DD`) |
-| `end_date` | string | No | Inclusive ISO date filter end (`YYYY-MM-DD`) |
-| `currency` | string | No (default: `EUR`) | Target currency (3-letter code, case-insensitive) |
+| Parameter    | Type      | Required                | Description                                                                                                                                                      |
+| ------------ | --------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tag_ids[]`  | integer[] | Conditional             | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`.                       |
+| `all`        | boolean   | No                      | Alias: `all_tags`. When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
+| `bucket`     | string    | No (default: `monthly`) | `monthly` or `yearly`                                                                                                                                            |
+| `start_date` | string    | No                      | Inclusive ISO date filter start (`YYYY-MM-DD`)                                                                                                                   |
+| `end_date`   | string    | No                      | Inclusive ISO date filter end (`YYYY-MM-DD`)                                                                                                                     |
+| `currency`   | string    | No (default: `EUR`)     | Target currency (3-letter code, case-insensitive)                                                                                                                |
 
 The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
 
@@ -499,11 +499,26 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
   "data": {
     "tagPivot": {
       "2026-01": [
-        { "tagId": 3, "slug": "rome-trip", "total": 412.50, "transactionCount": 8 },
-        { "tagId": 7, "slug": "home-reno", "total": 980.00, "transactionCount": 14 }
+        {
+          "tagId": 3,
+          "slug": "rome-trip",
+          "total": 412.5,
+          "transactionCount": 8
+        },
+        {
+          "tagId": 7,
+          "slug": "home-reno",
+          "total": 980.0,
+          "transactionCount": 14
+        }
       ],
       "2026-02": [
-        { "tagId": 3, "slug": "rome-trip", "total": 75.00, "transactionCount": 2 }
+        {
+          "tagId": 3,
+          "slug": "rome-trip",
+          "total": 75.0,
+          "transactionCount": 2
+        }
       ]
     }
   },
@@ -516,13 +531,13 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `tagPivot` | `Record<period, TagPivotEntry[]>` | Map from period key (`YYYY-MM` or `YYYY`) to per-tag totals for that period |
-| `tagId` | number | Tag ID |
-| `slug` | string | Tag slug (used as chart legend label, prefixed `#` in the UI) |
-| `total` | number | Absolute spending total for this tag in this period (always positive; expenses only) |
-| `transactionCount` | number | Number of expense transactions tagged with this tag in this period |
+| Field              | Type                              | Meaning                                                                              |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------ |
+| `tagPivot`         | `Record<period, TagPivotEntry[]>` | Map from period key (`YYYY-MM` or `YYYY`) to per-tag totals for that period          |
+| `tagId`            | number                            | Tag ID                                                                               |
+| `slug`             | string                            | Tag slug (used as chart legend label, prefixed `#` in the UI)                        |
+| `total`            | number                            | Absolute spending total for this tag in this period (always positive; expenses only) |
+| `transactionCount` | number                            | Number of expense transactions tagged with this tag in this period                   |
 
 **Spending Lens:**
 
@@ -542,24 +557,25 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
 // Explicit tag selection
 const envelope = await getAggregationTagPivot({
   tag_ids: [3, 7],
-  bucket: 'monthly',
-  start_date: '2026-01-01',
-  end_date: '2026-06-30',
-  currency: 'EUR'
+  bucket: "monthly",
+  start_date: "2026-01-01",
+  end_date: "2026-06-30",
+  currency: "EUR",
 });
 // envelope.data.tagPivot['2026-01'] → TagPivotEntry[]
 // Render as CustomChart with tags as series (legend: #slug)
 
 // Dynamic all-tags mode (saved chart with all_tags=true)
 const allTagsEnvelope = await getAggregationTagPivot({
-  all: true,  // omits tag_ids; returns every active tag
-  bucket: 'yearly',
-  currency: 'EUR'
+  all: true, // omits tag_ids; returns every active tag
+  bucket: "yearly",
+  currency: "EUR",
 });
 // Client-side: cap to top 8 by spend + "Other" bundle when entity count > TOP_N
 ```
 
 **Implementation:**
+
 - Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
 - Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
 - Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts `all` and `all_tags` query params as boolean aliases.
@@ -576,30 +592,36 @@ Aggregated spending data pivoted by category with support for exclusion filters.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+| Parameter                  | Type      | Default | Description                                       |
+| -------------------------- | --------- | ------- | ------------------------------------------------- |
+| `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive) |
+| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude                             |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude                             |
 
 **Response (data field):**
 
 ```json
 {
-  "categories": [
-    {
-      "category_id": 5,
-      "name": "FOOD:GROCERIES",
-      "total": 1250.75,
-      "count": 42
-    }
-  ]
+  "categoryPivot": {
+    "2026-01": [
+      {
+        "categoryId": 5,
+        "categoryName": "FOOD:GROCERIES",
+        "total": -1250.75,
+        "income": 0,
+        "expense": -1250.75,
+        "transactionCount": 42
+      }
+    ]
+  }
 }
 ```
 
 **Notes:**
+
 - Serves as an alternative category-level pivot, supporting exclusion filters for filtered dashboard views
-- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
+- `meta.source` remains `'live'`; repeated identical requests may reuse the
+  five-minute in-process response cache without changing the source label
 
 ---
 
@@ -611,34 +633,34 @@ Aggregated per-recipient spending broken out by calendar year, with support for 
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
+| Parameter                  | Type      | Default | Description                                       |
+| -------------------------- | --------- | ------- | ------------------------------------------------- |
+| `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive) |
+| `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude                             |
+| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude                             |
 
 **Response (data field):**
 
 ```json
 {
-  "recipients": [
-    {
-      "recipient_id": 10,
-      "recipient_name": "SuperMart",
-      "years": [
-        { "year": 2025, "total": 1850.00, "count": 32 },
-        { "year": 2026, "total": 980.50, "count": 17 }
-      ],
-      "total": 2830.50,
-      "count": 49
-    }
-  ]
+  "recipientsByYear": {
+    "2026": [
+      {
+        "recipientId": 10,
+        "name": "SuperMart",
+        "totalSpend": 980.5,
+        "transactionCount": 17
+      }
+    ]
+  }
 }
 ```
 
 **Notes:**
+
 - Powers year-over-year recipient spending views
-- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
+- `meta.source` remains `'live'`; repeated identical requests may reuse the
+  five-minute in-process response cache without changing the source label
 
 ---
 
@@ -650,9 +672,9 @@ N-month forward projection of income and expenses from active, unexecuted planne
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Max | Description |
-|-----------|------|---------|-----|-------------|
-| `months` | integer | 3 | 24 | Number of months to forecast |
+| Parameter | Type    | Default | Max | Description                  |
+| --------- | ------- | ------- | --- | ---------------------------- |
+| `months`  | integer | 3       | 24  | Number of months to forecast |
 
 **Response (data field):**
 
@@ -661,7 +683,7 @@ N-month forward projection of income and expenses from active, unexecuted planne
   "forecast": [
     {
       "month": "2026-05",
-      "income": 3500.00,
+      "income": 3500.0,
       "expenses": -2150.75,
       "net": 1349.25,
       "items": [
@@ -669,7 +691,7 @@ N-month forward projection of income and expenses from active, unexecuted planne
           "id": 42,
           "planned_date": "2026-05-01",
           "currency": "EUR",
-          "amount": 3500.00,
+          "amount": 3500.0,
           "memo": "Salary",
           "recipient_name": "Employer Inc.",
           "category_name": "INCOME:SALARY",
@@ -680,7 +702,7 @@ N-month forward projection of income and expenses from active, unexecuted planne
     },
     {
       "month": "2026-06",
-      "income": 3500.00,
+      "income": 3500.0,
       "expenses": -2150.75,
       "net": 1349.25,
       "items": []
@@ -691,19 +713,19 @@ N-month forward projection of income and expenses from active, unexecuted planne
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `month` | string | `YYYY-MM` format |
-| `income` | number | Sum of positive (incoming) amounts |
+| Field      | Type   | Meaning                                             |
+| ---------- | ------ | --------------------------------------------------- |
+| `month`    | string | `YYYY-MM` format                                    |
+| `income`   | number | Sum of positive (incoming) amounts                  |
 | `expenses` | number | Sum of negative (outgoing) amounts (negative value) |
-| `net` | number | `income + expenses` |
-| `items` | array | Forecast line items in this month |
+| `net`      | number | `income + expenses`                                 |
+| `items`    | array  | Forecast line items in this month                   |
 
 **Frontend Usage:**
 
 ```typescript
 const envelope = await apiClient.getAggregationCashflowForecast({
-  months: 6
+  months: 6,
 });
 // envelope.data.forecast[n].month → "2026-05"
 // envelope.data.forecast[n].net → projected cash position
@@ -722,18 +744,18 @@ N-day rolling-window projection of income and expenses from actual transactions 
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Max | Description |
-|-----------|------|---------|-----|-------------|
-| `days_back` | integer | 90 | 365 | Historical lookback window (days, typically 3× the forecast window) |
-| `days_forward` | integer | 90 | 365 | Days to forecast ahead (max 365) |
-| `currency` | string | EUR | — | Target currency (3-letter code, case-insensitive) |
-| `excluded_category_ids[]` | integer[] | [] | — | Categories to exclude from forecast |
-| `excluded_recipient_ids[]` | integer[] | [] | — | Recipients to exclude from forecast |
-| `include_planned` | boolean | false | — | When `true`, overlay pending planned transactions into cumulative view |
-| `history_months` | integer | 36 | 120 | Historical window for training methods (in months) |
-| `mc_paths` | integer | 500 | 5000 | Monte Carlo simulation paths per method (rolling-window default; distinct from month view default of 1000) |
-| `mc_percentiles[]` | integer[] | [25,75] | — | Percentiles for confidence bands (rolling-window defaults; distinct from month view [10,50,90]) |
-| `include_backtest` | boolean | false | — | When `true`, runs expensive walk-forward backtest and includes diagnostics in response (frontend uses lazy-load via separate query, only enabled when user opens diagnostics sheet) |
+| Parameter                  | Type      | Default | Max  | Description                                                                                                                                                                         |
+| -------------------------- | --------- | ------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `days_back`                | integer   | 90      | 365  | Historical lookback window (days, typically 3× the forecast window)                                                                                                                 |
+| `days_forward`             | integer   | 90      | 365  | Days to forecast ahead (max 365)                                                                                                                                                    |
+| `currency`                 | string    | EUR     | —    | Target currency (3-letter code, case-insensitive)                                                                                                                                   |
+| `excluded_category_ids[]`  | integer[] | []      | —    | Categories to exclude from forecast                                                                                                                                                 |
+| `excluded_recipient_ids[]` | integer[] | []      | —    | Recipients to exclude from forecast                                                                                                                                                 |
+| `include_planned`          | boolean   | false   | —    | When `true`, overlay pending planned transactions into cumulative view                                                                                                              |
+| `history_months`           | integer   | 36      | 120  | Historical window for training methods (in months)                                                                                                                                  |
+| `mc_paths`                 | integer   | 500     | 5000 | Monte Carlo simulation paths per method (rolling-window default; distinct from month view default of 1000)                                                                          |
+| `mc_percentiles[]`         | integer[] | [25,75] | —    | Percentiles for confidence bands (rolling-window defaults; distinct from month view [10,50,90])                                                                                     |
+| `include_backtest`         | boolean   | false   | —    | When `true`, runs expensive walk-forward backtest and includes diagnostics in response (frontend uses lazy-load via separate query, only enabled when user opens diagnostics sheet) |
 
 **Note:** `days_back + days_forward` must be ≤ 730 days; requests exceeding this limit return 400 error.
 
@@ -760,7 +782,7 @@ N-day rolling-window projection of income and expenses from actual transactions 
       "label": "Simple Average",
       "daily": [
         { "date": "2026-04-29", "value": 42.15 },
-        { "date": "2026-04-30", "value": 39.80 }
+        { "date": "2026-04-30", "value": 39.8 }
       ],
       "cumulative": [
         { "date": "2026-04-29", "value": 3450.75 },
@@ -772,12 +794,12 @@ N-day rolling-window projection of income and expenses from actual transactions 
     {
       "id": "monte_carlo_parametric",
       "label": "Monte Carlo (Parametric)",
-      "daily": [ /* ... */ ],
-      "cumulative": [ /* ... */ ],
+      "daily": [/* ... */],
+      "cumulative": [/* ... */],
       "bands": {
-        "p10": [ { "date": "2026-04-29", "value": 35.20 } ],
-        "p50": [ { "date": "2026-04-29", "value": 42.15 } ],
-        "p90": [ { "date": "2026-04-29", "value": 49.10 } ]
+        "p10": [{ "date": "2026-04-29", "value": 35.2 }],
+        "p50": [{ "date": "2026-04-29", "value": 42.15 }],
+        "p90": [{ "date": "2026-04-29", "value": 49.1 }]
       },
       "error": null
     }
@@ -793,7 +815,7 @@ N-day rolling-window projection of income and expenses from actual transactions 
         "method_id": "simple_avg",
         "label": "Simple Average",
         "mae": 125.45,
-        "rmse": 165.30,
+        "rmse": 165.3,
         "mape": 8.2,
         "months": 36
       }
@@ -806,36 +828,36 @@ N-day rolling-window projection of income and expenses from actual transactions 
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `window_start` | string | Start of rolling window (today - days_back), YYYY-MM-DD format |
-| `window_end` | string | End of rolling window (today + days_forward), YYYY-MM-DD format |
-| `today` | string | Current date (YYYY-MM-DD) |
-| `currency` | string | Target currency |
-| `days_back` | integer | Historical lookback window (days) |
-| `days_forward` | integer | Forecast horizon (days) |
-| `actual[]` | array | Realized daily net cash flow (past dates only) |
-| `actual[].date` | string | ISO date (YYYY-MM-DD) |
-| `actual[].net` | number | Daily net amount |
-| `actual[].cumulative` | number | Cumulative from window start through date |
-| `methods[]` | array | Array of 8 forecasting methods (5 point + 2 MC + 1 ensemble); same structure as month-mode forecast |
-| `methods[].id` | string | Method identifier (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap) |
-| `methods[].label` | string | Human-readable method name |
-| `methods[].daily[]` | array | Daily forecast values (future dates only) |
-| `methods[].cumulative[]` | array | Cumulative sum including actual-to-date and forecast |
-| `methods[].bands` | object \| null | Confidence bands for MC methods; `{ p10: [], p50: [], p90: [], ... }` per requested percentile |
-| `methods[].error` | string \| null | Error code if method failed |
-| `planned[]` | array | Pending planned transaction dates (if `include_planned=true`) |
-| `planned[].date` | string | Planned date |
-| `planned[].net` | number | Planned net amount |
-| `diagnostics` | object \| null | Walk-forward backtest results (null if `include_backtest=false`) |
-| `diagnostics.backtest[].method_id` | string | Forecasting method identifier |
-| `diagnostics.backtest[].mae` | number | Mean Absolute Error (EUR/currency) |
-| `diagnostics.backtest[].rmse` | number | Root Mean Squared Error |
-| `diagnostics.backtest[].mape` | number | Mean Absolute Percentage Error (%) |
-| `diagnostics.backtest[].months` | integer | Number of backtest windows |
-| `history_months` | integer | Historical training window (months) |
-| `include_planned` | boolean | Whether planned transactions are included in response |
+| Field                              | Type           | Meaning                                                                                                                                            |
+| ---------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `window_start`                     | string         | Start of rolling window (today - days_back), YYYY-MM-DD format                                                                                     |
+| `window_end`                       | string         | End of rolling window (today + days_forward), YYYY-MM-DD format                                                                                    |
+| `today`                            | string         | Current date (YYYY-MM-DD)                                                                                                                          |
+| `currency`                         | string         | Target currency                                                                                                                                    |
+| `days_back`                        | integer        | Historical lookback window (days)                                                                                                                  |
+| `days_forward`                     | integer        | Forecast horizon (days)                                                                                                                            |
+| `actual[]`                         | array          | Realized daily net cash flow (past dates only)                                                                                                     |
+| `actual[].date`                    | string         | ISO date (YYYY-MM-DD)                                                                                                                              |
+| `actual[].net`                     | number         | Daily net amount                                                                                                                                   |
+| `actual[].cumulative`              | number         | Cumulative from window start through date                                                                                                          |
+| `methods[]`                        | array          | Array of 8 forecasting methods (5 point + 2 MC + 1 ensemble); same structure as month-mode forecast                                                |
+| `methods[].id`                     | string         | Method identifier (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap) |
+| `methods[].label`                  | string         | Human-readable method name                                                                                                                         |
+| `methods[].daily[]`                | array          | Daily forecast values (future dates only)                                                                                                          |
+| `methods[].cumulative[]`           | array          | Cumulative sum including actual-to-date and forecast                                                                                               |
+| `methods[].bands`                  | object \| null | Confidence bands for MC methods; `{ p10: [], p50: [], p90: [], ... }` per requested percentile                                                     |
+| `methods[].error`                  | string \| null | Error code if method failed                                                                                                                        |
+| `planned[]`                        | array          | Pending planned transaction dates (if `include_planned=true`)                                                                                      |
+| `planned[].date`                   | string         | Planned date                                                                                                                                       |
+| `planned[].net`                    | number         | Planned net amount                                                                                                                                 |
+| `diagnostics`                      | object \| null | Walk-forward backtest results (null if `include_backtest=false`)                                                                                   |
+| `diagnostics.backtest[].method_id` | string         | Forecasting method identifier                                                                                                                      |
+| `diagnostics.backtest[].mae`       | number         | Mean Absolute Error (EUR/currency)                                                                                                                 |
+| `diagnostics.backtest[].rmse`      | number         | Root Mean Squared Error                                                                                                                            |
+| `diagnostics.backtest[].mape`      | number         | Mean Absolute Percentage Error (%)                                                                                                                 |
+| `diagnostics.backtest[].months`    | integer        | Number of backtest windows                                                                                                                         |
+| `history_months`                   | integer        | Historical training window (months)                                                                                                                |
+| `include_planned`                  | boolean        | Whether planned transactions are included in response                                                                                              |
 
 **Frontend Usage:**
 
@@ -843,11 +865,11 @@ N-day rolling-window projection of income and expenses from actual transactions 
 const envelope = await apiClient.getCashflowForecastRolling({
   days_forward: 90,
   days_back: 90,
-  currency: 'EUR',
+  currency: "EUR",
   include_planned: false,
   include_backtest: true,
   mc_paths: 500,
-  mc_percentiles: [25, 75]
+  mc_percentiles: [25, 75],
 });
 // envelope.data.actual → historical actuals
 // envelope.data.methods[] → 8 forecasting methods with daily/cumulative series
@@ -880,44 +902,45 @@ See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] — Phase H 
 
 ### Sankey Flow (Phase 7)
 
-Directed income-to-category flow graph for d3-sankey visualization with support for category/recipient exclusions.
+Balanced income/funding-gap-to-spending flow graph for d3-sankey visualization with support for category/recipient exclusions.
 
 **Path:** `GET /api/aggregations/sankey`
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `year` | integer | current year | Year to analyze (YYYY format) |
-| `currency` | string | EUR | Target currency |
-| `excluded_category_ids[]` | integer[] | [] | Categories to exclude from the flow calculation |
-| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude from the flow calculation |
+| Parameter                  | Type      | Default      | Description                                     |
+| -------------------------- | --------- | ------------ | ----------------------------------------------- |
+| `year`                     | integer   | current year | Year to analyze (YYYY format)                   |
+| `currency`                 | string    | EUR          | Target currency                                 |
+| `excluded_category_ids[]`  | integer[] | []           | Categories to exclude from the flow calculation |
+| `excluded_recipient_ids[]` | integer[] | []           | Recipients to exclude from the flow calculation |
 
 **Response (data field):**
 
 ```json
 {
   "nodes": [
-    { "id": "__income__", "label": "Income", "value": 9550.50 },
-    { "id": "cat:Groceries", "label": "Groceries", "value": 4200.50 },
-    { "id": "cat:Transport", "label": "Transport", "value": 1850.00 },
-    { "id": "__savings__", "label": "Savings / Unspent", "value": 2900.00 }
+    { "id": "__income__", "label": "__income__", "value": 9550.5 },
+    { "id": "__spending__", "label": "__spending__", "value": 6650.5 },
+    { "id": "cat:17", "label": "Food: Groceries", "value": 4200.5 },
+    { "id": "cat:23", "label": "Travel: Transport", "value": 2450.0 },
+    { "id": "__savings__", "label": "__savings__", "value": 2900.0 }
   ],
   "links": [
     {
       "source": "__income__",
-      "target": "cat:Groceries",
-      "value": 4200.50
+      "target": "__spending__",
+      "value": 6650.5
     },
     {
-      "source": "__income__",
-      "target": "cat:Transport",
-      "value": 1850.00
+      "source": "__spending__",
+      "target": "cat:17",
+      "value": 4200.5
     },
     {
       "source": "__income__",
       "target": "__savings__",
-      "value": 2900.00
+      "value": 2900.0
     }
   ],
   "year": 2026
@@ -929,21 +952,22 @@ Directed income-to-category flow graph for d3-sankey visualization with support 
 ```typescript
 const envelope = await apiClient.getSankeyFlow({
   year: 2026,
-  currency: 'EUR',
+  currency: "EUR",
   excluded_category_ids: [5, 10],
-  excluded_recipient_ids: [3]
+  excluded_recipient_ids: [3],
 });
-// envelope.data.nodes → [Income, ...topCategories, Savings]
-// envelope.data.links → flows from Income to categories (excluding specified filters)
+// envelope.data.nodes → stable reserved IDs plus cat:<category_id> nodes
+// envelope.data.links → balanced flows through the spending hub
 // envelope.meta.source → 'live' (always computed with exclusions)
 ```
 
 **Exclusion Logic:**
 
 When `excluded_category_ids[]` or `excluded_recipient_ids[]` are provided:
+
 - Transactions matching those filters are excluded from the calculation
 - Income and category flows are recomputed based on remaining transactions
-- Savings node recalculates as: `remaining_income - remaining_spending`
+- Savings or funding-gap nodes recalculate from remaining income and spending
 - Backend always returns `meta.source === 'live'` (computed on-demand due to exclusions)
 
 See [[docs/features/sankey-flow|Sankey Flow Feature]] for visualization details.
@@ -956,17 +980,17 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Max | Description |
-|-----------|------|---------|-----|-------------|
-| `currency` | string | EUR | — | Target currency (3-letter code, case-insensitive) |
-| `excluded_category_ids[]` | integer[] | [] | — | Categories to exclude |
-| `excluded_recipient_ids[]` | integer[] | [] | — | Recipients to exclude |
-| `history_months` | integer | 36 | 120 | Historical window for training (days = history_months × 30) |
-| `mc_paths` | integer | 1000 | 5000 | Monte Carlo simulation paths per method |
-| `mc_percentiles[]` | integer[] | [10,50,90] | — | Percentiles for MC confidence bands (e.g., `[5,25,75,95]`) |
-| `include_planned` | boolean | false | — | Include pending planned transactions in cumulative overlay? |
-| `include_backtest` | boolean | true | — | Include walk-forward backtest diagnostics (MAE/RMSE/MAPE)? |
-| `include_breakdown` | boolean | false | — | Include per-category breakdown with reconciliation to aggregate (Phase G)? |
+| Parameter                  | Type      | Default    | Max  | Description                                                                |
+| -------------------------- | --------- | ---------- | ---- | -------------------------------------------------------------------------- |
+| `currency`                 | string    | EUR        | —    | Target currency (3-letter code, case-insensitive)                          |
+| `excluded_category_ids[]`  | integer[] | []         | —    | Categories to exclude                                                      |
+| `excluded_recipient_ids[]` | integer[] | []         | —    | Recipients to exclude                                                      |
+| `history_months`           | integer   | 36         | 120  | Historical window for training (days = history_months × 30)                |
+| `mc_paths`                 | integer   | 1000       | 5000 | Monte Carlo simulation paths per method                                    |
+| `mc_percentiles[]`         | integer[] | [10,50,90] | —    | Percentiles for MC confidence bands (e.g., `[5,25,75,95]`)                 |
+| `include_planned`          | boolean   | false      | —    | Include pending planned transactions in cumulative overlay?                |
+| `include_backtest`         | boolean   | true       | —    | Include walk-forward backtest diagnostics (MAE/RMSE/MAPE)?                 |
+| `include_breakdown`        | boolean   | false      | —    | Include per-category breakdown with reconciliation to aggregate (Phase G)? |
 
 **Response (data field):**
 
@@ -977,27 +1001,27 @@ Real-time cash flow forecast for the current month using eight forecasting metho
   "days_in_month": 30,
   "current_day": 24,
   "actual": [
-    { "date": "2026-04-01", "net": 150.50, "cumulative": 150.50 },
-    { "date": "2026-04-02", "net": -25.00, "cumulative": 125.50 },
+    { "date": "2026-04-01", "net": 150.5, "cumulative": 150.5 },
+    { "date": "2026-04-02", "net": -25.0, "cumulative": 125.5 },
     { "date": "2026-04-03", "net": null, "cumulative": null }
   ],
   "planned": [
-    { "date": "2026-04-25", "net": -1200.00 },
-    { "date": "2026-04-30", "net": 3500.00 }
+    { "date": "2026-04-25", "net": -1200.0 },
+    { "date": "2026-04-30", "net": 3500.0 }
   ],
   "methods": [
     {
       "id": "simple_avg",
       "label": "Simple Average",
       "daily": [
-        { "date": "2026-04-25", "value": 45.30 },
+        { "date": "2026-04-25", "value": 45.3 },
         { "date": "2026-04-26", "value": 40.15 },
-        { "date": "2026-04-27", "value": 48.90 }
+        { "date": "2026-04-27", "value": 48.9 }
       ],
       "cumulative": [
-        { "date": "2026-04-01", "value": 150.50 },
-        { "date": "2026-04-24", "value": 1245.70 },
-        { "date": "2026-04-25", "value": 1291.00 }
+        { "date": "2026-04-01", "value": 150.5 },
+        { "date": "2026-04-24", "value": 1245.7 },
+        { "date": "2026-04-25", "value": 1291.0 }
       ],
       "bands": null,
       "error": null
@@ -1006,26 +1030,26 @@ Real-time cash flow forecast for the current month using eight forecasting metho
       "id": "monte_carlo_parametric",
       "label": "Monte Carlo (Parametric)",
       "daily": [
-        { "date": "2026-04-25", "value": 42.80 },
-        { "date": "2026-04-26", "value": 38.60 },
-        { "date": "2026-04-27", "value": 51.20 }
+        { "date": "2026-04-25", "value": 42.8 },
+        { "date": "2026-04-26", "value": 38.6 },
+        { "date": "2026-04-27", "value": 51.2 }
       ],
       "cumulative": [
-        { "date": "2026-04-24", "value": 1245.70 },
-        { "date": "2026-04-25", "value": 1288.50 }
+        { "date": "2026-04-24", "value": 1245.7 },
+        { "date": "2026-04-25", "value": 1288.5 }
       ],
       "bands": {
         "p10": [
-          { "date": "2026-04-25", "value": 30.50 },
-          { "date": "2026-04-26", "value": 28.20 }
+          { "date": "2026-04-25", "value": 30.5 },
+          { "date": "2026-04-26", "value": 28.2 }
         ],
         "p50": [
-          { "date": "2026-04-25", "value": 42.80 },
-          { "date": "2026-04-26", "value": 38.60 }
+          { "date": "2026-04-25", "value": 42.8 },
+          { "date": "2026-04-26", "value": 38.6 }
         ],
         "p90": [
-          { "date": "2026-04-25", "value": 55.10 },
-          { "date": "2026-04-26", "value": 49.00 }
+          { "date": "2026-04-25", "value": 55.1 },
+          { "date": "2026-04-26", "value": 49.0 }
         ]
       },
       "error": null
@@ -1038,14 +1062,14 @@ Real-time cash flow forecast for the current month using eight forecasting metho
         "method_id": "simple_avg",
         "label": "Simple Average",
         "mae": 125.45,
-        "rmse": 165.30,
+        "rmse": 165.3,
         "mape": 8.2,
         "months": 36,
         "per_month": [
           {
             "month": "2025-12",
-            "mae": 115.20,
-            "rmse": 155.80,
+            "mae": 115.2,
+            "rmse": 155.8,
             "mape": 7.8,
             "sample_days": 28
           }
@@ -1060,15 +1084,15 @@ Real-time cash flow forecast for the current month using eight forecasting metho
       "general": "Groceries",
       "detail": "Supermarket",
       "actual": [
-        { "date": "2026-04-01", "net": 45.50, "cumulative": 45.50 },
-        { "date": "2026-04-02", "net": -10.00, "cumulative": 35.50 }
+        { "date": "2026-04-01", "net": 45.5, "cumulative": 45.5 },
+        { "date": "2026-04-02", "net": -10.0, "cumulative": 35.5 }
       ],
       "forecast": [
         { "date": "2026-04-25", "value": 42.15 },
-        { "date": "2026-04-26", "value": 48.30 }
+        { "date": "2026-04-26", "value": 48.3 }
       ],
       "cumulative": [
-        { "date": "2026-04-01", "value": 45.50 },
+        { "date": "2026-04-01", "value": 45.5 },
         { "date": "2026-04-25", "value": 1234.65 }
       ]
     }
@@ -1078,55 +1102,56 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `month` | string | `YYYY-MM` current month |
-| `currency` | string | Target currency |
-| `days_in_month` | integer | Total days in current month (28-31) |
-| `current_day` | integer | Today's day-of-month (1-31) |
-| `actual[]` | array | Realized daily net cash flow (past and today) |
-| `actual[].date` | string | ISO date (YYYY-MM-DD) |
-| `actual[].net` | number \| null | Daily net (null for future dates) |
-| `actual[].cumulative` | number \| null | Cumulative through date (null for future) |
-| `planned[]` | array | Pending planned transaction dates (if `include_planned=true`) |
-| `planned[].date` | string | Planned date |
-| `planned[].net` | number | Planned net amount |
-| `methods[].id` | string | Method identifier: `simple_avg`, `weighted_avg`, `ewma`, `holt_winters`, `prophet_lite`, `monte_carlo_parametric`, `monte_carlo_block_bootstrap` |
-| `methods[].label` | string | Human-readable method name |
-| `methods[].daily[]` | array | Daily forecast values (null for past, forecast for future) |
-| `methods[].cumulative[]` | array | Cumulative sum including actual-to-date and method's forecast |
-| `methods[].bands` | object \| null | Confidence bands (only for MC methods); `{ p10: [], p50: [], p90: [], ... }` per requested percentile |
-| `methods[].error` | string \| null | Error code if method failed (e.g., `"forecast_failed"`) |
-| `diagnostics` | object \| null | Walk-forward backtest results (null if `include_backtest=false`) |
-| `diagnostics.backtest[].mae` | number | Mean Absolute Error (EUR) across all historical months |
-| `diagnostics.backtest[].rmse` | number | Root Mean Squared Error (EUR) |
-| `diagnostics.backtest[].mape` | number | Mean Absolute Percentage Error (%) |
-| `diagnostics.backtest[].months` | integer | Number of months in backtest window |
-| `diagnostics.backtest[].per_month[]` | array | Per-month accuracy breakdown |
-| `category_breakdown[]` | array | Per-category breakdown with reconciliation (only if `include_breakdown=true`, Phase G) |
-| `category_breakdown[].category_id` | number \| null | Category ID; null for uncategorized |
-| `category_breakdown[].general` | string | General category name (e.g., "Groceries") |
-| `category_breakdown[].detail` | string | Detail category name (e.g., "Supermarket") |
-| `category_breakdown[].actual[]` | array | Per-category realized daily net (past and today) with cumulative |
-| `category_breakdown[].forecast[]` | array | Per-category simple-average forecast (reconciled) |
-| `category_breakdown[].cumulative[]` | array | Per-category cumulative series (actual + forecast) |
+| Field                                | Type           | Meaning                                                                                                                                          |
+| ------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `month`                              | string         | `YYYY-MM` current month                                                                                                                          |
+| `currency`                           | string         | Target currency                                                                                                                                  |
+| `days_in_month`                      | integer        | Total days in current month (28-31)                                                                                                              |
+| `current_day`                        | integer        | Today's day-of-month (1-31)                                                                                                                      |
+| `actual[]`                           | array          | Realized daily net cash flow (past and today)                                                                                                    |
+| `actual[].date`                      | string         | ISO date (YYYY-MM-DD)                                                                                                                            |
+| `actual[].net`                       | number \| null | Daily net (null for future dates)                                                                                                                |
+| `actual[].cumulative`                | number \| null | Cumulative through date (null for future)                                                                                                        |
+| `planned[]`                          | array          | Pending planned transaction dates (if `include_planned=true`)                                                                                    |
+| `planned[].date`                     | string         | Planned date                                                                                                                                     |
+| `planned[].net`                      | number         | Planned net amount                                                                                                                               |
+| `methods[].id`                       | string         | Method identifier: `simple_avg`, `weighted_avg`, `ewma`, `holt_winters`, `prophet_lite`, `monte_carlo_parametric`, `monte_carlo_block_bootstrap` |
+| `methods[].label`                    | string         | Human-readable method name                                                                                                                       |
+| `methods[].daily[]`                  | array          | Daily forecast values (null for past, forecast for future)                                                                                       |
+| `methods[].cumulative[]`             | array          | Cumulative sum including actual-to-date and method's forecast                                                                                    |
+| `methods[].bands`                    | object \| null | Confidence bands (only for MC methods); `{ p10: [], p50: [], p90: [], ... }` per requested percentile                                            |
+| `methods[].error`                    | string \| null | Error code if method failed (e.g., `"forecast_failed"`)                                                                                          |
+| `diagnostics`                        | object \| null | Walk-forward backtest results (null if `include_backtest=false`)                                                                                 |
+| `diagnostics.backtest[].mae`         | number         | Mean Absolute Error (EUR) across all historical months                                                                                           |
+| `diagnostics.backtest[].rmse`        | number         | Root Mean Squared Error (EUR)                                                                                                                    |
+| `diagnostics.backtest[].mape`        | number         | Mean Absolute Percentage Error (%)                                                                                                               |
+| `diagnostics.backtest[].months`      | integer        | Number of months in backtest window                                                                                                              |
+| `diagnostics.backtest[].per_month[]` | array          | Per-month accuracy breakdown                                                                                                                     |
+| `category_breakdown[]`               | array          | Per-category breakdown with reconciliation (only if `include_breakdown=true`, Phase G)                                                           |
+| `category_breakdown[].category_id`   | number \| null | Category ID; null for uncategorized                                                                                                              |
+| `category_breakdown[].general`       | string         | General category name (e.g., "Groceries")                                                                                                        |
+| `category_breakdown[].detail`        | string         | Detail category name (e.g., "Supermarket")                                                                                                       |
+| `category_breakdown[].actual[]`      | array          | Per-category realized daily net (past and today) with cumulative                                                                                 |
+| `category_breakdown[].forecast[]`    | array          | Per-category simple-average forecast (reconciled)                                                                                                |
+| `category_breakdown[].cumulative[]`  | array          | Per-category cumulative series (actual + forecast)                                                                                               |
 
 **Eight Forecasting Methods:**
 
-| Method ID | Label | Type | Description |
-|-----------|-------|------|-------------|
-| `simple_avg` | Simple Average | Point | Per-day-of-month mean across history |
-| `weighted_avg` | Weighted Average | Point | Linear recency weights (newer days matter more) |
-| `ewma` | Exponential Moving Average | Point | Exponential smoothing (α=0.15) on daily flow |
-| `holt_winters` | Holt-Winters | Point | Double exponential smoothing with weekly + monthly seasonality (M1=7, M2=30); 3⁴ grid search |
-| `prophet_lite` | Prophet Lite | Point | Piecewise-linear trend + Fourier (K=3 weekly, K=10 yearly) + Belgian holiday dummies; needs ≥60 days or returns zeros |
-| `monte_carlo_parametric` | Monte Carlo (Parametric) | Distribution | Gaussian sampling per (day-of-week, day-of-month) bucket; includes confidence bands |
-| `monte_carlo_block_bootstrap` | Monte Carlo (Block Bootstrap) | Distribution | Stationary block bootstrap over detrended residuals (L=7 block length); includes confidence bands |
-| `ensemble_imse` | Ensemble (v2) | Combination | Weighted average of 5 point methods using sample-size-shrunk inverse-MSE weights (empirical Bayes: `(n·rmse + K·meanRmse)/(n+K)`, K=30 days) blended toward a uniform 5% floor; falls back to equal weights when accuracy data unavailable. Label changed from "Ensemble (inv-MSE)" to "Ensemble (v2)" in June 2026. |
+| Method ID                     | Label                         | Type         | Description                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `simple_avg`                  | Simple Average                | Point        | Per-day-of-month mean across history                                                                                                                                                                                                                                                                                 |
+| `weighted_avg`                | Weighted Average              | Point        | Linear recency weights (newer days matter more)                                                                                                                                                                                                                                                                      |
+| `ewma`                        | Exponential Moving Average    | Point        | Exponential smoothing (α=0.15) on daily flow                                                                                                                                                                                                                                                                         |
+| `holt_winters`                | Holt-Winters                  | Point        | Double exponential smoothing with weekly + monthly seasonality (M1=7, M2=30); 3⁴ grid search                                                                                                                                                                                                                         |
+| `prophet_lite`                | Prophet Lite                  | Point        | Piecewise-linear trend + Fourier (K=3 weekly, K=10 yearly) + Belgian holiday dummies; needs ≥60 days or returns zeros                                                                                                                                                                                                |
+| `monte_carlo_parametric`      | Monte Carlo (Parametric)      | Distribution | Gaussian sampling per (day-of-week, day-of-month) bucket; includes confidence bands                                                                                                                                                                                                                                  |
+| `monte_carlo_block_bootstrap` | Monte Carlo (Block Bootstrap) | Distribution | Stationary block bootstrap over detrended residuals (L=7 block length); includes confidence bands                                                                                                                                                                                                                    |
+| `ensemble_imse`               | Ensemble (v2)                 | Combination  | Weighted average of 5 point methods using sample-size-shrunk inverse-MSE weights (empirical Bayes: `(n·rmse + K·meanRmse)/(n+K)`, K=30 days) blended toward a uniform 5% floor; falls back to equal weights when accuracy data unavailable. Label changed from "Ensemble (inv-MSE)" to "Ensemble (v2)" in June 2026. |
 
 **Determinism & Reproducibility:**
 
 Each Monte Carlo method uses a seeded PRNG derived from `hash(userId | yyyymm | filterHash)` to ensure:
+
 - Same user, same month, same filters → identical samples across requests
 - Enables ensemble combination and cross-session caching
 - `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
@@ -1136,6 +1161,7 @@ See [[apps/node-backend/src/services/calculations/forecast/index.js|Forecast Ser
 **Caching (Phase E):**
 
 When using default parameters (mc_paths=1000, mc_percentiles=[10,50,90]), responses are served from a 6-hour TTL cache:
+
 - `meta.source === 'cache'` indicates cached result (likely within last 6 hours, from nightly pre-compute)
 - `meta.source === 'live'` indicates freshly computed result (custom parameters or cache miss/expiry)
 - Nightly job (`refreshCashflowForecastMc`) precomputes forecasts for all active users at ~02:00 UTC
@@ -1149,6 +1175,7 @@ The 8th method (`ensemble_imse`, label "Ensemble (v2)") is a weighted combinatio
 2. **Uniform-blend floor:** The normalized inverse-MSE weights are mixed with a 5% equal-weight floor so no single method dominates on noisy backtest accuracy and every method retains a minimum contribution.
 
 Other characteristics (unchanged from Phase F):
+
 - Falls back to equal weights (0.2 per method) on first run or when accuracy data is unavailable (e.g., after migration)
 - Runs after all 7 base methods; excludes MC methods and any errored methods from the combination
 - Provides a data-driven forecast without requiring manual tuning
@@ -1166,9 +1193,9 @@ Persisted monthly backtest accuracy metrics (MAE/RMSE/MAPE) per forecasting meth
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Max | Description |
-|-----------|------|---------|-----|-------------|
-| `limit_months` | integer | 24 | 120 | Historical window to return (in months) |
+| Parameter      | Type    | Default | Max | Description                             |
+| -------------- | ------- | ------- | --- | --------------------------------------- |
+| `limit_months` | integer | 24      | 120 | Historical window to return (in months) |
 
 **Response (data field):**
 
@@ -1179,28 +1206,28 @@ Persisted monthly backtest accuracy metrics (MAE/RMSE/MAPE) per forecasting meth
       "method_id": "simple_avg",
       "as_of_month": "2026-04",
       "mae": 125.45,
-      "rmse": 165.30,
+      "rmse": 165.3,
       "mape": 8.2,
       "sample_days": 28,
       "history": [
         {
           "month": "2025-12",
-          "mae": 115.20,
-          "rmse": 155.80,
+          "mae": 115.2,
+          "rmse": 155.8,
           "mape": 7.8,
           "sample_days": 28
         },
         {
           "month": "2026-01",
-          "mae": 132.50,
-          "rmse": 175.20,
+          "mae": 132.5,
+          "rmse": 175.2,
           "mape": 8.5,
           "sample_days": 31
         },
         {
           "month": "2026-04",
           "mae": 125.45,
-          "rmse": 165.30,
+          "rmse": 165.3,
           "mape": 8.2,
           "sample_days": 24
         }
@@ -1209,8 +1236,8 @@ Persisted monthly backtest accuracy metrics (MAE/RMSE/MAPE) per forecasting meth
     {
       "method_id": "ewma",
       "as_of_month": "2026-04",
-      "mae": 110.80,
-      "rmse": 150.20,
+      "mae": 110.8,
+      "rmse": 150.2,
       "mape": 7.1,
       "sample_days": 28,
       "history": [/* ... */]
@@ -1222,28 +1249,28 @@ Persisted monthly backtest accuracy metrics (MAE/RMSE/MAPE) per forecasting meth
 
 **Field Descriptions:**
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `methods[]` | array | Per-method accuracy records and historical trend |
-| `method_id` | string | Forecasting method identifier (same 7 methods as Phase 10) |
-| `as_of_month` | string | Latest month with accuracy data (YYYY-MM format) |
-| `mae` | number | Mean Absolute Error for latest month (EUR or currency) |
-| `rmse` | number | Root Mean Squared Error for latest month |
-| `mape` | number | Mean Absolute Percentage Error for latest month (%) |
-| `sample_days` | integer | Days included in latest month's backtest |
-| `history[]` | array | Time-series of accuracy metrics (newest first, up to `limit_months`) |
-| `history[].month` | string | Month in YYYY-MM format |
-| `history[].mae` | number | MAE for that month |
-| `history[].rmse` | number | RMSE for that month |
-| `history[].mape` | number | MAPE for that month (%) |
-| `history[].sample_days` | integer | Days in that month's backtest |
-| `limit_months` | integer | Historical window returned |
+| Field                   | Type    | Meaning                                                              |
+| ----------------------- | ------- | -------------------------------------------------------------------- |
+| `methods[]`             | array   | Per-method accuracy records and historical trend                     |
+| `method_id`             | string  | Forecasting method identifier (same 7 methods as Phase 10)           |
+| `as_of_month`           | string  | Latest month with accuracy data (YYYY-MM format)                     |
+| `mae`                   | number  | Mean Absolute Error for latest month (EUR or currency)               |
+| `rmse`                  | number  | Root Mean Squared Error for latest month                             |
+| `mape`                  | number  | Mean Absolute Percentage Error for latest month (%)                  |
+| `sample_days`           | integer | Days included in latest month's backtest                             |
+| `history[]`             | array   | Time-series of accuracy metrics (newest first, up to `limit_months`) |
+| `history[].month`       | string  | Month in YYYY-MM format                                              |
+| `history[].mae`         | number  | MAE for that month                                                   |
+| `history[].rmse`        | number  | RMSE for that month                                                  |
+| `history[].mape`        | number  | MAPE for that month (%)                                              |
+| `history[].sample_days` | integer | Days in that month's backtest                                        |
+| `limit_months`          | integer | Historical window returned                                           |
 
 **Frontend Usage:**
 
 ```typescript
 const envelope = await apiClient.getCashflowForecastAccuracy({
-  limit_months: 24
+  limit_months: 24,
 });
 
 // Group by method for dashboard
@@ -1278,6 +1305,7 @@ methodAccuracy.simple_avg.history.forEach((point) => {
 ---
 
 Dashboard visualization via `CashFlowForecastChart` component:
+
 - Multi-method chart with all 8 forecasting methods available (5 point + 2 MC + 1 ensemble)
 - **Default visibility:** Displays 6 methods by default — 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + Ensemble inv-MSE. Monte Carlo methods are hidden by default but can be toggled on via pill controls to reduce clutter in the default view.
 - View toggle (cumulative balance vs. daily net) via Tabs
@@ -1291,6 +1319,7 @@ See [[docs/components/dashboard|Dashboard Components]] for component documentati
 **Walk-Forward Backtest:**
 
 If `include_backtest=true` (default), the response includes accuracy metrics computed via walk-forward validation:
+
 - For each historical month, refit all 7 methods on prior `history_months` and forecast that month's actual
 - Compute MAE (mean absolute error), RMSE, and MAPE (mean absolute % error)
 - Aggregate across all historical windows; also return per-month breakdown
@@ -1302,11 +1331,11 @@ If `include_backtest=true` (default), the response includes accuracy metrics com
 
 The `meta.source` field distinguishes between two computation modes:
 
-| Condition | Source | Rationale |
-|-----------|--------|-----------|
-| No `excluded_category_ids[]` AND no `excluded_recipient_ids[]` | `'mv'` | Unfiltered request served from materialized view (fast, stale) |
+| Condition                                                       | Source   | Rationale                                                          |
+| --------------------------------------------------------------- | -------- | ------------------------------------------------------------------ |
+| No `excluded_category_ids[]` AND no `excluded_recipient_ids[]`  | `'mv'`   | Unfiltered request served from materialized view (fast, stale)     |
 | `excluded_category_ids[]` OR `excluded_recipient_ids[]` present | `'live'` | Exclusions require live scan of all transactions (slower, current) |
-| `/average-vs-current` | `'live'` | Phase 2 always computes current-period metrics live |
+| `/average-vs-current`                                           | `'live'` | Phase 2 always computes current-period metrics live                |
 
 ---
 
@@ -1314,10 +1343,10 @@ The `meta.source` field distinguishes between two computation modes:
 
 All aggregation endpoints return errors in the standard envelope:
 
-| Status | Response | Cause |
-|--------|----------|-------|
-| 400 | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid currency code" } }` | Malformed currency param |
-| 500 | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error computing aggregation: {label}" } }` | Server error during computation |
+| Status | Response                                                                                               | Cause                           |
+| ------ | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| 400    | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid currency code" } }`                | Malformed currency param        |
+| 500    | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error computing aggregation: {label}" } }` | Server error during computation |
 
 ---
 
@@ -1328,7 +1357,7 @@ All aggregation endpoints return errors in the standard envelope:
 Dashboard stat cards fetch from `/api/aggregations/monthly-summary` with exclusions applied:
 
 ```typescript
-import { useFilteredDashboardStats } from '@/hooks/useFilteredDashboardStats';
+import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 
 function DashboardPage() {
   const { data: stats } = useFilteredDashboardStats();
@@ -1343,53 +1372,59 @@ See [[apps/frontend/src/hooks/useFilteredDashboardStats.ts|useFilteredDashboardS
 All aggregation methods are available on `apiClient`:
 
 ```typescript
-import { apiClient } from '@/lib/api';
+import { apiClient } from "@/lib/api";
 
 // Monthly summary with exclusions
 const envelope = await apiClient.getAggregationMonthlySummary({
   excluded_category_ids: [5],
   excluded_recipient_ids: [3],
-  currency: 'EUR'
+  currency: "EUR",
 });
 
 // Category breakdown (no exclusions)
-const catEnvelope = await apiClient.getAggregationCategoryBreakdown({ currency: 'EUR' });
+const catEnvelope = await apiClient.getAggregationCategoryBreakdown({
+  currency: "EUR",
+});
 
 // Other endpoints
 await apiClient.getAggregationRecipientInsights({
-  currency: 'EUR',
-  excluded_category_ids: [5, 10],   // optional — June 2026
-  excluded_recipient_ids: [3],       // optional — June 2026
+  currency: "EUR",
+  excluded_category_ids: [5, 10], // optional — June 2026
+  excluded_recipient_ids: [3], // optional — June 2026
 });
-await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
-await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
-await apiClient.getAggregationBankBalances({ currency: 'EUR' });
-await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
-await getAggregationRecipientPivot({ // Custom Charts feature — recipient series
-  currency: 'EUR',
-  bucket: 'monthly',
+await apiClient.getAggregationCashflowComparison({ currency: "EUR" });
+await apiClient.getAggregationAverageVsCurrent({ currency: "EUR" });
+await apiClient.getAggregationBankBalances({ currency: "EUR" });
+await apiClient.getSankeyFlow({ year: 2026, currency: "EUR" }); // Phase 7
+await getAggregationRecipientPivot({
+  // Custom Charts feature — recipient series
+  currency: "EUR",
+  bucket: "monthly",
   recipient_ids: [10, 11],
-  start_date: '2026-01-01',
-  end_date: '2026-06-30'
+  start_date: "2026-01-01",
+  end_date: "2026-06-30",
 });
-await getAggregationTagPivot({ // Custom Charts feature — tag series (June 2026)
+await getAggregationTagPivot({
+  // Custom Charts feature — tag series (June 2026)
   tag_ids: [3, 7],
-  bucket: 'monthly',
-  start_date: '2026-01-01',
-  end_date: '2026-06-30',
-  currency: 'EUR'
+  bucket: "monthly",
+  start_date: "2026-01-01",
+  end_date: "2026-06-30",
+  currency: "EUR",
 });
 
 // Forecast endpoints
-await apiClient.getCashflowForecastMethods({ // Phase 10 + C + F
-  currency: 'EUR',
+await apiClient.getCashflowForecastMethods({
+  // Phase 10 + C + F
+  currency: "EUR",
   history_months: 36,
-  include_backtest: true
+  include_backtest: true,
 });
-await apiClient.getCashflowForecastRolling({ // Phase H (rolling window)
+await apiClient.getCashflowForecastRolling({
+  // Phase H (rolling window)
   days_forward: 30,
   days_back: 90,
-  currency: 'EUR'
+  currency: "EUR",
 });
 await apiClient.getCashflowForecastAccuracy({ limit_months: 24 }); // Phase D
 ```

@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-08-26
-updated: 2026-08-26
+last_modified: 2026-08-31
+updated: 2026-08-31
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -35,16 +35,17 @@ Retrieve a list of investments.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| limit | integer | 200 | Max items (max 1000) |
-| offset | integer | 0 | Items to skip |
-| asset_class | string | null | Filter by asset class |
-| active | boolean | true | Show active/inactive |
+| Parameter   | Type    | Default | Description           |
+| ----------- | ------- | ------- | --------------------- |
+| limit       | integer | 200     | Max items (max 1000)  |
+| offset      | integer | 0       | Items to skip         |
+| asset_class | string  | null    | Filter by asset class |
+| active      | boolean | true    | Show active/inactive  |
 
 **Asset Class Values:** stock, etf, crypto, metals, real_estate, savings, bond
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -54,7 +55,7 @@ Retrieve a list of investments.
       "symbol": "AAPL",
       "asset_class": "stock",
       "currency": "USD",
-      "current_price": 185.50,
+      "current_price": 185.5,
       "interest_rate": null,
       "maturity_date": null,
       "location": null,
@@ -86,6 +87,7 @@ Retrieve a list of investments.
 ```
 
 Notes:
+
 - Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.js]]).
 - Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.js]]).
 - Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
@@ -95,14 +97,31 @@ Notes:
 Get supported price providers.
 
 **Response:**
+
 ```json
 {
   "providers": [
     { "key": "manual", "name": "Manual", "description": "Set price manually" },
-    { "key": "binance", "name": "Binance", "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")" },
-    { "key": "yahoo", "name": "Yahoo Finance", "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")" },
-    { "key": "custom", "name": "Custom JSON", "description": "Any JSON endpoint with a configurable price path" },
-    { "key": "kinesis", "name": "Kinesis", "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")" }
+    {
+      "key": "binance",
+      "name": "Binance",
+      "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+    },
+    {
+      "key": "yahoo",
+      "name": "Yahoo Finance",
+      "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+    },
+    {
+      "key": "custom",
+      "name": "Custom JSON",
+      "description": "Any JSON endpoint with a configurable price path"
+    },
+    {
+      "key": "kinesis",
+      "name": "Kinesis",
+      "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+    }
   ]
 }
 ```
@@ -112,23 +131,26 @@ Get supported price providers.
 Fetch historical price points for an investment from its provider-specific history source.
 
 Current support:
+
 - All providers read persisted database history first and return it directly when it already covers the requested range (or when `db_only=true`).
 - `yahoo` fetches daily chart quotes; `binance` walks the requested window through paginated daily klines; `kinesis` fetches trendline data, converts USD points with historical foreign-exchange rates when needed, and sanitizes isolated spikes; `custom` follows the configured, Server-Side Request Forgery-guarded history URL and JSON paths.
 - Successful live fetches are range-filtered and upserted into `asset_price_history`. Manual or unknown providers have no external history branch and therefore return persisted points only.
 
 Persistence notes:
+
 - Historical quotes are stored in `asset_price_history` (daily `price_date` and `close_price` per investment).
 - Startup runs background backfill (`backfillHistoricalAssetQuotes`) for held market-priced assets from first transaction date.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| from_ms | integer | — | Optional lower bound (unix timestamp ms) |
-| to_ms | integer | — | Optional upper bound (unix timestamp ms) |
-| db_only | boolean (`true`/`false` or `1`/`0`) | `true` | When true, serves only persisted DB history and skips external provider refresh/fetch. Defaults to `true` to prevent accidental external fetches when no `db_only` query is supplied (offline-resilience default). Frontend can opt out with `?db_only=false` to allow live provider refresh. |
+| Parameter | Type                                | Default | Description                                                                                                                                                                                                                                                                                   |
+| --------- | ----------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| from_ms   | integer                             | —       | Optional lower bound (unix timestamp ms)                                                                                                                                                                                                                                                      |
+| to_ms     | integer                             | —       | Optional upper bound (unix timestamp ms)                                                                                                                                                                                                                                                      |
+| db_only   | boolean (`true`/`false` or `1`/`0`) | `true`  | When true, serves only persisted DB history and skips external provider refresh/fetch. Defaults to `true` to prevent accidental external fetches when no `db_only` query is supplied (offline-resilience default). Frontend can opt out with `?db_only=false` to allow live provider refresh. |
 
 **Response:**
+
 ```json
 {
   "investment_id": 42,
@@ -145,6 +167,7 @@ Persistence notes:
 Refresh prices from live providers for all investments.
 
 Fallback chain for each investment price:
+
 1. Live quote (`live`)
 2. Previous close (`close`, when provider live price is missing/0)
 3. Latest historical close from Yahoo chart data (`close`, when quote fields are unavailable)
@@ -152,12 +175,14 @@ Fallback chain for each investment price:
 5. Last persisted point from `asset_price_history` (`historical_fallback`, when live providers are unreachable and in-memory cache is cold)
 
 Additional refresh behavior:
+
 - Yahoo refresh accepts either `price_provider_id` **or** investment `symbol` (symbol fallback), matching Market Lookup symbol handling.
 - Kinesis refresh/history resolution uses shared config resolution (`_resolveKinesisConfig`) so live and historical paths use the same symbol/timeframe mapping.
 - Route-level live-refresh eligibility for `kinesis` accepts either explicit `price_provider_id` or asset-name/symbol mapping via `getKinesisAssetConfig`, so mapped metals can refresh even when `provider_id` is empty.
 - Price writes are persisted through inheritance tables (`investments_base` + asset child table) to avoid direct updates on the non-updatable `investments` compatibility view.
 
 Compatibility safeguard:
+
 - A DB migration adds an `INSTEAD OF UPDATE` trigger on the `investments` view, so legacy `UPDATE investments ...` statements are redirected to inheritance tables and no longer error.
 - Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 - Migration `0021_price_provider_binance` replaces `coingecko`/`kraken` enum values with `binance` by altering `investments_base.price_provider` directly (not the `investments` compatibility view), dropping the default before enum conversion, then restoring `DEFAULT 'manual'` after conversion. The migration also handles PostgreSQL relation dependencies by backing up and dropping all dependent `public` views that reference `investments_base` (table-level or `price_provider` column-level dependencies), then recreating them from captured definitions; when the `investments` view is restored and `investments_view_update_instead()` exists, it recreates trigger `update_investments_view_instead` ([[alembic/versions/0021_update_price_provider_enum.py]]).
@@ -165,13 +190,14 @@ Compatibility safeguard:
 - Alembic baseline migration `0001_initial_database_schema` guards indexes and triggers to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[alembic/versions/0001_initial_database_schema.py]]).
 
 **Response:**
+
 ```json
 {
   "updated": 9,
   "total": 15,
   "prices": {
-    "1": 185.50,
-    "2": 45000.00
+    "1": 185.5,
+    "2": 45000.0
   },
   "priceSources": {
     "1": "close",
@@ -191,13 +217,14 @@ Compatibility safeguard:
 Create a new investment.
 
 **Request Body:**
+
 ```json
 {
   "name": "Apple Inc.",
   "symbol": "AAPL",
   "asset_class": "stock",
   "currency": "USD",
-  "current_price": 185.50,
+  "current_price": 185.5,
   "price_provider": "yahoo",
   "price_provider_id": "AAPL",
   "price_provider_latest_url": "https://example.com/latest",
@@ -220,13 +247,21 @@ Custom provider path configuration fields:
 - `price_provider_history_price_path`: JSON path (relative to each history row) for price.
 
 Fallback compatibility:
+
 - legacy `price_provider_url` and `price_provider_id` are still read for custom latest-price resolution.
 - legacy-schema create compatibility: when DB relation `investments` lacks new custom-provider columns, create falls back to legacy insert fields and maps `price_provider_latest_path` → `price_provider_id`, `price_provider_latest_url` → `price_provider_url`.
 - recommended schema state for full custom-provider latest/history compatibility is migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 
 **Required Fields:** name, asset_class
 
+When supplied, `currency` must be a non-empty three-letter ISO code. It is
+trimmed and normalized to uppercase. Explicit `null` or empty values return
+`400 VALIDATION_ERROR`; omitting it on create defaults it to `EUR`.
+PATCH applies the same validation and does not allow the investment currency to
+be cleared.
+
 Create-path compatibility:
+
 - `create()` auto-detects inheritance schema by checking `investments_base`; when present, it inserts into the asset-specific child table (`stock_investments`, `etf_investments`, `crypto_investments`, `metals_investments`, `real_estate_investments`, `savings_investments`, `bond_investments`) and then reads the created row from the `investments` compatibility view.
 - In legacy schema mode, `create()` still performs `INSERT INTO investments ...`; if that path fails with `cannot insert into view "investments"`, it falls back to inheritance-table insert and caches inheritance mode for subsequent creates ([[apps/node-backend/src/repositories/investmentRepository.js]]).
 - In inheritance mode, if child-table insert fails with duplicate-id primary key violation (`23505`, `<child_table>_pkey`, `Key (id)`), `create()` self-heals by resyncing the `investments_base` sequence (`setval(..., COALESCE(MAX(id), 0) + 1, false)`) and retries the insert once ([[apps/node-backend/src/repositories/investmentRepository.js]]).
@@ -240,12 +275,14 @@ Get a single investment by ID.
 Update an investment.
 
 Validation and mutability rules:
+
 - `asset_class` is immutable after creation; attempts to change it return `400` with `VALIDATION_ERROR`.
 - `symbol` (ticker) is editable for unit-based investments but must be non-empty when provided and globally unique (case-insensitive).
 - Route-level update now maps repository validation failures to `400` instead of generic `500` for business-rule violations.
 - Existing DB `updated_at` triggers keep timestamp-only edit history (no previous-value history required).
 
 **Accepted body field — `show_in_ticker`** (boolean, optional):
+
 - Controls whether this investment appears in the Portfolio Overview ticker tape.
 - `true` (default): the holding is included in the ticker and its symbol is quoted from Yahoo.
 - `false`: the holding is excluded; no Yahoo quote request is made for it.
@@ -260,6 +297,7 @@ Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend
 Delete an investment (hard delete).
 
 Delete-path compatibility:
+
 - `hardDelete()` now detects inheritance schema and deletes through `investments_base` when needed.
 - If legacy `DELETE FROM investments ...` fails with a non-updatable view error, the repository falls back to base-table delete and caches inheritance mode for subsequent deletes ([[apps/node-backend/src/repositories/investmentRepository.js]]).
 
@@ -269,11 +307,11 @@ Get portfolio transactions for an investment.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| type | string | null | Filter by transaction type |
-| limit | integer | 200 | Max items |
-| offset | integer | 0 | Items to skip |
+| Parameter | Type    | Default | Description                |
+| --------- | ------- | ------- | -------------------------- |
+| type      | string  | null    | Filter by transaction type |
+| limit     | integer | 200     | Max items                  |
+| offset    | integer | 0       | Items to skip              |
 
 **Transaction Types:** buy, sell, gift, dividend, fee, tax, interest, rent_income, appreciation
 
@@ -285,15 +323,16 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `investment_ids` | string | required | Comma-separated investment IDs (e.g. `1,2,5`). Every element must be a plain base-10 integer in 1..2,147,483,647 — one malformed element rejects the whole request |
-| `type` | string | null | Optional transaction type filter |
-| `per_investment_limit` | integer | 1000 | Max rows per investment (clamped 1..5000) |
-| `limit` | integer | null | Optional global cap after per-investment limiting (clamped 1..200000) |
-| `offset` | integer | 0 | Global offset after ordering |
+| Parameter              | Type    | Default  | Description                                                                                                                                                        |
+| ---------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `investment_ids`       | string  | required | Comma-separated investment IDs (e.g. `1,2,5`). Every element must be a plain base-10 integer in 1..2,147,483,647 — one malformed element rejects the whole request |
+| `type`                 | string  | null     | Optional transaction type filter                                                                                                                                   |
+| `per_investment_limit` | integer | 1000     | Max rows per investment (clamped 1..5000)                                                                                                                          |
+| `limit`                | integer | null     | Optional global cap after per-investment limiting (clamped 1..200000)                                                                                              |
+| `offset`               | integer | 0        | Global offset after ordering                                                                                                                                       |
 
 **Behavior notes:**
+
 - Repository uses per-investment ranking (`ROW_NUMBER() OVER (PARTITION BY investment_id ORDER BY date DESC, id DESC)`) so each investment contributes at most `per_investment_limit` rows.
 - Final result is globally ordered by `date DESC, id DESC`.
 - `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
@@ -305,6 +344,7 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 > `openapi.yaml` documented this filter as `investment_id` (singular, optional) until 2026-08-11; the route has only ever read `investment_ids`. The spec now matches the implementation. `useInvestments.ts` already sent the plural form. Full accept set: [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -313,10 +353,10 @@ This endpoint is intended for portfolio pages that need to load many holdings at
       "investment_id": 5,
       "type": "buy",
       "date": "2026-01-15",
-      "amount": 1855.00,
+      "amount": 1855.0,
       "units": 10,
-      "price_per_unit": 185.50,
-      "fees": 5.00,
+      "price_per_unit": 185.5,
+      "fees": 5.0,
       "currency": "USD",
       "fx_rate_to_eur": 0.92,
       "import_batch_id": "12",
@@ -349,17 +389,18 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
 `type` and `date`; PATCH treats every field as optional.
 
 **Request Body:**
+
 ```json
 {
   "type": "buy",
   "date": "2026-01-15",
-  "amount": 1855.00,
+  "amount": 1855.0,
   "units": 10,
-  "price_per_unit": 185.50,
-  "fees": 5.00,
-  "taxes": 0.00,
+  "price_per_unit": 185.5,
+  "fees": 5.0,
+  "taxes": 0.0,
   "currency": "USD",
-  "fx_rate_to_eur": 0.9200000000,
+  "fx_rate_to_eur": 0.92,
   "note": "Initial purchase",
   "is_recurring": false,
   "recurrence_interval": "monthly",
@@ -369,26 +410,27 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
 
 **Request Body Fields:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| type | string | Yes | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
-| date | string | Yes | Transaction date (YYYY-MM-DD) |
-| amount | number | No | Total amount (auto-computed if missing for unit-based types) |
-| units | number | No | Number of units (required for buy/sell/gift on unit-based assets) |
-| price_per_unit | number | No | Price per unit (auto-computed if missing for unit-based types) |
-| fees | number | No | Transaction fees |
-| taxes | number | No | Transaction taxes (supported for dividend transactions) |
-| currency | string | No | Currency code (defaults to investment currency) |
-| fx_rate_to_eur | number | No | FX rate to EUR at transaction date |
-| note | string | No | Transaction note |
-| is_recurring | boolean | No | Whether this transaction is recurring |
-| recurrence_interval | string | No | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly |
-| account_id | integer \| null | No | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11 |
-| recurrence_end_date | string | No | End date for recurring transactions (YYYY-MM-DD) |
+| Field               | Type            | Required | Description                                                                                                                                     |
+| ------------------- | --------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| type                | string          | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
+| date                | string          | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                   |
+| amount              | number          | No       | Total amount (auto-computed if missing for unit-based types)                                                                                    |
+| units               | number          | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                               |
+| price_per_unit      | number          | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                  |
+| fees                | number          | No       | Transaction fees                                                                                                                                |
+| taxes               | number          | No       | Transaction taxes (supported for dividend transactions)                                                                                         |
+| currency            | string          | No       | Currency code (defaults to investment currency)                                                                                                 |
+| fx_rate_to_eur      | number          | No       | FX rate to EUR at transaction date                                                                                                              |
+| note                | string          | No       | Transaction note                                                                                                                                |
+| is_recurring        | boolean         | No       | Whether this transaction is recurring                                                                                                           |
+| recurrence_interval | string          | No       | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly                                                                        |
+| account_id          | integer \| null | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11            |
+| recurrence_end_date | string          | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                |
 
 **Required Fields:** type, date (additional type-specific validation below)
 
 Unit-based buy/sell behavior (asset classes: stock, etf, crypto, metals):
+
 - Request may include any 2 of `amount`, `units`, `price_per_unit`; backend computes the missing third value.
 - If all 3 are provided and inconsistent, request is rejected with `400`.
 - Precision policy during normalization/storage: `amount` (4 decimals), `units` (8 decimals), `price_per_unit` (6 decimals).
@@ -396,14 +438,17 @@ Unit-based buy/sell behavior (asset classes: stock, etf, crypto, metals):
 - Oversell protection: `sell` transactions are rejected with `400` / `VALIDATION_ERROR` when `units` exceed net units held on the transaction date.
 
 Dividend behavior:
+
 - `dividend` transactions support optional `fees` and `taxes`.
 
 Gift behavior (unit-based assets):
+
 - New `gift` transaction type requires `units`.
 - `amount` defaults to `0` when omitted (optional basis amount can still be provided).
 - `fees` and `taxes` are forced to `0`.
 
 Create-path compatibility:
+
 - `create()` now supports inheritance schema for portfolio transactions; if `portfolio_transactions` is a non-updatable compatibility view, it inserts into the asset-specific child transaction table based on the investment `asset_class`.
 - Before inherited child-table insert, `create()` proactively resyncs the `portfolio_transactions_base` sequence to reduce sequence drift failures; if insert still hits duplicate id (`23505`), it self-heals by resyncing again and retries once ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
@@ -415,7 +460,7 @@ Create-path compatibility:
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
 
-### ~~POST /api/investments/:id/move~~ *(removed 2026-07-22 — WP-C1 / ADR-108)*
+### ~~POST /api/investments/:id/move~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
 
 > **Removed.** The in-specie move endpoint (ADR-091 FIFO/proportional lot surgery,
 > `moveHoldingService`) was deleted; under ADR-108 an in-specie transfer becomes a whole-lot
@@ -434,9 +479,10 @@ Update a portfolio transaction by transaction ID.
 >
 > **`account_id`** on both write bodies now goes through `validateId`. It was a bare `Number()` with no integer check whatsoever — `'1e3'` booked the lot against account **1000**, `'0x10'` against 16, `true` against 1 and `[7]` against 7, all `201`, while `'12abc'` reached Postgres as `NaN` and 500'd. `PATCH` forwarded the field raw through the repository allow-list, where Postgres' hex-literal parsing turned `'0x10'` into account 16. `0`, negatives and `''` now 400 instead of 500ing at the FK.
 >
-> Null/absent semantics are unchanged: on create both mean *no account*; on `PATCH`, `null` unassigns and an absent key leaves the column alone. No shipped caller breaks — `lib/api/portfolio.ts` types `txnId` and `account_id` as `number`, and `EditPortfolioTxnDialog` takes the account id from the account picker's server rows. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+> Null/absent semantics are unchanged: on create both mean _no account_; on `PATCH`, `null` unassigns and an absent key leaves the column alone. No shipped caller breaks — `lib/api/portfolio.ts` types `txnId` and `account_id` as `number`, and `EditPortfolioTxnDialog` takes the account id from the account picker's server rows. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
 
 Update endpoint notes:
+
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
 - The shared POST/PATCH body parser validates common field shapes at the controller boundary;
   repository normalization remains defense in depth for type-specific unit math, oversell checks,
@@ -455,6 +501,7 @@ Update endpoint notes:
 - Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.
 
 Update-path compatibility:
+
 - For repository-level transaction update paths (PATCH), if `UPDATE portfolio_transactions ...` fails because `portfolio_transactions` is a non-updatable compatibility view, the repository falls back to updating `portfolio_transactions_base` plus the asset-specific child transaction table ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Migration safety: alembic migration `0016_add_fx_rate_to_portfolio_transactions` runs `ALTER TABLE` only when `portfolio_transactions` is a table/partitioned table (`relkind in ('r','p')`), so startup no longer attempts `ALTER TABLE` on a compatibility view ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
 
@@ -463,6 +510,7 @@ Update-path compatibility:
 Delete a portfolio transaction.
 
 Delete-path compatibility:
+
 - `hardDelete()` supports inheritance schema by falling back from `portfolio_transactions` view delete to `portfolio_transactions_base` delete when needed ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 
 ### GET /api/investments/:id/summary
@@ -470,15 +518,16 @@ Delete-path compatibility:
 Get investment summary with holdings breakdown.
 
 **Response:**
+
 ```json
 {
   "investment_id": 1,
   "breakdown": {
     "total_units": 50,
-    "total_cost": 9000.00,
-    "current_value": 9275.00,
-    "total_dividends": 250.00,
-    "total_fees": 25.00
+    "total_cost": 9000.0,
+    "current_value": 9275.0,
+    "total_dividends": 250.0,
+    "total_fees": 25.0
   }
 }
 ```
@@ -488,11 +537,13 @@ Get investment summary with holdings breakdown.
 ### List Investments
 
 **curl:**
+
 ```bash
 curl "http://localhost:3002/api/investments?limit=20"
 ```
 
 **apiClient:**
+
 ```ts
 const { data } = await apiClient.getInvestments({ limit: 20 });
 ```
@@ -500,6 +551,7 @@ const { data } = await apiClient.getInvestments({ limit: 20 });
 ### Create Investment
 
 **curl:**
+
 ```bash
 curl -X POST http://localhost:3002/api/investments \
   -H "Content-Type: application/json" \
@@ -513,19 +565,21 @@ curl -X POST http://localhost:3002/api/investments \
 ```
 
 **apiClient:**
+
 ```ts
 const investment = await apiClient.createInvestment({
-  name: 'Apple Inc.',
-  asset_class: 'stock',
-  symbol: 'AAPL',
-  currency: 'USD',
-  price_provider: 'yahoo',
+  name: "Apple Inc.",
+  asset_class: "stock",
+  symbol: "AAPL",
+  currency: "USD",
+  price_provider: "yahoo",
 });
 ```
 
 ### Add Portfolio Transaction
 
 **curl:**
+
 ```bash
 curl -X POST http://localhost:3002/api/investments/5/transactions \
   -H "Content-Type: application/json" \
@@ -539,41 +593,45 @@ curl -X POST http://localhost:3002/api/investments/5/transactions \
 ```
 
 **apiClient:**
+
 ```ts
 const txn = await apiClient.createPortfolioTransaction(5, {
-  type: 'buy',
-  date: '2026-01-15',
+  type: "buy",
+  date: "2026-01-15",
   units: 10,
-  price_per_unit: 185.50,
-  currency: 'USD',
+  price_per_unit: 185.5,
+  currency: "USD",
 });
 ```
 
 ### Update Prices
 
 **curl:**
+
 ```bash
 curl -X POST http://localhost:3002/api/investments/update-prices
 ```
 
 **apiClient:**
+
 ```ts
 await apiClient.updateInvestmentPrices();
 ```
 
 ## Price Providers
 
-| Provider | Asset Classes | Description |
-|----------|---------------|-------------|
-| manual | all | Manual price entry |
-| binance | crypto | Binance market data |
-| yahoo | stock, etf, metals | Yahoo Finance |
-| kinesis | metals, commodities | Kinesis market data |
-| custom | all | Custom API |
+| Provider | Asset Classes       | Description         |
+| -------- | ------------------- | ------------------- |
+| manual   | all                 | Manual price entry  |
+| binance  | crypto              | Binance market data |
+| yahoo    | stock, etf, metals  | Yahoo Finance       |
+| kinesis  | metals, commodities | Kinesis market data |
+| custom   | all                 | Custom API          |
 
 ## Belgian Tax Fields
 
 For real estate investments:
+
 - `municipality`: Belgian municipality name
 - `cadastral_income`: Cadastral income (kadastraal inkomen)
 - `municipality_tax_rate`: Municipal tax rate

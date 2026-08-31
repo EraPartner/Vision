@@ -4,9 +4,29 @@ type: feature
 status: active
 date: 2026-04-25
 updated: 2026-08-26
-tags: [feature, admin, database, maintenance, performance, phase-7, vacuum, db-data-editor, adr-101, audit]
+tags:
+  [
+    feature,
+    admin,
+    database,
+    maintenance,
+    performance,
+    phase-7,
+    vacuum,
+    db-data-editor,
+    adr-101,
+    audit,
+  ]
 description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a committed-SQL audit trail.
-aliases: [db maintenance, database admin, VACUUM, table stats, db data editor, table editor]
+aliases:
+  [
+    db maintenance,
+    database admin,
+    VACUUM,
+    table stats,
+    db data editor,
+    table editor,
+  ]
 related_code:
   - apps/node-backend/src/routes/admin.js
   - apps/node-backend/src/services/dbEditor.js
@@ -37,9 +57,9 @@ Retrieve current table statistics including row counts, dead rows, and estimated
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `table` | string | none | Optional: specific table name to fetch; omit for all tables |
+| Parameter | Type   | Default | Description                                                 |
+| --------- | ------ | ------- | ----------------------------------------------------------- |
+| `table`   | string | none    | Optional: specific table name to fetch; omit for all tables |
 
 **Response:**
 
@@ -77,10 +97,10 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | No | Specific table name to vacuum; omit to vacuum all |
-| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM |
+| Parameter | Type    | Required          | Description                                       |
+| --------- | ------- | ----------------- | ------------------------------------------------- |
+| `table`   | string  | No                | Specific table name to vacuum; omit to vacuum all |
+| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM                          |
 
 **Response:**
 
@@ -124,13 +144,14 @@ The VACUUM operation uses a **raw database client** (not the connection pool) be
 // apps/node-backend/src/routes/admin.js
 const client = await getClient(); // Raw client, not pool
 try {
-  await client.query('VACUUM ANALYZE ' + (tableName ? `"${tableName}"` : ''));
+  await client.query("VACUUM ANALYZE " + (tableName ? `"${tableName}"` : ""));
 } finally {
   await client.release();
 }
 ```
 
 **Why raw client?**
+
 - VACUUM cannot run in a transaction block
 - The connection pool wraps all queries in implicit transactions
 - We need an auto-commit connection for this operation
@@ -217,22 +238,22 @@ Tables that lack a primary key are **read-only** in the data editor — the Comm
 
 ### Safety model summary
 
-| Concern | Mitigation |
-|---------|-----------|
-| SQL injection via table/column identifiers | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted |
-| SQL injection via values | Always parameterized |
-| Read queries causing mutations | All reads run in a `READ ONLY` transaction |
-| Hung read queries | `SET LOCAL statement_timeout = '10s'` |
-| Raw WHERE clause abuse | Semicolons rejected; runs inside READ ONLY transaction |
-| Silent concurrent overwrites | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch |
-| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages |
-| Partial batch application | Entire batch runs in one transaction; any failure rolls back all changes |
-| No audit trail | Every committed statement written to `db_editor_audit` inside the same transaction + structured logger |
+| Concern                                               | Mitigation                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| SQL injection via table/column identifiers            | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted |
+| SQL injection via values                              | Always parameterized                                                                                    |
+| Read queries causing mutations                        | All reads run in a `READ ONLY` transaction                                                              |
+| Hung read queries                                     | `SET LOCAL statement_timeout = '10s'`                                                                   |
+| Raw WHERE clause abuse                                | Semicolons rejected; runs inside READ ONLY transaction                                                  |
+| Silent concurrent overwrites                          | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch                                         |
+| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages                         |
+| Partial batch application                             | Entire batch runs in one transaction; any failure rolls back all changes                                |
+| No audit trail                                        | Every committed statement written to `db_editor_audit` inside the same transaction + structured logger  |
 
 ### Bypass-domain-validation caveat
 
 > [!warning] Raw writes bypass app-level domain logic
-> The data editor writes directly to PostgreSQL. It honors every *structural* constraint Postgres enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
+> The data editor writes directly to PostgreSQL. It honors every _structural_ constraint Postgres enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
 
 ### Materialized-view auto-refresh
 
@@ -258,12 +279,20 @@ CREATE INDEX idx_db_editor_audit_table_time ON db_editor_audit (table_name, crea
 
 Audit rows are written inside the same transaction as the change, so a rollback also removes the audit entry. The `db_editor_audit` table is itself browsable (and editable) through the data editor.
 
+Audit history uses a best-effort 180-day retention window. During startup,
+`startup/warmup.js` deletes rows whose `created_at` is older than 180 days;
+failures are logged and do not block the application from starting. This keeps
+the full before/after JSONB images bounded while preserving six months of
+administrator accountability. Revisit the window or add an explicit archive
+workflow if `db_editor_audit` exceeds 10% of the database or adds more than 30
+seconds to a measured backup. Any manual purge must preview the exact range.
+
 ### API endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/admin/database/tables/:table/schema` | Column metadata + PK discovery |
-| `GET` | `/api/admin/database/tables/:table/rows` | Paginated/filtered/sorted read |
+| Method | Path                                       | Purpose                                           |
+| ------ | ------------------------------------------ | ------------------------------------------------- |
+| `GET`  | `/api/admin/database/tables/:table/schema` | Column metadata + PK discovery                    |
+| `GET`  | `/api/admin/database/tables/:table/rows`   | Paginated/filtered/sorted read                    |
 | `POST` | `/api/admin/database/tables/:table/mutate` | Batch write (insert/update/delete); `dryRun` mode |
 
 Full endpoint documentation: [[docs/api/admin|Admin API]].

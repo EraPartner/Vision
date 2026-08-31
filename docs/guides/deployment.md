@@ -2,8 +2,8 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-08-30
-updated: 2026-08-30
+date: 2026-08-31
+updated: 2026-08-31
 tags:
   [
     guide,
@@ -159,7 +159,7 @@ token or an explicit acknowledged outer boundary, startup fails closed. See
 
 **Critical synchronization:** Any named volumes added to `docker-compose.yml` **must also be added**
 to `packaging/electron/resources/docker-compose.yml`, which is retained for the optional Electron
-Docker provider and Demo path. Omitting a volume from that copy can lose optional-provider data on
+Docker provider. Omitting a volume from that copy can lose optional-provider data on
 updates. Native startup does not use this Compose file. See
 [[docs/guides/cicd-pipelines#3-verify-compose-sync--docker-compose-sync-check|CI/CD Pipelines:
 Verify Compose Sync]] and [[docs/adr/051-docker-compose-sync-named-volumes|ADR-051]].

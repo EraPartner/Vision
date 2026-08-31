@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-04-16
-updated: 2026-08-26
+date: 2026-08-31
+updated: 2026-08-31
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -26,28 +26,29 @@ Retrieve a list of recipients.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| limit | integer | 50 | Max items (clamped: 1–5000) |
-| offset | integer | 0 | Items to skip (clamped: ≥0) |
-| search | string | null | Search in name |
-| active | boolean | true | Show active/inactive |
-| name | string | null | Filter by exact name match |
-| default_category_id | integer | null | Filter by default category |
-| uncategorized | boolean | null | Filter recipients without default category |
-| sort_by | string | name | Sort field (name, created_at, updated_at) |
-| sort_dir | string | asc | Sort direction (asc, desc) |
+| Parameter           | Type    | Default | Description                                |
+| ------------------- | ------- | ------- | ------------------------------------------ |
+| limit               | integer | 50      | Max items (clamped: 1–5000)                |
+| offset              | integer | 0       | Items to skip (clamped: ≥0)                |
+| search              | string  | null    | Search in name                             |
+| active              | boolean | true    | Show active/inactive                       |
+| name                | string  | null    | Filter by exact name match                 |
+| default_category_id | integer | null    | Filter by default category                 |
+| uncategorized       | boolean | null    | Filter recipients without default category |
+| sort_by             | string  | name    | Sort field (name, created_at, updated_at)  |
+| sort_dir            | string  | asc     | Sort direction (asc, desc)                 |
 
 > [!warning] `default_category_id` is a strict id (changed 2026-08-11, breaking for malformed ids)
 > It accepts only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
 > `1e3`, `0x10`, `-4`, `0`, ` 5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty
-> (`?default_category_id=`) still mean *no filter* and answer `200`. This was `parseInt`, which
+> (`?default_category_id=`) still mean _no filter_ and answer `200`. This was `parseInt`, which
 > takes the leading digits of anything, so `?default_category_id=12abc` listed the recipients
 > defaulting to category **12** — a filter the caller never asked for — and a `NaN` reached
 > Postgres as a `22P02` 500. See
 > [[docs/security/input-validation#Optional id query params on the remaining list endpoints|Input Validation]].
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -72,15 +73,19 @@ Retrieve a list of recipients.
 ```
 
 Implementation note:
+
 - Recipient list route now fetches `items` and `total` via `Promise.all` because both repository calls are independent; response payload and filtering behavior are unchanged ([[apps/node-backend/src/routes/recipients.js]]).
 - Recipient repository list query now computes `primary_bank_account` via `LEFT JOIN LATERAL` and alias totals via a pre-aggregated join instead of per-row correlated subqueries, preserving sortable fields and response shape while improving scalability on larger recipient sets ([[apps/node-backend/src/repositories/recipientRepository.js]]).
 - Recipient `getById` now uses the same lateral/pre-aggregated enrichment pattern as list queries (instead of correlated subqueries), and recipient update now returns enriched fields via a single CTE update-and-select query instead of update + follow-up read; API payloads and not-found behavior are unchanged ([[apps/node-backend/src/repositories/recipientRepository.js]]).
 
 ### POST /api/recipients
 
-Create a new recipient.
+Create a new recipient or return the existing normalized-name match. This is an idempotent
+create-or-get endpoint: it returns `201` with `created: true` for a new row and `200` with
+`created: false` for an existing row.
 
 **Request Body:**
+
 ```json
 {
   "name": "Supermarket ABC",
@@ -93,11 +98,14 @@ Create a new recipient.
 
 **Behavior:** Automatically normalizes the name for matching (lowercase, trimmed).
 
+The response data includes the recipient fields plus `created` and `links`.
+
 ### GET /api/recipients/:id
 
 Retrieve a single recipient by ID.
 
 **Response:**
+
 ```json
 {
   "id": 1,
@@ -114,8 +122,12 @@ Retrieve a single recipient by ID.
 ```
 
 **Error Response (404):**
+
 ```json
-{ "ok": false, "error": { "code": "NOT_FOUND", "message": "Recipient not found" } }
+{
+  "ok": false,
+  "error": { "code": "NOT_FOUND", "message": "Recipient not found" }
+}
 ```
 
 ### PATCH /api/recipients/:id
@@ -123,6 +135,7 @@ Retrieve a single recipient by ID.
 Update a recipient.
 
 **Request Body:**
+
 ```json
 {
   "name": "Updated Name",
@@ -142,6 +155,7 @@ Permanently delete a recipient (hard delete).
 Merge multiple recipients into one (the recipient identified by `:id` becomes the primary). **Phase 6: Atomic merge with transactional guarantees.**
 
 **Request Body:**
+
 ```json
 {
   "alias_ids": [2, 3]
@@ -156,17 +170,24 @@ integer in 1..2,147,483,647. Digit strings are normalized to numbers. One malfor
 `400 VALIDATION_ERROR`; no recipient lookup or merge write runs for a partial subset.
 
 **Atomic Guarantees (Phase 6):**
+
 - All FK reassignments execute within a single database transaction.
 - If any step fails, the entire merge rolls back (no partial state).
 - Concurrent merges into the same primary are serialized via row-level locking (FOR UPDATE).
 - Bank account deduplication is race-safe (INSERT ... ON CONFLICT).
 
 **Response:**
+
 ```json
 {
   "primary": { "id": 1, "name": "Primary Recipient" },
   "merged_ids": [2, 3],
-  "reassigned": { "transactions": 7, "splits": 0, "planned": 0, "bankAccounts": 1 },
+  "reassigned": {
+    "transactions": 7,
+    "splits": 0,
+    "planned": 0,
+    "bankAccounts": 1
+  },
   "aliases": [
     { "id": 2, "name": "Alias One" },
     { "id": 3, "name": "Alias Two" }
@@ -182,6 +203,7 @@ integer in 1..2,147,483,647. Digit strings are normalized to numbers. One malfor
 Remove a recipient from its primary merge group (clears `primary_recipient_id`).
 
 **Response:**
+
 ```json
 {
   "id": 2,
@@ -195,6 +217,7 @@ Remove a recipient from its primary merge group (clears `primary_recipient_id`).
 Get all alias recipients for a primary recipient.
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -211,11 +234,12 @@ Identify recipient clusters for bulk merge operations. The service scans at most
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| min_count | integer | 2 | Minimum recipients per cluster (minimum 2) |
+| Parameter | Type    | Default | Description                                |
+| --------- | ------- | ------- | ------------------------------------------ |
+| min_count | integer | 2       | Minimum recipients per cluster (minimum 2) |
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -223,7 +247,11 @@ Identify recipient clusters for bulk merge operations. The service scans at most
       "lcp": "SUPERMARKET",
       "confidence": "medium",
       "recipientIds": [1, 5, 7],
-      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Supermarket City"],
+      "recipientNames": [
+        "Supermarket ABC",
+        "Supermarket XYZ",
+        "Supermarket City"
+      ],
       "categoryId": 5,
       "suggestedPattern": "SUPERMARKET",
       "suggestedKind": "literal_prefix"
@@ -234,6 +262,7 @@ Identify recipient clusters for bulk merge operations. The service scans at most
 ```
 
 **Response Fields:**
+
 - `lcp` (string): Longest common prefix of recipient names in the cluster
 - `confidence` (string): `"high"` when the common prefix is at least 16 characters; otherwise `"medium"`
 - `recipientIds` (array): IDs of recipients in the cluster
@@ -243,6 +272,7 @@ Identify recipient clusters for bulk merge operations. The service scans at most
 - `suggestedKind` (string): Pattern type, currently `"literal_prefix"`
 
 **Implementation:**
+
 - Queries active primary recipients only (excludes aliases and inactive)
 - Buckets by first-4-character prefix + category for initial grouping
 - Analyzes longest common prefix (LCP) with minimum length of 8 characters
@@ -259,11 +289,12 @@ List all matching patterns for a recipient.
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `id` | Recipient ID |
+| Parameter | Description  |
+| --------- | ------------ |
+| `id`      | Recipient ID |
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -287,11 +318,12 @@ Create a new matching pattern for a recipient.
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `id` | Recipient ID |
+| Parameter | Description  |
+| --------- | ------------ |
+| `id`      | Recipient ID |
 
 **Request Body:**
+
 ```json
 {
   "pattern": "SUPERMARKET",
@@ -305,6 +337,7 @@ Create a new matching pattern for a recipient.
 **Required Fields:** `pattern`
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": 1,
@@ -318,8 +351,15 @@ Create a new matching pattern for a recipient.
 ```
 
 **Error Response (400):**
+
 ```json
-{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "Missing required field: pattern" } }
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Missing required field: pattern"
+  }
+}
 ```
 
 ### POST /api/recipients/:id/patterns/preview
@@ -328,11 +368,12 @@ Preview which existing transactions would match a given pattern before saving it
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `id` | Recipient ID |
+| Parameter | Description  |
+| --------- | ------------ |
+| `id`      | Recipient ID |
 
 **Request Body:**
+
 ```json
 {
   "pattern": "SUPERMARKET",
@@ -346,11 +387,17 @@ Preview which existing transactions would match a given pattern before saving it
 **Defaults:** `pattern_kind` defaults to `literal_prefix`; `case_sensitive` defaults to `false`.
 
 **Response:** `200 OK`
+
 ```json
 {
   "matchCount": 14,
   "matches": [
-    { "id": 101, "description": "SUPERMARKET ABC", "date": "2026-05-01", "amount": -45.00 }
+    {
+      "id": 101,
+      "description": "SUPERMARKET ABC",
+      "date": "2026-05-01",
+      "amount": -45.0
+    }
   ]
 }
 ```
@@ -361,21 +408,29 @@ Update an existing pattern.
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `id` | Recipient ID |
-| `patternId` | Pattern ID |
+| Parameter   | Description  |
+| ----------- | ------------ |
+| `id`        | Recipient ID |
+| `patternId` | Pattern ID   |
 
 **Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`.
 
 **Response:** `200 OK`
+
 ```json
 { "patternId": 1 }
 ```
 
 **Error Response (400):**
+
 ```json
-{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "patternId must be a positive integer" } }
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "patternId must be a positive integer"
+  }
+}
 ```
 
 ### DELETE /api/recipients/:id/patterns/:patternId
@@ -384,16 +439,23 @@ Delete a pattern.
 
 **Path Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `id` | Recipient ID |
-| `patternId` | Pattern ID |
+| Parameter   | Description  |
+| ----------- | ------------ |
+| `id`        | Recipient ID |
+| `patternId` | Pattern ID   |
 
 **Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 **Error Response (400):**
+
 ```json
-{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "patternId must be a positive integer" } }
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "patternId must be a positive integer"
+  }
+}
 ```
 
 ## Recipient Bank Accounts
@@ -406,15 +468,19 @@ Get bank accounts for a recipient.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `active` | boolean | `true` | Filter active-only accounts |
+| Parameter | Type    | Default | Description                 |
+| --------- | ------- | ------- | --------------------------- |
+| `active`  | boolean | `true`  | Filter active-only accounts |
 
 ### POST /api/recipients/:id/bank-accounts
 
 Add or get an existing bank account for a recipient (create-or-get pattern).
 
+The response data includes `created: true` with status `201`, or `created: false` with status
+`200` when the account already exists.
+
 **Request Body:**
+
 ```json
 {
   "account_number": "BE12345678901234",
@@ -430,6 +496,7 @@ Add or get an existing bank account for a recipient (create-or-get pattern).
 Update a bank account's details.
 
 **Request Body:**
+
 ```json
 {
   "bank_name": "Updated Bank",
@@ -452,11 +519,13 @@ Set a bank account as the primary account for the recipient.
 ### List Recipients
 
 **curl:**
+
 ```bash
 curl "http://localhost:3002/api/recipients?limit=20&active=true"
 ```
 
 **apiClient:**
+
 ```ts
 const { data } = await apiClient.getRecipients({ limit: 20, active: true });
 ```
@@ -464,6 +533,7 @@ const { data } = await apiClient.getRecipients({ limit: 20, active: true });
 ### Create Recipient
 
 **curl:**
+
 ```bash
 curl -X POST http://localhost:3002/api/recipients \
   -H "Content-Type: application/json" \
@@ -471,13 +541,15 @@ curl -X POST http://localhost:3002/api/recipients \
 ```
 
 **apiClient:**
+
 ```ts
-const recipient = await apiClient.createRecipient({ name: 'Supermarket ABC' });
+const recipient = await apiClient.createRecipient({ name: "Supermarket ABC" });
 ```
 
 ### Merge Recipients
 
 **curl:**
+
 ```bash
 curl -X POST http://localhost:3002/api/recipients/1/merge \
   -H "Content-Type: application/json" \
@@ -485,6 +557,7 @@ curl -X POST http://localhost:3002/api/recipients/1/merge \
 ```
 
 **apiClient:**
+
 ```ts
 const merged = await apiClient.mergeRecipients(1, [2, 3]);
 ```

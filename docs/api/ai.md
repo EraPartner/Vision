@@ -3,7 +3,7 @@ title: AI Chat API
 type: api
 status: active
 date: 2026-05-03
-updated: 2026-08-27
+updated: 2026-08-31
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -81,9 +81,15 @@ Pass-through of `GET /api/tags` from Ollama, served in the canonical collection 
 
 ## GET /api/ai/conversations
 
-List conversations newest-first. All fields use camelCase (e.g., `createdAt`, `updatedAt`).
+List conversations newest-first. All fields use camelCase (e.g., `createdAt`, `updatedAt`). The
+shipped frontend requests 50-row pages with `limit` and `offset` and exposes **Load more**. For
+backward compatibility, callers that omit both query parameters still receive the historical full
+list. `limit` is clamped to 200.
 
-**Response 200:** canonical collection body `{ items, total }`, where each item is `{ id, title, model, createdAt, updatedAt }`. The list is unpaginated, so `total` is the row count. There is no message count in the payload — the list query selects only these five columns.
+**Response 200:** canonical collection body `{ items, total, limit?, offset? }`, where each item is
+`{ id, title, model, createdAt, updatedAt }`. `total` is always the full conversation count, even
+when the requested offset is past the end; `limit` and `offset` appear only for a paginated request.
+There is no message count in the payload — the list query selects only these five columns.
 
 ## POST /api/ai/conversations
 
@@ -197,6 +203,8 @@ Non-streaming chat turn — runs the tool loop to completion then returns the fu
 
 Same contract as `/chat` but streamed over Server-Sent Events. Uses backpressure-aware writer (Phase 3.2) to prevent unbounded memory growth.
 
+The public event names and payload shapes are defined once in `@vision/types/aiChat`. The service emits those wire-ready events and the route forwards them without an internal rename layer. The route owns canonical terminal `complete`, the deprecated byte-equivalent `done` compatibility alias, and `error` frames.
+
 **Request headers / body:** identical to `/chat`. **Response:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
 
 **Backpressure Handling (Phase 3.2):**
@@ -228,13 +236,16 @@ data: { "message": { "role": "tool", "toolName": "getSpendByCategory", "toolResu
 event: token
 data: "category "
 
-event: done
+event: complete
 data: {
   "conversation": {...},
   "assistantMessage": {...},
   "usage": {...},
   "iterations": 2
 }
+
+event: done
+data: { ...same terminal payload... }
 ```
 
 ### Event Reference
@@ -245,14 +256,15 @@ data: {
 | `token`        | `"delta"` (string)                                      | Assistant content chunk                                                                                                                |
 | `tool_call`    | `{ name, args }`                                        | Model requested a tool — before dispatch                                                                                               |
 | `tool_result`  | `{ message }`                                           | Tool row persisted (camelCase fields; result in `message.toolResult`)                                                                  |
-| `done`         | `{ conversation, assistantMessage, usage, iterations }` | Terminal success (all fields camelCase)                                                                                                |
-| `error`        | `{ detail, code? }`                                     | Terminal failure — `code` present for `AiChatServiceError`                                                                             |
+| `complete`     | `{ conversation, assistantMessage, usage, iterations }` | Canonical terminal success (all fields camelCase)                                                                                      |
+| `done`         | Same as `complete`                                      | Deprecated compatibility alias emitted after `complete`; new clients deduplicate it                                                    |
+| `error`        | `{ detail, code }`                                      | Terminal failure with a stable API error code                                                                                          |
 
 > [!info] Disconnect
-> Route registers `res.on('close')` to detect client disconnect and abort the `AbortController`. Mid-turn Ollama calls are cancelled; no further SSE frames are written. The assistant message is already persisted in the DB before `done` fires, so a late disconnect does not leak orphans. (Note: listening on `req.on('close')` is unsafe—Node's Readable streams emit `close` after the request body is consumed by middleware, before SSE events are emitted.)
+> Route registers `res.on('close')` to detect client disconnect and abort the `AbortController`. Mid-turn Ollama calls are cancelled; no further SSE frames are written. The assistant message is already persisted in the DB before `complete` fires, so a late disconnect does not leak orphans. (Note: listening on `req.on('close')` is unsafe—Node's Readable streams emit `close` after the request body is consumed by middleware, before SSE events are emitted.)
 
 > [!warning] Error semantics
-> On `error` the server emits the frame and calls `res.end()`. No `done` follows. Internal error messages are not leaked — generic failures surface as `"Failed to stream AI chat message"`.
+> On `error` the server emits the frame and calls `res.end()`. No success terminal follows. Internal error messages are not leaked — generic failures surface as `"Failed to stream AI chat message"` with `INTERNAL_SERVER_ERROR`.
 
 ## Validation
 
@@ -286,7 +298,10 @@ Chat endpoints are per-IP rate-limited because each request fans out to Ollama +
 | `OLLAMA_DEFAULT_MODEL`          | `llama3.1:8b`            | Fallback when the request omits `model`                                                               |
 | `OLLAMA_REQUEST_TIMEOUT_MS`     | `600000`                 | Time-to-first-chunk budget (connect + prompt-eval phase only)                                         |
 | `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000`                 | Per-chunk inactivity window for streaming; re-arms on every chunk; total generation time is unbounded |
-| `AI_CHAT_MAX_HISTORY`           | `30`                     | Messages retained when building prompt context                                                        |
+| `OLLAMA_NUM_CTX`                | `8192`                   | Ollama context window sent as `options.num_ctx` for streaming and non-streaming calls                 |
+| `AI_CHAT_MAX_HISTORY`           | `30`                     | Hard upper bound on prior messages considered for prompt context                                      |
+| `AI_CHAT_CONTEXT_BUDGET_CHARS`  | `24000`                  | Approximate character budget for prior messages after reserving the system prompt and current request |
+| `AI_CHAT_MAX_TOOL_RESULT_CHARS` | `6000`                   | Per-result prompt cap; keeps outcome metadata and replaces oversized data with a bounded preview      |
 
 See [[docs/reference/environment-variables|Environment Variables]].
 

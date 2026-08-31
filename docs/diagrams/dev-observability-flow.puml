@@ -19,11 +19,15 @@ package "Frontend  ·  dev build only" as FE {
   node "ApiInspector\n(filter + virtualised list)" as Inspector
 }
 
-cloud "Backend API" as BE
+package "Backend API" as BE {
+  node "requestId middleware\nAsyncLocalStorage" as RequestContext
+  node "shared logger\nambient requestId" as BackendLogger
+}
 
 Hook --> ApiClient : useQuery / useMutation
-ApiClient --> BE  : fetch + auth header
-BE --> ApiClient  : envelope
+ApiClient --> RequestContext : fetch + auth + X-Request-Id
+RequestContext --> ApiClient : envelope + X-Request-Id
+RequestContext --> BackendLogger : async request context
 ApiClient --> Bus : emit ApiRequestEvent\n(start, success, error)
 Bus --> Log       : append (drop oldest)
 Bus --> Metrics   : update p50 / p95 / cache-hit

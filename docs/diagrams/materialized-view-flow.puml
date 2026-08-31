@@ -24,20 +24,17 @@ database "PostgreSQL" as DB {
     view "mv_monthly_summary"
     view "mv_category_totals"
     view "mv_cashflow_daily"
-    view "mv_bank_balances"
   }
 
   node "Indexes" as Indexes {
     idx_mv_monthly_summary
     idx_mv_category_totals
     idx_mv_cashflow_daily
-    idx_mv_bank_balances
   }
 }
 
 package "External" as External {
   class StartupHook
-  class ScheduledRefresh
   class ImportCompletion
 }
 
@@ -53,12 +50,8 @@ end
 
 MatViews --> DB : refreshed
 
-' Scheduled refresh (optional)
-ScheduledRefresh --> MaterializedViewService : 12h cron
-MaterializedViewService --> MatViews : CONCURRENTLY refresh
-
 ' Import-triggered refresh
-ImportCompletion --> MaterializedViewService : After CSV import
+ImportCompletion --> MaterializedViewService : Schedule after reconciliation\nHTTP response does not await
 MaterializedViewService --> MatViews : CONCURRENTLY refresh
 
 note right of MaterializedViewService
@@ -66,15 +59,14 @@ note right of MaterializedViewService
   - mv_monthly_summary
   - mv_category_totals
   - mv_cashflow_daily
-  - mv_bank_balances
    
   CONCURRENTLY option for
   non-locking refresh
    
   Refreshed on:
   - App startup (after schema init)
-  - After import (scheduleRefresh - debounced 1s)
-  - 12h exchange rate refresh
+  - After import (5s trailing debounce,
+    10s burst cap)
   
   Coalesces rapid calls
   (refreshInFlight flag)

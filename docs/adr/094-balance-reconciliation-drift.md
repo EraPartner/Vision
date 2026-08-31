@@ -10,9 +10,11 @@ aliases: [reconciliation, drift detection, statement balance]
 # ADR-094: Balance Reconciliation & Drift Detection
 
 ## Status
+
 Proposed
 
 ## Date
+
 2026-06-18
 
 ## Context
@@ -25,6 +27,7 @@ bank, and Vision can flag when its computed balance disagrees.
 ## Decision
 
 Add to `accounts`:
+
 - `statement_balance NUMERIC(15,2)` — what the bank says.
 - `statement_balance_date DATE` — as of when.
 
@@ -43,23 +46,50 @@ often a missing or duplicated transaction since the last import.
 ## Consequences
 
 **Positive**
+
 - Catches missing/duplicate transactions early, per account, with a concrete euro figure.
 - Reuses the existing computed-balance figure (no new balance engine).
 
 **Negative / cost**
+
 - One small migration (two nullable columns); the drift figure is only as useful as the user
   keeping the statement balance current.
 
 **Risks / mitigations**
-- *Stale statement balance reads as drift* → show `statement_balance_date` alongside so the user
+
+- _Stale statement balance reads as drift_ → show `statement_balance_date` alongside so the user
   knows how fresh it is; drift only shown when a statement balance exists.
-- *Cross-currency accounts* → drift compares same-currency figures (the account's currency); no FX
+- _Cross-currency accounts_ → drift compares same-currency figures (the account's currency); no FX
   in the diff.
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] (computed balance source)
+
+---
+
+## Addendum (2026-08-31): declared-currency reconciliation base
+
+The original single-currency definition above is retained as historical context. Accounts now
+compute one native balance partition per currency. The single `statement_balance` remains
+denominated in `accounts.currency`, so reconciliation resolves a native `reconcilable_balance`
+instead of the FX-converted reporting `computed_balance`.
+
+Resolution is deterministic:
+
+1. When a partition in `accounts.currency` exists, it wins even when its balance is exactly zero.
+   A zero declared-currency balance can mean the account was spent down; it must not silently turn
+   a statement into a claim about another currency.
+2. Only when the declared-currency partition is absent are zero and sub-cent fallback partitions
+   removed. One remaining funded foreign partition is accepted as the compatibility case for a
+   mislabelled single-currency account.
+3. Otherwise the base is zero in `accounts.currency`.
+
+An adjustment transaction is stamped in the selected base currency. Other currency partitions are
+left untouched. This preserves the invariant that the displayed drift is the exact amount the
+reconcile endpoint resolves.
 
 ---
 
@@ -81,18 +111,19 @@ of €0" discrepancy that triggered the audit.
 
 Specific enforcement:
 
-| Layer | Change |
-|-------|--------|
-| `middleware/validation.js` | `'balance'` removed from `ALLOWED_COLUMNS.transactions`; `PATCH /api/transactions/:id` now rejects any body that contains `balance` |
-| `routes/transactions.js` (create) | Create route no longer forwards `balance` to the repository |
-| `repositories/transactionRepository.js` | `create()` no longer accepts or inserts `balance`; manually-created rows leave it `NULL` |
-| `features/transactions/types.ts` | `'balance'` removed from `InfoEditableField` union; the type system enforces the read-only surface at compile time |
-| `features/transactions/components/TransactionInfoDialog.tsx` | Balance field rendered as read-only display; the pencil/edit affordance for this field is removed |
-| `pages/TransactionsPage.tsx` | All callers of the info dialog updated to reflect the removed editable field |
+| Layer                                                        | Change                                                                                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `middleware/validation.js`                                   | `'balance'` removed from `ALLOWED_COLUMNS.transactions`; `PATCH /api/transactions/:id` now rejects any body that contains `balance` |
+| `routes/transactions.js` (create)                            | Create route no longer forwards `balance` to the repository                                                                         |
+| `repositories/transactionRepository.js`                      | `create()` no longer accepts or inserts `balance`; manually-created rows leave it `NULL`                                            |
+| `features/transactions/types.ts`                             | `'balance'` removed from `InfoEditableField` union; the type system enforces the read-only surface at compile time                  |
+| `features/transactions/components/TransactionInfoDialog.tsx` | Balance field rendered as read-only display; the pencil/edit affordance for this field is removed                                   |
+| `pages/TransactionsPage.tsx`                                 | All callers of the info dialog updated to reflect the removed editable field                                                        |
 
 ### Consequences
 
 **Positive**
+
 - The account computed-balance anchor is now tamper-proof from the UI and the API.
 - The source of truth for `balance` is unambiguous: it is the running balance stamped by the
   import pipeline; `NULL` on manual rows is intentional and correct.
@@ -100,6 +131,7 @@ Specific enforcement:
   discrepancies rather than user-introduced noise.
 
 **Negative / cost**
+
 - Power users who previously relied on PATCH to set `balance` (e.g., for seeding an opening
   balance) can no longer do so via the API. The correct workflow is to import a statement that
   carries the balance column, or to rely on the drift badge to quantify the discrepancy.
@@ -136,13 +168,13 @@ A dedicated action, e.g. `POST /api/accounts/:id/opening-balance` with
 `{ balance, date, currency? }`, creates **one system anchor row** in `transactions`,
 server-side:
 
-| Field | Value |
-|-------|-------|
-| `amount` | `0` — the row moves no money |
-| `balance` | the stated opening balance (stamped by the server, the one non-import writer) |
-| `date` | user-chosen; expected to precede the account's activity (warn when it doesn't — by anchor+delta semantics a *later* stamped row always wins, so a mid-history anchor is inert against newer import stamps) |
-| `is_transfer` / `transfer_source` | `true` / `'opening'` — a new CHECK value following ADR-090's `'trade'` precedent, so the row is excluded from spending aggregations and from transfer reconciliation |
-| `memo` | `'OPENING BALANCE'` — a fixed English server-side constant (`OPENING_MEMO`), stamped by the service, not i18n'd |
+| Field                             | Value                                                                                                                                                                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `amount`                          | `0` — the row moves no money                                                                                                                                                                               |
+| `balance`                         | the stated opening balance (stamped by the server, the one non-import writer)                                                                                                                              |
+| `date`                            | user-chosen; expected to precede the account's activity (warn when it doesn't — by anchor+delta semantics a _later_ stamped row always wins, so a mid-history anchor is inert against newer import stamps) |
+| `is_transfer` / `transfer_source` | `true` / `'opening'` — a new CHECK value following ADR-090's `'trade'` precedent, so the row is excluded from spending aggregations and from transfer reconciliation                                       |
+| `memo`                            | `'OPENING BALANCE'` — a fixed English server-side constant (`OPENING_MEMO`), stamped by the service, not i18n'd                                                                                            |
 
 One anchor per `(account, currency)`; invoking the action again **updates** the existing row
 rather than adding a second. The generic `POST /api/transactions` / `PATCH` surface remains
@@ -153,12 +185,14 @@ detail/reconcile flow (rewrite Phase C/D).
 ### Consequences
 
 **Positive**
+
 - Manual accounts finally anchor; their computed balance and drift become meaningful.
 - The tamper-protection stays intact — users still never free-type `balance` on a row.
 - Replaces the awkward documented workaround ("import a statement that carries a balance
   column") for accounts that will never have one.
 
 **Negative / cost**
+
 - A new `transfer_source` CHECK value (small revision; rollback removes the value after deleting
   any `'opening'` rows).
 - The planned zero-amount-transaction rejection (filed elsewhere in TODO.md) must exempt
