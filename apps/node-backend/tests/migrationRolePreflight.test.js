@@ -60,7 +60,7 @@ describe("migration role preflight", () => {
     const entrypoints = [
       ".github/workflows/ci.yml",
       ".github/workflows/release.yml",
-      "packaging/electron/demo-db/regenerate.sh",
+      "packaging/electron/runtime/native.js",
     ];
     for (const relativePath of entrypoints) {
       const contents = readFileSync(

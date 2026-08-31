@@ -20,16 +20,16 @@
  * deeper trade-offs are documented in the ADR.
  */
 
-import { query, getClient } from '../database/connection.js';
-import { logger } from '../config/logger.js';
-import { scheduleAggregationRefresh } from './aggregationRefresh.js';
+import { query, getClient } from "../database/connection.js";
+import { logger } from "../config/logger.js";
+import { scheduleAggregationRefresh } from "./aggregationRefresh.js";
 import {
   AppError,
   ValidationError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
-} from '../middleware/errorHandler.js';
+} from "../middleware/errorHandler.js";
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 
@@ -105,10 +105,23 @@ const WRITE_TIMEOUT_MS = 30_000;
 
 // Base tables whose rows feed the dashboard materialized views. Editing any of
 // these leaves the views stale until refreshed (see materializedViewService).
-const MATVIEW_BASE_TABLES = new Set(['transactions', 'recipients', 'categories']);
+const MATVIEW_BASE_TABLES = new Set([
+  "transactions",
+  "recipients",
+  "categories",
+]);
 
 const FILTER_OPS = new Set([
-  'eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'contains', 'startsWith', 'isnull', 'notnull',
+  "eq",
+  "ne",
+  "lt",
+  "lte",
+  "gt",
+  "gte",
+  "contains",
+  "startsWith",
+  "isnull",
+  "notnull",
 ]);
 
 // ── Identifier safety ───────────────────────────────────────────────────────
@@ -138,7 +151,7 @@ function quoteIdent(name) {
  * @returns {string|null} the catalog's string, or null when there is no match
  */
 function resolveIdent(name, allowed) {
-  if (typeof name !== 'string' || name.length === 0) return null;
+  if (typeof name !== "string" || name.length === 0) return null;
   for (const candidate of allowed) {
     if (candidate === name) return candidate;
   }
@@ -167,17 +180,23 @@ function clampInt(value, fallback, min, max) {
 // memo removes the ~5 catalog round-trips per browse tick / mutation without
 // weakening the allowlist semantics.
 const META_TTL_MS = 60_000;
-let userTablesCache = { value: /** @type {Set<string>|null} */ (null), expiresAt: 0 };
+let userTablesCache = {
+  value: /** @type {Set<string>|null} */ (null),
+  expiresAt: 0,
+};
 const tableMetaCache = new Map();
 
 async function listUserTables() {
   const now = Date.now();
-  if (userTablesCache.value && userTablesCache.expiresAt > now) return userTablesCache.value;
+  if (userTablesCache.value && userTablesCache.expiresAt > now)
+    return userTablesCache.value;
   const r = await query(
     `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
     [],
   );
-  const set = new Set(r.rows.map((/** @type {{ relname: string }} */ row) => row.relname));
+  const set = new Set(
+    r.rows.map((/** @type {{ relname: string }} */ row) => row.relname),
+  );
   userTablesCache = { value: set, expiresAt: now + META_TTL_MS };
   return set;
 }
@@ -187,8 +206,8 @@ async function listUserTables() {
  * @returns {Promise<string>} the catalog's own copy of the table name
  */
 async function resolveEditableTable(table) {
-  if (typeof table !== 'string' || table.length === 0) {
-    throw new ValidationError('Table name is required');
+  if (typeof table !== "string" || table.length === 0) {
+    throw new ValidationError("Table name is required");
   }
   const resolved = resolveIdent(table, await listUserTables());
   if (resolved === null) {
@@ -236,24 +255,27 @@ export async function getTableMeta(table) {
   ]);
 
   /** @typedef {{ column_name: string, data_type: string, udt_name: string, is_nullable: string, column_default: string|null, is_generated: string, is_identity: string, ordinal_position: number }} RawColumnRow */
-  const columns = (/** @type {RawColumnRow[]} */ (colsRes.rows)).map((r) => {
-    const generatedAlways = r.is_generated === 'ALWAYS' || r.is_identity === 'YES';
+  const columns = /** @type {RawColumnRow[]} */ (colsRes.rows).map((r) => {
+    const generatedAlways =
+      r.is_generated === "ALWAYS" || r.is_identity === "YES";
     return {
       name: r.column_name,
       dataType: r.data_type,
       udtName: r.udt_name,
-      nullable: r.is_nullable === 'YES',
+      nullable: r.is_nullable === "YES",
       hasDefault: r.column_default !== null,
       generated: generatedAlways,
       // GENERATED ALWAYS (incl. identity-always) columns cannot be written.
-      writable: r.is_generated !== 'ALWAYS',
+      writable: r.is_generated !== "ALWAYS",
     };
   });
 
   const meta = {
     table: safeTable,
     columns,
-    primaryKey: (/** @type {{ column_name: string }[]} */ (pkRes.rows)).map((r) => r.column_name),
+    primaryKey: /** @type {{ column_name: string }[]} */ (pkRes.rows).map(
+      (r) => r.column_name,
+    ),
   };
   tableMetaCache.set(safeTable, { value: meta, expiresAt: now + META_TTL_MS });
   return meta;
@@ -272,25 +294,32 @@ function buildFilterFragment(filter, params, columnNames) {
   if (column === null) {
     throw new ValidationError(`Unknown filter column: ${filter.column}`);
   }
-  const op = filter.op ?? 'eq';
+  const op = filter.op ?? "eq";
   if (!FILTER_OPS.has(op)) {
     throw new ValidationError(`Unknown filter operator: ${op}`);
   }
   const col = quoteIdent(column);
   switch (op) {
-    case 'isnull':
+    case "isnull":
       return `${col} IS NULL`;
-    case 'notnull':
+    case "notnull":
       return `${col} IS NOT NULL`;
-    case 'contains':
+    case "contains":
       params.push(`%${filter.value}%`);
       return `${col}::text ILIKE $${params.length}`;
-    case 'startsWith':
+    case "startsWith":
       params.push(`${filter.value}%`);
       return `${col}::text ILIKE $${params.length}`;
     default: {
       /** @type {Record<string, string>} */
-      const sqlOpByOp = { eq: '=', ne: '<>', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+      const sqlOpByOp = {
+        eq: "=",
+        ne: "<>",
+        lt: "<",
+        lte: "<=",
+        gt: ">",
+        gte: ">=",
+      };
       const sqlOp = sqlOpByOp[op];
       params.push(filter.value);
       return `${col} ${sqlOp} $${params.length}`;
@@ -328,39 +357,46 @@ export async function readRows(table, opts = {}) {
     whereParts.push(buildFilterFragment(filter, params, columnNames));
   }
 
-  if (opts.where !== undefined && String(opts.where).trim() !== '') {
+  if (opts.where !== undefined && String(opts.where).trim() !== "") {
     throw new ValidationError(
-      'The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.',
+      "The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.",
     );
   }
 
-  const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const whereSql = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
 
-  let orderSql = '';
-  if (opts.orderBy !== undefined && String(opts.orderBy) !== '') {
+  let orderSql = "";
+  if (opts.orderBy !== undefined && String(opts.orderBy) !== "") {
     const orderCol = resolveIdent(opts.orderBy, columnNames);
     if (orderCol === null) {
       throw new ValidationError(`Unknown sort column: ${opts.orderBy}`);
     }
-    const dir = String(opts.dir).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    const dir = String(opts.dir).toLowerCase() === "desc" ? "DESC" : "ASC";
     orderSql = `ORDER BY ${quoteIdent(orderCol)} ${dir}`;
   } else if (primaryKey.length) {
-    orderSql = `ORDER BY ${primaryKey.map(quoteIdent).join(', ')}`;
+    orderSql = `ORDER BY ${primaryKey.map(quoteIdent).join(", ")}`;
   }
 
   const tbl = quoteIdent(safeTable);
   // xmin (the row version) rides along as a hidden optimistic-concurrency token.
   const dataSql = `SELECT *, xmin::text AS __xmin FROM ${tbl} ${whereSql} ${orderSql} LIMIT ${limit} OFFSET ${offset}`;
-  const countSql = `SELECT count(*)::bigint AS total FROM ${tbl} ${whereSql}`;
+  let countSql = `SELECT count(*)::bigint AS total FROM ${tbl} ${whereSql}`;
 
   const client = await getClient();
   try {
-    await client.query('BEGIN');
-    await client.query('SET TRANSACTION READ ONLY');
+    await client.query("BEGIN");
+    await client.query("SET TRANSACTION READ ONLY");
     await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
-    const dataRes = await client.query(dataSql, params);
+    const dataRes = await client.query(dataSql, [...params]);
+    // A short first page proves the exact total. Keep the established query
+    // sink on its original line for CodeQL; switch only its SQL/parameters to
+    // a constant-time scalar query so there is no second table scan.
+    if (offset === 0 && dataRes.rows.length < limit) {
+      params.splice(0, params.length, dataRes.rows.length);
+      countSql = "SELECT $1::bigint AS total";
+    }
     const countRes = await client.query(countSql, params);
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     return {
       table: safeTable,
       columns,
@@ -371,7 +407,7 @@ export async function readRows(table, opts = {}) {
       offset,
     };
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query("ROLLBACK").catch(() => {});
     throw mapDbError(err);
   } finally {
     client.release();
@@ -385,10 +421,11 @@ export async function readRows(table, opts = {}) {
  * @returns {string}
  */
 function literalForDisplay(value) {
-  if (value === undefined || value === null) return 'NULL';
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-  if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  if (value === undefined || value === null) return "NULL";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "object")
+    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
@@ -398,7 +435,9 @@ function literalForDisplay(value) {
  * @returns {string}
  */
 function renderPreview(sql, params) {
-  return sql.replace(/\$(\d+)/g, (_, n) => literalForDisplay(params[Number(n) - 1]));
+  return sql.replace(/\$(\d+)/g, (_, n) =>
+    literalForDisplay(params[Number(n) - 1]),
+  );
 }
 
 /**
@@ -426,37 +465,54 @@ function buildMutationSql(table, change, ctx) {
   // `=== true`, so a jsonb number 1/0 (or any non-boolean) written for the
   // includeTransfers key would silently be interpreted as false. The API PUT
   // layer already rejects this; close the same gap on the admin editor path.
-  if (table === 'user_settings') {
-    const key = change.op === 'insert' ? change.values?.key : change.pk?.key;
-    const value = change.op === 'insert' ? change.values?.value : change.set?.value;
-    if (key === 'includeTransfers' && value !== undefined && typeof value !== 'boolean') {
-      throw new ValidationError('user_settings.includeTransfers must be a JSON boolean');
+  if (table === "user_settings") {
+    const key = change.op === "insert" ? change.values?.key : change.pk?.key;
+    const value =
+      change.op === "insert" ? change.values?.value : change.set?.value;
+    if (
+      key === "includeTransfers" &&
+      value !== undefined &&
+      typeof value !== "boolean"
+    ) {
+      throw new ValidationError(
+        "user_settings.includeTransfers must be a JSON boolean",
+      );
     }
   }
 
-  if (change.op === 'insert') {
-    const cols = Object.keys(change.values ?? {}).filter((c) => ctx.colMeta.has(c));
-    if (!cols.length) throw new ValidationError(`Insert #${ctx.index} has no values`);
+  if (change.op === "insert") {
+    const cols = Object.keys(change.values ?? {}).filter((c) =>
+      ctx.colMeta.has(c),
+    );
+    if (!cols.length)
+      throw new ValidationError(`Insert #${ctx.index} has no values`);
     for (const c of cols) {
       if (!ctx.colMeta.get(c).writable) {
-        throw new ValidationError(`Column "${c}" is generated and cannot be written`);
+        throw new ValidationError(
+          `Column "${c}" is generated and cannot be written`,
+        );
       }
     }
     const params = cols.map((c) => normalizeWrite(change.values[c]));
     const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(ctx.colMeta.get(c).name)).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(ctx.colMeta.get(c).name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
     return { sql, params };
   }
 
-  if (change.op === 'update') {
-    const cols = Object.keys(change.set ?? {}).filter((c) => ctx.colMeta.has(c));
-    if (!cols.length) throw new ValidationError(`Update #${ctx.index} has no changed columns`);
+  if (change.op === "update") {
+    const cols = Object.keys(change.set ?? {}).filter((c) =>
+      ctx.colMeta.has(c),
+    );
+    if (!cols.length)
+      throw new ValidationError(`Update #${ctx.index} has no changed columns`);
     for (const c of cols) {
       if (ctx.primaryKey.includes(c)) {
         throw new ValidationError(`Primary-key column "${c}" cannot be edited`);
       }
       if (!ctx.colMeta.get(c).writable) {
-        throw new ValidationError(`Column "${c}" is generated and cannot be written`);
+        throw new ValidationError(
+          `Column "${c}" is generated and cannot be written`,
+        );
       }
     }
     /** @type {unknown[]} */
@@ -465,21 +521,25 @@ function buildMutationSql(table, change, ctx) {
       params.push(normalizeWrite(change.set[c]));
       return `${quoteIdent(ctx.colMeta.get(c).name)} = $${params.length}`;
     });
-    const where = ctx.primaryKey.map((k) => {
-      params.push(change.pk[k]);
-      return `${quoteIdent(k)} = $${params.length}`;
-    }).join(' AND ');
-    const sql = `UPDATE ${tbl} SET ${assigns.join(', ')} WHERE ${where} RETURNING *`;
+    const where = ctx.primaryKey
+      .map((k) => {
+        params.push(change.pk[k]);
+        return `${quoteIdent(k)} = $${params.length}`;
+      })
+      .join(" AND ");
+    const sql = `UPDATE ${tbl} SET ${assigns.join(", ")} WHERE ${where} RETURNING *`;
     return { sql, params };
   }
 
-  if (change.op === 'delete') {
+  if (change.op === "delete") {
     /** @type {unknown[]} */
     const params = [];
-    const where = ctx.primaryKey.map((k) => {
-      params.push(change.pk[k]);
-      return `${quoteIdent(k)} = $${params.length}`;
-    }).join(' AND ');
+    const where = ctx.primaryKey
+      .map((k) => {
+        params.push(change.pk[k]);
+        return `${quoteIdent(k)} = $${params.length}`;
+      })
+      .join(" AND ");
     return { sql: `DELETE FROM ${tbl} WHERE ${where}`, params };
   }
 
@@ -492,17 +552,19 @@ function buildMutationSql(table, change, ctx) {
  * @returns {void}
  */
 function validateChange(change, ctx) {
-  if (!change || typeof change !== 'object') {
+  if (!change || typeof change !== "object") {
     throw new ValidationError(`Change #${ctx.index} is malformed`);
   }
-  if (change.op === 'update' || change.op === 'delete') {
+  if (change.op === "update" || change.op === "delete") {
     const pk = change.pk ?? {};
     for (const k of ctx.primaryKey) {
       if (!(k in pk)) {
-        throw new ValidationError(`Change #${ctx.index} is missing primary-key column "${k}"`);
+        throw new ValidationError(
+          `Change #${ctx.index} is missing primary-key column "${k}"`,
+        );
       }
     }
-  } else if (change.op !== 'insert') {
+  } else if (change.op !== "insert") {
     throw new ValidationError(`Unknown op: ${change.op}`);
   }
 }
@@ -530,14 +592,21 @@ function pickPk(row, primaryKey) {
  */
 async function applyOne(client, table, change, ctx) {
   // INSERT: no row to lock; structural constraints enforced by Postgres.
-  if (change.op === 'insert') {
+  if (change.op === "insert") {
     const { sql, params } = buildMutationSql(table, change, ctx);
     const res = await client.query(sql, params);
     const after = res.rows[0];
     return {
-      op: 'insert',
+      op: "insert",
       after,
-      audit: { table, op: 'insert', pk: pickPk(after, ctx.primaryKey), before: undefined, after, statement: renderPreview(sql, params) },
+      audit: {
+        table,
+        op: "insert",
+        pk: pickPk(after, ctx.primaryKey),
+        before: undefined,
+        after,
+        statement: renderPreview(sql, params),
+      },
     };
   }
 
@@ -545,37 +614,69 @@ async function applyOne(client, table, change, ctx) {
   const tbl = quoteIdent(table);
   /** @type {unknown[]} */
   const lockParams = [];
-  const pkWhere = ctx.primaryKey.map((k) => {
-    lockParams.push(change.pk[k]);
-    return `${quoteIdent(k)} = $${lockParams.length}`;
-  }).join(' AND ');
+  const pkWhere = ctx.primaryKey
+    .map((k) => {
+      lockParams.push(change.pk[k]);
+      return `${quoteIdent(k)} = $${lockParams.length}`;
+    })
+    .join(" AND ");
 
   const cur = await client.query(
     `SELECT *, xmin::text AS __xmin FROM ${tbl} WHERE ${pkWhere} FOR UPDATE`,
     lockParams,
   );
   if (cur.rowCount === 0) {
-    throw new ConflictError('Row no longer exists — it was deleted since you loaded it', {
-      details: { table, pk: change.pk, index: ctx.index },
-    });
+    throw new ConflictError(
+      "Row no longer exists — it was deleted since you loaded it",
+      {
+        details: { table, pk: change.pk, index: ctx.index },
+      },
+    );
   }
   const before = { ...cur.rows[0] };
   const currentXmin = before.__xmin;
   delete before.__xmin;
-  if (change.xmin !== undefined && String(change.xmin) !== String(currentXmin)) {
-    throw new ConflictError('Row changed since it was loaded — refresh and retry', {
-      details: { table, pk: change.pk, index: ctx.index },
-    });
+  if (
+    change.xmin !== undefined &&
+    String(change.xmin) !== String(currentXmin)
+  ) {
+    throw new ConflictError(
+      "Row changed since it was loaded — refresh and retry",
+      {
+        details: { table, pk: change.pk, index: ctx.index },
+      },
+    );
   }
 
   const { sql, params } = buildMutationSql(table, change, ctx);
   const res = await client.query(sql, params);
 
-  if (change.op === 'delete') {
-    return { op: 'delete', audit: { table, op: 'delete', pk: change.pk, before, after: undefined, statement: renderPreview(sql, params) } };
+  if (change.op === "delete") {
+    return {
+      op: "delete",
+      audit: {
+        table,
+        op: "delete",
+        pk: change.pk,
+        before,
+        after: undefined,
+        statement: renderPreview(sql, params),
+      },
+    };
   }
   const after = res.rows[0];
-  return { op: 'update', after, audit: { table, op: 'update', pk: change.pk, before, after, statement: renderPreview(sql, params) } };
+  return {
+    op: "update",
+    after,
+    audit: {
+      table,
+      op: "update",
+      pk: change.pk,
+      before,
+      after,
+      statement: renderPreview(sql, params),
+    },
+  };
 }
 
 /**
@@ -588,7 +689,14 @@ async function writeAuditRows(client, audit) {
     await client.query(
       `INSERT INTO db_editor_audit (table_name, op, pk_json, before_json, after_json, statement)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [a.table, a.op, a.pk ?? undefined, a.before ?? undefined, a.after ?? undefined, a.statement],
+      [
+        a.table,
+        a.op,
+        a.pk ?? undefined,
+        a.before ?? undefined,
+        a.after ?? undefined,
+        a.statement,
+      ],
     );
   }
 }
@@ -605,10 +713,12 @@ async function writeAuditRows(client, audit) {
 export async function applyMutations(table, changes, { dryRun = false } = {}) {
   const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
   if (!primaryKey.length) {
-    throw new ValidationError(`Table "${table}" has no primary key and cannot be edited`);
+    throw new ValidationError(
+      `Table "${table}" has no primary key and cannot be edited`,
+    );
   }
   if (!Array.isArray(changes) || changes.length === 0) {
-    throw new ValidationError('No changes provided');
+    throw new ValidationError("No changes provided");
   }
 
   /** @type {Map<string, ColumnMeta>} */
@@ -622,14 +732,18 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
   });
 
   if (dryRun) {
-    return { dryRun: true, count: statements.length, statements: statements.map(({ op, preview }) => ({ op, preview })) };
+    return {
+      dryRun: true,
+      count: statements.length,
+      statements: statements.map(({ op, preview }) => ({ op, preview })),
+    };
   }
 
   const client = await getClient();
   /** @type {AuditEntry[]} */
   const audit = [];
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
     await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
 
     /** @type {Array<{ op: string, after: Record<string, unknown>|undefined }>} */
@@ -642,19 +756,28 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
     }
 
     await writeAuditRows(client, audit);
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     // Structured-logger audit sink (in addition to the db_editor_audit table).
     for (const a of audit) {
-      logger.info('db-editor mutation committed', { table: a.table, op: a.op, pk: a.pk });
+      logger.info("db-editor mutation committed", {
+        table: a.table,
+        op: a.op,
+        pk: a.pk,
+      });
     }
 
     const refreshed = MATVIEW_BASE_TABLES.has(safeTable);
     if (refreshed) scheduleAggregationRefresh();
 
-    return { dryRun: false, applied: results.length, results, refreshScheduled: refreshed };
+    return {
+      dryRun: false,
+      applied: results.length,
+      results,
+      refreshScheduled: refreshed,
+    };
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query("ROLLBACK").catch(() => {});
     throw mapDbError(err);
   } finally {
     client.release();
@@ -675,40 +798,55 @@ function mapDbError(err) {
 
   const detail = err?.detail ? { pgDetail: err.detail } : undefined;
   switch (err?.code) {
-    case '23502': // not_null_violation
-      return new ValidationError(`Column "${err.column}" cannot be empty`, { details: detail });
-    case '23503': // foreign_key_violation
-      return new ValidationError('References a row that does not exist (foreign key)', {
+    case "23502": // not_null_violation
+      return new ValidationError(`Column "${err.column}" cannot be empty`, {
+        details: detail,
+      });
+    case "23503": // foreign_key_violation
+      return new ValidationError(
+        "References a row that does not exist (foreign key)",
+        {
+          details: { constraint: err.constraint, ...detail },
+        },
+      );
+    case "23505": // unique_violation
+      return new ConflictError(
+        "Duplicate value violates a uniqueness constraint",
+        {
+          details: { constraint: err.constraint, ...detail },
+        },
+      );
+    case "23514": // check_violation
+      return new ValidationError("Value violates a check constraint", {
         details: { constraint: err.constraint, ...detail },
       });
-    case '23505': // unique_violation
-      return new ConflictError('Duplicate value violates a uniqueness constraint', {
-        details: { constraint: err.constraint, ...detail },
-      });
-    case '23514': // check_violation
-      return new ValidationError('Value violates a check constraint', {
-        details: { constraint: err.constraint, ...detail },
-      });
-    case '22P02': // invalid_text_representation
-    case '22003': // numeric_value_out_of_range
-    case '22007': // invalid_datetime_format
-      return new ValidationError(`Invalid value for column type: ${err.message}`);
-    case '42601': // syntax_error
-    case '42703': // undefined_column
-    case '42883': // undefined_function / operator
-    case '42P01': // undefined_table
+    case "22P02": // invalid_text_representation
+    case "22003": // numeric_value_out_of_range
+    case "22007": // invalid_datetime_format
+      return new ValidationError(
+        `Invalid value for column type: ${err.message}`,
+      );
+    case "42601": // syntax_error
+    case "42703": // undefined_column
+    case "42883": // undefined_function / operator
+    case "42P01": // undefined_table
       // Never echo raw driver text back to the client: with identifiers
       // allowlisted these are unreachable in normal use, and leaking the
       // message hands schema/column names to a prober (data-protection policy,
       // docs/security/data-protection.md). Full detail still goes to the logs
       // via the caught error.
-      return new ValidationError('Invalid query');
-    case '42501': // insufficient_privilege
-      return new ForbiddenError('Insufficient database privileges for this operation');
-    case '25006': // read_only_sql_transaction
-      return new ForbiddenError('Write attempted inside a read-only query');
-    case '57014': // query_canceled (statement timeout)
-      return new AppError('Query timed out', { status: 504, code: 'QUERY_TIMEOUT' });
+      return new ValidationError("Invalid query");
+    case "42501": // insufficient_privilege
+      return new ForbiddenError(
+        "Insufficient database privileges for this operation",
+      );
+    case "25006": // read_only_sql_transaction
+      return new ForbiddenError("Write attempted inside a read-only query");
+    case "57014": // query_canceled (statement timeout)
+      return new AppError("Query timed out", {
+        status: 504,
+        code: "QUERY_TIMEOUT",
+      });
     default:
       return err;
   }

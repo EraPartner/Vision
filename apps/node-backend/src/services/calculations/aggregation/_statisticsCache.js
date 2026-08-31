@@ -7,15 +7,16 @@
  * intermediate set on every statistics-page load with no date bound. The exact
  * per-date FX semantics are binding (DECIDED 2026-07-10 — no month-grain
  * pre-aggregation), so this is a pure memoization: same inputs → same output,
- * served from a short-lived process cache, busted synchronously on every
- * transaction/category/recipient mutation via invalidateStatisticsCaches().
+ * served from a short-lived process cache. Transaction reconciliation/refresh
+ * and category/recipient mutation funnels bust it synchronously; the five-minute
+ * TTL bounds staleness for tag-only label/activation changes.
  */
 
 import {
   statisticsResponseCache,
   STATISTICS_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from '../../info/cache.js';
+} from "../../info/cache.js";
 
 /**
  * Stable key fragment for an optional numeric-id array (order-independent).
@@ -24,8 +25,11 @@ import {
  * @returns {string}
  */
 export function statsKeyPart(arr) {
-  if (!arr || arr.length === 0) return '';
-  return [...arr].map(Number).sort((a, b) => a - b).join(',');
+  if (!arr || arr.length === 0) return "";
+  return [...arr]
+    .map(Number)
+    .sort((a, b) => a - b)
+    .join(",");
 }
 
 /**

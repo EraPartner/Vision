@@ -7,18 +7,20 @@
  * instrument matching, or dedup happens here.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { parsedDateToYmd } from '../../lib/importDates.js';
-import { parseWithConfig } from './portfolioGenericAdapter.js';
+import { query, withTransaction } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { parsedDateToYmd } from "../../lib/importDates.js";
+import { parseWithConfig } from "./portfolioGenericAdapter.js";
+import {
+  normalizeCreatedBatchId,
+  runImportStageLifecycle,
+} from "../importStageLifecycle.js";
 
 /**
  * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
  * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
  * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
  */
-
-const STAGE_INSERT_CHUNK = 500;
 
 /**
  * Create a new portfolio import batch row.
@@ -35,7 +37,16 @@ const STAGE_INSERT_CHUNK = 500;
  *   and the frontend guards (`batch_id: z.number()` in
  *   apps/frontend/src/lib/api/portfolioImports.ts).
  */
-export async function createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage = false, accountId }) {
+export async function createBatch({
+  adapterName,
+  filename,
+  sizeBytes,
+  customConfig,
+  defaultAssetClass,
+  defaultType,
+  isBrokerage = false,
+  accountId,
+}) {
   const result = await query(
     `INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
@@ -52,7 +63,7 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
       accountId != null ? Number(accountId) : null,
     ],
   );
-  return Number(result.rows[0].id);
+  return normalizeCreatedBatchId(result.rows[0].id);
 }
 
 /**
@@ -62,24 +73,34 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
  * @returns {Promise<{ rowsTotal: number, rowsSkipped: number }>} `rowsSkipped` is
  *   the adapter's own count of data rows it could not interpret.
  */
-export async function stageBatch({ batchId, filePath, customConfig, onProgress }) {
-  await query(`UPDATE portfolio_import_batches SET status = 'staging' WHERE id = $1`, [batchId]);
-
-  const rows = await parseWithConfig(filePath, customConfig);
-  const total = rows.length;
-  const skipped = Number(rows.skipped) || 0;
-  logger.info('[portfolio-pipeline:stage] parsed rows', { batchId, total, skipped });
-
-  await query(`UPDATE portfolio_import_batches SET rows_total = $1 WHERE id = $2`, [total, batchId]);
-  if (onProgress) onProgress({ phase: 'staging', current: 0, total });
-
-  for (let start = 0; start < total; start += STAGE_INSERT_CHUNK) {
-    const end = Math.min(start + STAGE_INSERT_CHUNK, total);
-    await insertStagingChunk(batchId, rows.slice(start, end), start);
-    if (onProgress) onProgress({ phase: 'staging', current: end, total });
-  }
-
-  return { rowsTotal: total, rowsSkipped: skipped };
+export async function stageBatch({
+  batchId,
+  filePath,
+  customConfig,
+  onProgress,
+}) {
+  return runImportStageLifecycle({
+    batchId,
+    markStaging: () =>
+      query(
+        `UPDATE portfolio_import_batches SET status = 'staging' WHERE id = $1`,
+        [batchId],
+      ),
+    parseRows: () => parseWithConfig(filePath, customConfig),
+    persistTotal: (total) =>
+      query(
+        `UPDATE portfolio_import_batches SET rows_total = $1 WHERE id = $2`,
+        [total, batchId],
+      ),
+    insertChunk: (rows, start) => insertStagingChunk(batchId, rows, start),
+    onParsed: ({ total, skipped }) =>
+      logger.info("[portfolio-pipeline:stage] parsed rows", {
+        batchId,
+        total,
+        skipped,
+      }),
+    onProgress,
+  });
 }
 
 /**
@@ -105,10 +126,14 @@ async function insertStagingChunk(batchId, rows, startIndex) {
       const base = values.length;
       const ph = Array.from({ length: 15 }, (_, k) => `$${base + k + 1}`);
       // status defaults to 'pending' via the column default.
-      placeholders.push(`(${ph.join(',')})`);
+      placeholders.push(`(${ph.join(",")})`);
       values.push(
-        batchId, idx, dateStr,
-        r.typeRaw || null, r.symbolRaw || null, r.nameRaw || null,
+        batchId,
+        idx,
+        dateStr,
+        r.typeRaw || null,
+        r.symbolRaw || null,
+        r.nameRaw || null,
         r.units != null ? r.units : null,
         r.pricePerUnit != null ? r.pricePerUnit : null,
         r.amount != null ? r.amount : null,
@@ -124,7 +149,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
     const sql = `INSERT INTO portfolio_import_staging_rows
       (batch_id, row_index, tx_date, type_raw, symbol_raw, name_raw,
        units, price_per_unit, amount, fees, taxes, currency, fx_rate_to_eur, note, raw_data)
-      VALUES ${placeholders.join(',')}`;
+      VALUES ${placeholders.join(",")}`;
     await client.query(sql, values);
   });
 }

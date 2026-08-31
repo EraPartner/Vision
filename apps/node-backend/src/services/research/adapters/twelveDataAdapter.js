@@ -7,22 +7,25 @@
  * documented Twelve Data API and need live verification with a real key.
  */
 
-import { z } from 'zod';
-import { getJson } from './httpClient.js';
-import { requireProviderKey } from '../providerKeys.js';
-import { looseArray, looseString, numish, parseOr } from './schemas.js';
+import { z } from "zod";
+import { getJson } from "./httpClient.js";
+import { requireProviderKey } from "../providerKeys.js";
+import { looseArray, looseString, numish, parseOr } from "./schemas.js";
+import { makeChartRangeMap } from "@vision/types/chartRanges";
 
-const BASE = 'https://api.twelvedata.com';
+const BASE = "https://api.twelvedata.com";
 
 // Response shapes (tolerant — see schemas.js). Twelve Data serializes all
 // numbers as strings, hence numish everywhere.
 const searchResponseSchema = z.looseObject({
-  data: looseArray(z.looseObject({
-    symbol: looseString,
-    instrument_name: looseString,
-    instrument_type: looseString,
-    exchange: looseString,
-  })),
+  data: looseArray(
+    z.looseObject({
+      symbol: looseString,
+      instrument_name: looseString,
+      instrument_type: looseString,
+      exchange: looseString,
+    }),
+  ),
 });
 
 const quoteResponseSchema = z.looseObject({
@@ -45,20 +48,22 @@ const quoteResponseSchema = z.looseObject({
 
 const timeSeriesResponseSchema = z.looseObject({
   meta: z.looseObject({ symbol: looseString, currency: looseString }).catch({}),
-  values: looseArray(z.looseObject({
-    datetime: looseString,
-    close: numish,
-    high: numish,
-    low: numish,
-    volume: numish,
-  })),
+  values: looseArray(
+    z.looseObject({
+      datetime: looseString,
+      close: numish,
+      high: numish,
+      low: numish,
+      volume: numish,
+    }),
+  ),
 });
 
-const RANGE_TO_OUTPUTSIZE = Object.freeze({
-  '1d': 2, '5d': 7, '1mo': 23, '3mo': 66, '6mo': 130, '1y': 260, '2y': 520, '5y': 1300, max: 5000,
-});
+const RANGE_TO_OUTPUTSIZE = makeChartRangeMap([
+  2, 7, 23, 66, 130, 260, 520, 1300, 5000,
+]);
 
-const key = () => requireProviderKey('twelve_data');
+const key = () => requireProviderKey("twelve_data");
 
 /**
  * @param {unknown} payload raw JSON body — upstream shape is undocumented outside
@@ -67,15 +72,16 @@ const key = () => requireProviderKey('twelve_data');
  */
 function assertOk(payload) {
   // Twelve Data signals failure with { status: 'error', code, message }.
-  if (payload && typeof payload === 'object') {
+  if (payload && typeof payload === "object") {
     const p = /** @type {Record<string, unknown>} */ (payload);
-    if (p.status === 'error') throw new Error(p.message ? String(p.message) : 'twelve_data error');
+    if (p.status === "error")
+      throw new Error(p.message ? String(p.message) : "twelve_data error");
   }
   return payload;
 }
 
 const twelveDataAdapter = {
-  key: 'twelve_data',
+  key: "twelve_data",
 
   /** @param {string} query */
   async search(query) {
@@ -85,8 +91,8 @@ const twelveDataAdapter = {
     const items = data.map((d) => ({
       symbol: d.symbol,
       name: d.instrument_name || d.symbol,
-      type: d.instrument_type || 'UNKNOWN',
-      exchange: d.exchange || '',
+      type: d.instrument_type || "UNKNOWN",
+      exchange: d.exchange || "",
     }));
     return { items };
   },
@@ -97,7 +103,7 @@ const twelveDataAdapter = {
     const payload = assertOk(await getJson(url));
     // Pre-zod, a null body threw on field access; keep throwing so the
     // aggregator still falls through to the next provider.
-    if (payload == null) throw new Error('twelve_data: empty quote response');
+    if (payload == null) throw new Error("twelve_data: empty quote response");
     const q = parseOr(quoteResponseSchema, payload, { fifty_two_week: {} });
     return {
       symbol: q.symbol || symbol,
@@ -123,12 +129,17 @@ const twelveDataAdapter = {
    * @param {string} symbol
    * @param {{ range?: string }} [opts]
    */
-  async chart(symbol, { range = '1mo' } = {}) {
-    const outputsize = RANGE_TO_OUTPUTSIZE[/** @type {keyof typeof RANGE_TO_OUTPUTSIZE} */ (range)]
-      ?? RANGE_TO_OUTPUTSIZE['1mo'];
+  async chart(symbol, { range = "1mo" } = {}) {
+    const outputsize =
+      RANGE_TO_OUTPUTSIZE[
+        /** @type {keyof typeof RANGE_TO_OUTPUTSIZE} */ (range)
+      ] ?? RANGE_TO_OUTPUTSIZE["1mo"];
     const url = `${BASE}/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${key()}`;
     const payload = assertOk(await getJson(url));
-    const { meta, values } = parseOr(timeSeriesResponseSchema, payload, { meta: {}, values: [] });
+    const { meta, values } = parseOr(timeSeriesResponseSchema, payload, {
+      meta: {},
+      values: [],
+    });
     // Twelve Data returns newest-first; the chart expects oldest-first.
     const points = values
       .map((v) => ({

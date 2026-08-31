@@ -15,21 +15,24 @@
  * came back — matching services/marketLookupService.js.
  */
 
-import { getYahooClient } from '../../prices/yahooClient.js';
+import { getYahooClient } from "../../prices/yahooClient.js";
+import { makeChartRangeMap } from "@vision/types/chartRanges";
 
-const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({ validateResult: false });
+const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({
+  validateResult: false,
+});
 
-const RANGE_TO_PERIOD1 = {
-  '1d': () => new Date(Date.now() - 1 * 86_400_000),
-  '5d': () => new Date(Date.now() - 5 * 86_400_000),
-  '1mo': () => monthsAgo(1),
-  '3mo': () => monthsAgo(3),
-  '6mo': () => monthsAgo(6),
-  '1y': () => yearsAgo(1),
-  '2y': () => yearsAgo(2),
-  '5y': () => yearsAgo(5),
-  max: () => new Date('1970-01-01'),
-};
+const RANGE_TO_PERIOD1 = makeChartRangeMap([
+  () => new Date(Date.now() - 1 * 86_400_000),
+  () => new Date(Date.now() - 5 * 86_400_000),
+  () => monthsAgo(1),
+  () => monthsAgo(3),
+  () => monthsAgo(6),
+  () => yearsAgo(1),
+  () => yearsAgo(2),
+  () => yearsAgo(5),
+  () => new Date("1970-01-01"),
+]);
 
 /** @param {number} n */
 function monthsAgo(n) {
@@ -45,17 +48,20 @@ function yearsAgo(n) {
 
 /** @param {string} range */
 function rangeToDate(range) {
-  return (RANGE_TO_PERIOD1[/** @type {keyof typeof RANGE_TO_PERIOD1} */ (range)] ?? RANGE_TO_PERIOD1['1mo'])();
+  return (
+    RANGE_TO_PERIOD1[/** @type {keyof typeof RANGE_TO_PERIOD1} */ (range)] ??
+    RANGE_TO_PERIOD1["1mo"]
+  )();
 }
 
 /** @param {unknown} url */
 function normalizeThumbnailUrl(url) {
-  if (!url || typeof url !== 'string') return undefined;
+  if (!url || typeof url !== "string") return undefined;
   const trimmed = url.trim();
   if (!trimmed) return undefined;
-  if (trimmed.startsWith('//')) return `https:${trimmed}`;
-  if (trimmed.startsWith('http://')) return `https://${trimmed.slice(7)}`;
-  if (trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("http://")) return `https://${trimmed.slice(7)}`;
+  if (trimmed.startsWith("https://")) return trimmed;
   return undefined;
 }
 
@@ -63,7 +69,9 @@ function normalizeThumbnailUrl(url) {
  * @param {any} thumbnail raw yahoo-finance2 payload (NO_VALIDATE — see file header).
  */
 function pickBestThumbnail(thumbnail) {
-  const resolutions = Array.isArray(thumbnail?.resolutions) ? thumbnail.resolutions : [];
+  const resolutions = Array.isArray(thumbnail?.resolutions)
+    ? thumbnail.resolutions
+    : [];
   for (let i = resolutions.length - 1; i >= 0; i -= 1) {
     const candidate = normalizeThumbnailUrl(resolutions[i]?.url);
     if (candidate) return candidate;
@@ -72,7 +80,7 @@ function pickBestThumbnail(thumbnail) {
 }
 
 const yahooAdapter = {
-  key: 'yahoo',
+  key: "yahoo",
 
   /** @param {string} query */
   async search(query) {
@@ -85,8 +93,8 @@ const yahooAdapter = {
       .map((/** @type {any} */ r) => ({
         symbol: r.symbol,
         name: r.shortname || r.longname || r.symbol,
-        type: r.quoteType || 'UNKNOWN',
-        exchange: r.exchDisp || r.exchange || '',
+        type: r.quoteType || "UNKNOWN",
+        exchange: r.exchDisp || r.exchange || "",
       }));
     return { items };
   },
@@ -101,7 +109,7 @@ const yahooAdapter = {
       price: q.regularMarketPrice,
       change: q.regularMarketChange,
       changePercent: q.regularMarketChangePercent,
-      currency: q.currency || 'USD',
+      currency: q.currency || "USD",
       exchange: q.fullExchangeName || q.exchange,
       type: q.quoteType,
       open: q.regularMarketOpen,
@@ -119,10 +127,18 @@ const yahooAdapter = {
    * @param {string} symbol
    * @param {{ range?: string, interval?: string }} [opts]
    */
-  async chart(symbol, { range = '1mo', interval = '1d' } = {}) {
+  async chart(symbol, { range = "1mo", interval = "1d" } = {}) {
     const yahoo = await getYahooClient();
     const result = /** @type {any} */ (
-      await yahoo.chart(symbol, { period1: rangeToDate(range), interval: /** @type {any} */ (interval), includePrePost: false }, NO_VALIDATE)
+      await yahoo.chart(
+        symbol,
+        {
+          period1: rangeToDate(range),
+          interval: /** @type {any} */ (interval),
+          includePrePost: false,
+        },
+        NO_VALIDATE,
+      )
     );
     const points = (result?.quotes || [])
       .filter((/** @type {any} */ p) => p.close != null)
@@ -133,7 +149,11 @@ const yahooAdapter = {
         low: p.low,
         volume: p.volume,
       }));
-    return { symbol: result?.meta?.symbol ?? symbol, currency: result?.meta?.currency, points };
+    return {
+      symbol: result?.meta?.symbol ?? symbol,
+      currency: result?.meta?.currency,
+      points,
+    };
   },
 
   /** @param {string} symbol */
@@ -144,7 +164,11 @@ const yahooAdapter = {
         symbol,
         {
           modules: [
-            'summaryDetail', 'defaultKeyStatistics', 'price', 'financialData', 'assetProfile',
+            "summaryDetail",
+            "defaultKeyStatistics",
+            "price",
+            "financialData",
+            "assetProfile",
           ],
         },
         NO_VALIDATE,
@@ -157,9 +181,12 @@ const yahooAdapter = {
     const ap = s?.assetProfile || {};
     const marketCap = sd.marketCap ?? pr.marketCap;
     const freeCashFlow = fd.freeCashflow;
-    const fcfYield = Number.isFinite(freeCashFlow) && Number.isFinite(marketCap) && marketCap > 0
-      ? freeCashFlow / marketCap
-      : undefined;
+    const fcfYield =
+      Number.isFinite(freeCashFlow) &&
+      Number.isFinite(marketCap) &&
+      marketCap > 0
+        ? freeCashFlow / marketCap
+        : undefined;
     return {
       symbol,
       name: pr.longName || pr.shortName || symbol,
@@ -182,7 +209,9 @@ const yahooAdapter = {
       earningsGrowth: fd.earningsGrowth,
       returnOnEquity: fd.returnOnEquity,
       // Yahoo reports debt/equity as a percentage (150 = 1.5×); normalize to a ratio.
-      debtToEquity: Number.isFinite(fd.debtToEquity) ? fd.debtToEquity / 100 : undefined,
+      debtToEquity: Number.isFinite(fd.debtToEquity)
+        ? fd.debtToEquity / 100
+        : undefined,
       currentRatio: fd.currentRatio,
       quickRatio: fd.quickRatio,
       freeCashFlow,
@@ -196,12 +225,20 @@ const yahooAdapter = {
     const s = /** @type {any} */ (
       await yahoo.quoteSummary(
         symbol,
-        { modules: ['recommendationTrend', 'upgradeDowngradeHistory', 'financialData'] },
+        {
+          modules: [
+            "recommendationTrend",
+            "upgradeDowngradeHistory",
+            "financialData",
+          ],
+        },
         NO_VALIDATE,
       )
     );
     const trendBuckets = s?.recommendationTrend?.trend || [];
-    const current = trendBuckets.find((/** @type {any} */ t) => t.period === '0m') || trendBuckets[0];
+    const current =
+      trendBuckets.find((/** @type {any} */ t) => t.period === "0m") ||
+      trendBuckets[0];
     const consensus = current
       ? {
           strongBuy: current.strongBuy ?? 0,
@@ -212,13 +249,15 @@ const yahooAdapter = {
         }
       : undefined;
     const fd = s?.financialData || {};
-    const recentActions = (s?.upgradeDowngradeHistory?.history || []).slice(0, 10).map((/** @type {any} */ h) => ({
-      date: h.epochGradeDate,
-      firm: h.firm,
-      toGrade: h.toGrade,
-      fromGrade: h.fromGrade || undefined,
-      action: h.action,
-    }));
+    const recentActions = (s?.upgradeDowngradeHistory?.history || [])
+      .slice(0, 10)
+      .map((/** @type {any} */ h) => ({
+        date: h.epochGradeDate,
+        firm: h.firm,
+        toGrade: h.toGrade,
+        fromGrade: h.fromGrade || undefined,
+        action: h.action,
+      }));
     return {
       symbol,
       consensus,
@@ -244,7 +283,9 @@ const yahooAdapter = {
       title: n.title,
       link: n.link,
       publisher: n.publisher,
-      publishedAt: n.providerPublishTime ? new Date(n.providerPublishTime).getTime() : undefined,
+      publishedAt: n.providerPublishTime
+        ? new Date(n.providerPublishTime).getTime()
+        : undefined,
       thumbnail: pickBestThumbnail(n.thumbnail),
       relatedSymbols: [symbol],
     }));

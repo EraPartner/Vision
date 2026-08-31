@@ -5,18 +5,22 @@
  * Performance notes:
  * - create() uses a CTE to INSERT and immediately JOIN in a single round-trip,
  *   eliminating the old INSERT RETURNING + separate getById pattern.
- * - getAllWithCount() uses COUNT(*) OVER () window function so pagination callers
- *   get rows and total count in one DB call instead of two.
+ * - getAllWithCount() keeps the row query pipelined under LIMIT and briefly
+ *   caches the separate filtered count across page requests.
  *
  * Row shapes are declared against the shared contracts in `src/types/rows.js`;
  * mind that `amount`/`balance` are pg NUMERIC (strings) and `date` is a `Date`.
  */
 
-import { query, queryPrepared, withTransaction } from '../database/connection.js';
-import { sanitizeUpdateFields } from '../lib/validation.js';
-import { buildTransactionWhere } from '../lib/filterBuilder.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
-import { accountRepository } from './accountRepository.js';
+import {
+  query,
+  queryPrepared,
+  withTransaction,
+} from "../database/connection.js";
+import { sanitizeUpdateFields } from "../lib/validation.js";
+import { buildTransactionWhere } from "../lib/filterBuilder.js";
+import { buildSetClauses } from "../lib/sqlClauses.js";
+import { accountRepository } from "./accountRepository.js";
 
 /**
  * ADR-088 UPDATE-path decouple, shared by this repo and
@@ -42,9 +46,10 @@ import { accountRepository } from './accountRepository.js';
  * @returns {Promise<Record<string, any>>}
  */
 export async function stampAccountIdForUpdate(sanitized) {
-  if (Object.hasOwn(sanitized, 'bank_account')) {
+  if (Object.hasOwn(sanitized, "bank_account")) {
     sanitized.account_id =
-      (await accountRepository.resolveOrCreateByName(sanitized.bank_account)) ?? null;
+      (await accountRepository.resolveOrCreateByName(sanitized.bank_account)) ??
+      null;
   }
   return sanitized;
 }
@@ -101,7 +106,7 @@ const TRANSACTION_JOINS = `
 // keeps the LAST duplicate field), which both survives the out-of-band column
 // drop and stays byte-identical pre-drop under the dual-write parity
 // invariant (sync trigger + rename propagation keep string == accounts.name).
-const ACCOUNT_LABEL_SQL = 'acct.name AS bank_account';
+const ACCOUNT_LABEL_SQL = "acct.name AS bank_account";
 
 // Reduced join set for count-only queries over a buildTransactionWhere clause.
 // `r` is the sole join alias that builder's predicates reference (recipientName's
@@ -115,11 +120,75 @@ const COUNT_JOINS = `
   LEFT JOIN recipients r ON t.recipient_id = r.id
 `;
 
+const COUNT_CACHE_TTL_MS = 2_000;
+const COUNT_CACHE_MAX_ENTRIES = 100;
+/** @type {Map<string, { expiresAt: number, pending: boolean, promise: Promise<number> }>} */
+const transactionCountCache = new Map();
+
+/** Clear cached filtered transaction counts after a transaction mutation. */
+export function clearTransactionCountCache() {
+  transactionCountCache.clear();
+}
+
+/**
+ * @param {string} sql
+ * @param {unknown[]} params
+ * @returns {Promise<number>}
+ */
+function getCachedTransactionCount(sql, params) {
+  const now = Date.now();
+  const key = JSON.stringify([sql, params]);
+  const cached = transactionCountCache.get(key);
+  // A pending full count remains the single-flight authority regardless of
+  // how long PostgreSQL needs. The short TTL starts only after it resolves.
+  if (cached && (cached.pending || cached.expiresAt > now)) {
+    return cached.promise;
+  }
+  if (cached) transactionCountCache.delete(key);
+
+  for (const [cacheKey, entry] of transactionCountCache) {
+    if (!entry.pending && entry.expiresAt <= now) {
+      transactionCountCache.delete(cacheKey);
+    }
+  }
+  if (transactionCountCache.size >= COUNT_CACHE_MAX_ENTRIES) {
+    const resolvedKey = [...transactionCountCache].find(
+      ([, entry]) => !entry.pending,
+    )?.[0];
+    if (resolvedKey) transactionCountCache.delete(resolvedKey);
+  }
+
+  /** @type {Promise<number>} */
+  let promise;
+  promise = query(sql, params)
+    .then((result) => {
+      const entry = transactionCountCache.get(key);
+      if (entry?.promise === promise) {
+        entry.pending = false;
+        entry.expiresAt = Date.now() + COUNT_CACHE_TTL_MS;
+      }
+      return result.rows[0]?.total ?? 0;
+    })
+    .catch((err) => {
+      if (transactionCountCache.get(key)?.promise === promise) {
+        transactionCountCache.delete(key);
+      }
+      throw err;
+    });
+  transactionCountCache.set(key, {
+    expiresAt: Number.POSITIVE_INFINITY,
+    pending: true,
+    promise,
+  });
+  return promise;
+}
+
 // Effective category = own → recipient default → primary-recipient default
 // (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
 // getById/create paths resolve categories identically to the list paths — an
 // alias recipient must not show categorized in lists but uncategorized on GET.
-const EFFECTIVE_CATEGORY_ID_SQL = 'COALESCE(t.category_id, r.default_category_id, pr.default_category_id)';
+const EFFECTIVE_CATEGORY_ID_SQL =
+  "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)";
 // Displayed name for exactly the category EFFECTIVE_CATEGORY_ID_SQL resolves,
 // so the two can never denote different categories. The branch order therefore
 // mirrors that COALESCE: own (c) → recipient default (rc) → primary-recipient
@@ -135,7 +204,7 @@ const CATEGORY_NAME_SQL = `CASE
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END`;
-const RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
+const RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
 
 // Stamped-balance date range per account, keyed on the ORIGINAL account_id —
 // the account-merge guard (§1 F2) must read this before the repoint.
@@ -171,18 +240,18 @@ const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transf
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
 /** @type {Record<string, string>} */
 const TRANSACTION_SORT_COLUMNS = {
-  date: 't.date',
-  amount: 't.amount',
-  memo: 't.memo',
-  recipient: 'COALESCE(pr.name, r.name)',
+  date: "t.date",
+  amount: "t.amount",
+  memo: "t.memo",
+  recipient: "COALESCE(pr.name, r.name)",
   category: `CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END`,
-  bank: 'acct.name',
-  currency: 't.currency',
+  bank: "acct.name",
+  currency: "t.currency",
 };
 
 /**
@@ -205,7 +274,12 @@ async function attachTagsToRows(rows) {
   const tagMap = new Map();
   for (const row of result.rows) {
     const list = tagMap.get(row.transaction_id) ?? [];
-    list.push({ id: row.id, slug: row.slug, color: row.color, is_active: row.is_active });
+    list.push({
+      id: row.id,
+      slug: row.slug,
+      color: row.color,
+      is_active: row.is_active,
+    });
     tagMap.set(row.transaction_id, list);
   }
   return rows.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
@@ -220,10 +294,12 @@ async function attachTagsToRows(rows) {
  * @returns {Promise<void>}
  */
 async function setTransactionTags(client, transactionId, slugs) {
-  await client.query('DELETE FROM transaction_tags WHERE transaction_id = $1', [transactionId]);
+  await client.query("DELETE FROM transaction_tags WHERE transaction_id = $1", [
+    transactionId,
+  ]);
   if (!slugs || slugs.length === 0) return;
   const resolved = await client.query(
-    'SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+    "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
   );
   if (resolved.rows.length === 0) return;
@@ -262,19 +338,35 @@ export const transactionRepository = {
     includeBalance = false,
     tagSlugs = null,
   } = {}) {
-    const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+    const {
+      sql: where,
+      params,
+      nextParamIdx: p,
+    } = buildTransactionWhere({
+      transactionId,
+      startDate,
+      endDate,
+      accountId,
+      bankAccount,
+      categoryId,
+      recipientId,
+      recipientGroupId,
+      recipientName,
+      search,
+      active,
+      tagSlugs,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
-    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
-    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || "t.date";
+    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
     // Secondary sort by date DESC keeps rows stable when primary column has
     // ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages can't
     // duplicate or skip same-date rows across separate query executions.
-    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-      : `t.date DESC, t.id DESC`;
+    const orderBy =
+      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+        : `t.date DESC, t.id DESC`;
 
     // Partition by account_id (ADR-088): a running balance is a per-account ledger
     // figure. Without the partition, a list spanning multiple accounts summed
@@ -285,7 +377,7 @@ export const transactionRepository = {
     // is still correct across pages.)
     const runningBalanceCol = includeBalance
       ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
-      : '';
+      : "";
 
     const sql = `
       SELECT t.*,
@@ -335,7 +427,23 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, accountId, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
+      transactionId,
+      startDate,
+      endDate,
+      accountId,
+      bankAccount,
+      categoryId,
+      categoryIds,
+      recipientId,
+      recipientGroupId,
+      recipientName,
+      search,
+      active,
+      transactionType,
+      amountMin,
+      amountMax,
+      amountSigned,
+      tagSlugs,
     });
 
     const sql = `
@@ -376,10 +484,26 @@ export const transactionRepository = {
     // category, the recipient default, AND the primary-recipient default. Joining
     // pr (and using EFFECTIVE_CATEGORY_ID_SQL) stops alias-recipient rows whose
     // primary carries a category from wrongly appearing in the queue.
-    const { sql: where, params, nextParamIdx: paramIdx } = buildTransactionWhere({
-      transactionId, startDate, endDate, accountId, bankAccount, recipientId,
-      recipientGroupId, recipientName, search, active: true, transactionType,
-      amountMin, amountMax, amountSigned, tagSlugs,
+    const {
+      sql: where,
+      params,
+      nextParamIdx: paramIdx,
+    } = buildTransactionWhere({
+      transactionId,
+      startDate,
+      endDate,
+      accountId,
+      bankAccount,
+      recipientId,
+      recipientGroupId,
+      recipientName,
+      search,
+      active: true,
+      transactionType,
+      amountMin,
+      amountMax,
+      amountSigned,
+      tagSlugs,
     });
     const sql = `
       SELECT t.*,
@@ -492,14 +616,15 @@ export const transactionRepository = {
 
     const params = [...totalParams, ...rowsParams];
 
-    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
-    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
-    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-      : 't.date DESC, t.id DESC';
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || "t.date";
+    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
+    const orderBy =
+      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+        : "t.date DESC, t.id DESC";
     const runningBalanceCol = includeBalance
-      ? ', SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance'
-      : '';
+      ? ", SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance"
+      : "";
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join added to the uncategorised_rows CTE below.
@@ -539,10 +664,15 @@ export const transactionRepository = {
     `;
 
     const result = await query(sql, params);
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const total =
+      result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     const rows = result.rows
       .filter((/** @type {any} */ row) => row.id != null)
-      .map((/** @type {any} */ { total_count: _total_count, _row_order, ...row }) => row);
+      .map(
+        (
+          /** @type {any} */ { total_count: _total_count, _row_order, ...row },
+        ) => row,
+      );
 
     return { rows: await attachTagsToRows(rows), total };
   },
@@ -564,7 +694,7 @@ export const transactionRepository = {
       ${TRANSACTION_JOINS}
       WHERE t.id = $1
     `;
-    const result = await queryPrepared('tx_get_by_id', sql, [id]);
+    const result = await queryPrepared("tx_get_by_id", sql, [id]);
     const row = result.rows[0] || null;
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
@@ -589,7 +719,17 @@ export const transactionRepository = {
    * @param {string[]|null} [input.tags] `null` means "do not touch tags".
    * @returns {Promise<EnrichedTransactionRow|null>}
    */
-  async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, tags = null }) {
+  async create({
+    transaction_date,
+    bank_account,
+    recipient_id,
+    amount,
+    memo,
+    currency,
+    category_id,
+    comment,
+    tags = null,
+  }) {
     // `balance` is intentionally absent: manual transactions leave it NULL so the
     // account balance (ADR-094) only ever anchors on imported, bank-stamped rows.
     // The CSV import pipeline writes `balance` via its own INSERT (commit.js).
@@ -615,7 +755,7 @@ export const transactionRepository = {
       memo ? memo.toUpperCase() : null,
       // Default to EUR rather than NULL: currency is NOT NULL at the DB level
       // (migration 0046) and the read layer already coalesces missing → EUR.
-      currency ? currency.toUpperCase() : 'EUR',
+      currency ? currency.toUpperCase() : "EUR",
       category_id,
       comment,
     ];
@@ -630,18 +770,20 @@ export const transactionRepository = {
         return inserted;
       });
     } else {
-      const result = await queryPrepared('tx_create', sql, sqlParams);
+      const result = await queryPrepared("tx_create", sql, sqlParams);
       row = result.rows[0] || null;
     }
 
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
+    clearTransactionCountCache();
     return enriched;
   },
 
   /**
-   * Get transactions AND total count in a single DB round-trip using COUNT(*) OVER ().
-   * Use this instead of calling getAll() + getCount() separately in paginated views.
+   * Get transactions and a briefly cached total count. The data query remains
+   * independently pipelined under LIMIT while page changes reuse the same
+   * filter count.
    *
    * @param {TransactionFilters} [filters]
    * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>} `total` is `COUNT(*)::int`, a real number.
@@ -670,23 +812,44 @@ export const transactionRepository = {
     amountSigned = false,
     tagSlugs = null,
   } = {}) {
-    const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, accountId, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
+    const {
+      sql: where,
+      params,
+      nextParamIdx: p,
+    } = buildTransactionWhere({
+      transactionId,
+      startDate,
+      endDate,
+      accountId,
+      bankAccount,
+      categoryId,
+      categoryIds,
+      recipientId,
+      recipientGroupId,
+      recipientName,
+      search,
+      active,
+      transactionType,
+      amountMin,
+      amountMax,
+      amountSigned,
+      tagSlugs,
     });
 
-    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
-    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || "t.date";
+    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
     // t.id DESC is the unique final tiebreaker — without it LIMIT/OFFSET pages
     // can duplicate or skip same-date rows across separate query executions.
-    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-      : `t.date DESC, t.id DESC`;
+    const orderBy =
+      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+        : `t.date DESC, t.id DESC`;
 
     // Partition by account_id (ADR-088) — see getAll for the rationale; account_id
     // is kept in sync with bank_account by the dual-write trigger (migration 0051).
     const runningBalanceCol = includeBalance
       ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
-      : '';
+      : "";
 
     // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window
     // function forced the planner to fully materialize + sort the whole filtered
@@ -716,11 +879,10 @@ export const transactionRepository = {
     const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`;
 
     const dataParams = [...params, limit, offset];
-    const [result, countResult] = await Promise.all([
+    const [result, total] = await Promise.all([
       query(dataSql, dataParams),
-      query(countSql, params),
+      getCachedTransactionCount(countSql, params),
     ]);
-    const total = countResult.rows[0]?.total ?? 0;
     return { rows: await attachTagsToRows(result.rows), total };
   },
 
@@ -736,16 +898,20 @@ export const transactionRepository = {
   async update(id, fields) {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
-    const sanitized = sanitizeUpdateFields('transactions', txFields);
+    const sanitized = sanitizeUpdateFields("transactions", txFields);
     // A bank_account edit also writes the resolved FK (ADR-088 — see
     // stampAccountIdForUpdate). Resolution happens before the row UPDATE, so
     // an edit against a missing id can mint the account without applying the
     // field change — harmless (same account the retried PATCH will then use).
     await stampAccountIdForUpdate(sanitized);
     // Map frontend field names to DB columns (transaction_date → date)
-    const { clauses: setClauses, params: updateParams, nextIdx: paramIdx } = buildSetClauses(sanitized, {
+    const {
+      clauses: setClauses,
+      params: updateParams,
+      nextIdx: paramIdx,
+    } = buildSetClauses(sanitized, {
       quote: true,
-      mapColumn: (key) => (key === 'transaction_date' ? 'date' : key),
+      mapColumn: (key) => (key === "transaction_date" ? "date" : key),
     });
 
     // Same 3-level enrichment as getById/getAll/create (shared fragments): the
@@ -769,7 +935,7 @@ export const transactionRepository = {
           updateParams.push(id);
           const updateSql = `
             WITH updated AS (
-              UPDATE transactions SET ${setClauses.join(', ')}
+              UPDATE transactions SET ${setClauses.join(", ")}
               WHERE id = $${paramIdx} RETURNING id
             )
             SELECT id FROM updated
@@ -780,7 +946,10 @@ export const transactionRepository = {
           // Tags-only PATCH: probe existence first. Otherwise setTransactionTags'
           // junction INSERT hits the transaction_id FK for a missing row → a raw
           // 23503 surfaces as a 500 instead of the standard 404.
-          const exists = await client.query('SELECT 1 FROM transactions WHERE id = $1', [id]);
+          const exists = await client.query(
+            "SELECT 1 FROM transactions WHERE id = $1",
+            [id],
+          );
           if (!exists.rows[0]) return null;
         }
         await setTransactionTags(client, id, tags ?? []);
@@ -789,6 +958,7 @@ export const transactionRepository = {
       });
       if (!row) return null;
       const [enriched] = await attachTagsToRows([row]);
+      clearTransactionCountCache();
       return enriched;
     }
 
@@ -800,7 +970,7 @@ export const transactionRepository = {
     const sql = `
       WITH updated AS (
         UPDATE transactions
-        SET ${setClauses.join(', ')}
+        SET ${setClauses.join(", ")}
         WHERE id = $${paramIdx}
         RETURNING *
       )
@@ -817,6 +987,7 @@ export const transactionRepository = {
     const row = result.rows[0] || null;
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
+    clearTransactionCountCache();
     return enriched;
   },
 
@@ -827,8 +998,14 @@ export const transactionRepository = {
    * @returns {Promise<boolean>} true when a row was removed
    */
   async hardDelete(id) {
-    const result = await queryPrepared('tx_hard_delete', 'DELETE FROM transactions WHERE id = $1', [id]);
-    return result.rowCount > 0;
+    const result = await queryPrepared(
+      "tx_hard_delete",
+      "DELETE FROM transactions WHERE id = $1",
+      [id],
+    );
+    const deleted = result.rowCount > 0;
+    if (deleted) clearTransactionCountCache();
+    return deleted;
   },
 
   // Recent active transactions not yet linked to any planned-transaction
@@ -859,7 +1036,7 @@ export const transactionRepository = {
              WHERE pte.executed_transaction_id = t.id
           )
         ORDER BY t.date DESC, t.id DESC`,
-      [sinceDate]
+      [sinceDate],
     );
     return result.rows;
   },
@@ -1121,7 +1298,7 @@ export const transactionRepository = {
    */
   async lockTransferPeerPointer(id) {
     const { rows } = await query(
-      'SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE',
+      "SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE",
       [id],
     );
     return rows[0]?.transfer_peer_id ?? undefined;
@@ -1194,7 +1371,16 @@ export const transactionRepository = {
    * @param {number|string} probe.batchId
    * @returns {Promise<number|undefined>} the duplicate's id, or undefined
    */
-  async findImportDuplicate({ date, amount, recipientId, memo, accountId, currency, txHash, batchId }) {
+  async findImportDuplicate({
+    date,
+    amount,
+    recipientId,
+    memo,
+    accountId,
+    currency,
+    txHash,
+    batchId,
+  }) {
     const result = await query(
       `SELECT t.id
              FROM transactions t
@@ -1204,10 +1390,15 @@ export const transactionRepository = {
                 ($3::integer IS NOT NULL AND t.recipient_id = $3)
                 OR ($3::integer IS NULL AND t.recipient_id IS NULL)
               )
-              AND COALESCE(TRIM(t.memo), '') = $4
+              AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
               AND t.account_id IS NOT DISTINCT FROM $5::integer
               AND t.currency = $8
-              AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
+              AND (
+                t.import_batch_id IS DISTINCT FROM $7
+                OR t.tx_hash IS NULL
+                OR $6::text IS NULL
+                OR t.tx_hash = $6
+              )
               AND t.is_active = true
             LIMIT 1`,
       [date, amount, recipientId, memo, accountId, txHash, batchId, currency],
@@ -1245,7 +1436,21 @@ export const transactionRepository = {
    * @param {string|null} row.txHash
    * @returns {Promise<number|undefined>} inserted id, or undefined on conflict
    */
-  async insertImportedRow({ date, bankAccount, accountId, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash }) {
+  async insertImportedRow({
+    date,
+    bankAccount,
+    accountId,
+    recipientId,
+    categoryId,
+    amount,
+    memo,
+    currency,
+    balance,
+    comment,
+    importBatchId,
+    matchedPatternId,
+    txHash,
+  }) {
     const result = await query(
       `INSERT INTO transactions
                 (date, bank_account, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
@@ -1253,7 +1458,21 @@ export const transactionRepository = {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
              ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
              RETURNING id`,
-      [date, bankAccount, accountId ?? null, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash],
+      [
+        date,
+        bankAccount,
+        accountId ?? null,
+        recipientId,
+        categoryId,
+        amount,
+        memo,
+        currency,
+        balance,
+        comment,
+        importBatchId,
+        matchedPatternId,
+        txHash,
+      ],
     );
     return result.rows[0]?.id ?? undefined;
   },

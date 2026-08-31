@@ -20,17 +20,29 @@
  *  12  Reden van weigering     rejection reason
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
+import {
+  cleanRecipientName,
+  normalizeToUppercase,
+} from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseDayMonthYear,
+  parseAmountField,
+  buildOptionalComment,
+  splitCsvLines,
+  splitDelimitedRecord,
+  canonicalIban,
+  readTextWithEncodingFallback,
+  normalizeIsoCurrency,
+} from "./_shared.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const NAME = 'bnp';
-const BANK_LABEL = 'BNP Paribas Fortis';
+const NAME = "bnp";
+const BANK_LABEL = "BNP Paribas Fortis";
 const MIN_FIELDS = 9;
 
 /**
@@ -38,7 +50,7 @@ const MIN_FIELDS = 9;
  * @returns {boolean}
  */
 function isHeaderLine(line) {
-  return line.includes('Volgnummer') && line.includes('Uitvoeringsdatum');
+  return line.includes("Volgnummer") && line.includes("Uitvoeringsdatum");
 }
 
 // A rejected/cancelled row (e.g. a refused direct debit) means the money never
@@ -46,7 +58,8 @@ function isHeaderLine(line) {
 // Denylist rather than "keep only executed": the status vocabulary isn't pinned
 // against every BNP export variant, so an unknown status keeps the row (never
 // silently drop a real transaction). NL/FR/EN refusal + cancellation stems.
-const NON_EXECUTED_STATUS_RE = /geweiger|geannuleer|annulering|refus|annul|reject|cancel/i;
+const NON_EXECUTED_STATUS_RE =
+  /geweiger|geannuleer|annulering|refus|annul|reject|cancel/i;
 
 /**
  * @param {string} status the export's status column
@@ -69,15 +82,15 @@ function parseLine(line) {
   const sequenceNumber = parts[0].trim();
   const executionDateStr = parts[1].trim();
   const amountStr = parts[3].trim();
-  const currency = parts[4].trim();
+  const currency = normalizeIsoCurrency(parts[4]);
   const accountNumber = parts[5].trim();
   const transactionType = parts[6].trim();
   const counterpartyAccount = parts[7].trim();
-  const counterpartyName = parts[8] ? parts[8].trim() : '';
-  const message = parts[9] ? parts[9].trim() : '';
-  const details = parts[10] ? parts[10].trim() : '';
-  const status = parts[11] ? parts[11].trim() : '';
-  const rejectionReason = parts[12] ? parts[12].trim() : '';
+  const counterpartyName = parts[8] ? parts[8].trim() : "";
+  const message = parts[9] ? parts[9].trim() : "";
+  const details = parts[10] ? parts[10].trim() : "";
+  const status = parts[11] ? parts[11].trim() : "";
+  const rejectionReason = parts[12] ? parts[12].trim() : "";
 
   if (isNonExecutedRow(status, rejectionReason)) return null;
 
@@ -94,21 +107,22 @@ function parseLine(line) {
   const commentParts = [];
   if (sequenceNumber) commentParts.push(`Sequence: ${sequenceNumber}`);
   if (message) commentParts.push(`Message: ${message}`);
-  if (details && details !== transactionType) commentParts.push(`Details: ${details}`);
+  if (details && details !== transactionType)
+    commentParts.push(`Details: ${details}`);
   if (status) commentParts.push(`Status: ${status}`);
   if (rejectionReason) commentParts.push(`Rejected: ${rejectionReason}`);
 
   return {
     date,
-    bankAccount: canonicalIban(accountNumber) || 'BNP',
+    bankAccount: canonicalIban(accountNumber) || "BNP",
     recipient,
     memo,
     amount,
-    currency: currency || null,
+    currency,
     balance: null,
     recipientAccount: counterpartyAccount || null,
     recipientAddress: null,
-    recipientBankName: counterpartyAccount ? 'BNP Paribas Fortis' : null,
+    recipientBankName: counterpartyAccount ? "BNP Paribas Fortis" : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
   };
@@ -122,9 +136,10 @@ export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 3);
   return lines.some(
-    (line) => line.includes('Volgnummer')
-      && line.includes('Uitvoeringsdatum')
-      && line.includes('Valuta rekening'),
+    (line) =>
+      line.includes("Volgnummer") &&
+      line.includes("Uitvoeringsdatum") &&
+      line.includes("Valuta rekening"),
   );
 }
 
@@ -153,7 +168,9 @@ export async function parse(filePath) {
   }
 
   transactions.skipped = skipped;
-  logger.info(`BNP CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `BNP CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

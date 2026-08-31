@@ -18,15 +18,18 @@
  * Phase primitives are also re-exported for direct use by route handlers.
  */
 
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { scheduleRefresh, refreshMaterializedViews } from '../materializedViewService.js';
+import { query } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import {
+  clearForecastMcCaches,
+  scheduleMaterializedViewRefresh,
+} from "../aggregationRefresh.js";
 
-import { createBatch, stageBatch } from './stage.js';
-import { validateBatch } from './validate.js';
-import { matchBatch } from './match.js';
-import { commitBatch } from './commit.js';
-import { reconcileTransfers } from '../transferReconciliationService.js';
+import { createBatch, stageBatch } from "./stage.js";
+import { validateBatch } from "./validate.js";
+import { matchBatch } from "./match.js";
+import { commitBatch } from "./commit.js";
+import { reconcileTransfers } from "../transferReconciliationService.js";
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -64,34 +67,63 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * @param {{ batchId: ImportBatchId, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: ImportProgressCallback }} args
  * @returns {Promise<{ batchId: ImportBatchId, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object, validateErrors: number }>}
  */
-export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename: _filename, sizeBytes: _sizeBytes, onProgress }) {
-  const { rowsTotal } = await stageBatch({ batchId, filePath, adapterName, customConfig, onProgress });
+export async function prepareImport({
+  batchId,
+  filePath,
+  adapterName,
+  customConfig,
+  filename: _filename,
+  sizeBytes: _sizeBytes,
+  onProgress,
+}) {
+  const { rowsTotal } = await stageBatch({
+    batchId,
+    filePath,
+    adapterName,
+    customConfig,
+    onProgress,
+  });
 
-  const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
+  const { errors: validateErrors } = await validateBatch({
+    batchId,
+    onProgress,
+  });
 
-  const { matchSourceCounts, unresolved } = await matchBatch({ batchId, onProgress });
+  const { matchSourceCounts, unresolved } = await matchBatch({
+    batchId,
+    onProgress,
+  });
 
   // Review is required when any row was resolved by something other than an
   // exact normalized match — fuzzy hits, pattern hits, and new recipients
   // all warrant user confirmation before committing. Unresolved rows (e.g. a
   // batch of blank `recipient_raw` rows) must NOT auto-commit either: they
   // would otherwise land as transactions with no resolved recipient.
-  const requiresReview = (
+  const requiresReview =
     (matchSourceCounts.fuzzy || 0) > 0 ||
     (matchSourceCounts.pattern || 0) > 0 ||
     (matchSourceCounts.new || 0) > 0 ||
-    (unresolved || 0) > 0
-  );
+    (unresolved || 0) > 0;
 
   if (requiresReview) {
     await query(
       `UPDATE import_batches SET status = 'awaiting_review' WHERE id = $1`,
-      [batchId]
+      [batchId],
     );
-    logger.info('[pipeline] awaiting review', { batchId, matchSourceCounts, validateErrors });
+    logger.info("[pipeline] awaiting review", {
+      batchId,
+      matchSourceCounts,
+      validateErrors,
+    });
   }
 
-  return { batchId, rowsTotal, requiresReview, matchSourceCounts, validateErrors };
+  return {
+    batchId,
+    rowsTotal,
+    requiresReview,
+    matchSourceCounts,
+    validateErrors,
+  };
 }
 
 /**
@@ -102,32 +134,48 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
  * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitImport({ batchId, onProgress }) {
-  const { imported, duplicates, errors, autoLinkedCount } = await commitBatch({ batchId, onProgress });
+  const { imported, duplicates, errors, autoLinkedCount } = await commitBatch({
+    batchId,
+    onProgress,
+  });
 
   await query(
     `UPDATE import_batches
         SET status = 'complete',
             completed_at = NOW()
       WHERE id = $1`,
-    [batchId]
+    [batchId],
   );
 
   // Detect internal transfers across the whole corpus (not just this batch) so
   // cross-bank pairs whose legs arrived in separate imports get matched (ADR-083).
   // Runs before the MV refresh so the views reflect the exclusion immediately.
   await reconcileTransfers().catch((err) => {
-    logger.warn('[pipeline] transfer reconcile failed (non-fatal)', { err: err?.message });
+    logger.warn("[pipeline] transfer reconcile failed (non-fatal)", {
+      err: err?.message,
+    });
   });
 
-  if (imported > 100) {
-    await refreshMaterializedViews().catch((err) => {
-      logger.warn('[pipeline] MV refresh failed (non-fatal)', { err: err?.message });
+  if (imported > 0) {
+    await clearForecastMcCaches().catch((err) => {
+      logger.warn("[pipeline] forecast cache invalidation failed (non-fatal)", {
+        err: err?.message,
+      });
     });
-  } else {
-    scheduleRefresh();
   }
 
-  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors, autoLinkedCount });
+  // The import response must not wait for three full materialized-view scans.
+  // Schedule one coalesced rebuild only after transfer reconciliation, so the
+  // eventual snapshot includes any transfer exclusions created above.
+  scheduleMaterializedViewRefresh();
+
+  logger.info("[pipeline] committed", {
+    batchId,
+    imported,
+    duplicates,
+    errors,
+    autoLinkedCount,
+  });
   return { imported, duplicates, errors, autoLinkedCount };
 }
 
@@ -141,36 +189,74 @@ export async function commitImport({ batchId, onProgress }) {
  * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: ImportProgressCallback }} args
  * @returns {Promise<{ batchId: ImportBatchId, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object, autoLinkedCount?: number }>}
  */
-export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
-  const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });
-  logger.info('[pipeline] created batch', { batchId, adapterName });
+export async function runImportPipeline({
+  filePath,
+  adapterName,
+  customConfig,
+  filename,
+  sizeBytes,
+  onProgress,
+}) {
+  const batchId = await createBatch({
+    adapterName,
+    filename,
+    sizeBytes,
+    customConfig,
+  });
+  logger.info("[pipeline] created batch", { batchId, adapterName });
 
   try {
-    const { rowsTotal, requiresReview, matchSourceCounts, validateErrors } = await prepareImport({
-      batchId,
-      filePath,
-      adapterName,
-      customConfig,
-      filename,
-      sizeBytes,
-      onProgress,
-    });
+    const { rowsTotal, requiresReview, matchSourceCounts, validateErrors } =
+      await prepareImport({
+        batchId,
+        filePath,
+        adapterName,
+        customConfig,
+        filename,
+        sizeBytes,
+        onProgress,
+      });
 
     if (requiresReview) {
-      return { batchId, total: rowsTotal, requiresReview: true, matchSourceCounts };
+      return {
+        batchId,
+        total: rowsTotal,
+        requiresReview: true,
+        matchSourceCounts,
+      };
     }
 
     // All rows resolved exactly — auto-commit without review.
-    const { imported, duplicates, errors: commitErrors, autoLinkedCount } = await commitImport({ batchId, onProgress });
+    const {
+      imported,
+      duplicates,
+      errors: commitErrors,
+      autoLinkedCount,
+    } = await commitImport({ batchId, onProgress });
 
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
-    await query(
-      `UPDATE import_batches SET rows_error = $2 WHERE id = $1`,
-      [batchId, totalErrors]
-    );
+    await query(`UPDATE import_batches SET rows_error = $2 WHERE id = $1`, [
+      batchId,
+      totalErrors,
+    ]);
 
-    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors, autoLinkedCount });
-    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors, autoLinkedCount };
+    logger.info("[pipeline] complete", {
+      batchId,
+      total: rowsTotal,
+      imported,
+      duplicates,
+      errors: totalErrors,
+      autoLinkedCount,
+    });
+    return {
+      batchId,
+      total: rowsTotal,
+      requiresReview: false,
+      imported,
+      duplicates,
+      errors: totalErrors,
+      autoLinkedCount,
+    };
   } catch (err) {
     await query(
       `UPDATE import_batches
@@ -178,11 +264,14 @@ export async function runImportPipeline({ filePath, adapterName, customConfig, f
               completed_at = NOW(),
               error_summary = $2
         WHERE id = $1`,
-      [batchId, String(err?.message || err).slice(0, 2000)]
+      [batchId, String(err?.message || err).slice(0, 2000)],
     ).catch((updateErr) => {
-      logger.error('[pipeline] failed to mark batch as failed', { batchId, error: updateErr?.message });
+      logger.error("[pipeline] failed to mark batch as failed", {
+        batchId,
+        error: updateErr?.message,
+      });
     });
-    logger.error('[pipeline] failed', { batchId, error: err?.message });
+    logger.error("[pipeline] failed", { batchId, error: err?.message });
     throw err;
   }
 }

@@ -1,27 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mockLogger } from './helpers/mockLogger.js';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockLogger } from "./helpers/mockLogger.js";
 
 const mockQuery = vi.fn();
 
-vi.mock('../src/database/connection.js', () => ({
+vi.mock("../src/database/connection.js", () => ({
   query: (...args) => mockQuery(...args),
 }));
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-import { detectRecurringPatterns, __clearRecurringCacheForTests } from '../src/services/recurringDetectionService.js';
+import {
+  detectRecurringPatterns,
+  __clearRecurringCacheForTests,
+} from "../src/services/recurringDetectionService.js";
 
 const gymRow = (id, date, amount) => ({
   id,
   date: new Date(`${date}T00:00:00.000Z`),
   amount,
-  currency: 'EUR',
+  currency: "EUR",
   memo: `Gym ${id}`,
-  bank_account: 'BE00',
+  bank_account: "BE00",
   recipient_id: 42,
-  recipient_name: 'Gym',
+  recipient_name: "Gym",
   // The scan query resolves and emits `effective_category_id` (the same
   // 3-level COALESCE `category_name` is resolved from) — kept equal to the
   // raw `category_id` here since none of these fixtures exercise a
@@ -29,10 +32,10 @@ const gymRow = (id, date, amount) => ({
   // where they diverge.
   category_id: 7,
   effective_category_id: 7,
-  category_name: 'HEALTH:GYM',
+  category_name: "HEALTH:GYM",
 });
 
-describe('detectRecurringPatterns', () => {
+describe("detectRecurringPatterns", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // The service memoises results in a short-TTL cache; clear it so each case
@@ -40,48 +43,48 @@ describe('detectRecurringPatterns', () => {
     __clearRecurringCacheForTests();
   });
 
-  it('handles Date objects in transaction date field without throwing', async () => {
+  it("handles Date objects in transaction date field without throwing", async () => {
     mockQuery
       .mockResolvedValueOnce({
         rows: [
           {
             id: 1,
-            date: new Date('2026-01-01T00:00:00.000Z'),
-            amount: '-50.00',
-            currency: 'EUR',
-            memo: 'Gym Jan',
-            bank_account: 'BE00',
+            date: new Date("2026-01-01T00:00:00.000Z"),
+            amount: "-50.00",
+            currency: "EUR",
+            memo: "Gym Jan",
+            bank_account: "BE00",
             recipient_id: 42,
-            recipient_name: 'Gym',
+            recipient_name: "Gym",
             category_id: 7,
             effective_category_id: 7,
-            category_name: 'HEALTH:GYM',
+            category_name: "HEALTH:GYM",
           },
           {
             id: 2,
-            date: new Date('2026-02-01T00:00:00.000Z'),
-            amount: '-50.00',
-            currency: 'EUR',
-            memo: 'Gym Feb',
-            bank_account: 'BE00',
+            date: new Date("2026-02-01T00:00:00.000Z"),
+            amount: "-50.00",
+            currency: "EUR",
+            memo: "Gym Feb",
+            bank_account: "BE00",
             recipient_id: 42,
-            recipient_name: 'Gym',
+            recipient_name: "Gym",
             category_id: 7,
             effective_category_id: 7,
-            category_name: 'HEALTH:GYM',
+            category_name: "HEALTH:GYM",
           },
           {
             id: 3,
-            date: new Date('2026-03-01T00:00:00.000Z'),
-            amount: '-55.00',
-            currency: 'EUR',
-            memo: 'Gym Mar',
-            bank_account: 'BE00',
+            date: new Date("2026-03-01T00:00:00.000Z"),
+            amount: "-55.00",
+            currency: "EUR",
+            memo: "Gym Mar",
+            bank_account: "BE00",
             recipient_id: 42,
-            recipient_name: 'Gym',
+            recipient_name: "Gym",
             category_id: 7,
             effective_category_id: 7,
-            category_name: 'HEALTH:GYM',
+            category_name: "HEALTH:GYM",
           },
         ],
       })
@@ -92,33 +95,36 @@ describe('detectRecurringPatterns', () => {
 
     expect(result.total).toBe(1);
     expect(result.patterns[0].recipientId).toBe(42);
-    expect(result.patterns[0].direction).toBe('expense');
+    expect(result.patterns[0].direction).toBe("expense");
     expect(Array.isArray(result.patterns[0].amountChanges)).toBe(true);
   });
 
-  it('partitions income and expense flows from the same recipient', async () => {
+  it("partitions income and expense flows from the same recipient", async () => {
     // Bucketing by recipient alone blended a €2000 monthly salary with €50
     // monthly payments into one nonsensical averaged pattern.
     const tx = (id, date, amount) => ({
       id,
       date: new Date(`${date}T00:00:00.000Z`),
       amount,
-      currency: 'EUR',
+      currency: "EUR",
       memo: `tx ${id}`,
-      bank_account: 'BE00',
+      bank_account: "BE00",
       recipient_id: 42,
-      recipient_name: 'Employer & Landlord',
+      recipient_name: "Employer & Landlord",
       category_id: 7,
       effective_category_id: 7,
-      category_name: 'MISC:MISC',
+      category_name: "MISC:MISC",
     });
     mockQuery
       .mockResolvedValueOnce({
         rows: [
           // ORDER BY recipient_id, date — directions interleave per month
-          tx(1, '2026-01-01', '2000.00'), tx(2, '2026-01-05', '-50.00'),
-          tx(3, '2026-02-01', '2000.00'), tx(4, '2026-02-05', '-50.00'),
-          tx(5, '2026-03-01', '2000.00'), tx(6, '2026-03-05', '-50.00'),
+          tx(1, "2026-01-01", "2000.00"),
+          tx(2, "2026-01-05", "-50.00"),
+          tx(3, "2026-02-01", "2000.00"),
+          tx(4, "2026-02-05", "-50.00"),
+          tx(5, "2026-03-01", "2000.00"),
+          tx(6, "2026-03-05", "-50.00"),
         ],
       })
       .mockResolvedValueOnce({ rows: [{ exists: true }] })
@@ -127,22 +133,22 @@ describe('detectRecurringPatterns', () => {
     const result = await detectRecurringPatterns();
 
     expect(result.total).toBe(2);
-    const income = result.patterns.find((p) => p.direction === 'income');
-    const expense = result.patterns.find((p) => p.direction === 'expense');
+    const income = result.patterns.find((p) => p.direction === "income");
+    const expense = result.patterns.find((p) => p.direction === "expense");
     expect(income?.averageAmount).toBe(2000);
     expect(expense?.averageAmount).toBe(50);
     // Both detected as monthly, not the ~17-day blend of the merged series
-    expect(income?.detectedPattern).toBe('monthly');
-    expect(expense?.detectedPattern).toBe('monthly');
+    expect(income?.detectedPattern).toBe("monthly");
+    expect(expense?.detectedPattern).toBe("monthly");
   });
 
-  it('serves a cached result within the TTL without re-querying', async () => {
+  it("serves a cached result within the TTL without re-querying", async () => {
     mockQuery
       .mockResolvedValueOnce({
         rows: [
-          gymRow(1, '2026-01-01', '-50.00'),
-          gymRow(2, '2026-02-01', '-50.00'),
-          gymRow(3, '2026-03-01', '-55.00'),
+          gymRow(1, "2026-01-01", "-50.00"),
+          gymRow(2, "2026-02-01", "-50.00"),
+          gymRow(3, "2026-03-01", "-55.00"),
         ],
       })
       .mockResolvedValueOnce({ rows: [{ exists: true }] })
@@ -165,22 +171,49 @@ describe('detectRecurringPatterns', () => {
   // PRIMARY's default — reported categoryName: null while the transactions
   // list showed it categorised. Behavioural coverage lives in
   // tests/aliasCategoryResolution.db.test.js.
-  it('resolves the effective category over three levels in the scan query', async () => {
+  it("resolves the effective category over three levels in the scan query", async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
 
     await detectRecurringPatterns();
 
     const sql = mockQuery.mock.calls[0][0];
-    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
     expect(sql).toContain(
-      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+      "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
+    );
+    expect(sql).toContain(
+      "LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id",
     );
     // The pattern's emitted categoryId must come from the same COALESCE
     // categoryName is resolved from, not the raw t.category_id — otherwise a
     // recipient-default-categorised pattern reports categoryId: null beside a
     // non-null categoryName.
     expect(sql).toContain(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id',
+      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id",
+    );
+    expect(sql).toContain(
+      "COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id",
+    );
+    expect(sql).toContain("COALESCE(pr.name, r.name) AS recipient_name");
+  });
+
+  it("uses canonical recipient roots for the already-planned lookup", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          gymRow(1, "2026-01-01", "-50.00"),
+          gymRow(2, "2026-02-01", "-50.00"),
+          gymRow(3, "2026-03-01", "-50.00"),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ exists: true }] })
+      .mockResolvedValueOnce({ rows: [{ recipient_id: 42 }] });
+
+    const result = await detectRecurringPatterns();
+
+    expect(result.patterns[0].isAlreadyPlanned).toBe(true);
+    const plannedSql = mockQuery.mock.calls[2][0];
+    expect(plannedSql).toContain(
+      "COALESCE(r.primary_recipient_id, pt.recipient_id)",
     );
   });
 
@@ -189,23 +222,27 @@ describe('detectRecurringPatterns', () => {
   // must surface as pattern.categoryId === 7, not the raw null. Pre-fix, the
   // service read `category_id` off the row and this assertion failed while
   // `categoryName` was already correct.
-  it('emits the resolved effective_category_id as categoryId, not the raw category_id', async () => {
+  it("emits the resolved effective_category_id as categoryId, not the raw category_id", async () => {
     const row = (id, date) => ({
       id,
       date: new Date(`${date}T00:00:00.000Z`),
-      amount: '-120.00',
-      currency: 'EUR',
+      amount: "-120.00",
+      currency: "EUR",
       memo: `Electrabel ${id}`,
-      bank_account: 'BE00',
+      bank_account: "BE00",
       recipient_id: 99,
-      recipient_name: 'Electrabel Invoicing',
+      recipient_name: "Electrabel Invoicing",
       category_id: null,
       effective_category_id: 7,
-      category_name: 'Bills:Utilities',
+      category_name: "Bills:Utilities",
     });
     mockQuery
       .mockResolvedValueOnce({
-        rows: [row(1, '2026-01-01'), row(2, '2026-02-01'), row(3, '2026-03-01')],
+        rows: [
+          row(1, "2026-01-01"),
+          row(2, "2026-02-01"),
+          row(3, "2026-03-01"),
+        ],
       })
       .mockResolvedValueOnce({ rows: [{ exists: true }] })
       .mockResolvedValueOnce({ rows: [] });
@@ -213,6 +250,6 @@ describe('detectRecurringPatterns', () => {
     const result = await detectRecurringPatterns();
 
     expect(result.patterns[0].categoryId).toBe(7);
-    expect(result.patterns[0].categoryName).toBe('Bills:Utilities');
+    expect(result.patterns[0].categoryName).toBe("Bills:Utilities");
   });
 });

@@ -32,18 +32,36 @@
  *    contiguous prefix of $-indices it references.
  */
 
-import { query } from '../database/connection.js';
-import { roundMoney as roundToCents } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
+import { query } from "../database/connection.js";
+import {
+  addAll,
+  divide,
+  roundMoney as roundToCents,
+  toNumber,
+} from "../lib/money.js";
+import { formatDateToYmd } from "../lib/dateFormat.js";
 import {
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
-} from './infoRepositoryHelpers.js';
-import { todayAppDateString } from '../lib/timezone.js';
-import { ValidationError } from '../middleware/errorHandler.js';
-import { buildExclusionClauses } from '../lib/filterBuilder.js';
-import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.js';
+} from "./infoRepositoryHelpers.js";
+import { todayAppDateString } from "../lib/timezone.js";
+import { ValidationError } from "../middleware/errorHandler.js";
+import { buildExclusionClauses } from "../lib/filterBuilder.js";
+import {
+  countObservedMonths,
+  monthKeyFromDbDate,
+} from "../lib/observedMonths.js";
+
+/** @param {unknown} value */
+function safeMoneyInput(value) {
+  return Number.isFinite(Number(value))
+    ? /** @type {number|string} */ (value)
+    : 0;
+}
+
+/** @param {...(number|string)} values */
+const addMoney = (...values) => toNumber(addAll(values));
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 /**
@@ -54,10 +72,15 @@ function aggregateByDate(rows) {
   /** @type {Map<string, number>} */
   const map = new Map();
   for (const r of rows) {
-    const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
-    map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
+    const iso =
+      r.date instanceof Date
+        ? formatDateToYmd(r.date)
+        : String(r.date).slice(0, 10);
+    map.set(iso, addMoney(map.get(iso) ?? 0, safeMoneyInput(r.amount_eur)));
   }
-  return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
+  return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
 }
 
 /*
@@ -105,12 +128,12 @@ function computeAvgCumulativeByDay(monthDayNet, monthCount) {
     const dayNet = monthDayNet[mk];
     let cum = 0;
     for (let d = 1; d <= 31; d++) {
-      cum += (dayNet[d] || 0);
-      out[d] = (out[d] || 0) + cum;
+      cum = addMoney(cum, dayNet[d] || 0);
+      out[d] = addMoney(out[d] || 0, cum);
     }
   }
   for (const d of Object.keys(out)) {
-    out[d] /= monthCount;
+    out[d] = toNumber(divide(out[d], monthCount));
   }
   return out;
 }
@@ -123,25 +146,26 @@ function computeAvgCumulativeByDay(monthDayNet, monthCount) {
 export async function getCashflowComparison(
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
 ) {
   // The single clock for this call (ADR-009). Read ONCE, used for the JS month
   // arithmetic below AND bound into every SQL window below in place of
   // CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
-  const daysInMonth = new Date(Date.UTC(
-    Number(todayYmd.slice(0, 4)),
-    Number(todayYmd.slice(5, 7)),
-    0,
-  )).getUTCDate();
+  const daysInMonth = new Date(
+    Date.UTC(Number(todayYmd.slice(0, 4)), Number(todayYmd.slice(5, 7)), 0),
+  ).getUTCDate();
   const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
   // Canonical exclusion clauses (lib/filterBuilder.js). The joins are only
   // needed when a clause actually references r/pr, so they stay conditional.
-  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excl = buildExclusionClauses({
+    excludedCategoryIds,
+    excludedRecipientIds,
+  });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
   const excludeParams = excl.params;
 
   // This function's own bound params, allocated AFTER the exclusion params so
@@ -149,8 +173,8 @@ export async function getCashflowComparison(
   // contiguous prefix it actually references — Postgres derives the parameter
   // count from the highest $n in the text, so a referenced-but-unsupplied (or
   // skipped) index is an error, not a no-op.
-  const pDate = excl.nextParamIdx;      // the APP_TIMEZONE anchor date
-  const pMonths = pDate + 1;            // HISTORY_MONTHS
+  const pDate = excl.nextParamIdx; // the APP_TIMEZONE anchor date
+  const pMonths = pDate + 1; // HISTORY_MONTHS
   const anchor = `$${pDate}::date`;
 
   // ADR-083: internal transfers must not inflate cash-flow aggregates unless
@@ -161,7 +185,7 @@ export async function getCashflowComparison(
   // without it a checking->savings transfer's outflow leg was counted here and
   // excluded there, so two cards on one dashboard disagreed on one fixture.
   const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
 
   // Aggregate in SQL per (date, currency) rather than streaming every row to
   // Node. batchConvertGroupsWithHistoricalRateFallback converts by (currency,
@@ -261,26 +285,35 @@ export async function getCashflowComparison(
       AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
   `;
 
-  const [pastResult, currentResult, plannedCurrentResult, plannedHistResult, ledgerStartResult] =
-    await Promise.all([
-      query(sqlPast, [...excludeParams, todayYmd, HISTORY_MONTHS]),
-      query(sqlCurrent, [...excludeParams, todayYmd]),
-      query(sqlPlannedCurrent, [todayYmd]),
-      query(sqlPlannedHist, [todayYmd, HISTORY_MONTHS]),
-      query(sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
-    ]);
+  const [
+    pastResult,
+    currentResult,
+    plannedCurrentResult,
+    plannedHistResult,
+    ledgerStartResult,
+  ] = await Promise.all([
+    query(sqlPast, [...excludeParams, todayYmd, HISTORY_MONTHS]),
+    query(sqlCurrent, [...excludeParams, todayYmd]),
+    query(sqlPlannedCurrent, [todayYmd]),
+    query(sqlPlannedHist, [todayYmd, HISTORY_MONTHS]),
+    query(sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
+  ]);
 
-  const [pastConverted, currentCashflowConverted, plannedCurrentConverted, plannedHistConverted] =
-    await batchConvertGroupsWithHistoricalRateFallback(
-      [
-        mapRowsForAmountConversion(pastResult.rows, 'amount', false),
-        mapRowsForAmountConversion(currentResult.rows, 'amount', false),
-        mapRowsForAmountConversion(plannedCurrentResult.rows, 'amount', false),
-        mapRowsForAmountConversion(plannedHistResult.rows, 'amount', false),
-      ],
-      targetCurrency,
-      'date'
-    );
+  const [
+    pastConverted,
+    currentCashflowConverted,
+    plannedCurrentConverted,
+    plannedHistConverted,
+  ] = await batchConvertGroupsWithHistoricalRateFallback(
+    [
+      mapRowsForAmountConversion(pastResult.rows, "amount", false),
+      mapRowsForAmountConversion(currentResult.rows, "amount", false),
+      mapRowsForAmountConversion(plannedCurrentResult.rows, "amount", false),
+      mapRowsForAmountConversion(plannedHistResult.rows, "amount", false),
+    ],
+    targetCurrency,
+    "date",
+  );
 
   /** @type {Record<string, Record<string, number>>} */
   const monthDayNet = {};
@@ -288,27 +321,36 @@ export async function getCashflowComparison(
     const eur = row.amount_eur;
     const mk = row.month_key;
     if (!monthDayNet[mk]) monthDayNet[mk] = {};
-    monthDayNet[mk][row.day_of_month] = (monthDayNet[mk][row.day_of_month] || 0) + eur;
+    monthDayNet[mk][row.day_of_month] = addMoney(
+      monthDayNet[mk][row.day_of_month] || 0,
+      safeMoneyInput(eur),
+    );
   }
 
   /** @type {Record<string, number>} */
   const currentDayNet = {};
   for (const row of currentCashflowConverted) {
-    currentDayNet[row.day_of_month] = (currentDayNet[row.day_of_month] || 0) + row.amount_eur;
+    currentDayNet[row.day_of_month] = addMoney(
+      currentDayNet[row.day_of_month] || 0,
+      safeMoneyInput(row.amount_eur),
+    );
   }
 
   let currentCum = 0;
   /** @type {Record<string, number>} */
   const currentByDay = {};
   for (let d = 1; d <= currentDay; d++) {
-    currentCum += (currentDayNet[d] || 0);
+    currentCum = addMoney(currentCum, currentDayNet[d] || 0);
     currentByDay[d] = currentCum;
   }
 
   /** @type {Record<string, number>} */
   const plannedCurrentByDay = {};
   for (const row of plannedCurrentConverted) {
-    plannedCurrentByDay[row.day_of_month] = (plannedCurrentByDay[row.day_of_month] || 0) + row.amount_eur;
+    plannedCurrentByDay[row.day_of_month] = addMoney(
+      plannedCurrentByDay[row.day_of_month] || 0,
+      safeMoneyInput(row.amount_eur),
+    );
   }
 
   /** @type {Record<string, Record<string, number>>} */
@@ -316,7 +358,10 @@ export async function getCashflowComparison(
   for (const row of plannedHistConverted) {
     const mk = row.month_key;
     if (!plannedHistMonthDay[mk]) plannedHistMonthDay[mk] = {};
-    plannedHistMonthDay[mk][row.day_of_month] = (plannedHistMonthDay[mk][row.day_of_month] || 0) + row.amount_eur;
+    plannedHistMonthDay[mk][row.day_of_month] = addMoney(
+      plannedHistMonthDay[mk][row.day_of_month] || 0,
+      safeMoneyInput(row.amount_eur),
+    );
   }
 
   // ONE divisor for both historical series, taken from the unfiltered ledger
@@ -335,15 +380,24 @@ export async function getCashflowComparison(
     HISTORY_MONTHS,
   );
 
-  const avgCumulativeByDay = computeAvgCumulativeByDay(monthDayNet, observedMonths);
-  const avgPlannedCumByDay = computeAvgCumulativeByDay(plannedHistMonthDay, observedMonths);
+  const avgCumulativeByDay = computeAvgCumulativeByDay(
+    monthDayNet,
+    observedMonths,
+  );
+  const avgPlannedCumByDay = computeAvgCumulativeByDay(
+    plannedHistMonthDay,
+    observedMonths,
+  );
 
   const withoutPlanned = [];
   const withPlanned = [];
   let plannedCum = 0;
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const avg = avgCumulativeByDay[day] !== undefined ? avgCumulativeByDay[day] : (avgCumulativeByDay[day - 1] || 0);
+    const avg =
+      avgCumulativeByDay[day] !== undefined
+        ? avgCumulativeByDay[day]
+        : avgCumulativeByDay[day - 1] || 0;
     const current = day <= currentDay ? currentByDay[day] : null;
 
     withoutPlanned.push({
@@ -352,14 +406,19 @@ export async function getCashflowComparison(
       current: current !== null ? roundToCents(current) : null,
     });
 
-    const avgPlanned = avgPlannedCumByDay[day] !== undefined ? avgPlannedCumByDay[day] : (avgPlannedCumByDay[day - 1] || 0);
-    plannedCum += (plannedCurrentByDay[day] || 0);
-    const currentWithPlanned = current !== null ? current + plannedCum : null;
+    const avgPlanned =
+      avgPlannedCumByDay[day] !== undefined
+        ? avgPlannedCumByDay[day]
+        : avgPlannedCumByDay[day - 1] || 0;
+    plannedCum = addMoney(plannedCum, plannedCurrentByDay[day] || 0);
+    const currentWithPlanned =
+      current !== null ? addMoney(current, plannedCum) : null;
 
     withPlanned.push({
       day,
-      average: roundToCents(avg + avgPlanned),
-      current: currentWithPlanned !== null ? roundToCents(currentWithPlanned) : null,
+      average: roundToCents(addMoney(avg, avgPlanned)),
+      current:
+        currentWithPlanned !== null ? roundToCents(currentWithPlanned) : null,
     });
   }
 
@@ -383,10 +442,14 @@ export async function getCashflowForecastData(
   historyMonths,
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
 ) {
-  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new ValidationError('historyMonths must be an integer in [1, 120]');
+  if (
+    !Number.isInteger(historyMonths) ||
+    historyMonths < 1 ||
+    historyMonths > 120
+  ) {
+    throw new ValidationError("historyMonths must be an integer in [1, 120]");
   }
 
   // One clock for the whole call (ADR-009), bound into the SQL below in place
@@ -394,9 +457,12 @@ export async function getCashflowForecastData(
   const todayYmd = todayAppDateString();
 
   // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
-  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excl = buildExclusionClauses({
+    excludedCategoryIds,
+    excludedRecipientIds,
+  });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
   const excludeParams = excl.params;
 
   // Own bound params, allocated after the exclusion params (convention 2).
@@ -406,7 +472,7 @@ export async function getCashflowForecastData(
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
 
   // GROUP BY (date, currency) in SQL — aggregateByDate re-buckets by date and
   // conversion is per (currency, date), so this is identical to the old per-row
@@ -455,23 +521,24 @@ export async function getCashflowForecastData(
     GROUP BY pt.planned_date, pt.currency
   `;
 
-  const [histRes, currentRes, plannedCurRes, plannedHistRes] = await Promise.all([
-    query(sqlHistory, [...excludeParams, todayYmd, historyMonths]),
-    query(sqlCurrent, [...excludeParams, todayYmd]),
-    query(sqlPlannedCurrent, [todayYmd]),
-    query(sqlPlannedHist, [todayYmd, historyMonths]),
-  ]);
+  const [histRes, currentRes, plannedCurRes, plannedHistRes] =
+    await Promise.all([
+      query(sqlHistory, [...excludeParams, todayYmd, historyMonths]),
+      query(sqlCurrent, [...excludeParams, todayYmd]),
+      query(sqlPlannedCurrent, [todayYmd]),
+      query(sqlPlannedHist, [todayYmd, historyMonths]),
+    ]);
 
   const [histConv, currentConv, plannedCurConv, plannedHistConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
-        mapRowsForAmountConversion(histRes.rows, 'amount', false),
-        mapRowsForAmountConversion(currentRes.rows, 'amount', false),
-        mapRowsForAmountConversion(plannedCurRes.rows, 'amount', false),
-        mapRowsForAmountConversion(plannedHistRes.rows, 'amount', false),
+        mapRowsForAmountConversion(histRes.rows, "amount", false),
+        mapRowsForAmountConversion(currentRes.rows, "amount", false),
+        mapRowsForAmountConversion(plannedCurRes.rows, "amount", false),
+        mapRowsForAmountConversion(plannedHistRes.rows, "amount", false),
       ],
       targetCurrency,
-      'date'
+      "date",
     );
 
   return {
@@ -497,16 +564,20 @@ export async function getCashflowForecastDataRolling(
   daysForward,
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
 ) {
-  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new ValidationError('historyMonths must be an integer in [1, 120]');
+  if (
+    !Number.isInteger(historyMonths) ||
+    historyMonths < 1 ||
+    historyMonths > 120
+  ) {
+    throw new ValidationError("historyMonths must be an integer in [1, 120]");
   }
   if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) {
-    throw new ValidationError('daysBack must be an integer in [1, 365]');
+    throw new ValidationError("daysBack must be an integer in [1, 365]");
   }
   if (!Number.isInteger(daysForward) || daysForward < 1 || daysForward > 365) {
-    throw new ValidationError('daysForward must be an integer in [1, 365]');
+    throw new ValidationError("daysForward must be an integer in [1, 365]");
   }
 
   // One clock for the whole call (ADR-009), bound into the SQL below in place
@@ -514,9 +585,12 @@ export async function getCashflowForecastDataRolling(
   const todayYmd = todayAppDateString();
 
   // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
-  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excl = buildExclusionClauses({
+    excludedCategoryIds,
+    excludedRecipientIds,
+  });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
   const excludeParams = excl.params;
 
   // Own bound params, allocated after the exclusion params (convention 2).
@@ -528,7 +602,7 @@ export async function getCashflowForecastDataRolling(
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
 
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
@@ -576,12 +650,12 @@ export async function getCashflowForecastDataRolling(
   const [histConv, currentConv, plannedConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
-        mapRowsForAmountConversion(histRes.rows, 'amount', false),
-        mapRowsForAmountConversion(currentRes.rows, 'amount', false),
-        mapRowsForAmountConversion(plannedRes.rows, 'amount', false),
+        mapRowsForAmountConversion(histRes.rows, "amount", false),
+        mapRowsForAmountConversion(currentRes.rows, "amount", false),
+        mapRowsForAmountConversion(plannedRes.rows, "amount", false),
       ],
       targetCurrency,
-      'date',
+      "date",
     );
 
   return {
@@ -602,10 +676,14 @@ export async function getCashflowForecastDataByCategory(
   historyMonths,
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
 ) {
-  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new ValidationError('historyMonths must be an integer in [1, 120]');
+  if (
+    !Number.isInteger(historyMonths) ||
+    historyMonths < 1 ||
+    historyMonths > 120
+  ) {
+    throw new ValidationError("historyMonths must be an integer in [1, 120]");
   }
 
   // One clock for the whole call (ADR-009), bound into the SQL below in place
@@ -614,9 +692,12 @@ export async function getCashflowForecastDataByCategory(
 
   // Canonical exclusion clauses (lib/filterBuilder.js). The r/pr joins are
   // unconditional here (the effective-category COALESCE needs them anyway).
-  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const excl = buildExclusionClauses({
+    excludedCategoryIds,
+    excludedRecipientIds,
+  });
   const excludeParams = excl.params;
-  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
   // Own bound params, allocated after the exclusion params (convention 2).
   const pDate = excl.nextParamIdx;
@@ -628,7 +709,7 @@ export async function getCashflowForecastDataByCategory(
   // to whatever category the account's recipient defaults to, inventing spend
   // in a category the user never spent in.
   const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
 
   // Aggregate per (date, currency, effective category) in SQL — aggregateByDateAndCategory
   // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
@@ -679,14 +760,15 @@ export async function getCashflowForecastDataByCategory(
     query(sqlCurrent, [...excludeParams, todayYmd]),
   ]);
 
-  const [histConv, currentConv] = await batchConvertGroupsWithHistoricalRateFallback(
-    [
-      mapRowsForAmountConversion(histRes.rows, 'amount', false),
-      mapRowsForAmountConversion(currentRes.rows, 'amount', false),
-    ],
-    targetCurrency,
-    'date',
-  );
+  const [histConv, currentConv] =
+    await batchConvertGroupsWithHistoricalRateFallback(
+      [
+        mapRowsForAmountConversion(histRes.rows, "amount", false),
+        mapRowsForAmountConversion(currentRes.rows, "amount", false),
+      ],
+      targetCurrency,
+      "date",
+    );
 
   /**
    * @param {Array<Record<string, any>>} rows
@@ -696,20 +778,28 @@ export async function getCashflowForecastDataByCategory(
     /** @type {Map<string, { date: string, category_id: number|null, general: string, detail: string, net: number }>} */
     const map = new Map();
     for (const r of rows) {
-      const date = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
-      const key = `${date}|${r.category_id ?? 'null'}`;
+      const date =
+        r.date instanceof Date
+          ? formatDateToYmd(r.date)
+          : String(r.date).slice(0, 10);
+      const key = `${date}|${r.category_id ?? "null"}`;
       if (!map.has(key)) {
         map.set(key, {
           date,
           category_id: r.category_id ?? null,
-          general: r.general ?? 'Uncategorized',
-          detail: r.detail ?? 'Uncategorized',
+          general: r.general ?? "Uncategorized",
+          detail: r.detail ?? "Uncategorized",
           net: 0,
         });
       }
-      map.get(key).net += Number(r.amount_eur) || 0;
+      map.get(key).net = addMoney(
+        map.get(key).net,
+        safeMoneyInput(r.amount_eur),
+      );
     }
-    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return Array.from(map.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
   };
 
   return {

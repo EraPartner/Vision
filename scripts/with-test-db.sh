@@ -31,6 +31,7 @@ CONTAINER=${VISION_TEST_DB_CONTAINER:-vision-test-db}
 PORT=${VISION_TEST_DB_PORT:-55432}
 KEEP=${VISION_TEST_DB_KEEP:-0}
 CHECK_ONLY=${VISION_TEST_DB_CHECK_ONLY:-0}
+TASK=${VISION_TEST_DB_TASK:-tests}
 ACTIVE_PROVIDER=
 NATIVE_ROOT=
 NATIVE_DATA=
@@ -41,6 +42,14 @@ case "$PROVIDER" in
   auto|native|docker) ;;
   *)
     echo "[test-db] VISION_TEST_DB_PROVIDER must be auto, native, or docker." >&2
+    exit 1
+    ;;
+esac
+
+case "$TASK" in
+  tests|migration-fidelity) ;;
+  *)
+    echo "[test-db] VISION_TEST_DB_TASK must be tests or migration-fidelity." >&2
     exit 1
     ;;
 esac
@@ -60,6 +69,11 @@ if [ -n "${TEST_DATABASE_URL:-}" ]; then
   if [ "$CHECK_ONLY" = 1 ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
+  fi
+  if [ "$TASK" = migration-fidelity ]; then
+    echo "[test-db] Migration fidelity refuses a caller-managed TEST_DATABASE_URL." >&2
+    echo "[test-db] Unset it so this script provisions a disposable database." >&2
+    exit 1
   fi
   if [ "${CODEX_SESSION_ENV:-}" = cloud ] && \
     [ "$TEST_DATABASE_URL" = 'postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test' ]; then
@@ -307,6 +321,14 @@ fi
 
 echo "[test-db] Migrating the disposable database to head."
 bun run apps/node-backend/scripts/db-migrate.js
+
+if [ "$TASK" = migration-fidelity ]; then
+  echo "[test-db] Verifying latest-revision downgrade and upgrade fidelity."
+  bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+  bun run apps/node-backend/scripts/db-migrate.js upgrade head
+  echo "[test-db] Migration fidelity check passed."
+  exit 0
+fi
 
 echo "[test-db] Running backend suite with the $ACTIVE_PROVIDER provider."
 cd apps/node-backend && bun vitest run "$@"

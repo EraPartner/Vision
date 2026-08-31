@@ -2,9 +2,10 @@
  * Deduplication Service
  */
 
-import crypto from 'crypto';
-import { query } from '../database/connection.js';
-import { logger } from '../config/logger.js';
+import crypto from "crypto";
+import { query } from "../database/connection.js";
+import { logger } from "../config/logger.js";
+import { epochMsToUtcYmd } from "../lib/dateFormat.js";
 
 /**
  * @typedef {object} FieldHashInput
@@ -27,9 +28,9 @@ import { logger } from '../config/logger.js';
 export function createTransactionHash(transactionData) {
   let raw = transactionData.rawData;
   if (!raw) {
-    raw = `${transactionData.date.toISOString().split('T')[0]}|${transactionData.amount}|${transactionData.recipient}|${transactionData.memo || ''}`;
+    raw = `${epochMsToUtcYmd(transactionData.date.getTime())}|${transactionData.amount}|${transactionData.recipient}|${transactionData.memo || ""}`;
   }
-  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
+  return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
 }
 
 /**
@@ -47,9 +48,15 @@ export function createTransactionHash(transactionData) {
  * @param {ManualHashInput} input
  * @returns {string}
  */
-export function createManualTransactionHash({ date, amount, recipientId, memo, bankAccount }) {
-  const raw = `manual|${date}|${amount}|${recipientId}|${(memo || '').toUpperCase()}|${(bankAccount || '').toUpperCase()}`;
-  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
+export function createManualTransactionHash({
+  date,
+  amount,
+  recipientId,
+  memo,
+  bankAccount,
+}) {
+  const raw = `manual|${date}|${amount}|${recipientId}|${(memo || "").toUpperCase()}|${(bankAccount || "").toUpperCase()}`;
+  return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
 }
 
 /**
@@ -78,11 +85,11 @@ export async function isDuplicate(transactionData) {
        AND t.is_active = true
      LIMIT 1`,
     [
-      transactionData.date.toISOString().split('T')[0],
+      epochMsToUtcYmd(transactionData.date.getTime()),
       transactionData.amount,
-      (transactionData.recipient || '').toUpperCase(),
-      (transactionData.memo || '').trim(),
-    ]
+      (transactionData.recipient || "").toUpperCase(),
+      (transactionData.memo || "").trim(),
+    ],
   );
   return result.rows.length > 0;
 }
@@ -101,7 +108,7 @@ export async function isDuplicateByFields(date, amount, recipientName, memo) {
      WHERE t.date = $1 AND t.amount = $2 AND UPPER(r.name) = $3
        AND COALESCE(TRIM(t.memo), '') = $4 AND t.is_active = true
      LIMIT 1`,
-    [date, amount, (recipientName || '').toUpperCase(), (memo || '').trim()]
+    [date, amount, (recipientName || "").toUpperCase(), (memo || "").trim()],
   );
   return result.rows.length > 0;
 }
@@ -112,9 +119,21 @@ export async function isDuplicateByFields(date, amount, recipientName, memo) {
  * @param {ManualHashInput} input
  * @returns {Promise<{ isDuplicate: boolean, existingTransactionId: number|null }>}
  */
-export async function isManualDuplicate({ date, amount, recipientId, memo, bankAccount }) {
-  const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
-  
+export async function isManualDuplicate({
+  date,
+  amount,
+  recipientId,
+  memo,
+  bankAccount,
+}) {
+  const hash = createManualTransactionHash({
+    date,
+    amount,
+    recipientId,
+    memo,
+    bankAccount,
+  });
+
   try {
     // Only a live, active transaction blocks. The FK is ON DELETE SET NULL
     // (migration 0024), so a deleted transaction leaves its hash row behind
@@ -127,14 +146,20 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
          JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
         WHERE m.deduplication_hash = $1
         LIMIT 1`,
-      [hash]
+      [hash],
     );
     if (result.rows.length > 0) {
-      return { isDuplicate: true, existingTransactionId: result.rows[0].transaction_id };
+      return {
+        isDuplicate: true,
+        existingTransactionId: result.rows[0].transaction_id,
+      };
     }
   } catch (err) {
-    if (err.code !== '42P01') {
-      logger.warn('Unexpected error in manual dedup hash check', { error: err.message, code: err.code });
+    if (err.code !== "42P01") {
+      logger.warn("Unexpected error in manual dedup hash check", {
+        error: err.message,
+        code: err.code,
+      });
     }
     // Table may not exist yet — fall through to field-based check
   }
@@ -145,7 +170,7 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
      WHERE date = $1 AND amount = $2 AND recipient_id = $3
        AND COALESCE(TRIM(memo), '') = $4 AND is_active = true
      LIMIT 1`,
-    [date, amount, recipientId, (memo || '').trim()]
+    [date, amount, recipientId, (memo || "").trim()],
   );
   if (fieldResult.rows.length > 0) {
     return { isDuplicate: true, existingTransactionId: fieldResult.rows[0].id };
@@ -160,9 +185,24 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
  * @param {ManualHashInput & { categoryId?: number|string|null, comment?: string|null, transactionId: number|string }} input
  * @returns {Promise<void>}
  */
-export async function recordManualRawTransaction({ date, amount, recipientId, memo, bankAccount, categoryId, comment, transactionId }) {
-  const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
-  
+export async function recordManualRawTransaction({
+  date,
+  amount,
+  recipientId,
+  memo,
+  bankAccount,
+  categoryId,
+  comment,
+  transactionId,
+}) {
+  const hash = createManualTransactionHash({
+    date,
+    amount,
+    recipientId,
+    memo,
+    bankAccount,
+  });
+
   try {
     // DO UPDATE (not DO NOTHING): re-adding a previously deleted transaction
     // re-claims its dangling hash row, so the hash points at the live row again.
@@ -170,11 +210,24 @@ export async function recordManualRawTransaction({ date, amount, recipientId, me
       `INSERT INTO manual_raw_transactions (deduplication_hash, transaction_id, date, bank_account, recipient_id, amount, memo, currency, category_id, comment)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9)
        ON CONFLICT (deduplication_hash) DO UPDATE SET transaction_id = EXCLUDED.transaction_id`,
-      [hash, transactionId, date, bankAccount, recipientId, amount, memo, categoryId, comment]
+      [
+        hash,
+        transactionId,
+        date,
+        bankAccount,
+        recipientId,
+        amount,
+        memo,
+        categoryId,
+        comment,
+      ],
     );
   } catch (err) {
-    if (err.code !== '42P01') {
-      logger.warn('Unexpected error recording manual raw transaction', { error: err.message, code: err.code });
+    if (err.code !== "42P01") {
+      logger.warn("Unexpected error recording manual raw transaction", {
+        error: err.message,
+        code: err.code,
+      });
     }
     // Table may not exist yet — silently skip
   }

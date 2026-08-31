@@ -8,11 +8,12 @@
  * - Returns suggestions for planned transactions
  */
 
-import { query } from '../database/connection.js';
-import { toWireDate } from '../lib/dateFormat.js';
-import { logger } from '../config/logger.js';
-import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
-import { median } from '../lib/math.js';
+import { query } from "../database/connection.js";
+import { normalizeDateLikeToYmd, toWireDate } from "../lib/dateFormat.js";
+import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.js";
+import { logger } from "../config/logger.js";
+import { addAll, divide, roundMoney, toDecimal } from "../lib/money.js";
+import { median } from "../lib/math.js";
 
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
@@ -85,11 +86,11 @@ export function __clearRecurringCacheForTests() {
 
 // Known interval patterns (in days)
 const INTERVAL_PATTERNS = [
-  { name: 'weekly', days: 7, tolerance: 2 },
-  { name: 'biweekly', days: 14, tolerance: 3 },
-  { name: 'monthly', days: 30, tolerance: 5 },
-  { name: 'quarterly', days: 91, tolerance: 10 },
-  { name: 'yearly', days: 365, tolerance: 20 },
+  { name: "weekly", days: 7, tolerance: 2 },
+  { name: "biweekly", days: 14, tolerance: 3 },
+  { name: "monthly", days: 30, tolerance: 5 },
+  { name: "quarterly", days: 91, tolerance: 10 },
+  { name: "yearly", days: 365, tolerance: 20 },
 ];
 
 /**
@@ -108,7 +109,7 @@ function detectInterval(intervals) {
     if (Math.abs(medianInterval - pattern.days) <= pattern.tolerance) {
       // Verify consistency: most intervals should be within tolerance
       const matching = intervals.filter(
-        (i) => Math.abs(i - pattern.days) <= pattern.tolerance
+        (i) => Math.abs(i - pattern.days) <= pattern.tolerance,
       );
       const consistency = matching.length / intervals.length;
       if (consistency >= 0.6) {
@@ -124,13 +125,14 @@ function detectInterval(intervals) {
 
   // Check for custom regular interval
   const stdDev = Math.sqrt(
-    intervals.reduce((s, v) => s + Math.pow(v - avgInterval, 2), 0) / intervals.length
+    intervals.reduce((s, v) => s + Math.pow(v - avgInterval, 2), 0) /
+      intervals.length,
   );
   const cv = stdDev / avgInterval; // Coefficient of variation
 
   if (cv < INTERVAL_TOLERANCE && avgInterval >= 5) {
     return {
-      pattern: 'custom',
+      pattern: "custom",
       avgDays: Math.round(avgInterval),
       medianDays: Math.round(medianInterval),
       consistency: Math.round((1 - cv) * 100),
@@ -180,7 +182,7 @@ function detectAmountChanges(transactions) {
         previousAmount: medianAmount,
         newAmount: amt,
         percentChange: Math.round(pctChange * 100) / 100,
-        direction: pctChange > 0 ? 'increased' : 'decreased',
+        direction: pctChange > 0 ? "increased" : "decreased",
       });
     }
   }
@@ -208,7 +210,8 @@ export async function detectRecurringPatterns() {
     // shows it categorised.
     const result = await query(`
       SELECT t.id, t.date, t.amount, t.currency, t.memo, acct.name AS bank_account,
-             t.recipient_id, r.name AS recipient_name,
+             COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id,
+             COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              COALESCE(c.general || ':' || c.detail, NULL) AS category_name
       FROM transactions t
@@ -219,19 +222,22 @@ export async function detectRecurringPatterns() {
       WHERE t.is_active = true
         AND t.recipient_id IS NOT NULL
         AND t.date >= CURRENT_DATE - INTERVAL '3 years'
-      ORDER BY t.recipient_id, t.date
+      ORDER BY COALESCE(r.primary_recipient_id, t.recipient_id), t.date
     `);
 
     if (result.rows.length === 0) {
       /** @type {{ patterns: RecurringPattern[], total: number }} */
       const empty = { patterns: [], total: 0 };
-      recurringCache = { value: empty, expiresAt: Date.now() + RECURRING_CACHE_TTL_MS };
+      recurringCache = {
+        value: empty,
+        expiresAt: Date.now() + RECURRING_CACHE_TTL_MS,
+      };
       return empty;
     }
 
     // planned_transactions may not exist in partially initialized environments.
     const plannedTableCheck = await query(
-      `SELECT to_regclass('public.planned_transactions') IS NOT NULL AS exists`
+      `SELECT to_regclass('public.planned_transactions') IS NOT NULL AS exists`,
     );
     const plannedTableAvailable = Boolean(plannedTableCheck.rows[0]?.exists);
 
@@ -243,12 +249,12 @@ export async function detectRecurringPatterns() {
     /** @type {Record<string, RecurringGroup>} */
     const byRecipient = {};
     for (const row of /** @type {RecurringCandidateRow[]} */ (result.rows)) {
-      const direction = Number(row.amount) < 0 ? 'expense' : 'income';
+      const direction = Number(row.amount) < 0 ? "expense" : "income";
       const key = `${row.recipient_id}:${direction}`;
       if (!byRecipient[key]) {
         byRecipient[key] = {
           recipientId: row.recipient_id,
-          recipientName: row.recipient_name || 'Unknown',
+          recipientName: row.recipient_name || "Unknown",
           direction,
           transactions: [],
         };
@@ -259,17 +265,25 @@ export async function detectRecurringPatterns() {
     // Batch-fetch all planned recipient IDs in one query (avoids N+1).
     // Keys are now "recipientId:direction" composites — read the id from the
     // group, not the key.
-    const allRecipientIds = [...new Set(
-      Object.values(byRecipient).map((g) => g.recipientId).filter(Boolean),
-    )];
+    const allRecipientIds = [
+      ...new Set(
+        Object.values(byRecipient)
+          .map((g) => g.recipientId)
+          .filter(Boolean),
+      ),
+    ];
     const plannedRecipientIds = new Set();
     if (plannedTableAvailable && allRecipientIds.length > 0) {
       const plannedResult = await query(
-        `SELECT DISTINCT recipient_id FROM planned_transactions
-         WHERE recipient_id = ANY($1) AND is_active = true`,
-        [allRecipientIds]
+        `SELECT DISTINCT COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_id
+           FROM planned_transactions pt
+           LEFT JOIN recipients r ON pt.recipient_id = r.id
+          WHERE COALESCE(r.primary_recipient_id, pt.recipient_id) = ANY($1)
+            AND pt.is_active = true`,
+        [allRecipientIds],
       );
-      for (const row of plannedResult.rows) plannedRecipientIds.add(row.recipient_id);
+      for (const row of plannedResult.rows)
+        plannedRecipientIds.add(row.recipient_id);
     }
 
     /** @type {RecurringPattern[]} */
@@ -283,15 +297,12 @@ export async function detectRecurringPatterns() {
       // Calculate intervals between consecutive transactions (in days)
       const intervals = [];
       for (let i = 1; i < txns.length; i++) {
-        const d1 = new Date(txns[i - 1].date);
-        const d2 = new Date(txns[i].date);
-        if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) {
+        const d1 = normalizeDateLikeToYmd(txns[i - 1].date);
+        const d2 = normalizeDateLikeToYmd(txns[i].date);
+        if (!d1 || !d2) {
           continue;
         }
-        // Use UTC dates to avoid DST off-by-one on 23/25-hour days
-        const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
-        const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
-        const daysDiff = Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
+        const daysDiff = differenceInCalendarDaysYmd(d1, d2);
         if (daysDiff > 0) intervals.push(daysDiff);
       }
 
@@ -304,7 +315,7 @@ export async function detectRecurringPatterns() {
       const amounts = txns.map((t) => toDecimal(t.amount).abs());
       const avgAmount = divide(addAll(amounts), amounts.length);
       const latestAmount = amounts[amounts.length - 1];
-      const currency = txns[0].currency || 'EUR';
+      const currency = txns[0].currency || "EUR";
 
       // Check for amount changes
       const amountChanges = detectAmountChanges(txns);
@@ -312,16 +323,11 @@ export async function detectRecurringPatterns() {
       // Predict next occurrence. Advance in UTC so it stays consistent with
       // the interval calc above — mixing UTC interval math with local
       // getDate/setDate shifted predictedNext by a day across a DST boundary.
-      const lastDate = new Date(txns[txns.length - 1].date);
-      if (Number.isNaN(lastDate.getTime())) {
+      const lastDate = normalizeDateLikeToYmd(txns[txns.length - 1].date);
+      if (!lastDate) {
         continue;
       }
-      const lastUtcMidnight = Date.UTC(
-        lastDate.getFullYear(),
-        lastDate.getMonth(),
-        lastDate.getDate(),
-      );
-      const nextDate = new Date(lastUtcMidnight + detected.medianDays * 24 * 60 * 60 * 1000);
+      const nextDate = addDaysYmd(lastDate, detected.medianDays);
 
       const isAlreadyPlanned = plannedRecipientIds.has(group.recipientId);
 
@@ -343,7 +349,7 @@ export async function detectRecurringPatterns() {
         // toJSON to the previous day's ISO timestamp east of UTC).
         firstSeen: toWireDate(txns[0].date),
         lastSeen: toWireDate(txns[txns.length - 1].date),
-        predictedNext: nextDate.toISOString().split('T')[0],
+        predictedNext: nextDate,
         amountChanges,
         isAlreadyPlanned,
         // Confidence score (0-100)
@@ -351,9 +357,9 @@ export async function detectRecurringPatterns() {
           100,
           Math.round(
             detected.consistency * 0.5 +
-            Math.min(txns.length, 12) / 12 * 30 +
-            (amountChanges.length === 0 ? 20 : 10)
-          )
+              (Math.min(txns.length, 12) / 12) * 30 +
+              (amountChanges.length === 0 ? 20 : 10),
+          ),
         ),
       });
     }
@@ -365,7 +371,7 @@ export async function detectRecurringPatterns() {
     recurringCache = { value, expiresAt: Date.now() + RECURRING_CACHE_TTL_MS };
     return value;
   } catch (err) {
-    logger.error('Error detecting recurring patterns', { error: err.message });
+    logger.error("Error detecting recurring patterns", { error: err.message });
     throw err;
   }
 }

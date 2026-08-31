@@ -6,8 +6,8 @@
  * and exposes the frozen `settings` object consumed across the backend.
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { env } from './env.js';
+import { readFileSync, existsSync } from "fs";
+import { env } from "./env.js";
 
 /**
  * @template {object} T
@@ -19,9 +19,9 @@ function deepFreeze(object) {
   for (const key of Object.getOwnPropertyNames(object)) {
     const value = /** @type {Record<string, unknown>} */ (object)[key];
     if (
-      value
-      && (typeof value === 'object' || typeof value === 'function')
-      && !Object.isFrozen(value)
+      value &&
+      (typeof value === "object" || typeof value === "function") &&
+      !Object.isFrozen(value)
     ) {
       deepFreeze(value);
     }
@@ -38,9 +38,9 @@ function deepFreeze(object) {
  */
 function isRunningInContainer() {
   try {
-    if (existsSync('/.dockerenv')) return true;
-    if (existsSync('/run/.containerenv')) return true;
-    const cgroup = readFileSync('/proc/1/cgroup', 'utf-8');
+    if (existsSync("/.dockerenv")) return true;
+    if (existsSync("/run/.containerenv")) return true;
+    const cgroup = readFileSync("/proc/1/cgroup", "utf-8");
     return /docker|containerd|kubepods|podman/.test(cgroup);
   } catch {
     return false;
@@ -51,15 +51,15 @@ function defaultOllamaUrl() {
   // 127.0.0.1 over `localhost` — Node's DNS resolves `localhost` to IPv6 `::1`
   // first, but Ollama binds only to IPv4 127.0.0.1 by default.
   return isRunningInContainer()
-    ? 'http://host.docker.internal:11434'
-    : 'http://127.0.0.1:11434';
+    ? "http://host.docker.internal:11434"
+    : "http://127.0.0.1:11434";
 }
 
 const settings = deepFreeze({
   server: {
-    host: env.SERVER_HOST || env.HOSTNAME || 'localhost',
+    host: env.SERVER_HOST || env.HOSTNAME || "localhost",
     port: env.PORT,
-    environment: env.ENVIRONMENT || env.NODE_ENV || 'development',
+    environment: env.ENVIRONMENT || env.NODE_ENV || "development",
   },
 
   database: {
@@ -74,9 +74,9 @@ const settings = deepFreeze({
   },
 
   api: {
-    title: 'Financial Transaction Manager',
-    version: '1.0.0',
-    description: 'Import and manage financial transactions from various banks',
+    title: "Financial Transaction Manager",
+    version: "1.0.0",
+    description: "Import and manage financial transactions from various banks",
     // Always string[]: env.CORS_ORIGINS is parsed by csvEnv. The union type
     // this used to carry existed only to satisfy main.js's unreachable
     // `corsOrigins === '*'` wildcard branch, which has since been deleted.
@@ -102,26 +102,29 @@ const settings = deepFreeze({
   },
 
   ollama: {
-    url: (env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
+    url: (env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ""),
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
     requestTimeoutMs: env.OLLAMA_REQUEST_TIMEOUT_MS,
     healthTimeoutMs: env.OLLAMA_HEALTH_TIMEOUT_MS,
     streamIdleTimeoutMs: env.OLLAMA_STREAM_IDLE_TIMEOUT_MS,
+    numCtx: env.OLLAMA_NUM_CTX,
   },
 
   aiChat: {
     enabled: env.AI_CHAT_ENABLED,
     rateLimit: env.AI_CHAT_RATE_LIMIT,
     maxHistoryMessages: env.AI_CHAT_MAX_HISTORY,
+    contextBudgetChars: env.AI_CHAT_CONTEXT_BUDGET_CHARS,
+    maxToolResultChars: env.AI_CHAT_MAX_TOOL_RESULT_CHARS,
     maxToolRows: env.AI_CHAT_MAX_TOOL_ROWS,
   },
 
   isProduction() {
-    return this.server.environment.toLowerCase() === 'production';
+    return this.server.environment.toLowerCase() === "production";
   },
 
   isDevelopment() {
-    return this.server.environment.toLowerCase() === 'development';
+    return this.server.environment.toLowerCase() === "development";
   },
 });
 

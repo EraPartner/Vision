@@ -152,7 +152,7 @@ describe("POST /api/ai/chat/stream", () => {
     expect(res.headers["content-type"]).toMatch(/json/);
   });
 
-  it("streams SSE events in order: user_message → token → tool_call → tool_result → done", async () => {
+  it("streams canonical complete then the deprecated done compatibility alias", async () => {
     const userMsg = { id: "u1", role: "user", content: "hi" };
     const toolMsg = {
       id: "t1",
@@ -168,7 +168,7 @@ describe("POST /api/ai/chat/stream", () => {
     const conversation = { id: UUID, title: "hi", model: "llama3.2:3b" };
 
     runChatTurn.mockImplementation(async ({ onEvent }) => {
-      onEvent({ type: "user_message", data: userMsg });
+      onEvent({ type: "user_message", data: { message: userMsg } });
       onEvent({ type: "token", data: "Your " });
       onEvent({ type: "token", data: "top " });
       onEvent({ type: "token", data: "category." });
@@ -179,8 +179,7 @@ describe("POST /api/ai/chat/stream", () => {
           args: { from: "2025-01-01", to: "2025-12-31" },
         },
       });
-      onEvent({ type: "tool_message", data: toolMsg });
-      onEvent({ type: "assistant_message", data: assistantMsg });
+      onEvent({ type: "tool_result", data: { message: toolMsg } });
       return {
         conversation,
         userMessage: userMsg,
@@ -210,6 +209,7 @@ describe("POST /api/ai/chat/stream", () => {
       "token",
       "tool_call",
       "tool_result",
+      "complete",
       "done",
     ]);
 
@@ -221,7 +221,9 @@ describe("POST /api/ai/chat/stream", () => {
 
     expect(frames[5].data).toEqual({ message: toolMsg });
 
-    const donePayload = frames[6].data;
+    const completePayload = frames[6].data;
+    const donePayload = frames[7].data;
+    expect(donePayload).toEqual(completePayload);
     expect(donePayload.conversation).toEqual(conversation);
     expect(donePayload.assistantMessage).toEqual(assistantMsg);
     expect(donePayload.usage.evalCount).toBe(10);
@@ -283,6 +285,7 @@ describe("POST /api/ai/chat/stream", () => {
     expect(errFrame).toBeDefined();
     expect(errFrame.data).toEqual({
       detail: "Failed to stream AI chat message",
+      code: "INTERNAL_SERVER_ERROR",
     });
     expect(JSON.stringify(errFrame.data)).not.toContain("db exploded");
   });
@@ -325,10 +328,12 @@ describe("POST /api/ai/chat/stream", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
-  it("skips writes for unknown onEvent types", async () => {
+  it("passes the service's public event name through without a rename layer", async () => {
     runChatTurn.mockImplementation(async ({ onEvent }) => {
-      onEvent({ type: "unknown_event", data: { foo: "bar" } });
-      onEvent({ type: "assistant_message", data: { id: "a1" } });
+      onEvent({
+        type: "tool_result",
+        data: { message: { id: "t1", role: "tool", content: "" } },
+      });
       return {
         conversation: { id: UUID },
         userMessage: { id: "u1" },
@@ -345,8 +350,7 @@ describe("POST /api/ai/chat/stream", () => {
       .expect(200);
 
     const eventNames = parseSseFrames(res.text).map((f) => f.name);
-    expect(eventNames).not.toContain("unknown_event");
-    expect(eventNames).not.toContain("assistant_message");
+    expect(eventNames).toContain("tool_result");
     expect(eventNames).toContain("done");
   });
 });
@@ -630,25 +634,40 @@ describe("POST /api/ai/chat body validation", () => {
 describe("AI conversation routes validation", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // Used to answer with a bare array as `data`; now the canonical `{ items,
-  // total }` collection body (unpaginated, so `total` is the row count).
+  // Optional pagination preserves the historical unbounded response when no
+  // params are supplied, while bounded callers receive limit/offset metadata.
   describe("GET /conversations", () => {
-    it("returns { items, total }", async () => {
+    it("returns the legacy full-list shape and calls the service with null", async () => {
       const rows = [
         { id: UUID, title: "One" },
         { id: UUID, title: "Two" },
       ];
-      listConversations.mockResolvedValue(rows);
+      listConversations.mockResolvedValue({ items: rows, total: 2 });
 
       const res = await api.get(`${BASE}/conversations`).expect(200);
       expect(res.body).toEqual(okEnvelope({ items: rows, total: 2 }));
+      expect(listConversations).toHaveBeenCalledWith(null);
     });
 
     it("reports total 0 for an empty list", async () => {
-      listConversations.mockResolvedValue([]);
+      listConversations.mockResolvedValue({ items: [], total: 0 });
 
       const res = await api.get(`${BASE}/conversations`).expect(200);
       expect(res.body).toEqual(okEnvelope({ items: [], total: 0 }));
+    });
+
+    it("returns page metadata and forwards parsed limit/offset", async () => {
+      const rows = [{ id: UUID, title: "Older" }];
+      listConversations.mockResolvedValue({ items: rows, total: 75 });
+
+      const res = await api
+        .get(`${BASE}/conversations?limit=25&offset=50`)
+        .expect(200);
+
+      expect(res.body).toEqual(
+        okEnvelope({ items: rows, total: 75, limit: 25, offset: 50 }),
+      );
+      expect(listConversations).toHaveBeenCalledWith({ limit: 25, offset: 50 });
     });
   });
 

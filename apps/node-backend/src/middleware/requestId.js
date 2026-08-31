@@ -9,7 +9,8 @@
  * See docs/adr/026-unified-api-response-envelope.md for the envelope contract.
  */
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
+import { runWithRequestContext } from "../lib/requestContext.js";
 
 /** Accept client-supplied ids only when they look like opaque tokens we can trust. */
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
@@ -20,12 +21,13 @@ const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
  * @param {import('../types/express.js').ExpressNextFunction} next
  */
 export function requestId(req, res, next) {
-  const incoming = req.get('x-request-id');
-  const id = typeof incoming === 'string' && SAFE_REQUEST_ID.test(incoming)
-    ? incoming
-    : randomUUID();
+  const incoming = req.get("x-request-id");
+  const id =
+    typeof incoming === "string" && SAFE_REQUEST_ID.test(incoming)
+      ? incoming
+      : randomUUID();
 
   req.id = id;
-  res.setHeader('X-Request-Id', id);
-  next();
+  res.setHeader("X-Request-Id", id);
+  return runWithRequestContext(id, next);
 }

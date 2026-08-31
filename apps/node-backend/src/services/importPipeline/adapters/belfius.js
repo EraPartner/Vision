@@ -3,18 +3,30 @@
  * Statement-export format: 13 header lines, then ';'-delimited transactions.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
-import { toDecimal, roundMoney } from '../../../lib/money.js';
+import {
+  cleanRecipientName,
+  normalizeToUppercase,
+} from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseDayMonthYear,
+  parseCommaDecimal,
+  buildOptionalComment,
+  splitCsvLines,
+  splitDelimitedRecord,
+  canonicalIban,
+  readTextWithEncodingFallback,
+  normalizeIsoCurrency,
+} from "./_shared.js";
+import { toDecimal, roundMoney } from "../../../lib/money.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const NAME = 'belfius';
-const BANK_LABEL = 'Belfius';
+const NAME = "belfius";
+const BANK_LABEL = "Belfius";
 const HEADER_ROWS = 13;
 const BALANCE_LINE_INDEX = 9;
 const MIN_FIELDS = 12;
@@ -24,12 +36,12 @@ const MIN_FIELDS = 12;
  * @returns {number|null}
  */
 function parseLastBalance(line) {
-  if (!line.includes('Laatste saldo;')) return null;
-  const parts = line.split(';');
+  if (!line.includes("Laatste saldo;")) return null;
+  const parts = line.split(";");
   if (parts.length < 2) return null;
   // "12.345,67 EUR" — a bare comma swap left "12.345.67" (NaN), so running
   // balances silently never applied for balances ≥ €1000.
-  const balStr = parts[1].replace(' EUR', '').trim();
+  const balStr = parts[1].replace(" EUR", "").trim();
   const val = parseCommaDecimal(balStr);
   return isNaN(val) ? null : val;
 }
@@ -56,11 +68,14 @@ function applyRunningBalances(transactions, lastBalance) {
   let newestToOldest;
   if (haveSeq) {
     newestToOldest = [...transactions].sort(
-      (a, b) => (b._seq[0] - a._seq[0]) || (b._seq[1] - a._seq[1]),
+      (a, b) => b._seq[0] - a._seq[0] || b._seq[1] - a._seq[1],
     );
   } else {
-    const isDescending = transactions[0].date >= transactions[transactions.length - 1].date;
-    newestToOldest = isDescending ? [...transactions] : [...transactions].reverse();
+    const isDescending =
+      transactions[0].date >= transactions[transactions.length - 1].date;
+    newestToOldest = isDescending
+      ? [...transactions]
+      : [...transactions].reverse();
   }
 
   // Accumulate as Decimal — rounding the float `bal` every row let drift
@@ -90,10 +105,10 @@ function parseTransactionLine(line) {
   const location = parts[7].trim();
   const transactionDescription = parts[8].trim();
   const amountStr = parts[10].trim();
-  const currency = parts[11].trim();
-  const bicCode = parts[12] ? parts[12].trim() : '';
-  const countryCode = parts[13] ? parts[13].trim() : '';
-  const additionalMessage = parts[14] ? parts[14].trim() : '';
+  const currency = normalizeIsoCurrency(parts[11]);
+  const bicCode = parts[12] ? parts[12].trim() : "";
+  const countryCode = parts[13] ? parts[13].trim() : "";
+  const additionalMessage = parts[14] ? parts[14].trim() : "";
 
   const date = parseDayMonthYear(transactionDateStr);
   if (!date) return null;
@@ -105,8 +120,12 @@ function parseTransactionLine(line) {
   const fullRecipient = normalizeToUppercase(cleanRecipientName(baseRecipient));
 
   const addressParts = [street, location].filter(Boolean);
-  const recipientFullAddress = addressParts.length ? addressParts.join(', ') : null;
-  const memo = transactionDescription ? normalizeToUppercase(transactionDescription) : '';
+  const recipientFullAddress = addressParts.length
+    ? addressParts.join(", ")
+    : null;
+  const memo = transactionDescription
+    ? normalizeToUppercase(transactionDescription)
+    : "";
 
   const commentParts = [];
   if (statementNumber) commentParts.push(`Statement: ${statementNumber}`);
@@ -117,7 +136,7 @@ function parseTransactionLine(line) {
 
   return {
     date,
-    bankAccount: canonicalIban(accountNumber) || 'BELFIUS',
+    bankAccount: canonicalIban(accountNumber) || "BELFIUS",
     recipient: fullRecipient,
     memo,
     amount,
@@ -125,12 +144,15 @@ function parseTransactionLine(line) {
     balance: null,
     recipientAccount: recipientAccount || null,
     recipientAddress: recipientFullAddress,
-    recipientBankName: recipientAccount ? 'BELFIUS' : null,
+    recipientBankName: recipientAccount ? "BELFIUS" : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
     // Statement + transaction number: the export's own ordering, used (and
     // stripped again) by applyRunningBalances.
-    _seq: [Number.parseInt(statementNumber, 10), Number.parseInt(transactionNumber, 10)],
+    _seq: [
+      Number.parseInt(statementNumber, 10),
+      Number.parseInt(transactionNumber, 10),
+    ],
   };
 }
 
@@ -141,8 +163,13 @@ function parseTransactionLine(line) {
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 15);
-  return lines.some((line) => line.includes('Laatste saldo;'))
-    || lines.some((line) => /^BE\d{2}/.test(line.trim()) && line.split(';').length >= MIN_FIELDS);
+  return (
+    lines.some((line) => line.includes("Laatste saldo;")) ||
+    lines.some(
+      (line) =>
+        /^BE\d{2}/.test(line.trim()) && line.split(";").length >= MIN_FIELDS,
+    )
+  );
 }
 
 /**
@@ -153,9 +180,10 @@ export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   const transactions = /** @type {ParsedBankTransactions} */ ([]);
-  const lastBalance = lines.length > BALANCE_LINE_INDEX
-    ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
-    : null;
+  const lastBalance =
+    lines.length > BALANCE_LINE_INDEX
+      ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
+      : null;
 
   let skipped = 0;
   for (let i = HEADER_ROWS; i < lines.length; i++) {
@@ -172,7 +200,9 @@ export async function parse(filePath) {
   applyRunningBalances(transactions, lastBalance);
   for (const tx of transactions) delete tx._seq;
   transactions.skipped = skipped;
-  logger.info(`Belfius CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `Belfius CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

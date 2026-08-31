@@ -26,6 +26,7 @@ import settings from "../config/config.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { sanitizePersistedKinesisHistory } from "../services/priceProviderService.js";
+import { bodyFirstParam } from "../lib/httpParams.js";
 import {
   AppError,
   ForbiddenError,
@@ -208,13 +209,14 @@ router.post(
       throw new NotFoundError("Database reset endpoint disabled");
     }
 
-    const force = req.query.force === "true";
+    const forceValue = bodyFirstParam(req.body, req.query, "force");
+    const force = forceValue === true || forceValue === "true";
     if (!force) {
       throw new ValidationError(
-        "Database reset requires force=true parameter",
+        "Database reset requires force=true in the request body",
         {
           details: {
-            hint: "Set force=true query parameter to confirm reset (DESTRUCTIVE)",
+            hint: "Set force=true in the JSON request body to confirm reset (DESTRUCTIVE)",
           },
         },
       );

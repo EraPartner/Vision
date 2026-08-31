@@ -6,17 +6,28 @@
  * Besides the pass-through repository methods, this module owns the write
  * orchestration moved out of routes/transactions.js (ADR-067): the manual
  * create flow (duplicate guard → insert → raw-mirror record → planned-payment
- * auto-link → reconcile) and the hard delete with attachment-file cleanup.
+ * auto-link → reconcile), PATCH name resolution/update/reconcile, transfer
+ * marking/reconcile, and hard delete with attachment-file cleanup.
  */
 
-import transactionRepository from '../repositories/transactionRepository.js';
-import { isManualDuplicate, recordManualRawTransaction } from './deduplication.js';
-import { autoLinkTransactions } from './plannedMatchService.js';
-import { scheduleReconcile } from './transferReconciliationService.js';
-import { attachmentRepository } from './attachmentRecordService.js';
-import { removeAttachmentFilesBestEffort } from './attachmentCleanup.js';
-import { ConflictError } from '../middleware/errorHandler.js';
-import { logger } from '../config/logger.js';
+import transactionRepository from "../repositories/transactionRepository.js";
+import {
+  isManualDuplicate,
+  recordManualRawTransaction,
+} from "./deduplication.js";
+import { autoLinkTransactions } from "./plannedMatchService.js";
+import { scheduleReconcile } from "./transferReconciliationService.js";
+import {
+  getTransferSuggestions,
+  markTransfer as markTransferRecord,
+  unmarkTransfer as unmarkTransferRecord,
+} from "./transferReconciliationService.js";
+import { resolveRecipientIdByName } from "./recipientService.js";
+import { resolveCategoryIdByName } from "./categoryService.js";
+import { attachmentRepository } from "./attachmentRecordService.js";
+import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.js";
+import { ConflictError } from "../middleware/errorHandler.js";
+import { logger } from "../config/logger.js";
 
 /**
  * Create a manual transaction with its full side-effect chain.
@@ -51,12 +62,12 @@ async function createManualTransaction(data) {
     date: txDate,
     amount: data.amount,
     recipientId: data.recipient_id,
-    memo: data.memo || '',
+    memo: data.memo || "",
     bankAccount: data.bank_account,
   });
 
   if (dupCheck.isDuplicate) {
-    throw new ConflictError('Duplicate transaction detected', {
+    throw new ConflictError("Duplicate transaction detected", {
       details: { existing_transaction_id: dupCheck.existingTransactionId },
     });
   }
@@ -80,7 +91,7 @@ async function createManualTransaction(data) {
     date: txDate,
     amount: data.amount,
     recipientId: data.recipient_id,
-    memo: data.memo || '',
+    memo: data.memo || "",
     bankAccount: data.bank_account,
     categoryId: data.category_id || null,
     comment: data.comment || null,
@@ -94,10 +105,13 @@ async function createManualTransaction(data) {
   try {
     autoLink = await autoLinkTransactions([transaction]);
   } catch (err) {
-    logger.warn('Auto-link after manual create failed', { id: transaction.id, error: err?.message });
+    logger.warn("Auto-link after manual create failed", {
+      id: transaction.id,
+      error: err?.message,
+    });
   }
 
-  logger.info('Transaction created', { id: transaction.id });
+  logger.info("Transaction created", { id: transaction.id });
   scheduleReconcile();
   return { transaction, autoLink };
 }
@@ -114,7 +128,9 @@ async function createManualTransaction(data) {
  * @returns {Promise<boolean>} whether a row was deleted
  */
 async function hardDeleteWithCleanup(id) {
-  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([id]);
+  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([
+    id,
+  ]);
   const deleted = await transactionRepository.hardDelete(id);
   if (!deleted) return false;
   await removeAttachmentFilesBestEffort(attachmentPaths);
@@ -122,10 +138,63 @@ async function hardDeleteWithCleanup(id) {
   return true;
 }
 
+/**
+ * Update one transaction with name resolution and the reconcile side effect.
+ * The route passes its validated PATCH model here; this service strips the
+ * convenience name fields and resolves them in parallel before persistence.
+ *
+ * @param {number} id
+ * @param {Record<string, any> & { tags?: string[] }} fields
+ * @returns {Promise<object|null>}
+ */
+async function update(id, fields) {
+  const [recipientId, categoryId] = await Promise.all([
+    fields.recipient_name && !fields.recipient_id
+      ? resolveRecipientIdByName(fields.recipient_name)
+      : fields.recipient_id,
+    fields.category_name && !fields.category_id
+      ? resolveCategoryIdByName(fields.category_name)
+      : fields.category_id,
+  ]);
+
+  const {
+    recipient_name: _recipientName,
+    category_name: _categoryName,
+    ...patch
+  } = fields;
+  if (recipientId !== undefined) patch.recipient_id = recipientId;
+  if (categoryId !== undefined) patch.category_id = categoryId;
+
+  const updated = await transactionRepository.update(id, patch);
+  if (updated) scheduleReconcile();
+  return updated;
+}
+
+/** @returns {ReturnType<typeof getTransferSuggestions>} */
+function listTransferSuggestions() {
+  return getTransferSuggestions();
+}
+
+/** @param {number} aId @param {number} bId */
+async function markTransfer(aId, bId) {
+  await markTransferRecord(aId, bId);
+  scheduleReconcile();
+}
+
+/** @param {number} id */
+async function unmarkTransfer(id) {
+  await unmarkTransferRecord(id);
+  scheduleReconcile();
+}
+
 export const transactionService = {
   ...transactionRepository,
   createManualTransaction,
+  update,
   hardDeleteWithCleanup,
+  getTransferSuggestions: listTransferSuggestions,
+  markTransfer,
+  unmarkTransfer,
 };
 
 export default transactionService;

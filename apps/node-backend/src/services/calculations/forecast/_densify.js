@@ -1,4 +1,5 @@
-import { epochMsToUtcYmd as toIso } from '../../../lib/dateFormat.js';
+import { epochMsToUtcYmd as toIso } from "../../../lib/dateFormat.js";
+import { ymdToEpochDay } from "../../../lib/timezone.js";
 
 /**
  * Densify a daily {date, net} history: fill every calendar date from the first
@@ -17,16 +18,17 @@ import { epochMsToUtcYmd as toIso } from '../../../lib/dateFormat.js';
 export function densifyDailyHistory(history, endIso) {
   if (!Array.isArray(history) || history.length === 0) return history;
   const byDate = new Map();
-  for (const r of history) byDate.set(r.date, (byDate.get(r.date) ?? 0) + (Number(r.net) || 0));
+  for (const r of history)
+    byDate.set(r.date, (byDate.get(r.date) ?? 0) + (Number(r.net) || 0));
   const sortedDates = [...byDate.keys()].sort();
   const startIso = sortedDates[0];
   const lastObserved = sortedDates[sortedDates.length - 1];
   const endStr = endIso && endIso >= startIso ? endIso : lastObserved;
-  /** @param {string} d */
-  const parse = (d) => { const [y, m, dd] = d.split('-').map(Number); return Date.UTC(y, m - 1, dd); };
   const out = [];
-  for (let t = parse(startIso); t <= parse(endStr); t += 86_400_000) {
-    const iso = toIso(t);
+  const startDay = ymdToEpochDay(startIso);
+  const endDay = ymdToEpochDay(endStr);
+  for (let day = startDay; day <= endDay; day += 1) {
+    const iso = toIso(day * 86_400_000);
     out.push({ date: iso, net: byDate.get(iso) ?? 0 });
   }
   return out;

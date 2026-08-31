@@ -10,7 +10,8 @@
  *
  * Handlers keep only request parsing/validation and response shaping
  * (ADR-067): the write orchestration lives in transactionService and the
- * bulk-action SQL in transactionBulkService.
+ * bulk-action SQL in transactionBulkService, and export SQL in
+ * transactionExport.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
@@ -22,8 +23,6 @@ import {
   bulkUpdateTransactions,
   bulkDeleteTransactions,
 } from "../services/transactionBulkService.js";
-import { resolveRecipientIdByName } from "../services/recipientService.js";
-import { resolveCategoryIdByName } from "../services/categoryService.js";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
   validateIdParam,
@@ -37,18 +36,9 @@ import {
   assertIdParam,
 } from "../middleware/validation.js";
 import { rateLimiter } from "../middleware/rateLimiter.js";
-import {
-  scheduleReconcile,
-  getTransferSuggestions,
-  markTransfer,
-  unmarkTransfer,
-} from "../services/transferReconciliationService.js";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
 import { toDecimal, toNumber } from "../lib/money.js";
-import {
-  buildTransactionWhere,
-  parseAmountFilter,
-} from "../lib/filterBuilder.js";
+import { parseAmountFilter } from "../lib/filterBuilder.js";
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
@@ -57,6 +47,7 @@ import {
 } from "../services/transactionExport.js";
 import { parsePagination } from "../lib/pagination.js";
 import { toWireDate } from "../lib/dateFormat.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -428,7 +419,7 @@ function parseTransactionListQuery(query) {
 
   // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
   // bulkSelection). amount_exact is shorthand for min == max.
-  const amountSigned = amount_signed === "true" || amount_signed === "1";
+  const amountSigned = parseBooleanQueryParam(amount_signed);
   const amountExact = parseAmountFilter(amount_exact, amountSigned);
   const amountMin =
     amountExact != null
@@ -466,10 +457,10 @@ function parseTransactionListQuery(query) {
     ),
     recipientName: recipient_name || null,
     search: search ? String(search).slice(0, 200) : null,
-    active: active !== "false",
+    active: parseBooleanQueryParam(active, true),
     sortBy: sort_by || null,
     sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : null,
-    includeBalance: include_balance === "true",
+    includeBalance: parseBooleanQueryParam(include_balance),
     transactionType:
       transaction_type === "income" || transaction_type === "expense"
         ? transaction_type
@@ -482,17 +473,17 @@ function parseTransactionListQuery(query) {
 }
 
 /**
- * Build WHERE clause + params for the transactions export endpoints.
+ * Parse the transactions export filters into a service input model.
  *
- * Delegates to the shared `buildTransactionWhere` so the export filter set stays
- * in lockstep with the list endpoint (`GET /api/transactions`). Accepts the same
- * raw query-string shape used by the list endpoint, including `transaction_id`,
- * `recipient_id`, `recipient_name`, `search`, `transaction_type`, and `active`.
+ * Accepts the same raw query-string shape used by the list endpoint, including
+ * `transaction_id`, `recipient_id`, `recipient_name`, `search`,
+ * `transaction_type`, and `active`. SQL construction belongs to
+ * `transactionExport`; the route returns only validated domain filters.
  *
  * Account multi-value support: `account_ids=1,2,3` → array of ids (preferred);
  * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
  *
- * Returns { whereSql, params, nextParamIdx }.
+ * Returns a plain filter model.
  * @param {any} query req.query — see parseTransactionListQuery.
  */
 function buildExportFilters(query) {
@@ -516,7 +507,7 @@ function buildExportFilters(query) {
         .slice(0, EXPORT_MAX_LIST_SIZE)
     : null;
 
-  const { sql, params, nextParamIdx } = buildTransactionWhere({
+  return {
     transactionId: opts.transactionId,
     startDate: opts.startDate,
     endDate: opts.endDate,
@@ -536,9 +527,7 @@ function buildExportFilters(query) {
     amountMax: opts.amountMax,
     amountSigned: opts.amountSigned,
     tagSlugs: opts.tagSlugs,
-  });
-
-  return { whereSql: sql, params, nextParamIdx };
+  };
 }
 
 /** @param {any} body */
@@ -563,21 +552,6 @@ function normalizeTransactionPatchFields(body) {
   return fields;
 }
 
-// The name→id resolvers return the id to use (or undefined to leave the
-// column untouched) instead of mutating the fields object — the caller strips
-// the *_name keys immutably and applies the resolved ids itself.
-/** @param {any} fields */
-async function resolveRecipientNameToId(fields) {
-  if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
-  return resolveRecipientIdByName(fields.recipient_name);
-}
-
-/** @param {any} fields */
-async function resolveCategoryNameToId(fields) {
-  if (!fields.category_name || fields.category_id) return fields.category_id;
-  return resolveCategoryIdByName(fields.category_name);
-}
-
 // ── Internal transfers (ADR-083) ───────────────────────────────────────────
 // Defined before the `/:id` routes; all have 2 path segments or a literal first
 // segment so they never collide with the single-segment `/:id` handlers.
@@ -589,7 +563,7 @@ router.get(
     req,
     res,
   ) => {
-    res.ok({ items: await getTransferSuggestions() });
+    res.ok({ items: await transactionService.getTransferSuggestions() });
   },
 );
 
@@ -613,8 +587,7 @@ router.post(
     }
     const aId = a.value;
     const bId = b.value;
-    await markTransfer(aId, bId);
-    scheduleReconcile();
+    await transactionService.markTransfer(aId, bId);
     res.ok({ ok: true });
   },
 );
@@ -627,8 +600,7 @@ router.delete(
     req,
     res,
   ) => {
-    await unmarkTransfer(assertIdParam(req));
-    scheduleReconcile();
+    await transactionService.unmarkTransfer(assertIdParam(req));
     // Deleting the transfer mark reports nothing the caller can't derive →
     // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
     res.status(204).send();
@@ -650,7 +622,7 @@ router.get(
     const opts = parseTransactionListQuery(req.query);
 
     let items, total;
-    if (uncategorised === "true") {
+    if (parseBooleanQueryParam(uncategorised)) {
       const result = await transactionService.getUncategorisedWithCount(opts);
       items = result.rows;
       total = result.total;
@@ -660,7 +632,7 @@ router.get(
       total = result.total;
     }
 
-    if (normalize_to_eur === "true") {
+    if (parseBooleanQueryParam(normalize_to_eur)) {
       items = await convertRowsToEur(items, target_currency || "EUR");
     }
 
@@ -687,12 +659,10 @@ router.get(
     req,
     res,
   ) => {
-    const includeBalance = req.query.include_balance === "true";
-    const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
+    const includeBalance = parseBooleanQueryParam(req.query.include_balance);
+    const filters = buildExportFilters(req.query);
     await streamCsvExport(res, {
-      whereSql,
-      params,
-      nextParamIdx,
+      filters,
       includeBalance,
     });
   },
@@ -711,8 +681,8 @@ router.get(
     req,
     res,
   ) => {
-    const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
-    await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
+    const filters = buildExportFilters(req.query);
+    await streamNdjsonExport(res, { filters });
   },
 );
 
@@ -928,19 +898,6 @@ router.patch(
       normalizeTransactionPatchFields(req.body),
     );
 
-    // Independent lookups — run in parallel, then apply immutably.
-    const [recipientId, categoryId] = await Promise.all([
-      resolveRecipientNameToId(fields),
-      resolveCategoryNameToId(fields),
-    ]);
-    const {
-      recipient_name: _recipientName,
-      category_name: _categoryName,
-      ...patch
-    } = fields;
-    if (recipientId !== undefined) patch.recipient_id = recipientId;
-    if (categoryId !== undefined) patch.category_id = categoryId;
-
     // patchTransactionSchema's tagsField only validates "is an array" (item
     // type unchecked, matching pre-zod behavior); transactionRepository.update
     // types `tags` as `string[]` since that's what it writes to the junction
@@ -948,13 +905,12 @@ router.patch(
     // the POST handler above.
     const updated = await transactionService.update(
       id,
-      /** @type {Record<string, any> & { tags?: string[] }} */ (patch),
+      /** @type {Record<string, any> & { tags?: string[] }} */ (fields),
     );
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
 
-    scheduleReconcile();
     res.ok(formatTransaction(updated));
   },
 );

@@ -133,10 +133,13 @@ const envSchema = z
     // long. OLLAMA_REQUEST_TIMEOUT_MS still bounds connect + prompt-eval
     // (time to FIRST chunk); total generation time is unbounded by design.
     OLLAMA_STREAM_IDLE_TIMEOUT_MS: intEnv(120000),
+    OLLAMA_NUM_CTX: intEnv(8192),
 
     AI_CHAT_ENABLED: booleanEnv(true),
     AI_CHAT_RATE_LIMIT: intEnv(30),
     AI_CHAT_MAX_HISTORY: intEnv(30),
+    AI_CHAT_CONTEXT_BUDGET_CHARS: intEnv(24000),
+    AI_CHAT_MAX_TOOL_RESULT_CHARS: intEnv(6000),
     AI_CHAT_MAX_TOOL_ROWS: intEnv(500),
 
     APP_TIMEZONE: stringEnv("Europe/Brussels"),

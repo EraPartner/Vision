@@ -8,17 +8,19 @@
  * instrument) without aborting the chunk or discarding successful sibling rows.
  *
  * FX is auto-resolved (on-or-before stored rate) when the row has no rate and
- * is non-EUR. Dedup is field-based against portfolio_transactions (no tx_hash
- * column there) plus an intra-batch hash guard.
+ * is non-EUR. Dedup is occurrence-based against the destination tables: each
+ * repeated identity in a statement is matched to one existing row, so
+ * legitimate identical fills land while re-importing the statement is a no-op.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
-import recipientRepository from '../../repositories/recipientRepository.js';
-import categoryRepository from '../../repositories/categoryRepository.js';
-import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
-import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
+import { query, withTransaction } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import portfolioTransactionRepository from "../../repositories/portfolioTransactionRepository.js";
+import recipientRepository from "../../repositories/recipientRepository.js";
+import categoryRepository from "../../repositories/categoryRepository.js";
+import { normalizeTransactionPayload } from "../../repositories/portfolioTxRepo.common.js";
+import { autoResolveFxRateToEur } from "../portfolio/fxResolve.js";
+import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
 
 // Rows are drained in chunked BEGIN/COMMIT (mirrors importPipeline/commit.js):
 // one transaction per chunk instead of one autocommit per statement collapses a
@@ -38,7 +40,7 @@ import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
  * on `investments` (null for cash rows and unresolved instruments).
  *
  * @typedef {Pick<PortfolioImportStagingRow,
- *   'id'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'>
+ *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'>
  *   & {
  *     tx_date: string|null,
  *     investment_id: number|null,
@@ -65,7 +67,10 @@ const COMMIT_CHUNK = 1000;
  *   withdrawals/fees/taxes, positive for deposits/dividends/interest)
  */
 function signedCashAmount(row) {
-  const { direction } = classifyBrokerageRow({ kind: row.type ?? row.type_raw, hasInstrument: false });
+  const { direction } = classifyBrokerageRow({
+    kind: row.type ?? row.type_raw,
+    hasInstrument: false,
+  });
   return (direction ?? 1) * Math.abs(Number(row.amount));
 }
 
@@ -75,22 +80,25 @@ function signedCashAmount(row) {
 // uncategorized (unchanged) — they are transfers, not income or expense.
 /** @type {Record<string, { general: string, detail: string }>} */
 const CASH_KIND_CATEGORIES = {
-  dividend: { general: 'INCOME', detail: 'DIVIDENDS' },
-  interest: { general: 'INCOME', detail: 'INTEREST' },
-  fee: { general: 'INVESTMENTS', detail: 'FEES' },
-  tax: { general: 'INVESTMENTS', detail: 'TAXES' },
+  dividend: { general: "INCOME", detail: "DIVIDENDS" },
+  interest: { general: "INCOME", detail: "INTEREST" },
+  fee: { general: "INVESTMENTS", detail: "FEES" },
+  tax: { general: "INVESTMENTS", detail: "TAXES" },
 };
 
 /**
  * Run the commit phase: drain 'matched' staging rows into
  * `portfolio_transactions` (and, for brokerage cash rows, `transactions`), with
- * field-based dedup, an intra-batch hash guard, and a per-row SAVEPOINT.
+ * occurrence-based field dedup and a per-row SAVEPOINT.
  *
  * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
 export async function commitBatch({ batchId, onProgress }) {
-  await query(`UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
+  await query(
+    `UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`,
+    [batchId],
+  );
 
   // Batch-level brokerage account (ADR-095): every lot from this batch lands on it,
   // giving imported holdings a real per-account position (ADR-091). NULL = unassigned.
@@ -109,8 +117,9 @@ export async function commitBatch({ batchId, onProgress }) {
   const batchAccountId = batchRows[0]?.account_id ?? undefined;
   const isBrokerage = batchRows[0]?.is_brokerage === true;
 
-  const { rows: matched } = await query(
+  const { rows: relevantRows } = await query(
     `SELECT isr.id,
+            isr.status,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.type,
             isr.route,
@@ -130,20 +139,18 @@ export async function commitBatch({ batchId, onProgress }) {
        FROM portfolio_import_staging_rows isr
        LEFT JOIN investments inv
          ON inv.id = COALESCE(isr.user_override_investment_id, isr.resolved_investment_id)
-      WHERE isr.batch_id = $1 AND isr.status = 'matched'
+      WHERE isr.batch_id = $1
+        AND isr.status IN ('matched', 'committed', 'duplicate')
       ORDER BY isr.row_index ASC`,
     [batchId],
   );
+  const matched = relevantRows.filter((row) => row.status === "matched");
 
   const total = matched.length;
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
-  /** @type {Set<string>} */
-  const committedHashes = new Set();
-
-  // Per-run occurrence counters for the cash-row field dedup (same lifetime
-  // and chunk-rollback caveat as committedHashes above): a statement may
+  // Per-run occurrence counters for field dedup: a statement may
   // legitimately repeat one (date, signed amount, memo) identity — e.g. two
   // identical per-exchange custody fees on one date — and each occurrence must
   // land, while a RE-import of that same statement must still be a no-op. The
@@ -156,6 +163,34 @@ export async function commitBatch({ batchId, onProgress }) {
   const cashSeenByIdentity = new Map();
   /** @type {Map<string, number>} */
   const cashInsertedByIdentity = new Map();
+  /** @type {Map<string, number>} */
+  const tradeSeenByIdentity = new Map();
+  /** @type {Map<string, number>} */
+  const tradeInsertedByIdentity = new Map();
+
+  // A prior invocation may have committed one or more chunks before the
+  // process stopped. Seed the occurrence positions from every row that this
+  // batch already resolved (committed OR duplicate); otherwise a restart sees
+  // destination rows from the earlier chunks but starts at occurrence zero and
+  // incorrectly drops the first still-matched repeated fill.
+  for (const row of relevantRows) {
+    if (row.status === "matched") continue;
+    if (isBrokerage && row.route === "cash") {
+      const identity = cashIdentityKey(row);
+      cashSeenByIdentity.set(
+        identity,
+        (cashSeenByIdentity.get(identity) ?? 0) + 1,
+      );
+      continue;
+    }
+    if (!row.investment_id) continue;
+    const canonical = canonicalTradeValues(row);
+    const identity = tradeIdentityKey(row, batchAccountId, canonical);
+    tradeSeenByIdentity.set(
+      identity,
+      (tradeSeenByIdentity.get(identity) ?? 0) + 1,
+    );
+  }
 
   // ── Cash-row recipient, hoisted to once per commit ──
   // `transactions.recipient_id` has been NOT NULL since migration 0001, with no
@@ -175,12 +210,21 @@ export async function commitBatch({ batchId, onProgress }) {
   // key makes the write idempotent anyway.
   /** @type {number|null} */
   let cashRecipientId = null;
-  if (isBrokerage && batchAccountId && matched.some((/** @type {{route?: string}} */ r) => r.route === 'cash')) {
-    const brokerName = [batchRows[0]?.account_institution, batchRows[0]?.account_name]
-      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+  if (
+    isBrokerage &&
+    batchAccountId &&
+    matched.some((/** @type {{route?: string}} */ r) => r.route === "cash")
+  ) {
+    const brokerName = [
+      batchRows[0]?.account_institution,
+      batchRows[0]?.account_name,
+    ]
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
       .find((v) => v.length > 0);
     if (brokerName) {
-      const { recipient } = await recipientRepository.createOrGet({ name: brokerName });
+      const { recipient } = await recipientRepository.createOrGet({
+        name: brokerName,
+      });
       cashRecipientId = recipient?.id ?? null;
     }
     if (cashRecipientId == null) {
@@ -197,7 +241,10 @@ export async function commitBatch({ batchId, onProgress }) {
   if (isBrokerage && batchAccountId) {
     const cashKinds = new Set(
       matched
-        .filter((/** @type {{route?: string, type?: string|null}} */ r) => r.route === 'cash' && r.type != null)
+        .filter(
+          (/** @type {{route?: string, type?: string|null}} */ r) =>
+            r.route === "cash" && r.type != null,
+        )
         .map((/** @type {{type?: string|null}} */ r) => String(r.type)),
     );
     for (const kind of cashKinds) {
@@ -210,7 +257,8 @@ export async function commitBatch({ batchId, onProgress }) {
       // file them under a category every picker and list filters out. Leaving
       // the kind unmapped commits the row uncategorized instead — the state
       // external deposit/withdrawal cash rows already land in.
-      if (category?.id != null && category.is_active) cashCategoryIds.set(kind, category.id);
+      if (category?.id != null && category.is_active)
+        cashCategoryIds.set(kind, category.id);
     }
   }
 
@@ -226,14 +274,14 @@ export async function commitBatch({ batchId, onProgress }) {
    * @returns {Promise<number|undefined>}
    */
   async function resolveFx(currency, date) {
-    const key = `${String(currency || 'EUR').toUpperCase()}|${date}`;
+    const key = `${String(currency || "EUR").toUpperCase()}|${date}`;
     if (fxCache.has(key)) return fxCache.get(key);
     const rate = await autoResolveFxRateToEur(currency, date);
     fxCache.set(key, rate);
     return rate;
   }
 
-  if (onProgress) onProgress({ phase: 'committing', current: 0, total });
+  if (onProgress) onProgress({ phase: "committing", current: 0, total });
 
   for (let start = 0; start < total; start += COMMIT_CHUNK) {
     const chunk = matched.slice(start, start + COMMIT_CHUNK);
@@ -255,43 +303,53 @@ export async function commitBatch({ batchId, onProgress }) {
         // ── Brokerage cash row (ADR-095): an external deposit/withdrawal, or a
         // D6 instrument-less dividend/interest/fee/tax row → one signed plain
         // cash transaction on the sleeve (NOT a trade, no leg). ──
-        if (isBrokerage && row.route === 'cash') {
+        if (isBrokerage && row.route === "cash") {
           if (!batchAccountId) {
             chunkErrors++;
-            await markRow(row.id, 'error', 'brokerage cash row requires a batch account');
-            continue;
-          }
-          if (row.tx_hash && committedHashes.has(row.tx_hash)) {
-            chunkDuplicates++;
-            await markRow(row.id, 'duplicate');
+            await markRow(
+              row.id,
+              "error",
+              "brokerage cash row requires a batch account",
+            );
             continue;
           }
           const identity = cashIdentityKey(row);
           const occurrence = cashSeenByIdentity.get(identity) ?? 0;
           cashSeenByIdentity.set(identity, occurrence + 1);
           const insertedThisRun = cashInsertedByIdentity.get(identity) ?? 0;
-          const ledgerMatches = await countCashFieldMatches(batchAccountId, row);
+          const ledgerMatches = await countCashFieldMatches(
+            batchAccountId,
+            row,
+          );
           if (occurrence < ledgerMatches - insertedThisRun) {
             chunkDuplicates++;
-            await markRow(row.id, 'duplicate');
+            await markRow(row.id, "duplicate");
             continue;
           }
           const sp = savepointFor(row.id);
-          if (!sp) { chunkErrors++; continue; }
+          if (!sp) {
+            chunkErrors++;
+            continue;
+          }
           await client.query(`SAVEPOINT ${sp}`);
           try {
-            const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+            const memo =
+              row.note ||
+              (row.type_raw
+                ? String(row.type_raw).toUpperCase()
+                : "BROKERAGE CASH");
             const r = await query(
               `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
                VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
               [
                 row.tx_date,
                 signedCashAmount(row),
-                row.currency || 'EUR',
+                row.currency || "EUR",
                 memo,
                 batchAccountId,
                 cashRecipientId,
-                (row.type != null && cashCategoryIds.get(String(row.type))) || null,
+                (row.type != null && cashCategoryIds.get(String(row.type))) ||
+                  null,
               ],
             );
             await query(
@@ -301,64 +359,93 @@ export async function commitBatch({ batchId, onProgress }) {
             await client.query(`RELEASE SAVEPOINT ${sp}`);
             chunkImported++;
             cashInsertedByIdentity.set(identity, insertedThisRun + 1);
-            if (row.tx_hash) committedHashes.add(row.tx_hash);
           } catch (err) {
             // ROLLBACK TO SAVEPOINT before markRow: PostgreSQL poisons the whole
             // chunk txn on ANY statement error (25P02), so the row's error must
             // be recorded on a clean connection.
             await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
             chunkErrors++;
-            await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'cash insert failed');
+            await markRow(
+              row.id,
+              "error",
+              err?.message?.slice(0, 500) || "cash insert failed",
+            );
           }
           continue;
         }
 
         if (!row.investment_id) {
           chunkErrors++;
-          await markRow(row.id, 'error', 'unresolved instrument — pick or create a holding');
+          await markRow(
+            row.id,
+            "error",
+            "unresolved instrument — pick or create a holding",
+          );
           continue;
         }
 
-        if (row.tx_hash && committedHashes.has(row.tx_hash)) {
-          chunkDuplicates++;
-          await markRow(row.id, 'duplicate');
+        let canonical;
+        try {
+          canonical = canonicalTradeValues(row);
+        } catch (err) {
+          chunkErrors++;
+          await markRow(
+            row.id,
+            "error",
+            err?.message?.slice(0, 500) || "invalid transaction values",
+          );
           continue;
         }
-
-        if (await isFieldDuplicate(row, batchAccountId)) {
+        const identity = tradeIdentityKey(row, batchAccountId, canonical);
+        const occurrence = tradeSeenByIdentity.get(identity) ?? 0;
+        tradeSeenByIdentity.set(identity, occurrence + 1);
+        const insertedThisRun = tradeInsertedByIdentity.get(identity) ?? 0;
+        const destinationMatches = await countTradeFieldMatches(
+          row,
+          batchAccountId,
+          canonical,
+        );
+        if (occurrence < destinationMatches - insertedThisRun) {
           chunkDuplicates++;
-          await markRow(row.id, 'duplicate');
+          await markRow(row.id, "duplicate");
           continue;
         }
 
         const sp = savepointFor(row.id);
-        if (!sp) { chunkErrors++; continue; }
+        if (!sp) {
+          chunkErrors++;
+          continue;
+        }
         await client.query(`SAVEPOINT ${sp}`);
         try {
-          const currency = row.currency || row.investment_currency || 'EUR';
-          let fxRate = row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
-          if (fxRate === undefined) fxRate = await resolveFx(currency, row.tx_date);
+          const currency = row.currency || row.investment_currency || "EUR";
+          let fxRate =
+            row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
+          if (fxRate === undefined)
+            fxRate = await resolveFx(currency, row.tx_date);
 
-          const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
-            investment_id: row.investment_id,
-            type: row.type,
-            date: row.tx_date,
-            amount: row.amount != null ? Number(row.amount) : undefined,
-            units: row.units != null ? Number(row.units) : undefined,
-            price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
-            fees: row.fees != null ? Number(row.fees) : 0,
-            taxes: row.taxes != null ? Number(row.taxes) : 0,
-            currency,
-            note: row.note || undefined,
-            fx_rate_to_eur: fxRate,
-            account_id: batchAccountId,
-            // Import provenance (migration 0086) — the stamp rollback bulk-deletes
-            // on. Trades only: a brokerage CASH row goes to `transactions`, whose
-            // own import_batch_id FKs to the BANK `import_batches` table, so a
-            // portfolio batch id must never be written there.
-            import_batch_id: batchId,
-            preloaded_asset_class: row.asset_class,
-          }));
+          const created = await portfolioTransactionRepository.create(
+            /** @type {any} */ ({
+              investment_id: row.investment_id,
+              type: row.type,
+              date: row.tx_date,
+              amount: canonical.amount,
+              units: canonical.units,
+              price_per_unit: canonical.price_per_unit,
+              fees: row.fees != null ? Number(row.fees) : 0,
+              taxes: row.taxes != null ? Number(row.taxes) : 0,
+              currency,
+              note: row.note || undefined,
+              fx_rate_to_eur: fxRate,
+              account_id: batchAccountId,
+              // Import provenance (migration 0086) — the stamp rollback bulk-deletes
+              // on. Trades only: a brokerage CASH row goes to `transactions`, whose
+              // own import_batch_id FKs to the BANK `import_batches` table, so a
+              // portfolio batch id must never be written there.
+              import_batch_id: batchId,
+              preloaded_asset_class: row.asset_class,
+            }),
+          );
 
           await query(
             `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
@@ -366,16 +453,20 @@ export async function commitBatch({ batchId, onProgress }) {
           );
           await client.query(`RELEASE SAVEPOINT ${sp}`);
           chunkImported++;
-          if (row.tx_hash) committedHashes.add(row.tx_hash);
+          tradeInsertedByIdentity.set(identity, insertedThisRun + 1);
         } catch (err) {
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
           chunkErrors++;
-          await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'insert failed');
+          await markRow(
+            row.id,
+            "error",
+            err?.message?.slice(0, 500) || "insert failed",
+          );
         }
 
         if (onProgress && (start + j + 1) % 50 === 0) {
           onProgress({
-            phase: 'committing',
+            phase: "committing",
             current: start + j + 1,
             total,
             imported: imported + chunkImported,
@@ -405,11 +496,25 @@ export async function commitBatch({ batchId, onProgress }) {
     );
 
     if (onProgress) {
-      onProgress({ phase: 'committing', current: Math.min(start + chunk.length, total), total, imported, duplicates, errors });
+      onProgress({
+        phase: "committing",
+        current: Math.min(start + chunk.length, total),
+        total,
+        imported,
+        duplicates,
+        errors,
+      });
     }
   }
 
-  logger.info('[portfolio-pipeline:commit] done', { batchId, total, imported, duplicates, errors, isBrokerage });
+  logger.info("[portfolio-pipeline:commit] done", {
+    batchId,
+    total,
+    imported,
+    duplicates,
+    errors,
+    isBrokerage,
+  });
   return { imported, duplicates, errors };
 }
 
@@ -441,7 +546,7 @@ async function markRow(id, status, message) {
 }
 
 /**
- * The cash-row dedup identity: (date, signed amount, memo) — mirrors the SQL
+ * The cash-row dedup identity: (date, signed amount, currency, memo) — mirrors the SQL
  * predicate in {@link countCashFieldMatches} exactly (the account is constant
  * per batch), so the per-batch occurrence counters below count the same thing
  * the ledger probe counts.
@@ -450,8 +555,10 @@ async function markRow(id, status, message) {
  * @returns {string}
  */
 function cashIdentityKey(row) {
-  const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
-  return `${row.tx_date}|${signedCashAmount(row)}|${memo}`;
+  const memo =
+    row.note ||
+    (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
+  return `${row.tx_date}|${signedCashAmount(row)}|${row.currency || "EUR"}|${memo}`;
 }
 
 // Field-based dedup probe for a brokerage cash row (cash rows have no tx_hash
@@ -466,7 +573,9 @@ function cashIdentityKey(row) {
  * @returns {Promise<number>} count of active ledger rows matching the identity
  */
 async function countCashFieldMatches(accountId, row) {
-  const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+  const memo =
+    row.note ||
+    (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
   const signed = signedCashAmount(row);
   // The legacy magnitude leg (`amount = $4`) exists ONLY for untyped external
   // cash rows (deposit/withdrawal): brokerage withdrawals committed before the
@@ -481,17 +590,19 @@ async function countCashFieldMatches(accountId, row) {
   const legacyLeg = row.type == null;
   /** @type {(string|number|null)[]} */
   const params = [accountId, row.tx_date, signed];
-  let amountPredicate = 'amount = $3';
+  let amountPredicate = "amount = $3";
   if (legacyLeg) {
     params.push(Math.abs(signed));
-    amountPredicate = '(amount = $3 OR amount = $4)';
+    amountPredicate = "(amount = $3 OR amount = $4)";
   }
-  params.push(memo);
+  params.push(row.currency || "EUR", memo);
+  const currencyParam = `$${params.length - 1}`;
   const memoParam = `$${params.length}`;
   const r = await query(
     `SELECT COUNT(*)::int AS n FROM transactions
       WHERE account_id = $1 AND date = $2::date
         AND ${amountPredicate}
+        AND COALESCE(currency, 'EUR') = ${currencyParam}
         AND COALESCE(memo, '') = COALESCE(${memoParam}, '') AND is_active = true`,
     params,
   );
@@ -501,15 +612,68 @@ async function countCashFieldMatches(accountId, row) {
 /**
  * @param {MatchedPortfolioStagingRow} row
  * @param {number|undefined} batchAccountId
- * @returns {Promise<boolean>}
+ * @param {{amount: number|undefined, units: number|undefined, price_per_unit: number|undefined}} canonical
+ * @returns {string}
  */
-async function isFieldDuplicate(row, batchAccountId) {
+function tradeIdentityKey(row, batchAccountId, canonical) {
+  return [
+    row.investment_id,
+    row.tx_date,
+    row.type,
+    canonical.amount ?? 0,
+    canonical.units ?? null,
+    batchAccountId ?? null,
+    row.currency || row.investment_currency || "EUR",
+  ].join("|");
+}
+
+/**
+ * Apply the exact repository normalization before deduplication. Unit-based
+ * buy/sell rows support any two of amount, units, and price; comparing the raw
+ * missing field to stored derived values would miss a reimport.
+ *
+ * @param {MatchedPortfolioStagingRow} row
+ * @returns {{amount: number|undefined, units: number|undefined, price_per_unit: number|undefined}}
+ */
+function canonicalTradeValues(row) {
+  const normalized = normalizeTransactionPayload(
+    {
+      type: row.type,
+      amount: row.amount != null ? Number(row.amount) : undefined,
+      units: row.units != null ? Number(row.units) : undefined,
+      price_per_unit:
+        row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
+      fees: row.fees != null ? Number(row.fees) : 0,
+      taxes: row.taxes != null ? Number(row.taxes) : 0,
+      fx_rate_to_eur:
+        row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
+    },
+    { assetClass: row.asset_class || undefined },
+  );
+  return {
+    amount: normalized.amount,
+    units: normalized.units,
+    price_per_unit: normalized.price_per_unit,
+  };
+}
+
+/**
+ * Count destination rows matching one imported trade identity. A count, rather
+ * than an existence probe, lets the caller pair repeated statement occurrences
+ * one-for-one with rows already in the portfolio ledger.
+ *
+ * @param {MatchedPortfolioStagingRow} row
+ * @param {number|undefined} batchAccountId
+ * @param {{amount: number|undefined, units: number|undefined}} canonical
+ * @returns {Promise<number>}
+ */
+async function countTradeFieldMatches(row, batchAccountId, canonical) {
   // account_id and currency are part of the identity: the same-shaped fill on
   // a different account (or in a different currency) is a distinct trade, not
   // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
   // for account-less (non-brokerage) batches.
-  const dup = await query(
-    `SELECT 1
+  const matches = await query(
+    `SELECT COUNT(*)::int AS n
        FROM portfolio_transactions
       WHERE investment_id = $1
         AND date = $2::date
@@ -517,17 +681,16 @@ async function isFieldDuplicate(row, batchAccountId) {
         AND amount = $4
         AND COALESCE(units, 0) = COALESCE($5, 0)
         AND account_id IS NOT DISTINCT FROM $6
-        AND COALESCE(currency, 'EUR') = $7
-      LIMIT 1`,
+        AND COALESCE(currency, 'EUR') = $7`,
     [
       row.investment_id,
       row.tx_date,
       row.type,
-      row.amount != null ? Number(row.amount) : 0,
-      row.units != null ? Number(row.units) : null,
+      canonical.amount ?? 0,
+      canonical.units ?? null,
       batchAccountId ?? null,
-      row.currency || row.investment_currency || 'EUR',
+      row.currency || row.investment_currency || "EUR",
     ],
   );
-  return dup.rows.length > 0;
+  return Number(matches.rows[0]?.n) || 0;
 }

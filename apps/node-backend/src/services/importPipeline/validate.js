@@ -3,15 +3,15 @@
  *
  * Reads staging rows (status='pending'), validates required fields,
  * computes tx_hash per row as sha256 of the literal raw_data (or a
- * fallback date|amount|recipient|memo field hash if raw_data is
+ * fallback date|amount|recipient|memo|currency field hash if raw_data is
  * missing), and marks each row 'validated', 'duplicate' (a second row
  * in this same batch with an identical tx_hash), or 'error'.
  */
 
-import crypto from 'crypto';
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { parsedDateToYmd } from '../../lib/importDates.js';
+import crypto from "crypto";
+import { query } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { parsedDateToYmd } from "../../lib/importDates.js";
 
 /**
  * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
@@ -39,7 +39,9 @@ const VALIDATE_CHUNK = 500;
  * @returns {Promise<{ validated: number, duplicates: number, errors: number }>}
  */
 export async function validateBatch({ batchId, onProgress }) {
-  await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
+  await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [
+    batchId,
+  ]);
 
   // tx_date via to_char, matching commit.js: read raw, a pg DATE arrives as a
   // server-local-midnight Date whose toISOString() (in the fallback hash below)
@@ -51,7 +53,7 @@ export async function validateBatch({ batchId, onProgress }) {
        FROM import_staging_rows
       WHERE batch_id = $1 AND status = 'pending'
       ORDER BY row_index ASC`,
-    [batchId]
+    [batchId],
   );
 
   const total = pending.length;
@@ -64,7 +66,7 @@ export async function validateBatch({ batchId, onProgress }) {
   /** @type {Set<string>} */
   const seenHashes = new Set();
 
-  if (onProgress) onProgress({ phase: 'validating', current: 0, total });
+  if (onProgress) onProgress({ phase: "validating", current: 0, total });
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
@@ -81,19 +83,19 @@ export async function validateBatch({ batchId, onProgress }) {
       ids.push(row.id);
       if (issue) {
         errors++;
-        statuses.push('error');
+        statuses.push("error");
         txHashes.push(null);
         errorMessages.push(issue);
       } else {
         const hash = computeRowHash(row);
         if (seenHashes.has(hash)) {
           duplicates++;
-          statuses.push('duplicate');
+          statuses.push("duplicate");
           txHashes.push(hash);
           errorMessages.push(null);
         } else {
           seenHashes.add(hash);
-          statuses.push('validated');
+          statuses.push("validated");
           txHashes.push(hash);
           errorMessages.push(null);
         }
@@ -107,10 +109,10 @@ export async function validateBatch({ batchId, onProgress }) {
          FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[])
               AS v(id, status, tx_hash, error_message)
         WHERE s.id = v.id`,
-      [ids, statuses, txHashes, errorMessages]
+      [ids, statuses, txHashes, errorMessages],
     );
     seen += chunk.length;
-    if (onProgress) onProgress({ phase: 'validating', current: seen, total });
+    if (onProgress) onProgress({ phase: "validating", current: seen, total });
   }
 
   if (duplicates > 0) {
@@ -118,7 +120,7 @@ export async function validateBatch({ batchId, onProgress }) {
       `UPDATE import_batches
           SET rows_duplicate = COALESCE(rows_duplicate, 0) + $2
         WHERE id = $1`,
-      [batchId, duplicates]
+      [batchId, duplicates],
     );
   }
 
@@ -126,7 +128,13 @@ export async function validateBatch({ batchId, onProgress }) {
   // integer arithmetic is correct here — exempt from the monetary-arithmetic rule.
   // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   const validated = total - errors - duplicates;
-  logger.info('[pipeline:validate] done', { batchId, total, validated, duplicates, errors });
+  logger.info("[pipeline:validate] done", {
+    batchId,
+    total,
+    validated,
+    duplicates,
+    errors,
+  });
   return { validated, duplicates, errors };
 }
 
@@ -135,16 +143,16 @@ export async function validateBatch({ batchId, onProgress }) {
  * @returns {string|null} the rejection reason, or null when the row is usable
  */
 function validateRow(row) {
-  if (!row.tx_date) return 'missing tx_date';
-  if (row.amount == null) return 'missing amount';
+  if (!row.tx_date) return "missing tx_date";
+  if (row.amount == null) return "missing amount";
   const n = Number(row.amount);
-  if (!Number.isFinite(n)) return 'invalid amount';
+  if (!Number.isFinite(n)) return "invalid amount";
   return null;
 }
 
 /**
  * sha256 of the literal source record, falling back to a
- * date|amount|recipient|memo field hash when the adapter kept no raw record.
+ * date|amount|recipient|memo|currency field hash when the adapter kept no raw record.
  *
  * @param {PendingStagingRow} row
  * @returns {string} lowercase hex digest
@@ -155,7 +163,8 @@ function computeRowHash(row) {
     raw = row.raw_data;
   } else {
     const dateStr = parsedDateToYmd(row.tx_date);
-    raw = `${dateStr}|${row.amount}|${row.recipient_raw || ''}|${row.memo || ''}`;
+    const currencyKey = String(row.currency ?? "").trim() || "EUR";
+    raw = `${dateStr}|${row.amount}|${row.recipient_raw || ""}|${row.memo || ""}|${currencyKey}`;
   }
-  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
+  return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
 }

@@ -7,12 +7,17 @@
  * portfolio_performance_snapshots.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
-import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../calculations/portfolioMath.js';
-import { toDecimal, roundMoney } from '../../lib/money.js';
-import { todayAppDateString } from '../../lib/timezone.js';
+import { query, withTransaction } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
+import {
+  sanitizeSnapshotSpikes,
+  calendarDaysBetween,
+  toYmd,
+} from "../calculations/portfolioMath.js";
+import { toDecimal, roundMoney } from "../../lib/money.js";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
+import { todayAppDateString } from "../../lib/timezone.js";
 
 /** @typedef {import('decimal.js').default} Decimal */
 
@@ -140,9 +145,9 @@ import { todayAppDateString } from '../../lib/timezone.js';
  * @property {number} [return_pct] Added by the post-sanitize pass.
  */
 
-const FIXED_INCOME_ASSET_CLASSES = new Set(['savings', 'bond']);
-const REAL_ESTATE_ASSET_CLASS = 'real_estate';
-const NON_UNIT_ASSET_CLASSES = ['savings', 'bond', 'real_estate'];
+const FIXED_INCOME_ASSET_CLASSES = new Set(["savings", "bond"]);
+const REAL_ESTATE_ASSET_CLASS = "real_estate";
+const NON_UNIT_ASSET_CLASSES = ["savings", "bond", "real_estate"];
 
 /** @returns {Promise<string|null>} ISO date string or null */
 export async function getFirstDataDate() {
@@ -167,10 +172,10 @@ export async function getFirstDataDate() {
  * @param {string} targetCurrency
  * @returns {Promise<SnapshotRow[]>}
  */
-export async function computeDailySnapshots(targetCurrency = 'EUR') {
+export async function computeDailySnapshots(targetCurrency = "EUR") {
   const firstDataDate = await getFirstDataDate();
   if (!firstDataDate) {
-    logger.info('No portfolio data available for snapshots');
+    logger.info("No portfolio data available for snapshots");
     return [];
   }
 
@@ -190,19 +195,23 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     fxResult,
     fxHistoryResult,
   ] = await Promise.all([
-    /** @type {Promise<{ rows: UnitInvestmentRow[] }>} */ (query(`
+    /** @type {Promise<{ rows: UnitInvestmentRow[] }>} */ (
+      query(`
       SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price, i.asset_class
       FROM investments i
       WHERE i.is_active = true
         AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-    `)),
+    `)
+    ),
     portfolioTransactionRepository.getRowsForPortfolioMath({
       dateFrom: firstDateYmd,
       dateTo: todayYmd,
       sellsLastWithinDay: true,
     }),
-    /** @type {Promise<{ rows: NonUnitInvestmentRow[] }>} */ (query(`
+    /** @type {Promise<{ rows: NonUnitInvestmentRow[] }>} */ (
+      query(
+        `
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
              COALESCE(interest_rate, 0) AS interest_rate,
@@ -211,57 +220,81 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       FROM investments
       WHERE is_active = true
         AND asset_class::text = ANY($2::text[])
-    `, [firstDateYmd, NON_UNIT_ASSET_CLASSES])),
-    /** @type {Promise<{ rows: PriceHistoryRow[] }>} */ (query(`
+    `,
+        [firstDateYmd, NON_UNIT_ASSET_CLASSES],
+      )
+    ),
+    /** @type {Promise<{ rows: PriceHistoryRow[] }>} */ (
+      query(
+        `
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
       FROM asset_price_history
       WHERE price_date >= $1::date AND price_date <= $2::date
       ORDER BY investment_id, price_date
-    `, [firstDateYmd, todayYmd])),
-    /** @type {Promise<{ rows: InflationRateRow[] }>} */ (query(`
+    `,
+        [firstDateYmd, todayYmd],
+      )
+    ),
+    /** @type {Promise<{ rows: InflationRateRow[] }>} */ (
+      query(
+        `
       SELECT to_char(month_date, 'YYYY-MM') AS month, monthly_rate
       FROM belgian_inflation_rates
       WHERE month_date >= $1::date
       ORDER BY month_date
-    `, [firstDateYmd])),
+    `,
+        [firstDateYmd],
+      )
+    ),
     /** @type {Promise<{ rows: FxLatestRow[] }>} */ (
-      query(`SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`)
-        .catch(() => ({ rows: /** @type {FxLatestRow[]} */ ([]) }))
+      query(
+        `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
+      ).catch(() => ({ rows: /** @type {FxLatestRow[]} */ ([]) }))
     ),
     // Historical FX so each day of the walk converts at the rate that applied
     // then, not today's. Sparse/empty is fine — convertAmount falls back to the
     // latest (is_latest) rate when no historical row precedes the day.
-    /** @type {Promise<{ rows: FxHistoryRow[] }>} */ (query(`
+    /** @type {Promise<{ rows: FxHistoryRow[] }>} */ (
+      query(
+        `
       SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur
       FROM exchange_rates
       WHERE rate_date >= $1::date
       ORDER BY currency_code, rate_date
-    `, [firstDateYmd]).catch(() => ({ rows: /** @type {FxHistoryRow[]} */ ([]) }))),
+    `,
+        [firstDateYmd],
+      ).catch(() => ({ rows: /** @type {FxHistoryRow[]} */ ([]) }))
+    ),
   ]);
 
   // --- Build lookup maps ---
 
   const investmentsById = new Map(
-    unitInvestmentsResult.rows.map(row => [Number(row.id), {
-      id: Number(row.id),
-      currency: row.currency,
-      currentPrice: Number(row.current_price) || 0,
-      assetClass: row.asset_class,
-    }])
+    unitInvestmentsResult.rows.map((row) => [
+      Number(row.id),
+      {
+        id: Number(row.id),
+        currency: row.currency,
+        currentPrice: Number(row.current_price) || 0,
+        assetClass: row.asset_class,
+      },
+    ]),
   );
 
   // Non-unit investments (savings/bond/real_estate). Valued from transactions —
   // current_price is kept as a last-resort fallback only when no buy transactions
   // exist for the asset, mirroring how the live summary handles such cases.
-  const nonUnitInvestments = fixedIncomeResult.rows.map(row => ({
+  const nonUnitInvestments = fixedIncomeResult.rows.map((row) => ({
     id: Number(row.id),
     currency: row.currency,
     currentPrice: Number(row.current_price) || 0,
     interestRate: Number(row.interest_rate) || 0,
     assetClass: row.asset_class,
-    activeFrom: String(row.active_from).split('T')[0],
+    activeFrom: String(row.active_from).split("T")[0],
   }));
-  const nonUnitInvestmentsById = new Map(nonUnitInvestments.map(inv => [inv.id, inv]));
+  const nonUnitInvestmentsById = new Map(
+    nonUnitInvestments.map((inv) => [inv.id, inv]),
+  );
 
   // { investmentId: { day: price } }  +  sorted day arrays for binary-search forward-fill
   /** @type {Record<number, Record<string, number>>} */
@@ -284,7 +317,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   const inflationByMonth = new Map(
-    inflationResult.rows.map(row => [row.month, Number(row.monthly_rate) || 0])
+    inflationResult.rows.map((row) => [
+      row.month,
+      Number(row.monthly_rate) || 0,
+    ]),
   );
 
   /** @type {Record<string, number>} */
@@ -333,12 +369,15 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       amount: Number(row.amount) || 0,
       units: Number(row.units) || 0,
       currency: row.currency,
-      fxRateToEur: row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
+      fxRateToEur:
+        row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
     });
   }
   // Stable sort each day: non-sells (buy/gift/split/…) first, sells last.
   for (const dayTxs of Object.values(txByDay)) {
-    dayTxs.sort((a, b) => (a.type === 'sell' ? 1 : 0) - (b.type === 'sell' ? 1 : 0));
+    dayTxs.sort(
+      (a, b) => (a.type === "sell" ? 1 : 0) - (b.type === "sell" ? 1 : 0),
+    );
   }
 
   // --- Day walk helpers ---
@@ -354,8 +393,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
    * @returns {number}
    */
   function rateToEurOnOrBefore(currency, day) {
-    const cur = (currency || 'EUR').toUpperCase();
-    if (cur === 'EUR') return 1;
+    const cur = (currency || "EUR").toUpperCase();
+    if (cur === "EUR") return 1;
     const latest = fxRates[cur] > 0 ? fxRates[cur] : 1;
     if (!day || day === todayYmd) return latest;
 
@@ -365,7 +404,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       const days = fxHistorySortedDays[cur];
       let lo = 0;
       let hi = days.length - 1;
-      let bestDay = '';
+      let bestDay = "";
       while (lo <= hi) {
         const mid = (lo + hi) >>> 1;
         if (days[mid] <= day) {
@@ -393,14 +432,17 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
    * @returns {import('decimal.js').default} converted amount as Decimal
    */
   function convertAmount(amount, fromCurrency, fxRateToEur, asOfDay) {
-    const from = (fromCurrency || 'EUR').toUpperCase();
+    const from = (fromCurrency || "EUR").toUpperCase();
     const to = targetCurrency.toUpperCase();
     const amt = toDecimal(amount);
     if (from === to) return amt;
-    const rateTo = to === 'EUR' ? 1 : rateToEurOnOrBefore(to, asOfDay);
-    const rateFrom = (fxRateToEur !== undefined && Number.isFinite(fxRateToEur) && fxRateToEur > 0)
-      ? fxRateToEur
-      : rateToEurOnOrBefore(from, asOfDay);
+    const rateTo = to === "EUR" ? 1 : rateToEurOnOrBefore(to, asOfDay);
+    const rateFrom =
+      fxRateToEur !== undefined &&
+      Number.isFinite(fxRateToEur) &&
+      fxRateToEur > 0
+        ? fxRateToEur
+        : rateToEurOnOrBefore(from, asOfDay);
     return amt.times(rateFrom).div(rateTo);
   }
 
@@ -416,14 +458,17 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
    * @returns {number}
    */
   function txFallbackPrice(tx, invCurrency, asOfDay) {
-    const from = (tx.currency || 'EUR').toUpperCase();
-    const to = (invCurrency || 'EUR').toUpperCase();
+    const from = (tx.currency || "EUR").toUpperCase();
+    const to = (invCurrency || "EUR").toUpperCase();
     const perUnit = tx.amount / tx.units;
     if (from === to) return perUnit;
-    const rateFrom = (tx.fxRateToEur !== undefined && Number.isFinite(tx.fxRateToEur) && tx.fxRateToEur > 0)
-      ? tx.fxRateToEur
-      : rateToEurOnOrBefore(from, asOfDay);
-    const rateTo = to === 'EUR' ? 1 : rateToEurOnOrBefore(to, asOfDay);
+    const rateFrom =
+      tx.fxRateToEur !== undefined &&
+      Number.isFinite(tx.fxRateToEur) &&
+      tx.fxRateToEur > 0
+        ? tx.fxRateToEur
+        : rateToEurOnOrBefore(from, asOfDay);
+    const rateTo = to === "EUR" ? 1 : rateToEurOnOrBefore(to, asOfDay);
     return toDecimal(perUnit).times(rateFrom).div(rateTo).toNumber();
   }
 
@@ -436,7 +481,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   function resolvePrice(inv, day, lastKnownPrice) {
     const histPrices = priceHistoryByInvestment[inv.id];
     if (!histPrices) {
-      return lastKnownPrice[inv.id] > 0 ? lastKnownPrice[inv.id] : inv.currentPrice;
+      return lastKnownPrice[inv.id] > 0
+        ? lastKnownPrice[inv.id]
+        : inv.currentPrice;
     }
     if (histPrices[day]) return histPrices[day];
 
@@ -444,7 +491,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     const days = priceHistorySortedDays[inv.id];
     let lo = 0;
     let hi = days.length - 1;
-    let bestDay = '';
+    let bestDay = "";
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1;
       if (days[mid] <= day) {
@@ -465,8 +512,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // calendar day, matching the query bounds (ADR-009).
   const allDays = [];
   const today = new Date(todayYmd);
-  for (let d = new Date(firstDateYmd); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
-    allDays.push(d.toISOString().split('T')[0]);
+  for (
+    let d = new Date(firstDateYmd);
+    d <= today;
+    d.setUTCDate(d.getUTCDate() + 1)
+  ) {
+    allDays.push(epochMsToUtcYmd(d.getTime()));
   }
 
   /** @type {Record<number, number>} */
@@ -486,7 +537,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   let cryptoInvested = toDecimal(0);
   let metalsInvested = toDecimal(0);
   let cumulativeInflation = toDecimal(1);
-  let lastInflationMonth = '';
+  let lastInflationMonth = "";
   /** @type {Record<number, number>} */
   const lastKnownPrice = {};
   /** @type {SnapshotRow[]} */
@@ -513,21 +564,38 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     // Apply transactions. Invested capital converts at the rate on the
     // transaction's own day (or the stored fx_rate_to_eur), not today's.
     for (const tx of txByDay[day] || []) {
-      const converted = convertAmount(tx.amount, tx.currency, tx.fxRateToEur, day);
+      const converted = convertAmount(
+        tx.amount,
+        tx.currency,
+        tx.fxRateToEur,
+        day,
+      );
       const inv = investmentsById.get(tx.investmentId);
       const nonUnitInv = nonUnitInvestmentsById.get(tx.investmentId);
       const nonUnitS = nonUnitState.get(tx.investmentId);
 
-      if (tx.type === 'buy' || tx.type === 'gift') {
+      if (tx.type === "buy" || tx.type === "gift") {
         cumulativeInvested = cumulativeInvested.plus(converted);
-        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.plus(converted);
-        else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.plus(converted);
-        else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
-        unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
-        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
+        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
+          stocksEtfsInvested = stocksEtfsInvested.plus(converted);
+        else if (inv?.assetClass === "crypto")
+          cryptoInvested = cryptoInvested.plus(converted);
+        else if (inv?.assetClass === "metals")
+          metalsInvested = metalsInvested.plus(converted);
+        unitsByInvestment[tx.investmentId] =
+          (unitsByInvestment[tx.investmentId] || 0) + tx.units;
+        if (tx.units > 0 && tx.amount > 0)
+          lastKnownPrice[tx.investmentId] = txFallbackPrice(
+            tx,
+            inv?.currency,
+            day,
+          );
 
         if (inv && tx.amount > 0) {
-          const fxs = fxNeutralState.get(tx.investmentId) ?? { weight: toDecimal(0), weightedRate: toDecimal(0) };
+          const fxs = fxNeutralState.get(tx.investmentId) ?? {
+            weight: toDecimal(0),
+            weightedRate: toDecimal(0),
+          };
           fxs.weight = fxs.weight.plus(tx.amount);
           fxs.weightedRate = fxs.weightedRate.plus(converted); // amount × m_i
           fxNeutralState.set(tx.investmentId, fxs);
@@ -535,45 +603,64 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
         if (nonUnitS) {
           // Live summary: fixed-income uses buy+gift; real_estate uses buy only.
-          const includeForInvested = nonUnitInv.assetClass !== REAL_ESTATE_ASSET_CLASS || tx.type === 'buy';
-          if (includeForInvested) nonUnitS.runningInvested = nonUnitS.runningInvested.plus(converted);
-          if (tx.type === 'buy' && !nonUnitS.firstBuyDate) nonUnitS.firstBuyDate = day;
+          const includeForInvested =
+            nonUnitInv.assetClass !== REAL_ESTATE_ASSET_CLASS ||
+            tx.type === "buy";
+          if (includeForInvested)
+            nonUnitS.runningInvested = nonUnitS.runningInvested.plus(converted);
+          if (tx.type === "buy" && !nonUnitS.firstBuyDate)
+            nonUnitS.firstBuyDate = day;
         }
-      } else if (tx.type === 'sell') {
+      } else if (tx.type === "sell") {
         cumulativeInvested = cumulativeInvested.minus(converted);
-        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
-        else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
-        else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
+        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
+          stocksEtfsInvested = stocksEtfsInvested.minus(converted);
+        else if (inv?.assetClass === "crypto")
+          cryptoInvested = cryptoInvested.minus(converted);
+        else if (inv?.assetClass === "metals")
+          metalsInvested = metalsInvested.minus(converted);
         // Clamp oversells to held units (mirrors calculateCostBasis's
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
-        unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
-        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
+        unitsByInvestment[tx.investmentId] =
+          heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
+        if (tx.units > 0 && tx.amount > 0)
+          lastKnownPrice[tx.investmentId] = txFallbackPrice(
+            tx,
+            inv?.currency,
+            day,
+          );
 
         const fxs = fxNeutralState.get(tx.investmentId);
         if (fxs && heldUnits > 0 && tx.units > 0) {
-          const factor = toDecimal(Math.max(0, heldUnits - tx.units)).div(heldUnits);
+          const factor = toDecimal(Math.max(0, heldUnits - tx.units)).div(
+            heldUnits,
+          );
           fxs.weight = fxs.weight.times(factor);
           fxs.weightedRate = fxs.weightedRate.times(factor);
         }
 
-        if (nonUnitS) nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
-      } else if (tx.type === 'split') {
+        if (nonUnitS)
+          nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
+      } else if (tx.type === "split") {
         // units = new total post-split; invested/cost basis is unchanged
         // (mirrors calculateCostBasis). Only applies once units are held.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0 && tx.units > 0) {
           unitsByInvestment[tx.investmentId] = tx.units;
         }
-      } else if (tx.type === 'return_of_capital') {
+      } else if (tx.type === "return_of_capital") {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
         // reducing cost basis). Units are unchanged.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0) {
           cumulativeInvested = cumulativeInvested.minus(converted);
-          if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
-          else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
-          else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
+          if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
+            stocksEtfsInvested = stocksEtfsInvested.minus(converted);
+          else if (inv?.assetClass === "crypto")
+            cryptoInvested = cryptoInvested.minus(converted);
+          else if (inv?.assetClass === "metals")
+            metalsInvested = metalsInvested.minus(converted);
         } else if (nonUnitS) {
           // Non-unit classes (savings/bond/real_estate) hold no units, so the
           // heldUnits gate never fires. Mirror the sell branch: reduce net
@@ -582,11 +669,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
           cumulativeInvested = cumulativeInvested.minus(converted);
           nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
         }
-      } else if (tx.type === 'interest' && nonUnitS) {
+      } else if (tx.type === "interest" && nonUnitS) {
         // Resets the accrual clock to match calculateAccruedInterest.
         nonUnitS.lastInterestDate = day;
-      } else if (tx.type === 'appreciation' && nonUnitS) {
-        nonUnitS.runningAppreciation = nonUnitS.runningAppreciation.plus(converted);
+      } else if (tx.type === "appreciation" && nonUnitS) {
+        nonUnitS.runningAppreciation =
+          nonUnitS.runningAppreciation.plus(converted);
       }
       // income / dividends / fees / taxes: don't alter invested capital
     }
@@ -607,9 +695,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       // Latest day: use the live current_price so the headline snapshot value
       // always reconciles with /portfolio-summary, even if asset_price_history
       // lags behind a price refresh that updated investments.current_price.
-      const price = isLatestDay && inv.currentPrice > 0
-        ? inv.currentPrice
-        : resolvePrice(inv, day, lastKnownPrice);
+      const price =
+        isLatestDay && inv.currentPrice > 0
+          ? inv.currentPrice
+          : resolvePrice(inv, day, lastKnownPrice);
       if (price <= 0) continue;
 
       // Forward-fill last known price
@@ -620,19 +709,28 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       // Market value converts at the rate on the day being valued (latest day
       // uses the latest rate, so the headline value still reconciles).
       const invValueNative = toDecimal(units).times(price);
-      const invValue = convertAmount(invValueNative, inv.currency, undefined, day);
+      const invValue = convertAmount(
+        invValueNative,
+        inv.currency,
+        undefined,
+        day,
+      );
       totalValue = totalValue.plus(invValue);
-      if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
-      else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
-      else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
+      if (inv.assetClass === "stock" || inv.assetClass === "etf")
+        stocksEtfsValue = stocksEtfsValue.plus(invValue);
+      else if (inv.assetClass === "crypto")
+        cryptoValue = cryptoValue.plus(invValue);
+      else if (inv.assetClass === "metals")
+        metalsValue = metalsValue.plus(invValue);
 
       // FX-neutral: value the position at its cost-weighted purchase-date
       // rate. Positions with no recorded buy amounts (e.g. price-only seeds)
       // have no purchase rate to lock — they contribute at the day's rate.
       const fxs = fxNeutralState.get(inv.id);
-      const invValueNeutral = fxs && fxs.weight.gt(0)
-        ? invValueNative.times(fxs.weightedRate).div(fxs.weight)
-        : invValue;
+      const invValueNeutral =
+        fxs && fxs.weight.gt(0)
+          ? invValueNative.times(fxs.weightedRate).div(fxs.weight)
+          : invValue;
       totalValueFxNeutral = totalValueFxNeutral.plus(invValueNeutral);
     }
 
@@ -666,7 +764,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       // of showing current_price from active_from so we don't regress users who
       // entered a current_price without seed transactions.
       if (invValue.lte(0) && day >= inv.activeFrom && inv.currentPrice > 0) {
-        invValue = convertAmount(inv.currentPrice, inv.currency, undefined, day);
+        invValue = convertAmount(
+          inv.currentPrice,
+          inv.currency,
+          undefined,
+          day,
+        );
       }
 
       if (invValue.gt(0)) {
@@ -681,7 +784,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     // Inflation compounding (once per calendar month)
     const monthKey = day.slice(0, 7);
     if (monthKey !== lastInflationMonth) {
-      cumulativeInflation = cumulativeInflation.times(toDecimal(1).plus(inflationByMonth.get(monthKey) ?? 0));
+      cumulativeInflation = cumulativeInflation.times(
+        toDecimal(1).plus(inflationByMonth.get(monthKey) ?? 0),
+      );
       lastInflationMonth = monthKey;
     }
 
@@ -697,9 +802,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       stocks_etfs_invested: roundMoney(stocksEtfsInvested),
       crypto_invested: roundMoney(cryptoInvested),
       metals_invested: roundMoney(metalsInvested),
-      cumulative_inflation: roundMoney(cumulativeInflation.minus(1).times(100), 2),
+      cumulative_inflation: roundMoney(
+        cumulativeInflation.minus(1).times(100),
+        2,
+      ),
       inflation_adjusted_value: cumulativeInflation.gt(0)
-        ? roundMoney(totalValue.div(cumulativeInflation)) : roundMoney(totalValue),
+        ? roundMoney(totalValue.div(cumulativeInflation))
+        : roundMoney(totalValue),
     });
   }
 
@@ -710,9 +819,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // Compute gain/loss fields after sanitization
   for (const snap of sanitized) {
     snap.gain_loss = snap.value - snap.invested;
-    snap.return_pct = snap.invested > 0
-      ? ((snap.value - snap.invested) / snap.invested) * 100 : 0;
-    snap.inflation_adjusted_value = snap.value / (1 + snap.cumulative_inflation / 100) || snap.value;
+    snap.return_pct =
+      snap.invested > 0
+        ? ((snap.value - snap.invested) / snap.invested) * 100
+        : 0;
+    snap.inflation_adjusted_value =
+      snap.value / (1 + snap.cumulative_inflation / 100) || snap.value;
   }
 
   return sanitized;
@@ -743,48 +855,71 @@ async function hasFxNeutralColumn() {
  * @param {string} targetCurrency
  * @returns {Promise<SnapshotRow[]>} Stored snapshots
  */
-export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
-  logger.info('Computing portfolio performance snapshots...');
+export async function computeAndStoreSnapshots(targetCurrency = "EUR") {
+  logger.info("Computing portfolio performance snapshots...");
 
   const snapshots = await computeDailySnapshots(targetCurrency);
   if (snapshots.length === 0) {
-    logger.info('No snapshots to store');
+    logger.info("No snapshots to store");
     return [];
   }
 
   const includeFxNeutral = await hasFxNeutralColumn();
   if (!includeFxNeutral) {
-    logger.warn('portfolio_performance_snapshots.value_fx_neutral missing — apply migration 0039 to store the FX-neutral series');
+    logger.warn(
+      "portfolio_performance_snapshots.value_fx_neutral missing — apply migration 0039 to store the FX-neutral series",
+    );
   }
 
   const columns = [
-    'snapshot_date', 'invested', 'value',
-    'stocks_etfs_value', 'crypto_value', 'metals_value', 'cash_value',
-    'gain_loss', 'return_pct', 'currency',
-    'inflation_adjusted_value',
-    'stocks_etfs_invested', 'crypto_invested', 'metals_invested',
-    ...(includeFxNeutral ? ['value_fx_neutral'] : []),
+    "snapshot_date",
+    "invested",
+    "value",
+    "stocks_etfs_value",
+    "crypto_value",
+    "metals_value",
+    "cash_value",
+    "gain_loss",
+    "return_pct",
+    "currency",
+    "inflation_adjusted_value",
+    "stocks_etfs_invested",
+    "crypto_invested",
+    "metals_invested",
+    ...(includeFxNeutral ? ["value_fx_neutral"] : []),
   ];
   /** @param {SnapshotRow} snap */
   const snapParams = (snap) => [
-    snap.snapshot_date, snap.invested, snap.value,
-    snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,
-    snap.gain_loss, snap.return_pct, targetCurrency,
+    snap.snapshot_date,
+    snap.invested,
+    snap.value,
+    snap.stocks_etfs_value,
+    snap.crypto_value,
+    snap.metals_value,
+    snap.cash_value,
+    snap.gain_loss,
+    snap.return_pct,
+    targetCurrency,
     snap.inflation_adjusted_value,
-    snap.stocks_etfs_invested, snap.crypto_invested, snap.metals_invested,
+    snap.stocks_etfs_invested,
+    snap.crypto_invested,
+    snap.metals_invested,
     ...(includeFxNeutral ? [snap.value_fx_neutral] : []),
   ];
   const updateSet = columns
-    .filter((c) => c !== 'snapshot_date' && c !== 'currency')
+    .filter((c) => c !== "snapshot_date" && c !== "currency")
     .map((c) => `${c} = EXCLUDED.${c}`)
-    .concat('computed_at = NOW()')
-    .join(', ');
+    .concat("computed_at = NOW()")
+    .join(", ");
 
   // Atomic replace: DELETE + INSERTs in one transaction so concurrent readers
   // (e.g. /api/info/net-worth during startup warmup) see either fully-old or
   // fully-new state via Postgres MVCC — never an empty/partial table.
   await withTransaction(async (client) => {
-    await client.query('DELETE FROM portfolio_performance_snapshots WHERE currency = $1', [targetCurrency]);
+    await client.query(
+      "DELETE FROM portfolio_performance_snapshots WHERE currency = $1",
+      [targetCurrency],
+    );
 
     for (let i = 0; i < snapshots.length; i += BATCH_SIZE) {
       const batch = snapshots.slice(i, i + BATCH_SIZE);
@@ -793,18 +928,23 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
       let p = 1;
 
       for (const snap of batch) {
-        values.push(`(${columns.map(() => `$${p++}`).join(',')},NOW())`);
+        values.push(`(${columns.map(() => `$${p++}`).join(",")},NOW())`);
         params.push(...snapParams(snap));
       }
 
-      await client.query(`
-        INSERT INTO portfolio_performance_snapshots (${columns.join(', ')}, computed_at)
-        VALUES ${values.join(', ')}
+      await client.query(
+        `
+        INSERT INTO portfolio_performance_snapshots (${columns.join(", ")}, computed_at)
+        VALUES ${values.join(", ")}
         ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${updateSet}
-      `, params);
+      `,
+        params,
+      );
     }
   });
 
-  logger.info('Portfolio performance snapshots stored', { count: snapshots.length });
+  logger.info("Portfolio performance snapshots stored", {
+    count: snapshots.length,
+  });
   return snapshots;
 }

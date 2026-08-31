@@ -6,26 +6,23 @@
  *   - POST /inflation-rates/refresh
  */
 
-import { Router } from 'express';
-import { logger } from '../../config/logger.js';
-import { rateLimiter, adminRateLimiter } from '../../middleware/rateLimiter.js';
+import { Router } from "express";
+import { logger } from "../../config/logger.js";
+import { rateLimiter, adminRateLimiter } from "../../middleware/rateLimiter.js";
 import {
   FALLBACK_RATES,
   warmCache,
   clearMemoryCache,
   listLatestStoredRates,
-} from '../../services/currency/currencyConversionService.js';
+} from "../../services/currency/currencyConversionService.js";
 import {
   getInflationRates,
   clearInflationMemoryCache,
-} from '../../services/belgianInflationService.js';
-import { toDecimal, toNumber } from '../../lib/money.js';
-import { formatDateToYmd } from '../../lib/dateFormat.js';
-import {
-  getMonthParam,
-  isTruthyQueryParam,
-  getCurrentDateString,
-} from './_queryParams.js';
+} from "../../services/belgianInflationService.js";
+import { toDecimal, toNumber } from "../../lib/money.js";
+import { formatDateToYmd } from "../../lib/dateFormat.js";
+import { getMonthParam, getCurrentDateString } from "./_queryParams.js";
+import { parseBooleanQueryParam } from "../../lib/httpParams.js";
 
 /**
  * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
@@ -46,18 +43,25 @@ import {
 const router = Router();
 
 router.get(
-  '/exchange-rates',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
+  "/exchange-rates",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "exchange-rates",
+  }),
   /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
-    const dbOnly = isTruthyQueryParam(req.query.db_only);
+    const dbOnly = parseBooleanQueryParam(req.query.db_only);
 
     const result = await listLatestStoredRates();
 
-    const rates = (/** @type {ExchangeRateRow[]} */ (result.rows)).map((row) => ({
+    const rates = /** @type {ExchangeRateRow[]} */ (result.rows).map((row) => ({
       currency: row.currency_code,
       rate_to_eur: toNumber(toDecimal(row.rate_to_eur)),
-      rate_date: row.rate_date instanceof Date ? formatDateToYmd(row.rate_date) : String(row.rate_date),
+      rate_date:
+        row.rate_date instanceof Date
+          ? formatDateToYmd(row.rate_date)
+          : String(row.rate_date),
       fetched_at: row.fetched_at,
     }));
 
@@ -68,12 +72,14 @@ router.get(
       const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
-    const source = rates.length > 0 ? 'database' : 'fallback';
+    const source = rates.length > 0 ? "database" : "fallback";
 
     if (isStale && !dbOnly) {
       clearMemoryCache();
       warmCache().catch((err) =>
-        logger.warn('Background exchange rate refresh failed', { error: err.message })
+        logger.warn("Background exchange rate refresh failed", {
+          error: err.message,
+        }),
       );
     }
 
@@ -83,20 +89,32 @@ router.get(
       fallback_rates: FALLBACK_RATES || {},
       source,
       is_stale: isStale,
-      last_fetched_at: lastFetchedAt > 0 ? new Date(lastFetchedAt).toISOString() : null,
+      last_fetched_at:
+        lastFetchedAt > 0 ? new Date(lastFetchedAt).toISOString() : null,
     });
   },
 );
 
-router.post('/exchange-rates/refresh', adminRateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  clearMemoryCache();
-  await warmCache();
-  res.ok({ message: 'Exchange rates refreshed from ECB' });
-});
+router.post(
+  "/exchange-rates/refresh",
+  adminRateLimiter,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    clearMemoryCache();
+    await warmCache();
+    res.ok({ message: "Exchange rates refreshed from ECB" });
+  },
+);
 
 router.get(
-  '/inflation-rates',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'inflation-rates' }),
+  "/inflation-rates",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "inflation-rates",
+  }),
   /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const startMonth = getMonthParam(req.query.start_month);
@@ -105,10 +123,7 @@ router.get(
     // Statbel/Eurostat fetch when the host is offline. Background refresh is
     // scheduled so cached data is updated whenever connectivity returns.
     // Clients can opt in to a synchronous live fetch with ?db_only=false.
-    const rawDbOnly = req.query.db_only;
-    const dbOnly = rawDbOnly == null || rawDbOnly === ''
-      ? true
-      : isTruthyQueryParam(rawDbOnly);
+    const dbOnly = parseBooleanQueryParam(req.query.db_only, true);
     const result = await getInflationRates({
       startMonth,
       endMonth,
@@ -124,14 +139,21 @@ router.get(
   },
 );
 
-router.post('/inflation-rates/refresh', adminRateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  clearInflationMemoryCache();
-  const result = await getInflationRates({ forceRefresh: true });
-  res.ok({
-    message: 'Belgian inflation rates refreshed from Statbel',
-    source: result.source,
-    total_rates: result.rates.length,
-  });
-});
+router.post(
+  "/inflation-rates/refresh",
+  adminRateLimiter,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    clearInflationMemoryCache();
+    const result = await getInflationRates({ forceRefresh: true });
+    res.ok({
+      message: "Belgian inflation rates refreshed from Statbel",
+      source: result.source,
+      total_rates: result.rates.length,
+    });
+  },
+);
 
 export default router;

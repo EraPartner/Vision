@@ -13,15 +13,16 @@
  * - Provider-agnostic spike sanitization before persistence
  */
 
-import { logger } from '../config/logger.js';
-import { query } from '../database/connection.js';
-import { getDayKeyUtc } from '../lib/dateKeys.js';
-import { madReturnStats, isRobustNeedle } from '../lib/math.js';
-import { forEachConcurrent } from '../lib/concurrency.js';
+import { logger } from "../config/logger.js";
+import { query } from "../database/connection.js";
+import { getDayKeyUtc } from "../lib/dateKeys.js";
+import { madReturnStats, isRobustNeedle } from "../lib/math.js";
+import { forEachConcurrent } from "../lib/concurrency.js";
+import { differenceInCalendarDaysYmd } from "../lib/timezone.js";
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
-} from './priceProviderService.js';
+} from "./priceProviderService.js";
 
 /**
  * Provider-config subset of `InvestmentRow` (types/rows.js) this module reads
@@ -122,9 +123,9 @@ export function computeHoldingWindows(transactions) {
     const units = Number(tx.units) || 0;
     const prevBalance = balance;
 
-    if (tx.type === 'buy' || tx.type === 'gift') {
+    if (tx.type === "buy" || tx.type === "gift") {
       balance += units;
-    } else if (tx.type === 'sell') {
+    } else if (tx.type === "sell") {
       balance -= units;
     }
 
@@ -136,7 +137,10 @@ export function computeHoldingWindows(transactions) {
     }
 
     if (prevBalance > 0 && balance <= 0 && windowStart !== null) {
-      windows.push({ fromDate: windowStart, toDate: String(tx.date).slice(0, 10) });
+      windows.push({
+        fromDate: windowStart,
+        toDate: String(tx.date).slice(0, 10),
+      });
       windowStart = null;
     }
   }
@@ -163,7 +167,8 @@ export function computeHoldingWindows(transactions) {
  * @returns {Array<{ timestampMs: number, price: number }>} - Cleaned copy (immutable)
  */
 export function sanitizeIsolatedSpikes(points) {
-  if (!Array.isArray(points) || points.length < 3) return points ? [...points] : [];
+  if (!Array.isArray(points) || points.length < 3)
+    return points ? [...points] : [];
 
   const sanitized = points.map((p) => ({ ...p }));
 
@@ -173,15 +178,18 @@ export function sanitizeIsolatedSpikes(points) {
     const current = sanitized[i]?.price;
     const next = sanitized[i + 1]?.price;
 
-    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next)) continue;
+    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next))
+      continue;
 
     const jumpUp = current / prev;
     const jumpDown = current / next;
     const dropUp = prev / current;
     const dropDown = next / current;
 
-    const isSpikeUp = jumpUp >= SPIKE_RATIO_THRESHOLD && jumpDown >= SPIKE_RATIO_THRESHOLD;
-    const isSpikeDn = dropUp >= SPIKE_RATIO_THRESHOLD && dropDown >= SPIKE_RATIO_THRESHOLD;
+    const isSpikeUp =
+      jumpUp >= SPIKE_RATIO_THRESHOLD && jumpDown >= SPIKE_RATIO_THRESHOLD;
+    const isSpikeDn =
+      dropUp >= SPIKE_RATIO_THRESHOLD && dropDown >= SPIKE_RATIO_THRESHOLD;
 
     if (isSpikeUp || isSpikeDn) {
       sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
@@ -207,7 +215,8 @@ export function sanitizeIsolatedSpikes(points) {
     const prev = sanitized[i - 1]?.price;
     const current = sanitized[i]?.price;
     const next = sanitized[i + 1]?.price;
-    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next)) continue;
+    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next))
+      continue;
 
     if (isRobustNeedle(prev, current, next, stats)) {
       sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
@@ -300,7 +309,7 @@ export async function getInvestmentsWithHoldingWindows() {
     `${HOLDING_WINDOW_SELECT}
      WHERE ${HOLDING_ASSET_CLASS_FILTER}
      ORDER BY i.id, pt.date, pt.id`,
-    []
+    [],
   );
 
   /** @type {HoldingWindowRow[]} */
@@ -346,7 +355,7 @@ async function getInvestmentWithHoldingWindows(investmentId) {
      WHERE i.id = $1
        AND ${HOLDING_ASSET_CLASS_FILTER}
      ORDER BY pt.date, pt.id`,
-    [Number(investmentId)]
+    [Number(investmentId)],
   );
 
   /** @type {HoldingWindowRow[]} */
@@ -374,21 +383,9 @@ async function getStoredPriceDates(investmentId) {
        FROM asset_price_history
       WHERE investment_id = $1
       ORDER BY price_date`,
-    [Number(investmentId)]
+    [Number(investmentId)],
   );
   return (result.rows || []).map((/** @type {{ d: string }} */ row) => row.d);
-}
-
-/**
- * @param {string} aYmd 'YYYY-MM-DD'
- * @param {string} bYmd 'YYYY-MM-DD'
- * @returns {number}
- */
-function _daysBetween(aYmd, bYmd) {
-  const a = Date.parse(`${aYmd}T00:00:00.000Z`);
-  const b = Date.parse(`${bYmd}T00:00:00.000Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.round((b - a) / HISTORY_DAY_MS);
 }
 
 /**
@@ -404,20 +401,40 @@ function _daysBetween(aYmd, bYmd) {
  * @param {{ thresholdDays?: number, todayUtc?: string }} [opts]
  * @returns {boolean}
  */
-export function holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays = GAP_THRESHOLD_DAYS, todayUtc } = {}) {
-  if (!Array.isArray(holdingWindows) || holdingWindows.length === 0) return false;
+export function holdingWindowsNeedBackfill(
+  holdingWindows,
+  storedDates,
+  { thresholdDays = GAP_THRESHOLD_DAYS, todayUtc } = {},
+) {
+  if (!Array.isArray(holdingWindows) || holdingWindows.length === 0)
+    return false;
   const today = todayUtc || getDayKeyUtc(new Date());
-  const sortedStored = Array.isArray(storedDates) ? [...storedDates].sort() : [];
+  const sortedStored = Array.isArray(storedDates)
+    ? [...storedDates].sort()
+    : [];
 
   for (const window of holdingWindows) {
     const fromDate = window?.fromDate;
-    const toDate = window?.toDate !== null && window?.toDate !== undefined ? window.toDate : today;
+    const toDate =
+      window?.toDate !== null && window?.toDate !== undefined
+        ? window.toDate
+        : today;
     if (!fromDate || !toDate || fromDate > toDate) continue;
 
     const inWindow = sortedStored.filter((d) => d >= fromDate && d <= toDate);
     const boundaries = [fromDate, ...inWindow, toDate];
     for (let i = 1; i < boundaries.length; i += 1) {
-      if (_daysBetween(boundaries[i - 1], boundaries[i]) > thresholdDays) return true;
+      try {
+        if (
+          differenceInCalendarDaysYmd(boundaries[i - 1], boundaries[i]) >
+          thresholdDays
+        ) {
+          return true;
+        }
+      } catch {
+        // Preserve the old invalid-input behavior: an unparseable boundary is
+        // not treated as evidence of a missing-price gap.
+      }
     }
   }
 
@@ -436,26 +453,39 @@ export function holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresh
  *   series already spans the window endpoints (needed to repopulate interior gaps).
  * @returns {Promise<{ hasHistory: boolean, windowCount: number }>}
  */
-async function backfillInvestmentQuotes(investment, holdingWindows, { force = false } = {}) {
+async function backfillInvestmentQuotes(
+  investment,
+  holdingWindows,
+  { force = false } = {},
+) {
   let hasHistory = false;
 
   for (const window of holdingWindows) {
     const fromMs = Date.parse(`${window.fromDate}T00:00:00.000Z`);
-    const toMs = window.toDate !== null
-      ? Date.parse(`${window.toDate}T23:59:59.999Z`)
-      : Date.now();
+    const toMs =
+      window.toDate !== null
+        ? Date.parse(`${window.toDate}T23:59:59.999Z`)
+        : Date.now();
 
     if (!Number.isFinite(fromMs)) continue;
 
-    const rawPoints = await fetchHistoricalPrices(investment, { fromMs, toMs, force });
+    const rawPoints = await fetchHistoricalPrices(investment, {
+      fromMs,
+      toMs,
+      force,
+    });
 
     if (rawPoints.length > 0) {
       hasHistory = true;
       const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
 
       // Re-save cleaned points — upsert overwrites any bad values
-      const provider = investment.price_provider || 'provider';
-      await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+      const provider = investment.price_provider || "provider";
+      await saveHistoricalPointsToDatabase(
+        investment.id,
+        cleanPoints,
+        provider,
+      );
     }
   }
 
@@ -472,7 +502,9 @@ export async function backfillHistoricalAssetQuotes() {
   const investmentWindows = await getInvestmentsWithHoldingWindows();
 
   if (investmentWindows.size === 0) {
-    logger.info('Historical asset quote backfill skipped: no investments with holding windows');
+    logger.info(
+      "Historical asset quote backfill skipped: no investments with holding windows",
+    );
     return { processed: 0, withHistory: 0, failed: 0 };
   }
 
@@ -484,26 +516,29 @@ export async function backfillHistoricalAssetQuotes() {
     BACKFILL_CONCURRENCY,
     async ([invId, { investment, holdingWindows }]) => {
       try {
-        const result = await backfillInvestmentQuotes(investment, holdingWindows);
+        const result = await backfillInvestmentQuotes(
+          investment,
+          holdingWindows,
+        );
         if (result.hasHistory) withHistory += 1;
       } catch (error) {
         failed += 1;
-        logger.warn('Historical quote backfill failed for investment', {
+        logger.warn("Historical quote backfill failed for investment", {
           investmentId: invId,
           error: error?.message,
         });
       }
-    }
+    },
   );
 
   // Cleanup stale quotes outside holding windows
   try {
     await cleanupStaleQuotes(investmentWindows);
   } catch (error) {
-    logger.warn('Stale quote cleanup failed', { error: error?.message });
+    logger.warn("Stale quote cleanup failed", { error: error?.message });
   }
 
-  logger.info('Historical asset quote backfill complete', {
+  logger.info("Historical asset quote backfill complete", {
     processed: investmentWindows.size,
     withHistory,
     failed,
@@ -540,7 +575,7 @@ export async function refreshActiveHoldingQuotes() {
         for (const window of openWindows) {
           const fromMs = Math.max(
             Date.parse(`${window.fromDate}T00:00:00.000Z`),
-            lookbackMs
+            lookbackMs,
           );
 
           const rawPoints = await fetchHistoricalPrices(investment, {
@@ -550,22 +585,26 @@ export async function refreshActiveHoldingQuotes() {
 
           if (rawPoints.length > 0) {
             const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
-            const provider = investment.price_provider || 'provider';
-            await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+            const provider = investment.price_provider || "provider";
+            await saveHistoricalPointsToDatabase(
+              investment.id,
+              cleanPoints,
+              provider,
+            );
           }
         }
         refreshed += 1;
       } catch (error) {
         failed += 1;
-        logger.warn('Periodic quote refresh failed for investment', {
+        logger.warn("Periodic quote refresh failed for investment", {
           investmentId: invId,
           error: error?.message,
         });
       }
-    }
+    },
   );
 
-  logger.info('Periodic active quote refresh complete', { refreshed, failed });
+  logger.info("Periodic active quote refresh complete", { refreshed, failed });
   return { refreshed, failed };
 }
 
@@ -580,7 +619,9 @@ export async function refreshActiveHoldingQuotes() {
  * @param {{ thresholdDays?: number }} [opts]
  * @returns {Promise<{ checked: number, needed: number, filled: number, failed: number }>}
  */
-export async function backfillHoldingGaps({ thresholdDays = GAP_THRESHOLD_DAYS } = {}) {
+export async function backfillHoldingGaps({
+  thresholdDays = GAP_THRESHOLD_DAYS,
+} = {}) {
   const investmentWindows = await getInvestmentsWithHoldingWindows();
   if (investmentWindows.size === 0) {
     return { checked: 0, needed: 0, filled: 0, failed: 0 };
@@ -599,26 +640,38 @@ export async function backfillHoldingGaps({ thresholdDays = GAP_THRESHOLD_DAYS }
       checked += 1;
       try {
         const storedDates = await getStoredPriceDates(invId);
-        if (!holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays, todayUtc })) {
+        if (
+          !holdingWindowsNeedBackfill(holdingWindows, storedDates, {
+            thresholdDays,
+            todayUtc,
+          })
+        ) {
           return;
         }
 
         needed += 1;
         const before = storedDates.length;
-        await backfillInvestmentQuotes(investment, holdingWindows, { force: true });
+        await backfillInvestmentQuotes(investment, holdingWindows, {
+          force: true,
+        });
         const after = (await getStoredPriceDates(invId)).length;
         if (after > before) filled += 1;
       } catch (error) {
         failed += 1;
-        logger.warn('Holding-gap backfill failed for investment', {
+        logger.warn("Holding-gap backfill failed for investment", {
           investmentId: invId,
           error: error?.message,
         });
       }
-    }
+    },
   );
 
-  logger.info('Holding-gap backfill complete', { checked, needed, filled, failed });
+  logger.info("Holding-gap backfill complete", {
+    checked,
+    needed,
+    filled,
+    failed,
+  });
   return { checked, needed, filled, failed };
 }
 
@@ -634,10 +687,9 @@ export async function refreshQuotesForInvestment(investmentId) {
 
   if (!data) {
     // No holding windows — clean up any existing quotes for this investment
-    await query(
-      'DELETE FROM asset_price_history WHERE investment_id = $1',
-      [Number(investmentId)]
-    );
+    await query("DELETE FROM asset_price_history WHERE investment_id = $1", [
+      Number(investmentId),
+    ]);
     return;
   }
 
@@ -646,7 +698,7 @@ export async function refreshQuotesForInvestment(investmentId) {
   try {
     await backfillInvestmentQuotes(investment, holdingWindows);
   } catch (error) {
-    logger.warn('Transaction-triggered quote refresh failed', {
+    logger.warn("Transaction-triggered quote refresh failed", {
       investmentId,
       error: error?.message,
     });
@@ -657,7 +709,7 @@ export async function refreshQuotesForInvestment(investmentId) {
     const singleMap = new Map([[investmentId, { investment, holdingWindows }]]);
     await cleanupStaleQuotes(singleMap);
   } catch (error) {
-    logger.warn('Post-transaction stale quote cleanup failed', {
+    logger.warn("Post-transaction stale quote cleanup failed", {
       investmentId,
       error: error?.message,
     });
@@ -708,18 +760,18 @@ export async function cleanupStaleQuotes(investmentWindows) {
            WHERE w.inv_id = aph.investment_id
              AND aph.price_date >= w.from_date AND aph.price_date <= w.to_date
          )`,
-      [invIds, windowInvIds, fromDates, toDates]
+      [invIds, windowInvIds, fromDates, toDates],
     );
     totalDeleted = result.rowCount || 0;
   } catch (error) {
-    logger.warn('Failed to cleanup stale quotes', {
+    logger.warn("Failed to cleanup stale quotes", {
       investmentCount: invIds.length,
       error: error?.message,
     });
   }
 
   if (totalDeleted > 0) {
-    logger.info('Stale quote cleanup complete', { deletedRows: totalDeleted });
+    logger.info("Stale quote cleanup complete", { deletedRows: totalDeleted });
   }
 
   return totalDeleted;

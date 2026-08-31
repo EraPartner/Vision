@@ -69,6 +69,23 @@ beforeEach(() => {
 });
 
 describe("export date serialization", () => {
+  it("builds SQL from a validated route filter model inside the export service", async () => {
+    primeQueries([exportRow()]);
+    const res = mockRes();
+
+    await streamCsvExport(res, {
+      filters: {
+        accountIds: [3, 9],
+        transactionType: "expense",
+        active: true,
+      },
+    });
+
+    expect(dbQuery.mock.calls[0][0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
+    expect(dbQuery.mock.calls[0][0]).toContain("t.amount < 0");
+    expect(dbQuery.mock.calls[0][1]).toEqual([3, 9]);
+  });
+
   it("destroys and rejects a response when a database failure happens after headers", async () => {
     dbQuery
       .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })

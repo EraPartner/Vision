@@ -14,8 +14,8 @@
  * and emits `token` events (content deltas) via `onEvent` for each chunk.
  * Also emits a `tool_call` event before each dispatch (progress affordance
  * for slow tools) carrying the model's args when they are already a plain
- * object, else `{}`. The non-streaming path emits `user_message`,
- * `tool_message`, `assistant_message` events only.
+ * object, else `{}`. Every service event already uses the public SSE name and
+ * payload; the terminal assistant row is carried only by the route's `done` frame.
  *
  * Tool-call argument coercion lives in exactly one place: `dispatchTool`
  * (services/aiChat/tools/index.js). This module passes the model's raw
@@ -28,7 +28,11 @@ import settings from "../config/config.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { aiChatRepository } from "../repositories/aiChatRepository.js";
 import { getOllamaClient } from "../integrations/ollama/client.js";
-import { buildChatMessages } from "../integrations/ollama/prompts.js";
+import {
+  buildChatMessages,
+  serializeToolResultForPrompt,
+} from "../integrations/ollama/prompts.js";
+import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import {
   dispatchTool,
   getToolSchemas,
@@ -232,7 +236,7 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
  * @param {AbortSignal} [args.signal]    - propagate cancellation
  * @param {boolean} [args.streaming=false] - when true, use `ollamaClient.chatStream`
  *   and emit per-chunk `token` events via `onEvent`.
- * @param {(event: {type: string, data: any}) => void | Promise<void>} [args.onEvent]
+ * @param {(event: import('@vision/types/aiChat').AiChatServiceEvent<AiMessageRow>) => void | Promise<void>} [args.onEvent]
  *   Optional hook called for each persisted message, tool call/result,
  *   and (in streaming mode) each content delta. May be async — awaited at each call site.
  * @param {any} [args.ollamaClient]
@@ -407,7 +411,10 @@ async function runChatTurnLocked({
       role: "user",
       content: message,
     });
-    await onEvent?.({ type: "user_message", data: userMessage });
+    await onEvent?.({
+      type: AI_CHAT_STREAM_EVENT.USER_MESSAGE,
+      data: { message: userMessage },
+    });
   }
 
   const toolSchemas = useTools ? getToolSchemas() : [];
@@ -418,7 +425,10 @@ async function runChatTurnLocked({
     history: historyBeforeTurn,
     userInput: effectiveMessage,
     maxHistoryMessages: settings.aiChat.maxHistoryMessages,
+    contextBudgetChars: settings.aiChat.contextBudgetChars,
+    maxToolResultChars: settings.aiChat.maxToolResultChars,
   });
+  const ollamaOptions = { num_ctx: settings.ollama.numCtx };
 
   /** @type {AiMessageRow[]} */
   const toolMessages = [];
@@ -447,7 +457,7 @@ async function runChatTurnLocked({
   if (preCallTool) {
     try {
       await onEvent?.({
-        type: "tool_call",
+        type: AI_CHAT_STREAM_EVENT.TOOL_CALL,
         data: { name: preCallTool, args: {} },
       });
       const { args: preCallArgs, result } = await dispatchTool(
@@ -463,7 +473,10 @@ async function runChatTurnLocked({
         toolResult: result,
       });
       toolMessages.push(toolRow);
-      await onEvent?.({ type: "tool_message", data: toolRow });
+      await onEvent?.({
+        type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
+        data: { message: toolRow },
+      });
 
       baseMessages.push({
         role: "assistant",
@@ -473,7 +486,10 @@ async function runChatTurnLocked({
       baseMessages.push({
         role: "tool",
         name: preCallTool,
-        content: JSON.stringify(result),
+        content: serializeToolResultForPrompt(
+          result,
+          settings.aiChat.maxToolResultChars,
+        ),
       });
     } catch (err) {
       logger.warn(
@@ -506,9 +522,15 @@ async function runChatTurnLocked({
           model: activeModel,
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+          options: ollamaOptions,
           signal,
           onToken: async (/** @type {string} */ delta) => {
-            if (delta) await onEvent?.({ type: "token", data: delta });
+            if (delta) {
+              await onEvent?.({
+                type: AI_CHAT_STREAM_EVENT.TOKEN,
+                data: delta,
+              });
+            }
           },
         });
       } else {
@@ -516,6 +538,7 @@ async function runChatTurnLocked({
           model: activeModel,
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+          options: ollamaOptions,
           signal,
         });
       }
@@ -559,8 +582,6 @@ async function runChatTurnLocked({
         role: "assistant",
         content: response.content || "",
       });
-      await onEvent?.({ type: "assistant_message", data: assistantMessage });
-
       return {
         conversation,
         userMessage,
@@ -591,7 +612,7 @@ async function runChatTurnLocked({
       // Fidelity nuance: for string-JSON arguments this frame shows `{}`
       // while the persisted row stores the dispatcher-coerced object.
       await onEvent?.({
-        type: "tool_call",
+        type: AI_CHAT_STREAM_EVENT.TOOL_CALL,
         data: { name, args: isArgsRecord(rawArgs) ? rawArgs : {} },
       });
 
@@ -608,12 +629,18 @@ async function runChatTurnLocked({
         toolResult: result,
       });
       toolMessages.push(toolRow);
-      await onEvent?.({ type: "tool_message", data: toolRow });
+      await onEvent?.({
+        type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
+        data: { message: toolRow },
+      });
 
       baseMessages.push({
         role: "tool",
         name,
-        content: JSON.stringify(result),
+        content: serializeToolResultForPrompt(
+          result,
+          settings.aiChat.maxToolResultChars,
+        ),
       });
     }
   }
@@ -629,8 +656,6 @@ async function runChatTurnLocked({
       "I wasn't able to finish answering — I hit the tool-call iteration limit. Try rephrasing your question.",
     status: "error",
   });
-  await onEvent?.({ type: "assistant_message", data: fallbackMessage });
-
   return {
     conversation,
     userMessage,
@@ -644,8 +669,8 @@ async function runChatTurnLocked({
 /**
  * Thin wrappers around the repository for route handlers.
  */
-export async function listConversations() {
-  return aiChatRepository.listConversations();
+export async function listConversations(page = null) {
+  return aiChatRepository.listConversations(page);
 }
 
 /**

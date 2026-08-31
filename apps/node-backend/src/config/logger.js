@@ -7,15 +7,23 @@
  *
  */
 
+import { getRequestContext } from "../lib/requestContext.js";
+
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
 
 function getLogLevel() {
-  if (process.env.ENABLE_LOGGING?.toLowerCase() === 'false') return LOG_LEVELS.silent;
-  const level = (process.env.LOG_LEVEL || '').toLowerCase();
-  if (level in LOG_LEVELS) return LOG_LEVELS[/** @type {keyof typeof LOG_LEVELS} */ (level)];
+  if (process.env.ENABLE_LOGGING?.toLowerCase() === "false")
+    return LOG_LEVELS.silent;
+  const level = (process.env.LOG_LEVEL || "").toLowerCase();
+  if (level in LOG_LEVELS)
+    return LOG_LEVELS[/** @type {keyof typeof LOG_LEVELS} */ (level)];
   // Default: debug in development, info in production
-  const env = (process.env.ENVIRONMENT || process.env.NODE_ENV || 'development').toLowerCase();
-  return env === 'production' ? LOG_LEVELS.info : LOG_LEVELS.debug;
+  const env = (
+    process.env.ENVIRONMENT ||
+    process.env.NODE_ENV ||
+    "development"
+  ).toLowerCase();
+  return env === "production" ? LOG_LEVELS.info : LOG_LEVELS.debug;
 }
 
 // Resolve the level ONCE at module load rather than re-parsing process.env on
@@ -34,40 +42,65 @@ function formatMessage(level, ...args) {
   let message;
   /** @type {object} */
   let extra;
-  if (typeof args[0] === 'object' && args[0] !== null && typeof args[1] === 'string') {
+  if (
+    typeof args[0] === "object" &&
+    args[0] !== null &&
+    typeof args[1] === "string"
+  ) {
     // pino-style: logger.info({ key: val }, 'message')
     extra = args[0];
     message = args[1];
   } else {
     message = args[0];
-    extra = (typeof args[1] === 'object' && args[1] !== null) ? args[1] : {};
+    extra = typeof args[1] === "object" && args[1] !== null ? args[1] : {};
   }
-  const extraStr = Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : '';
+  const ambientRequestId = getRequestContext()?.requestId;
+  const hasConcreteRequestId =
+    Object.prototype.hasOwnProperty.call(extra, "requestId") &&
+    extra.requestId !== undefined;
+  const contextualExtra =
+    ambientRequestId !== undefined && !hasConcreteRequestId
+      ? {
+          requestId: ambientRequestId,
+          ...Object.fromEntries(
+            Object.entries(extra).filter(([key]) => key !== "requestId"),
+          ),
+        }
+      : extra;
+  const extraStr =
+    Object.keys(contextualExtra).length > 0
+      ? ` ${JSON.stringify(contextualExtra)}`
+      : "";
   // Strip CR/LF (and unicode line separators) from the free-text message so a
   // value that reaches a log call can't forge extra log lines (log injection).
   // `extra` is already newline-safe via JSON.stringify.
-  const safeMessage = typeof message === 'string'
-    ? message.replace(/[\r\n\u2028\u2029]+/g, ' ')
-    : message;
+  const safeMessage =
+    typeof message === "string"
+      ? message.replace(/[\r\n\u2028\u2029]+/g, " ")
+      : message;
   return `${timestamp} [${level}] ${safeMessage}${extraStr}`;
 }
 
 export const logger = {
   /** @param {...unknown} args */
   debug(...args) {
-    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.debug)
+      console.debug(formatMessage("DEBUG", ...args));
   },
   /** @param {...unknown} args */
   info(...args) {
-    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.info) console.log(formatMessage('INFO', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.info)
+      console.log(formatMessage("INFO", ...args));
   },
   /** @param {...unknown} args */
   warn(...args) {
-    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.warn)
+      console.warn(formatMessage("WARN", ...args));
   },
   /** @param {...unknown} args */
   error(...args) {
-    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.error) console.error(formatMessage('ERROR', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.error)
+      console.error(formatMessage("ERROR", ...args));
   },
 };
 

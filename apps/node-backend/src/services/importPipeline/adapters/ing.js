@@ -16,17 +16,26 @@
  *  10  Bericht              free-text message from sender
  */
 
-import { normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
+import { normalizeToUppercase } from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseDayMonthYear,
+  parseCommaDecimal,
+  buildOptionalComment,
+  splitCsvLines,
+  splitDelimitedRecord,
+  canonicalIban,
+  readTextWithEncodingFallback,
+  normalizeIsoCurrency,
+} from "./_shared.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const NAME = 'ing';
-const BANK_LABEL = 'ING';
+const NAME = "ing";
+const BANK_LABEL = "ING";
 const MIN_FIELDS = 9;
 
 /**
@@ -34,7 +43,7 @@ const MIN_FIELDS = 9;
  * @returns {boolean}
  */
 function isHeaderLine(line) {
-  return line.includes('Omzetnummer') && line.includes('Boekingsdatum');
+  return line.includes("Omzetnummer") && line.includes("Boekingsdatum");
 }
 
 /**
@@ -50,10 +59,10 @@ function parseLine(line) {
   const transactionNumber = parts[3].trim();
   const bookingDateStr = parts[4].trim();
   const amountStr = parts[6].trim();
-  const currency = parts[7].trim();
+  const currency = normalizeIsoCurrency(parts[7]);
   const description = parts[8].trim();
-  const detail = parts[9] ? parts[9].trim() : '';
-  const message = parts[10] ? parts[10].trim() : '';
+  const detail = parts[9] ? parts[9].trim() : "";
+  const message = parts[10] ? parts[10].trim() : "";
 
   const date = parseDayMonthYear(bookingDateStr);
   if (!date) return null;
@@ -71,15 +80,15 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: canonicalIban(accountNumber) || 'ING',
+    bankAccount: canonicalIban(accountNumber) || "ING",
     recipient,
     memo,
     amount,
-    currency: currency || null,
+    currency,
     balance: null,
     recipientAccount: counterpartyAccount || null,
     recipientAddress: null,
-    recipientBankName: counterpartyAccount ? 'ING' : null,
+    recipientBankName: counterpartyAccount ? "ING" : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
   };
@@ -93,7 +102,8 @@ export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 3);
   return lines.some(
-    (line) => line.includes('Omzetnummer') && line.includes('Detail van de omzet'),
+    (line) =>
+      line.includes("Omzetnummer") && line.includes("Detail van de omzet"),
   );
 }
 
@@ -122,7 +132,9 @@ export async function parse(filePath) {
   }
 
   transactions.skipped = skipped;
-  logger.info(`ING CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `ING CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

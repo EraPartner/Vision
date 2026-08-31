@@ -11,11 +11,15 @@
  * material accuracy gap vs Holt-Winters, upgrade to Python sidecar.
  */
 
-import { isBelgianHoliday } from '../holidays/be.js';
-import { densifyDailyHistory } from '../_densify.js';
+import { isBelgianHoliday } from "../holidays/be.js";
+import { densifyDailyHistory } from "../_densify.js";
+import {
+  differenceInCalendarDaysYmd,
+  ymdToEpochDay,
+} from "../../../../lib/timezone.js";
 
-export const id = 'prophet_lite';
-export const label = 'Prophet-lite';
+export const id = "prophet_lite";
+export const label = "Prophet-lite";
 
 const WEEKLY_K = 3;
 const YEARLY_K = 10;
@@ -24,22 +28,13 @@ const CHANGEPOINT_FRACTION = 0.8;
 const NUM_CHANGEPOINTS = 10;
 
 /** @param {string} iso */
-function parseIso(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return Date.UTC(y, m - 1, d);
-}
-
-/** @param {string} iso */
 function daysSinceEpoch(iso) {
-  return parseIso(iso) / 86_400_000;
+  return ymdToEpochDay(iso);
 }
 
 /** @param {string} iso */
 function dayOfYear(iso) {
-  const ms = parseIso(iso);
-  const [y] = iso.split('-').map(Number);
-  const startMs = Date.UTC(y, 0, 1);
-  return (ms - startMs) / 86_400_000;
+  return differenceInCalendarDaysYmd(`${iso.slice(0, 4)}-01-01`, iso);
 }
 
 /**

@@ -7,17 +7,19 @@
  * toAppTz / toUtc. No raw `new Date()` + offset arithmetic in calc modules.
  */
 
-import { env } from '../config/env.js';
+import { env } from "../config/env.js";
 
-const DEFAULT_ZONE = 'Europe/Brussels';
+const DEFAULT_ZONE = "Europe/Brussels";
 
 function resolveZone() {
   const zone = env.APP_TIMEZONE;
   if (!zone) return DEFAULT_ZONE;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
   } catch {
-    throw new Error(`Invalid APP_TIMEZONE: ${zone}. Use an IANA zone name (e.g. Europe/Brussels).`);
+    throw new Error(
+      `Invalid APP_TIMEZONE: ${zone}. Use an IANA zone name (e.g. Europe/Brussels).`,
+    );
   }
   return zone;
 }
@@ -42,25 +44,25 @@ export const APP_TIMEZONE = resolveZone();
  */
 export function toAppTz(utcDate, zone = APP_TIMEZONE) {
   if (!(utcDate instanceof Date) || Number.isNaN(utcDate.getTime())) {
-    throw new TypeError('toAppTz requires a valid Date');
+    throw new TypeError("toAppTz requires a valid Date");
   }
-  const parts = new Intl.DateTimeFormat('en-GB', {
+  const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: zone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   }).formatToParts(utcDate);
 
   /** @param {Intl.DateTimeFormatPartTypes} type */
   const get = (type) => Number(parts.find((p) => p.type === type)?.value);
-  let year = get('year');
-  let month = get('month');
-  let day = get('day');
-  let hour = get('hour');
+  let year = get("year");
+  let month = get("month");
+  let day = get("day");
+  let hour = get("hour");
   // Some Intl implementations report hour=24 at midnight. Roll into next day
   // and re-normalize via Date.UTC to handle month/year overflow correctly.
   if (hour === 24) {
@@ -75,8 +77,8 @@ export function toAppTz(utcDate, zone = APP_TIMEZONE) {
     month,
     day,
     hour,
-    minute: get('minute'),
-    second: get('second'),
+    minute: get("minute"),
+    second: get("second"),
   };
 }
 
@@ -87,7 +89,10 @@ export function toAppTz(utcDate, zone = APP_TIMEZONE) {
  * @param {string} [zone]
  * @returns {Date}
  */
-export function toUtc({ year, month, day, hour = 0, minute = 0, second = 0 }, zone = APP_TIMEZONE) {
+export function toUtc(
+  { year, month, day, hour = 0, minute = 0, second = 0 },
+  zone = APP_TIMEZONE,
+) {
   let ts = Date.UTC(year, month - 1, day, hour, minute, second);
   for (let i = 0; i < 2; i += 1) {
     const zoned = toAppTz(new Date(ts), zone);
@@ -115,7 +120,7 @@ export function toUtc({ year, month, day, hour = 0, minute = 0, second = 0 }, zo
  */
 export function toAppDateString(utcDate, zone = APP_TIMEZONE) {
   const { year, month, day } = toAppTz(utcDate, zone);
-  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /**
@@ -142,7 +147,45 @@ const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 function parseYmdParts(yyyyMmDd) {
   const match = YMD_RE.exec(yyyyMmDd);
   if (!match) throw new TypeError(`Expected YYYY-MM-DD, got: ${yyyyMmDd}`);
-  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Strict YYYY-MM-DD to an integer UTC calendar-day index. Throws for malformed
+ * or normalized dates so callers cannot silently turn 2026-02-30 into March.
+ *
+ * @param {string} yyyyMmDd
+ * @returns {number}
+ */
+export function ymdToEpochDay(yyyyMmDd) {
+  if (!YMD_RE.test(yyyyMmDd)) {
+    throw new TypeError(`Expected YYYY-MM-DD, got: ${yyyyMmDd}`);
+  }
+  const ms = Date.parse(`${yyyyMmDd}T00:00:00.000Z`);
+  if (
+    !Number.isFinite(ms) ||
+    new Date(ms).toISOString().slice(0, 10) !== yyyyMmDd
+  ) {
+    throw new TypeError(`Invalid calendar date: ${yyyyMmDd}`);
+  }
+  return Math.floor(ms / MS_PER_DAY);
+}
+
+/**
+ * Signed calendar-day difference, positive when `toYmd` is later.
+ *
+ * @param {string} fromYmd
+ * @param {string} toYmd
+ * @returns {number}
+ */
+export function differenceInCalendarDaysYmd(fromYmd, toYmd) {
+  return ymdToEpochDay(toYmd) - ymdToEpochDay(fromYmd);
 }
 
 /**
@@ -155,12 +198,11 @@ function parseYmdParts(yyyyMmDd) {
  * @returns {string}
  */
 export function addDaysYmd(yyyyMmDd, days) {
-  const { year, month, day } = parseYmdParts(yyyyMmDd);
-  const shifted = new Date(Date.UTC(year, month - 1, day + days));
-  const y = shifted.getUTCFullYear();
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(shifted.getUTCDate()).padStart(2, '0');
-  return `${String(y).padStart(4, '0')}-${m}-${d}`;
+  if (!Number.isInteger(days)) {
+    throw new TypeError(`days must be an integer, got: ${days}`);
+  }
+  const shifted = new Date((ymdToEpochDay(yyyyMmDd) + days) * MS_PER_DAY);
+  return shifted.toISOString().slice(0, 10);
 }
 
 /**
@@ -176,8 +218,8 @@ export function firstOfMonthYmd(yyyyMmDd, monthOffset = 0) {
   const { year, month } = parseYmdParts(yyyyMmDd);
   const shifted = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
   const y = shifted.getUTCFullYear();
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-  return `${String(y).padStart(4, '0')}-${m}-01`;
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  return `${String(y).padStart(4, "0")}-${m}-01`;
 }
 
 /**

@@ -14,15 +14,19 @@
  * ±5%, transaction date within ±5 days of the planned date.
  */
 
-import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
-import transactionRepository from '../repositories/transactionRepository.js';
-import recipientRepository from '../repositories/recipientRepository.js';
-import settingsRepository from '../repositories/settingsRepository.js';
-import { executePlanned } from './plannedExecutionService.js';
-import { addDaysYmd, todayAppDateString } from '../lib/timezone.js';
-import { toDecimal, toNumber } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
-import { logger } from '../config/logger.js';
+import plannedTransactionRepository from "../repositories/plannedTransactionRepository.js";
+import transactionRepository from "../repositories/transactionRepository.js";
+import recipientRepository from "../repositories/recipientRepository.js";
+import settingsRepository from "../repositories/settingsRepository.js";
+import { executePlanned } from "./plannedExecutionService.js";
+import {
+  addDaysYmd,
+  differenceInCalendarDaysYmd,
+  todayAppDateString,
+} from "../lib/timezone.js";
+import { toDecimal, toNumber } from "../lib/money.js";
+import { normalizeDateLikeToYmd } from "../lib/dateFormat.js";
+import { logger } from "../config/logger.js";
 
 const AMOUNT_TOLERANCE_PCT = 5;
 const DATE_WINDOW_DAYS = 5;
@@ -43,30 +47,6 @@ const SUGGESTION_LOOKBACK_DAYS = 45;
  * @typedef {{ recipient_cluster_id?: number|string|null, amount: number|string, transaction_date?: Date|string|null }} TxLike
  */
 
-// Normalize a DATE-ish value (pg Date at local midnight, or a 'YYYY-MM-DD' /
-// ISO string) to a plain 'YYYY-MM-DD' string. pg returns DATE columns as a JS
-// Date built from local Y/M/D, so local getters recover the calendar date.
-/**
- * @param {Date|string|null|undefined} value
- * @returns {string|undefined}
- */
-function toYmd(value) {
-  if (value == null) return undefined;
-  if (value instanceof Date) return formatDateToYmd(value);
-  return String(value).slice(0, 10);
-}
-
-/**
- * @param {string} a 'YYYY-MM-DD'
- * @param {string} b 'YYYY-MM-DD'
- * @returns {number}
- */
-function ymdDiffDays(a, b) {
-  const [ay, am, ad] = a.split('-').map(Number);
-  const [by, bm, bd] = b.split('-').map(Number);
-  return Math.round((Date.UTC(ay, am - 1, ad) - Date.UTC(by, bm - 1, bd)) / 86400000);
-}
-
 /**
  * Pure predicate: does `tx` fall within tolerance of planned payment `planned`?
  * Both objects must carry `recipient_cluster_id`, `amount`, and a date
@@ -77,8 +57,10 @@ function ymdDiffDays(a, b) {
  * @returns {boolean}
  */
 export function matchesTolerance(planned, tx) {
-  if (planned?.recipient_cluster_id == null || tx?.recipient_cluster_id == null) return false;
-  if (Number(planned.recipient_cluster_id) !== Number(tx.recipient_cluster_id)) return false;
+  if (planned?.recipient_cluster_id == null || tx?.recipient_cluster_id == null)
+    return false;
+  if (Number(planned.recipient_cluster_id) !== Number(tx.recipient_cluster_id))
+    return false;
 
   const pAmt = Number(planned.amount);
   const tAmt = Number(tx.amount);
@@ -93,10 +75,11 @@ export function matchesTolerance(planned, tx) {
   const tol = Math.max(1, p * (AMOUNT_TOLERANCE_PCT / 100));
   if (Math.abs(t - p) > tol) return false;
 
-  const pDate = toYmd(planned.planned_date);
-  const tDate = toYmd(tx.transaction_date);
+  const pDate = normalizeDateLikeToYmd(planned.planned_date);
+  const tDate = normalizeDateLikeToYmd(tx.transaction_date);
   if (!pDate || !tDate) return false;
-  if (Math.abs(ymdDiffDays(pDate, tDate)) > DATE_WINDOW_DAYS) return false;
+  if (Math.abs(differenceInCalendarDaysYmd(pDate, tDate)) > DATE_WINDOW_DAYS)
+    return false;
 
   return true;
 }
@@ -109,7 +92,7 @@ export function matchesTolerance(planned, tx) {
 
 async function isAutoClearEnabled() {
   try {
-    const settings = await settingsRepository.get('app_settings');
+    const settings = await settingsRepository.get("app_settings");
     return settings?.autoClearPlannedOnMatch !== false; // default ON
   } catch {
     return true;
@@ -131,7 +114,8 @@ export async function autoLinkTransactions(txRows) {
   if (!Array.isArray(txRows) || txRows.length === 0) return result;
   if (!(await isAutoClearEnabled())) return result;
 
-  const activePlanned = await plannedTransactionRepository.listActiveUnexecuted();
+  const activePlanned =
+    await plannedTransactionRepository.listActiveUnexecuted();
   if (activePlanned.length === 0) return result;
 
   const clusterMap = await recipientRepository.getClusterRootMap(
@@ -152,7 +136,9 @@ export async function autoLinkTransactions(txRows) {
   const candidatesByTx = new Map();
   const txIdsByPlanned = new Map();
   for (const tx of txs) {
-    const matches = activePlanned.filter((planned) => matchesTolerance(planned, tx));
+    const matches = activePlanned.filter((planned) =>
+      matchesTolerance(planned, tx),
+    );
     candidatesByTx.set(tx.id, matches);
     for (const planned of matches) {
       if (!txIdsByPlanned.has(planned.id)) txIdsByPlanned.set(planned.id, []);
@@ -170,14 +156,17 @@ export async function autoLinkTransactions(txRows) {
       const { duplicate } = await executePlanned({
         id: planned.id,
         executedTransactionId: tx.id,
-        executionDate: toYmd(tx.transaction_date),
+        executionDate: normalizeDateLikeToYmd(tx.transaction_date),
       });
       if (!duplicate) {
         result.autoLinkedCount += 1;
-        result.links.push({ plannedTransactionId: planned.id, transactionId: tx.id });
+        result.links.push({
+          plannedTransactionId: planned.id,
+          transactionId: tx.id,
+        });
       }
     } catch (err) {
-      logger.warn('[auto-link] execute failed', {
+      logger.warn("[auto-link] execute failed", {
         plannedId: planned.id,
         txId: tx.id,
         error: err?.message,
@@ -196,11 +185,14 @@ export async function autoLinkTransactions(txRows) {
  * @returns {Promise<Array<{ planned: object, candidates: object[] }>>}
  */
 export async function getMatchSuggestions() {
-  const activePlanned = await plannedTransactionRepository.listActiveUnexecuted();
+  const activePlanned =
+    await plannedTransactionRepository.listActiveUnexecuted();
   if (activePlanned.length === 0) return [];
 
   const sinceDate = addDaysYmd(todayAppDateString(), -SUGGESTION_LOOKBACK_DAYS);
-  const recentTx = await transactionRepository.listRecentUnlinked({ sinceDate });
+  const recentTx = await transactionRepository.listRecentUnlinked({
+    sinceDate,
+  });
   if (recentTx.length === 0) return [];
 
   const suggestions = [];
@@ -213,7 +205,7 @@ export async function getMatchSuggestions() {
         recipient_id: planned.recipient_id,
         recipient_name: planned.recipient_name ?? null,
         amount: toNumber(toDecimal(planned.amount)),
-        planned_date: toYmd(planned.planned_date),
+        planned_date: normalizeDateLikeToYmd(planned.planned_date),
         currency: planned.currency ?? null,
         is_recurring: planned.is_recurring,
       },
@@ -221,7 +213,7 @@ export async function getMatchSuggestions() {
         id: tx.id,
         recipient_name: tx.recipient_name ?? null,
         amount: toNumber(toDecimal(tx.amount)),
-        transaction_date: toYmd(tx.transaction_date),
+        transaction_date: normalizeDateLikeToYmd(tx.transaction_date),
         currency: tx.currency ?? null,
         memo: tx.memo ?? null,
       })),

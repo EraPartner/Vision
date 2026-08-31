@@ -2,17 +2,29 @@
  * KBC CSV adapter — Belgian bank, ';'-separated with 15+ columns.
  */
 
-import { cleanKbcRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
+import {
+  cleanKbcRecipientName,
+  normalizeToUppercase,
+} from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseDayMonthYear,
+  parseCommaDecimal,
+  buildOptionalComment,
+  splitCsvLines,
+  splitDelimitedRecord,
+  canonicalIban,
+  readTextWithEncodingFallback,
+  normalizeIsoCurrency,
+} from "./_shared.js";
 
-const NAME = 'kbc';
+const NAME = "kbc";
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const BANK_LABEL = 'KBC';
+const BANK_LABEL = "KBC";
 const MIN_FIELDS = 15;
 
 /**
@@ -23,11 +35,11 @@ const MIN_FIELDS = 15;
 function classifyTransactionType(creditStr, debitStr) {
   if (creditStr && creditStr.trim()) {
     const cv = parseCommaDecimal(creditStr);
-    if (!isNaN(cv) && Math.abs(cv) > 0) return 'CREDIT';
+    if (!isNaN(cv) && Math.abs(cv) > 0) return "CREDIT";
   }
   if (debitStr && debitStr.trim()) {
     const dv = parseCommaDecimal(debitStr);
-    if (!isNaN(dv) && Math.abs(dv) > 0) return 'DEBIT';
+    if (!isNaN(dv) && Math.abs(dv) > 0) return "DEBIT";
   }
   return null;
 }
@@ -41,7 +53,7 @@ function parseLine(line) {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
   const ownAccount = parts[0].trim(); // "Rekeningnummer" — the account holder's own IBAN
-  const currency = parts[3].trim();
+  const currency = normalizeIsoCurrency(parts[3]);
   const statementNumber = parts[4].trim();
   const transactionDateStr = parts[5].trim();
   const description = parts[6].trim();
@@ -52,9 +64,9 @@ function parseLine(line) {
   const counterpartyAccount = parts[12].trim();
   const counterpartyBic = parts[13].trim();
   const counterpartyName = parts[14].trim();
-  const counterpartyAddress = parts[15] ? parts[15].trim() : '';
-  const structuredCommunication = parts[16] ? parts[16].trim() : '';
-  const freeCommunication = parts[17] ? parts[17].trim() : '';
+  const counterpartyAddress = parts[15] ? parts[15].trim() : "";
+  const structuredCommunication = parts[16] ? parts[16].trim() : "";
+  const freeCommunication = parts[17] ? parts[17].trim() : "";
 
   const date = parseDayMonthYear(transactionDateStr);
   if (!date) return null;
@@ -69,18 +81,20 @@ function parseLine(line) {
   if (!counterpartyName) fullRecipient = cleanKbcRecipientName(fullRecipient);
   fullRecipient = normalizeToUppercase(fullRecipient);
 
-  const memo = description ? normalizeToUppercase(description) : '';
+  const memo = description ? normalizeToUppercase(description) : "";
 
   const commentParts = [];
-  if (statementNumber) commentParts.push(`Statement: ${statementNumber.trim()}`);
+  if (statementNumber)
+    commentParts.push(`Statement: ${statementNumber.trim()}`);
   if (transactionType) commentParts.push(`Type: ${transactionType}`);
   if (counterpartyBic) commentParts.push(`BIC: ${counterpartyBic}`);
-  if (structuredCommunication) commentParts.push(`Structured: ${structuredCommunication}`);
+  if (structuredCommunication)
+    commentParts.push(`Structured: ${structuredCommunication}`);
   if (freeCommunication) commentParts.push(`Free: ${freeCommunication}`);
 
   return {
     date,
-    bankAccount: canonicalIban(ownAccount) || 'KBC',
+    bankAccount: canonicalIban(ownAccount) || "KBC",
     recipient: fullRecipient,
     memo,
     amount,
@@ -88,7 +102,7 @@ function parseLine(line) {
     balance: balance !== null && !isNaN(balance) ? balance : null,
     recipientAccount: counterpartyAccount || null,
     recipientAddress: counterpartyAddress || null,
-    recipientBankName: counterpartyAccount ? 'KBC' : null,
+    recipientBankName: counterpartyAccount ? "KBC" : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
   };
@@ -99,9 +113,11 @@ function parseLine(line) {
  * @returns {boolean}
  */
 function isNonDataLine(line) {
-  return line.startsWith('Rekeningnummer')
-    || line.includes('Vrije Mededeling')
-    || line.startsWith(',,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,');
+  return (
+    line.startsWith("Rekeningnummer") ||
+    line.includes("Vrije Mededeling") ||
+    line.startsWith(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,")
+  );
 }
 
 /**
@@ -111,8 +127,10 @@ function isNonDataLine(line) {
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 5);
-  return lines.some((line) => line.startsWith('Rekeningnummer'))
-    || lines.some((line) => line.includes('Vrije Mededeling'));
+  return (
+    lines.some((line) => line.startsWith("Rekeningnummer")) ||
+    lines.some((line) => line.includes("Vrije Mededeling"))
+  );
 }
 
 /**
@@ -135,7 +153,9 @@ export async function parse(filePath) {
   }
 
   transactions.skipped = skipped;
-  logger.info(`KBC CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `KBC CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

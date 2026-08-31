@@ -6,11 +6,18 @@
  * on failure; section renderers handle null gracefully.
  */
 
-import { query } from '../../database/connection.js';
-import { getSnapshots, getBreakdownSummary } from '../portfolioPerformanceSnapshotService.js';
-import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
-import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
-import { logger } from '../../config/logger.js';
+import { query } from "../../database/connection.js";
+import {
+  getSnapshots,
+  getBreakdownSummary,
+} from "../portfolioPerformanceSnapshotService.js";
+import {
+  convertWithRates,
+  loadCurrentRates,
+} from "../currency/currencyConversionService.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.js";
+import { logger } from "../../config/logger.js";
+import { addAll, toNumber } from "../../lib/money.js";
 
 /**
  * @typedef {{ kind: 'ytd' }
@@ -46,12 +53,41 @@ import { logger } from '../../config/logger.js';
 /** @typedef {{ byMonth: DividendMonthRow[]; byInvestment: DividendInvestmentRow[] }} DividendData */
 
 /**
+ * @typedef {{
+ *   year: number, month: number, value: number, invested: number,
+ *   inflationAdjustedValue: number, gainLoss: number, returnPct: number,
+ * }} PerformanceTrendPoint
+ */
+
+/**
+ * @typedef {{
+ *   points: PerformanceTrendPoint[];
+ *   tablePoints: PerformanceTrendPoint[];
+ * }} PerformanceTrendData
+ */
+
+/**
+ * @typedef {{
+ *   totalValue: number;
+ *   totalInvested: number;
+ *   totalGainLoss: number;
+ *   returnPct: number;
+ *   inflationAdjustedValue: number;
+ *   totalDividends: number;
+ *   holdingsCount: number;
+ *   topHoldings: BreakdownRow[];
+ * }} PortfolioExecutiveSummaryData
+ */
+
+/**
  * Full result of {@link fetchPortfolioData} — the data payload portfolio
  * report section renderers consume.
  * @typedef {{
  *   snapshots: SnapshotRow[] | null;
  *   breakdown: BreakdownRow[] | null;
  *   dividends: DividendData | null;
+ *   performanceTrend: PerformanceTrendData | null;
+ *   executiveSummary: PortfolioExecutiveSummaryData | null;
  *   period: Period;
  *   currency: string;
  * }} PortfolioReportData
@@ -66,8 +102,11 @@ import { logger } from '../../config/logger.js';
  * @returns {T | null}
  */
 function unwrap(result, label) {
-  if (result.status === 'fulfilled') return result.value;
-  logger.warn(`[dataFetcherPortfolio] ${label} failed — section will be skipped`, { reason: result.reason?.message });
+  if (result.status === "fulfilled") return result.value;
+  logger.warn(
+    `[dataFetcherPortfolio] ${label} failed — section will be skipped`,
+    { reason: result.reason?.message },
+  );
   return null;
 }
 
@@ -86,12 +125,105 @@ function unwrap(result, label) {
 export function normalizeBreakdownRow(row) {
   return /** @type {BreakdownRow} */ ({
     ...row,
-    assetClass: row.assetClass ?? row.asset_class ?? 'other',
+    assetClass: row.assetClass ?? row.asset_class ?? "other",
     currentValue: row.currentValue ?? row.current_value ?? 0,
     totalInvested: row.totalInvested ?? row.total_invested ?? 0,
     gainLoss: row.gainLoss ?? row.gain_loss ?? 0,
     gainLossPercent: row.gainLossPercent ?? row.gain_loss_pct ?? 0,
   });
+}
+
+/**
+ * Build the monthly chart and table model once at the data boundary.
+ *
+ * @param {SnapshotRow[] | null} snapshots
+ * @returns {PerformanceTrendData | null}
+ */
+export function buildPerformanceTrendData(snapshots) {
+  if (!snapshots?.length) return null;
+
+  const byMonth = new Map();
+  for (const snapshot of snapshots) {
+    const date = new Date(snapshot.snapshot_date);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    byMonth.set(key, snapshot);
+  }
+
+  const points = [...byMonth.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, snapshot]) => {
+      const date = new Date(snapshot.snapshot_date);
+      const value = Number(snapshot.value ?? 0);
+      const invested = Number(snapshot.invested ?? 0);
+      return {
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        value,
+        invested,
+        inflationAdjustedValue: Number(
+          snapshot.inflation_adjusted_value ?? value,
+        ),
+        gainLoss: value - invested,
+        returnPct: Number(snapshot.return_pct ?? 0),
+      };
+    });
+
+  return { points, tablePoints: points.slice(-12) };
+}
+
+/**
+ * Build the KPI and top-holdings model once at the data boundary.
+ *
+ * @param {BreakdownRow[] | null} breakdown
+ * @param {SnapshotRow[] | null} snapshots
+ * @param {DividendData | null} dividends
+ * @returns {PortfolioExecutiveSummaryData | null}
+ */
+export function buildPortfolioExecutiveSummaryData(
+  breakdown,
+  snapshots,
+  dividends,
+) {
+  if (!breakdown?.length && !snapshots?.length) return null;
+
+  const totalValue = toNumber(
+    addAll((breakdown ?? []).map((investment) => investment.currentValue ?? 0)),
+  );
+  const totalInvested = toNumber(
+    addAll(
+      (breakdown ?? []).map((investment) => investment.totalInvested ?? 0),
+    ),
+  );
+  const totalGainLoss = toNumber(
+    addAll((breakdown ?? []).map((investment) => investment.gainLoss ?? 0)),
+  );
+
+  const latest = snapshots?.length ? snapshots[snapshots.length - 1] : null;
+  const returnPct = latest
+    ? Number(latest.return_pct ?? 0)
+    : totalInvested > 0
+      ? (totalGainLoss / totalInvested) * 100
+      : 0;
+
+  return {
+    totalValue,
+    totalInvested,
+    totalGainLoss,
+    returnPct,
+    inflationAdjustedValue: latest
+      ? Number(latest.inflation_adjusted_value ?? totalValue)
+      : totalValue,
+    totalDividends: toNumber(
+      addAll((dividends?.byMonth ?? []).map((month) => month.amount ?? 0)),
+    ),
+    holdingsCount: breakdown?.length ?? 0,
+    topHoldings: [...(breakdown ?? [])]
+      .sort(
+        (left, right) =>
+          Number(right.currentValue ?? 0) - Number(left.currentValue ?? 0),
+      )
+      .slice(0, 5),
+  };
 }
 
 /**
@@ -108,14 +240,20 @@ export function periodToDateRange(period) {
   const year = Number(today.slice(0, 4));
 
   switch (period.kind) {
-    case 'ytd':
+    case "ytd":
       return { startDate: `${year}-01-01`, endDate: today };
-    case 'rolling':
-      return { startDate: firstOfMonthYmd(today, -(period.months - 1)), endDate: today };
-    case 'custom':
+    case "rolling":
+      return {
+        startDate: firstOfMonthYmd(today, -(period.months - 1)),
+        endDate: today,
+      };
+    case "custom":
       return { startDate: period.from, endDate: period.to };
-    case 'year':
-      return { startDate: `${period.year}-01-01`, endDate: `${period.year}-12-31` };
+    case "year":
+      return {
+        startDate: `${period.year}-01-01`,
+        endDate: `${period.year}-12-31`,
+      };
     default:
       return { startDate: `${year - 1}-01-01`, endDate: today };
   }
@@ -131,7 +269,8 @@ export function periodToDateRange(period) {
  * @returns {Promise<DividendData>}
  */
 async function fetchDividends(targetCurrency, startDate, endDate) {
-  const result = await query(`
+  const result = await query(
+    `
     SELECT
       pt.investment_id,
       i.name AS investment_name,
@@ -147,7 +286,9 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
       AND pt.date::date BETWEEN $1 AND $2
     ORDER BY year, month
     LIMIT 100000
-  `, [startDate, endDate]);
+  `,
+    [startDate, endDate],
+  );
 
   // Convert each row and aggregate
   const byMonthMap = new Map();
@@ -155,11 +296,17 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   const rates = await loadCurrentRates();
 
   for (const row of result.rows) {
-    const converted = row.currency !== targetCurrency
-      ? convertWithRates(Number(row.amount), row.currency, targetCurrency, rates)
-      : Number(row.amount);
+    const converted =
+      row.currency !== targetCurrency
+        ? convertWithRates(
+            Number(row.amount),
+            row.currency,
+            targetCurrency,
+            rates,
+          )
+        : Number(row.amount);
 
-    const monthKey = `${row.year}-${String(row.month).padStart(2, '0')}`;
+    const monthKey = `${row.year}-${String(row.month).padStart(2, "0")}`;
     byMonthMap.set(monthKey, (byMonthMap.get(monthKey) ?? 0) + converted);
 
     const invKey = row.investment_id;
@@ -178,12 +325,13 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   const byMonth = [...byMonthMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, amount]) => {
-      const [yr, mo] = key.split('-').map(Number);
+      const [yr, mo] = key.split("-").map(Number);
       return { year: yr, month: mo, amount };
     });
 
-  const byInvestment = [...byInvestmentMap.values()]
-    .sort((a, b) => b.total - a.total);
+  const byInvestment = [...byInvestmentMap.values()].sort(
+    (a, b) => b.total - a.total,
+  );
 
   return { byMonth, byInvestment };
 }
@@ -198,18 +346,28 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
 export async function fetchPortfolioData(currency, period) {
   const { startDate, endDate } = periodToDateRange(period);
 
-  const [snapshotsResult, breakdownResult, dividendsResult] = await Promise.allSettled([
-    getSnapshots(startDate, endDate, currency),
-    getBreakdownSummary(currency),
-    fetchDividends(currency, startDate, endDate),
-  ]);
+  const [snapshotsResult, breakdownResult, dividendsResult] =
+    await Promise.allSettled([
+      getSnapshots(startDate, endDate, currency),
+      getBreakdownSummary(currency),
+      fetchDividends(currency, startDate, endDate),
+    ]);
 
-  const breakdown = unwrap(breakdownResult, 'getBreakdownSummary');
+  const snapshots = unwrap(snapshotsResult, "getSnapshots");
+  const rawBreakdown = unwrap(breakdownResult, "getBreakdownSummary");
+  const breakdown = rawBreakdown?.map(normalizeBreakdownRow) ?? rawBreakdown;
+  const dividends = unwrap(dividendsResult, "fetchDividends");
 
   return {
-    snapshots: unwrap(snapshotsResult, 'getSnapshots'),
-    breakdown: breakdown?.map(normalizeBreakdownRow) ?? breakdown,
-    dividends: unwrap(dividendsResult, 'fetchDividends'),
+    snapshots,
+    breakdown,
+    dividends,
+    performanceTrend: buildPerformanceTrendData(snapshots),
+    executiveSummary: buildPortfolioExecutiveSummaryData(
+      breakdown,
+      snapshots,
+      dividends,
+    ),
     period,
     currency,
   };

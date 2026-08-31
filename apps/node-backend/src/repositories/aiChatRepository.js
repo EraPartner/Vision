@@ -11,7 +11,7 @@
  * so this module never needs to touch `updated_at` manually.
  */
 
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 /** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
 /** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
@@ -19,11 +19,11 @@ import { query } from '../database/connection.js';
 const CONVERSATION_COLUMNS =
   'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
 const MESSAGE_COLUMNS =
-  'id, conversation_id AS "conversationId", role, content, '
-  + 'tool_name AS "toolName", tool_args AS "toolArgs", tool_result AS "toolResult", '
-  + 'status, created_at AS "createdAt"';
+  'id, conversation_id AS "conversationId", role, content, ' +
+  'tool_name AS "toolName", tool_args AS "toolArgs", tool_result AS "toolResult", ' +
+  'status, created_at AS "createdAt"';
 
-const PG_FK_VIOLATION = '23503';
+const PG_FK_VIOLATION = "23503";
 
 export class ConversationDeletedError extends Error {
   /**
@@ -31,9 +31,11 @@ export class ConversationDeletedError extends Error {
    * @param {unknown} [cause] The underlying pg FK-violation error.
    */
   constructor(conversationId, cause) {
-    super(`Conversation ${conversationId} was deleted while a message was being appended`);
-    this.name = 'ConversationDeletedError';
-    this.code = 'CONVERSATION_DELETED';
+    super(
+      `Conversation ${conversationId} was deleted while a message was being appended`,
+    );
+    this.name = "ConversationDeletedError";
+    this.code = "CONVERSATION_DELETED";
     this.conversationId = conversationId;
     if (cause) this.cause = cause;
   }
@@ -49,14 +51,34 @@ function serializeJsonb(value) {
 }
 
 const aiChatRepository = {
-  /** @returns {Promise<AiConversationRow[]>} */
-  async listConversations() {
-    const result = await query(
-      `SELECT ${CONVERSATION_COLUMNS}
-         FROM ai_conversations
-        ORDER BY updated_at DESC`,
-    );
-    return result.rows;
+  /**
+   * @param {{ limit: number, offset: number }|null} [page]
+   * @returns {Promise<{items: AiConversationRow[], total: number}>}
+   */
+  async listConversations(page = null) {
+    if (!page) {
+      const result = await query(
+        `SELECT ${CONVERSATION_COLUMNS}
+           FROM ai_conversations
+          ORDER BY updated_at DESC`,
+      );
+      return { items: result.rows, total: result.rows.length };
+    }
+
+    const [itemsResult, countResult] = await Promise.all([
+      query(
+        `SELECT ${CONVERSATION_COLUMNS}
+           FROM ai_conversations
+          ORDER BY updated_at DESC
+          LIMIT $1 OFFSET $2`,
+        [page.limit, page.offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM ai_conversations`),
+    ]);
+    return {
+      items: itemsResult.rows,
+      total: Number(countResult.rows[0]?.total) || 0,
+    };
   },
 
   /**
@@ -163,7 +185,7 @@ const aiChatRepository = {
     toolName = null,
     toolArgs = null,
     toolResult = null,
-    status = 'complete',
+    status = "complete",
   }) {
     try {
       const result = await query(
@@ -189,7 +211,6 @@ const aiChatRepository = {
       throw err;
     }
   },
-
 };
 
 export default aiChatRepository;

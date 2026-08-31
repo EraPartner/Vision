@@ -1,105 +1,227 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock('../../src/database/connection.js', () => ({ query: vi.fn() }));
-vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
+vi.mock("../../src/repositories/infoRepositorySankey.js", () => ({
+  getSankeyAggregates: vi.fn(),
+}));
+vi.mock("../../src/services/currency/currencyConversionService.js", () => ({
   convertRowsToEur: vi.fn(),
 }));
-vi.mock('../../src/repositories/infoRepositoryHelpers.js', async () => {
-  const actual = await vi.importActual('../../src/repositories/infoRepositoryHelpers.js');
-  return { ...actual, getIncludeTransfers: vi.fn() };
-});
-
-import { query } from '../../src/database/connection.js';
-import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
-import { getIncludeTransfers } from '../../src/repositories/infoRepositoryHelpers.js';
-import { computeSankeyFlow } from '../../src/services/calculations/aggregation/sankey.js';
+import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.js";
+import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
+import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.js";
 
 beforeEach(() => {
-  query.mockReset();
+  getSankeyAggregates.mockReset();
   convertRowsToEur.mockReset();
-  getIncludeTransfers.mockReset();
-  getIncludeTransfers.mockResolvedValue(false);
 });
 
-describe('computeSankeyFlow (SQL-grouped rows)', () => {
-  it('builds income → category links and a savings node from grouped, multi-currency rows', async () => {
+describe("computeSankeyFlow (SQL-grouped rows)", () => {
+  it("builds income → category links and a savings node from grouped, multi-currency rows", async () => {
     // SQL now returns one row per (category, currency, is_income) with SUM(ABS).
-    query.mockResolvedValueOnce({
-      rows: [
-        { category_name: 'Income: Salary', currency: 'EUR', is_income: true, amount: '1000' },
-        { category_name: 'Income: Salary', currency: 'USD', is_income: true, amount: '100' },
-        { category_name: 'Food: Groceries', currency: 'EUR', is_income: false, amount: '300' },
-        { category_name: 'Housing: Rent', currency: 'EUR', is_income: false, amount: '400' },
-      ],
-    });
+    getSankeyAggregates.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        currency: "EUR",
+        is_income: true,
+        amount: "1000",
+      },
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        currency: "USD",
+        is_income: true,
+        amount: "100",
+      },
+      {
+        category_id: 2,
+        category_name: "Food: Groceries",
+        currency: "EUR",
+        is_income: false,
+        amount: "300",
+      },
+      {
+        category_id: 3,
+        category_name: "Housing: Rent",
+        currency: "EUR",
+        is_income: false,
+        amount: "400",
+      },
+    ]);
     // Latest-rate conversion: USD → ×0.9, EUR → ×1.
     convertRowsToEur.mockImplementation(async (rows) =>
-      rows.map((r) => ({ ...r, amount_eur: r.currency === 'USD' ? r.amount * 0.9 : r.amount })),
+      rows.map((r) => ({
+        ...r,
+        amount_eur: r.currency === "USD" ? r.amount * 0.9 : r.amount,
+      })),
     );
 
-    const env = await computeSankeyFlow({ targetCurrency: 'EUR', year: 2025 });
+    const env = await computeSankeyFlow({ targetCurrency: "EUR", year: 2025 });
     const { nodes, links } = env.data;
 
     // Income = 1000 + 100*0.9 = 1090; spending = 300 + 400 = 700; savings = 390.
-    const income = nodes.find((n) => n.label === 'Income');
+    const income = nodes.find((n) => n.id === "__income__");
     expect(income.value).toBe(1090);
-    const savings = nodes.find((n) => n.label === 'Savings / Unspent');
+    const savings = nodes.find((n) => n.id === "__savings__");
     expect(savings.value).toBe(390);
 
-    const rentLink = links.find((l) => l.target === 'cat:Housing: Rent');
+    const rentLink = links.find((l) => l.target === "cat:3");
     expect(rentLink.value).toBe(400);
-    // All links flow from the single income node.
-    expect(links.every((l) => l.source === income.id)).toBe(true);
+    expect(links).toEqual(
+      expect.arrayContaining([
+        { source: "__income__", target: "__spending__", value: 700 },
+        { source: "__spending__", target: "cat:3", value: 400 },
+      ]),
+    );
 
-    // GROUP BY pushed into SQL (no per-transaction streaming).
-    expect(query.mock.calls[0][0]).toContain('GROUP BY 1, 2, 3');
-    expect(query.mock.calls[0][0]).toContain('SUM(ABS(t.amount))');
+    expect(getSankeyAggregates).toHaveBeenCalledWith({
+      yearStart: "2025-01-01",
+      yearEnd: "2025-12-31",
+      excludedCategoryIds: [],
+      excludedRecipientIds: [],
+    });
   });
 
-  // The emitted SQL must resolve the effective category over all THREE levels
-  // (own → recipient default → PRIMARY recipient's default), in the category
-  // JOIN *and* in the exclusion clause. With the former 2-level resolution a
-  // row recorded under an alias whose PRIMARY carries the default category
-  // landed in "Uncategorised" and survived an exclusion of that same category.
-  //
-  // The exclusion clauses are the canonical ones from
-  // lib/filterBuilder.buildExclusionClauses — the `-1` NULL sentinel and the
-  // alias-aware recipient form are the load-bearing halves (see the DB pins in
-  // tests/aliasCategoryResolution.db.test.js for the behaviour). Numbering
-  // starts at $3 because the year range owns $1/$2.
-  it('emits the canonical exclusion clauses, numbered after the date range', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-
-    await computeSankeyFlow({ year: 2025, excludedCategoryIds: [7], excludedRecipientIds: [9] });
-
-    const sql = query.mock.calls[0][0];
-    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
-    expect(sql).toContain(
-      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+  it("keeps NULL and same-named real categories as distinct nodes", async () => {
+    getSankeyAggregates.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        currency: "EUR",
+        is_income: true,
+        amount: "1000",
+      },
+      {
+        category_id: null,
+        category_name: null,
+        currency: "EUR",
+        is_income: false,
+        amount: "100",
+      },
+      {
+        category_id: 7,
+        category_name: "Uncategorised",
+        currency: "EUR",
+        is_income: false,
+        amount: "200",
+      },
+      {
+        category_id: 8,
+        category_name: "Uncategorised",
+        currency: "EUR",
+        is_income: false,
+        amount: "50",
+      },
+    ]);
+    convertRowsToEur.mockImplementation(async (rows) =>
+      rows.map((row) => ({ ...row, amount_eur: row.amount })),
     );
-    // NULL sentinel: without the trailing -1 a NULL effective category makes
-    // the predicate NULL, dropping every uncategorised row.
-    expect(sql).toContain(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)',
+
+    const env = await computeSankeyFlow({ year: 2025 });
+
+    expect(env.data.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "__uncategorised__", value: 100 }),
+        expect.objectContaining({
+          id: "cat:7",
+          label: "Uncategorised",
+          value: 200,
+        }),
+        expect.objectContaining({
+          id: "cat:8",
+          label: "Uncategorised",
+          value: 50,
+        }),
+      ]),
     );
-    // Alias-aware: excluding a PRIMARY must also exclude rows booked on its aliases.
-    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4)');
-    expect(query.mock.calls[0][1]).toEqual(['2025-01-01', '2025-12-31', 7, 9]);
+    expect(env.data.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: "__uncategorised__", value: 100 }),
+        expect.objectContaining({ target: "cat:7", value: 200 }),
+      ]),
+    );
   });
 
-  // ADR-083: transfers are excluded from income/spending by default, governed
-  // by the runtime `includeTransfers` setting — same conditional predicate as
-  // every sibling aggregation. Without it a savings transfer's two legs
-  // inflated BOTH the income and the spending side of the flow graph.
-  it('filters internal transfers by default and honours the includeTransfers setting', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await computeSankeyFlow({ year: 2025 });
-    expect(query.mock.calls[0][0]).toContain('AND t.is_transfer = false');
+  it("balances an overspent year with an explicit funding-gap source", async () => {
+    getSankeyAggregates.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        currency: "EUR",
+        is_income: true,
+        amount: "100",
+      },
+      {
+        category_id: 2,
+        category_name: "Food",
+        currency: "EUR",
+        is_income: false,
+        amount: "150",
+      },
+    ]);
+    convertRowsToEur.mockImplementation(async (rows) =>
+      rows.map((row) => ({ ...row, amount_eur: row.amount })),
+    );
 
-    query.mockReset();
-    getIncludeTransfers.mockResolvedValue(true);
-    query.mockResolvedValueOnce({ rows: [] });
-    await computeSankeyFlow({ year: 2025 });
-    expect(query.mock.calls[0][0]).not.toContain('is_transfer');
+    const env = await computeSankeyFlow({ year: 2025 });
+    expect(env.data.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "__income__", value: 100 }),
+        expect.objectContaining({ id: "__funding_gap__", value: 50 }),
+        expect.objectContaining({ id: "__spending__", value: 150 }),
+      ]),
+    );
+    expect(env.data.nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "__savings__" })]),
+    );
+    expect(env.data.links).toEqual(
+      expect.arrayContaining([
+        { source: "__income__", target: "__spending__", value: 100 },
+        { source: "__funding_gap__", target: "__spending__", value: 50 },
+        { source: "__spending__", target: "cat:2", value: 150 },
+      ]),
+    );
+  });
+
+  it("conserves every internal flow after cent rounding, including sub-euro gaps", async () => {
+    getSankeyAggregates.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income",
+        currency: "EUR",
+        is_income: true,
+        amount: "1.005",
+      },
+      ...[2, 3, 4].map((category_id) => ({
+        category_id,
+        category_name: `Category ${category_id}`,
+        currency: "EUR",
+        is_income: false,
+        amount: "0.335",
+      })),
+    ]);
+    convertRowsToEur.mockImplementation(async (rows) =>
+      rows.map((row) => ({ ...row, amount_eur: row.amount })),
+    );
+
+    const env = await computeSankeyFlow({ year: 2025 });
+    const { nodes, links } = env.data;
+    expect(nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "__income__", value: 1 }),
+        expect.objectContaining({ id: "__funding_gap__", value: 0.02 }),
+        expect.objectContaining({ id: "__spending__", value: 1.02 }),
+      ]),
+    );
+
+    for (const node of nodes) {
+      const incoming = links
+        .filter((link) => link.target === node.id)
+        .reduce((sum, link) => sum + Math.round(link.value * 100), 0);
+      const outgoing = links
+        .filter((link) => link.source === node.id)
+        .reduce((sum, link) => sum + Math.round(link.value * 100), 0);
+      if (incoming > 0 && outgoing > 0) expect(incoming).toBe(outgoing);
+    }
   });
 });

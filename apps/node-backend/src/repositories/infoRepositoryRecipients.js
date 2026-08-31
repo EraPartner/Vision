@@ -8,15 +8,22 @@
  * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
-import { query } from '../database/connection.js';
-import { toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
-import { toWireDate } from '../lib/dateFormat.js';
-import { buildExclusionClauses, validateInt4Ids } from '../lib/filterBuilder.js';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
+import { query } from "../database/connection.js";
+import {
+  toDecimal,
+  toNumber,
+  roundMoney as roundToCents,
+} from "../lib/money.js";
+import { toWireDate } from "../lib/dateFormat.js";
+import {
+  buildExclusionClauses,
+  validateInt4Ids,
+} from "../lib/filterBuilder.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
   buildPeriodPivot,
   mapRowsForAmountConversion,
-} from './infoRepositoryHelpers.js';
+} from "./infoRepositoryHelpers.js";
 
 export const recipientInsightsRepository = {
   /**
@@ -30,16 +37,22 @@ export const recipientInsightsRepository = {
    * @param {string} [targetCurrency]
    * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
    */
-  async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
+  async getRecipientInsights(
+    targetCurrency = "EUR",
+    { excludedCategoryIds = [], excludedRecipientIds = [] } = {},
+  ) {
     // Canonical exclusion semantics (lib/filterBuilder.buildExclusionClauses,
     // shared with the dashboard / statistics endpoints): drop hidden categories
     // (by effective category) and excluded recipients (rolled up to the primary
     // recipient via COALESCE(r.primary_recipient_id, t.recipient_id)). Built once
     // and reused by both queries below since neither carries any other bound
     // parameters. The queries' own r/pr joins satisfy the helper's join contract.
-    const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+    const excl = buildExclusionClauses({
+      excludedCategoryIds,
+      excludedRecipientIds,
+    });
     const params = excl.params;
-    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
     // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
     // the conversion below can use each row's OWN date rate, exactly as
@@ -50,7 +63,8 @@ export const recipientInsightsRepository = {
     // amount < 0 is pinned, so ABS distributes over the same-sign SUM and
     // SUM-then-convert per date is identical to converting each row; tx_count
     // and the MIN/MAX date bounds are re-reduced per recipient in JS below.
-    const topRawResult = await query(`
+    const topRawResult = await query(
+      `
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
         COALESCE(pr.id, r.id)       AS recipient_id,
@@ -68,15 +82,17 @@ export const recipientInsightsRepository = {
         AND t.is_transfer = false
         ${exclusionWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
-    `, params);
+    `,
+      params,
+    );
 
     // Historical per-date rates, matching getRecipientByYear / getRecipientPivot.
     // Converting at the LATEST rate here made one 2024 USD purchase read 90 in
     // Top merchants and 25 in the by-year / pivot views of the same recipient.
     const topConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
+      mapRowsForAmountConversion(topRawResult.rows, "total_abs_amount", false),
       targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
+      { useHistoricalRatesByDate: true, dateField: "date" },
     );
 
     /**
@@ -106,17 +122,21 @@ export const recipientInsightsRepository = {
       }
       // Decimal accumulation (money-hygiene): native `+=` over per-currency
       // converted spend drifts sub-cent before the final round.
-      recipientAgg[rid].totalSpend = toNumber(toDecimal(recipientAgg[rid].totalSpend).plus(toDecimal(eur)));
+      recipientAgg[rid].totalSpend = toNumber(
+        toDecimal(recipientAgg[rid].totalSpend).plus(toDecimal(eur)),
+      );
       recipientAgg[rid].transactionCount += count;
       const firstSeen = toWireDate(row.first_seen);
       const lastSeen = toWireDate(row.last_seen);
-      if (firstSeen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = firstSeen;
-      if (lastSeen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = lastSeen;
+      if (firstSeen < recipientAgg[rid].firstSeen)
+        recipientAgg[rid].firstSeen = firstSeen;
+      if (lastSeen > recipientAgg[rid].lastSeen)
+        recipientAgg[rid].lastSeen = lastSeen;
     }
 
     const topMerchants = Object.values(recipientAgg)
       .sort((a, b) => b.totalSpend - a.totalSpend)
-      .map(r => ({
+      .map((r) => ({
         ...r,
         totalSpend: roundToCents(r.totalSpend),
         avgAmount: roundToCents(r.totalSpend / r.transactionCount),
@@ -133,7 +153,8 @@ export const recipientInsightsRepository = {
     // distributes over the same-sign SUM and SUM-then-convert per date is
     // identical to converting each row; the per-(recipient, period) totals are
     // re-reduced in JS below.
-    const momRawResult = await query(`
+    const momRawResult = await query(
+      `
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -158,13 +179,15 @@ export const recipientInsightsRepository = {
         )
         ${exclusionWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
-    `, params);
+    `,
+      params,
+    );
 
     // Historical per-date rates, matching top merchants / by-year / pivot.
     const momConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),
+      mapRowsForAmountConversion(momRawResult.rows, "abs_amount", false),
       targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
+      { useHistoricalRatesByDate: true, dateField: "date" },
     );
 
     // Derive the current / previous month keys in the database so they match
@@ -183,14 +206,19 @@ export const recipientInsightsRepository = {
     for (const row of momConverted) {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
-      if (!momAgg[rid]) momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
+      if (!momAgg[rid])
+        momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
       // Decimal accumulation (money-hygiene), as in the top-merchants reduction
       // above: per-date conversion means a month is now many converted rows,
       // and native `+=` over them drifts sub-cent before the final round.
       if (row.period === currentPeriod) {
-        momAgg[rid].current = toNumber(toDecimal(momAgg[rid].current).plus(toDecimal(eur)));
+        momAgg[rid].current = toNumber(
+          toDecimal(momAgg[rid].current).plus(toDecimal(eur)),
+        );
       } else if (row.period === prevPeriod) {
-        momAgg[rid].previous = toNumber(toDecimal(momAgg[rid].previous).plus(toDecimal(eur)));
+        momAgg[rid].previous = toNumber(
+          toDecimal(momAgg[rid].previous).plus(toDecimal(eur)),
+        );
       }
     }
 
@@ -201,7 +229,8 @@ export const recipientInsightsRepository = {
         name: v.name,
         currentSpend: roundToCents(v.current),
         previousSpend: roundToCents(v.previous),
-        changePercent: Math.round(((v.current - v.previous) / v.previous * 100) * 10) / 10,
+        changePercent:
+          Math.round(((v.current - v.previous) / v.previous) * 100 * 10) / 10,
       }))
       .sort((a, b) => b.currentSpend - a.currentSpend)
       .slice(0, 10);
@@ -217,7 +246,7 @@ export const recipientInsightsRepository = {
    * }} [options]
    */
   async getRecipientByYear({
-    targetCurrency = 'EUR',
+    targetCurrency = "EUR",
     excludedRecipientIds = [],
     excludedCategoryIds = [],
   } = {}) {
@@ -225,9 +254,12 @@ export const recipientInsightsRepository = {
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
     // does exclude them).
-    const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+    const excl = buildExclusionClauses({
+      excludedCategoryIds,
+      excludedRecipientIds,
+    });
     const params = excl.params;
-    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
@@ -254,9 +286,9 @@ export const recipientInsightsRepository = {
     const result = await query(sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'abs_amount', false),
+      mapRowsForAmountConversion(result.rows, "abs_amount", false),
       targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
+      { useHistoricalRatesByDate: true, dateField: "date" },
     );
 
     /**
@@ -274,9 +306,16 @@ export const recipientInsightsRepository = {
 
       if (!yearRecMap[year]) yearRecMap[year] = {};
       if (!yearRecMap[year][rid]) {
-        yearRecMap[year][rid] = { recipientId: rid, name: row.name, totalSpend: 0, transactionCount: 0 };
+        yearRecMap[year][rid] = {
+          recipientId: rid,
+          name: row.name,
+          totalSpend: 0,
+          transactionCount: 0,
+        };
       }
-      yearRecMap[year][rid].totalSpend = toNumber(toDecimal(yearRecMap[year][rid].totalSpend).plus(toDecimal(eur)));
+      yearRecMap[year][rid].totalSpend = toNumber(
+        toDecimal(yearRecMap[year][rid].totalSpend).plus(toDecimal(eur)),
+      );
       yearRecMap[year][rid].transactionCount += cnt;
     }
 
@@ -291,7 +330,7 @@ export const recipientInsightsRepository = {
       recipientsByYear[year] = Object.values(recs)
         .sort((a, b) => b.totalSpend - a.totalSpend)
         .slice(0, 20)
-        .map(r => ({ ...r, totalSpend: roundToCents(r.totalSpend) }));
+        .map((r) => ({ ...r, totalSpend: roundToCents(r.totalSpend) }));
     }
 
     return { recipientsByYear };
@@ -309,8 +348,8 @@ export const recipientInsightsRepository = {
    */
   async getRecipientPivot({
     excludedRecipientIds = [],
-    targetCurrency = 'EUR',
-    bucket = 'monthly',
+    targetCurrency = "EUR",
+    bucket = "monthly",
     startDate = null,
     endDate = null,
     recipientIds = null,
@@ -318,27 +357,51 @@ export const recipientInsightsRepository = {
     // Canonical recipient exclusion (lib/filterBuilder.buildExclusionClauses).
     const excl = buildExclusionClauses({ excludedRecipientIds });
     const params = excl.params;
-    const recExclude = excl.whereSql ? `AND ${excl.whereSql}` : '';
+    const recExclude = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
-    const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
+    const periodExpr =
+      bucket === "yearly"
+        ? "TO_CHAR(t.date, 'YYYY')"
+        : "TO_CHAR(t.date, 'YYYY-MM')";
 
     const dateFilters = [];
-    if (startDate) { params.push(startDate); dateFilters.push(`t.date >= $${params.length}`); }
-    if (endDate) { params.push(endDate); dateFilters.push(`t.date <= $${params.length}`); }
-    const dateWhere = dateFilters.length > 0 ? dateFilters.join(' AND ') : '';
+    if (startDate) {
+      params.push(startDate);
+      dateFilters.push(`t.date >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      dateFilters.push(`t.date <= $${params.length}`);
+    }
+    const dateWhere = dateFilters.length > 0 ? dateFilters.join(" AND ") : "";
 
     // Optional inclusion narrowing: the only consumer (saved CustomChart) renders
     // a handful of selected recipients, so resolve their alias members and scan
     // ONLY those rows (hits idx_transactions_recipient_date_active) instead of
     // every active expense row for all recipients. See ADR-041 amendment.
-    let recipientInclude = '';
-    const validIncludeIds = validateInt4Ids(recipientIds, 'recipientIds');
+    let recipientInclude = "";
+    const validIncludeIds = validateInt4Ids(recipientIds, "recipientIds");
     if (validIncludeIds.length > 0) {
       const memberRes = await query(
-        `SELECT id FROM recipients WHERE id = ANY($1::int[]) OR primary_recipient_id = ANY($1::int[])`,
+        `WITH selected_roots AS (
+           SELECT DISTINCT COALESCE(primary_recipient_id, id) AS id
+           FROM recipients
+           WHERE id = ANY($1::int[])
+         )
+         SELECT id FROM selected_roots
+         UNION
+         SELECT r.id
+         FROM recipients r
+         JOIN selected_roots sr ON r.primary_recipient_id = sr.id`,
         [validIncludeIds],
       );
-      const memberIds = memberRes.rows.map((/** @type {{ id: number }} */ row) => Number(row.id));
+      const memberIds = [
+        ...new Set(
+          memberRes.rows.map((/** @type {{ id: number }} */ row) =>
+            Number(row.id),
+          ),
+        ),
+      ];
       if (memberIds.length === 0) return { recipientPivot: {} };
       params.push(memberIds);
       recipientInclude = `AND t.recipient_id = ANY($${params.length}::int[])`;
@@ -364,23 +427,23 @@ export const recipientInsightsRepository = {
         AND t.is_transfer = false
         ${recExclude}
         ${recipientInclude}
-        ${dateWhere ? `AND ${dateWhere}` : ''}
+        ${dateWhere ? `AND ${dateWhere}` : ""}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), ${periodExpr}, t.date, t.currency
     `;
 
     const result = await query(sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'abs_amount', false),
+      mapRowsForAmountConversion(result.rows, "abs_amount", false),
       targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
+      { useHistoricalRatesByDate: true, dateField: "date" },
     );
 
     const recipientPivot = buildPeriodPivot(converted, {
-      idField: 'recipient_id',
-      labelField: 'recipient_name',
-      idKey: 'recipientId',
-      labelKey: 'name',
+      idField: "recipient_id",
+      labelField: "recipient_name",
+      idKey: "recipientId",
+      labelKey: "name",
     });
 
     return { recipientPivot };

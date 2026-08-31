@@ -9,30 +9,22 @@
  * scheduled hour is near midnight in a non-UTC zone (e.g. Jan 31 23:59 +01:00
  * must roll to Feb 28 23:59 +01:00, not Mar 1 / shifted by an hour).
  *
- * ONE grammar, TWO steppers. The pattern grammar (daily/weekly/biweekly/
+ * ONE grammar, TWO return shapes. The pattern grammar (daily/weekly/biweekly/
  * "every N days" + monthly/quarterly/yearly) lives ONLY in
  * {@link parseRecurrenceStep}; both steppers dispatch off it, so adding a
  * pattern there is the whole job — it can no longer land in one stepper and
  * silently miss the other:
  *
- *   - {@link calculateNextDate} — Date-space (instant → instant). Used where an
- *     occurrence is a stored timestamp: /execute advancing planned_date, and
- *     {@link expandOccurrences} (cashflow forecast, AI-chat planned tools).
+ *   - {@link calculateNextDate} — Date return value with APP_TIMEZONE
+ *     wall-clock stepping. Used by /execute and {@link expandOccurrences}
+ *     (cashflow forecast, AI-chat planned tools).
  *   - {@link nextOccurrenceYmd} — string-space ('YYYY-MM-DD' → 'YYYY-MM-DD'),
  *     with the optional {@link fastForwardYmd} jump. Used where an occurrence
  *     is a calendar day: infoRepositoryPlanned's next-month expansion.
  *
- * KNOWN DIVERGENCE (pre-existing, deliberately preserved): the two steppers
- * agree on every month-based step and on every day-based step that does not
- * cross APP_TIMEZONE's fall-back DST transition. Across fall-back, Date-space
- * day steps (addDaysUtc keeps the UTC time-of-day, so a start-of-day instant
- * lands at 23:00 the previous wall-clock day) render one calendar day EARLY —
- * and daily renders the transition day twice — while string-space steps stay
- * calendar-exact (Oct 21 + 7 = Oct 28, never Oct 27). Migrating
- * expandOccurrences to string space would therefore CHANGE forecast output for
- * day-cadence rows spanning late October; that is a behavior decision, not a
- * refactor, so it is pinned in tests (recurrenceStepper.test.js /
- * recurrenceExpandOccurrences.test.js) rather than silently "fixed" here.
+ * Both forms advance calendar days in APP_TIMEZONE. A day cadence therefore
+ * stays exact across daylight-saving transitions: daily never repeats the
+ * fall-back day and weekly never lands one wall-clock day early.
  *
  * Contract:
  *   parseRecurrenceStep(pattern) → { unit, amount } | undefined
@@ -49,10 +41,11 @@ import {
   appDateStringToUtc,
   toAppDateString,
   addDaysYmd,
+  differenceInCalendarDaysYmd,
   firstOfMonthYmd,
-} from '../timezone.js';
-import { formatDateToYmd } from '../dateFormat.js';
-import { PLANNED_RECURRENCE_PATTERNS } from '@vision/types/recurrence';
+} from "../timezone.js";
+import { formatDateToYmd } from "../dateFormat.js";
+import { PLANNED_RECURRENCE_PATTERNS } from "@vision/types/recurrence";
 
 // The named cadences this module recognises, single-sourced in
 // @vision/types/recurrence alongside the portfolio vocabulary that spells the
@@ -60,8 +53,6 @@ import { PLANNED_RECURRENCE_PATTERNS } from '@vision/types/recurrence';
 // only — parseRecurrenceStep additionally accepts the custom `every N days`
 // form, which is deliberately not a member.
 const SUPPORTED_PATTERNS = PLANNED_RECURRENCE_PATTERNS;
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * @typedef {object} RecurrenceStep
@@ -84,17 +75,19 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * @returns {RecurrenceStep|undefined}
  */
 export function parseRecurrenceStep(pattern) {
-  const p = String(pattern || '').toLowerCase().trim();
-  if (p === 'daily') return { unit: 'day', amount: 1 };
-  if (p === 'weekly') return { unit: 'day', amount: 7 };
-  if (p === 'biweekly') return { unit: 'day', amount: 14 };
-  if (p === 'monthly') return { unit: 'month', amount: 1 };
-  if (p === 'quarterly') return { unit: 'month', amount: 3 };
-  if (p === 'yearly') return { unit: 'month', amount: 12 };
+  const p = String(pattern || "")
+    .toLowerCase()
+    .trim();
+  if (p === "daily") return { unit: "day", amount: 1 };
+  if (p === "weekly") return { unit: "day", amount: 7 };
+  if (p === "biweekly") return { unit: "day", amount: 14 };
+  if (p === "monthly") return { unit: "month", amount: 1 };
+  if (p === "quarterly") return { unit: "month", amount: 3 };
+  if (p === "yearly") return { unit: "month", amount: 12 };
   const match = p.match(/^every\s+(\d+)\s+days?$/);
   if (match) {
     const days = parseInt(match[1], 10);
-    if (days >= 1) return { unit: 'day', amount: days };
+    if (days >= 1) return { unit: "day", amount: days };
   }
   return undefined;
 }
@@ -103,15 +96,27 @@ export function parseRecurrenceStep(pattern) {
 const MAX_OCCURRENCES = 500;
 
 /**
+ * Add days on the APP_TIMEZONE wall clock while preserving time-of-day. UTC
+ * duration arithmetic is wrong here: a summer midnight plus seven UTC days
+ * becomes 23:00 on the previous local day after fall-back.
+ *
  * @param {string|number|Date} dateLike
  * @param {number} days
  * @returns {Date}
  */
-function addDaysUtc(dateLike, days) {
+function addDaysInAppTz(dateLike, days) {
   const source = new Date(dateLike);
-  const result = new Date(source.getTime());
-  result.setUTCDate(result.getUTCDate() + days);
-  return result;
+  const zoned = toAppTz(source);
+  const sourceYmd = `${String(zoned.year).padStart(4, "0")}-${String(zoned.month).padStart(2, "0")}-${String(zoned.day).padStart(2, "0")}`;
+  const shiftedYmd = addDaysYmd(sourceYmd, days);
+  return toUtc({
+    year: Number(shiftedYmd.slice(0, 4)),
+    month: Number(shiftedYmd.slice(5, 7)),
+    day: Number(shiftedYmd.slice(8, 10)),
+    hour: zoned.hour,
+    minute: zoned.minute,
+    second: zoned.second,
+  });
 }
 
 /**
@@ -130,7 +135,9 @@ function addMonthsClampedInAppTz(dateLike, monthDelta) {
   // Double-modulo normalizes negative indices: e.g. -1 → 11 (December).
   const targetMonth0 = ((targetMonthIndex % 12) + 12) % 12;
   // Last day of target month (UTC-safe arithmetic for "0th of next month").
-  const lastDay = new Date(Date.UTC(targetYear, targetMonth0 + 1, 0)).getUTCDate();
+  const lastDay = new Date(
+    Date.UTC(targetYear, targetMonth0 + 1, 0),
+  ).getUTCDate();
   const targetDay = Math.min(zoned.day, lastDay);
   return toUtc({
     year: targetYear,
@@ -143,11 +150,9 @@ function addMonthsClampedInAppTz(dateLike, monthDelta) {
 }
 
 /**
- * Date-space stepper: the occurrence after `currentDate`, or null for a
- * pattern {@link parseRecurrenceStep} can't advance. Day steps are UTC day
- * arithmetic (time-of-day preserved); month steps clamp in APP_TIMEZONE
- * wall-clock. See the module header for how this differs from the string-space
- * twin across fall-back DST.
+ * Date-returning stepper: the occurrence after `currentDate`, or null for a
+ * pattern {@link parseRecurrenceStep} can't advance. Day and month steps both
+ * use APP_TIMEZONE wall-clock arithmetic, preserving the local time-of-day.
  *
  * @param {string|number|Date} currentDate
  * @param {string|null|undefined} recurrencePattern
@@ -157,8 +162,8 @@ export function calculateNextDate(currentDate, recurrencePattern) {
   if (!recurrencePattern) return null;
   const step = parseRecurrenceStep(recurrencePattern.toLowerCase().trim());
   if (!step) return null;
-  return step.unit === 'day'
-    ? addDaysUtc(currentDate, step.amount)
+  return step.unit === "day"
+    ? addDaysInAppTz(currentDate, step.amount)
     : addMonthsClampedInAppTz(currentDate, step.amount);
 }
 
@@ -193,8 +198,11 @@ export function isValidPattern(pattern) {
 function addMonthsClampedYmd(ymd, months) {
   const day = parseInt(ymd.slice(8, 10), 10);
   const firstOfTarget = firstOfMonthYmd(ymd, months);
-  const lastDayOfTarget = parseInt(addDaysYmd(firstOfMonthYmd(ymd, months + 1), -1).slice(8, 10), 10);
-  return `${firstOfTarget.slice(0, 8)}${String(Math.min(day, lastDayOfTarget)).padStart(2, '0')}`;
+  const lastDayOfTarget = parseInt(
+    addDaysYmd(firstOfMonthYmd(ymd, months + 1), -1).slice(8, 10),
+    10,
+  );
+  return `${firstOfTarget.slice(0, 8)}${String(Math.min(day, lastDayOfTarget)).padStart(2, "0")}`;
 }
 
 /**
@@ -205,12 +213,6 @@ function addMonthsClampedYmd(ymd, months) {
  * @param {string} toYmd 'YYYY-MM-DD'
  * @returns {number}
  */
-function diffDaysYmd(fromYmd, toYmd) {
-  const [fy, fm, fd] = fromYmd.split('-').map(Number);
-  const [ty, tm, td] = toYmd.split('-').map(Number);
-  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / MS_PER_DAY);
-}
-
 /**
  * String-space stepper: the occurrence after `ymd` for `pattern`, or undefined
  * for a pattern {@link parseRecurrenceStep} can't advance. Calendar-string
@@ -225,7 +227,9 @@ function diffDaysYmd(fromYmd, toYmd) {
 export function nextOccurrenceYmd(ymd, pattern) {
   const step = parseRecurrenceStep(pattern);
   if (!step) return undefined;
-  return step.unit === 'day' ? addDaysYmd(ymd, step.amount) : addMonthsClampedYmd(ymd, step.amount);
+  return step.unit === "day"
+    ? addDaysYmd(ymd, step.amount)
+    : addMonthsClampedYmd(ymd, step.amount);
 }
 
 /**
@@ -251,8 +255,8 @@ export function nextOccurrenceYmd(ymd, pattern) {
  */
 export function fastForwardYmd(ymd, pattern, targetYmd) {
   const step = parseRecurrenceStep(pattern);
-  if (!step || step.unit !== 'day') return ymd;
-  const deficitDays = diffDaysYmd(ymd, targetYmd);
+  if (!step || step.unit !== "day") return ymd;
+  const deficitDays = differenceInCalendarDaysYmd(ymd, targetYmd);
   if (deficitDays <= step.amount) return ymd;
   const hops = Math.floor(deficitDays / step.amount) - 1;
   if (hops <= 0) return ymd;
@@ -303,7 +307,11 @@ function parsePlannedDate(value) {
  * @param {{ maxOccurrences?: number }} [opts]
  * @returns {string[]}  ordered occurrence dates, 'YYYY-MM-DD'
  */
-export function expandOccurrences(row, horizonYmd, { maxOccurrences = MAX_OCCURRENCES } = {}) {
+export function expandOccurrences(
+  row,
+  horizonYmd,
+  { maxOccurrences = MAX_OCCURRENCES } = {},
+) {
   const end = appDateStringToUtc(horizonYmd);
   const first = parsePlannedDate(row.planned_date);
   const occurrences = [];

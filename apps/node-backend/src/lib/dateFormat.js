@@ -18,8 +18,8 @@
  */
 export function formatDateToYmd(date) {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -34,6 +34,45 @@ export function formatDateToYmd(date) {
 export function toYmd(value) {
   if (value instanceof Date) return formatDateToYmd(value);
   return String(value).slice(0, 10);
+}
+
+/**
+ * Normalize a DATE-like value to YYYY-MM-DD. PostgreSQL DATE objects use
+ * local calendar getters; strings with a YMD prefix retain that prefix after
+ * strict calendar validation; other parseable strings retain the historical
+ * local-Date fallback. Invalid and nullish values fail closed as undefined.
+ *
+ * @param {unknown} value
+ * @returns {string|undefined}
+ */
+export function normalizeDateLikeToYmd(value) {
+  if (value == null || value === "") return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : formatDateToYmd(value);
+  }
+  if (typeof value !== "string") return undefined;
+
+  const stringValue = value.trim();
+  if (
+    stringValue === "" ||
+    /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(stringValue)
+  ) {
+    return undefined;
+  }
+  const prefix = stringValue.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(prefix)) {
+    const ms = Date.parse(`${prefix}T00:00:00.000Z`);
+    if (
+      Number.isFinite(ms) &&
+      new Date(ms).toISOString().slice(0, 10) === prefix
+    ) {
+      return prefix;
+    }
+    return undefined;
+  }
+
+  const parsed = new Date(stringValue);
+  return Number.isNaN(parsed.getTime()) ? undefined : formatDateToYmd(parsed);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 async function loadAggregationRefresh() {
   vi.resetModules();
@@ -16,27 +16,35 @@ async function loadAggregationRefresh() {
   const clearMcCache = vi.fn().mockResolvedValue(undefined);
   const clearRollingMcCache = vi.fn().mockResolvedValue(undefined);
 
-  vi.doMock('../src/database/connection.js', () => ({ query }));
-  vi.doMock('../src/config/logger.js', () => ({ logger }));
-  vi.doMock('../src/services/materializedViewService.js', () => ({
+  vi.doMock("../src/database/connection.js", () => ({ query }));
+  vi.doMock("../src/config/logger.js", () => ({ logger }));
+  vi.doMock("../src/services/materializedViewService.js", () => ({
     refreshMaterializedViews: refreshLegacyMaterializedViews,
     scheduleRefresh: scheduleLegacyRefresh,
   }));
-  vi.doMock('../src/repositories/cashflowForecastMcRepository.js', () => ({
+  vi.doMock("../src/repositories/cashflowForecastMcRepository.js", () => ({
     default: { clearAll: clearMcCache },
   }));
-  vi.doMock('../src/repositories/cashflowForecastMcRollingRepository.js', () => ({
-    default: { clearAll: clearRollingMcCache },
-  }));
+  vi.doMock(
+    "../src/repositories/cashflowForecastMcRollingRepository.js",
+    () => ({
+      default: { clearAll: clearRollingMcCache },
+    }),
+  );
 
-  const service = await import('../src/services/aggregationRefresh.js');
+  const service = await import("../src/services/aggregationRefresh.js");
   return {
-    ...service, query, logger, refreshLegacyMaterializedViews, scheduleLegacyRefresh,
-    clearMcCache, clearRollingMcCache,
+    ...service,
+    query,
+    logger,
+    refreshLegacyMaterializedViews,
+    scheduleLegacyRefresh,
+    clearMcCache,
+    clearRollingMcCache,
   };
 }
 
-describe('aggregationRefresh', () => {
+describe("aggregationRefresh", () => {
   afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();
@@ -44,21 +52,22 @@ describe('aggregationRefresh', () => {
     vi.resetModules();
   });
 
-  it('exposes the trigger-maintained tables as a frozen array', async () => {
+  it("exposes the trigger-maintained tables as a frozen array", async () => {
     const { TRIGGER_MAINTAINED_TABLES } = await loadAggregationRefresh();
-    expect(TRIGGER_MAINTAINED_TABLES).toEqual(['agg_split_outstanding']);
+    expect(TRIGGER_MAINTAINED_TABLES).toEqual(["agg_split_outstanding"]);
     expect(Object.isFrozen(TRIGGER_MAINTAINED_TABLES)).toBe(true);
   });
 
-  it('refreshes the legacy materialized views', async () => {
-    const { refreshAggregations, refreshLegacyMaterializedViews } = await loadAggregationRefresh();
+  it("refreshes the legacy materialized views", async () => {
+    const { refreshAggregations, refreshLegacyMaterializedViews } =
+      await loadAggregationRefresh();
 
     await refreshAggregations();
 
     expect(refreshLegacyMaterializedViews).toHaveBeenCalledTimes(1);
   });
 
-  it('no longer refreshes mv_recipient_monthly (write-amplification removed)', async () => {
+  it("no longer refreshes mv_recipient_monthly (write-amplification removed)", async () => {
     const { refreshAggregations, query } = await loadAggregationRefresh();
     query.mockResolvedValue({ rows: [] });
 
@@ -66,11 +75,17 @@ describe('aggregationRefresh', () => {
 
     // The view is no longer in the refresh set — no REFRESH should be issued.
     const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls.some((sql) => typeof sql === 'string' && sql.includes('mv_recipient_monthly'))).toBe(false);
+    expect(
+      sqlCalls.some(
+        (sql) =>
+          typeof sql === "string" && sql.includes("mv_recipient_monthly"),
+      ),
+    ).toBe(false);
   });
 
-  it('invalidates the cashflow-forecast caches so diagnostics recompute on fresh data', async () => {
-    const { refreshAggregations, clearMcCache, clearRollingMcCache } = await loadAggregationRefresh();
+  it("invalidates the cashflow-forecast caches so diagnostics recompute on fresh data", async () => {
+    const { refreshAggregations, clearMcCache, clearRollingMcCache } =
+      await loadAggregationRefresh();
 
     await refreshAggregations();
 
@@ -78,9 +93,40 @@ describe('aggregationRefresh', () => {
     expect(clearRollingMcCache).toHaveBeenCalledTimes(1);
   });
 
-  it('scheduleAggregationRefresh delegates to the legacy debounce', async () => {
+  it("can invalidate forecast caches without rebuilding materialized views", async () => {
+    const {
+      clearForecastMcCaches,
+      clearMcCache,
+      clearRollingMcCache,
+      refreshLegacyMaterializedViews,
+    } = await loadAggregationRefresh();
+
+    await clearForecastMcCaches();
+
+    expect(clearMcCache).toHaveBeenCalledTimes(1);
+    expect(clearRollingMcCache).toHaveBeenCalledTimes(1);
+    expect(refreshLegacyMaterializedViews).not.toHaveBeenCalled();
+  });
+
+  it("can schedule only the materialized-view refresh for a completed bulk mutation", async () => {
+    const {
+      scheduleMaterializedViewRefresh,
+      scheduleLegacyRefresh,
+      clearMcCache,
+      clearRollingMcCache,
+    } = await loadAggregationRefresh();
+
+    scheduleMaterializedViewRefresh();
+
+    expect(scheduleLegacyRefresh).toHaveBeenCalledTimes(1);
+    expect(clearMcCache).not.toHaveBeenCalled();
+    expect(clearRollingMcCache).not.toHaveBeenCalled();
+  });
+
+  it("scheduleAggregationRefresh delegates to the legacy debounce", async () => {
     vi.useFakeTimers();
-    const { scheduleAggregationRefresh, scheduleLegacyRefresh, query } = await loadAggregationRefresh();
+    const { scheduleAggregationRefresh, scheduleLegacyRefresh, query } =
+      await loadAggregationRefresh();
 
     scheduleAggregationRefresh();
     scheduleAggregationRefresh();
@@ -92,9 +138,10 @@ describe('aggregationRefresh', () => {
 
   // TODO E15: single-transaction mutations previously had NO path to the MC
   // cache clear — an edit left the cashflow forecast stale for up to 6 hours.
-  it('scheduleAggregationRefresh clears the forecast MC caches once per burst', async () => {
+  it("scheduleAggregationRefresh clears the forecast MC caches once per burst", async () => {
     vi.useFakeTimers();
-    const { scheduleAggregationRefresh, clearMcCache, clearRollingMcCache } = await loadAggregationRefresh();
+    const { scheduleAggregationRefresh, clearMcCache, clearRollingMcCache } =
+      await loadAggregationRefresh();
 
     scheduleAggregationRefresh();
     scheduleAggregationRefresh();
@@ -107,9 +154,13 @@ describe('aggregationRefresh', () => {
     expect(clearRollingMcCache).toHaveBeenCalledTimes(1);
   });
 
-  it('cancelPendingAggregationRefresh drops a pending MC-cache clear', async () => {
+  it("cancelPendingAggregationRefresh drops a pending MC-cache clear", async () => {
     vi.useFakeTimers();
-    const { scheduleAggregationRefresh, cancelPendingAggregationRefresh, clearMcCache } = await loadAggregationRefresh();
+    const {
+      scheduleAggregationRefresh,
+      cancelPendingAggregationRefresh,
+      clearMcCache,
+    } = await loadAggregationRefresh();
 
     expect(() => cancelPendingAggregationRefresh()).not.toThrow(); // idle: no-op
 
@@ -120,11 +171,13 @@ describe('aggregationRefresh', () => {
     expect(clearMcCache).not.toHaveBeenCalled();
   });
 
-  it('default export exposes the public API', async () => {
+  it("default export exposes the public API", async () => {
     const mod = await loadAggregationRefresh();
     expect(mod.default).toMatchObject({
       refreshAggregations: expect.any(Function),
+      clearForecastMcCaches: expect.any(Function),
       scheduleAggregationRefresh: expect.any(Function),
+      scheduleMaterializedViewRefresh: expect.any(Function),
       cancelPendingAggregationRefresh: expect.any(Function),
       TRIGGER_MAINTAINED_TABLES: expect.any(Array),
     });

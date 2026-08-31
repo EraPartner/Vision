@@ -5,11 +5,11 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { toDecimal, toNumber } from '../../lib/money.js';
-import { todayAppDateString } from '../../lib/timezone.js';
-import { formatDateToYmd, epochMsToUtcYmd } from '../../lib/dateFormat.js';
+import { query, withTransaction } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { toDecimal, toNumber } from "../../lib/money.js";
+import { todayAppDateString } from "../../lib/timezone.js";
+import { formatDateToYmd, epochMsToUtcYmd } from "../../lib/dateFormat.js";
 
 /**
  * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
@@ -24,12 +24,15 @@ import { formatDateToYmd, epochMsToUtcYmd } from '../../lib/dateFormat.js';
  * @typedef {Map<string, RateTable>} RatesByDate
  */
 
-const ECB_LATEST_URL       = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
-const ERAR_LATEST_URL      = 'https://open.er-api.com/v6/latest/EUR';
-const ECB_HISTORY_90D_URL  = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
+const ECB_LATEST_URL =
+  "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+const ERAR_LATEST_URL = "https://open.er-api.com/v6/latest/EUR";
+const ECB_HISTORY_90D_URL =
+  "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml";
 // Full ECB reference-rate history (one ~6 MB XML, daily back to 1999). Only
 // fetched when a rate older than the 90-day window is actually needed.
-const ECB_HISTORY_FULL_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
+const ECB_HISTORY_FULL_URL =
+  "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
 
 export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -54,15 +57,18 @@ let historicalEcbFullEvictTimer = null;
  * module stays safe in environments without timers.
  */
 function scheduleHistoricalFullEviction() {
-  if (typeof setTimeout !== 'function') return;
-  if (historicalEcbFullEvictTimer && typeof clearTimeout === 'function') {
+  if (typeof setTimeout !== "function") return;
+  if (historicalEcbFullEvictTimer && typeof clearTimeout === "function") {
     clearTimeout(historicalEcbFullEvictTimer);
   }
   historicalEcbFullEvictTimer = setTimeout(() => {
     historicalEcbFullCache = null;
     historicalEcbFullEvictTimer = null;
   }, HISTORICAL_FULL_CACHE_IDLE_MS);
-  if (historicalEcbFullEvictTimer && typeof historicalEcbFullEvictTimer.unref === 'function') {
+  if (
+    historicalEcbFullEvictTimer &&
+    typeof historicalEcbFullEvictTimer.unref === "function"
+  ) {
     historicalEcbFullEvictTimer.unref();
   }
 }
@@ -110,7 +116,8 @@ function parseEcbXml(xmlText) {
   const rates = { EUR: 1.0 };
   const q = `['"]`;
   const currencyPattern = new RegExp(
-    `<Cube\\s+currency=${q}([A-Z]{3})${q}\\s+rate=${q}([0-9.]+)${q}\\s*\\/>`,'g'
+    `<Cube\\s+currency=${q}([A-Z]{3})${q}\\s+rate=${q}([0-9.]+)${q}\\s*\\/>`,
+    "g",
   );
   let match;
   while ((match = currencyPattern.exec(xmlText)) !== null) {
@@ -132,7 +139,10 @@ function parseEcbXml(xmlText) {
 function parseEcbHistoricalXml(xmlText) {
   /** @type {RatesByDate} */
   const byDate = new Map();
-  const dayBlocks = xmlText.match(/<Cube\s+time=['"][0-9]{4}-[0-9]{2}-[0-9]{2}['"][\s\S]*?<\/Cube>/g) || [];
+  const dayBlocks =
+    xmlText.match(
+      /<Cube\s+time=['"][0-9]{4}-[0-9]{2}-[0-9]{2}['"][\s\S]*?<\/Cube>/g,
+    ) || [];
   for (const block of dayBlocks) {
     const timeMatch = block.match(/time=['"]([0-9]{4}-[0-9]{2}-[0-9]{2})['"]/);
     if (!timeMatch) continue;
@@ -153,7 +163,9 @@ function parseEcbHistoricalXml(xmlText) {
  */
 export async function fetchFromEcb() {
   try {
-    const response = await fetch(ECB_LATEST_URL, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(ECB_LATEST_URL, {
+      signal: AbortSignal.timeout(5000),
+    });
     if (!response.ok) {
       logger.error(`ECB API returned ${response.status}`);
       return null;
@@ -161,11 +173,15 @@ export async function fetchFromEcb() {
     const xmlText = await response.text();
     const rates = parseEcbXml(xmlText);
     if (rates) {
-      logger.debug(`Fetched ${Object.keys(rates).length - 1} exchange rates from ECB`);
+      logger.debug(
+        `Fetched ${Object.keys(rates).length - 1} exchange rates from ECB`,
+      );
     }
     return rates;
   } catch (err) {
-    logger.error('Failed to fetch exchange rates from ECB', { error: err.message });
+    logger.error("Failed to fetch exchange rates from ECB", {
+      error: err.message,
+    });
     return null;
   }
 }
@@ -178,21 +194,25 @@ export async function fetchFromEcb() {
  */
 export async function fetchFromErApi() {
   try {
-    const response = await fetch(ERAR_LATEST_URL, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(ERAR_LATEST_URL, {
+      signal: AbortSignal.timeout(5000),
+    });
     if (!response.ok) {
       logger.error(`open.er-api returned ${response.status}`);
       return null;
     }
     const data = await response.json();
-    if (data.result !== 'success' || !data.rates) {
-      logger.error('Unexpected response from open.er-api', { result: data.result });
+    if (data.result !== "success" || !data.rates) {
+      logger.error("Unexpected response from open.er-api", {
+        result: data.result,
+      });
       return null;
     }
     /** @type {RateTable} */
     const rates = { EUR: 1.0 };
     for (const [currency, eurToX] of Object.entries(data.rates)) {
       if (
-        currency !== 'EUR' &&
+        currency !== "EUR" &&
         Number.isFinite(eurToX) &&
         eurToX > 0.0001 &&
         eurToX < 100000
@@ -200,10 +220,14 @@ export async function fetchFromErApi() {
         rates[currency] = 1.0 / eurToX;
       }
     }
-    logger.debug(`Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`);
+    logger.debug(
+      `Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`,
+    );
     return rates;
   } catch (err) {
-    logger.error('Failed to fetch exchange rates from open.er-api', { error: err.message });
+    logger.error("Failed to fetch exchange rates from open.er-api", {
+      error: err.message,
+    });
     return null;
   }
 }
@@ -214,11 +238,16 @@ export async function fetchFromErApi() {
  * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
  */
 export async function fetchHistoricalFromEcb90d() {
-  if (historicalEcb90dCache && Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS) {
+  if (
+    historicalEcb90dCache &&
+    Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS
+  ) {
     return historicalEcb90dCache.byDate;
   }
   try {
-    const response = await fetch(ECB_HISTORY_90D_URL, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(ECB_HISTORY_90D_URL, {
+      signal: AbortSignal.timeout(8000),
+    });
     if (!response.ok) return new Map();
     const xmlText = await response.text();
     const byDate = parseEcbHistoricalXml(xmlText);
@@ -236,12 +265,17 @@ export async function fetchHistoricalFromEcb90d() {
  * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
  */
 export async function fetchHistoricalFromEcbFull() {
-  if (historicalEcbFullCache && Date.now() - historicalEcbFullCache.timestamp < CACHE_LIFETIME_MS) {
+  if (
+    historicalEcbFullCache &&
+    Date.now() - historicalEcbFullCache.timestamp < CACHE_LIFETIME_MS
+  ) {
     scheduleHistoricalFullEviction(); // touch: keep a live cache from being evicted
     return historicalEcbFullCache.byDate;
   }
   try {
-    const response = await fetch(ECB_HISTORY_FULL_URL, { signal: AbortSignal.timeout(30000) });
+    const response = await fetch(ECB_HISTORY_FULL_URL, {
+      signal: AbortSignal.timeout(30000),
+    });
     if (!response.ok) return new Map();
     const xmlText = await response.text();
     const byDate = parseEcbHistoricalXml(xmlText);
@@ -252,7 +286,9 @@ export async function fetchHistoricalFromEcbFull() {
     }
     return byDate;
   } catch (err) {
-    logger.warn('Failed to fetch full ECB rate history', { error: err.message });
+    logger.warn("Failed to fetch full ECB rate history", {
+      error: err.message,
+    });
     return new Map();
   }
 }
@@ -260,7 +296,7 @@ export async function fetchHistoricalFromEcbFull() {
 export function clearHistoricalCache() {
   historicalEcb90dCache = null;
   historicalEcbFullCache = null;
-  if (historicalEcbFullEvictTimer && typeof clearTimeout === 'function') {
+  if (historicalEcbFullEvictTimer && typeof clearTimeout === "function") {
     clearTimeout(historicalEcbFullEvictTimer);
   }
   historicalEcbFullEvictTimer = null;
@@ -277,9 +313,14 @@ export function clearHistoricalCache() {
  * @param {number} [maxLookbackDays]
  * @returns {number|undefined}
  */
-export function rateOnOrBeforeFromMap(byDate, currencyCode, dateStr, maxLookbackDays = 7) {
+export function rateOnOrBeforeFromMap(
+  byDate,
+  currencyCode,
+  dateStr,
+  maxLookbackDays = 7,
+) {
   if (!byDate || byDate.size === 0) return undefined;
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   let ts = Date.UTC(y, m - 1, d);
   for (let back = 0; back <= maxLookbackDays; back += 1) {
     const day = epochMsToUtcYmd(ts);
@@ -301,19 +342,23 @@ export function rateOnOrBeforeFromMap(byDate, currencyCode, dateStr, maxLookback
 export async function loadFromDatabase() {
   try {
     const result = await query(
-      `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`
+      `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
     );
     if (result.rows.length === 0) return null;
 
     /** @type {RateTable} */
     const rates = { EUR: 1.0 };
-    for (const row of /** @type {Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'>[]} */ (result.rows)) {
+    for (const row of /** @type {Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'>[]} */ (
+      result.rows
+    )) {
       rates[row.currency_code] = toNumber(toDecimal(row.rate_to_eur));
     }
     logger.debug(`Loaded ${result.rows.length} exchange rates from database`);
     return rates;
   } catch (err) {
-    logger.error('Failed to load exchange rates from database', { error: err.message });
+    logger.error("Failed to load exchange rates from database", {
+      error: err.message,
+    });
     return null;
   }
 }
@@ -330,7 +375,7 @@ export async function saveToDatabase(rates) {
     // rate_date is compared against APP_TIMEZONE calendar days throughout the
     // calc layer (historical lookups, snapshot day-walk) — stamp in the same zone.
     const today = todayAppDateString();
-    const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
+    const entries = Object.entries(rates).filter(([c]) => c !== "EUR");
     if (entries.length === 0) return;
 
     await withTransaction(async (client) => {
@@ -338,7 +383,7 @@ export async function saveToDatabase(rates) {
         `UPDATE exchange_rates
          SET is_latest = false, updated_at = NOW()
          WHERE currency_code = ANY($1::text[]) AND is_latest = true`,
-        [entries.map(([currency]) => currency)]
+        [entries.map(([currency]) => currency)],
       );
 
       for (const [currency, rate] of entries) {
@@ -351,13 +396,17 @@ export async function saveToDatabase(rates) {
              is_latest = true,
              fetched_at = NOW(),
              updated_at = NOW()`,
-          [currency, rate, today]
+          [currency, rate, today],
         );
       }
     });
-    logger.debug(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
+    logger.debug(
+      `Saved ${Object.keys(rates).length - 1} latest exchange rates to database`,
+    );
   } catch (err) {
-    logger.error('Failed to save exchange rates to database', { error: err.message });
+    logger.error("Failed to save exchange rates to database", {
+      error: err.message,
+    });
   }
 }
 
@@ -377,8 +426,81 @@ export async function saveHistoricalRate(currencyCode, dateStr, rateToEur) {
      DO UPDATE SET
        rate_to_eur = EXCLUDED.rate_to_eur,
        updated_at = NOW()`,
-    [currencyCode, rateToEur, dateStr]
+    [currencyCode, rateToEur, dateStr],
   );
+}
+
+/**
+ * Resolve many previously-unindexed currency/date pairs from ECB feeds.
+ *
+ * The caller has already proved that these currencies have no stored history,
+ * so doing an exact and nearest database lookup for every date cannot produce
+ * a result. Both ECB feeds are loaded at most once, all dates are resolved in
+ * memory, and successful points are persisted with one set-based statement.
+ *
+ * @param {Map<string, string[]>} datesByCurrency normalized currency → YYYY-MM-DD dates
+ * @param {{ saveFetchedHistoricalRates?: boolean }} [options]
+ * @returns {Promise<Map<string, number>>} `${currency}:${date}` → rate
+ */
+export async function getUnindexedRatesToEurForDates(
+  datesByCurrency,
+  { saveFetchedHistoricalRates = true } = {},
+) {
+  const pairs = [];
+  for (const [rawCurrency, rawDates] of datesByCurrency || []) {
+    const currency = String(rawCurrency || "")
+      .toUpperCase()
+      .trim();
+    if (!currency || currency === "EUR") continue;
+    for (const rawDate of new Set(rawDates || [])) {
+      const date = normalizeDateInput(rawDate);
+      if (date) pairs.push({ currency, date });
+    }
+  }
+  if (pairs.length === 0) return new Map();
+
+  const resolved = new Map();
+  const recentByDate = await fetchHistoricalFromEcb90d();
+  const unresolved = [];
+  for (const pair of pairs) {
+    const rate = rateOnOrBeforeFromMap(recentByDate, pair.currency, pair.date);
+    if (rate === undefined) unresolved.push(pair);
+    else resolved.set(`${pair.currency}:${pair.date}`, rate);
+  }
+
+  if (unresolved.length > 0) {
+    const fullByDate = await fetchHistoricalFromEcbFull();
+    for (const pair of unresolved) {
+      const rate = rateOnOrBeforeFromMap(fullByDate, pair.currency, pair.date);
+      if (rate !== undefined)
+        resolved.set(`${pair.currency}:${pair.date}`, rate);
+    }
+  }
+
+  if (saveFetchedHistoricalRates && resolved.size > 0) {
+    const currencies = [];
+    const dates = [];
+    const rates = [];
+    for (const [key, rate] of resolved) {
+      const separator = key.indexOf(":");
+      currencies.push(key.slice(0, separator));
+      dates.push(key.slice(separator + 1));
+      rates.push(rate);
+    }
+    await query(
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+       SELECT currency_code, rate_to_eur, rate_date::date, false
+       FROM UNNEST($1::text[], $2::numeric[], $3::text[])
+         AS fetched(currency_code, rate_to_eur, rate_date)
+       ON CONFLICT (currency_code, rate_date)
+       DO UPDATE SET
+         rate_to_eur = EXCLUDED.rate_to_eur,
+         updated_at = NOW()`,
+      [currencies, rates, dates],
+    );
+  }
+
+  return resolved;
 }
 
 /**
@@ -396,7 +518,7 @@ export async function getNearestRateFromDatabase(currencyCode, dateStr) {
      WHERE currency_code = $1
      ORDER BY ABS(rate_date - $2::date) ASC, rate_date DESC
      LIMIT 1`,
-    [currencyCode, dateStr]
+    [currencyCode, dateStr],
   );
   if (result.rows.length === 0) return undefined;
   return toNumber(toDecimal(result.rows[0].rate_to_eur));
@@ -412,10 +534,16 @@ export async function getNearestRateFromDatabase(currencyCode, dateStr) {
  * @param {number} [maxLookbackDays]
  * @returns {Promise<number|undefined>}
  */
-export async function getStoredRateToEurOnOrBefore(currencyCode, dateValue, maxLookbackDays = 7) {
-  const code = String(currencyCode || '').toUpperCase().trim();
+export async function getStoredRateToEurOnOrBefore(
+  currencyCode,
+  dateValue,
+  maxLookbackDays = 7,
+) {
+  const code = String(currencyCode || "")
+    .toUpperCase()
+    .trim();
   if (!code) return undefined;
-  if (code === 'EUR') return 1.0;
+  if (code === "EUR") return 1.0;
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
   const result = await query(
@@ -426,7 +554,7 @@ export async function getStoredRateToEurOnOrBefore(currencyCode, dateValue, maxL
        AND rate_date >= $2::date - make_interval(days => $3)
      ORDER BY rate_date DESC
      LIMIT 1`,
-    [code, dateStr, maxLookbackDays]
+    [code, dateStr, maxLookbackDays],
   );
   if (result.rows.length === 0) return undefined;
   return toNumber(toDecimal(result.rows[0].rate_to_eur));
@@ -453,7 +581,9 @@ export function buildHistoricalRateIndex(rows) {
   /** @type {HistoricalRateIndex} */
   const byCurrency = new Map();
   for (const row of rows) {
-    const currency = String(row.currency_code || '').toUpperCase().trim();
+    const currency = String(row.currency_code || "")
+      .toUpperCase()
+      .trim();
     const date = normalizeDateInput(row.rate_date);
     const rate = toNumber(toDecimal(row.rate_to_eur));
     if (!currency || !date || !Number.isFinite(rate)) continue;
@@ -480,7 +610,7 @@ export function buildHistoricalRateIndex(rows) {
  * @returns {number | undefined}
  */
 function searchRateIndex(index, currencyCode, dateStr, resolve) {
-  if (currencyCode === 'EUR') return 1.0;
+  if (currencyCode === "EUR") return 1.0;
   const entries = index.get(currencyCode);
   if (!entries || entries.length === 0) return undefined;
 
@@ -494,7 +624,10 @@ function searchRateIndex(index, currencyCode, dateStr, resolve) {
     else hi = mid - 1;
   }
 
-  return resolve(hi >= 0 ? entries[hi] : null, lo < entries.length ? entries[lo] : null);
+  return resolve(
+    hi >= 0 ? entries[hi] : null,
+    lo < entries.length ? entries[lo] : null,
+  );
 }
 
 /**
@@ -511,8 +644,12 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
     if (!prev) return next?.rate;
     if (!next) return prev.rate;
 
-    const prevDist = Math.abs(new Date(prev.date).getTime() - new Date(dateStr).getTime());
-    const nextDist = Math.abs(new Date(next.date).getTime() - new Date(dateStr).getTime());
+    const prevDist = Math.abs(
+      new Date(prev.date).getTime() - new Date(dateStr).getTime(),
+    );
+    const nextDist = Math.abs(
+      new Date(next.date).getTime() - new Date(dateStr).getTime(),
+    );
     return prevDist <= nextDist ? prev.rate : next.rate;
   });
 }
@@ -528,7 +665,9 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
  * @returns {number|undefined}
  */
 export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
-  return searchRateIndex(index, currencyCode, dateStr, (prev) => (prev ? prev.rate : undefined));
+  return searchRateIndex(index, currencyCode, dateStr, (prev) =>
+    prev ? prev.rate : undefined,
+  );
 }
 
 // ─── Historical rate point lookup ─────────────────────────────────────────────
@@ -542,8 +681,12 @@ export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
  * @param {{ saveFetchedHistoricalRate?: boolean }} [options] persist rates sourced from ECB (default true)
  * @returns {Promise<number|undefined>} undefined when the date is unparseable or nothing resolves
  */
-export async function getRateToEurForDate(currencyCode, dateValue, { saveFetchedHistoricalRate = true } = {}) {
-  if (!currencyCode || currencyCode === 'EUR') return 1.0;
+export async function getRateToEurForDate(
+  currencyCode,
+  dateValue,
+  { saveFetchedHistoricalRate = true } = {},
+) {
+  if (!currencyCode || currencyCode === "EUR") return 1.0;
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
 
@@ -552,7 +695,7 @@ export async function getRateToEurForDate(currencyCode, dateValue, { saveFetched
      FROM exchange_rates
      WHERE currency_code = $1 AND rate_date = $2::date
      LIMIT 1`,
-    [currencyCode, dateStr]
+    [currencyCode, dateStr],
   );
   if (exact.rows.length > 0) {
     return toNumber(toDecimal(exact.rows[0].rate_to_eur));
@@ -571,7 +714,11 @@ export async function getRateToEurForDate(currencyCode, dateValue, { saveFetched
   // Older dates: full ECB history (back to 1999). Cached for 24h, and every
   // resolved rate is persisted, so the big download happens at most rarely.
   const fullByDate = await fetchHistoricalFromEcbFull();
-  const historicalRate = rateOnOrBeforeFromMap(fullByDate, currencyCode, dateStr);
+  const historicalRate = rateOnOrBeforeFromMap(
+    fullByDate,
+    currencyCode,
+    dateStr,
+  );
   if (historicalRate !== undefined) {
     if (saveFetchedHistoricalRate) {
       await saveHistoricalRate(currencyCode, dateStr, historicalRate);

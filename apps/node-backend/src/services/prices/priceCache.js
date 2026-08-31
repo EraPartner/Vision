@@ -5,10 +5,14 @@
  * plus the DB read/write layer for asset_price_history.
  */
 
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
-import { validateInt4Ids } from '../../lib/filterBuilder.js';
+import { query } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import {
+  epochMsToUtcYmd,
+  normalizeDateLikeToYmd,
+} from "../../lib/dateFormat.js";
+import { ymdToEpochDay } from "../../lib/timezone.js";
+import { validateInt4Ids } from "../../lib/filterBuilder.js";
 
 /**
  * @typedef {import('../../types/rows.js').AssetPriceHistoryRow} AssetPriceHistoryRow
@@ -71,20 +75,13 @@ export function toDateOnly(timestampMs) {
  * @returns {number} epoch ms at UTC noon of that day, or NaN when unparseable
  */
 export function dateOnlyToTimestampMs(dateOnly) {
-  if (!dateOnly) return Number.NaN;
-  // pg returns DATE columns as local-midnight Date objects. String() on one is
-  // "Wed Jul 01 2026 …" — no parseable y-m-d in ANY timezone — so every
-  // DB-cached price-history read NaN'd out and normalizeHistoryPoints filtered
-  // every row: a silent live re-fetch (provider-quota burn) or an empty chart
-  // under db_only, in every deployment. Extract the calendar day with local
-  // getters (the day pg meant), then pin to UTC noon like the string path.
-  if (dateOnly instanceof Date) {
-    if (Number.isNaN(dateOnly.getTime())) return Number.NaN;
-    return Date.UTC(dateOnly.getFullYear(), dateOnly.getMonth(), dateOnly.getDate(), 12, 0, 0, 0);
+  const ymd = normalizeDateLikeToYmd(dateOnly);
+  if (!ymd) return Number.NaN;
+  try {
+    return ymdToEpochDay(ymd) * HISTORY_DAY_MS + 12 * 60 * 60 * 1000;
+  } catch {
+    return Number.NaN;
   }
-  const [y, m, d] = String(dateOnly).split('-').map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return Number.NaN;
-  return Date.UTC(y, m - 1, d, 12, 0, 0, 0);
 }
 
 // ─── History point helpers ────────────────────────────────────────────────────
@@ -107,7 +104,10 @@ export function normalizeHistoryPoints(points) {
     if (!Number.isFinite(timestampMs) || !isValidPrice(price)) continue;
     const dateOnly = toDateOnly(timestampMs);
     if (!dateOnly) continue;
-    byDate.set(dateOnly, { timestampMs: dateOnlyToTimestampMs(dateOnly), price });
+    byDate.set(dateOnly, {
+      timestampMs: dateOnlyToTimestampMs(dateOnly),
+      price,
+    });
   }
 
   return [...byDate.entries()]
@@ -180,7 +180,10 @@ export function countChangedPointPrices(beforePoints, afterPoints) {
 export function cacheGet(key) {
   const entry = _cache.get(key);
   if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) { _cache.delete(key); return undefined; }
+  if (Date.now() > entry.expiresAt) {
+    _cache.delete(key);
+    return undefined;
+  }
   return entry.data;
 }
 
@@ -210,8 +213,11 @@ export function sweepExpiredCacheEntries(now = Date.now()) {
   return removed;
 }
 
-const _sweepInterval = setInterval(sweepExpiredCacheEntries, CACHE_SWEEP_INTERVAL_MS);
-if (typeof _sweepInterval.unref === 'function') _sweepInterval.unref();
+const _sweepInterval = setInterval(
+  sweepExpiredCacheEntries,
+  CACHE_SWEEP_INTERVAL_MS,
+);
+if (typeof _sweepInterval.unref === "function") _sweepInterval.unref();
 
 // ─── DB persistence ───────────────────────────────────────────────────────────
 
@@ -219,10 +225,17 @@ if (typeof _sweepInterval.unref === 'function') _sweepInterval.unref();
  * @param {number} investmentId
  * @param {{ fromMs?: number, toMs?: number }} [range]
  */
-export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs } = {}) {
+export async function loadHistoricalPointsFromDatabase(
+  investmentId,
+  { fromMs, toMs } = {},
+) {
   if (!Number.isFinite(Number(investmentId))) return [];
-  const fromDate = Number.isFinite(Number(fromMs)) ? toDateOnly(Number(fromMs)) : null;
-  const toDateVal = Number.isFinite(Number(toMs)) ? toDateOnly(Number(toMs)) : null;
+  const fromDate = Number.isFinite(Number(fromMs))
+    ? toDateOnly(Number(fromMs))
+    : null;
+  const toDateVal = Number.isFinite(Number(toMs))
+    ? toDateOnly(Number(toMs))
+    : null;
 
   try {
     const result = await query(
@@ -232,7 +245,7 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
          AND ($2::date IS NULL OR price_date >= $2::date)
          AND ($3::date IS NULL OR price_date <= $3::date)
        ORDER BY price_date ASC`,
-      [Number(investmentId), fromDate, toDateVal]
+      [Number(investmentId), fromDate, toDateVal],
     );
 
     return normalizeHistoryPoints(
@@ -240,10 +253,10 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
       (result.rows).map((row) => ({
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),
-      }))
+      })),
     );
   } catch (error) {
-    if (error?.code === '42P01') return [];
+    if (error?.code === "42P01") return [];
     throw error;
   }
 }
@@ -265,7 +278,7 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
  * @returns {Promise<Map<number, { timestampMs: number, price: number }>>}
  */
 export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
-  const ids = [...new Set(validateInt4Ids(investmentIds, 'investmentIds'))];
+  const ids = [...new Set(validateInt4Ids(investmentIds, "investmentIds"))];
   if (ids.length === 0) return new Map();
 
   try {
@@ -274,12 +287,14 @@ export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
        FROM asset_price_history
        WHERE investment_id = ANY($1::int[])
        ORDER BY investment_id, price_date DESC`,
-      [ids]
+      [ids],
     );
 
     /** @type {Map<number, PricePoint>} */
     const byId = new Map();
-    for (const row of /** @type {Pick<AssetPriceHistoryRow, 'investment_id'|'price_date'|'close_price'>[]} */ (result.rows)) {
+    for (const row of /** @type {Pick<AssetPriceHistoryRow, 'investment_id'|'price_date'|'close_price'>[]} */ (
+      result.rows
+    )) {
       byId.set(row.investment_id, {
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),
@@ -287,7 +302,7 @@ export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
     }
     return byId;
   } catch (error) {
-    if (error?.code === '42P01') return new Map();
+    if (error?.code === "42P01") return new Map();
     throw error;
   }
 }
@@ -309,7 +324,9 @@ async function _dropForeignKey() {
       END $$;
     `);
   } catch (error) {
-    logger.warn('Failed to drop asset price history FK constraint', { error: error?.message });
+    logger.warn("Failed to drop asset price history FK constraint", {
+      error: error?.message,
+    });
   }
 }
 
@@ -322,7 +339,11 @@ async function _dropForeignKey() {
  * @param {string|null|undefined} source provider id; defaults to 'provider'
  * @returns {Promise<void>}
  */
-export async function saveHistoricalPointsToDatabase(investmentId, points, source) {
+export async function saveHistoricalPointsToDatabase(
+  investmentId,
+  points,
+  source,
+) {
   const normalized = normalizeHistoryPoints(points);
   if (!Number.isFinite(Number(investmentId)) || normalized.length === 0) return;
 
@@ -347,15 +368,21 @@ export async function saveHistoricalPointsToDatabase(investmentId, points, sourc
        source = EXCLUDED.source,
        fetched_at = NOW(),
        updated_at = NOW()`;
-  const upsertArgs = [Number(investmentId), source || 'provider', priceDates, closePrices];
+  const upsertArgs = [
+    Number(investmentId),
+    source || "provider",
+    priceDates,
+    closePrices,
+  ];
 
   try {
     await query(upsertSql, upsertArgs);
   } catch (error) {
-    if (error?.code === '42P01') return;
-    if (error?.code === '23503') {
+    if (error?.code === "42P01") return;
+    if (error?.code === "23503") {
       throw Object.assign(error, {
-        context: 'priceCache upsert: orphan investment_id — resolve via investigation of FK violation, never auto-drop',
+        context:
+          "priceCache upsert: orphan investment_id — resolve via investigation of FK violation, never auto-drop",
       });
     }
     throw error;

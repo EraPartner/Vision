@@ -22,41 +22,57 @@
  * and the cross-batch case is specifically about what survives COMMIT.
  */
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from './setup/db.js';
-import { createBatch, prepareImport, runImportPipeline, commitImport } from '../src/services/importPipeline/index.js';
-import { accountRepository } from '../src/repositories/accountRepository.js';
-import { closePool } from '../src/database/connection.js';
+} from "./setup/db.js";
+import {
+  createBatch,
+  prepareImport,
+  runImportPipeline,
+  commitImport,
+} from "../src/services/importPipeline/index.js";
+import { accountRepository } from "../src/repositories/accountRepository.js";
+import { closePool } from "../src/database/connection.js";
 
 // Neither the MV refresh (this database has no materialized views) nor the
 // planned-payment auto-link is what this suite measures; both are already
 // try/caught inside the pipeline, so stubbing them keeps the assertions about
 // the import itself. Transfer reconciliation is left REAL: it can deactivate
 // rows, and "the USD row survived" must mean survived everything.
-vi.mock('../src/services/aggregationRefresh.js', () => ({
-  refreshAggregations: vi.fn().mockResolvedValue(undefined),
+vi.mock("../src/services/aggregationRefresh.js", () => ({
+  clearForecastMcCaches: vi.fn().mockResolvedValue(undefined),
+  scheduleMaterializedViewRefresh: vi.fn(),
 }));
-vi.mock('../src/services/materializedViewService.js', () => ({
+vi.mock("../src/services/materializedViewService.js", () => ({
   scheduleRefresh: vi.fn(),
   refreshMaterializedViews: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../src/services/plannedMatchService.js', () => ({
+vi.mock("../src/services/plannedMatchService.js", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
-const HEADER = 'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance';
+const HEADER =
+  "Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance";
 
 /**
  * A rolling Revolut export for ONE `REVOLUT CURRENT` account holding EUR and
@@ -105,8 +121,11 @@ let tempFiles = [];
  * @returns {string} path to a temp CSV holding it
  */
 function writeCsv(csv) {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'revolut-mc-')), 'revolut.csv');
-  fs.writeFileSync(file, csv, 'utf-8');
+  const file = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "revolut-mc-")),
+    "revolut.csv",
+  );
+  fs.writeFileSync(file, csv, "utf-8");
   tempFiles.push(file);
   return file;
 }
@@ -126,12 +145,15 @@ function writeCsv(csv) {
 async function importExport(csv) {
   const result = await runImportPipeline({
     filePath: writeCsv(csv),
-    adapterName: 'revolut',
-    filename: 'revolut.csv',
+    adapterName: "revolut",
+    filename: "revolut.csv",
     sizeBytes: csv.length,
   });
   if (!result.requiresReview) {
-    return { imported: result.imported ?? 0, duplicates: result.duplicates ?? 0 };
+    return {
+      imported: result.imported ?? 0,
+      duplicates: result.duplicates ?? 0,
+    };
   }
   const committed = await commitImport({ batchId: result.batchId });
   return { imported: committed.imported, duplicates: committed.duplicates };
@@ -152,7 +174,7 @@ async function ledger() {
 /** The one Revolut account as the accounts hub serves it. */
 async function hubAccount() {
   const accounts = await accountRepository.getAll({});
-  const revolut = accounts.filter((a) => a.name === 'REVOLUT CURRENT');
+  const revolut = accounts.filter((a) => a.name === "REVOLUT CURRENT");
   expect(revolut).toHaveLength(1); // D2: ONE account, not one per currency
   return revolut[0];
 }
@@ -166,7 +188,7 @@ async function wipe() {
   await pool.query(`DELETE FROM accounts`);
 }
 
-describeDb('Revolut multi-currency import (real DB)', () => {
+describeDb("Revolut multi-currency import (real DB)", () => {
   beforeAll(acquireDbSuiteLock, 180_000);
 
   beforeEach(async () => {
@@ -187,25 +209,32 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     await closePool();
   });
 
-  it('stamps each row with its own Currency column and keeps them in one account', async () => {
+  it("stamps each row with its own Currency column and keeps them in one account", async () => {
     const { imported } = await importExport(EXPORT_V1);
     expect(imported).toBe(4);
 
     const rows = await ledger();
     // One account for all four rows (D2), each row carrying its OWN currency.
-    expect(rows.map((r) => r.bank_account)).toEqual(Array(4).fill('REVOLUT CURRENT'));
+    expect(rows.map((r) => r.bank_account)).toEqual(
+      Array(4).fill("REVOLUT CURRENT"),
+    );
     expect(rows.map((r) => `${r.date} ${r.amount} ${r.currency}`)).toEqual([
-      '2026-03-01 -25.0000 EUR',
-      '2026-03-02 50.0000 EUR',
-      '2026-03-03 -40.0000 USD',
-      '2026-03-04 -5.0000 EUR',
+      "2026-03-01 -25.0000 EUR",
+      "2026-03-02 50.0000 EUR",
+      "2026-03-03 -40.0000 USD",
+      "2026-03-04 -5.0000 EUR",
     ]);
     // The Balance column rides along per row, including the blank one —
     // transactions.balance emits at 4 dp since migration 0088 (NUMERIC(18,4)).
-    expect(rows.map((r) => r.balance)).toEqual(['175.0000', '225.0000', '260.0000', null]);
+    expect(rows.map((r) => r.balance)).toEqual([
+      "175.0000",
+      "225.0000",
+      "260.0000",
+      null,
+    ]);
   });
 
-  it('anchors each currency on its own stamps — a USD statement figure never anchors EUR', async () => {
+  it("anchors each currency on its own stamps — a USD statement figure never anchors EUR", async () => {
     await importExport(EXPORT_V1);
     const account = await hubAccount();
 
@@ -217,7 +246,7 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     // A cross-currency collapse anchors on the newest stamp of ANY currency —
     // the USD 260.00 — and reads 255.00. A USD stamp leaking into the EUR
     // anchor at all reads 260.00 or 255.00; neither is 220.00.
-    expect(account.reconcilable_currency).toBe('EUR');
+    expect(account.reconcilable_currency).toBe("EUR");
     expect(account.reconcilable_balance).toBe(220);
 
     // The USD partition anchors on its own stamp and is NOT reduced by the
@@ -228,10 +257,10 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     expect(account.computed_balance).toBeGreaterThan(220);
 
     // Provenance stays account-level: the newest stamp of any currency.
-    expect(account.anchor_date).toBe('2026-03-03');
+    expect(account.anchor_date).toBe("2026-03-03");
   });
 
-  it('keeps a foreign-currency row that collides with an earlier batch on every other field', async () => {
+  it("keeps a foreign-currency row that collides with an earlier batch on every other field", async () => {
     // First export: the EUR −25.00 Alpha Shop row lands.
     const first = await importExport(EXPORT_V1);
     expect(first.imported).toBe(4);
@@ -244,31 +273,40 @@ describeDb('Revolut multi-currency import (real DB)', () => {
 
     const rows = await ledger();
     expect(rows).toHaveLength(5);
-    const alphaDay = rows.filter((r) => r.date === '2026-03-01');
+    const alphaDay = rows.filter((r) => r.date === "2026-03-01");
     expect(alphaDay.map((r) => `${r.amount} ${r.currency}`)).toEqual([
-      '-25.0000 EUR',
-      '-25.0000 USD',
+      "-25.0000 EUR",
+      "-25.0000 USD",
     ]);
 
     // And the surviving row lands in the USD series, not the EUR one: the EUR
     // partition is unchanged at 220.00, while USD gained the −25.00.
     const account = await hubAccount();
-    expect(account.reconcilable_currency).toBe('EUR');
+    expect(account.reconcilable_currency).toBe("EUR");
     expect(account.reconcilable_balance).toBe(220);
   });
 
-  it('re-importing the same export is still a no-op', async () => {
+  it("re-importing the same export is still a no-op", async () => {
     // The narrower dup identity must not cost idempotency. (This path is
     // adjudicated by tx_hash — identical source rows hash identically — so it
     // guards the pipeline as a whole rather than the field check specifically;
     // the test below isolates the field check.)
-    expect(await importExport(EXPORT_V1)).toEqual({ imported: 4, duplicates: 0 });
-    expect(await importExport(EXPORT_V1)).toEqual({ imported: 0, duplicates: 4 });
-    expect(await importExport(EXPORT_V1)).toEqual({ imported: 0, duplicates: 4 });
+    expect(await importExport(EXPORT_V1)).toEqual({
+      imported: 4,
+      duplicates: 0,
+    });
+    expect(await importExport(EXPORT_V1)).toEqual({
+      imported: 0,
+      duplicates: 4,
+    });
+    expect(await importExport(EXPORT_V1)).toEqual({
+      imported: 0,
+      duplicates: 4,
+    });
     expect(await ledger()).toHaveLength(4);
   });
 
-  it('defaults a currency-less staging row to EUR on BOTH sides of the field check', async () => {
+  it("defaults a currency-less staging row to EUR on BOTH sides of the field check", async () => {
     // Not every adapter fills the column — `ParsedBankTransaction.currency` is
     // nullable, and commit defaults it to EUR because transactions.currency is
     // NOT NULL. Were the dup key read off the RAW staging value, such a row
@@ -280,8 +318,16 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     // different question.)
     expect(await importExport(EXPORT_EUR_ONLY)).toMatchObject({ imported: 2 });
 
-    const batchId = await createBatch({ adapterName: 'revolut', filename: 'revolut.csv', sizeBytes: EXPORT_EUR_ONLY.length });
-    await prepareImport({ batchId, filePath: writeCsv(EXPORT_EUR_ONLY), adapterName: 'revolut' });
+    const batchId = await createBatch({
+      adapterName: "revolut",
+      filename: "revolut.csv",
+      sizeBytes: EXPORT_EUR_ONLY.length,
+    });
+    await prepareImport({
+      batchId,
+      filePath: writeCsv(EXPORT_EUR_ONLY),
+      adapterName: "revolut",
+    });
     // Drop the staged currency (the no-currency-column adapter's state) AND the
     // hash, so the hash short-circuits cannot decide the verdict and the
     // field-based check — the thing under test — is the sole adjudicator.
@@ -292,11 +338,14 @@ describeDb('Revolut multi-currency import (real DB)', () => {
       [batchId],
     );
 
-    expect(await commitImport({ batchId })).toMatchObject({ imported: 0, duplicates: 2 });
+    expect(await commitImport({ batchId })).toMatchObject({
+      imported: 0,
+      duplicates: 2,
+    });
     expect(await ledger()).toHaveLength(2);
   });
 
-  it('trims a trailing-space staged currency so the dup key matches what VARCHAR(3) stores', async () => {
+  it("trims a trailing-space staged currency so the dup key matches what VARCHAR(3) stores", async () => {
     // transactions.currency is VARCHAR(3), and Postgres silently drops
     // TRAILING spaces on assignment to varchar(n) — 'EUR ' stores as 'EUR'.
     // Were the dup key the raw staging value, the probe would key on 'EUR '
@@ -305,8 +354,16 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     // adapter trims its cell, so this pins the pipeline-level guarantee that
     // holds even for one that forgets.
     const stage = async () => {
-      const batchId = await createBatch({ adapterName: 'revolut', filename: 'revolut.csv', sizeBytes: EXPORT_EUR_ONLY.length });
-      await prepareImport({ batchId, filePath: writeCsv(EXPORT_EUR_ONLY), adapterName: 'revolut' });
+      const batchId = await createBatch({
+        adapterName: "revolut",
+        filename: "revolut.csv",
+        sizeBytes: EXPORT_EUR_ONLY.length,
+      });
+      await prepareImport({
+        batchId,
+        filePath: writeCsv(EXPORT_EUR_ONLY),
+        adapterName: "revolut",
+      });
       // Untrimmed currency from a hypothetical sloppy adapter; hash dropped so
       // the field check is the sole adjudicator (as in the EUR-default test).
       await pool.query(
@@ -320,6 +377,6 @@ describeDb('Revolut multi-currency import (real DB)', () => {
     expect(await stage()).toMatchObject({ imported: 0, duplicates: 2 });
     const rows = await ledger();
     expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row.currency).toBe('EUR');
+    for (const row of rows) expect(row.currency).toBe("EUR");
   });
 });

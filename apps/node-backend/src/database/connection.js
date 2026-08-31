@@ -4,10 +4,10 @@
  * Uses node-postgres (pg) with a connection pool.
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks';
-import pg from 'pg';
-import settings from '../config/config.js';
-import { logger } from '../config/logger.js';
+import { AsyncLocalStorage } from "node:async_hooks";
+import pg from "pg";
+import settings from "../config/config.js";
+import { logger } from "../config/logger.js";
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
 
@@ -62,16 +62,17 @@ export function getAmbientTransactionClient() {
 // settings.database.poolSize is the sustained pool size;
 // settings.database.maxOverflow is kept for configuration parity but we use
 // the larger of the two so burst traffic is absorbed without exhausting the DB.
-const poolMax = Math.max(settings.database.poolSize, settings.database.maxOverflow)
-  || settings.database.poolSize
-  || 10;
+const poolMax =
+  Math.max(settings.database.poolSize, settings.database.maxOverflow) ||
+  settings.database.poolSize ||
+  10;
 
 const pool = new pg.Pool({
   connectionString: settings.database.url,
   max: poolMax,
-  idleTimeoutMillis: 60_000,      // close idle connections after 60s
-  connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
-  statement_timeout: 30_000,       // kill queries running > 30s
+  idleTimeoutMillis: 60_000, // close idle connections after 60s
+  connectionTimeoutMillis: 5_000, // fail fast if can't connect in 5s
+  statement_timeout: 30_000, // kill queries running > 30s
   // statement_timeout does NOT fire while a session is idle *inside* a
   // transaction — if a withTransaction() callback stalls on a non-DB await
   // (hung network/stream) the lock + pool slot are held until restart, and
@@ -80,10 +81,9 @@ const pool = new pg.Pool({
   idle_in_transaction_session_timeout: 60_000,
 });
 
-pool.on('error', (/** @type {unknown} */ err) => {
-  logger.error('Unexpected error on idle database client', err);
+pool.on("error", (/** @type {unknown} */ err) => {
+  logger.error("Unexpected error on idle database client", err);
 });
-
 
 /**
  * A statement is safe to transparently retry only if it cannot have applied a
@@ -115,9 +115,8 @@ export async function query(text, params, opts = {}) {
     return ambient.query(text, params);
   }
 
-  const maxRetries = (opts.retries ?? 0) > 0 && isRetryableStatement(text)
-    ? opts.retries
-    : 0;
+  const maxRetries =
+    (opts.retries ?? 0) > 0 && isRetryableStatement(text) ? opts.retries : 0;
   let attempt = 0;
 
   while (true) {
@@ -137,16 +136,18 @@ export async function query(text, params, opts = {}) {
     } catch (err) {
       const duration = Date.now() - start;
       const isTransient =
-        err.code === 'ECONNRESET' ||
-        err.code === '57P01' || // admin_shutdown
-        err.code === '08006' || // connection_failure
-        err.code === '08001' || // sqlclient_unable_to_establish_sqlconnection
-        err.message?.includes('Connection terminated');
+        err.code === "ECONNRESET" ||
+        err.code === "57P01" || // admin_shutdown
+        err.code === "08006" || // connection_failure
+        err.code === "08001" || // sqlclient_unable_to_establish_sqlconnection
+        err.message?.includes("Connection terminated");
 
       if (isTransient && attempt < maxRetries) {
         attempt++;
         const backoff = Math.min(200 * attempt, 2000);
-        logger.warn(`Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${err.message}`);
+        logger.warn(
+          `Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${err.message}`,
+        );
         // Global setTimeout, not node:timers/promises: connection.test.js
         // drives this backoff with vi.useFakeTimers(), which cannot fake
         // timers/promises.
@@ -154,7 +155,9 @@ export async function query(text, params, opts = {}) {
         continue;
       }
 
-      logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, { error: err.message });
+      logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, {
+        error: err.message,
+      });
       throw err;
     }
   }
@@ -193,31 +196,84 @@ export async function getClient() {
 /**
  * Run `fn` inside a database transaction.
  *
- * Acquires a pooled client, issues BEGIN, invokes `fn(client)`, then COMMITs
- * on success or ROLLBACKs on throw. Always releases the client.
+ * The outermost call acquires a pooled client, issues BEGIN, invokes
+ * `fn(client)`, then COMMITs on success or ROLLBACKs on throw. A nested call
+ * reuses the ambient client behind a unique savepoint, so it never opens an
+ * independent transaction. The outermost call always releases the client.
  *
  * @template T
  * @param {(client: PgPoolClient) => Promise<T>} fn
  * @returns {Promise<T>}
  */
 export async function withTransaction(fn) {
+  const ambientClient = getAmbientTransactionClient();
+  if (ambientClient) {
+    const parentStore = txStorage.getStore();
+    if (parentStore.activeNested) {
+      try {
+        await parentStore.activeNested;
+      } catch {
+        // The active scope reports its own error to its caller. This sibling
+        // still rejects as an unsupported concurrent nesting attempt.
+      }
+      throw new Error(
+        "Concurrent sibling withTransaction calls are not supported; await nested transactions sequentially",
+      );
+    }
+
+    const runNested = async () => {
+      parentStore.savepointCounter.value += 1;
+      const savepointName = `vision_nested_tx_${parentStore.savepointCounter.value}`;
+      const childStore = {
+        client: ambientClient,
+        savepointCounter: parentStore.savepointCounter,
+        activeNested: null,
+      };
+      try {
+        return await withSavepointIfInTransaction(savepointName, () =>
+          txStorage.run(childStore, () => fn(ambientClient)),
+        );
+      } finally {
+        childStore.client = null;
+      }
+    };
+
+    // pg clients execute one protocol stream. A sibling call observes this
+    // active promise and rejects only after it settles, so the outer rollback
+    // can never race an in-flight savepoint. Deeper nesting receives a child
+    // store and remains properly lexical.
+    const operation = runNested();
+    parentStore.activeNested = operation;
+    try {
+      return await operation;
+    } finally {
+      if (parentStore.activeNested === operation) {
+        parentStore.activeNested = null;
+      }
+    }
+  }
+
   const client = await getClient();
   // The callback runs inside txStorage so module-level query() joins this
   // transaction (see getAmbientTransactionClient). fn still receives the
   // client for code that threads it explicitly — both routes hit the same
   // connection.
-  const store = { client };
+  const store = {
+    client,
+    savepointCounter: { value: 0 },
+    activeNested: null,
+  };
   let rollbackFailed = false;
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
     const result = await txStorage.run(store, () => fn(client));
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     return result;
   } catch (err) {
     try {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
     } catch (rollbackErr) {
-      logger.error('Transaction rollback failed', rollbackErr);
+      logger.error("Transaction rollback failed", rollbackErr);
       rollbackFailed = true;
     }
     throw err;
@@ -274,7 +330,7 @@ export async function withSavepointIfInTransaction(name, fn) {
  */
 export async function checkConnection() {
   try {
-    await pool.query('SELECT 1');
+    await pool.query("SELECT 1");
     return true;
   } catch {
     return false;
@@ -287,7 +343,7 @@ export async function checkConnection() {
  */
 export async function getTableCount() {
   const result = await pool.query(
-    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
+    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'",
   );
   return parseInt(result.rows[0].count, 10);
 }

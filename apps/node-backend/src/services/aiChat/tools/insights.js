@@ -5,27 +5,28 @@
  * No new SQL — wraps existing repositories.
  */
 
-import { ASSET_CLASSES } from '@vision/types/assetClasses';
-import { infoRepository } from '../../../repositories/infoRepository.js';
-import { watchlistRepository } from '../../../repositories/watchlistRepository.js';
-import { categoryRepository } from '../../../repositories/categoryRepository.js';
-import { transactionRepository } from '../../../repositories/transactionRepository.js';
-import settings from '../../../config/config.js';
-import { toDecimal, roundToCents } from '../../../lib/money.js';
-import { toYmd } from '../../calculations/portfolioMath.js';
-import { parseEnum, parsePositiveInt } from './_validate.js';
-import { getQuotes } from '../../marketLookupService.js';
-import { detectRecurringPatterns } from '../../recurringDetectionService.js';
-import { getInsightsDigest } from '../../insightsDigestService.js';
+import { ASSET_CLASSES } from "@vision/types/assetClasses";
+import { infoRepository } from "../../../repositories/infoRepository.js";
+import { watchlistRepository } from "../../../repositories/watchlistRepository.js";
+import { categoryRepository } from "../../../repositories/categoryRepository.js";
+import { transactionRepository } from "../../../repositories/transactionRepository.js";
+import settings from "../../../config/config.js";
+import { toDecimal, roundToCents } from "../../../lib/money.js";
+import { toYmd } from "../../calculations/portfolioMath.js";
+import { parseEnum, parsePositiveInt } from "./_validate.js";
+import { getQuotes } from "../../marketLookupService.js";
+import { detectRecurringPatterns } from "../../recurringDetectionService.js";
+import { getInsightsDigest } from "../../insightsDigestService.js";
 
 /**
  * Current bank account balances + total net position.
  */
 export const getBankBalances = {
-  name: 'getBankBalances',
-  description: 'Current balance per bank account and total net position across all accounts. Use for "how much money do I have", "bank balances", "total cash".',
+  name: "getBankBalances",
+  description:
+    'Current balance per bank account and total net position across all accounts. Use for "how much money do I have", "bank balances", "total cash".',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {},
   },
   /**
@@ -33,12 +34,15 @@ export const getBankBalances = {
    * @param {import('./_validate.js').ToolContext} [context]
    */
   async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const result = await infoRepository.getBankBalances('EUR');
+    const result = await infoRepository.getBankBalances("EUR");
 
     const accounts = (result.accounts ?? []).map((a) => ({
       account: a.bank_account,
-      balance: typeof a.balance === 'number' ? a.balance : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
-      currency: 'EUR',
+      balance:
+        typeof a.balance === "number"
+          ? a.balance
+          : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
+      currency: "EUR",
       transactionCount: a.transaction_count ?? null,
       // toYmd uses local getters for pg's local-midnight DATE values —
       // toISOString() shifted these one day back on a UTC+ server.
@@ -50,12 +54,15 @@ export const getBankBalances = {
       ok: true,
       data: accounts.slice(0, maxRows),
       meta: {
-        totalNetPosition: typeof result.total_net_position === 'number'
-          ? result.total_net_position
-          : roundToCents(toDecimal(result.total_net_position ?? 0)).toNumber(),
+        totalNetPosition:
+          typeof result.total_net_position === "number"
+            ? result.total_net_position
+            : roundToCents(
+                toDecimal(result.total_net_position ?? 0),
+              ).toNumber(),
         accountCount: accounts.length,
-        currency: 'EUR',
-        renderAs: 'table',
+        currency: "EUR",
+        renderAs: "table",
       },
     };
   },
@@ -65,15 +72,16 @@ export const getBankBalances = {
  * Current-month spending pace compared to 6-month average.
  */
 export const getSpendingPace = {
-  name: 'getSpendingPace',
-  description: 'Current-month spending vs 6-month average with projected end-of-month total. Use for "am I spending more than usual", "spending pace this month", "average monthly or yearly spend".',
+  name: "getSpendingPace",
+  description:
+    'Current-month spending vs 6-month average with projected end-of-month total. Use for "am I spending more than usual", "spending pace this month", "average monthly or yearly spend".',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       period: {
-        type: 'string',
-        enum: ['monthly', 'yearly'],
-        description: 'Normalize averages to monthly (default) or yearly.',
+        type: "string",
+        enum: ["monthly", "yearly"],
+        description: "Normalize averages to monthly (default) or yearly.",
       },
     },
   },
@@ -82,10 +90,12 @@ export const getSpendingPace = {
    * @param {import('./_validate.js').ToolContext} [_context]
    */
   async run(args, _context = {}) {
-    const period = parseEnum(args.period, 'period', ['monthly', 'yearly'], { defaultValue: 'monthly' });
-    const mult = period === 'yearly' ? 12 : 1;
+    const period = parseEnum(args.period, "period", ["monthly", "yearly"], {
+      defaultValue: "monthly",
+    });
+    const mult = period === "yearly" ? 12 : 1;
 
-    const result = await infoRepository.getAverageVsCurrentSpending('EUR');
+    const result = await infoRepository.getAverageVsCurrentSpending("EUR");
     /** @type {any} */
     const p6 = result.past_6_months ?? {};
     /** @type {any} */
@@ -96,10 +106,19 @@ export const getSpendingPace = {
     return {
       ok: true,
       data: [
-        { label: 'Avg daily spend (6-month)', value: p6.avg_daily_spending ?? 0 },
-        { label: `Avg ${period} spend (6-month)`, value: (p6.avg_monthly_spending ?? 0) * mult },
-        { label: 'Current month total', value: cm.total_spending ?? 0 },
-        { label: `Projected ${period} total`, value: (cmp.projected_monthly_total ?? 0) * mult },
+        {
+          label: "Avg daily spend (6-month)",
+          value: p6.avg_daily_spending ?? 0,
+        },
+        {
+          label: `Avg ${period} spend (6-month)`,
+          value: (p6.avg_monthly_spending ?? 0) * mult,
+        },
+        { label: "Current month total", value: cm.total_spending ?? 0 },
+        {
+          label: `Projected ${period} total`,
+          value: (cmp.projected_monthly_total ?? 0) * mult,
+        },
       ],
       meta: {
         period,
@@ -108,8 +127,8 @@ export const getSpendingPace = {
         pace: cmp.pace ?? null,
         variance: cmp.variance ?? null,
         monthsCounted: p6.months_counted ?? null,
-        currency: 'EUR',
-        renderAs: 'table',
+        currency: "EUR",
+        renderAs: "table",
       },
     };
   },
@@ -119,13 +138,25 @@ export const getSpendingPace = {
  * Recipient frequency, total spend, and last-seen date.
  */
 export const getRecipientInsights = {
-  name: 'getRecipientInsights',
-  description: 'Recipients by frequency, total spend, average amount, and last payment date. With recipientId: detailed view for one recipient. Without: top recipients ranked by frequency. Use for "most frequent payee", "how much do I pay [name]", "when did I last pay [name]".',
+  name: "getRecipientInsights",
+  description:
+    'Recipients by frequency, total spend, average amount, and last payment date. With recipientId: detailed view for one recipient. Without: top recipients ranked by frequency. Use for "most frequent payee", "how much do I pay [name]", "when did I last pay [name]".',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
-      recipientId: { type: 'integer', description: 'Filter to a single recipient by ID for a per-recipient view.', minimum: 1 },
-      limit: { type: 'integer', description: 'Max recipients when listing all (ignored when recipientId set). Default 20, max 100.', minimum: 1, maximum: 100 },
+      recipientId: {
+        type: "integer",
+        description:
+          "Filter to a single recipient by ID for a per-recipient view.",
+        minimum: 1,
+      },
+      limit: {
+        type: "integer",
+        description:
+          "Max recipients when listing all (ignored when recipientId set). Default 20, max 100.",
+        minimum: 1,
+        maximum: 100,
+      },
     },
   },
   /**
@@ -133,10 +164,18 @@ export const getRecipientInsights = {
    * @param {import('./_validate.js').ToolContext} [context]
    */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const limit = parsePositiveInt(args.limit, 'limit', { min: 1, max: 100, defaultValue: 20 });
-    const recipientId = args.recipientId != null
-      ? parsePositiveInt(args.recipientId, 'recipientId', { min: 1, max: Number.MAX_SAFE_INTEGER })
-      : null;
+    const limit = parsePositiveInt(args.limit, "limit", {
+      min: 1,
+      max: 100,
+      defaultValue: 20,
+    });
+    const recipientId =
+      args.recipientId != null
+        ? parsePositiveInt(args.recipientId, "recipientId", {
+            min: 1,
+            max: Number.MAX_SAFE_INTEGER,
+          })
+        : null;
 
     const SCAN_LIMIT = 50_000;
     const allRows = await transactionRepository.getAll({
@@ -173,9 +212,10 @@ export const getRecipientInsights = {
 
       // Local extraction: pg-read DATE is local midnight; toISOString showed
       // the previous day east of UTC (same fix as toYmd elsewhere in this file).
-      const dateStr = row.date instanceof Date
-        ? toYmd(row.date)
-        : String(row.date).slice(0, 10);
+      const dateStr =
+        row.date instanceof Date
+          ? toYmd(row.date)
+          : String(row.date).slice(0, 10);
       if (!entry.lastDate || dateStr > entry.lastDate) entry.lastDate = dateStr;
 
       byRecipient.set(name, entry);
@@ -189,7 +229,10 @@ export const getRecipientInsights = {
         count: e.count,
         totalSpend: roundToCents(e.totalSpend).toNumber(),
         totalIncome: roundToCents(e.totalIncome).toNumber(),
-        avgSpend: e.count > 0 ? roundToCents(e.totalSpend.dividedBy(e.count)).toNumber() : 0,
+        avgSpend:
+          e.count > 0
+            ? roundToCents(e.totalSpend.dividedBy(e.count)).toNumber()
+            : 0,
         lastDate: e.lastDate,
       }))
       .sort((a, b) => b.count - a.count)
@@ -198,7 +241,12 @@ export const getRecipientInsights = {
     return {
       ok: true,
       data: shaped.slice(0, maxRows),
-      meta: { recipientCount: byRecipient.size, currency: 'EUR', renderAs: 'table', truncated },
+      meta: {
+        recipientCount: byRecipient.size,
+        currency: "EUR",
+        renderAs: "table",
+        truncated,
+      },
     };
   },
 };
@@ -207,12 +255,17 @@ export const getRecipientInsights = {
  * Investments on the watchlist.
  */
 export const getWatchlist = {
-  name: 'getWatchlist',
-  description: 'Investments on the watchlist (tracked but not necessarily owned). Use for "what am I watching", "watchlist".',
+  name: "getWatchlist",
+  description:
+    'Investments on the watchlist (tracked but not necessarily owned). Use for "what am I watching", "watchlist".',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
-      assetClass: { type: 'string', enum: ASSET_CLASSES, description: 'Optional filter by asset class.' },
+      assetClass: {
+        type: "string",
+        enum: ASSET_CLASSES,
+        description: "Optional filter by asset class.",
+      },
     },
   },
   /**
@@ -220,7 +273,9 @@ export const getWatchlist = {
    * @param {import('./_validate.js').ToolContext} [context]
    */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
+    const assetClass = parseEnum(args.assetClass, "assetClass", ASSET_CLASSES, {
+      defaultValue: null,
+    });
 
     const { rows, total } = await watchlistRepository.getAllWithCount({
       limit: 500,
@@ -233,12 +288,16 @@ export const getWatchlist = {
     // /api/market/quote); mirror that here via the same service so the tool
     // reports real prices instead of always-null. Quote failures (offline, no
     // provider) degrade to null prices rather than failing the tool.
-    const symbols = [...new Set(rows.map((item) => item.symbol).filter(Boolean))];
+    const symbols = [
+      ...new Set(rows.map((item) => item.symbol).filter(Boolean)),
+    ];
     const priceBySymbol = new Map();
     if (symbols.length > 0) {
       try {
         const { items } = await getQuotes(symbols, true);
-        for (const quote of /** @type {Array<{ symbol?: string, price?: number|null }>} */ (items)) {
+        for (const quote of /** @type {Array<{ symbol?: string, price?: number|null }>} */ (
+          items
+        )) {
           if (quote.symbol != null && quote.price != null) {
             priceBySymbol.set(quote.symbol, quote.price);
           }
@@ -249,16 +308,19 @@ export const getWatchlist = {
     }
 
     const shaped = rows.map((item) => {
-      const livePrice = item.symbol ? priceBySymbol.get(item.symbol) : undefined;
+      const livePrice = item.symbol
+        ? priceBySymbol.get(item.symbol)
+        : undefined;
       return {
         id: item.id,
         name: item.name,
         symbol: item.symbol || null,
         assetClass: item.asset_class,
-        currentPrice: livePrice != null
-          ? roundToCents(toDecimal(livePrice)).toNumber()
-          : null,
-        currency: item.currency || 'EUR',
+        currentPrice:
+          livePrice != null
+            ? roundToCents(toDecimal(livePrice)).toNumber()
+            : null,
+        currency: item.currency || "EUR",
         notes: item.notes || null,
       };
     });
@@ -266,7 +328,7 @@ export const getWatchlist = {
     return {
       ok: true,
       data: shaped.slice(0, maxRows),
-      meta: { total, assetClass: assetClass || 'all', renderAs: 'table' },
+      meta: { total, assetClass: assetClass || "all", renderAs: "table" },
     };
   },
 };
@@ -275,12 +337,16 @@ export const getWatchlist = {
  * All categories with IDs — lets the LLM resolve a name to an ID.
  */
 export const getCategories = {
-  name: 'getCategories',
-  description: 'List all transaction categories with their IDs, general group, and detail name. Call this first when the user mentions a category by name and you need its ID for another tool like getSpendTrendForCategory.',
+  name: "getCategories",
+  description:
+    "List all transaction categories with their IDs, general group, and detail name. Call this first when the user mentions a category by name and you need its ID for another tool like getSpendTrendForCategory.",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
-      search: { type: 'string', description: 'Optional text filter on category name.' },
+      search: {
+        type: "string",
+        description: "Optional text filter on category name.",
+      },
     },
   },
   /**
@@ -305,7 +371,7 @@ export const getCategories = {
     return {
       ok: true,
       data: shaped.slice(0, maxRows),
-      meta: { count: shaped.length, renderAs: 'table' },
+      meta: { count: shaped.length, renderAs: "table" },
     };
   },
 };
@@ -315,14 +381,16 @@ export const getCategories = {
  * Different from planned transactions (user-created); these are inferred patterns.
  */
 export const getRecurringDetected = {
-  name: 'getRecurringDetected',
-  description: 'Auto-detected recurring payments inferred from transaction history (subscriptions, bills). Different from planned transactions — these are discovered patterns. Use for "what subscriptions am I missing", "what recurring payments haven\'t I tracked", "auto-detect my subscriptions".',
+  name: "getRecurringDetected",
+  description:
+    'Auto-detected recurring payments inferred from transaction history (subscriptions, bills). Different from planned transactions — these are discovered patterns. Use for "what subscriptions am I missing", "what recurring payments haven\'t I tracked", "auto-detect my subscriptions".',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       minOccurrences: {
-        type: 'integer',
-        description: 'Minimum times a pattern must repeat to be included. Default 3, max 20.',
+        type: "integer",
+        description:
+          "Minimum times a pattern must repeat to be included. Default 3, max 20.",
         minimum: 2,
         maximum: 20,
       },
@@ -333,7 +401,11 @@ export const getRecurringDetected = {
    * @param {import('./_validate.js').ToolContext} [context]
    */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const minOccurrences = parsePositiveInt(args.minOccurrences, 'minOccurrences', { min: 2, max: 20, defaultValue: 3 });
+    const minOccurrences = parsePositiveInt(
+      args.minOccurrences,
+      "minOccurrences",
+      { min: 2, max: 20, defaultValue: 3 },
+    );
 
     const { patterns } = await detectRecurringPatterns();
     const filtered = patterns.filter((p) => p.occurrences >= minOccurrences);
@@ -360,8 +432,8 @@ export const getRecurringDetected = {
       meta: {
         minOccurrences,
         count: shaped.length,
-        currency: 'EUR',
-        renderAs: 'table',
+        currency: "EUR",
+        renderAs: "table",
       },
     };
   },
@@ -377,10 +449,11 @@ export const getRecurringDetected = {
  * surfacing layer) and no previous month-end projection.
  */
 export const insightsDigest = {
-  name: 'insightsDigest',
-  description: 'Pre-computed insight findings from the detection layer: new subscriptions, subscription price changes, category overspend outliers, and the month-end cash forecast. Use for "insights digest", "what\'s new", "anything unusual in my spending", "give me my financial insights for today". Narrate and prioritize the returned findings — never invent figures.',
+  name: "insightsDigest",
+  description:
+    'Pre-computed insight findings from the detection layer: new subscriptions, subscription price changes, category overspend outliers, and the month-end cash forecast. Use for "insights digest", "what\'s new", "anything unusual in my spending", "give me my financial insights for today". Narrate and prioritize the returned findings — never invent figures.',
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {},
   },
   /**
@@ -388,7 +461,8 @@ export const insightsDigest = {
    * @param {import('./_validate.js').ToolContext} [context]
    */
   async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const { subscriptionCreep, categoryOutliers, cashForecast } = await getInsightsDigest();
+    const { subscriptionCreep, categoryOutliers, cashForecast } =
+      await getInsightsDigest();
 
     // The services already cap subscription lists to 5 — still slice
     // defensively so a service change can never blow past the tool-row cap.
@@ -410,7 +484,6 @@ export const insightsDigest = {
           categoryOutliers: outliers.length,
         },
         hasCashForecast: cashForecast != null,
-        renderAs: 'insightsDigest',
       },
     };
   },

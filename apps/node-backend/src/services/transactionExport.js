@@ -11,6 +11,7 @@ import { NotFoundError } from "../middleware/errorHandler.js";
 import { toDecimal } from "../lib/money.js";
 import { toYmd } from "./calculations/portfolioMath.js";
 import { escapeCsvValue } from "../lib/csv.js";
+import { buildTransactionWhere } from "../lib/filterBuilder.js";
 import {
   resolveBulkSelection,
   validateBulkSelection,
@@ -302,14 +303,38 @@ async function streamExport(
 }
 
 /**
+ * Convert the route's validated filter model into the SQL fragment used by
+ * both export formats. The legacy explicit WHERE shape remains accepted for
+ * focused service tests and the bulk-id helper.
+ *
+ * @param {{ filters?: Record<string, any>, whereSql?: string, params?: any[], nextParamIdx?: number }} args
+ * @returns {{ whereSql: string, params: any[], nextParamIdx: number }}
+ */
+function resolveExportWhere(args) {
+  if (args.filters) {
+    const { sql, params, nextParamIdx } = buildTransactionWhere(args.filters);
+    return { whereSql: sql, params, nextParamIdx };
+  }
+  if (typeof args.whereSql !== "string" || !args.nextParamIdx) {
+    throw new TypeError(
+      "Export filters or an explicit WHERE model are required",
+    );
+  }
+  return {
+    whereSql: args.whereSql,
+    params: args.params ?? [],
+    nextParamIdx: args.nextParamIdx,
+  };
+}
+
+/**
  * @param {ExpressResponse} res
- * @param {{ whereSql: string, params: any[], nextParamIdx: number, includeBalance?: boolean, query?: ExportQuery }} args
+ * @param {{ filters?: Record<string, any>, whereSql?: string, params?: any[], nextParamIdx?: number, includeBalance?: boolean, query?: ExportQuery }} args
  * @returns {Promise<{ rowCount: number }>}
  */
-export async function streamCsvExport(
-  res,
-  { whereSql, params, nextParamIdx, includeBalance = false, query },
-) {
+export async function streamCsvExport(res, args) {
+  const { includeBalance = false, query } = args;
+  const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
   // Partitioned by account_id (ADR-088): the list endpoint's window partitions
   // by account because a stream spanning multiple accounts otherwise sums them
   // into one meaningless cross-account total. Kept as Decimals across the whole
@@ -347,13 +372,12 @@ export async function streamCsvExport(
 
 /**
  * @param {ExpressResponse} res
- * @param {{ whereSql: string, params: any[], nextParamIdx: number, query?: ExportQuery }} args
+ * @param {{ filters?: Record<string, any>, whereSql?: string, params?: any[], nextParamIdx?: number, query?: ExportQuery }} args
  * @returns {Promise<{ rowCount: number }>}
  */
-export async function streamNdjsonExport(
-  res,
-  { whereSql, params, nextParamIdx, query },
-) {
+export async function streamNdjsonExport(res, args) {
+  const { query } = args;
+  const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
   return streamExport(res, {
     whereSql,
     params,

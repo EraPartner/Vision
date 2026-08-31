@@ -10,10 +10,12 @@
  * touch the repository layer directly (vision-local/no-repo-direct-from-route).
  */
 
-import { Router } from 'express';
-import tagService from '../services/tagService.js';
-import { validateIdParam, assertIdParam } from '../middleware/validation.js';
-import { listBody, parseOptionalPagination } from '../lib/pagination.js';
+import { Router } from "express";
+import tagService from "../services/tagService.js";
+import { validateIdParam, assertIdParam } from "../middleware/validation.js";
+import { listBody, parseOptionalPagination } from "../lib/pagination.js";
+import { withCreateOutcome } from "../lib/createOutcome.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -24,39 +26,73 @@ const router = Router();
 
 // Pagination is opt-in: without limit/offset this still answers the complete
 // list (the tag pickers/filters render all of them), so no client is truncated.
-router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const { active = 'true' } = req.query;
-  const activeFilter = active === 'all' ? null : active !== 'false';
-  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const { items, total } = await tagService.list({ active: activeFilter, ...(page ?? {}) });
-  res.ok({ ...listBody(items, total, page), links: [] });
-});
+router.get(
+  "/",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { active = "true" } = req.query;
+    // `all` is the explicit tags/accounts compatibility mode; it is not an
+    // API-wide third boolean spelling.
+    const activeFilter =
+      active === "all" ? null : parseBooleanQueryParam(active, true);
+    const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+    const { items, total } = await tagService.list({
+      active: activeFilter,
+      ...(page ?? {}),
+    });
+    res.ok({ ...listBody(items, total, page), links: [] });
+  },
+);
 
-router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const { tag, reactivated, wasInactive, junctionCount } = await tagService.createOrReactivate(req.body);
+router.post(
+  "/",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { tag, reactivated, wasInactive, junctionCount } =
+      await tagService.createOrReactivate(req.body);
 
-  res.status(reactivated && !wasInactive ? 200 : 201);
-  res.ok({
-    ...tag,
-    reactivated,
-    reactivated_junction_count: reactivated && wasInactive ? junctionCount : undefined,
-    links: [],
-  });
-});
+    res.status(reactivated && !wasInactive ? 200 : 201);
+    res.ok(
+      withCreateOutcome(tag, !reactivated, {
+        reactivated,
+        reactivated_junction_count:
+          reactivated && wasInactive ? junctionCount : undefined,
+      }),
+    );
+  },
+);
 
-router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = assertIdParam(req);
-  const updated = await tagService.update(id, req.body);
-  res.ok({ ...updated, links: [] });
-});
+router.patch(
+  "/:id",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const id = assertIdParam(req);
+    const updated = await tagService.update(id, req.body);
+    res.ok({ ...updated, links: [] });
+  },
+);
 
 // Deactivation, not a hard delete: the row survives with is_active = false, so
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses").
-router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = assertIdParam(req);
-  const deactivated = await tagService.softDelete(id);
-  res.ok({ ...deactivated, links: [] });
-});
+router.delete(
+  "/:id",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const id = assertIdParam(req);
+    const deactivated = await tagService.softDelete(id);
+    res.ok({ ...deactivated, links: [] });
+  },
+);
 
 export default router;

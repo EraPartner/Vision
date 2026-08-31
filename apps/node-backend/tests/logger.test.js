@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const originalEnv = process.env;
 
 async function importLoggerFresh() {
   vi.resetModules();
-  return import('../src/config/logger.js');
+  return import("../src/config/logger.js");
 }
 
-describe('logger', () => {
+describe("logger", () => {
   let debugSpy;
   let logSpy;
   let warnSpy;
@@ -20,10 +20,10 @@ describe('logger', () => {
     delete process.env.NODE_ENV;
     delete process.env.ENVIRONMENT;
 
-    debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -34,16 +34,16 @@ describe('logger', () => {
     process.env = originalEnv;
   });
 
-  it('forces silent mode when ENABLE_LOGGING=false', async () => {
-    process.env.ENABLE_LOGGING = 'false';
-    process.env.LOG_LEVEL = 'debug';
-    process.env.NODE_ENV = 'development';
+  it("forces silent mode when ENABLE_LOGGING=false", async () => {
+    process.env.ENABLE_LOGGING = "false";
+    process.env.LOG_LEVEL = "debug";
+    process.env.NODE_ENV = "development";
     const { logger } = await importLoggerFresh();
 
-    logger.debug('debug message');
-    logger.info('info message');
-    logger.warn('warn message');
-    logger.error('error message');
+    logger.debug("debug message");
+    logger.info("info message");
+    logger.warn("warn message");
+    logger.error("error message");
 
     expect(debugSpy).not.toHaveBeenCalled();
     expect(logSpy).not.toHaveBeenCalled();
@@ -51,37 +51,37 @@ describe('logger', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('defaults to debug level in development when LOG_LEVEL is missing', async () => {
-    process.env.NODE_ENV = 'development';
+  it("defaults to debug level in development when LOG_LEVEL is missing", async () => {
+    process.env.NODE_ENV = "development";
     const { logger } = await importLoggerFresh();
 
-    logger.debug('debug message');
-    logger.info('info message');
+    logger.debug("debug message");
+    logger.info("info message");
 
     expect(debugSpy).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('defaults to info level in production when LOG_LEVEL is unknown', async () => {
-    process.env.NODE_ENV = 'production';
-    process.env.LOG_LEVEL = 'unknown-level';
+  it("defaults to info level in production when LOG_LEVEL is unknown", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.LOG_LEVEL = "unknown-level";
     const { logger } = await importLoggerFresh();
 
-    logger.debug('debug message');
-    logger.info('info message');
+    logger.debug("debug message");
+    logger.info("info message");
 
     expect(debugSpy).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('logs only warn and error when LOG_LEVEL=warn', async () => {
-    process.env.LOG_LEVEL = 'warn';
+  it("logs only warn and error when LOG_LEVEL=warn", async () => {
+    process.env.LOG_LEVEL = "warn";
     const { logger } = await importLoggerFresh();
 
-    logger.debug('debug message');
-    logger.info('info message');
-    logger.warn('warn message');
-    logger.error('error message');
+    logger.debug("debug message");
+    logger.info("info message");
+    logger.warn("warn message");
+    logger.error("error message");
 
     expect(debugSpy).not.toHaveBeenCalled();
     expect(logSpy).not.toHaveBeenCalled();
@@ -89,14 +89,14 @@ describe('logger', () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('logs nothing when LOG_LEVEL=silent', async () => {
-    process.env.LOG_LEVEL = 'silent';
+  it("logs nothing when LOG_LEVEL=silent", async () => {
+    process.env.LOG_LEVEL = "silent";
     const { logger } = await importLoggerFresh();
 
-    logger.debug('debug message');
-    logger.info('info message');
-    logger.warn('warn message');
-    logger.error('error message');
+    logger.debug("debug message");
+    logger.info("info message");
+    logger.warn("warn message");
+    logger.error("error message");
 
     expect(debugSpy).not.toHaveBeenCalled();
     expect(logSpy).not.toHaveBeenCalled();
@@ -104,25 +104,107 @@ describe('logger', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('formats message with level tag and extra payload when provided', async () => {
-    process.env.LOG_LEVEL = 'info';
+  it("formats message with level tag and extra payload when provided", async () => {
+    process.env.LOG_LEVEL = "info";
     const { logger } = await importLoggerFresh();
 
-    logger.info('hello world', { requestId: 'abc123', status: 200 });
+    logger.info("hello world", { requestId: "abc123", status: 200 });
 
     expect(logSpy).toHaveBeenCalledTimes(1);
     const [formattedMessage] = logSpy.mock.calls[0];
-    expect(formattedMessage).toMatch(/^\d{4}-\d{2}-\d{2}T.* \[INFO\] hello world \{"requestId":"abc123","status":200\}$/);
+    expect(formattedMessage).toMatch(
+      /^\d{4}-\d{2}-\d{2}T.* \[INFO\] hello world \{"requestId":"abc123","status":200\}$/,
+    );
   });
 
-  it('formats message without extra payload when not provided', async () => {
-    process.env.LOG_LEVEL = 'error';
+  it("formats message without extra payload when not provided", async () => {
+    process.env.LOG_LEVEL = "error";
     const { logger } = await importLoggerFresh();
 
-    logger.error('plain error');
+    logger.error("plain error");
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const [formattedMessage] = errorSpy.mock.calls[0];
-    expect(formattedMessage).toMatch(/^\d{4}-\d{2}-\d{2}T.* \[ERROR\] plain error$/);
+    expect(formattedMessage).toMatch(
+      /^\d{4}-\d{2}-\d{2}T.* \[ERROR\] plain error$/,
+    );
+  });
+
+  it("adds the ambient requestId after awaits without changing call sites", async () => {
+    process.env.LOG_LEVEL = "info";
+    const { logger } = await importLoggerFresh();
+    const { runWithRequestContext } =
+      await import("../src/lib/requestContext.js");
+
+    await runWithRequestContext("request-context-123", async () => {
+      await Promise.resolve();
+      logger.info("service message", { operation: "load" });
+    });
+
+    expect(logSpy.mock.calls[0][0]).toMatch(
+      /\[INFO\] service message \{"requestId":"request-context-123","operation":"load"\}$/,
+    );
+  });
+
+  it("keeps concurrent request contexts isolated", async () => {
+    process.env.LOG_LEVEL = "info";
+    const { logger } = await importLoggerFresh();
+    const { runWithRequestContext } =
+      await import("../src/lib/requestContext.js");
+    let releaseFirst;
+    const firstGate = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const first = runWithRequestContext("request-first", async () => {
+      await firstGate;
+      logger.info("first operation");
+    });
+    const second = runWithRequestContext("request-second", async () => {
+      logger.info("second operation");
+      releaseFirst();
+    });
+    await Promise.all([first, second]);
+
+    const messages = logSpy.mock.calls.map(([message]) => message);
+    expect(
+      messages.find((message) => message.includes("first operation")),
+    ).toContain('"requestId":"request-first"');
+    expect(
+      messages.find((message) => message.includes("second operation")),
+    ).toContain('"requestId":"request-second"');
+  });
+
+  it("lets an explicit requestId override ambient context", async () => {
+    process.env.LOG_LEVEL = "info";
+    const { logger } = await importLoggerFresh();
+    const { runWithRequestContext } =
+      await import("../src/lib/requestContext.js");
+
+    runWithRequestContext("ambient-request", () => {
+      logger.info("explicit request", { requestId: "explicit-request" });
+    });
+
+    expect(logSpy.mock.calls[0][0]).toContain('"requestId":"explicit-request"');
+    expect(logSpy.mock.calls[0][0]).not.toContain("ambient-request");
+  });
+
+  it("uses ambient context when metadata carries requestId: undefined", async () => {
+    process.env.LOG_LEVEL = "error";
+    const { logger } = await importLoggerFresh();
+    const { runWithRequestContext } =
+      await import("../src/lib/requestContext.js");
+
+    runWithRequestContext("ambient-fatal-request", () => {
+      logger.error("fatal operation", {
+        error: "boom",
+        requestId: undefined,
+      });
+    });
+
+    expect(errorSpy.mock.calls[0][0]).toContain(
+      '"requestId":"ambient-fatal-request"',
+    );
+    expect(errorSpy.mock.calls[0][0]).toContain('"error":"boom"');
   });
 });

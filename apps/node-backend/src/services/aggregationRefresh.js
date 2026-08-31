@@ -18,14 +18,14 @@
 import {
   refreshMaterializedViews as refreshLegacyMaterializedViews,
   scheduleRefresh as scheduleLegacyRefresh,
-} from './materializedViewService.js';
-import mcCacheRepo from '../repositories/cashflowForecastMcRepository.js';
-import mcRollingCacheRepo from '../repositories/cashflowForecastMcRollingRepository.js';
-import { logger } from '../config/logger.js';
+} from "./materializedViewService.js";
+import mcCacheRepo from "../repositories/cashflowForecastMcRepository.js";
+import mcRollingCacheRepo from "../repositories/cashflowForecastMcRollingRepository.js";
+import { logger } from "../config/logger.js";
 
 /** Trigger-maintained tables — documented here, never refreshed from app code. */
 export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
-  'agg_split_outstanding',
+  "agg_split_outstanding",
 ]);
 
 /**
@@ -41,10 +41,24 @@ export async function refreshAggregations() {
   await clearForecastMcCaches();
 }
 
-function clearForecastMcCaches() {
+/**
+ * Invalidate both forecast Monte Carlo caches and wait until the invalidation
+ * attempts finish. Bulk mutations use this narrow operation before returning
+ * so a forecast request cannot observe a stale six-hour entry while the much
+ * heavier materialized-view rebuild runs asynchronously.
+ */
+export function clearForecastMcCaches() {
   return Promise.all([
-    mcCacheRepo.clearAll().catch((err) => logger.warn('Forecast MC cache invalidation failed', { error: err.message })),
-    mcRollingCacheRepo.clearAll().catch((err) => logger.warn('Rolling forecast MC cache invalidation failed', { error: err.message })),
+    mcCacheRepo.clearAll().catch((err) =>
+      logger.warn("Forecast MC cache invalidation failed", {
+        error: err.message,
+      }),
+    ),
+    mcRollingCacheRepo.clearAll().catch((err) =>
+      logger.warn("Rolling forecast MC cache invalidation failed", {
+        error: err.message,
+      }),
+    ),
   ]);
 }
 
@@ -57,8 +71,8 @@ let mcClearTimer = null;
  * Debounced refresh for single-row mutations: delegates the MV refresh to the
  * legacy service (which owns its own debounce) AND clears the 6-hour
  * cashflow-forecast MC caches. Without the latter, a single create/edit/delete
- * left the forecast serving pre-edit data for up to 6 hours — only the bulk
- * import paths (which call refreshAggregations) invalidated it.
+ * left the forecast serving pre-edit data for up to 6 hours. Bulk imports use
+ * the exported synchronous cache-clear operation before returning.
  */
 export function scheduleAggregationRefresh() {
   scheduleLegacyRefresh();
@@ -67,7 +81,16 @@ export function scheduleAggregationRefresh() {
     mcClearTimer = null;
     clearForecastMcCaches();
   }, MC_CLEAR_DEBOUNCE_MS);
-  if (typeof mcClearTimer.unref === 'function') mcClearTimer.unref();
+  if (typeof mcClearTimer.unref === "function") mcClearTimer.unref();
+}
+
+/**
+ * Schedule only the materialized-view portion of an aggregation refresh.
+ * Bulk mutation paths clear the forecast caches synchronously, then call this
+ * after all follow-up writes (for example transfer reconciliation) are done.
+ */
+export function scheduleMaterializedViewRefresh() {
+  scheduleLegacyRefresh();
 }
 
 /**
@@ -83,7 +106,9 @@ export function cancelPendingAggregationRefresh() {
 
 export default {
   refreshAggregations,
+  clearForecastMcCaches,
   scheduleAggregationRefresh,
+  scheduleMaterializedViewRefresh,
   cancelPendingAggregationRefresh,
   TRIGGER_MAINTAINED_TABLES,
 };

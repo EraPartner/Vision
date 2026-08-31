@@ -24,8 +24,9 @@
  *                                            the tool actually received (or the
  *                                            raw value next to the error)
  *   - tool_result        {message}         — tool row persisted (result in .tool_result)
- *   - done               {assistantMessage, usage, iterations, conversation}
- *   - error              {detail, code?}
+ *   - complete           {assistantMessage, usage, iterations, conversation}
+ *   - done               same payload; deprecated compatibility alias
+ *   - error              {detail, code}
  *
  * JSON responses use the unified envelope (ADR-026). The SSE stream keeps
  * the raw event protocol — headers are committed before the first handler
@@ -50,6 +51,8 @@ import {
   runChatTurn,
 } from "../services/aiChatService.js";
 import { ApiErrorCode } from "@vision/types/errors";
+import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
+import { listBody, parseOptionalPagination } from "../lib/pagination.js";
 import {
   AppError,
   NotFoundError,
@@ -269,8 +272,8 @@ router.get(
 
 // GET /api/ai/models
 //
-// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
-// row count (present so pagination can land without breaking the shape).
+// Pagination is opt-in for compatibility. The shipped frontend always asks for
+// bounded pages; callers that omit both parameters retain the historical full list.
 router.get(
   "/models",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
@@ -295,16 +298,20 @@ router.get(
 
 // GET /api/ai/conversations
 //
-// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
-// row count (present so pagination can land without breaking the shape).
+// Pagination is opt-in for compatibility. No params preserve the historical
+// full list; the shipped frontend always requests a bounded page.
 router.get(
   "/conversations",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
     req,
     res,
   ) => {
-    const rows = await listConversations();
-    res.ok({ items: rows, total: rows.length });
+    const page = parseOptionalPagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
+    const { items, total } = await listConversations(page);
+    res.ok(listBody(items, total, page));
   },
 );
 
@@ -453,35 +460,21 @@ router.post(
         signal: abortController.signal,
         streaming: true,
         onEvent: async (evt) => {
-          switch (evt.type) {
-            case "user_message":
-              await writer.write("user_message", { message: evt.data });
-              break;
-            case "token":
-              await writer.write("token", evt.data);
-              break;
-            case "tool_call":
-              await writer.write("tool_call", evt.data);
-              break;
-            case "tool_message":
-              await writer.write("tool_result", { message: evt.data });
-              break;
-            case "assistant_message":
-              // terminal `done` event is emitted after runChatTurn resolves
-              break;
-            default:
-              break;
-          }
+          await writer.write(evt.type, evt.data);
         },
       });
 
       if (!writer.closed) {
-        await writer.write("done", {
+        const terminalPayload = {
           conversation: turn.conversation,
           assistantMessage: turn.assistantMessage,
           usage: turn.usage,
           iterations: turn.iterations,
-        });
+        };
+        await writer.write(AI_CHAT_STREAM_EVENT.COMPLETE, terminalPayload);
+        // Compatibility window: old AI clients ignore `complete` and still
+        // terminate on `done`. New clients normalize and deduplicate both.
+        await writer.write(AI_CHAT_STREAM_EVENT.DONE, terminalPayload);
         writer.end();
       }
     } catch (err) {
@@ -492,14 +485,18 @@ router.post(
           status: err.status,
           message: err.message,
         });
-        await writer.write("error", { detail: err.message, code: err.code });
+        await writer.write(AI_CHAT_STREAM_EVENT.ERROR, {
+          detail: err.message,
+          code: err.code,
+        });
       } else {
         logger.error("Failed to stream AI chat message", {
           error: err.message,
           stack: err.stack,
         });
-        await writer.write("error", {
+        await writer.write(AI_CHAT_STREAM_EVENT.ERROR, {
           detail: "Failed to stream AI chat message",
+          code: ApiErrorCode.INTERNAL_SERVER_ERROR,
         });
       }
       writer.end();

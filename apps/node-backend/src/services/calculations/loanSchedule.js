@@ -11,8 +11,9 @@
  *   validateLoanConfig(config) → { errors[], normalized }
  */
 
-import { roundMoney } from '../../lib/money.js';
-import { ValidationError } from '../../middleware/errorHandler.js';
+import { roundMoney } from "../../lib/money.js";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
+import { ValidationError } from "../../middleware/errorHandler.js";
 
 const EPSILON = 0.0000001;
 
@@ -49,16 +50,28 @@ const EPSILON = 0.0000001;
  * @param {number} preferredDay
  */
 function addMonthsAtDay(baseDateStr, monthOffset, preferredDay) {
-  const [year, month] = baseDateStr.split('-').map(Number);
+  const [year, month] = baseDateStr.split("-").map(Number);
   const firstOfTarget = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
   const lastDay = new Date(
-    Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0)
+    Date.UTC(
+      firstOfTarget.getUTCFullYear(),
+      firstOfTarget.getUTCMonth() + 1,
+      0,
+    ),
   ).getUTCDate();
   const day = Math.max(1, Math.min(Number(preferredDay) || 1, lastDay));
   const result = new Date(
-    Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth(), day, 0, 0, 0, 0)
+    Date.UTC(
+      firstOfTarget.getUTCFullYear(),
+      firstOfTarget.getUTCMonth(),
+      day,
+      0,
+      0,
+      0,
+      0,
+    ),
   );
-  return result.toISOString().split('T')[0];
+  return epochMsToUtcYmd(result.getTime());
 }
 
 /**
@@ -71,14 +84,23 @@ function validateLoanConfig(config) {
   const annualRate = Number(config.loan_annual_interest_rate ?? 0);
   const termMonths = Number(config.loan_term_months);
   const paymentDay = Number(config.loan_payment_day);
-  const loanType = String(config.loan_type || '').trim();
+  const loanType = String(config.loan_type || "").trim();
 
-  if (!loanType) errors.push('loan_type is required for loan planned transactions');
-  if (!Number.isFinite(principal) || principal <= 0) errors.push('loan_principal must be a positive number');
-  if (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 100) errors.push('loan_annual_interest_rate must be between 0 and 100');
-  if (!Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600) errors.push('loan_term_months must be an integer between 1 and 600');
-  if (!config.loan_start_date || !/^\d{4}-\d{2}-\d{2}$/.test(String(config.loan_start_date))) errors.push('loan_start_date must be in YYYY-MM-DD format');
-  if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31) errors.push('loan_payment_day must be an integer between 1 and 31');
+  if (!loanType)
+    errors.push("loan_type is required for loan planned transactions");
+  if (!Number.isFinite(principal) || principal <= 0)
+    errors.push("loan_principal must be a positive number");
+  if (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 100)
+    errors.push("loan_annual_interest_rate must be between 0 and 100");
+  if (!Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600)
+    errors.push("loan_term_months must be an integer between 1 and 600");
+  if (
+    !config.loan_start_date ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(String(config.loan_start_date))
+  )
+    errors.push("loan_start_date must be in YYYY-MM-DD format");
+  if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31)
+    errors.push("loan_payment_day must be an integer between 1 and 31");
 
   return {
     errors,
@@ -103,7 +125,9 @@ export function generateLoanRepaymentSchedule(config) {
     // replaces the enumerated reasons with the generic "Bad Request" reason
     // phrase (errorHandler.js THE RULE, clause 2) — the text is authored here
     // and safe, so it should reach the caller intact.
-    throw new ValidationError(`Invalid loan configuration: ${errors.join(', ')}`);
+    throw new ValidationError(
+      `Invalid loan configuration: ${errors.join(", ")}`,
+    );
   }
 
   const {
@@ -120,20 +144,24 @@ export function generateLoanRepaymentSchedule(config) {
   const schedule = [];
 
   let regularPayment;
-  if (loanType === 'amortizing') {
+  if (loanType === "amortizing") {
     if (Math.abs(monthlyRate) < EPSILON) {
       regularPayment = principal / termMonths;
     } else {
-      regularPayment = (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -termMonths));
+      regularPayment =
+        (principal * monthlyRate) /
+        (1 - Math.pow(1 + monthlyRate, -termMonths));
     }
-  } else if (loanType === 'fixed_principal') {
+  } else if (loanType === "fixed_principal") {
     regularPayment = principal / termMonths;
-  } else if (loanType === 'interest_only') {
+  } else if (loanType === "interest_only") {
     regularPayment = principal * monthlyRate;
   } else {
     // Same reasoning as the config-validation throw above: authored, safe text
     // that only survives the handler as an AppError.
-    throw new ValidationError(`Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`);
+    throw new ValidationError(
+      `Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`,
+    );
   }
 
   // If the payment day lands before the loan's start within the start month
@@ -142,10 +170,15 @@ export function generateLoanRepaymentSchedule(config) {
   // addMonthsAtDay returns YYYY-MM-DD, so the comparison is lexicographic-safe.
   const startDateStr = String(startDate);
   const startYmd = startDateStr.slice(0, 10);
-  const monthOffset = addMonthsAtDay(startDateStr, 0, paymentDay) < startYmd ? 1 : 0;
+  const monthOffset =
+    addMonthsAtDay(startDateStr, 0, paymentDay) < startYmd ? 1 : 0;
 
   for (let i = 1; i <= termMonths; i++) {
-    const dueDate = addMonthsAtDay(startDateStr, i - 1 + monthOffset, paymentDay);
+    const dueDate = addMonthsAtDay(
+      startDateStr,
+      i - 1 + monthOffset,
+      paymentDay,
+    );
     // Whole-month convention: installment 1 charges a full month of interest
     // even when the loan started mid-month (start 06-05, payment day 20 → 15
     // days of life, one month of interest). Standard simplification — no
@@ -154,13 +187,13 @@ export function generateLoanRepaymentSchedule(config) {
     let principalAmount;
     let paymentAmount;
 
-    if (loanType === 'amortizing') {
+    if (loanType === "amortizing") {
       principalAmount = roundMoney(regularPayment - interestAmount);
       if (i === termMonths || principalAmount > remaining) {
         principalAmount = roundMoney(remaining);
       }
       paymentAmount = roundMoney(principalAmount + interestAmount);
-    } else if (loanType === 'fixed_principal') {
+    } else if (loanType === "fixed_principal") {
       principalAmount = roundMoney(principal / termMonths);
       if (i === termMonths || principalAmount > remaining) {
         principalAmount = roundMoney(remaining);

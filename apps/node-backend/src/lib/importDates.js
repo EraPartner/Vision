@@ -1,3 +1,5 @@
+import { epochMsToUtcYmd } from "./dateFormat.js";
+
 /**
  * Coerce an adapter-parsed date to a 'YYYY-MM-DD' string for the import staging
  * tables and dedup hashes. The input is either a JS Date built by an adapter
@@ -13,7 +15,11 @@
  * @returns {string|undefined}
  */
 export function parsedDateToYmd(value) {
-  if (value instanceof Date) return value.toISOString().split('T')[0];
-  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? undefined
+      : epochMsToUtcYmd(value.getTime());
+  }
+  if (typeof value === "string") return value.slice(0, 10);
   return undefined;
 }

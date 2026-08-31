@@ -10,9 +10,9 @@
  * aggregation scans of `transactions` whenever the views are missing or stale.
  */
 
-import { query, getClient } from '../database/connection.js';
-import { logger } from '../config/logger.js';
-import { invalidateStatisticsCaches } from './info/cache.js';
+import { query, getClient } from "../database/connection.js";
+import { logger } from "../config/logger.js";
+import { invalidateStatisticsCaches } from "./info/cache.js";
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout
@@ -31,12 +31,12 @@ import { invalidateStatisticsCaches } from './info/cache.js';
 async function runMaintenanceStatement(sql) {
   const client = await getClient();
   try {
-    await client.query('SET statement_timeout = 0');
+    await client.query("SET statement_timeout = 0");
     return await client.query(sql);
   } finally {
     try {
       // RESET returns to the connection-startup value (the pool's 30s default).
-      await client.query('RESET statement_timeout');
+      await client.query("RESET statement_timeout");
       client.release();
     } catch {
       // Couldn't restore the timeout — discard the connection rather than hand
@@ -48,9 +48,9 @@ async function runMaintenanceStatement(sql) {
 
 /** All managed materialized view names */
 const MATERIALIZED_VIEWS = [
-  'mv_monthly_summary',
-  'mv_category_totals',
-  'mv_cashflow_daily',
+  "mv_monthly_summary",
+  "mv_category_totals",
+  "mv_cashflow_daily",
 ];
 
 /**
@@ -63,7 +63,7 @@ const MATERIALIZED_VIEWS = [
  * `transactions`.
  */
 export async function createMaterializedViews() {
-  logger.info('Creating materialized views (if not exist)…');
+  logger.info("Creating materialized views (if not exist)…");
   const start = Date.now();
 
   // 1. Monthly income / spending / net per month (last 12 months).
@@ -130,10 +130,12 @@ export async function createMaterializedViews() {
         COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
         t.currency
       ORDER BY count DESC
-    `).then(() => runMaintenanceStatement(`
+    `).then(() =>
+      runMaintenanceStatement(`
       CREATE UNIQUE INDEX IF NOT EXISTS mv_category_totals_idx
       ON mv_category_totals (category_id, currency)
-    `)),
+    `),
+    ),
 
     // 3. Daily cashflow (last 7 months – 6 complete + current)
     runMaintenanceStatement(`
@@ -149,10 +151,12 @@ export async function createMaterializedViews() {
         AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       GROUP BY t.date, day_of_month, month_start, t.currency
       ORDER BY t.date
-    `).then(() => runMaintenanceStatement(`
+    `).then(() =>
+      runMaintenanceStatement(`
       CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
       ON mv_cashflow_daily (date, currency)
-    `)),
+    `),
+    ),
   ]);
 
   // The boot-wide `ANALYZE` in main.js runs pre-listen and so no longer covers
@@ -161,11 +165,11 @@ export async function createMaterializedViews() {
   // sample them either). Same best-effort shape as the post-migration ANALYZE
   // in migrate.js — the views are tiny, and stale stats must not fail warmup.
   await Promise.all(
-    MATERIALIZED_VIEWS.map(view =>
-      query(`ANALYZE ${view}`).catch(err => {
+    MATERIALIZED_VIEWS.map((view) =>
+      query(`ANALYZE ${view}`).catch((err) => {
         logger.warn(`Could not ANALYZE ${view}`, { error: err.message });
-      })
-    )
+      }),
+    ),
   );
 
   logger.info(`Materialized views ready in ${Date.now() - start}ms`);
@@ -179,18 +183,18 @@ export async function createMaterializedViews() {
 export async function ensureMaterializedViewIndexes() {
   const indexes = [
     {
-      name: 'mv_monthly_summary_idx',
-      view: 'mv_monthly_summary',
+      name: "mv_monthly_summary_idx",
+      view: "mv_monthly_summary",
       columns: `(month_start, currency, category_id_key)`,
     },
     {
-      name: 'mv_category_totals_idx',
-      view: 'mv_category_totals',
+      name: "mv_category_totals_idx",
+      view: "mv_category_totals",
       columns: `(category_id, currency)`,
     },
     {
-      name: 'mv_cashflow_daily_idx',
-      view: 'mv_cashflow_daily',
+      name: "mv_cashflow_daily_idx",
+      view: "mv_cashflow_daily",
       columns: `(date, currency)`,
     },
   ];
@@ -198,10 +202,14 @@ export async function ensureMaterializedViewIndexes() {
   // All indexes are on independent views — create them in parallel
   await Promise.all(
     indexes.map(({ name, view, columns }) =>
-      runMaintenanceStatement(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`).catch(err => {
-        logger.warn(`Could not create index ${name} on ${view}`, { error: err.message });
-      })
-    )
+      runMaintenanceStatement(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`,
+      ).catch((err) => {
+        logger.warn(`Could not create index ${name} on ${view}`, {
+          error: err.message,
+        });
+      }),
+    ),
   );
 }
 
@@ -213,9 +221,8 @@ let refreshQueued = false;
  * Coalesces rapid-fire calls (e.g. bulk import) into a single refresh.
  */
 export async function refreshMaterializedViews() {
-  // Bulk imports invalidate via this path (refreshAggregations →
-  // refreshMaterializedViews); clear the statistics-pivot cache so it doesn't
-  // serve pre-import figures for the TTL.
+  // Clear the statistics-pivot cache at refresh start so ordinary scheduled
+  // mutations do not serve the pre-mutation figures for the TTL.
   invalidateStatisticsCaches();
   if (refreshInFlight) {
     refreshQueued = true;
@@ -229,19 +236,21 @@ export async function refreshMaterializedViews() {
     // CONCURRENTLY requires unique indexes (created above) and allows
     // reads to continue during refresh.
     await Promise.all(
-      MATERIALIZED_VIEWS.map(view =>
-        runMaintenanceStatement(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch(err => {
+      MATERIALIZED_VIEWS.map((view) =>
+        runMaintenanceStatement(
+          `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`,
+        ).catch((err) => {
           // Fall back to non-concurrent if the view has no unique index or was never
           // populated. Match case-insensitively: Postgres phrases the unpopulated case as
           // "CONCURRENTLY cannot be used when the materialized view is not populated"
           // (uppercase CONCURRENTLY, "is not populated") — a case-sensitive substring check
           // missed it, so the first refresh after an initdb-loaded dump kept failing.
-          const msg = (err.message || '').toLowerCase();
+          const msg = (err.message || "").toLowerCase();
           if (
-            msg.includes('not populated') ||
-            msg.includes('has not been populated') ||
-            msg.includes('cannot refresh materialized view') ||
-            msg.includes('concurrently')
+            msg.includes("not populated") ||
+            msg.includes("has not been populated") ||
+            msg.includes("cannot refresh materialized view") ||
+            msg.includes("concurrently")
           ) {
             logger.warn(`Falling back to non-concurrent refresh for ${view}`);
             return runMaintenanceStatement(`REFRESH MATERIALIZED VIEW ${view}`);
@@ -251,20 +260,26 @@ export async function refreshMaterializedViews() {
           // resolve "successfully" while leaving a stale view in place.
           logger.warn(`Failed to refresh ${view}`, { error: err.message });
           throw err;
-        })
-      )
+        }),
+      ),
     );
+    // A request can repopulate the process cache from the old snapshot while
+    // the concurrent refresh is running. Clear it again after all views have
+    // switched to the new snapshot so that race cannot outlive the refresh.
+    invalidateStatisticsCaches();
     logger.info(`Materialized views refreshed in ${Date.now() - start}ms`);
   } catch (err) {
-    logger.error('Materialized view refresh failed', { error: err.message });
+    logger.error("Materialized view refresh failed", { error: err.message });
   } finally {
     refreshInFlight = false;
     if (refreshQueued) {
       refreshQueued = false;
       // Schedule deferred refresh; swallow rejection so unhandled promises do not crash the process.
       setTimeout(() => {
-        refreshMaterializedViews().catch(err => {
-          logger.warn('Deferred materialized view refresh failed', { error: err.message });
+        refreshMaterializedViews().catch((err) => {
+          logger.warn("Deferred materialized view refresh failed", {
+            error: err.message,
+          });
         });
       }, 500);
     }
@@ -276,7 +291,7 @@ export async function refreshMaterializedViews() {
  *
  * Trailing 5s debounce: the previous 1s window only coalesced edits made
  * <1s apart, so human editing cadence (a save every few seconds) paid the
- * full four-view rebuild — two of them all-time aggregates — per edit.
+ * full three-view rebuild — including the all-time category aggregate — per edit.
  * The 10s max-wait guarantees a machine-cadence mutation stream (steady
  * writes <5s apart, e.g. an importer) still flushes instead of deferring
  * the refresh indefinitely.
@@ -298,14 +313,23 @@ export function scheduleRefresh() {
   const now = Date.now();
   if (debounceTimer) clearTimeout(debounceTimer);
   if (debounceDeadline === null) debounceDeadline = now + REFRESH_MAX_WAIT_MS;
-  const delay = Math.max(0, Math.min(REFRESH_DEBOUNCE_MS, debounceDeadline - now));
+  const delay = Math.max(
+    0,
+    Math.min(REFRESH_DEBOUNCE_MS, debounceDeadline - now),
+  );
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
     debounceDeadline = null;
-    refreshMaterializedViews().catch(err => {
-      logger.warn('Debounced materialized view refresh failed', { error: err.message });
+    refreshMaterializedViews().catch((err) => {
+      logger.warn("Debounced materialized view refresh failed", {
+        error: err.message,
+      });
     });
   }, delay);
 }
 
-export default { createMaterializedViews, refreshMaterializedViews, scheduleRefresh };
+export default {
+  createMaterializedViews,
+  refreshMaterializedViews,
+  scheduleRefresh,
+};

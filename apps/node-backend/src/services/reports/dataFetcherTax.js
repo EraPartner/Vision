@@ -5,12 +5,20 @@
  * investment, and threads through optional Belgian tax profile data from the client.
  */
 
-import { query } from '../../database/connection.js';
-import { convertWithRates, loadCurrentRates, getHistoricalRateIndex } from '../currency/currencyConversionService.js';
-import { findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
-import { getTaxTable } from './belgianTaxTables.js';
-import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
-import { logger } from '../../config/logger.js';
+import { query } from "../../database/connection.js";
+import {
+  convertWithRates,
+  loadCurrentRates,
+  getHistoricalRateIndex,
+} from "../currency/currencyConversionService.js";
+import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.js";
+import { getTaxTable } from "./belgianTaxTables.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.js";
+import { logger } from "../../config/logger.js";
+import { addAll, toNumber } from "../../lib/money.js";
+
+/** @param {...(number|string)} values */
+const addMoney = (...values) => toNumber(addAll(values));
 
 /**
  * @typedef {{ kind: 'ytd' }
@@ -148,8 +156,10 @@ import { logger } from '../../config/logger.js';
  * @returns {T | null}
  */
 function unwrap(result, label) {
-  if (result.status === 'fulfilled') return result.value;
-  logger.warn(`[dataFetcherTax] ${label} failed — section will be skipped`, { reason: result.reason?.message });
+  if (result.status === "fulfilled") return result.value;
+  logger.warn(`[dataFetcherTax] ${label} failed — section will be skipped`, {
+    reason: result.reason?.message,
+  });
   return null;
 }
 
@@ -166,34 +176,61 @@ function periodToTaxContext(period) {
   const currentYear = Number(today.slice(0, 4));
 
   switch (period.kind) {
-    case 'ytd':
-      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: today, periodNote: null };
+    case "ytd":
+      return {
+        taxYear: currentYear,
+        startDate: `${currentYear}-01-01`,
+        endDate: today,
+        periodNote: null,
+      };
 
-    case 'year':
-      return { taxYear: period.year, startDate: `${period.year}-01-01`, endDate: `${period.year}-12-31`, periodNote: null };
+    case "year":
+      return {
+        taxYear: period.year,
+        startDate: `${period.year}-01-01`,
+        endDate: `${period.year}-12-31`,
+        periodNote: null,
+      };
 
-    case 'rolling': {
+    case "rolling": {
       // Use current year; add note that period may span two calendar years
       const startDate = firstOfMonthYmd(today, -(period.months - 1));
       const startYear = Number(startDate.slice(0, 4));
-      const note = startYear !== currentYear
-        ? `Rolling ${period.months}-month window spans ${startYear}–${currentYear}; brackets use ${currentYear} rates.`
-        : null;
-      return { taxYear: currentYear, startDate, endDate: today, periodNote: note };
+      const note =
+        startYear !== currentYear
+          ? `Rolling ${period.months}-month window spans ${startYear}–${currentYear}; brackets use ${currentYear} rates.`
+          : null;
+      return {
+        taxYear: currentYear,
+        startDate,
+        endDate: today,
+        periodNote: note,
+      };
     }
 
-    case 'custom': {
+    case "custom": {
       const fromYear = Number(String(period.from).slice(0, 4));
-      const toYear   = Number(String(period.to).slice(0, 4));
-      const taxYear  = fromYear;
-      const note = fromYear !== toYear
-        ? `Custom date range spans ${fromYear}–${toYear}; brackets use ${fromYear} rates.`
-        : null;
-      return { taxYear, startDate: period.from, endDate: period.to, periodNote: note };
+      const toYear = Number(String(period.to).slice(0, 4));
+      const taxYear = fromYear;
+      const note =
+        fromYear !== toYear
+          ? `Custom date range spans ${fromYear}–${toYear}; brackets use ${fromYear} rates.`
+          : null;
+      return {
+        taxYear,
+        startDate: period.from,
+        endDate: period.to,
+        periodNote: note,
+      };
     }
 
     default:
-      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: `${currentYear}-12-31`, periodNote: null };
+      return {
+        taxYear: currentYear,
+        startDate: `${currentYear}-01-01`,
+        endDate: `${currentYear}-12-31`,
+        periodNote: null,
+      };
   }
 }
 
@@ -206,7 +243,9 @@ function periodToTaxContext(period) {
  * @returns {Promise<TaxTransactionAggregates>}
  */
 async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
-  const result = await /** @type {Promise<{ rows: TaxTxnRow[] }>} */ (query(`
+  const result = await /** @type {Promise<{ rows: TaxTxnRow[] }>} */ (
+    query(
+      `
     SELECT
       pt.id,
       pt.investment_id,
@@ -227,22 +266,25 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       AND (pt.taxes > 0 OR pt.fees > 0 OR pt.type IN ('dividend', 'tax', 'fee'))
     ORDER BY pt.date
     LIMIT 100000
-  `, [startDate, endDate]));
+  `,
+      [startDate, endDate],
+    )
+  );
 
   // Aggregation accumulators
-  let tobTotal          = 0;
-  let dividendWHTTotal  = 0;
-  let sellTaxTotal      = 0;
-  let otherTaxTotal     = 0;
-  let feesTotal         = 0;
+  let tobTotal = 0;
+  let dividendWHTTotal = 0;
+  let sellTaxTotal = 0;
+  let otherTaxTotal = 0;
+  let feesTotal = 0;
   let dividendsReceived = 0;
 
   /** @type {Map<string, TaxMonthBucket>} */
-  const byMonthMap      = new Map(); // key: 'YYYY-MM'
+  const byMonthMap = new Map(); // key: 'YYYY-MM'
   /** @type {Map<string, TaxAssetClassBucket>} */
-  const byAssetClass    = new Map();
+  const byAssetClass = new Map();
   /** @type {Map<number, TaxInvestmentBucket>} */
-  const byInvestment    = new Map();
+  const byInvestment = new Map();
 
   // Currencies for which no rate (historical or current) could be resolved, so a
   // row was summed into the target total at an unconverted 1:1 rate. Surfaced so
@@ -260,12 +302,20 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   // before that date (e.g. a brand-new transaction before the FX backfill runs). See
   // ADR-085.
   const currentRates = await loadCurrentRates();
-  const toCur = String(targetCurrency || 'EUR').toUpperCase().trim();
+  const toCur = String(targetCurrency || "EUR")
+    .toUpperCase()
+    .trim();
 
-  const relevantCurrencies = [...new Set([
-    ...result.rows.map((r) => String(r.currency || 'EUR').toUpperCase().trim()),
-    toCur,
-  ])].filter((c) => c && c !== 'EUR');
+  const relevantCurrencies = [
+    ...new Set([
+      ...result.rows.map((r) =>
+        String(r.currency || "EUR")
+          .toUpperCase()
+          .trim(),
+      ),
+      toCur,
+    ]),
+  ].filter((c) => c && c !== "EUR");
 
   // Shared process-level index cache (see getHistoricalRateIndex) avoids
   // reloading the full exchange_rates history and rebuilding the index per call.
@@ -281,8 +331,10 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
    * @param {string} dateStr
    */
   const rateToEurForDate = (code, dateStr) => {
-    const c = String(code || 'EUR').toUpperCase().trim();
-    if (c === 'EUR') return 1;
+    const c = String(code || "EUR")
+      .toUpperCase()
+      .trim();
+    if (c === "EUR") return 1;
     const historical = findRateOnOrBeforeInIndex(historicalIndex, c, dateStr);
     if (historical !== undefined) return historical;
     return currentRates[c];
@@ -291,7 +343,9 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   for (const row of result.rows) {
     // Normalize the source currency ONCE so the skip-guard and the rowRates keys
     // can't disagree for mixed-case/whitespace currency strings.
-    const cur = String(row.currency || 'EUR').toUpperCase().trim();
+    const cur = String(row.currency || "EUR")
+      .toUpperCase()
+      .trim();
     const rowDate = row.rate_date;
     // Per-row rate table built from the transaction-date rates, so convertWithRates
     // applies the same conversion math and unsupported-currency handling as the live
@@ -304,16 +358,22 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     };
     // No rate resolved for a non-target foreign currency → convertWithRates will
     // sum it 1:1. Record it so the report can flag the total as approximate.
-    if (cur !== toCur && cur !== 'EUR' && (fromRate === undefined || fromRate === null)) {
+    if (
+      cur !== toCur &&
+      cur !== "EUR" &&
+      (fromRate === undefined || fromRate === null)
+    ) {
       missingRateCurrencies.add(cur);
     }
     /** @param {string} v */
     const convert = (v) =>
-      cur !== toCur ? convertWithRates(Number(v), cur, toCur, rowRates) : Number(v);
+      cur !== toCur
+        ? convertWithRates(Number(v), cur, toCur, rowRates)
+        : Number(v);
 
-    const taxes    = convert(row.taxes);
-    const fees     = convert(row.fees);
-    const amount   = convert(row.amount);
+    const taxes = convert(row.taxes);
+    const fees = convert(row.fees);
+    const amount = convert(row.amount);
 
     // Classify taxes by transaction type. Belgian TOB (beurstaks) is levied on
     // BOTH legs of an exchange transaction — "transfer and acquisition" are
@@ -322,45 +382,63 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     // "Capital Gains / Sell Tax": with Belgian CGT at 0% through 2025, a
     // nonzero line under that label was materially misleading (it was TOB all
     // along) and the TOB line under-reported by the whole sell side.
-    let tobAmt = 0, whtAmt = 0, sellAmt = 0, otherAmt = 0;
+    let tobAmt = 0,
+      whtAmt = 0,
+      sellAmt = 0,
+      otherAmt = 0;
     switch (row.type) {
-      case 'buy':
-      case 'sell':
+      case "buy":
+      case "sell":
         tobAmt = taxes;
         break;
-      case 'dividend':
+      case "dividend":
         whtAmt = taxes;
-        dividendsReceived += amount;
+        dividendsReceived = addMoney(dividendsReceived, amount);
         break;
-      case 'tax':
+      case "tax":
         otherAmt = amount; // 'tax' type transactions record the tax amount itself
         break;
       default:
         otherAmt = taxes;
     }
 
-    tobTotal         += tobAmt;
-    dividendWHTTotal += whtAmt;
-    sellTaxTotal     += sellAmt;
-    otherTaxTotal    += otherAmt;
-    feesTotal        += fees;
+    tobTotal = addMoney(tobTotal, tobAmt);
+    dividendWHTTotal = addMoney(dividendWHTTotal, whtAmt);
+    sellTaxTotal = addMoney(sellTaxTotal, sellAmt);
+    otherTaxTotal = addMoney(otherTaxTotal, otherAmt);
+    feesTotal = addMoney(feesTotal, fees);
 
-    const monthKey = `${row.year}-${String(row.month).padStart(2, '0')}`;
+    const monthKey = `${row.year}-${String(row.month).padStart(2, "0")}`;
     if (!byMonthMap.has(monthKey)) {
-      byMonthMap.set(monthKey, { year: row.year, month: row.month, tob: 0, wht: 0, sell: 0, other: 0, fees: 0 });
+      byMonthMap.set(monthKey, {
+        year: row.year,
+        month: row.month,
+        tob: 0,
+        wht: 0,
+        sell: 0,
+        other: 0,
+        fees: 0,
+      });
     }
     const mo = byMonthMap.get(monthKey);
-    mo.tob   += tobAmt;
-    mo.wht   += whtAmt;
-    mo.sell  += sellAmt;
-    mo.other += otherAmt;
-    mo.fees  += fees;
+    mo.tob = addMoney(mo.tob, tobAmt);
+    mo.wht = addMoney(mo.wht, whtAmt);
+    mo.sell = addMoney(mo.sell, sellAmt);
+    mo.other = addMoney(mo.other, otherAmt);
+    mo.fees = addMoney(mo.fees, fees);
 
-    const ac = row.asset_class ?? 'other';
-    if (!byAssetClass.has(ac)) byAssetClass.set(ac, { assetClass: ac, taxes: 0, fees: 0 });
+    const ac = row.asset_class ?? "other";
+    if (!byAssetClass.has(ac))
+      byAssetClass.set(ac, { assetClass: ac, taxes: 0, fees: 0 });
     const acBucket = byAssetClass.get(ac);
-    acBucket.taxes += tobAmt + whtAmt + sellAmt + otherAmt;
-    acBucket.fees  += fees;
+    acBucket.taxes = addMoney(
+      acBucket.taxes,
+      tobAmt,
+      whtAmt,
+      sellAmt,
+      otherAmt,
+    );
+    acBucket.fees = addMoney(acBucket.fees, fees);
 
     const invId = row.investment_id;
     if (!byInvestment.has(invId)) {
@@ -369,17 +447,21 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
         name: row.investment_name,
         symbol: row.symbol,
         assetClass: ac,
-        tob: 0, wht: 0, sell: 0, other: 0, fees: 0, total: 0,
+        tob: 0,
+        wht: 0,
+        sell: 0,
+        other: 0,
+        fees: 0,
+        total: 0,
       });
     }
     const inv = byInvestment.get(invId);
-    inv.tob   += tobAmt;
-    inv.wht   += whtAmt;
-    inv.sell  += sellAmt;
-    inv.other += otherAmt;
-    inv.fees  += fees;
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    inv.total += tobAmt + whtAmt + sellAmt + otherAmt + fees;
+    inv.tob = addMoney(inv.tob, tobAmt);
+    inv.wht = addMoney(inv.wht, whtAmt);
+    inv.sell = addMoney(inv.sell, sellAmt);
+    inv.other = addMoney(inv.other, otherAmt);
+    inv.fees = addMoney(inv.fees, fees);
+    inv.total = addMoney(inv.total, tobAmt, whtAmt, sellAmt, otherAmt, fees);
   }
 
   return {
@@ -389,8 +471,12 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     otherTaxTotal,
     feesTotal,
     dividendsReceived,
-    byMonth: [...byMonthMap.values()].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month),
-    byAssetClass: [...byAssetClass.values()].sort((a, b) => (b.taxes + b.fees) - (a.taxes + a.fees)),
+    byMonth: [...byMonthMap.values()].sort((a, b) =>
+      a.year !== b.year ? a.year - b.year : a.month - b.month,
+    ),
+    byAssetClass: [...byAssetClass.values()].sort((a, b) =>
+      addAll([b.taxes, b.fees]).comparedTo(addAll([a.taxes, a.fees])),
+    ),
     byInvestment: [...byInvestment.values()].sort((a, b) => b.total - a.total),
     // Foreign currencies that were summed at an unconverted 1:1 rate (no FX rate
     // available). Empty when every row converted cleanly.
@@ -406,15 +492,20 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
  * @param {{ taxProfile?: TaxProfile; precomputedPIT?: PrecomputedPIT }} [extra]
  * @returns {Promise<TaxReportData>}
  */
-export async function fetchTaxData(currency, period, { taxProfile, precomputedPIT } = {}) {
-  const { taxYear, startDate, endDate, periodNote } = periodToTaxContext(period);
+export async function fetchTaxData(
+  currency,
+  period,
+  { taxProfile, precomputedPIT } = {},
+) {
+  const { taxYear, startDate, endDate, periodNote } =
+    periodToTaxContext(period);
   const taxTables = getTaxTable(taxYear);
 
   const [txnsResult] = await Promise.allSettled([
     fetchTaxTransactions(currency, startDate, endDate),
   ]);
 
-  const txns = unwrap(txnsResult, 'fetchTaxTransactions');
+  const txns = unwrap(txnsResult, "fetchTaxTransactions");
 
   return {
     taxYear,
@@ -426,15 +517,15 @@ export async function fetchTaxData(currency, period, { taxProfile, precomputedPI
     taxTables,
     taxProfile: taxProfile ?? undefined,
     precomputedPIT: precomputedPIT ?? undefined,
-    tobTotal:          txns?.tobTotal          ?? 0,
-    dividendWHTTotal:  txns?.dividendWHTTotal  ?? 0,
-    sellTaxTotal:      txns?.sellTaxTotal      ?? 0,
-    otherTaxTotal:     txns?.otherTaxTotal     ?? 0,
-    feesTotal:         txns?.feesTotal         ?? 0,
+    tobTotal: txns?.tobTotal ?? 0,
+    dividendWHTTotal: txns?.dividendWHTTotal ?? 0,
+    sellTaxTotal: txns?.sellTaxTotal ?? 0,
+    otherTaxTotal: txns?.otherTaxTotal ?? 0,
+    feesTotal: txns?.feesTotal ?? 0,
     dividendsReceived: txns?.dividendsReceived ?? 0,
-    byMonth:           txns?.byMonth           ?? [],
-    byAssetClass:      txns?.byAssetClass      ?? [],
-    byInvestment:      txns?.byInvestment      ?? [],
+    byMonth: txns?.byMonth ?? [],
+    byAssetClass: txns?.byAssetClass ?? [],
+    byInvestment: txns?.byInvestment ?? [],
     unconvertedCurrencies: txns?.unconvertedCurrencies ?? [],
   };
 }

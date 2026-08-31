@@ -11,10 +11,13 @@
  * - If both APIs are unavailable the service falls back to DB then hardcoded constants
  */
 
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { toDecimal, toNumber } from '../../lib/money.js';
-import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from '../providerHealthService.js';
+import { query } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { toDecimal, toNumber } from "../../lib/money.js";
+import {
+  recordSuccess as recordProviderSuccess,
+  recordError as recordProviderError,
+} from "../providerHealthService.js";
 import {
   CACHE_LIFETIME_MS,
   normalizeDateInput,
@@ -25,12 +28,13 @@ import {
   loadFromDatabase,
   saveToDatabase,
   saveHistoricalRate,
+  getUnindexedRatesToEurForDates,
   buildHistoricalRateIndex,
   findNearestRateInIndex,
   getRateToEurForDate,
   clearHistoricalCache,
-} from './rateFetcher.js';
-import { settingsRepository } from '../../repositories/settingsRepository.js';
+} from "./rateFetcher.js";
+import { settingsRepository } from "../../repositories/settingsRepository.js";
 
 /**
  * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
@@ -62,29 +66,29 @@ export const FALLBACK_RATES = {
   GBP: 1 / 0.85,
   CHF: 1 / 0.95,
   JPY: 1 / 163.0,
-  SEK: 1 / 11.20,
-  NOK: 1 / 11.50,
+  SEK: 1 / 11.2,
+  NOK: 1 / 11.5,
   DKK: 1 / 7.46,
-  PLN: 1 / 4.30,
-  CZK: 1 / 25.30,
+  PLN: 1 / 4.3,
+  CZK: 1 / 25.3,
   HUF: 1 / 395.0,
   RON: 1 / 4.97,
   TRY: 1 / 35.0,
   AUD: 1 / 1.66,
-  CAD: 1 / 1.50,
-  CNY: 1 / 7.90,
+  CAD: 1 / 1.5,
+  CNY: 1 / 7.9,
   INR: 1 / 91.0,
-  BRL: 1 / 5.40,
+  BRL: 1 / 5.4,
   IDR: 1 / 17600.0,
   KRW: 1 / 1450.0,
-  MXN: 1 / 18.50,
-  MYR: 1 / 4.80,
+  MXN: 1 / 18.5,
+  MYR: 1 / 4.8,
   NZD: 1 / 1.78,
   PHP: 1 / 61.0,
   SGD: 1 / 1.46,
   THB: 1 / 37.5,
   ZAR: 1 / 19.5,
-  HKD: 1 / 8.50,
+  HKD: 1 / 8.5,
   ISK: 1 / 150.0,
   ILS: 1 / 3.95,
   // Supplementary currencies (open.er-api.com)
@@ -126,7 +130,9 @@ async function getRates() {
     return dbRates;
   }
 
-  logger.warn('Using fallback exchange rates — ECB API and database unavailable');
+  logger.warn(
+    "Using fallback exchange rates — ECB API and database unavailable",
+  );
   // Return the reference (callers never mutate) so warmCache can detect that
   // the fallback path was taken via identity comparison.
   return liveFallbackRates;
@@ -139,7 +145,7 @@ export function clearMemoryCache() {
   memoryCache = null;
   clearHistoricalCache();
   clearHistoricalIndexCache();
-  logger.debug('Cleared exchange rate memory cache');
+  logger.debug("Cleared exchange rate memory cache");
 }
 
 /** Drop the cached historical-rate index (rebuilt on next demand). */
@@ -162,9 +168,13 @@ export async function getHistoricalRateIndex(currencies) {
   const wanted = [...new Set(currencies)].filter(Boolean);
   if (wanted.length === 0) return new Map();
 
-  const fresh = historicalIndexCache !== null
-    && Date.now() - historicalIndexCache.builtAt < CACHE_LIFETIME_MS;
-  if (fresh && wanted.every((c) => historicalIndexCache.currencies.includes(c))) {
+  const fresh =
+    historicalIndexCache !== null &&
+    Date.now() - historicalIndexCache.builtAt < CACHE_LIFETIME_MS;
+  if (
+    fresh &&
+    wanted.every((c) => historicalIndexCache.currencies.includes(c))
+  ) {
     return historicalIndexCache.index;
   }
 
@@ -176,11 +186,52 @@ export async function getHistoricalRateIndex(currencies) {
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])
      ORDER BY currency_code ASC, rate_date ASC`,
-    [union]
+    [union],
   );
   const index = buildHistoricalRateIndex(result.rows || []);
   historicalIndexCache = { index, currencies: union, builtAt: Date.now() };
   return index;
+}
+
+/**
+ * Merge fetched points into the request's historical index without duplicating
+ * dates. If another request replaced the process cache while providers were in
+ * flight, invalidate that newer-but-now-stale cache so the next request reloads
+ * the points just persisted to PostgreSQL.
+ *
+ * @param {HistoricalRateIndex} requestIndex
+ * @param {Map<string, number>} fetchedRates
+ */
+function mergeFetchedRatesIntoHistoricalIndex(requestIndex, fetchedRates) {
+  for (const [key, rate] of fetchedRates) {
+    const separator = key.indexOf(":");
+    const currency = key.slice(0, separator);
+    const date = key.slice(separator + 1);
+    const byDate = new Map(
+      (requestIndex.get(currency) || []).map((point) => [
+        point.date,
+        point.rate,
+      ]),
+    );
+    byDate.set(date, rate);
+    requestIndex.set(
+      currency,
+      [...byDate].map(([pointDate, pointRate]) => ({
+        date: pointDate,
+        rate: pointRate,
+      })),
+    );
+  }
+  for (const entries of requestIndex.values()) {
+    entries.sort((left, right) => left.date.localeCompare(right.date));
+  }
+
+  if (
+    historicalIndexCache !== null &&
+    historicalIndexCache.index !== requestIndex
+  ) {
+    clearHistoricalIndexCache();
+  }
 }
 
 /**
@@ -205,23 +256,28 @@ export async function listLatestStoredRates() {
  */
 export async function warmCache() {
   try {
-    const [ecbRates, erarRates] = await Promise.all([fetchFromEcb(), fetchFromErApi()]);
+    const [ecbRates, erarRates] = await Promise.all([
+      fetchFromEcb(),
+      fetchFromErApi(),
+    ]);
 
     if (ecbRates) {
-      recordProviderSuccess('ecb');
+      recordProviderSuccess("ecb");
     } else {
-      recordProviderError('ecb', 'ECB fetch returned no rates');
+      recordProviderError("ecb", "ECB fetch returned no rates");
     }
 
     if (erarRates) {
-      recordProviderSuccess('open.er-api');
+      recordProviderSuccess("open.er-api");
     } else {
-      recordProviderError('open.er-api', 'open.er-api fetch returned no rates');
+      recordProviderError("open.er-api", "open.er-api fetch returned no rates");
     }
 
     if (!ecbRates && !erarRates) {
       const rates = await getRates();
-      logger.warn(`Exchange rate cache warmed from ${rates === liveFallbackRates ? 'fallback' : 'database'} (all APIs unavailable)`);
+      logger.warn(
+        `Exchange rate cache warmed from ${rates === liveFallbackRates ? "fallback" : "database"} (all APIs unavailable)`,
+      );
       return;
     }
 
@@ -229,15 +285,17 @@ export async function warmCache() {
     /** @type {Record<string, number>} */
     const mergedRates = {
       ...(erarRates ?? {}),
-      ...(ecbRates  ?? {}),
+      ...(ecbRates ?? {}),
     };
 
-    const ecbCount  = ecbRates  ? Object.keys(ecbRates).length  - 1 : 0;
+    const ecbCount = ecbRates ? Object.keys(ecbRates).length - 1 : 0;
     const totalCount = Object.keys(mergedRates).length - 1;
     // Supplementary = er-api currencies that survived the ECB-priority merge,
     // i.e. total minus ECB (not erarCount − ecbCount, which miscounted when
     // the two sources didn't fully overlap).
-    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`);
+    logger.info(
+      `Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`,
+    );
 
     liveFallbackRates = mergedRates;
     await saveToDatabase(mergedRates);
@@ -246,7 +304,7 @@ export async function warmCache() {
     // refresh cycle is the primary invalidation hook for it.
     clearHistoricalIndexCache();
   } catch (err) {
-    logger.warn('Failed to warm exchange rate cache', { error: err.message });
+    logger.warn("Failed to warm exchange rate cache", { error: err.message });
   }
 }
 
@@ -262,26 +320,16 @@ export async function warmCache() {
  * @param {{ useHistoricalRatesByDate?: boolean, dateField?: string|null }} [options]
  * @returns {Promise<Array<Record<string, any>>>}
  */
-export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {}) {
+export async function convertRowsToEur(
+  rows,
+  targetCurrency = "EUR",
+  options = {},
+) {
   if (!rows || rows.length === 0) return [];
 
   const { useHistoricalRatesByDate = false, dateField = null } = options || {};
-  const toCur = (targetCurrency || 'EUR').toUpperCase().trim();
+  const toCur = (targetCurrency || "EUR").toUpperCase().trim();
   const rates = await getRates();
-
-  /** @type {Map<string, number|undefined>} */
-  const historicalRateCache = new Map();
-
-  // Per-request memo for currencies the historical index knows NOTHING about.
-  // The index is empty for a currency only when `exchange_rates` holds no row
-  // for it at all, and then the per-date point lookup below misses on EVERY
-  // date and goes to the network. A daily series (balance history: up to 366
-  // distinct days per request) turned that into hundreds of sequential
-  // round-trips, each of which is a multi-second timeout when offline. One
-  // attempt per currency per request is enough: it saves what it fetches, so
-  // the index has a row to interpolate from next time.
-  /** @type {Map<string, number|undefined>} */
-  const unindexedCurrencyRate = new Map();
 
   /**
    * @param {Record<string, any>} row
@@ -289,34 +337,27 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
    */
   function resolveDateFromRow(row) {
     if (dateField && row[dateField]) return normalizeDateInput(row[dateField]);
-    return normalizeDateInput(row.date || row.day || row.transaction_date || row.planned_date || row.rate_date);
-  }
-
-  /**
-   * @param {string} currencyCode
-   * @param {string|null} rowDate
-   * @returns {Promise<number|undefined>}
-   */
-  async function getRate(currencyCode, rowDate) {
-    if (!useHistoricalRatesByDate || !rowDate) return rates[currencyCode];
-    const key = `${currencyCode}:${rowDate}`;
-    if (historicalRateCache.has(key)) return historicalRateCache.get(key);
-    const value = await getRateToEurForDate(currencyCode, rowDate, { saveFetchedHistoricalRate: true });
-    historicalRateCache.set(key, value);
-    return value;
+    return normalizeDateInput(
+      row.date ||
+        row.day ||
+        row.transaction_date ||
+        row.planned_date ||
+        row.rate_date,
+    );
   }
 
   // Resolve a rate for one side of the conversion. Returns the rate plus a
   // boolean flagging whether we fell back to current rates because the
-  // requested historical rate was missing. Callers surface this so the
-  // frontend can label affected rows.
+  // requested historical rate was missing. convertRowsToEur retains this as
+  // internal diagnostic metadata; current repositories intentionally project
+  // it away rather than treating it as an API response contract.
   /**
    * @param {string} code
    * @param {string|null} rowDate
    * @returns {Promise<{ rate: number|undefined, fellBack: boolean }>}
    */
   async function resolveRateWithFallback(code, rowDate) {
-    if (code === 'EUR') return { rate: 1, fellBack: false };
+    if (code === "EUR") return { rate: 1, fellBack: false };
 
     if (!useHistoricalRatesByDate || !rowDate) {
       return { rate: rates[code], fellBack: false };
@@ -327,43 +368,56 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
       : undefined;
     if (historical !== undefined) return { rate: historical, fellBack: false };
 
-    // Index built but empty for this currency (findNearestRateInIndex only
-    // misses when the currency has no entries at all): one network attempt per
-    // request, not one per date. See unindexedCurrencyRate above.
-    let fetched;
-    if (historicalIndex && unindexedCurrencyRate.has(code)) {
-      fetched = unindexedCurrencyRate.get(code);
-    } else {
-      fetched = await getRate(code, rowDate);
-      if (historicalIndex) unindexedCurrencyRate.set(code, fetched);
-    }
-    if (fetched !== undefined) return { rate: fetched, fellBack: false };
-
     const fallback = rates[code];
     if (fallback !== undefined) {
-      logger.warn('Historical FX missing, falling back to current rate', { currency: code, date: rowDate });
+      logger.warn("Historical FX missing, falling back to current rate", {
+        currency: code,
+        date: rowDate,
+      });
       return { rate: fallback, fellBack: true };
     }
-    // No rate found anywhere — flag as fellBack so the frontend shows the indicator.
+    // No rate found anywhere — retain the same internal diagnostic flag.
     return { rate: undefined, fellBack: true };
   }
 
   /** @type {HistoricalRateIndex|null} */
   let historicalIndex = null;
   if (useHistoricalRatesByDate) {
-    const relevantCurrencies = [...new Set([
-      ...rows.map(row => (row.currency || 'EUR').toUpperCase().trim()),
-      toCur,
-    ])].filter(Boolean);
+    const relevantCurrencies = [
+      ...new Set([
+        ...rows.map((row) => (row.currency || "EUR").toUpperCase().trim()),
+        toCur,
+      ]),
+    ].filter(Boolean);
 
     if (relevantCurrencies.length > 0) {
       historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
+
+      /** @type {Map<string, string[]>} */
+      const datesByUnindexedCurrency = new Map();
+      for (const row of rows) {
+        const rowDate = resolveDateFromRow(row);
+        if (!rowDate) continue;
+        const rowCurrency = (row.currency || "EUR").toUpperCase().trim();
+        if (rowCurrency === toCur) continue;
+        for (const currency of [rowCurrency, toCur]) {
+          if (currency === "EUR" || historicalIndex.has(currency)) continue;
+          if (!datesByUnindexedCurrency.has(currency))
+            datesByUnindexedCurrency.set(currency, []);
+          datesByUnindexedCurrency.get(currency).push(rowDate);
+        }
+      }
+
+      const fetchedRates = await getUnindexedRatesToEurForDates(
+        datesByUnindexedCurrency,
+      );
+      mergeFetchedRatesIntoHistoricalIndex(historicalIndex, fetchedRates);
     }
   }
 
   const converted = [];
   for (const row of rows) {
-    const currency = (row.currency || 'EUR').toUpperCase().trim();
+    const currency = (row.currency || "EUR").toUpperCase().trim();
     const amount = toNumber(toDecimal(row.amount));
     const rowDate = resolveDateFromRow(row);
 
@@ -376,23 +430,33 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
     const toResolved = await resolveRateWithFallback(toCur, rowDate);
     const fellBack = fromResolved.fellBack || toResolved.fellBack;
     const fallbackFields = fellBack
-      ? { used_fallback_rate: true, fallback_reason: 'historical_rate_missing' }
+      ? { used_fallback_rate: true, fallback_reason: "historical_rate_missing" }
       : {};
 
     if (!fromResolved.rate) {
-      logger.warn(`Unsupported source currency ${currency}, using 1:1 conversion`);
+      logger.warn(
+        `Unsupported source currency ${currency}, using 1:1 conversion`,
+      );
       converted.push({ ...row, amount_eur: amount, ...fallbackFields });
       continue;
     }
     if (!toResolved.rate) {
       logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      converted.push({ ...row, amount_eur: amount * fromResolved.rate, ...fallbackFields });
+      converted.push({
+        ...row,
+        // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+        amount_eur: amount * fromResolved.rate,
+        ...fallbackFields,
+      });
       continue;
     }
 
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    converted.push({ ...row, amount_eur: (amount * fromResolved.rate) / toResolved.rate, ...fallbackFields });
+    converted.push({
+      ...row,
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+      amount_eur: (amount * fromResolved.rate) / toResolved.rate,
+      ...fallbackFields,
+    });
   }
 
   return converted;
@@ -407,7 +471,11 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
  * @returns {Promise<number>}
  */
 export async function convertToCurrency(amount, fromCurrency, toCurrency) {
-  if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
+  if (
+    !fromCurrency ||
+    fromCurrency.toUpperCase().trim() ===
+      (toCurrency || "EUR").toUpperCase().trim()
+  ) {
     return amount;
   }
   const rates = await getRates();
@@ -436,12 +504,16 @@ export async function loadCurrentRates() {
  * @returns {number}
  */
 export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
-  if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
+  if (
+    !fromCurrency ||
+    fromCurrency.toUpperCase().trim() ===
+      (toCurrency || "EUR").toUpperCase().trim()
+  ) {
     return amount;
   }
 
   const from = fromCurrency.toUpperCase().trim();
-  const to = (toCurrency || 'EUR').toUpperCase().trim();
+  const to = (toCurrency || "EUR").toUpperCase().trim();
 
   const rateFrom = rates[from];
   const rateTo = rates[to];
@@ -451,7 +523,9 @@ export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
     return amount;
   }
   if (!rateTo) {
-    logger.warn(`Unsupported target currency ${to}, falling back to EUR conversion`);
+    logger.warn(
+      `Unsupported target currency ${to}, falling back to EUR conversion`,
+    );
     // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     return amount * rateFrom;
   }
@@ -466,7 +540,7 @@ export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
 // saved nearest-known rates under old transaction dates (fabricated history).
 // The repair overwrites those rows with true ECB rates; the flag is only set
 // once the full-history download succeeded so offline starts retry later.
-const FX_FULL_HISTORY_REPAIR_FLAG = 'fx_full_history_repair_done';
+const FX_FULL_HISTORY_REPAIR_FLAG = "fx_full_history_repair_done";
 
 /**
  * Overwrite stored txn-date rates with true ECB full-history values (one-time).
@@ -475,26 +549,40 @@ const FX_FULL_HISTORY_REPAIR_FLAG = 'fx_full_history_repair_done';
  * @returns {Promise<number|undefined>} rows repaired, or undefined when the repair could not run (offline)
  */
 async function repairHistoricalRatesFromFullHistory(pairs) {
-  if ((await settingsRepository.get(FX_FULL_HISTORY_REPAIR_FLAG)) === true) return 0;
+  if ((await settingsRepository.get(FX_FULL_HISTORY_REPAIR_FLAG)) === true)
+    return 0;
 
   const fullByDate = await fetchHistoricalFromEcbFull();
   if (fullByDate.size === 0) return undefined;
 
-  const currencies = [...new Set(pairs.map((p) => String(p.currency_code || '').toUpperCase().trim()))].filter(Boolean);
+  const currencies = [
+    ...new Set(
+      pairs.map((p) =>
+        String(p.currency_code || "")
+          .toUpperCase()
+          .trim(),
+      ),
+    ),
+  ].filter(Boolean);
   const storedResult = await query(
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])`,
-    [currencies]
+    [currencies],
   );
   const storedByKey = new Map(
     /** @type {Array<Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }>} */
-    (storedResult.rows).map((r) => [`${r.currency_code}:${r.rate_date}`, toNumber(toDecimal(r.rate_to_eur))])
+    (storedResult.rows).map((r) => [
+      `${r.currency_code}:${r.rate_date}`,
+      toNumber(toDecimal(r.rate_to_eur)),
+    ]),
   );
 
   let repaired = 0;
   for (const pair of pairs) {
-    const code = String(pair.currency_code || '').toUpperCase().trim();
+    const code = String(pair.currency_code || "")
+      .toUpperCase()
+      .trim();
     const dateStr = normalizeDateInput(pair.rate_date);
     if (!code || !dateStr) continue;
 
@@ -502,7 +590,11 @@ async function repairHistoricalRatesFromFullHistory(pairs) {
     if (truth === undefined) continue; // currency not published by ECB
 
     const stored = storedByKey.get(`${code}:${dateStr}`);
-    if (stored !== undefined && Math.abs(stored - truth) <= Math.abs(truth) * 1e-9) continue;
+    if (
+      stored !== undefined &&
+      Math.abs(stored - truth) <= Math.abs(truth) * 1e-9
+    )
+      continue;
 
     await saveHistoricalRate(code, dateStr, truth);
     repaired += 1;
@@ -536,7 +628,7 @@ async function stampTransactionFxRates() {
          AND pt2.currency IS NOT NULL
          AND UPPER(pt2.currency::text) <> 'EUR'
      ) sub
-     WHERE pt.id = sub.id AND sub.rate IS NOT NULL`
+     WHERE pt.id = sub.id AND sub.rate IS NOT NULL`,
   );
   return result.rowCount ?? 0;
 }
@@ -548,15 +640,19 @@ export async function backfillPortfolioHistoricalRates() {
      WHERE pt.currency IS NOT NULL
        AND UPPER(pt.currency::text) <> 'EUR'
      GROUP BY pt.currency::text, pt.date::date
-     ORDER BY pt.date::date ASC`
+     ORDER BY pt.date::date ASC`,
   );
-  if (pairsResult.rows.length === 0) return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
+  if (pairsResult.rows.length === 0)
+    return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
 
   let repaired = 0;
   try {
-    repaired = (await repairHistoricalRatesFromFullHistory(pairsResult.rows)) ?? 0;
+    repaired =
+      (await repairHistoricalRatesFromFullHistory(pairsResult.rows)) ?? 0;
   } catch (err) {
-    logger.warn('Full-history FX repair failed — will retry next startup', { error: err.message });
+    logger.warn("Full-history FX repair failed — will retry next startup", {
+      error: err.message,
+    });
   }
 
   const missingResult = await query(
@@ -569,7 +665,7 @@ export async function backfillPortfolioHistoricalRates() {
        AND UPPER(pt.currency::text) <> 'EUR'
        AND er.id IS NULL
      GROUP BY pt.currency::text, pt.date::date
-     ORDER BY pt.date::date ASC`
+     ORDER BY pt.date::date ASC`,
   );
 
   let inserted = 0;
@@ -577,14 +673,18 @@ export async function backfillPortfolioHistoricalRates() {
 
   const resolvedPairs = [];
   for (const row of missingResult.rows) {
-    const currencyCode = String(row.currency_code || '').toUpperCase().trim();
+    const currencyCode = String(row.currency_code || "")
+      .toUpperCase()
+      .trim();
     const rateDate = normalizeDateInput(row.rate_date);
     if (!currencyCode || !rateDate) continue;
 
     // getRateToEurForDate persists rates it sources from ECB (90d or full
     // history). When it falls through to a nearest-stored rate no exact row
     // appears — count those as unresolved rather than fabricating history.
-    await getRateToEurForDate(currencyCode, rateDate, { saveFetchedHistoricalRate: true });
+    await getRateToEurForDate(currencyCode, rateDate, {
+      saveFetchedHistoricalRate: true,
+    });
     resolvedPairs.push({ currencyCode, rateDate });
   }
 
@@ -600,11 +700,13 @@ export async function backfillPortfolioHistoricalRates() {
          JOIN UNNEST($1::text[], $2::text[]) AS want(currency_code, rate_date)
            ON er.currency_code = want.currency_code
           AND er.rate_date = want.rate_date::date`,
-      [codes, dates]
+      [codes, dates],
     );
     const present = new Set(
       /** @type {Array<Pick<ExchangeRateRow, 'currency_code'> & { rate_date: string }>} */
-      (existsResult.rows).map((r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`)
+      (existsResult.rows).map(
+        (r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`,
+      ),
     );
     for (const p of resolvedPairs) {
       if (present.has(`${p.currencyCode}|${p.rateDate}`)) inserted += 1;
@@ -616,11 +718,18 @@ export async function backfillPortfolioHistoricalRates() {
   try {
     stamped = await stampTransactionFxRates();
   } catch (err) {
-    logger.warn('Stamping fx_rate_to_eur onto transactions failed', { error: err.message });
+    logger.warn("Stamping fx_rate_to_eur onto transactions failed", {
+      error: err.message,
+    });
   }
 
   if (inserted > 0 || unresolved > 0 || repaired > 0 || stamped > 0) {
-    logger.info('Portfolio historical FX backfill complete', { inserted, unresolved, repaired, stamped });
+    logger.info("Portfolio historical FX backfill complete", {
+      inserted,
+      unresolved,
+      repaired,
+      stamped,
+    });
   }
 
   if (inserted > 0 || repaired > 0) {

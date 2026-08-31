@@ -10,14 +10,20 @@
  * Express 5 async-throw to errorHandler.js for the {ok:false,...} shape.
  */
 
-import { z } from 'zod';
-import investmentRepository, { pickInvestmentCreateFields } from '../repositories/investmentRepository.js';
-import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
-import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
-import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js';
-import { logger } from '../config/logger.js';
-import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { z } from "zod";
+import investmentRepository, {
+  pickInvestmentCreateFields,
+} from "../repositories/investmentRepository.js";
+import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
+import {
+  fetchHistoricalPrices,
+  fetchLivePricesDetailed,
+  SUPPORTED_PROVIDERS,
+} from "../services/priceProviderService.js";
+import { refreshQuotesForInvestment } from "../services/quoteBackfillService.js";
+import { logger } from "../config/logger.js";
+import { getKinesisAssetConfig } from "../config/kinesisConfig.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 import {
   validateNumber,
   assertMaxLength,
@@ -25,14 +31,15 @@ import {
   assertYmd,
   validateId,
   validateIntArray,
-} from '../lib/validation.js';
-import { assertIdParam } from '../middleware/validation.js';
-import { invalidatePortfolioCaches } from '../services/info/cache.js';
-import { assertPublicHttpUrl } from '../lib/urlSafety.js';
-import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
-import { parsePagination, parseIntClamped } from '../lib/pagination.js';
-import { PORTFOLIO_TXN_TYPES } from '@vision/types/portfolioTxnTypes';
-import { PORTFOLIO_RECURRENCE_INTERVALS } from '@vision/types/recurrence';
+} from "../lib/validation.js";
+import { assertIdParam } from "../middleware/validation.js";
+import { invalidatePortfolioCaches } from "../services/info/cache.js";
+import { assertPublicHttpUrl } from "../lib/urlSafety.js";
+import { autoResolveFxRateToEur } from "../services/portfolio/fxResolve.js";
+import { parsePagination, parseIntClamped } from "../lib/pagination.js";
+import { PORTFOLIO_TXN_TYPES } from "@vision/types/portfolioTxnTypes";
+import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
+import { parseBooleanQueryParam } from "../lib/httpParams.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -45,7 +52,11 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from '@vision/types/recurrence';
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
 // not resolved here — that would couple investment writes to DNS availability;
 // the full DNS-resolved check runs at fetch time in priceProviderRegistry.
-const PROVIDER_URL_FIELDS = ['price_provider_url', 'price_provider_latest_url', 'price_provider_history_url'];
+const PROVIDER_URL_FIELDS = [
+  "price_provider_url",
+  "price_provider_latest_url",
+  "price_provider_history_url",
+];
 
 /**
  * @param {Record<string, unknown>} body
@@ -53,9 +64,11 @@ const PROVIDER_URL_FIELDS = ['price_provider_url', 'price_provider_latest_url', 
 async function validateProviderUrls(body) {
   for (const field of PROVIDER_URL_FIELDS) {
     const value = body?.[field];
-    if (value === undefined || value === null || value === '') continue;
+    if (value === undefined || value === null || value === "") continue;
     try {
-      await assertPublicHttpUrl(/** @type {string} */ (value), { resolveDns: false });
+      await assertPublicHttpUrl(/** @type {string} */ (value), {
+        resolveDns: false,
+      });
     } catch (err) {
       throw new ValidationError(`Invalid ${field}: ${err.message}`);
     }
@@ -82,15 +95,19 @@ async function validateProviderUrls(body) {
  * @param {number} min
  * @param {number} max
  */
-const boundedNumberField = (field, min, max) => z.unknown().transform((value, ctx) => {
-  if (value === null || value === '') return null;
-  const result = validateNumber(value, { min, max, fieldName: field });
-  if (!result.valid) {
-    ctx.addIssue({ code: 'custom', message: result.error });
-    return z.NEVER;
-  }
-  return result.value;
-}).optional();
+const boundedNumberField = (field, min, max) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      if (value === null || value === "") return null;
+      const result = validateNumber(value, { min, max, fieldName: field });
+      if (!result.valid) {
+        ctx.addIssue({ code: "custom", message: result.error });
+        return z.NEVER;
+      }
+      return result.value;
+    })
+    .optional();
 
 // VARCHAR column widths (migration 0001). Provider-/market-prefilled values can
 // exceed the frontend maxLength cap (which only clamps typed input) and reach
@@ -100,50 +117,67 @@ const boundedNumberField = (field, min, max) => z.unknown().transform((value, ct
  * @param {string} field
  * @param {number} max
  */
-const maxLenField = (field, max) => z.unknown().transform((value, ctx) => {
-  try {
-    return assertMaxLength(value, max, field);
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
-    return z.NEVER;
-  }
-}).optional();
+const maxLenField = (field, max) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      try {
+        return assertMaxLength(value, max, field);
+      } catch (err) {
+        ctx.addIssue({ code: "custom", message: err.message });
+        return z.NEVER;
+      }
+    })
+    .optional();
 
-// ISO-4217 shape guard: a free-typed "euro"/"€"/over-long currency otherwise
-// reached the VARCHAR column as a raw 400/500. Absent/empty passes through
-// untouched so the column default ('EUR') applies; a valid code is normalised
-// to uppercase.
-const currencyField = z.unknown().transform((value, ctx) => {
-  if (value === null || value === '') return value;
-  try {
-    return assertCurrency(value);
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
+// ISO-4217 shape guard: a free-typed, null, or empty currency otherwise reaches
+// the explicitly-written NOT NULL column as malformed data or a raw 500.
+// Only an absent key lets the repository default apply.
+const currencyField = z
+  .unknown()
+  .transform((value, ctx) => {
+    try {
+      const code = assertCurrency(value);
+      if (code !== undefined) return code;
+    } catch (err) {
+      ctx.addIssue({ code: "custom", message: err.message });
+      return z.NEVER;
+    }
+    ctx.addIssue({
+      code: "custom",
+      message: "currency must be a 3-letter ISO code",
+    });
     return z.NEVER;
-  }
-}).optional();
+  })
+  .optional();
 
 const investmentBodySchema = z.looseObject({
-  current_price: boundedNumberField('current_price', 0, 1e12),
-  interest_rate: boundedNumberField('interest_rate', -100, 100),
-  cadastral_income: boundedNumberField('cadastral_income', 0, 1e12),
-  municipality_tax_rate: boundedNumberField('municipality_tax_rate', 0, 100),
-  name: maxLenField('name', 200),
-  symbol: maxLenField('symbol', 20),
-  location: maxLenField('location', 300),
-  municipality: maxLenField('municipality', 200),
+  current_price: boundedNumberField("current_price", 0, 1e12),
+  interest_rate: boundedNumberField("interest_rate", -100, 100),
+  cadastral_income: boundedNumberField("cadastral_income", 0, 1e12),
+  municipality_tax_rate: boundedNumberField("municipality_tax_rate", 0, 100),
+  name: maxLenField("name", 200),
+  symbol: maxLenField("symbol", 20),
+  location: maxLenField("location", 300),
+  municipality: maxLenField("municipality", 200),
   currency: currencyField,
   // Provider columns (migration 0001): URL shape is checked separately
   // (validateProviderUrls), but an over-length yet valid URL/path still
   // reached the VARCHAR column as a raw 22001 500.
-  price_provider_id: maxLenField('price_provider_id', 200),
-  price_provider_url: maxLenField('price_provider_url', 500),
-  price_provider_latest_url: maxLenField('price_provider_latest_url', 500),
-  price_provider_latest_path: maxLenField('price_provider_latest_path', 300),
-  price_provider_history_url: maxLenField('price_provider_history_url', 500),
-  price_provider_history_path: maxLenField('price_provider_history_path', 300),
-  price_provider_history_ts_path: maxLenField('price_provider_history_ts_path', 300),
-  price_provider_history_price_path: maxLenField('price_provider_history_price_path', 300),
+  price_provider_id: maxLenField("price_provider_id", 200),
+  price_provider_url: maxLenField("price_provider_url", 500),
+  price_provider_latest_url: maxLenField("price_provider_latest_url", 500),
+  price_provider_latest_path: maxLenField("price_provider_latest_path", 300),
+  price_provider_history_url: maxLenField("price_provider_history_url", 500),
+  price_provider_history_path: maxLenField("price_provider_history_path", 300),
+  price_provider_history_ts_path: maxLenField(
+    "price_provider_history_ts_path",
+    300,
+  ),
+  price_provider_history_price_path: maxLenField(
+    "price_provider_history_price_path",
+    300,
+  ),
 });
 
 /**
@@ -152,12 +186,16 @@ const investmentBodySchema = z.looseObject({
  */
 function parseInvestmentBody(body) {
   // Non-object bodies skipped field validation pre-zod; keep that boundary.
-  if (!body || typeof body !== 'object') return body;
+  if (!body || typeof body !== "object") return body;
   const result = investmentBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
-      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
-      .join('; ');
+      .map((issue) =>
+        issue.path.length
+          ? `${issue.path.join(".")}: ${issue.message}`
+          : issue.message,
+      )
+      .join("; ");
     throw new ValidationError(msg);
   }
   return result.data;
@@ -178,101 +216,123 @@ const PORTFOLIO_MONEY_MAX = 99_999_999_999_999;
  * @param {string} field
  * @param {number} [max]
  */
-const portfolioNumberField = (field, max = PORTFOLIO_MONEY_MAX) => z.unknown().transform((value, ctx) => {
-  // Preserve the repository's established per-field null/empty conventions:
-  // required amount math rejects these, while nullable/defaulted numeric
-  // fields clear or reset there.
-  if (value === null || value === '') return value;
-  if (
-    typeof value !== 'number'
-    && (typeof value !== 'string' || !DECIMAL_NUMBER_STRING.test(value))
-  ) {
-    ctx.addIssue({ code: 'custom', message: `${field} must be a number` });
-    return z.NEVER;
-  }
-  const result = validateNumber(value, {
-    min: -max,
-    max,
-    fieldName: field,
-  });
-  if (!result.valid) {
-    ctx.addIssue({ code: 'custom', message: result.error });
-    return z.NEVER;
-  }
-  return result.value;
-}).optional();
+const portfolioNumberField = (field, max = PORTFOLIO_MONEY_MAX) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      // Preserve the repository's established per-field null/empty conventions:
+      // required amount math rejects these, while nullable/defaulted numeric
+      // fields clear or reset there.
+      if (value === null || value === "") return value;
+      if (
+        typeof value !== "number" &&
+        (typeof value !== "string" || !DECIMAL_NUMBER_STRING.test(value))
+      ) {
+        ctx.addIssue({ code: "custom", message: `${field} must be a number` });
+        return z.NEVER;
+      }
+      const result = validateNumber(value, {
+        min: -max,
+        max,
+        fieldName: field,
+      });
+      if (!result.valid) {
+        ctx.addIssue({ code: "custom", message: result.error });
+        return z.NEVER;
+      }
+      return result.value;
+    })
+    .optional();
 
 /**
  * @param {string} field
  * @param {boolean} allowClear
  */
-const portfolioDateField = (field, allowClear) => z.unknown().transform((value, ctx) => {
-  if (value === null || value === '') {
-    if (allowClear) return null;
-    ctx.addIssue({ code: 'custom', message: `${field} cannot be cleared` });
-    return z.NEVER;
-  }
-  if (typeof value !== 'string') {
-    ctx.addIssue({ code: 'custom', message: `${field} must be in YYYY-MM-DD format` });
-    return z.NEVER;
-  }
-  try {
-    const date = assertYmd(value, field);
-    // Date accepts and normalizes impossible calendar days such as February
-    // 30. Round-trip the validated ISO value so those do not reach Postgres.
-    if (
-      date.startsWith('0000-')
-      || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
-    ) {
-      ctx.addIssue({ code: 'custom', message: `${field} is not a valid date` });
+const portfolioDateField = (field, allowClear) =>
+  z
+    .unknown()
+    .transform((value, ctx) => {
+      if (value === null || value === "") {
+        if (allowClear) return null;
+        ctx.addIssue({ code: "custom", message: `${field} cannot be cleared` });
+        return z.NEVER;
+      }
+      if (typeof value !== "string") {
+        ctx.addIssue({
+          code: "custom",
+          message: `${field} must be in YYYY-MM-DD format`,
+        });
+        return z.NEVER;
+      }
+      try {
+        const date = assertYmd(value, field);
+        // Date accepts and normalizes impossible calendar days such as February
+        // 30. Round-trip the validated ISO value so those do not reach Postgres.
+        if (
+          date.startsWith("0000-") ||
+          new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${field} is not a valid date`,
+          });
+          return z.NEVER;
+        }
+        return date;
+      } catch (err) {
+        ctx.addIssue({ code: "custom", message: err.message });
+        return z.NEVER;
+      }
+    })
+    .optional();
+
+const portfolioCurrencyField = z
+  .unknown()
+  .transform((value, ctx) => {
+    // Create treats null/empty as "use the investment currency" while PATCH
+    // rejects clearing the NOT NULL column. Preserve presence for that later
+    // endpoint-specific decision.
+    if (value === null || value === "") return value;
+    if (typeof value !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        message: "currency must be a 3-letter ISO code",
+      });
       return z.NEVER;
     }
-    return date;
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
-    return z.NEVER;
-  }
-}).optional();
+    try {
+      return assertCurrency(value);
+    } catch (err) {
+      ctx.addIssue({ code: "custom", message: err.message });
+      return z.NEVER;
+    }
+  })
+  .optional();
 
-const portfolioCurrencyField = z.unknown().transform((value, ctx) => {
-  // Create treats null/empty as "use the investment currency" while PATCH
-  // rejects clearing the NOT NULL column. Preserve presence for that later
-  // endpoint-specific decision.
-  if (value === null || value === '') return value;
-  if (typeof value !== 'string') {
-    ctx.addIssue({ code: 'custom', message: 'currency must be a 3-letter ISO code' });
-    return z.NEVER;
-  }
-  try {
-    return assertCurrency(value);
-  } catch (err) {
-    ctx.addIssue({ code: 'custom', message: err.message });
-    return z.NEVER;
-  }
-}).optional();
-
-const portfolioRecurrenceIntervalField = z.union([
-  z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
-  z.null(),
-  z.literal('').transform(/** @returns {null} */ () => null),
-]).optional();
+const portfolioRecurrenceIntervalField = z
+  .union([
+    z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
+    z.null(),
+    z.literal("").transform(/** @returns {null} */ () => null),
+  ])
+  .optional();
 
 const portfolioTransactionBodySchema = z.looseObject({
   type: z.enum(PORTFOLIO_TXN_TYPES).optional(),
-  date: portfolioDateField('date', false),
-  amount: portfolioNumberField('amount'),
+  date: portfolioDateField("date", false),
+  amount: portfolioNumberField("amount"),
   // Respect each column's integer-digit capacity: units and FX rates have ten
   // integer digits, while price_per_unit has twelve.
-  units: portfolioNumberField('units', 9_999_999_999),
-  price_per_unit: portfolioNumberField('price_per_unit', 999_999_999_999),
-  fees: portfolioNumberField('fees'),
-  taxes: portfolioNumberField('taxes'),
+  units: portfolioNumberField("units", 9_999_999_999),
+  price_per_unit: portfolioNumberField("price_per_unit", 999_999_999_999),
+  fees: portfolioNumberField("fees"),
+  taxes: portfolioNumberField("taxes"),
   currency: portfolioCurrencyField,
-  fx_rate_to_eur: portfolioNumberField('fx_rate_to_eur', 9_999_999_999),
+  fx_rate_to_eur: portfolioNumberField("fx_rate_to_eur", 9_999_999_999),
   note: z.string().nullable().optional(),
   is_recurring: z.boolean().optional(),
   recurrence_interval: portfolioRecurrenceIntervalField,
-  recurrence_end_date: portfolioDateField('recurrence_end_date', true),
+  recurrence_end_date: portfolioDateField("recurrence_end_date", true),
   account_id: z.unknown().optional(),
 });
 
@@ -284,8 +344,12 @@ export function parsePortfolioTransactionBody(body) {
   const result = portfolioTransactionBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
-      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
-      .join('; ');
+      .map((issue) =>
+        issue.path.length
+          ? `${issue.path.join(".")}: ${issue.message}`
+          : issue.message,
+      )
+      .join("; ");
     throw new ValidationError(msg);
   }
   return result.data;
@@ -298,11 +362,11 @@ const INVESTMENTS_CACHE_TTL_MS = 60_000;
 /** @type {{ data: any, expiresAt: number }} */
 let investmentsCache = { data: undefined, expiresAt: 0 };
 /** @type {{ data: any, key: string, expiresAt: number }} */
-let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+let bulkTxnCache = { data: undefined, key: "", expiresAt: 0 };
 
 export function clearInvestmentsCaches() {
   investmentsCache = { data: undefined, expiresAt: 0 };
-  bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+  bulkTxnCache = { data: undefined, key: "", expiresAt: 0 };
   invalidatePortfolioCaches();
 }
 
@@ -333,8 +397,8 @@ export function parseRequestId(req) {
  * @returns {number}
  */
 export function parseTxnRequestId(req) {
-  const result = validateId(req.params.txnId, 'transaction ID');
-  if (!result.valid) throw new ValidationError('Invalid transaction ID');
+  const result = validateId(req.params.txnId, "transaction ID");
+  if (!result.valid) throw new ValidationError("Invalid transaction ID");
   return result.value;
 }
 
@@ -364,8 +428,9 @@ export function requireTxnId(req) {
  * @returns {number}
  */
 function parseAccountId(value) {
-  const result = validateId(value, 'account_id');
-  if (!result.valid) throw new ValidationError('account_id must be a positive integer');
+  const result = validateId(value, "account_id");
+  if (!result.valid)
+    throw new ValidationError("account_id must be a positive integer");
   return result.value;
 }
 
@@ -378,7 +443,7 @@ function parseAccountId(value) {
  * @returns {never}
  */
 function translateRepoError(err) {
-  if (err?.code === 'VALIDATION_ERROR') {
+  if (err?.code === "VALIDATION_ERROR") {
     throw new ValidationError(err.message);
   }
   throw err;
@@ -407,28 +472,12 @@ function translateRepoError(err) {
  * @returns {number[]}
  */
 function parseInvestmentIdsQuery(rawInvestmentIds) {
-  const result = validateIntArray(String(rawInvestmentIds).split(','), 'investment_ids');
+  const result = validateIntArray(
+    String(rawInvestmentIds).split(","),
+    "investment_ids",
+  );
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
-}
-
-/**
- * @param {unknown} raw
- * @returns {boolean}
- */
-function parseDbOnlyQueryValue(raw) {
-  return raw === '1' || raw === 'true' || raw === 1 || raw === true;
-}
-
-/**
- * @param {unknown} raw
- * @param {boolean} defaultValue
- * @returns {boolean}
- */
-function parseDbOnlyOrDefault(raw, defaultValue) {
-  if (raw === undefined || raw === null || raw === '') return defaultValue;
-  if (raw === '0' || raw === 'false' || raw === 0 || raw === false) return false;
-  return parseDbOnlyQueryValue(raw);
 }
 
 // Route limit/offset through the canonical parsePagination clamp (used by the
@@ -440,13 +489,16 @@ function parseDbOnlyOrDefault(raw, defaultValue) {
  * @returns {{ limit: number, offset: number, assetClass: string|null, active: boolean }}
  */
 export function parseDefaultListOptions(query) {
-  const { asset_class, active = 'true' } = query;
-  const { limit, offset } = parsePagination(query, { defaultLimit: 200, maxLimit: 1000 });
+  const { asset_class, active = "true" } = query;
+  const { limit, offset } = parsePagination(query, {
+    defaultLimit: 200,
+    maxLimit: 1000,
+  });
   return {
     limit,
     offset,
     assetClass: /** @type {string|null} */ (asset_class || null),
-    active: active !== 'false',
+    active: parseBooleanQueryParam(active, true),
   };
 }
 
@@ -466,7 +518,10 @@ function parseBulkTransactionsOptions(query, investmentIds) {
   // the presence check and only borrows parsePagination's clamp. defaultLimit
   // is 1 to preserve the previous `parseInteger(limit) || 1` fallback for
   // garbage/zero/negative values.
-  const page = parsePagination(query, { defaultLimit: 1, maxLimit: BULK_TRANSACTIONS_MAX_LIMIT });
+  const page = parsePagination(query, {
+    defaultLimit: 1,
+    maxLimit: BULK_TRANSACTIONS_MAX_LIMIT,
+  });
   return {
     investmentIds,
     type: /** @type {string|null} */ (type || null),
@@ -474,7 +529,7 @@ function parseBulkTransactionsOptions(query, investmentIds) {
       max: BULK_PER_INVESTMENT_MAX_LIMIT,
       fallback: 1000,
     }),
-    limit: limit == null || limit === '' ? null : page.limit,
+    limit: limit == null || limit === "" ? null : page.limit,
     offset: page.offset,
   };
 }
@@ -506,23 +561,25 @@ function parseInvestmentTransactionsOptions(query, investmentId) {
  */
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
-  if (!provider || provider === 'manual') return false;
+  if (!provider || provider === "manual") return false;
 
-  if (provider === 'custom') {
+  if (provider === "custom") {
     return Boolean(
-      investment?.price_provider_latest_url
-      || investment?.price_provider_url
-      || investment?.price_provider_history_url
+      investment?.price_provider_latest_url ||
+      investment?.price_provider_url ||
+      investment?.price_provider_history_url,
     );
   }
 
-  if (provider === 'yahoo') {
+  if (provider === "yahoo") {
     return Boolean(investment?.price_provider_id || investment?.symbol);
   }
 
-  if (provider === 'kinesis') {
+  if (provider === "kinesis") {
     if (investment?.price_provider_id) return true;
-    const assetName = (investment?.name || investment?.symbol || '').toLowerCase().trim();
+    const assetName = (investment?.name || investment?.symbol || "")
+      .toLowerCase()
+      .trim();
     return Boolean(assetName && getKinesisAssetConfig(assetName));
   }
 
@@ -538,8 +595,13 @@ function hasLivePriceRefreshConfig(investment) {
 export async function listInvestments(req, res) {
   const opts = parseDefaultListOptions(req.query);
 
-  const isDefaultRequest = opts.limit >= 500 && !opts.assetClass && !opts.active && opts.offset === 0;
-  if (isDefaultRequest && investmentsCache.data && investmentsCache.expiresAt > Date.now()) {
+  const isDefaultRequest =
+    opts.limit >= 500 && !opts.assetClass && !opts.active && opts.offset === 0;
+  if (
+    isDefaultRequest &&
+    investmentsCache.data &&
+    investmentsCache.expiresAt > Date.now()
+  ) {
     return res.ok(investmentsCache.data);
   }
 
@@ -554,7 +616,10 @@ export async function listInvestments(req, res) {
   };
 
   if (isDefaultRequest) {
-    investmentsCache = { data: payload, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+    investmentsCache = {
+      data: payload,
+      expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS,
+    };
   }
 
   res.ok(payload);
@@ -569,7 +634,7 @@ export async function createInvestment(req, res) {
   const { name, asset_class } = body;
 
   if (!name || !asset_class) {
-    throw new ValidationError('name and asset_class are required');
+    throw new ValidationError("name and asset_class are required");
   }
 
   await validateProviderUrls(body);
@@ -598,17 +663,25 @@ export function listProviders(_req, res) {
  * @param {ExpressResponse} res
  */
 export async function refreshPrices(req, res) {
-  const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
+  const allInvestments = await investmentRepository.getAll({
+    limit: 1000,
+    active: true,
+  });
   const toRefresh = allInvestments.filter(hasLivePriceRefreshConfig);
 
   if (toRefresh.length === 0) {
-    return res.ok({ updated: 0, message: 'No investments with live price providers' });
+    return res.ok({
+      updated: 0,
+      message: "No investments with live price providers",
+    });
   }
 
   const cachedPricesByInvestmentId = Object.fromEntries(
-    toRefresh.map(i => [i.id, Number(i.current_price)])
+    toRefresh.map((i) => [i.id, Number(i.current_price)]),
   );
-  const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
+  const prices = await fetchLivePricesDetailed(toRefresh, {
+    cachedPricesByInvestmentId,
+  });
   /** @type {Record<string, string>} */
   const priceSources = {};
 
@@ -620,8 +693,8 @@ export async function refreshPrices(req, res) {
   for (const [investmentId, priceData] of Object.entries(prices)) {
     const { price, source } = priceData || {};
     if (price == null || isNaN(price)) continue;
-    priceSources[investmentId] = source || 'live';
-    if (source === 'cached' || source === 'historical_fallback') continue;
+    priceSources[investmentId] = source || "live";
+    if (source === "cached" || source === "historical_fallback") continue;
     priceUpdates.push({
       id: parseInt(investmentId, 10),
       current_price: price,
@@ -629,13 +702,17 @@ export async function refreshPrices(req, res) {
     });
   }
   const updated = await investmentRepository.updatePricesBulk(priceUpdates);
-  logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
+  logger.info(
+    `Refreshed prices for ${updated}/${toRefresh.length} investments`,
+  );
   clearInvestmentsCaches();
 
   res.ok({
     updated,
     total: toRefresh.length,
-    prices: Object.fromEntries(Object.entries(prices).map(([id, data]) => [id, data.price])),
+    prices: Object.fromEntries(
+      Object.entries(prices).map(([id, data]) => [id, data.price]),
+    ),
     priceSources,
   });
 }
@@ -646,25 +723,34 @@ export async function refreshPrices(req, res) {
  */
 export async function getBulkTransactions(req, res) {
   const rawInvestmentIds = req.query.investment_ids;
-  if (rawInvestmentIds == null || rawInvestmentIds === '') {
-    throw new ValidationError('investment_ids is required');
+  if (rawInvestmentIds == null || rawInvestmentIds === "") {
+    throw new ValidationError("investment_ids is required");
   }
 
   const investmentIds = parseInvestmentIdsQuery(rawInvestmentIds);
   if (investmentIds.length === 0) {
-    throw new ValidationError('investment_ids must include at least one valid id');
+    throw new ValidationError(
+      "investment_ids must include at least one valid id",
+    );
   }
 
   const opts = parseBulkTransactionsOptions(req.query, investmentIds);
-  const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.limit ?? ''}:${opts.offset}`;
+  const cacheKey = `${investmentIds.join(",")}:${opts.type || ""}:${opts.perInvestmentLimit}:${opts.limit ?? ""}:${opts.offset}`;
 
-  if (bulkTxnCache.key === cacheKey && bulkTxnCache.data && bulkTxnCache.expiresAt > Date.now()) {
+  if (
+    bulkTxnCache.key === cacheKey &&
+    bulkTxnCache.data &&
+    bulkTxnCache.expiresAt > Date.now()
+  ) {
     return res.ok(bulkTxnCache.data);
   }
 
   const [items, total] = await Promise.all([
     portfolioTransactionRepository.getAllByInvestmentIds(opts),
-    portfolioTransactionRepository.getCount({ investmentIds: opts.investmentIds, type: opts.type }),
+    portfolioTransactionRepository.getCount({
+      investmentIds: opts.investmentIds,
+      type: opts.type,
+    }),
   ]);
 
   const payload = {
@@ -676,7 +762,11 @@ export async function getBulkTransactions(req, res) {
     links: [],
   };
 
-  bulkTxnCache = { data: payload, key: cacheKey, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+  bulkTxnCache = {
+    data: payload,
+    key: cacheKey,
+    expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS,
+  };
   res.ok(payload);
 }
 
@@ -687,13 +777,13 @@ export async function getBulkTransactions(req, res) {
 export async function getPriceHistory(req, res) {
   const investmentId = parseRequestId(req);
   const inv = await investmentRepository.getById(investmentId);
-  if (!inv) throw new NotFoundError('Investment not found');
+  if (!inv) throw new NotFoundError("Investment not found");
 
   const { from_ms: fromMs, to_ms: toMs, db_only: dbOnlyRaw } = req.query;
   const points = await fetchHistoricalPrices(inv, {
     fromMs: fromMs !== undefined ? Number(fromMs) : undefined,
     toMs: toMs !== undefined ? Number(toMs) : undefined,
-    dbOnly: parseDbOnlyOrDefault(dbOnlyRaw, true),
+    dbOnly: parseBooleanQueryParam(dbOnlyRaw, true),
   });
 
   res.ok({ investment_id: investmentId, provider: inv.price_provider, points });
@@ -705,7 +795,7 @@ export async function getPriceHistory(req, res) {
  */
 export async function getInvestment(req, res) {
   const inv = await investmentRepository.getById(parseRequestId(req));
-  if (!inv) throw new NotFoundError('Investment not found');
+  if (!inv) throw new NotFoundError("Investment not found");
   res.ok(inv);
 }
 
@@ -723,7 +813,7 @@ export async function updateInvestment(req, res) {
   } catch (err) {
     translateRepoError(err);
   }
-  if (!inv) throw new NotFoundError('Investment not found');
+  if (!inv) throw new NotFoundError("Investment not found");
   clearInvestmentsCaches();
   res.ok(inv);
 }
@@ -736,7 +826,7 @@ export async function deleteInvestment(req, res) {
   const investmentId = parseRequestId(req);
 
   const ok = await investmentRepository.hardDelete(investmentId);
-  if (!ok) throw new NotFoundError('Investment not found');
+  if (!ok) throw new NotFoundError("Investment not found");
 
   clearInvestmentsCaches();
   res.status(204).send();
@@ -747,7 +837,10 @@ export async function deleteInvestment(req, res) {
  * @param {ExpressResponse} res
  */
 export async function listTransactions(req, res) {
-  const opts = parseInvestmentTransactionsOptions(req.query, parseRequestId(req));
+  const opts = parseInvestmentTransactionsOptions(
+    req.query,
+    parseRequestId(req),
+  );
   const result = await portfolioTransactionRepository.getAllWithCount(opts);
   res.ok({
     items: result.rows,
@@ -766,18 +859,28 @@ export async function listTransactions(req, res) {
 export async function createTransaction(req, res) {
   const investment_id = parseRequestId(req);
   const inv = await investmentRepository.getById(investment_id);
-  if (!inv) throw new NotFoundError('Investment not found');
+  if (!inv) throw new NotFoundError("Investment not found");
 
   const body = parsePortfolioTransactionBody(req.body);
   const {
-    type, date, amount, units, price_per_unit, fees, taxes,
-    currency, note, is_recurring, recurrence_interval,
-    recurrence_end_date, account_id,
+    type,
+    date,
+    amount,
+    units,
+    price_per_unit,
+    fees,
+    taxes,
+    currency,
+    note,
+    is_recurring,
+    recurrence_interval,
+    recurrence_end_date,
+    account_id,
   } = body;
   let { fx_rate_to_eur } = body;
 
   if (!type || !date) {
-    throw new ValidationError('type and date are required');
+    throw new ValidationError("type and date are required");
   }
 
   // Validate a free-typed currency (ISO-4217 shape) before it reaches the
@@ -791,9 +894,20 @@ export async function createTransaction(req, res) {
   let txn;
   try {
     txn = await portfolioTransactionRepository.create({
-      investment_id, type, date, amount, units, price_per_unit, fees, taxes,
-      currency: effectiveCurrency, note, is_recurring,
-      recurrence_interval, recurrence_end_date, fx_rate_to_eur,
+      investment_id,
+      type,
+      date,
+      amount,
+      units,
+      price_per_unit,
+      fees,
+      taxes,
+      currency: effectiveCurrency,
+      note,
+      is_recurring,
+      recurrence_interval,
+      recurrence_end_date,
+      fx_rate_to_eur,
       account_id: account_id != null ? parseAccountId(account_id) : undefined,
       preloaded_asset_class: inv.asset_class,
     });
@@ -803,7 +917,10 @@ export async function createTransaction(req, res) {
 
   clearInvestmentsCaches();
   refreshQuotesForInvestment(investment_id).catch((err) => {
-    logger.error('Transaction-triggered quote refresh failed', { investmentId: investment_id, error: err.message });
+    logger.error("Transaction-triggered quote refresh failed", {
+      investmentId: investment_id,
+      error: err.message,
+    });
   });
   res.status(201);
   res.ok(txn);
@@ -817,14 +934,17 @@ export async function deleteTransaction(req, res) {
   const txnId = requireTxnId(req);
 
   const existingTxn = await portfolioTransactionRepository.getById(txnId);
-  if (!existingTxn) throw new NotFoundError('Portfolio transaction not found');
+  if (!existingTxn) throw new NotFoundError("Portfolio transaction not found");
 
   const ok = await portfolioTransactionRepository.hardDelete(txnId);
-  if (!ok) throw new NotFoundError('Portfolio transaction not found');
+  if (!ok) throw new NotFoundError("Portfolio transaction not found");
 
   clearInvestmentsCaches();
   refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {
-    logger.error('Transaction-triggered quote refresh failed', { investmentId: existingTxn.investment_id, error: err.message });
+    logger.error("Transaction-triggered quote refresh failed", {
+      investmentId: existingTxn.investment_id,
+      error: err.message,
+    });
   });
   res.status(204).send();
 }
@@ -842,8 +962,8 @@ export async function updateTransaction(req, res) {
   // value (garbage stored; >10 chars 22001'd). The column is NOT NULL, so an
   // explicit null/'' (clear) rejects instead of 500ing at the constraint.
   if (fields.currency !== undefined) {
-    if (fields.currency === null || fields.currency === '') {
-      throw new ValidationError('currency cannot be cleared');
+    if (fields.currency === null || fields.currency === "") {
+      throw new ValidationError("currency cannot be cleared");
     }
     fields.currency = assertCurrency(fields.currency);
   }
@@ -860,8 +980,8 @@ export async function updateTransaction(req, res) {
   // A date or currency change invalidates the stamped FX rate — recompute it
   // unless the client supplied one explicitly.
   if (
-    fields.fx_rate_to_eur === undefined
-    && (fields.date !== undefined || fields.currency !== undefined)
+    fields.fx_rate_to_eur === undefined &&
+    (fields.date !== undefined || fields.currency !== undefined)
   ) {
     const existing = await portfolioTransactionRepository.getById(txnId);
     if (existing) {
@@ -878,11 +998,14 @@ export async function updateTransaction(req, res) {
   } catch (err) {
     translateRepoError(err);
   }
-  if (!txn) throw new NotFoundError('Portfolio transaction not found');
+  if (!txn) throw new NotFoundError("Portfolio transaction not found");
 
   clearInvestmentsCaches();
   refreshQuotesForInvestment(txn.investment_id).catch((err) => {
-    logger.error('Transaction-triggered quote refresh failed', { investmentId: txn.investment_id, error: err.message });
+    logger.error("Transaction-triggered quote refresh failed", {
+      investmentId: txn.investment_id,
+      error: err.message,
+    });
   });
   res.ok(txn);
 }

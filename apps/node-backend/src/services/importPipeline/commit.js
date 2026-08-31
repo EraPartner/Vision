@@ -19,12 +19,11 @@
  * size.
  *
  * The JS planner reproduces the old per-row SQL verdicts EXACTLY, including:
- *  - the three-valued logic of the `NOT (t.import_batch_id = $7 AND ...)`
- *    hash exemption (a candidate whose `import_batch_id` is NULL — an import
- *    batch was deleted, `ON DELETE SET NULL` — makes that predicate NULL, so
- *    the candidate is filtered out, not kept);
- *  - the asymmetry between SQL `TRIM()` (spaces only) on the stored memo and
- *    JS `.trim()` (all whitespace) on the incoming memo;
+ *  - the differing-hash exemption applies only to rows still owned by the
+ *    current batch. A deleted batch sets `import_batch_id` to NULL; that row
+ *    remains a field-dedup candidate so deleting metadata cannot make its
+ *    transaction silently re-importable;
+ *  - stored and incoming memos both ignore surrounding ASCII whitespace;
  *  - the ordering effect: an earlier row of the same chunk, once inserted, is
  *    visible to a later row's dup check. The planner feeds each planned insert
  *    back into its in-memory candidate index as it goes;
@@ -44,18 +43,24 @@
  * (`commitChunkPerRow`), which is still the authority on semantics.
  */
 
-import { query, withSavepointIfInTransaction, withTransaction } from '../../database/connection.js';
-import { transactionRepository } from '../../repositories/transactionRepository.js';
-import { accountRepository } from '../../repositories/accountRepository.js';
+import {
+  query,
+  withSavepointIfInTransaction,
+  withTransaction,
+} from "../../database/connection.js";
+import {
+  clearTransactionCountCache,
+  transactionRepository,
+} from "../../repositories/transactionRepository.js";
+import { accountRepository } from "../../repositories/accountRepository.js";
 import {
   markStagingRowCommitted,
   markStagingRowDuplicate,
   markStagingRowError,
-} from '../../repositories/importBatchRepository.js';
-import { logger } from '../../config/logger.js';
-import { formatDateToYmd } from '../../lib/dateFormat.js';
-import { refreshAggregations } from '../aggregationRefresh.js';
-import { autoLinkTransactions } from '../plannedMatchService.js';
+} from "../../repositories/importBatchRepository.js";
+import { logger } from "../../config/logger.js";
+import { formatDateToYmd } from "../../lib/dateFormat.js";
+import { autoLinkTransactions } from "../plannedMatchService.js";
 
 /**
  * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
@@ -78,15 +83,15 @@ import { autoLinkTransactions } from '../plannedMatchService.js';
 const COMMIT_CHUNK = 1000;
 
 // Static identifier, never interpolated from data.
-const CHUNK_SAVEPOINT = 'sp_commit_chunk';
-const ROW_SAVEPOINT = 'sp_commit_row';
+const CHUNK_SAVEPOINT = "sp_commit_chunk";
+const ROW_SAVEPOINT = "sp_commit_row";
 
 // error_message for a row that reaches commit with no recipient: the matcher
 // could not resolve one (match.js stamps such rows 'matched' with a NULL
 // resolved_recipient_id so they stay reviewable) and the user committed
 // without assigning one in review.
 const UNRESOLVED_RECIPIENT_MESSAGE =
-  'unresolved recipient — no recipient was matched or assigned in review';
+  "unresolved recipient — no recipient was matched or assigned in review";
 
 /**
  * Canonical text form of a NUMERIC value, so JS equality matches PostgreSQL's
@@ -109,27 +114,25 @@ const UNRESOLVED_RECIPIENT_MESSAGE =
 function normalizeAmountKey(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
-  if (s === '') return null;
+  if (s === "") return null;
   const m = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(s);
   if (!m) return s;
-  const sign = m[1] === '-' ? '-' : '';
-  const int = (m[2] || '').replace(/^0+/, '');
-  const frac = (m[3] || '').replace(/0+$/, '');
-  if (int === '' && frac === '') return '0';
-  return `${sign}${int || '0'}${frac ? `.${frac}` : ''}`;
+  const sign = m[1] === "-" ? "-" : "";
+  const int = (m[2] || "").replace(/^0+/, "");
+  const frac = (m[3] || "").replace(/0+$/, "");
+  if (int === "" && frac === "") return "0";
+  return `${sign}${int || "0"}${frac ? `.${frac}` : ""}`;
 }
 
 /**
- * SQL `TRIM(x)` — which strips ASCII spaces only, unlike JS `String#trim()`
- * which strips all Unicode whitespace. The stored side of the memo comparison
- * (`COALESCE(TRIM(t.memo), '')`) must use this; the incoming side keeps JS
- * `.trim()`, exactly as the original per-row SQL did.
+ * SQL `BTRIM(x, E' \\t\\n\\r\\f\\013')` equivalent for the ASCII
+ * whitespace set used by the stored side of import memo deduplication.
  *
  * @param {string} s
  * @returns {string}
  */
-function sqlTrimSpaces(s) {
-  return s.replace(/^ +/, '').replace(/ +$/, '');
+function sqlTrimAsciiWhitespace(s) {
+  return s.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, "");
 }
 
 /**
@@ -165,7 +168,14 @@ function bigintEq(a, b) {
  * @returns {string}
  */
 function dupKey(k) {
-  return JSON.stringify([k.date, k.amountKey, k.recipientId, k.memoKey, k.accountId, k.currencyKey]);
+  return JSON.stringify([
+    k.date,
+    k.amountKey,
+    k.recipientId,
+    k.memoKey,
+    k.accountId,
+    k.currencyKey,
+  ]);
 }
 
 /**
@@ -192,7 +202,7 @@ function dupKey(k) {
  * @returns {string}
  */
 function currencyKeyOf(currency) {
-  return (currency ?? '').trim() || 'EUR';
+  return (currency ?? "").trim() || "EUR";
 }
 
 /**
@@ -214,11 +224,13 @@ function deriveRow(row) {
   // The Date branch is defensive only: node-postgres parses DATE columns
   // into a server-local-midnight Date, so use LOCAL getters — toISOString()
   // would roll back a day for any TZ east of UTC.
-  const dateStr = row.tx_date instanceof Date
-    ? formatDateToYmd(row.tx_date)
-    : String(row.tx_date).slice(0, 10);
+  const dateStr =
+    row.tx_date instanceof Date
+      ? formatDateToYmd(row.tx_date)
+      : String(row.tx_date).slice(0, 10);
 
-  const recipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
+  const recipientId =
+    row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
 
   // import_staging_rows.id is BIGSERIAL — the pg driver returns BIGINT values
   // as strings to preserve int64 precision, so the value here is a string of
@@ -231,7 +243,7 @@ function deriveRow(row) {
     row,
     dateStr,
     recipientId,
-    memoNorm: (row.memo ?? '').trim(),
+    memoNorm: (row.memo ?? "").trim(),
     bankAccount: row.bank_account || null,
     // Stamped onto the row by resolveChunkAccounts (commitChunk, inside the
     // chunk transaction) before any planning: the label resolved to its
@@ -245,9 +257,12 @@ function deriveRow(row) {
     // ADR-046: per-row override beats recipient default. Both may be null
     // (truly uncategorized), in which case the runtime COALESCE in
     // transactionRepository falls back to the recipient default at read.
-    categoryId: row.override_category_id ?? row.recipient_default_category_id ?? null,
+    categoryId:
+      row.override_category_id ?? row.recipient_default_category_id ?? null,
     // When overridden, clear matched_pattern_id — the link is now manual.
-    patternId: row.user_override_recipient_id ? null : (row.matched_pattern_id ?? null),
+    patternId: row.user_override_recipient_id
+      ? null
+      : (row.matched_pattern_id ?? null),
     // Set by planChunk when the row's tx_hash is already in `transactions`:
     // it is still submitted to the bulk INSERT (so Postgres evaluates its
     // tuple constraints) but ON CONFLICT is expected to drop it.
@@ -257,18 +272,11 @@ function deriveRow(row) {
 
 /**
  * Does `cand` satisfy the dup-check WHERE clause for an incoming row with
- * `rowHash`? Mirrors, in three-valued logic, the last predicate of
+ * `rowHash`? Mirrors the last predicate of
  * `transactionRepository.findImportDuplicate`:
  *
- *   NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL
- *        AND $6::text IS NOT NULL AND t.tx_hash <> $6)
- *
- * A row is only matched when the whole WHERE is TRUE, so `NOT excl` must be
- * TRUE, so `excl` must be FALSE — which needs at least one conjunct FALSE.
- * When `t.import_batch_id` is NULL and the other three conjuncts are TRUE,
- * `excl` is NULL and the candidate is filtered out. (Reachable: the
- * `transactions_import_batch_id_fkey` is ON DELETE SET NULL, so a deleted
- * batch leaves rows with a tx_hash but no import_batch_id.)
+ *   t.import_batch_id IS DISTINCT FROM $7 OR t.tx_hash IS NULL
+ *   OR $6::text IS NULL OR t.tx_hash = $6
  *
  * @param {{ txHash: string|null, importBatchId: unknown }} cand
  * @param {string|null} rowHash
@@ -277,12 +285,11 @@ function deriveRow(row) {
  */
 function candidateVisible(cand, rowHash, batchId) {
   const sameBatch = bigintEq(cand.importBatchId, batchId); // true | false | null
-  if (sameBatch === false) return true;
-  if (cand.txHash === null) return true;   // t.tx_hash IS NOT NULL → FALSE
-  if (rowHash === null) return true;       // $6::text IS NOT NULL  → FALSE
+  if (sameBatch !== true) return true;
+  if (cand.txHash === null) return true; // t.tx_hash IS NOT NULL → FALSE
+  if (rowHash === null) return true; // $6::text IS NOT NULL  → FALSE
   if (cand.txHash === rowHash) return true; // t.tx_hash <> $6      → FALSE
-  // No conjunct is FALSE: `excl` is TRUE (same batch) or NULL (batch id NULL).
-  // `NOT excl` is FALSE or NULL — either way the candidate does not match.
+  // Same batch plus two present, differing hashes is the sole exemption.
   return false;
 }
 
@@ -370,52 +377,58 @@ async function commitChunkPerRow({ chunk, batchId, committedHashes }) {
       continue;
     }
     try {
-      const duplicate = await withSavepointIfInTransaction(ROW_SAVEPOINT, async () => {
-        // ON CONFLICT on the partial unique index over tx_hash makes the
-        // insert race-safe — a concurrent import that slipped past the
-        // field-based check above can't double-insert.
-        const insertedId = await transactionRepository.insertImportedRow({
-          date: d.dateStr,
-          // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
-          // trigger; the resolved FK is written explicitly (decoupled half).
-          bankAccount: d.bankAccount,
-          accountId: d.accountId,
-          recipientId: d.recipientId,
-          categoryId: d.categoryId,
-          amount: row.amount,
-          memo: row.memo || '',
-          // The SAME value the dup probe above was keyed on — currency is part
-          // of the row's identity, so the probe and the write must not drift.
-          currency: d.currencyKey,
-          balance: row.balance != null ? row.balance : null,
-          comment: row.comment || null,
-          importBatchId: batchId,
-          matchedPatternId: d.patternId,
-          txHash: d.txHash,
-        });
+      const duplicate = await withSavepointIfInTransaction(
+        ROW_SAVEPOINT,
+        async () => {
+          // ON CONFLICT on the partial unique index over tx_hash makes the
+          // insert race-safe — a concurrent import that slipped past the
+          // field-based check above can't double-insert.
+          const insertedId = await transactionRepository.insertImportedRow({
+            date: d.dateStr,
+            // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
+            // trigger; the resolved FK is written explicitly (decoupled half).
+            bankAccount: d.bankAccount,
+            accountId: d.accountId,
+            recipientId: d.recipientId,
+            categoryId: d.categoryId,
+            amount: row.amount,
+            memo: row.memo || "",
+            // The SAME value the dup probe above was keyed on — currency is part
+            // of the row's identity, so the probe and the write must not drift.
+            currency: d.currencyKey,
+            balance: row.balance != null ? row.balance : null,
+            comment: row.comment || null,
+            importBatchId: batchId,
+            matchedPatternId: d.patternId,
+            txHash: d.txHash,
+          });
 
-        if (insertedId === undefined) {
-          // tx_hash conflict — another row/import already has this hash.
-          duplicates++;
-          await markStagingRowDuplicate(row.id);
-          return true;
-        }
+          if (insertedId === undefined) {
+            // tx_hash conflict — another row/import already has this hash.
+            duplicates++;
+            await markStagingRowDuplicate(row.id);
+            return true;
+          }
 
-        imported++;
-        inserted.push({
-          id: insertedId,
-          recipient_id: d.recipientId,
-          amount: row.amount,
-          transaction_date: d.dateStr,
-        });
-        if (d.txHash) committedHashes.add(d.txHash);
-        await markStagingRowCommitted(row.id);
-        return false;
-      });
+          imported++;
+          inserted.push({
+            id: insertedId,
+            recipient_id: d.recipientId,
+            amount: row.amount,
+            transaction_date: d.dateStr,
+          });
+          if (d.txHash) committedHashes.add(d.txHash);
+          await markStagingRowCommitted(row.id);
+          return false;
+        },
+      );
       if (duplicate) continue;
     } catch (err) {
       errors++;
-      await markStagingRowError(row.id, err?.message?.slice(0, 500) || 'insert failed');
+      await markStagingRowError(
+        row.id,
+        err?.message?.slice(0, 500) || "insert failed",
+      );
     }
   }
 
@@ -463,14 +476,17 @@ async function resolveChunkAccounts(rows) {
   /** @type {Map<string, number|null>} */
   const idByLabel = new Map();
   for (const row of rows) {
-    const label = row.bank_account == null ? '' : String(row.bank_account);
-    const key = label.replace(/^ +| +$/g, ''); // SQL btrim — U+0020 only
-    if (key === '') {
+    const label = row.bank_account == null ? "" : String(row.bank_account);
+    const key = label.replace(/^ +| +$/g, ""); // SQL btrim — U+0020 only
+    if (key === "") {
       row.resolved_account_id = null;
       continue;
     }
     if (!idByLabel.has(key)) {
-      idByLabel.set(key, (await accountRepository.resolveOrCreateByName(label)) ?? null);
+      idByLabel.set(
+        key,
+        (await accountRepository.resolveOrCreateByName(label)) ?? null,
+      );
     }
     row.resolved_account_id = idByLabel.get(key);
   }
@@ -497,7 +513,7 @@ async function loadDupCandidates(dates) {
     `SELECT to_char(t.date, 'YYYY-MM-DD')     AS date_key,
             t.amount::text                    AS amount_key,
             t.recipient_id,
-            COALESCE(TRIM(t.memo), '')        AS memo_key,
+            COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') AS memo_key,
             t.account_id,
             t.currency,
             t.tx_hash,
@@ -512,15 +528,24 @@ async function loadDupCandidates(dates) {
     const key = dupKey({
       date: r.date_key,
       amountKey: normalizeAmountKey(r.amount_key),
-      recipientId: r.recipient_id === null || r.recipient_id === undefined ? null : Number(r.recipient_id),
-      memoKey: r.memo_key ?? '',
-      accountId: r.account_id === null || r.account_id === undefined ? null : Number(r.account_id),
+      recipientId:
+        r.recipient_id === null || r.recipient_id === undefined
+          ? null
+          : Number(r.recipient_id),
+      memoKey: r.memo_key ?? "",
+      accountId:
+        r.account_id === null || r.account_id === undefined
+          ? null
+          : Number(r.account_id),
       // NOT NULL in the schema; `currencyKeyOf` is the same default the
       // incoming side applies, so the two keys agree on a legacy blank.
       currencyKey: currencyKeyOf(r.currency),
     });
     const bucket = index.get(key);
-    const cand = { txHash: r.tx_hash ?? null, importBatchId: r.import_batch_id ?? null };
+    const cand = {
+      txHash: r.tx_hash ?? null,
+      importBatchId: r.import_batch_id ?? null,
+    };
     if (bucket) bucket.push(cand);
     else index.set(key, [cand]);
   }
@@ -565,7 +590,9 @@ async function loadExistingHashes(hashes) {
 async function planChunk({ chunk, batchId, committedHashes }) {
   const derived = chunk.map(deriveRow);
 
-  const index = await loadDupCandidates([...new Set(derived.map((d) => d.dateStr))]);
+  const index = await loadDupCandidates([
+    ...new Set(derived.map((d) => d.dateStr)),
+  ]);
   const existingHashes = await loadExistingHashes([
     ...new Set(derived.map((d) => d.txHash).filter((h) => h !== null)),
   ]);
@@ -583,7 +610,10 @@ async function planChunk({ chunk, batchId, committedHashes }) {
 
   for (const d of derived) {
     // 1. Intra-batch hash dedup (earlier row of this run already wrote it).
-    if (d.txHash && (committedHashes.has(d.txHash) || chunkHashes.has(d.txHash))) {
+    if (
+      d.txHash &&
+      (committedHashes.has(d.txHash) || chunkHashes.has(d.txHash))
+    ) {
       duplicateIds.push(d.row.id);
       continue;
     }
@@ -644,8 +674,8 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       amountKey: d.amountKey,
       recipientId: d.recipientId === null ? null : Number(d.recipientId),
       // The stored memo is `row.memo || ''`; the dup check reads it back
-      // through SQL TRIM(), which strips spaces only.
-      memoKey: sqlTrimSpaces(d.row.memo || ''),
+      // through the same ASCII-whitespace BTRIM as the preload query.
+      memoKey: sqlTrimAsciiWhitespace(d.row.memo || ""),
       // The INSERT writes both the label string and this resolved account_id;
       // the sync trigger re-resolves the string to the SAME id (the account
       // row already exists — resolveChunkAccounts created it), so this is
@@ -669,7 +699,9 @@ async function planChunk({ chunk, batchId, committedHashes }) {
     toInsert,
     // Only rows Postgres is expected to actually write become 'committed';
     // the predicted conflicts are already in `duplicateIds`.
-    committedIds: toInsert.filter((d) => !d.conflictPredicted).map((d) => d.idStr),
+    committedIds: toInsert
+      .filter((d) => !d.conflictPredicted)
+      .map((d) => d.idStr),
     duplicateIds,
     duplicates: duplicateIds.length,
     errors,
@@ -717,7 +749,7 @@ async function bulkInsertPlanned(toInsert, batchId) {
       toInsert.map((d) => d.recipientId),
       toInsert.map((d) => d.categoryId),
       toInsert.map((d) => d.row.amount),
-      toInsert.map((d) => d.row.memo || ''),
+      toInsert.map((d) => d.row.memo || ""),
       toInsert.map((d) => d.currencyKey),
       toInsert.map((d) => (d.row.balance != null ? d.row.balance : null)),
       toInsert.map((d) => d.row.comment || null),
@@ -741,8 +773,8 @@ async function bulkInsertPlanned(toInsert, batchId) {
   const expected = toInsert.filter((d) => !d.conflictPredicted);
   if (rows.length !== expected.length) {
     throw new ChunkPlanInvalid(
-      `bulk insert returned ${rows.length} rows, expected ${expected.length} `
-      + `(${toInsert.length} planned, ${toInsert.length - expected.length} predicted conflicts)`,
+      `bulk insert returned ${rows.length} rows, expected ${expected.length} ` +
+        `(${toInsert.length} planned, ${toInsert.length - expected.length} predicted conflicts)`,
     );
   }
 
@@ -752,14 +784,18 @@ async function bulkInsertPlanned(toInsert, batchId) {
   // than trusting it, when the driver gave us one: if a predicted conflict
   // actually inserted while a non-predicted row conflicted, the counts cancel
   // out and only this positional check catches the swap.
-  const hashesReturned = rows.every((/** @type {any} */ r) => Object.hasOwn(r, 'tx_hash'));
+  const hashesReturned = rows.every((/** @type {any} */ r) =>
+    Object.hasOwn(r, "tx_hash"),
+  );
 
   /** @type {InsertedRow[]} */
   const inserted = [];
   for (let i = 0; i < expected.length; i++) {
     const d = expected[i];
     if (hashesReturned && (rows[i].tx_hash ?? null) !== d.txHash) {
-      throw new ChunkPlanInvalid('bulk insert RETURNING order did not match source order');
+      throw new ChunkPlanInvalid(
+        "bulk insert RETURNING order did not match source order",
+      );
     }
     inserted.push({
       id: rows[i].id,
@@ -789,19 +825,21 @@ async function commitChunk({ chunk, batchId, committedHashes }) {
   let inserted = [];
   if (plan.toInsert.length > 0) {
     try {
-      inserted = await withSavepointIfInTransaction(
-        CHUNK_SAVEPOINT,
-        () => bulkInsertPlanned(plan.toInsert, batchId),
+      inserted = await withSavepointIfInTransaction(CHUNK_SAVEPOINT, () =>
+        bulkInsertPlanned(plan.toInsert, batchId),
       );
     } catch (err) {
       // A poison row (FK/NOT NULL violation) or a lost tx_hash race. Either
       // way the whole plan is suspect — every verdict downstream of the row
       // that failed could differ — so discard it and replay row by row.
-      logger.warn('[pipeline:commit] batched chunk insert failed, replaying per row', {
-        batchId,
-        rows: chunk.length,
-        error: err?.message,
-      });
+      logger.warn(
+        "[pipeline:commit] batched chunk insert failed, replaying per row",
+        {
+          batchId,
+          rows: chunk.length,
+          error: err?.message,
+        },
+      );
       return commitChunkPerRow({ chunk, batchId, committedHashes });
     }
   }
@@ -842,7 +880,9 @@ async function commitChunk({ chunk, batchId, committedHashes }) {
  * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitBatch({ batchId, onProgress }) {
-  await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
+  await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [
+    batchId,
+  ]);
 
   const { rows: reviewed } = await query(
     `SELECT isr.id,
@@ -866,7 +906,7 @@ export async function commitBatch({ batchId, onProgress }) {
          ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
       WHERE isr.batch_id = $1 AND isr.status = 'matched'
       ORDER BY isr.row_index ASC`,
-    [batchId]
+    [batchId],
   );
 
   // Unresolved rows stay 'matched' through review (the only status the
@@ -877,10 +917,12 @@ export async function commitBatch({ batchId, onProgress }) {
   // INSERT fail on the constraint and demote the whole chunk to the per-row
   // replay, surfacing the right outcome by the wrong mechanism.
   const unresolvedRows = reviewed.filter(
-    (/** @type {any} */ r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) == null,
+    (/** @type {any} */ r) =>
+      (r.user_override_recipient_id ?? r.resolved_recipient_id) == null,
   );
   const matched = reviewed.filter(
-    (/** @type {any} */ r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) != null,
+    (/** @type {any} */ r) =>
+      (r.user_override_recipient_id ?? r.resolved_recipient_id) != null,
   );
 
   if (unresolvedRows.length > 0) {
@@ -888,7 +930,10 @@ export async function commitBatch({ batchId, onProgress }) {
       `UPDATE import_staging_rows
           SET status = 'error', error_message = $2
         WHERE id = ANY($1::bigint[])`,
-      [unresolvedRows.map((/** @type {any} */ r) => r.id), UNRESOLVED_RECIPIENT_MESSAGE],
+      [
+        unresolvedRows.map((/** @type {any} */ r) => r.id),
+        UNRESOLVED_RECIPIENT_MESSAGE,
+      ],
     );
     await query(
       `UPDATE import_batches
@@ -896,10 +941,13 @@ export async function commitBatch({ batchId, onProgress }) {
         WHERE id = $1`,
       [batchId, unresolvedRows.length],
     );
-    logger.warn('[pipeline:commit] rows without a resolved recipient marked as errors', {
-      batchId,
-      rows: unresolvedRows.length,
-    });
+    logger.warn(
+      "[pipeline:commit] rows without a resolved recipient marked as errors",
+      {
+        batchId,
+        rows: unresolvedRows.length,
+      },
+    );
   }
 
   const total = matched.length;
@@ -917,7 +965,7 @@ export async function commitBatch({ batchId, onProgress }) {
   /** @type {InsertedRow[]} */
   const insertedRows = [];
 
-  if (onProgress) onProgress({ phase: 'committing', current: 0, total });
+  if (onProgress) onProgress({ phase: "committing", current: 0, total });
 
   for (let start = 0; start < total; start += COMMIT_CHUNK) {
     const chunk = matched.slice(start, start + COMMIT_CHUNK);
@@ -947,6 +995,11 @@ export async function commitBatch({ batchId, onProgress }) {
       throw err;
     }
 
+    // The chunk transaction is now committed. Clearing inside an individual
+    // INSERT would let an outside request refill the cache from the old
+    // committed snapshot before COMMIT and retain that stale count afterward.
+    if (chunkImported > 0) clearTransactionCountCache();
+
     // Transaction committed — only now is it safe to fold the chunk's counts
     // into the running totals and the persisted checkpoint.
     imported += chunkImported;
@@ -964,26 +1017,28 @@ export async function commitBatch({ batchId, onProgress }) {
               rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
               rows_error = COALESCE(rows_error, 0) + $4
         WHERE id = $1`,
-      [batchId, chunkImported, chunkDuplicates, chunkErrors]
+      [batchId, chunkImported, chunkDuplicates, chunkErrors],
     );
 
     if (onProgress) {
-      onProgress({ phase: 'committing', current: seen, total, imported, duplicates, errors });
-    }
-  }
-
-  logger.info('[pipeline:commit] done', { batchId, total, imported, duplicates, errors });
-
-  if (imported > 0) {
-    try {
-      await refreshAggregations();
-    } catch (err) {
-      logger.warn('[pipeline:commit] post-import aggregation refresh failed', {
-        batchId,
-        error: err?.message,
+      onProgress({
+        phase: "committing",
+        current: seen,
+        total,
+        imported,
+        duplicates,
+        errors,
       });
     }
   }
+
+  logger.info("[pipeline:commit] done", {
+    batchId,
+    total,
+    imported,
+    duplicates,
+    errors,
+  });
 
   // Auto-clear matching planned payments for the just-imported transactions.
   // Runs after commit (rows are durable) and never fails the import.
@@ -993,10 +1048,16 @@ export async function commitBatch({ batchId, onProgress }) {
       const auto = await autoLinkTransactions(insertedRows);
       autoLinkedCount = auto.autoLinkedCount;
       if (autoLinkedCount > 0) {
-        logger.info('[pipeline:commit] auto-linked planned payments', { batchId, autoLinkedCount });
+        logger.info("[pipeline:commit] auto-linked planned payments", {
+          batchId,
+          autoLinkedCount,
+        });
       }
     } catch (err) {
-      logger.warn('[pipeline:commit] planned auto-link failed', { batchId, error: err?.message });
+      logger.warn("[pipeline:commit] planned auto-link failed", {
+        batchId,
+        error: err?.message,
+      });
     }
   }
 

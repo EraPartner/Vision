@@ -11,7 +11,8 @@
  *   vi.mock('../src/database/connection.js', () => mockConnection());
  *   vi.mock('../src/database/connection.js', () => mockTxConnection());
  */
-import { vi } from 'vitest';
+import { AsyncLocalStorage } from "node:async_hooks";
+import { vi } from "vitest";
 
 /**
  * Inert connection mock: `query` and `withTransaction` are bare spies.
@@ -54,9 +55,7 @@ export function mockConnection(extra = {}) {
  * @param {Record<string, any>} [extra]
  */
 export function mockTxConnection(client, extra = {}) {
-  // Mirrors connection.js's txStorage store: holds the active transaction's
-  // client while the callback runs, nulled when it settles.
-  const store = { client: null };
+  const txStorage = new AsyncLocalStorage();
   const { query: poolImpl, ...restExtra } = extra;
   const poolQuery = poolImpl ?? vi.fn();
 
@@ -64,7 +63,7 @@ export function mockTxConnection(client, extra = {}) {
   // case, where the transaction shares this very spy: routing there would
   // recurse forever, and the call is already being recorded on it.
   const ambient = () => {
-    const active = store.client;
+    const active = txStorage.getStore()?.client;
     return active && active.query !== query ? active : null;
   };
 
@@ -76,7 +75,9 @@ export function mockTxConnection(client, extra = {}) {
   const queryPrepared = vi.fn((name, text, values) => {
     const active = ambient();
     // pg's object form, exactly as connection.js:151 passes it.
-    return active ? active.query({ name, text, values }) : poolQuery(text, values);
+    return active
+      ? active.query({ name, text, values })
+      : poolQuery(text, values);
   });
 
   const txClient = client ?? { query };
@@ -85,7 +86,7 @@ export function mockTxConnection(client, extra = {}) {
     // Savepoint presence follows the ambient store directly. Unlike normal
     // query routing, the no-explicit-client case is valid here: its shared
     // query spy records the SAVEPOINT without recursively routing to itself.
-    const active = store.client;
+    const active = txStorage.getStore()?.client;
     if (!active) return fn();
     await active.query(`SAVEPOINT ${name}`);
     try {
@@ -103,19 +104,67 @@ export function mockTxConnection(client, extra = {}) {
     }
   });
 
+  const withTransaction = vi.fn(async (fn) => {
+    const ambientClient = txStorage.getStore()?.client;
+    if (ambientClient) {
+      const parentStore = txStorage.getStore();
+      if (parentStore.activeNested) {
+        try {
+          await parentStore.activeNested;
+        } catch {
+          // The active scope reports its own error.
+        }
+        throw new Error(
+          "Concurrent sibling withTransaction calls are not supported; await nested transactions sequentially",
+        );
+      }
+      const runNested = async () => {
+        parentStore.savepointCounter.value += 1;
+        const savepointName = `vision_nested_tx_${parentStore.savepointCounter.value}`;
+        const childStore = {
+          client: ambientClient,
+          savepointCounter: parentStore.savepointCounter,
+          activeNested: null,
+        };
+        try {
+          return await withSavepointIfInTransaction(savepointName, () =>
+            txStorage.run(childStore, () => fn(ambientClient)),
+          );
+        } finally {
+          childStore.client = null;
+        }
+      };
+      const operation = runNested();
+      parentStore.activeNested = operation;
+      try {
+        return await operation;
+      } finally {
+        if (parentStore.activeNested === operation) {
+          parentStore.activeNested = null;
+        }
+      }
+    }
+
+    const store = {
+      client: txClient,
+      savepointCounter: { value: 0 },
+      activeNested: null,
+    };
+    try {
+      return await txStorage.run(store, () => fn(txClient));
+    } finally {
+      store.client = null;
+    }
+  });
+
   return {
     query,
     queryPrepared,
     poolQuery,
-    getAmbientTransactionClient: vi.fn(() => store.client),
-    withTransaction: vi.fn(async (fn) => {
-      store.client = txClient;
-      try {
-        return await fn(txClient);
-      } finally {
-        store.client = null;
-      }
-    }),
+    getAmbientTransactionClient: vi.fn(
+      () => txStorage.getStore()?.client ?? null,
+    ),
+    withTransaction,
     withSavepointIfInTransaction,
     ...restExtra,
   };
@@ -136,13 +185,13 @@ export function mockPooledTxConnection() {
     withTransaction: vi.fn(async (fn) => {
       const client = await getClient();
       try {
-        await client.query('BEGIN');
+        await client.query("BEGIN");
         const result = await fn(client);
-        await client.query('COMMIT');
+        await client.query("COMMIT");
         return result;
       } catch (err) {
         try {
-          await client.query('ROLLBACK');
+          await client.query("ROLLBACK");
         } catch {
           /* rollback failure is secondary */
         }

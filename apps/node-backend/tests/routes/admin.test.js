@@ -230,21 +230,37 @@ describe("Admin Routes", () => {
       expect(res.body).toEqual(
         errEnvelope({
           code: "VALIDATION_ERROR",
-          message: "Database reset requires force=true parameter",
+          message: "Database reset requires force=true in the request body",
           details: {
-            hint: "Set force=true query parameter to confirm reset (DESTRUCTIVE)",
+            hint: "Set force=true in the JSON request body to confirm reset (DESTRUCTIVE)",
           },
         }),
       );
     });
 
-    it("should accept force=true", async () => {
+    it("accepts force=true in the request body", async () => {
       settings.admin.enableResetDb = true;
 
       const res = await api
-        .post(`${BASE}/database/reset?force=true`)
+        .post(`${BASE}/database/reset`)
+        .send({ force: true })
         .expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true }));
+    });
+
+    it("keeps query force=true as a compatibility fallback", async () => {
+      settings.admin.enableResetDb = true;
+
+      await api.post(`${BASE}/database/reset?force=true`).expect(200);
+    });
+
+    it("lets an explicit body value override the legacy query parameter", async () => {
+      settings.admin.enableResetDb = true;
+
+      await api
+        .post(`${BASE}/database/reset?force=true`)
+        .send({ force: false })
+        .expect(400);
     });
   });
 

@@ -5,7 +5,15 @@
  * dividends YTD, return %, inflation-adjusted value; plus top-holdings mini-table.
  */
 
-import { emptySection, escapeHtml, fmtCurrency, fmtPct, kpiGrid, sectionPage, signClass } from '../sectionHelpers.js';
+import {
+  emptySection,
+  escapeHtml,
+  fmtCurrency,
+  fmtPct,
+  kpiGrid,
+  sectionPage,
+  signClass,
+} from "../sectionHelpers.js";
 
 /**
  * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
@@ -13,77 +21,82 @@ import { emptySection, escapeHtml, fmtCurrency, fmtPct, kpiGrid, sectionPage, si
  * @returns {string}  HTML page div
  */
 export function renderPortfolioExecutiveSummary(data, { currency }) {
-  if (!data?.breakdown?.length && !data?.snapshots?.length) {
+  const summary = data?.executiveSummary;
+  if (!summary) {
     return emptySection({
-      title: 'Portfolio Overview',
-      subtitle: 'Key performance indicators',
-      heading: 'No portfolio data',
-      message: 'Add investments to see the executive summary.',
+      title: "Portfolio Overview",
+      subtitle: "Key performance indicators",
+      heading: "No portfolio data",
+      message: "Add investments to see the executive summary.",
     });
   }
 
-  // Derive totals from breakdown (per-investment summaries)
-  const breakdown = data.breakdown ?? [];
-  let totalValue    = 0;
-  let totalInvested = 0;
-  let totalGainLoss = 0;
-
-  for (const inv of breakdown) {
-    totalValue    += Number(inv.currentValue ?? 0);
-    totalInvested += Number(inv.totalInvested ?? 0);
-    totalGainLoss += Number(inv.gainLoss ?? 0);
-  }
-
-  // Use latest snapshot for return % and inflation-adjusted value
-  const snapshots = data.snapshots ?? [];
-  const latest = snapshots.length ? snapshots[snapshots.length - 1] : null;
-  const returnPct = latest ? Number(latest.return_pct ?? 0) : (totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0);
-  const inflAdj   = latest ? Number(latest.inflation_adjusted_value ?? totalValue) : totalValue;
-
-  // Dividends from dividends data
-  const dividendsByMonth = data.dividends?.byMonth ?? [];
-  const totalDividends   = dividendsByMonth.reduce((s, m) => s + m.amount, 0);
-
-  const glClass  = signClass(totalGainLoss);
-  const retClass = signClass(returnPct);
+  const glClass = signClass(summary.totalGainLoss);
+  const retClass = signClass(summary.returnPct);
 
   const kpiCards = kpiGrid([
-    { label: 'Total Value',    value: fmtCurrency(totalValue,    currency) },
-    { label: 'Total Invested', value: fmtCurrency(totalInvested, currency) },
-    { label: 'Unrealised P/L', value: fmtCurrency(totalGainLoss, currency), sub: fmtPct(returnPct, true), cls: glClass, subCls: glClass },
-    { label: 'Dividends',      value: fmtCurrency(totalDividends, currency), sub: 'period total' },
+    { label: "Total Value", value: fmtCurrency(summary.totalValue, currency) },
+    {
+      label: "Total Invested",
+      value: fmtCurrency(summary.totalInvested, currency),
+    },
+    {
+      label: "Unrealised P/L",
+      value: fmtCurrency(summary.totalGainLoss, currency),
+      sub: fmtPct(summary.returnPct, true),
+      cls: glClass,
+      subCls: glClass,
+    },
+    {
+      label: "Dividends",
+      value: fmtCurrency(summary.totalDividends, currency),
+      sub: "period total",
+    },
   ]);
 
-  const kpiCards2 = kpiGrid([
-    { label: 'Return %',              value: fmtPct(returnPct, true), cls: retClass },
-    { label: 'Inflation-Adj. Value',  value: fmtCurrency(inflAdj, currency) },
-    { label: 'Holdings',              value: String(breakdown.length), sub: 'active investments' },
-  ], { cols: 3 });
+  const kpiCards2 = kpiGrid(
+    [
+      {
+        label: "Return %",
+        value: fmtPct(summary.returnPct, true),
+        cls: retClass,
+      },
+      {
+        label: "Inflation-Adj. Value",
+        value: fmtCurrency(summary.inflationAdjustedValue, currency),
+      },
+      {
+        label: "Holdings",
+        value: String(summary.holdingsCount),
+        sub: "active investments",
+      },
+    ],
+    { cols: 3 },
+  );
 
-  // Top 5 holdings mini-table
-  const top5 = [...breakdown]
-    .sort((a, b) => (Number(b.currentValue ?? 0)) - (Number(a.currentValue ?? 0)))
-    .slice(0, 5);
-
-  const rows = top5.map(inv => {
-    const val = Number(inv.currentValue ?? 0);
-    const gl  = Number(inv.gainLoss ?? 0);
-    const cls = signClass(gl);
-    return `<tr>
-      <td>${escapeHtml(inv.name ?? '—')}</td>
-      <td>${escapeHtml(inv.symbol ?? '—')}</td>
+  const rows = summary.topHoldings
+    .map((inv) => {
+      const val = Number(inv.currentValue ?? 0);
+      const gl = Number(inv.gainLoss ?? 0);
+      const cls = signClass(gl);
+      return `<tr>
+      <td>${escapeHtml(inv.name ?? "—")}</td>
+      <td>${escapeHtml(inv.symbol ?? "—")}</td>
       <td class="num">${fmtCurrency(val, currency)}</td>
       <td class="num ${cls}">${fmtCurrency(gl, currency)}</td>
     </tr>`;
-  }).join('');
+    })
+    .join("");
 
   return sectionPage({
-    title: 'Portfolio Overview',
-    subtitle: 'Key performance indicators for the selected period',
+    title: "Portfolio Overview",
+    subtitle: "Key performance indicators for the selected period",
     content: `
       ${kpiCards}
       ${kpiCards2}
-      ${top5.length ? `
+      ${
+        summary.topHoldings.length
+          ? `
         <table class="data-table">
           <thead><tr>
             <th>Investment</th><th>Symbol</th>
@@ -91,6 +104,8 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
             <th class="num">Unrealised P/L</th>
           </tr></thead>
           <tbody>${rows}</tbody>
-        </table>` : ''}`,
+        </table>`
+          : ""
+      }`,
   });
 }
