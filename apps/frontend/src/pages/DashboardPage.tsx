@@ -1,7 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { parseISO } from "@/components/shared/dateUtils";
+import { parseISO } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { NetSummaryCard } from "@/features/dashboard/NetSummaryCard";
@@ -50,7 +50,7 @@ import {
 } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { parseCategoryName } from "@vision/shared-utils";
 import {
     claimDashboardArrival,

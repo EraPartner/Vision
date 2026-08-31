@@ -5,7 +5,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, aggOk, ACCOUNT_STUB } from "@/test/msw/handlers";
-import { toYmd } from "@/components/shared/dateUtils";
+import { toYmd } from "@/lib/dateUtils";
 import { BankBalancesWidget } from "@/features/dashboard/BankBalancesWidget";
 
 const API_BASE = "http://localhost:3002";

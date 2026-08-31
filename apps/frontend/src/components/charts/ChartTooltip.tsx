@@ -1,5 +1,5 @@
 /**
- * ChartTooltip — glass-thick tooltip surface for visx charts.
+ * ChartTooltip — opaque tooltip surface for visx charts.
  *
  * Renders into a portal with viewport-aware positioning:
  *  - Default placement: centered above the anchor point.
@@ -219,23 +219,29 @@ export function ChartTooltip({
                 {open ? (
                     <m.div
                         key="chart-tooltip"
-                        initial={reduce ? { opacity: 1 } : { opacity: 0, y: 4, scale: 0.98 }}
+                        initial={
+                            reduce
+                                ? { opacity: 1 }
+                                : { opacity: 0, y: 4, scale: 0.98 }
+                        }
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 2, scale: 0.98 }}
+                        exit={
+                            reduce
+                                ? { opacity: 0 }
+                                : { opacity: 0, y: 2, scale: 0.98 }
+                        }
                         transition={{
                             duration: reduce ? 0 : durations.fast,
                             ease: easings.outExpo,
                         }}
                         className={cn(
-                            "glass-thick min-w-[140px] max-w-[260px] rounded-xl border border-border/60 px-3 py-2 text-xs shadow-glass-elevated",
+                            "min-w-[140px] max-w-[260px] rounded-xl border border-border/60 bg-popover px-3 py-2 text-xs shadow-lg",
                             "ring-1 ring-inset ring-white/10",
                             className,
                         )}
                     >
                         {title ? (
-                            <div className="mb-1.5 eyebrow">
-                                {title}
-                            </div>
+                            <div className="mb-1.5 eyebrow">{title}</div>
                         ) : null}
                         {items && items.length > 0 ? (
                             <ul className="space-y-1">
@@ -248,7 +254,9 @@ export function ChartTooltip({
                                             {item.color ? (
                                                 <span
                                                     className="inline-block size-2 rounded-full"
-                                                    style={{ background: item.color }}
+                                                    style={{
+                                                        background: item.color,
+                                                    }}
                                                 />
                                             ) : null}
                                             <span>{item.label}</span>
@@ -269,7 +277,11 @@ export function ChartTooltip({
 
     return (
         <>
-            <span ref={anchorRef} aria-hidden="true" style={{ display: "none" }} />
+            <span
+                ref={anchorRef}
+                aria-hidden="true"
+                style={{ display: "none" }}
+            />
             {typeof document !== "undefined"
                 ? createPortal(tooltipNode, document.body)
                 : tooltipNode}

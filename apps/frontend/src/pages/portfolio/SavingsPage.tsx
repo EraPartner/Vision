@@ -22,7 +22,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";

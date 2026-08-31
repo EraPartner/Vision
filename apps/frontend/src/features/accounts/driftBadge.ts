@@ -26,7 +26,7 @@ import { useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { formatDateStringWithAppSettings, toYmd } from '@/components/shared/dateUtils';
+import { formatDateStringWithAppSettings, toYmd } from '@/lib/dateUtils';
 import type { Account } from '@/types/api';
 
 /**

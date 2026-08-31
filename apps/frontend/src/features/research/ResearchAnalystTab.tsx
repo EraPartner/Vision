@@ -4,7 +4,7 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { ProvenanceBadge } from "@/features/research/ProvenanceBadge";

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { BackupSection } from "@/features/settings/sections/BackupSection";
@@ -45,7 +45,9 @@ interface BackupStubOverrides {
     selectDir?: () => Promise<string | null>;
     selectFile?: () => Promise<string | null>;
     runBackup?: () => Promise<BackupResult>;
-    setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
+    setPassphrase?: (
+        passphrase: string,
+    ) => Promise<{ success: boolean; available: boolean; error?: string }>;
     isEncrypted?: () => Promise<boolean>;
     restoreBackup?: () => Promise<RestoreResult>;
     saveSettings?: (s: BackupSettings) => Promise<void>;
@@ -62,13 +64,20 @@ function installElectronStubs(
     win.electronBackup = {
         runBackup:
             overrides.runBackup ??
-            vi.fn().mockResolvedValue({ success: true, file: "/tmp/vision-2025-01-01.visionbak" }),
+            vi.fn().mockResolvedValue({
+                success: true,
+                file: "/tmp/vision-2025-01-01.visionbak",
+            }),
         selectFile: overrides.selectFile ?? vi.fn().mockResolvedValue(null),
-        restoreBackup: overrides.restoreBackup ?? vi.fn().mockResolvedValue({ success: true, file: "x.visionbak" }),
+        restoreBackup:
+            overrides.restoreBackup ??
+            vi.fn().mockResolvedValue({ success: true, file: "x.visionbak" }),
         isEncrypted: overrides.isEncrypted ?? vi.fn().mockResolvedValue(false),
         selectDir: overrides.selectDir ?? vi.fn().mockResolvedValue(null),
-        saveSettings: overrides.saveSettings ?? vi.fn().mockResolvedValue(undefined),
-        loadSettings: overrides.loadSettings ?? vi.fn().mockResolvedValue(loadedSettings),
+        saveSettings:
+            overrides.saveSettings ?? vi.fn().mockResolvedValue(undefined),
+        loadSettings:
+            overrides.loadSettings ?? vi.fn().mockResolvedValue(loadedSettings),
         getEncryptionStatus:
             overrides.getEncryptionStatus ??
             vi.fn().mockResolvedValue({
@@ -112,24 +121,41 @@ describe("BackupSection", () => {
     });
 
     it("renders backup directory + sections when Electron is available", async () => {
-        installElectronStubs({}, { backupDir: "/Users/me/backups", backupOnQuit: false });
+        installElectronStubs(
+            {},
+            { backupDir: "/Users/me/backups", backupOnQuit: false },
+        );
         renderWithApp(<BackupSection />);
 
-        expect(await screen.findByText(/backup directory/i)).toBeInTheDocument();
-        expect(await screen.findByText(/restore from backup/i)).toBeInTheDocument();
-        expect(await screen.findByText(/backup encryption/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/backup directory/i),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByText(/restore from backup/i),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByText(/backup encryption/i),
+        ).toBeInTheDocument();
     });
 
     it("triggers backup when 'Back up now' is clicked with a configured directory", async () => {
         const runBackup = vi
             .fn<() => Promise<BackupResult>>()
-            .mockResolvedValue({ success: true, file: "/Users/me/backups/vision.visionbak" });
-        installElectronStubs({ runBackup }, { backupDir: "/Users/me/backups", backupOnQuit: false });
+            .mockResolvedValue({
+                success: true,
+                file: "/Users/me/backups/vision.visionbak",
+            });
+        installElectronStubs(
+            { runBackup },
+            { backupDir: "/Users/me/backups", backupOnQuit: false },
+        );
 
         const user = userEvent.setup();
         renderWithApp(<BackupSection />);
 
-        const backupButton = await screen.findByRole("button", { name: /back up now/i });
+        const backupButton = await screen.findByRole("button", {
+            name: /back up now/i,
+        });
         await waitFor(() => expect(backupButton).not.toBeDisabled());
 
         await user.click(backupButton);
@@ -142,7 +168,9 @@ describe("BackupSection", () => {
     it("backup button is disabled until a directory is configured", async () => {
         renderWithApp(<BackupSection />);
 
-        const backupButton = await screen.findByRole("button", { name: /back up now/i });
+        const backupButton = await screen.findByRole("button", {
+            name: /back up now/i,
+        });
         expect(backupButton).toBeDisabled();
     });
 
@@ -155,12 +183,16 @@ describe("BackupSection", () => {
         const user = userEvent.setup();
         renderWithApp(<BackupSection />);
 
-        const browseButton = await screen.findByRole("button", { name: /browse/i });
+        const browseButton = await screen.findByRole("button", {
+            name: /browse/i,
+        });
         await user.click(browseButton);
 
         await waitFor(() => expect(selectDir).toHaveBeenCalledTimes(1));
         await waitFor(() => {
-            expect(screen.getByDisplayValue("/Users/me/picked")).toBeInTheDocument();
+            expect(
+                screen.getByDisplayValue("/Users/me/picked"),
+            ).toBeInTheDocument();
         });
         // Instant-apply: the new directory is persisted immediately.
         await waitFor(() => {
@@ -171,35 +203,66 @@ describe("BackupSection", () => {
         });
     });
 
-    it("opens the restore confirmation dialog when 'Restore now' is clicked with a selected file", async () => {
+    it("shows the selected basename, cancels safely, and restores the captured file on confirm", async () => {
         const selectFile = vi
             .fn<() => Promise<string | null>>()
             .mockResolvedValue("/Users/me/backups/snapshot.visionbak");
-        installElectronStubs({ selectFile }, { backupDir: "/Users/me/backups", backupOnQuit: false });
+        const backup = installElectronStubs(
+            { selectFile },
+            { backupDir: "/Users/me/backups", backupOnQuit: false },
+        );
 
         const user = userEvent.setup();
         renderWithApp(<BackupSection />);
 
-        const chooseButton = await screen.findByRole("button", { name: /choose backup file/i });
+        const chooseButton = await screen.findByRole("button", {
+            name: /choose backup file/i,
+        });
         await user.click(chooseButton);
 
         await waitFor(() => expect(selectFile).toHaveBeenCalledTimes(1));
 
-        const restoreButton = await screen.findByRole("button", { name: /^restore now$/i });
+        const restoreButton = await screen.findByRole("button", {
+            name: /^restore now$/i,
+        });
         await waitFor(() => expect(restoreButton).not.toBeDisabled());
         await user.click(restoreButton);
 
+        let dialog = await screen.findByRole("alertdialog", {
+            name: /restore database\?/i,
+        });
         expect(
-            await screen.findByRole("alertdialog", { name: /restore database\?/i }),
+            within(dialog).getByText("snapshot.visionbak"),
         ).toBeInTheDocument();
-        expect(
-            await screen.findByRole("button", { name: /yes, restore/i }),
-        ).toBeInTheDocument();
+        await user.click(
+            within(dialog).getByRole("button", { name: /cancel/i }),
+        );
+        expect(backup.restoreBackup).not.toHaveBeenCalled();
+
+        await user.click(restoreButton);
+        dialog = await screen.findByRole("alertdialog", {
+            name: /restore database\?/i,
+        });
+        await user.click(
+            within(dialog).getByRole("button", { name: /yes, restore/i }),
+        );
+        await waitFor(() => {
+            expect(backup.restoreBackup).toHaveBeenCalledWith(
+                "/Users/me/backups/snapshot.visionbak",
+                undefined,
+            );
+        });
     });
 
     it("saves a passphrase via the encryption section when secure storage is available", async () => {
         const setPassphrase = vi
-            .fn<(passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>>()
+            .fn<
+                (passphrase: string) => Promise<{
+                    success: boolean;
+                    available: boolean;
+                    error?: string;
+                }>
+            >()
             .mockResolvedValue({ success: true, available: true });
         const getEncryptionStatus = vi
             .fn<() => Promise<EncryptionStatus>>()
@@ -217,11 +280,14 @@ describe("BackupSection", () => {
         const user = userEvent.setup();
         renderWithApp(<BackupSection />);
 
-        const passphraseInput = await screen.findByPlaceholderText(/enter passphrase/i);
+        const passphraseInput =
+            await screen.findByPlaceholderText(/enter passphrase/i);
         await waitFor(() => expect(passphraseInput).not.toBeDisabled());
 
         await user.type(passphraseInput, "supersecret");
-        const saveButton = await screen.findByRole("button", { name: /save passphrase/i });
+        const saveButton = await screen.findByRole("button", {
+            name: /save passphrase/i,
+        });
         await user.click(saveButton);
 
         await waitFor(() => {
@@ -232,16 +298,23 @@ describe("BackupSection", () => {
     it("disables the backup-on-quit switch until a directory is configured", async () => {
         renderWithApp(<BackupSection />);
 
-        const switchEl = await screen.findByRole("switch", { name: /back up when quitting/i });
+        const switchEl = await screen.findByRole("switch", {
+            name: /back up when quitting/i,
+        });
         expect(switchEl).toBeDisabled();
     });
 
     it("toggles backup-on-quit when a directory is configured", async () => {
-        installElectronStubs({}, { backupDir: "/Users/me/backups", backupOnQuit: false });
+        installElectronStubs(
+            {},
+            { backupDir: "/Users/me/backups", backupOnQuit: false },
+        );
         const user = userEvent.setup();
         renderWithApp(<BackupSection />);
 
-        const switchEl = await screen.findByRole("switch", { name: /back up when quitting/i });
+        const switchEl = await screen.findByRole("switch", {
+            name: /back up when quitting/i,
+        });
         await waitFor(() => expect(switchEl).not.toBeDisabled());
         await user.click(switchEl);
 

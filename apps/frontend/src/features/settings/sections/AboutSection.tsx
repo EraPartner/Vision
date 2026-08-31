@@ -21,7 +21,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import {
     SettingsSection,
     SettingsGroup,

@@ -29,6 +29,18 @@
     "./recurrence": {
       "types": "./src/recurrence.d.ts",
       "default": "./src/recurrence.js"
+    },
+    "./aiChat": {
+      "types": "./src/aiChat.d.ts",
+      "default": "./src/aiChat.js"
+    },
+    "./reportThemeDefaults": {
+      "types": "./src/reportThemeDefaults.d.ts",
+      "default": "./src/reportThemeDefaults.js"
+    },
+    "./chartRanges": {
+      "types": "./src/chartRanges.d.ts",
+      "default": "./src/chartRanges.js"
     }
   },
   "types": "./src/index.d.ts",

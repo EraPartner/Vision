@@ -16,7 +16,7 @@ import {
     formatDateWithAppSettings,
     parseAppDateInput,
     weekStartsOnFromSetting,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import type { FieldErrorAria } from "@/hooks/useFieldErrors";
 import { enUS, nl } from "date-fns/locale";
 

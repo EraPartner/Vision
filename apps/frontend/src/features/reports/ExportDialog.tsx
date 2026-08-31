@@ -31,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";

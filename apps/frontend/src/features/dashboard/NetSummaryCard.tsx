@@ -11,7 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
-import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
 import { cn } from "@/lib/utils";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";

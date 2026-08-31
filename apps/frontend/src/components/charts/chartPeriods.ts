@@ -5,7 +5,7 @@
  * i18n keys, which are generic ("1M", "3M", …) and reused across charts.
  */
 import { subDays } from "date-fns";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 
 export const CHART_PERIODS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
 export type ChartPeriod = (typeof CHART_PERIODS)[number];

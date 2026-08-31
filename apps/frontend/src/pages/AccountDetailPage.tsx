@@ -26,7 +26,7 @@ import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndica
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

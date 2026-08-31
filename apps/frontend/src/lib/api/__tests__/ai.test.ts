@@ -57,13 +57,23 @@ describe("ai conversation API client", () => {
         expect(await getOllamaModels()).toEqual([]);
     });
 
-    it("getConversations returns summaries", async () => {
+    it("getConversations requests and returns one bounded page", async () => {
+        let requestUrl = "";
         server.use(
-            http.get(`${API_BASE}/api/ai/conversations`, () =>
-                ok({ items: [{ id: "a" }], total: 1 }),
-            ),
+            http.get(`${API_BASE}/api/ai/conversations`, ({ request }) => {
+                requestUrl = request.url;
+                return ok({
+                    items: [{ id: "a" }],
+                    total: 75,
+                    limit: 25,
+                    offset: 50,
+                });
+            }),
         );
-        expect((await getConversations())[0].id).toBe("a");
+        const page = await getConversations({ limit: 25, offset: 50 });
+        expect(page.items[0].id).toBe("a");
+        expect(page.total).toBe(75);
+        expect(requestUrl).toContain("limit=25&offset=50");
     });
 
     it("getConversation URL-encodes the id", async () => {
@@ -272,6 +282,41 @@ describe("streamChat SSE handling", () => {
             "done",
         ]);
         expect(terminal.type).toBe("done");
+    });
+
+    it("normalizes complete and deduplicates the following done compatibility alias", async () => {
+        const payload = {
+            conversation: {},
+            assistantMessage: {},
+            usage: {},
+            iterations: 1,
+        };
+        const data = JSON.stringify(payload);
+        const wire =
+            `event: complete\ndata: ${data}\n\n` +
+            `event: done\ndata: ${data}\n\n`;
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (event) =>
+            events.push(event.type),
+        );
+
+        await expect(result).resolves.toMatchObject({ type: "done", payload });
+        expect(events).toEqual(["done"]);
+    });
+
+    it("still accepts a legacy server that emits only done", async () => {
+        const wire = "event: done\ndata: {}\n\n";
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+        const events: string[] = [];
+        const { result } = streamChat({ message: "hi" } as never, (event) =>
+            events.push(event.type),
+        );
+
+        await expect(result).resolves.toMatchObject({ type: "done" });
+        expect(events).toEqual(["done"]);
     });
 
     it("passes the user_message payload's message object through unchanged", async () => {

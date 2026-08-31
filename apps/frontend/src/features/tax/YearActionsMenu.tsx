@@ -7,10 +7,17 @@
  * Wired against the currently-viewed year. The page mounts one of these alongside the
  * `TaxYearSwitcher` so all year-scoped operations live in a predictable spot.
  */
-import { MoreHorizontal, Snowflake, Lock, History, FileDown, Unlock } from 'lucide-react';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { Button } from '@/components/ui/button';
+import {
+    MoreHorizontal,
+    Snowflake,
+    Lock,
+    History,
+    FileDown,
+    Unlock,
+} from "lucide-react";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -18,11 +25,11 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { MarkAsFiledDialog } from './MarkAsFiledDialog';
-import { SnapshotHistoryDialog } from './SnapshotHistoryDialog';
-import { exportTaxYearCsv } from '@/lib/tax/exportTaxYearCsv';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+} from "@/components/ui/dropdown-menu";
+import { MarkAsFiledDialog } from "./MarkAsFiledDialog";
+import { SnapshotHistoryDialog } from "./SnapshotHistoryDialog";
+import { exportTaxYearCsv } from "@/lib/belgianTax/exportTaxYearCsv";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
@@ -53,7 +60,7 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
             year,
             profile: profileForYear(year),
             calculation: displayCalculationForYear(year),
-            currency: appSettings.defaultCurrency || 'EUR',
+            currency: appSettings.defaultCurrency || "EUR",
             isFiled: filed,
             hasFrozenCalculation: hasFrozen,
             // Friendly stamp for the file header.
@@ -68,27 +75,35 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                     variant="outline"
                     size="sm"
                     className="h-8 w-8 p-0"
-                    aria-label={t('tax.yearActions.trigger', { year: String(year) })}
+                    aria-label={t("tax.yearActions.trigger", {
+                        year: String(year),
+                    })}
                 >
                     <MoreHorizontal className="h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    {t('tax.yearActions.menuLabel', { year: String(year) })}
+                    {t("tax.yearActions.menuLabel", { year: String(year) })}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
                 {!filed && !hasFrozen && (
-                    <DropdownMenuItem onSelect={() => freezeCalculation(year)} className="gap-2">
+                    <DropdownMenuItem
+                        onSelect={() => freezeCalculation(year)}
+                        className="gap-2"
+                    >
                         <Snowflake className="h-3.5 w-3.5 text-info" />
-                        {t('tax.yearActions.freeze')}
+                        {t("tax.yearActions.freeze")}
                     </DropdownMenuItem>
                 )}
                 {!filed && hasFrozen && (
-                    <DropdownMenuItem onSelect={() => unfreezeCalculation(year)} className="gap-2">
+                    <DropdownMenuItem
+                        onSelect={() => unfreezeCalculation(year)}
+                        className="gap-2"
+                    >
                         <Snowflake className="h-3.5 w-3.5 text-muted-foreground" />
-                        {t('tax.yearActions.unfreeze')}
+                        {t("tax.yearActions.unfreeze")}
                     </DropdownMenuItem>
                 )}
 
@@ -96,17 +111,23 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                     <MarkAsFiledDialog
                         year={year}
                         trigger={
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
+                            <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                className="gap-2"
+                            >
                                 <Lock className="h-3.5 w-3.5 text-warning" />
-                                {t('tax.yearActions.markFiled')}
+                                {t("tax.yearActions.markFiled")}
                             </DropdownMenuItem>
                         }
                     />
                 )}
                 {filed && (
-                    <DropdownMenuItem onSelect={() => unmarkYearAsFiled(year)} className="gap-2">
+                    <DropdownMenuItem
+                        onSelect={() => unmarkYearAsFiled(year)}
+                        className="gap-2"
+                    >
                         <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
-                        {t('tax.yearActions.unmarkFiled')}
+                        {t("tax.yearActions.unmarkFiled")}
                     </DropdownMenuItem>
                 )}
 
@@ -117,18 +138,22 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                     trigger={
                         <DropdownMenuItem
                             onSelect={(e) => e.preventDefault()}
-                            disabled={!snapshotExistsForYear(year) && !hasFrozen && !filed}
+                            disabled={
+                                !snapshotExistsForYear(year) &&
+                                !hasFrozen &&
+                                !filed
+                            }
                             className="gap-2"
                         >
                             <History className="h-3.5 w-3.5 text-muted-foreground" />
-                            {t('tax.yearActions.viewHistory')}
+                            {t("tax.yearActions.viewHistory")}
                         </DropdownMenuItem>
                     }
                 />
 
                 <DropdownMenuItem onSelect={handleExport} className="gap-2">
                     <FileDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    {t('tax.yearActions.exportCsv')}
+                    {t("tax.yearActions.exportCsv")}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

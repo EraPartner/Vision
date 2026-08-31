@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { formatDateTimeWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

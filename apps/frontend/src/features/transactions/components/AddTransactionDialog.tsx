@@ -25,7 +25,7 @@ import {
     formatDateStringWithAppSettings,
     parseLocalDateFromYmd,
     toYmd,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { useAccounts } from "@/hooks/useAccounts";
 import {
     ADD_TRANSACTION_FIELD_IDS,

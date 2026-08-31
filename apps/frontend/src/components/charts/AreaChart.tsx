@@ -30,7 +30,7 @@ import { durations, easings } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 
 export interface AreaSeries<Datum> {
     readonly key: string;
@@ -65,7 +65,12 @@ export interface AreaChartProps<Datum> {
     readonly referenceLines?: ReadonlyArray<AreaReferenceLine>;
     readonly tooltipTitle?: (datum: Datum) => string;
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly margin?: { top: number; right: number; bottom: number; left: number };
+    readonly margin?: {
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+    };
     readonly width?: number;
     readonly ariaLabel?: string;
     /** Opt into synced crosshairs with sibling charts sharing this id (needs ChartSyncProvider). */
@@ -77,7 +82,9 @@ export interface AreaChartProps<Datum> {
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
 type AreaYScale = ReturnType<typeof scaleLinear<number>>;
-type AreaXScale = ReturnType<typeof scaleTime<number>> | ReturnType<typeof scaleLinear<number>>;
+type AreaXScale =
+    | ReturnType<typeof scaleTime<number>>
+    | ReturnType<typeof scaleLinear<number>>;
 
 interface AreaSeriesLayerProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
@@ -112,92 +119,106 @@ function AreaSeriesLayerInner<Datum>({
 }: AreaSeriesLayerProps<Datum>) {
     return (
         <g clipPath={`url(#${revealId})`}>
-        {stacked ? (
-            <AreaStack<Datum>
-                keys={series.map((s) => s.key)}
-                data={data as Datum[]}
-                curve={curveMonotoneX}
-                value={(d, key) => {
-                    const s = series.find((x) => x.key === key);
-                    return s ? (s.accessor(d) ?? 0) : 0;
-                }}
-                x={(d) => xScale(xAccessor(d.data) as never) ?? 0}
-                y0={(d) => yScale(d[0]) ?? 0}
-                y1={(d) => yScale(d[1]) ?? 0}
-            >
-                {({ stacks, path }) =>
-                    stacks.map((stack, i) => {
-                        const s = series[i];
-                        const color = s.color ?? getChartColor(i);
-                        return (
-                            <m.path
-                                key={`stack-${stack.key}`}
-                                d={path(stack) || ""}
-                                fill={color}
-                                fillOpacity={0.55}
-                                stroke={color}
-                                strokeOpacity={0.95}
-                                strokeWidth={1.5}
+            {stacked ? (
+                <AreaStack<Datum>
+                    keys={series.map((s) => s.key)}
+                    data={data as Datum[]}
+                    curve={curveMonotoneX}
+                    value={(d, key) => {
+                        const s = series.find((x) => x.key === key);
+                        return s ? (s.accessor(d) ?? 0) : 0;
+                    }}
+                    x={(d) => xScale(xAccessor(d.data) as never) ?? 0}
+                    y0={(d) => yScale(d[0]) ?? 0}
+                    y1={(d) => yScale(d[1]) ?? 0}
+                >
+                    {({ stacks, path }) =>
+                        stacks.map((stack, i) => {
+                            const s = series[i];
+                            const color = s.color ?? getChartColor(i);
+                            return (
+                                <m.path
+                                    key={`stack-${stack.key}`}
+                                    d={path(stack) || ""}
+                                    fill={color}
+                                    fillOpacity={0.55}
+                                    stroke={color}
+                                    strokeOpacity={0.95}
+                                    strokeWidth={1.5}
+                                    initial={
+                                        reduce
+                                            ? { opacity: 1 }
+                                            : { opacity: 0, y: 12 }
+                                    }
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{
+                                        duration: reduce ? 0 : durations.slow,
+                                        ease: easings.outExpo,
+                                        delay: i * 0.04,
+                                    }}
+                                />
+                            );
+                        })
+                    }
+                </AreaStack>
+            ) : (
+                series.map((s, i) => {
+                    const color = s.color ?? getChartColor(i);
+                    return (
+                        <g key={s.key}>
+                            <m.g
                                 initial={
-                                    reduce ? { opacity: 1 } : { opacity: 0, y: 12 }
+                                    reduce ? { opacity: 1 } : { opacity: 0 }
                                 }
-                                animate={{ opacity: 1, y: 0 }}
+                                animate={{ opacity: 1 }}
                                 transition={{
                                     duration: reduce ? 0 : durations.slow,
                                     ease: easings.outExpo,
                                     delay: i * 0.04,
                                 }}
-                            />
-                        );
-                    })
-                }
-            </AreaStack>
-        ) : (
-            series.map((s, i) => {
-                const color = s.color ?? getChartColor(i);
-                return (
-                    <g key={s.key}>
-                        <m.g
-                            initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{
-                                duration: reduce ? 0 : durations.slow,
-                                ease: easings.outExpo,
-                                delay: i * 0.04,
-                            }}
-                        >
-                            {s.fillOpacity !== 0 && (
-                                <AreaClosed<Datum>
+                            >
+                                {s.fillOpacity !== 0 && (
+                                    <AreaClosed<Datum>
+                                        data={data as Datum[]}
+                                        x={(d) =>
+                                            xScale(xAccessor(d) as never) ?? 0
+                                        }
+                                        y={(d) =>
+                                            yScale(s.accessor(d) ?? 0) ?? 0
+                                        }
+                                        yScale={yScale}
+                                        curve={curveMonotoneX}
+                                        fill={`url(#${gradId}-${s.key})`}
+                                        fillOpacity={s.fillOpacity ?? 1}
+                                    />
+                                )}
+                                <LinePath<Datum>
                                     data={data as Datum[]}
-                                    x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                                    x={(d) =>
+                                        xScale(xAccessor(d) as never) ?? 0
+                                    }
                                     y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                    yScale={yScale}
                                     curve={curveMonotoneX}
-                                    fill={`url(#${gradId}-${s.key})`}
-                                    fillOpacity={s.fillOpacity ?? 1}
+                                    stroke={color}
+                                    strokeWidth={s.strokeWidth ?? 2}
+                                    strokeDasharray={
+                                        s.dashed ? "5 4" : undefined
+                                    }
+                                    fill="none"
                                 />
-                            )}
-                            <LinePath<Datum>
-                                data={data as Datum[]}
-                                x={(d) => xScale(xAccessor(d) as never) ?? 0}
-                                y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                curve={curveMonotoneX}
-                                stroke={color}
-                                strokeWidth={s.strokeWidth ?? 2}
-                                strokeDasharray={s.dashed ? "5 4" : undefined}
-                                fill="none"
-                            />
-                        </m.g>
-                    </g>
-                );
-            })
-        )}
+                            </m.g>
+                        </g>
+                    );
+                })
+            )}
         </g>
     );
 }
 
 // memo() erases the generic signature; the cast restores it for callers.
-const AreaSeriesLayer = memo(AreaSeriesLayerInner) as typeof AreaSeriesLayerInner;
+const AreaSeriesLayer = memo(
+    AreaSeriesLayerInner,
+) as typeof AreaSeriesLayerInner;
 
 export function AreaChart<Datum>(props: AreaChartProps<Datum>) {
     const { height = 280, width } = props;
@@ -257,10 +278,16 @@ function AreaChartInner<Datum>({
     // The ref always tracks the latest accessor; the stable wrapper never changes identity.
     const xAccessorRef = useRef(xAccessor);
     xAccessorRef.current = xAccessor;
-     
-    const stableXAccessor = useCallback((d: Datum) => xAccessorRef.current(d), []);
 
-    const xValues = useMemo(() => data.map((d) => stableXAccessor(d)), [data, stableXAccessor]);
+    const stableXAccessor = useCallback(
+        (d: Datum) => xAccessorRef.current(d),
+        [],
+    );
+
+    const xValues = useMemo(
+        () => data.map((d) => stableXAccessor(d)),
+        [data, stableXAccessor],
+    );
 
     const xScale = useMemo(() => {
         if (xIsDate) {
@@ -289,8 +316,12 @@ function AreaChartInner<Datum>({
             });
         }
         if (stacked) {
-            const stackMax = max(data, (d) => sum(series, (s) => s.accessor(d) ?? 0));
-            const stackMin = min(data, (d) => sum(series, (s) => s.accessor(d) ?? 0));
+            const stackMax = max(data, (d) =>
+                sum(series, (s) => s.accessor(d) ?? 0),
+            );
+            const stackMin = min(data, (d) =>
+                sum(series, (s) => s.accessor(d) ?? 0),
+            );
             return scaleLinear({
                 range: [innerHeight, 0],
                 domain: [Math.min(0, stackMin ?? 0), stackMax ?? 0],
@@ -320,7 +351,9 @@ function AreaChartInner<Datum>({
     }, [data, innerHeight, referenceLines, series, stacked, yDomain]);
 
     const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date).center,
+        () =>
+            bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date)
+                .center,
         [stableXAccessor],
     );
 
@@ -388,27 +421,33 @@ function AreaChartInner<Datum>({
         },
         [publishHover, stableXAccessor, data],
     );
-    const { onKeyDown: handleKeyDown, onBlur: handleBlur } = useChartKeyboardNav({
-        pointCount: data.length,
-        index: hoverIndex,
-        onIndexChange: stepToIndex,
-        onClear: handleLeave,
-        scrub: scrubbable ? scrub : undefined,
-    });
+    const { onKeyDown: handleKeyDown, onBlur: handleBlur } =
+        useChartKeyboardNav({
+            pointCount: data.length,
+            index: hoverIndex,
+            onIndexChange: stepToIndex,
+            onClear: handleLeave,
+            scrub: scrubbable ? scrub : undefined,
+        });
 
     // Mirror a sibling chart's hover when not hovered locally (nearest point).
     const syncedIndex = useMemo(() => {
-        if (hoverIndex != null || syncedX == null || data.length === 0) return null;
+        if (hoverIndex != null || syncedX == null || data.length === 0)
+            return null;
         // Only mirror when the synced x falls inside this chart's domain —
         // disjoint timelines (history vs forecast) must not pin to an edge.
         const lo = Number(stableXAccessor(data[0]));
         const hi = Number(stableXAccessor(data[data.length - 1]));
-        if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi)) return null;
+        if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi))
+            return null;
         let best = 0;
         let bestDist = Infinity;
         for (let i = 0; i < data.length; i++) {
             const dist = Math.abs(Number(stableXAccessor(data[i])) - syncedX);
-            if (dist < bestDist) { bestDist = dist; best = i; }
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = i;
+            }
         }
         return best;
     }, [hoverIndex, syncedX, data, stableXAccessor]);
@@ -425,14 +464,18 @@ function AreaChartInner<Datum>({
                 return {
                     label: s.label ?? s.key,
                     color: s.color ?? getChartColor(i),
-                    value: tooltipValueFormat ? tooltipValueFormat(raw, s.key) : String(raw),
+                    value: tooltipValueFormat
+                        ? tooltipValueFormat(raw, s.key)
+                        : String(raw),
                 };
             })
             .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
     const tooltipLeft =
-        hoverDatum != null ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0) : 0;
+        hoverDatum != null
+            ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0)
+            : 0;
     const tooltipTop = margin.top;
 
     // useId: deterministic per render position (stable snapshots), unique per
@@ -447,7 +490,15 @@ function AreaChartInner<Datum>({
                 width={width}
                 height={height}
                 role="img"
-                aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.area', data.length, series.map((s) => s.label))}
+                aria-label={
+                    ariaLabel ??
+                    summarizeSeriesChart(
+                        t,
+                        "chart.aria.kind.area",
+                        data.length,
+                        series.map((s) => s.label),
+                    )
+                }
                 tabIndex={data.length > 0 ? 0 : undefined}
                 onKeyDown={handleKeyDown}
                 onBlur={handleBlur}
@@ -460,9 +511,16 @@ function AreaChartInner<Datum>({
                                 x={0}
                                 y={-margin.top}
                                 height={height}
-                                initial={reduce ? { width: innerWidth } : { width: 0 }}
+                                initial={
+                                    reduce
+                                        ? { width: innerWidth }
+                                        : { width: 0 }
+                                }
                                 animate={{ width: innerWidth }}
-                                transition={{ duration: reduce ? 0 : durations.page, ease: easings.outExpo }}
+                                transition={{
+                                    duration: reduce ? 0 : durations.page,
+                                    ease: easings.outExpo,
+                                }}
                             />
                         </clipPath>
                     </defs>
@@ -519,7 +577,9 @@ function AreaChartInner<Datum>({
                                     to={{ x: innerWidth, y }}
                                     stroke={color}
                                     strokeWidth={1}
-                                    strokeDasharray={r.dashed === false ? undefined : "4 4"}
+                                    strokeDasharray={
+                                        r.dashed === false ? undefined : "4 4"
+                                    }
                                 />
                                 {r.label ? (
                                     <text
@@ -537,28 +597,43 @@ function AreaChartInner<Datum>({
                     })}
 
                     {/* Scrub range band */}
-                    {scrub.range ? (() => {
-                        const xA = xScale(stableXAccessor(data[scrub.range.startIndex]) as never) ?? 0;
-                        const xB = xScale(stableXAccessor(data[scrub.range.endIndex]) as never) ?? 0;
-                        return (
-                            <rect
-                                x={Math.min(xA, xB)}
-                                y={0}
-                                width={Math.abs(xB - xA)}
-                                height={innerHeight}
-                                fill={CHART_NEUTRAL.label}
-                                fillOpacity={0.08}
-                                stroke={CHART_NEUTRAL.label}
-                                strokeOpacity={0.25}
-                                pointerEvents="none"
-                            />
-                        );
-                    })() : null}
+                    {scrub.range
+                        ? (() => {
+                              const xA =
+                                  xScale(
+                                      stableXAccessor(
+                                          data[scrub.range.startIndex],
+                                      ) as never,
+                                  ) ?? 0;
+                              const xB =
+                                  xScale(
+                                      stableXAccessor(
+                                          data[scrub.range.endIndex],
+                                      ) as never,
+                                  ) ?? 0;
+                              return (
+                                  <rect
+                                      x={Math.min(xA, xB)}
+                                      y={0}
+                                      width={Math.abs(xB - xA)}
+                                      height={innerHeight}
+                                      fill={CHART_NEUTRAL.label}
+                                      fillOpacity={0.08}
+                                      stroke={CHART_NEUTRAL.label}
+                                      strokeOpacity={0.25}
+                                      pointerEvents="none"
+                                  />
+                              );
+                          })()
+                        : null}
 
                     {/* Crosshair */}
                     {hoverDatum != null ? (
                         <Line
-                            from={{ x: xScale(xAccessor(hoverDatum) as never) ?? 0, y: 0 }}
+                            from={{
+                                x: xScale(xAccessor(hoverDatum) as never) ?? 0,
+                                y: 0,
+                            }}
                             to={{
                                 x: xScale(xAccessor(hoverDatum) as never) ?? 0,
                                 y: innerHeight,
@@ -588,7 +663,9 @@ function AreaChartInner<Datum>({
                             scale={yScale}
                             numTicks={numYTicks}
                             tickFormat={
-                                yTickFormat ? (v) => yTickFormat(v as number) : undefined
+                                yTickFormat
+                                    ? (v) => yTickFormat(v as number)
+                                    : undefined
                             }
                         />
                     ) : (
@@ -597,7 +674,9 @@ function AreaChartInner<Datum>({
                             left={innerWidth}
                             numTicks={numYTicks}
                             tickFormat={
-                                yTickFormat ? (v) => yTickFormat(v as number) : undefined
+                                yTickFormat
+                                    ? (v) => yTickFormat(v as number)
+                                    : undefined
                             }
                         />
                     )}
@@ -609,7 +688,11 @@ function AreaChartInner<Datum>({
                         width={innerWidth}
                         height={innerHeight}
                         fill="transparent"
-                        style={scrubbable ? { touchAction: "pan-y", cursor: "crosshair" } : undefined}
+                        style={
+                            scrubbable
+                                ? { touchAction: "pan-y", cursor: "crosshair" }
+                                : undefined
+                        }
                         onPointerMove={handleMove}
                         onPointerLeave={handleLeave}
                         onPointerDown={handleDown}
@@ -619,26 +702,55 @@ function AreaChartInner<Datum>({
                 </Group>
             </svg>
 
-            {scrub.range ? (() => {
-                const first = series[0];
-                const a = first?.accessor(data[scrub.range.startIndex]);
-                const b = first?.accessor(data[scrub.range.endIndex]);
-                if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
-                const fmt = (v: number) =>
-                    tooltipValueFormat ? tooltipValueFormat(v, first.key) : String(Math.round(v * 100) / 100);
-                const xA = margin.left + (xScale(stableXAccessor(data[scrub.range.startIndex]) as never) ?? 0);
-                const xB = margin.left + (xScale(stableXAccessor(data[scrub.range.endIndex]) as never) ?? 0);
-                const mid = (xA + xB) / 2;
-                const rising = b - a > 0;
-                return (
-                    <div
-                        className={cn("glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums", rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground")}
-                        style={{ left: mid, top: 2 }}
-                    >
-                        {formatScrubDelta(a, b, fmt)}
-                    </div>
-                );
-            })() : null}
+            {scrub.range
+                ? (() => {
+                      const first = series[0];
+                      const a = first?.accessor(data[scrub.range.startIndex]);
+                      const b = first?.accessor(data[scrub.range.endIndex]);
+                      if (
+                          a == null ||
+                          b == null ||
+                          !Number.isFinite(a) ||
+                          !Number.isFinite(b)
+                      )
+                          return null;
+                      const fmt = (v: number) =>
+                          tooltipValueFormat
+                              ? tooltipValueFormat(v, first.key)
+                              : String(Math.round(v * 100) / 100);
+                      const xA =
+                          margin.left +
+                          (xScale(
+                              stableXAccessor(
+                                  data[scrub.range.startIndex],
+                              ) as never,
+                          ) ?? 0);
+                      const xB =
+                          margin.left +
+                          (xScale(
+                              stableXAccessor(
+                                  data[scrub.range.endIndex],
+                              ) as never,
+                          ) ?? 0);
+                      const mid = (xA + xB) / 2;
+                      const rising = b - a > 0;
+                      return (
+                          <div
+                              className={cn(
+                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 text-xs font-semibold tabular-nums shadow-sm",
+                                  rising
+                                      ? "text-gain"
+                                      : b - a < 0
+                                        ? "text-loss"
+                                        : "text-foreground",
+                              )}
+                              style={{ left: mid, top: 2 }}
+                          >
+                              {formatScrubDelta(a, b, fmt)}
+                          </div>
+                      );
+                  })()
+                : null}
 
             <ChartTooltip
                 open={hoverDatum != null && !scrub.range}
@@ -648,7 +760,10 @@ function AreaChartInner<Datum>({
                     hoverDatum && tooltipTitle
                         ? tooltipTitle(hoverDatum)
                         : hoverDatum
-                          ? formatHoverTitle(xAccessor(hoverDatum), appSettings.dateFormat)
+                          ? formatHoverTitle(
+                                xAccessor(hoverDatum),
+                                appSettings.dateFormat,
+                            )
                           : undefined
                 }
                 items={tooltipItems}

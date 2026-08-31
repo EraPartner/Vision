@@ -6,7 +6,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 

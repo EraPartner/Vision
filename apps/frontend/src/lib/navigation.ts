@@ -1,5 +1,5 @@
 import { Briefcase, Receipt, Telescope, type LucideIcon } from "lucide-react";
-import type { Workspace } from "@/contexts/WorkspaceContext";
+import type { Workspace } from "@/hooks/useWorkspace";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 
 /**

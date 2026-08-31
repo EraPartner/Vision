@@ -1,15 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Plus, TrendingUp } from "lucide-react";
 import { useSavedCharts, useDeleteSavedChart } from "@/hooks/useSavedCharts";
 import type { SavedChart } from "@/lib/api/types";
@@ -19,6 +9,7 @@ import { CustomChart } from "./CustomChart";
 import { CustomChartBuilderModal } from "./CustomChartBuilderModal";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 interface SavedChartsSectionProps {
     data: StatisticsData;
@@ -28,12 +19,10 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
     const { t } = useLanguage();
     const { data: savedCharts, isLoading } = useSavedCharts();
     const deleteChart = useDeleteSavedChart();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [builderOpen, setBuilderOpen] = useState(false);
     const [editChart, setEditChart] = useState<SavedChart | undefined>(
-        undefined,
-    );
-    const [pendingDelete, setPendingDelete] = useState<SavedChart | undefined>(
         undefined,
     );
 
@@ -47,12 +36,15 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
         if (!open) setEditChart(undefined);
     };
 
-    const handleDeleteConfirm = () => {
-        if (pendingDelete) {
-            deleteChart.mutate(pendingDelete.id, {
-                onSuccess: () => setPendingDelete(undefined),
-            });
-        }
+    const handleDelete = async (chart: SavedChart) => {
+        const accepted = await confirm({
+            title: t("customChart.deleteTitle"),
+            description: t("customChart.deleteDesc", { name: chart.name }),
+            confirmLabel: t("common.delete"),
+            cancelLabel: t("common.cancel"),
+            variant: "destructive",
+        });
+        if (accepted) deleteChart.mutate(chart.id);
     };
 
     const charts = (savedCharts ?? []).filter(
@@ -119,7 +111,7 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                             savedChart={chart}
                             data={data}
                             onEdit={handleEdit}
-                            onDelete={setPendingDelete}
+                            onDelete={(chart) => void handleDelete(chart)}
                         />
                     ))}
                 </div>
@@ -132,38 +124,7 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                 editChart={editChart}
             />
 
-            <AlertDialog
-                open={!!pendingDelete}
-                onOpenChange={(open) => {
-                    if (!open) setPendingDelete(undefined);
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            {t("customChart.deleteTitle")}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {t("customChart.deleteDesc", {
-                                name: pendingDelete?.name ?? "",
-                            })}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>
-                            {t("common.cancel")}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteConfirm}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            {deleteChart.isPending
-                                ? t("customChart.deleting")
-                                : t("common.delete")}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDialog />
         </div>
     );
 }

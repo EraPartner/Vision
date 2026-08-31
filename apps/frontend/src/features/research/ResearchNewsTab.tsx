@@ -5,7 +5,7 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { apiClient } from "@/lib/api";
 import { ProvenanceBadge } from "@/features/research/ProvenanceBadge";

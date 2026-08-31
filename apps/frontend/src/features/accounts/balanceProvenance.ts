@@ -19,7 +19,7 @@
 import { useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
+import { formatDateStringWithAppSettings } from '@/lib/dateUtils';
 
 export interface BalanceProvenanceFields {
     /** YYYY-MM-DD date of the stamped statement anchor; absent when unstamped. */

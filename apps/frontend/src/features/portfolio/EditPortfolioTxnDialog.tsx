@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { toYmd } from "@/components/shared/dateUtils";
+import { toYmd } from "@/lib/dateUtils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { toast } from "sonner";
@@ -165,7 +165,7 @@ export function EditPortfolioTxnDialog({
             : undefined;
     const fieldErrors: FieldErrorMap = {
         "edit-txn-date": !form.date
-            ? t("plannedPage.link.pickDate")
+            ? t("addPortTxn.error.dateRequired")
             : undefined,
         "edit-txn-units":
             isGift && unitMath.effectiveUnits === undefined

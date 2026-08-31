@@ -22,7 +22,7 @@ import { apiClient } from '@/lib/api';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
-import { toYmd } from '@/components/shared/dateUtils';
+import { toYmd } from '@/lib/dateUtils';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
 

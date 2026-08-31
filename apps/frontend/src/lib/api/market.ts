@@ -1,7 +1,7 @@
 import type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
-import type { MarketNewsArticle } from '@/lib/api/types';
+import type { MarketNewsArticle } from "@/types/apiClient";
 
 export type { MarketNewsArticle };
 

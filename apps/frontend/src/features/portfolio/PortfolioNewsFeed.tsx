@@ -8,7 +8,7 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock, WifiOff } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatDistanceToNow } from "@/components/shared/dateUtils";
+import { formatDistanceToNow } from "@/lib/dateUtils";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { EmptyState } from "@/components/shared/EmptyState";

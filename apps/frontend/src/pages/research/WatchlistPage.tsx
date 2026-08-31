@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatPercent, numberFormatToLocale } from "@/utils/currency";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/features/portfolio/WatchlistChartDialog";

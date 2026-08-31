@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { CategoryMultiCombobox } from "@/components/shared/CategoryMultiCombobox";
 import { BankAccountMultiCombobox } from "@/components/shared/BankAccountMultiCombobox";
 import { toast } from "sonner";

@@ -37,7 +37,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import type { Column } from "@/types/dataTable";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";

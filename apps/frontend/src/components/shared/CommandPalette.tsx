@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
@@ -70,7 +70,12 @@ interface CommandPaletteProps {
     onOpenShortcuts: () => void;
 }
 
-export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShortcuts }: CommandPaletteProps) {
+export function CommandPalette({
+    open,
+    onOpenChange,
+    onOpenSettings,
+    onOpenShortcuts,
+}: CommandPaletteProps) {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
@@ -96,17 +101,25 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     // user-typed / provider-supplied currency codes can be invalid, so fall back
     // to "<amount> <code>" instead of throwing (the reason this stays off
     // useCurrencyFormatter, which assumes valid codes).
-    const fmtSafeCurrency = useCallback((val: number, currency: string, decimals?: number) => {
-        try {
-            return new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency,
-                ...(decimals != null ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : {}),
-            }).format(val);
-        } catch {
-            return `${val.toFixed(2)} ${currency}`;
-        }
-    }, [locale]);
+    const fmtSafeCurrency = useCallback(
+        (val: number, currency: string, decimals?: number) => {
+            try {
+                return new Intl.NumberFormat(locale, {
+                    style: "currency",
+                    currency,
+                    ...(decimals != null
+                        ? {
+                              minimumFractionDigits: decimals,
+                              maximumFractionDigits: decimals,
+                          }
+                        : {}),
+                }).format(val);
+            } catch {
+                return `${val.toFixed(2)} ${currency}`;
+            }
+        },
+        [locale],
+    );
 
     const fxResult = useMemo(() => {
         if (!fxParsed || fxParsed.from === fxTarget) return null;
@@ -118,7 +131,11 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const calcResult = useMemo(() => {
         if (fxParsed) return null;
         const value = evaluateArithmetic(query.trim());
-        return value == null ? null : new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(value);
+        return value == null
+            ? null
+            : new Intl.NumberFormat(locale, {
+                  maximumFractionDigits: 6,
+              }).format(value);
     }, [fxParsed, query, locale]);
 
     const copyResult = (text: string) => {
@@ -131,7 +148,12 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
 
     const { data: recipientHits } = useQuery({
         queryKey: ["palette-recipients", debouncedQuery],
-        queryFn: () => apiClient.getRecipients({ search: debouncedQuery, active: true, limit: 5 }),
+        queryFn: () =>
+            apiClient.getRecipients({
+                search: debouncedQuery,
+                active: true,
+                limit: 5,
+            }),
         enabled: open && debouncedQuery.length >= 2,
         staleTime: 30_000,
     });
@@ -143,13 +165,17 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const { data: tickerQuote, isFetching: tickerLoading } = useQuery({
         queryKey: ["palette-quote", debouncedTicker],
         queryFn: async () => {
-            const quotes = await apiClient.getMarketQuotes<PaletteQuote>(debouncedTicker, { detail: "basic" });
+            const quotes = await apiClient.getMarketQuotes<PaletteQuote>(
+                debouncedTicker,
+                { detail: "basic" },
+            );
             return quotes[0] ?? null;
         },
         enabled: open && debouncedTicker.length >= 1,
         staleTime: 30_000,
     });
-    const fmtTickerPrice = (val: number, currency: string) => fmtSafeCurrency(val, currency, 2);
+    const fmtTickerPrice = (val: number, currency: string) =>
+        fmtSafeCurrency(val, currency, 2);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -192,9 +218,10 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         [adminPages],
     );
     const recentEntries = useMemo(
-        () => recents
-            .map((url) => allPages.find((p) => p.url === url))
-            .filter((p): p is PaletteEntry => Boolean(p)),
+        () =>
+            recents
+                .map((url) => allPages.find((p) => p.url === url))
+                .filter((p): p is PaletteEntry => Boolean(p)),
         [recents, allPages],
     );
 
@@ -209,59 +236,110 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
             <CommandList>
                 <CommandEmpty>{t("commandPalette.noResults")}</CommandEmpty>
                 {tickerSymbol && (tickerQuote || tickerLoading) && (
-                    <CommandGroup heading={t("commandPalette.market")} forceMount>
+                    <CommandGroup
+                        heading={t("commandPalette.market")}
+                        forceMount
+                    >
                         <CommandItem
                             forceMount
                             value={`market ${tickerSymbol} ${tickerQuote?.name ?? ""}`}
-                            onSelect={() => goTo(`/research/market?symbol=${encodeURIComponent(tickerQuote?.symbol ?? tickerSymbol)}`)}
+                            onSelect={() =>
+                                goTo(
+                                    `/research/market?symbol=${encodeURIComponent(tickerQuote?.symbol ?? tickerSymbol)}`,
+                                )
+                            }
                         >
                             <LineChart className="text-muted-foreground" />
-                            <span className="font-medium">{tickerQuote?.symbol ?? tickerSymbol}</span>
+                            <span className="font-medium">
+                                {tickerQuote?.symbol ?? tickerSymbol}
+                            </span>
                             {tickerQuote ? (
                                 <>
                                     {tickerQuote.name && (
-                                        <span className="truncate text-xs text-muted-foreground">{tickerQuote.name}</span>
+                                        <span className="truncate text-xs text-muted-foreground">
+                                            {tickerQuote.name}
+                                        </span>
                                     )}
                                     <span className="ml-auto flex items-baseline gap-2 tabular-nums">
                                         <span className="font-semibold text-foreground">
-                                            {fmtTickerPrice(tickerQuote.price, tickerQuote.currency)}
+                                            {fmtTickerPrice(
+                                                tickerQuote.price,
+                                                tickerQuote.currency,
+                                            )}
                                         </span>
-                                        <span className={cn(
-                                            "text-xs font-semibold",
-                                            tickerQuote.changePercent >= 0 ? "text-gain" : "text-loss",
-                                        )}>
-                                            {formatPercent(tickerQuote.changePercent, { digits: 2, signed: true, locale })}
+                                        <span
+                                            className={cn(
+                                                "text-xs font-semibold",
+                                                tickerQuote.changePercent >= 0
+                                                    ? "text-gain"
+                                                    : "text-loss",
+                                            )}
+                                        >
+                                            {formatPercent(
+                                                tickerQuote.changePercent,
+                                                {
+                                                    digits: 2,
+                                                    signed: true,
+                                                    locale,
+                                                },
+                                            )}
                                         </span>
                                     </span>
                                 </>
                             ) : (
-                                <CommandShortcut>{t("commandPalette.lookingUp")}</CommandShortcut>
+                                <CommandShortcut>
+                                    {t("commandPalette.lookingUp")}
+                                </CommandShortcut>
                             )}
                         </CommandItem>
                     </CommandGroup>
                 )}
                 {(fxResult || calcResult) && (
-                    <CommandGroup heading={t("commandPalette.result")} forceMount>
+                    <CommandGroup
+                        heading={t("commandPalette.result")}
+                        forceMount
+                    >
                         <CommandItem
                             forceMount
                             value={`result ${query}`}
-                            onSelect={() => copyResult((fxResult ?? calcResult) as string)}
+                            onSelect={() =>
+                                copyResult((fxResult ?? calcResult) as string)
+                            }
                         >
-                            {fxResult ? <ArrowLeftRight className="text-muted-foreground" /> : <Calculator className="text-muted-foreground" />}
-                            <span className="font-semibold tabular-nums">{fxResult ?? calcResult}</span>
-                            <CommandShortcut>{t("commandPalette.copyHint")}</CommandShortcut>
+                            {fxResult ? (
+                                <ArrowLeftRight className="text-muted-foreground" />
+                            ) : (
+                                <Calculator className="text-muted-foreground" />
+                            )}
+                            <span className="font-semibold tabular-nums">
+                                {fxResult ?? calcResult}
+                            </span>
+                            <CommandShortcut>
+                                {t("commandPalette.copyHint")}
+                            </CommandShortcut>
                         </CommandItem>
                     </CommandGroup>
                 )}
                 {query.trim().length >= 2 && (
-                    <CommandGroup heading={t("commandPalette.actions")} forceMount>
+                    <CommandGroup
+                        heading={t("commandPalette.actions")}
+                        forceMount
+                    >
                         <CommandItem
                             forceMount
                             value={`tx-search ${query}`}
-                            onSelect={() => goTo(`/transactions?search=${encodeURIComponent(query.trim())}`)}
+                            onSelect={() =>
+                                goTo(
+                                    `/transactions?search=${encodeURIComponent(query.trim())}`,
+                                )
+                            }
                         >
                             <Receipt className="text-muted-foreground" />
-                            <span>{t("commandPalette.searchTransactions", { q: query.trim() })}</span>
+                            <span>
+                                {t("commandPalette.searchTransactions", {
+                                    q: query.trim(),
+                                })}
+                            </span>
                         </CommandItem>
                     </CommandGroup>
                 )}
@@ -272,7 +350,11 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                                 key={`recipient-${r.id}`}
                                 forceMount
                                 value={`recipient ${r.name} ${query}`}
-                                onSelect={() => goTo(`/transactions?recipient_id=${r.id}&filter_label=${encodeURIComponent(r.name)}`)}
+                                onSelect={() =>
+                                    goTo(
+                                        `/transactions?recipient_id=${r.id}&filter_label=${encodeURIComponent(r.name)}`,
+                                    )
+                                }
                             >
                                 <Users className="text-muted-foreground" />
                                 <span>{r.name}</span>
@@ -283,7 +365,11 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                 {recentEntries.length > 0 && query.trim() === "" && (
                     <CommandGroup heading={t("commandPalette.recent")}>
                         {recentEntries.map((page) => (
-                            <CommandItem key={`recent-${page.url}`} value={`recent ${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                            <CommandItem
+                                key={`recent-${page.url}`}
+                                value={`recent ${t(page.titleKey)} ${page.url}`}
+                                onSelect={() => goTo(page.url)}
+                            >
                                 <page.icon className="text-muted-foreground" />
                                 <span>{t(page.titleKey)}</span>
                                 <GoToHint url={page.url} />
@@ -299,7 +385,11 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                         {idx > 0 && <CommandSeparator />}
                         <CommandGroup heading={t(headingKey)}>
                             {pages.map((page) => (
-                                <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                                <CommandItem
+                                    key={page.url}
+                                    value={`${t(page.titleKey)} ${page.url}`}
+                                    onSelect={() => goTo(page.url)}
+                                >
                                     <page.icon className="text-muted-foreground" />
                                     <span>{t(page.titleKey)}</span>
                                     <GoToHint url={page.url} />
@@ -313,7 +403,11 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                         <CommandSeparator />
                         <CommandGroup heading={t("nav.admin")}>
                             {adminPages.map((page) => (
-                                <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                                <CommandItem
+                                    key={page.url}
+                                    value={`${t(page.titleKey)} ${page.url}`}
+                                    onSelect={() => goTo(page.url)}
+                                >
                                     <page.icon className="text-muted-foreground" />
                                     <span>{t(page.titleKey)}</span>
                                 </CommandItem>
@@ -323,20 +417,34 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                 )}
                 <CommandSeparator />
                 <CommandGroup heading={t("commandPalette.actions")}>
-                    <CommandItem value={t("layout.light")} onSelect={() => runAction(() => setMode("light"))}>
+                    <CommandItem
+                        value={t("layout.light")}
+                        onSelect={() => runAction(() => setMode("light"))}
+                    >
                         <Sun className="text-muted-foreground" />
                         <span>{t("layout.light")}</span>
                     </CommandItem>
-                    <CommandItem value={t("layout.dark")} onSelect={() => runAction(() => setMode("dark"))}>
+                    <CommandItem
+                        value={t("layout.dark")}
+                        onSelect={() => runAction(() => setMode("dark"))}
+                    >
                         <Moon className="text-muted-foreground" />
                         <span>{t("layout.dark")}</span>
                     </CommandItem>
-                    <CommandItem value={t("layout.settings")} onSelect={() => runAction(() => onOpenSettings("general"))}>
+                    <CommandItem
+                        value={t("layout.settings")}
+                        onSelect={() =>
+                            runAction(() => onOpenSettings("general"))
+                        }
+                    >
                         <Settings className="text-muted-foreground" />
                         <span>{t("layout.settings")}</span>
                         <CommandShortcut>⌘,</CommandShortcut>
                     </CommandItem>
-                    <CommandItem value={t("shortcuts.title")} onSelect={() => runAction(onOpenShortcuts)}>
+                    <CommandItem
+                        value={t("shortcuts.title")}
+                        onSelect={() => runAction(onOpenShortcuts)}
+                    >
                         <Keyboard className="text-muted-foreground" />
                         <span>{t("shortcuts.title")}</span>
                         <CommandShortcut>?</CommandShortcut>

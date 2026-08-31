@@ -7,7 +7,7 @@ import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { useChartKeyboardNav } from "@/components/charts/keyboardNav";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale } from "@/components/shared/dateUtils";
+import { appLanguageToLocale } from "@/lib/dateUtils";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodLabel } from "./statisticsUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";

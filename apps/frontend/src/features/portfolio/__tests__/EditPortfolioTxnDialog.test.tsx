@@ -22,7 +22,7 @@ const PORTFOLIO_TXN_STUB = {
     amount: 900,
     fees: 2.5,
     taxes: 0,
-    date: "2025-01-10",
+    date: "2025-01-10T00:00:00.000Z",
     currency: "EUR",
     note: null,
     is_recurring: false,
@@ -69,7 +69,7 @@ const TRANSACTION: PortfolioTransaction = {
     id: 101,
     investment_id: 1,
     type: "buy",
-    date: "2025-01-10",
+    date: "2025-01-10T00:00:00.000Z",
     amount: 900,
     units: 10,
     price_per_unit: 90,
@@ -127,6 +127,10 @@ describe("EditPortfolioTxnDialog", () => {
 
         const amountInput = screen.getByLabelText(/total amount/i);
         expect(amountInput).toHaveValue("900");
+
+        expect(screen.getByRole("button", { name: /date/i })).toHaveTextContent(
+            "10/01/2025",
+        );
     });
 
     it("cancel button closes dialog", async () => {
@@ -179,14 +183,22 @@ describe("EditPortfolioTxnDialog", () => {
 
     it("submits updated transaction successfully and closes dialog", async () => {
         // Arrange
+        let capturedBody: Record<string, unknown> | undefined;
         server.use(
-            http.patch(`${API_BASE}/api/investments/transactions/101`, () =>
-                ok({
-                    ...PORTFOLIO_TXN_STUB,
-                    units: 12,
-                    price_per_unit: 90,
-                    amount: 1080,
-                }),
+            http.patch(
+                `${API_BASE}/api/investments/transactions/101`,
+                async ({ request }) => {
+                    capturedBody = (await request.json()) as Record<
+                        string,
+                        unknown
+                    >;
+                    return ok({
+                        ...PORTFOLIO_TXN_STUB,
+                        units: 12,
+                        price_per_unit: 90,
+                        amount: 1080,
+                    });
+                },
             ),
         );
         const user = userEvent.setup();
@@ -217,6 +229,7 @@ describe("EditPortfolioTxnDialog", () => {
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
+        expect(capturedBody?.date).toBe("2025-01-10");
     });
 
     it("blocks submit when FX rate is 0 instead of sending a doomed PATCH", async () => {

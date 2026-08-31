@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { numberFormatToLocale } from "@/utils/currency";
 import { getProviderHealth, probeProvider } from "@/lib/api/admin";
 import type { ProviderHealth } from "@/lib/api/admin";

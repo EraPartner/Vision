@@ -19,7 +19,7 @@ import {
     formatDateStringWithAppSettings,
     parseLocalDateFromYmd,
     toYmd,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import { TagInput } from "@/components/shared/TagInput";

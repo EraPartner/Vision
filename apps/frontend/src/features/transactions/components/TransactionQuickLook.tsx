@@ -6,7 +6,7 @@ import { TagChip } from "@/components/shared/TagInput";
 import { Eye } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
 import type { TableTransaction } from "../types";
 

@@ -22,13 +22,13 @@ import {
     Banknote,
     Filter,
 } from "lucide-react";
-import { parseISO } from "@/components/shared/dateUtils";
+import { parseISO } from "@/lib/dateUtils";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
 import { formatPercent } from "@/utils/currency";
 

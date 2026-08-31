@@ -27,7 +27,7 @@ import {
     CHART_DATE_PATTERNS,
     formatDate,
     parseISO,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useRecipientPivot } from "@/hooks/useRecipientPivot";
 import { useTagPivot } from "@/hooks/useTagPivot";

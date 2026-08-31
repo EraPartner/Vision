@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { setDockBadge } from "@/lib/api/electron";
 import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
 

@@ -13,10 +13,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { SankeyFlowData } from "@/lib/api/aggregations";
+import { localizeSankeyLabel, sankeyColorKey } from "./sankeyLabels";
 
 interface SankeyChartProps {
-  readonly data: SankeyFlowData;
-  readonly height?: number;
+    readonly data: SankeyFlowData;
+    readonly height?: number;
 }
 
 type NodeExtra = { id: string; label: string; value: number };
@@ -27,166 +28,193 @@ const NODE_WIDTH = 16;
 const NODE_PADDING = 18;
 
 function SankeyInner({
-  data,
-  width,
-  height,
+    data,
+    width,
+    height,
 }: {
-  data: SankeyFlowData;
-  width: number;
-  height: number;
+    data: SankeyFlowData;
+    width: number;
+    height: number;
 }) {
-  const { formatCurrency } = useChartCurrencyFormatter();
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
+    const { t } = useLanguage();
+    const { formatCurrency } = useChartCurrencyFormatter();
+    const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+    const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(
+        null,
+    );
 
-  const innerWidth = width - MARGIN.left - MARGIN.right;
-  const innerHeight = height - MARGIN.top - MARGIN.bottom;
+    const innerWidth = width - MARGIN.left - MARGIN.right;
+    const innerHeight = height - MARGIN.top - MARGIN.bottom;
 
-  const graph = useMemo<SankeyGraph<NodeExtra, LinkExtra> | null>(() => {
-    if (!data.nodes.length || !data.links.length) return null;
+    const graph = useMemo<SankeyGraph<NodeExtra, LinkExtra> | null>(() => {
+        if (!data.nodes.length || !data.links.length) return null;
 
-    // Deep clone — d3-sankey mutates node/link objects in-place
-    const clonedNodes = data.nodes.map((n) => ({ ...n }));
-    const clonedLinks = data.links.map((l) => ({ ...l }));
+        // Deep clone — d3-sankey mutates node/link objects in-place
+        const clonedNodes = data.nodes.map((n) => ({
+            ...n,
+            label: localizeSankeyLabel(n.id, n.label, t),
+        }));
+        const clonedLinks = data.links.map((l) => ({ ...l }));
 
-    const sankeyGen = sankey<NodeExtra, LinkExtra>()
-      .nodeId((d) => d.id)
-      .nodeWidth(NODE_WIDTH)
-      .nodePadding(NODE_PADDING)
-      .extent([
-        [0, 0],
-        [innerWidth, innerHeight],
-      ]);
+        const sankeyGen = sankey<NodeExtra, LinkExtra>()
+            .nodeId((d) => d.id)
+            .nodeWidth(NODE_WIDTH)
+            .nodePadding(NODE_PADDING)
+            .extent([
+                [0, 0],
+                [innerWidth, innerHeight],
+            ]);
 
-    try {
-      // Pass string IDs — d3-sankey resolves them via nodeId internally
-      return sankeyGen({ nodes: clonedNodes, links: clonedLinks });
-    } catch {
-      return null;
-    }
-  }, [data, innerWidth, innerHeight]);
+        try {
+            // Pass string IDs — d3-sankey resolves them via nodeId internally
+            return sankeyGen({ nodes: clonedNodes, links: clonedLinks });
+        } catch {
+            return null;
+        }
+    }, [data, innerWidth, innerHeight, t]);
 
-  // Color by node identity (label hash into the chart tokens), not node
-  // index — a category keeps its hue when the node set changes with the
-  // selected year, and matches the donuts and chips (utils/categoryColors).
-  const nodeColorMap = useMemo(() => {
-    const map = new Map<string, string>();
-    data.nodes.forEach((n) => map.set(n.id, getCategoryChartColor(n.label)));
-    return map;
-  }, [data.nodes]);
+    // Color by stable node identity, not translated display text or node index.
+    const nodeColorMap = useMemo(() => {
+        const map = new Map<string, string>();
+        data.nodes.forEach((n) =>
+            map.set(n.id, getCategoryChartColor(sankeyColorKey(n.id, n.label))),
+        );
+        return map;
+    }, [data.nodes]);
 
-  if (!graph || width < 2) return null;
+    if (!graph || width < 2) return null;
 
-  const pathGen = sankeyLinkHorizontal();
+    const pathGen = sankeyLinkHorizontal();
 
-  return (
-    <svg width={width} height={height}>
-      <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {/* Links */}
-        {graph.links.map((link, i) => {
-          const sourceId = (link.source as SankeyNode<NodeExtra, LinkExtra>).id;
-          const targetId = (link.target as SankeyNode<NodeExtra, LinkExtra>).id;
-          const color = nodeColorMap.get(targetId) ?? "hsl(var(--muted-foreground))";
-          const isHovered = hoveredLinkIndex === i ||
-            hoveredNodeId === sourceId ||
-            hoveredNodeId === targetId;
-          const d = pathGen(link as Parameters<typeof pathGen>[0]);
+    return (
+        <svg width={width} height={height}>
+            <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
+                {/* Links */}
+                {graph.links.map((link, i) => {
+                    const sourceId = (
+                        link.source as SankeyNode<NodeExtra, LinkExtra>
+                    ).id;
+                    const targetId = (
+                        link.target as SankeyNode<NodeExtra, LinkExtra>
+                    ).id;
+                    const color =
+                        nodeColorMap.get(targetId) ??
+                        "hsl(var(--muted-foreground))";
+                    const isHovered =
+                        hoveredLinkIndex === i ||
+                        hoveredNodeId === sourceId ||
+                        hoveredNodeId === targetId;
+                    const d = pathGen(link as Parameters<typeof pathGen>[0]);
 
-          return (
-            <path
-              key={`link-${i}`}
-              d={d ?? ""}
-              fill="none"
-              stroke={color}
-              strokeWidth={Math.max(1, link.width ?? 1)}
-              strokeOpacity={isHovered ? 0.6 : 0.25}
-              style={{ cursor: "default", transition: "stroke-opacity var(--duration-fast)" }}
-              onMouseEnter={() => setHoveredLinkIndex(i)}
-              onMouseLeave={() => setHoveredLinkIndex(null)}
-            />
-          );
-        })}
+                    return (
+                        <path
+                            key={`link-${i}`}
+                            d={d ?? ""}
+                            fill="none"
+                            stroke={color}
+                            strokeWidth={Math.max(1, link.width ?? 1)}
+                            strokeOpacity={isHovered ? 0.6 : 0.25}
+                            style={{
+                                cursor: "default",
+                                transition:
+                                    "stroke-opacity var(--duration-fast)",
+                            }}
+                            onMouseEnter={() => setHoveredLinkIndex(i)}
+                            onMouseLeave={() => setHoveredLinkIndex(null)}
+                        />
+                    );
+                })}
 
-        {/* Nodes */}
-        {graph.nodes.map((node) => {
-          const x0 = node.x0 ?? 0;
-          const x1 = node.x1 ?? 0;
-          const y0 = node.y0 ?? 0;
-          const y1 = node.y1 ?? 0;
-          const nodeHeight = Math.max(1, y1 - y0);
-          const color = nodeColorMap.get(node.id) ?? "hsl(var(--muted-foreground))";
-          const isRight = x0 > innerWidth / 2;
-          const isHovered = hoveredNodeId === node.id;
+                {/* Nodes */}
+                {graph.nodes.map((node) => {
+                    const x0 = node.x0 ?? 0;
+                    const x1 = node.x1 ?? 0;
+                    const y0 = node.y0 ?? 0;
+                    const y1 = node.y1 ?? 0;
+                    const nodeHeight = Math.max(1, y1 - y0);
+                    const color =
+                        nodeColorMap.get(node.id) ??
+                        "hsl(var(--muted-foreground))";
+                    const isRight = x0 > innerWidth / 2;
+                    const isHovered = hoveredNodeId === node.id;
 
-          return (
-            <g
-              key={`node-${node.id}`}
-              onMouseEnter={() => setHoveredNodeId(node.id)}
-              onMouseLeave={() => setHoveredNodeId(null)}
-              style={{ cursor: "default" }}
-            >
-              <rect
-                x={x0}
-                y={y0}
-                width={x1 - x0}
-                height={nodeHeight}
-                fill={color}
-                opacity={isHovered ? 1 : 0.85}
-                rx={3}
-                style={{ transition: "opacity var(--duration-fast)" }}
-              />
-              {/* Label */}
-              <text
-                x={isRight ? x0 - 6 : x1 + 6}
-                y={y0 + nodeHeight / 2}
-                dy="0.35em"
-                textAnchor={isRight ? "end" : "start"}
-                fontSize={11}
-                fill="hsl(var(--foreground))"
-                style={{ pointerEvents: "none", userSelect: "none" }}
-              >
-                {node.label}
-              </text>
-              {/* Value on hover */}
-              {isHovered && (
-                <text
-                  x={isRight ? x0 - 6 : x1 + 6}
-                  y={y0 + nodeHeight / 2 + 14}
-                  dy="0.35em"
-                  textAnchor={isRight ? "end" : "start"}
-                  fontSize={10}
-                  fill="hsl(var(--muted-foreground))"
-                  style={{ pointerEvents: "none", userSelect: "none" }}
-                >
-                  {formatCurrency(node.value ?? 0)}
-                </text>
-              )}
+                    return (
+                        <g
+                            key={`node-${node.id}`}
+                            onMouseEnter={() => setHoveredNodeId(node.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            style={{ cursor: "default" }}
+                        >
+                            <rect
+                                x={x0}
+                                y={y0}
+                                width={x1 - x0}
+                                height={nodeHeight}
+                                fill={color}
+                                opacity={isHovered ? 1 : 0.85}
+                                rx={3}
+                                style={{
+                                    transition: "opacity var(--duration-fast)",
+                                }}
+                            />
+                            {/* Label */}
+                            <text
+                                x={isRight ? x0 - 6 : x1 + 6}
+                                y={y0 + nodeHeight / 2}
+                                dy="0.35em"
+                                textAnchor={isRight ? "end" : "start"}
+                                fontSize={11}
+                                fill="hsl(var(--foreground))"
+                                style={{
+                                    pointerEvents: "none",
+                                    userSelect: "none",
+                                }}
+                            >
+                                {node.label}
+                            </text>
+                            {/* Value on hover */}
+                            {isHovered && (
+                                <text
+                                    x={isRight ? x0 - 6 : x1 + 6}
+                                    y={y0 + nodeHeight / 2 + 14}
+                                    dy="0.35em"
+                                    textAnchor={isRight ? "end" : "start"}
+                                    fontSize={10}
+                                    fill="hsl(var(--muted-foreground))"
+                                    style={{
+                                        pointerEvents: "none",
+                                        userSelect: "none",
+                                    }}
+                                >
+                                    {formatCurrency(node.value ?? 0)}
+                                </text>
+                            )}
+                        </g>
+                    );
+                })}
             </g>
-          );
-        })}
-      </g>
-    </svg>
-  );
+        </svg>
+    );
 }
 
 export function SankeyChart({ data, height = 420 }: SankeyChartProps) {
-  const { t } = useLanguage();
+    const { t } = useLanguage();
 
-  if (!data.nodes.length) {
+    if (!data.nodes.length) {
+        return (
+            <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+                {t("statsPage.sankey.noData")}
+            </div>
+        );
+    }
+
     return (
-      <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-        {t("statsPage.sankey.noData")}
-      </div>
+        <div style={{ width: "100%", height }}>
+            <ParentSize>
+                {({ width }) => (
+                    <SankeyInner data={data} width={width} height={height} />
+                )}
+            </ParentSize>
+        </div>
     );
-  }
-
-  return (
-    <div style={{ width: "100%", height }}>
-      <ParentSize>
-        {({ width }) => (
-          <SankeyInner data={data} width={width} height={height} />
-        )}
-      </ParentSize>
-    </div>
-  );
 }

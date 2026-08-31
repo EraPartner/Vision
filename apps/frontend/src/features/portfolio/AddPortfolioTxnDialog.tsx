@@ -33,7 +33,7 @@ import type {
 } from "@/types/portfolio";
 import { getTxnTypeLabel } from "@/types/portfolio";
 import { toast } from "sonner";
-import { toYmd } from "@/components/shared/dateUtils";
+import { toYmd } from "@/lib/dateUtils";
 import {
     useDialogFormState,
     useReseedOnIdentityChange,

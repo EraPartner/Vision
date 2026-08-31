@@ -37,7 +37,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
 import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
 import { cn } from "@/lib/utils";

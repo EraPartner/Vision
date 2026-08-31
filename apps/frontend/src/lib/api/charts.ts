@@ -1,5 +1,5 @@
 import { apiRequest } from '@/lib/api/client';
-import type { SavedChart, SavedChartCreate } from '@/lib/api/types';
+import type { SavedChart, SavedChartCreate } from "@/types/apiClient";
 
 export type { SavedChart, SavedChartCreate };
 

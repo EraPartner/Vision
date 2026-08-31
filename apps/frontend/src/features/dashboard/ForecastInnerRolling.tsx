@@ -3,7 +3,7 @@ import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseLocalDateFromYmd } from "@/lib/dateUtils";
 
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { mergeForViewRolling, type MergedDayDate } from "@/utils/forecastMerge";

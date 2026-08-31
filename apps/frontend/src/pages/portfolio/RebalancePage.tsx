@@ -33,17 +33,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Scale, Loader2, Plus, Trash2, Save } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -64,6 +53,7 @@ import {
     writeRebalanceUrl,
     type RebalanceUrlDraft,
 } from "./rebalanceUrlState";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const MODELS: ModelPortfolio[] = ["sixty_forty", "all_weather", "three_fund"];
 
@@ -128,6 +118,7 @@ function actualsToRows(actuals: Record<string, number>): Row[] {
 
 export default function RebalancePage() {
     const { t } = useLanguage();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
     const { appSettings } = useAppSettings();
     const currency = appSettings.defaultCurrency || "EUR";
 
@@ -370,6 +361,16 @@ export default function RebalancePage() {
 
     const onDelete = async () => {
         if (!editingPlanId) return;
+        const accepted = await confirm({
+            title: t("rebalance.plan.deleteTitle"),
+            description: t("rebalance.plan.deleteConfirm", {
+                name: planName,
+            }),
+            confirmLabel: t("rebalance.plan.delete"),
+            cancelLabel: t("common.cancel"),
+        });
+        if (!accepted) return;
+
         await deletePlan(editingPlanId);
         updateDraft({
             source: "model:sixty_forty",
@@ -685,42 +686,14 @@ export default function RebalancePage() {
                                     : t("rebalance.plan.save")}
                             </Button>
                             {editingPlanId && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className="gap-2 text-destructive"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                            {t("rebalance.plan.delete")}
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>
-                                                {t(
-                                                    "rebalance.plan.deleteTitle",
-                                                )}
-                                            </AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                {t(
-                                                    "rebalance.plan.deleteConfirm",
-                                                    { name: planName },
-                                                )}
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>
-                                                {t("common.cancel")}
-                                            </AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={onDelete}
-                                            >
-                                                {t("rebalance.plan.delete")}
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                <Button
+                                    variant="outline"
+                                    className="gap-2 text-destructive"
+                                    onClick={() => void onDelete()}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    {t("rebalance.plan.delete")}
+                                </Button>
                             )}
                         </div>
                     </CardContent>
@@ -732,6 +705,8 @@ export default function RebalancePage() {
                     {apiErrorToMessage(compute.error, t)}
                 </p>
             )}
+
+            <ConfirmDialog />
 
             {result && (
                 <>

@@ -584,7 +584,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Bulk assign category to transactions */
+        /**
+         * Assign a name-resolved category to recipients (deprecated)
+         * @deprecated
+         * @description Compatibility endpoint that resolves or creates a category from category_general and category_detail, then assigns it to recipient_ids. New callers should resolve the category first and use POST /api/categories/{id}/assign.
+         */
         post: operations["bulkAssignCategory"];
         delete?: never;
         options?: never;
@@ -603,7 +607,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Assign category to transactions */
+        /** Assign category to recipients */
         post: operations["assignCategory"];
         delete?: never;
         options?: never;
@@ -1285,7 +1289,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sankey flow data (income → category → recipient) */
+        /** Balanced Sankey flow data (income/funding gap → spending → category) */
         get: operations["getSankey"];
         put?: never;
         post?: never;
@@ -1336,7 +1340,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Top-recipient spending pivot (months × recipients) */
+        /**
+         * Top-recipient spending pivot (months × recipients)
+         * @description Per-recipient expense series. Selecting either a primary recipient or an alias includes the full primary-recipient cluster. Overlapping ids from one cluster are deduplicated and output uses the primary id/name.
+         */
         get: operations["getRecipientPivot"];
         put?: never;
         post?: never;
@@ -3177,9 +3184,9 @@ export interface components {
             statement_balance_date?: string | null;
             /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. */
             computed_balance?: number | null;
-            /** @description The reconciliation base: the computed balance of the single currency partition `statement_balance` is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. Only returned by the list endpoint. */
+            /** @description The reconciliation base: the computed balance of the single currency partition `statement_balance` is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. The declared `currency` partition wins whenever it exists, including at exactly zero. Zero/sub-cent filtering applies only to the fallback when that partition is absent. Only returned by the list endpoint. */
             reconcilable_balance?: number | null;
-            /** @description Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole funded partition's code when the ledger's currency disagrees with the declared one. Only returned by the list endpoint. */
+            /** @description Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole funded partition's code when the declared currency partition is absent and the ledger contains one funded foreign partition. Only returned by the list endpoint. */
             reconcilable_currency?: string;
             /** @description statement_balance − reconcilable_balance, in `reconcilable_currency` (ADR-094); null if no statement balance. Native-currency by design — never statement_balance − computed_balance, which on a multi-currency account would make the badge move with the daily exchange rate. */
             drift?: number | null;
@@ -3318,6 +3325,9 @@ export interface components {
              * @description YYYY-MM-DD
              */
             transaction_date: string;
+            /** @description Stable linked account identity */
+            account_id?: number | null;
+            /** @description Canonical display name projected from the linked account; use account_id as the stable identity */
             bank_account: string;
             recipient_id?: number;
             recipient_name?: string;
@@ -3853,10 +3863,12 @@ export interface components {
         RecipientBankAccount: {
             id: number;
             recipient_id: number;
-            iban: string;
-            bic?: string;
-            bank_name?: string;
+            account_number: string;
+            bank_name?: string | null;
+            address?: string | null;
+            account_label?: string | null;
             is_primary: boolean;
+            is_active: boolean;
             /** Format: date-time */
             created_at?: string;
         };
@@ -3923,14 +3935,30 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created or reactivated tag */
+            /** @description Existing active tag returned (`created` is false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Tag"] & {
+                            /** @enum {boolean} */
+                            created: false;
+                        };
+                    };
+                };
+            };
+            /** @description Created or reactivated tag (`created` distinguishes the two) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Tag"];
+                        data?: components["schemas"]["Tag"] & {
+                            created: boolean;
+                        };
                     };
                 };
             };
@@ -4640,7 +4668,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Category"];
+                        data?: components["schemas"]["Category"] & {
+                            /** @enum {boolean} */
+                            created: false;
+                        };
                     };
                 };
             };
@@ -4651,7 +4682,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Category"];
+                        data?: components["schemas"]["Category"] & {
+                            /** @enum {boolean} */
+                            created: true;
+                        };
                     };
                 };
             };
@@ -4776,7 +4810,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Recipient"];
+                        data?: components["schemas"]["Recipient"] & {
+                            /** @enum {boolean} */
+                            created: false;
+                        };
                     };
                 };
             };
@@ -4787,7 +4824,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Recipient"];
+                        data?: components["schemas"]["Recipient"] & {
+                            /** @enum {boolean} */
+                            created: true;
+                        };
                     };
                 };
             };
@@ -5035,6 +5075,7 @@ export interface operations {
                     name: string;
                     symbol?: string;
                     asset_class: string;
+                    /** @description Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR. */
                     currency?: string;
                     current_price?: number;
                     interest_rate?: number;
@@ -5062,7 +5103,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description name and asset_class are required */
+            /** @description Missing required fields or malformed investment fields, including currency */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5589,8 +5630,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    category_id: number;
-                    transaction_ids: number[];
+                    category_general: string;
+                    category_detail: string;
+                    recipient_ids: number | number[];
                 };
             };
         };
@@ -5601,7 +5643,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            updated_recipients: number;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
         };
@@ -5618,7 +5665,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    transaction_ids: number[];
+                    recipient_ids: number | number[];
                 };
             };
         };
@@ -5629,7 +5676,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            updated_recipients: number;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
         };
@@ -5904,14 +5956,29 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    iban: string;
-                    bic?: string;
+                    account_number: string;
                     bank_name?: string;
-                    is_primary?: boolean;
+                    address?: string;
+                    account_label?: string;
+                    set_as_primary?: boolean;
                 };
             };
         };
         responses: {
+            /** @description Existing bank account returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["RecipientBankAccount"] & {
+                            /** @enum {boolean} */
+                            created: false;
+                        };
+                    };
+                };
+            };
             /** @description Created bank account */
             201: {
                 headers: {
@@ -5919,7 +5986,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientBankAccount"];
+                        data?: components["schemas"]["RecipientBankAccount"] & {
+                            /** @enum {boolean} */
+                            created: true;
+                        };
                     };
                 };
             };
@@ -6518,9 +6588,9 @@ export interface operations {
     getMonthlySummary: {
         parameters: {
             query?: {
-                start_date?: string;
-                end_date?: string;
                 currency?: string;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
             };
             header?: never;
             path?: never;
@@ -6740,8 +6810,9 @@ export interface operations {
     getSankey: {
         parameters: {
             query?: {
-                start_date?: string;
-                end_date?: string;
+                year?: number;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
                 currency?: string;
             };
             header?: never;
@@ -6764,9 +6835,9 @@ export interface operations {
     getCategoryPivot: {
         parameters: {
             query?: {
-                start_date?: string;
-                end_date?: string;
                 currency?: string;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
             };
             header?: never;
             path?: never;
@@ -6788,8 +6859,9 @@ export interface operations {
     getRecipientByYear: {
         parameters: {
             query?: {
-                recipient_id?: number;
                 currency?: string;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
             };
             header?: never;
             path?: never;
@@ -6811,6 +6883,11 @@ export interface operations {
     getRecipientPivot: {
         parameters: {
             query?: {
+                /** @description Recipient ids to include as series (repeatable). A primary or alias selects its full cluster. */
+                recipient_ids?: number[];
+                /** @description Canonical recipient cluster ids to exclude (repeatable). */
+                excluded_recipient_ids?: number[];
+                bucket?: "monthly" | "yearly";
                 /** @description Inclusive start date. Preferred over the deprecated `start` alias when both are present. */
                 start_date?: string;
                 /** @description Inclusive end date. Preferred over the deprecated `end` alias when both are present. */
@@ -7090,6 +7167,7 @@ export interface operations {
                     name?: string;
                     symbol?: string;
                     asset_class?: components["schemas"]["AssetClass"];
+                    /** @description Three-letter ISO currency code; normalized to uppercase and cannot be cleared. */
                     currency?: string;
                     is_active?: boolean;
                     show_in_ticker?: boolean;
@@ -7107,6 +7185,13 @@ export interface operations {
                         data?: components["schemas"]["Investment"];
                     };
                 };
+            };
+            /** @description Malformed investment field, including a null, empty, or invalid currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7394,9 +7479,16 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    symbol: string;
-                    name?: string;
+                    symbol?: string;
+                    name: string;
+                    /** @enum {string} */
+                    asset_class: "stock" | "etf" | "crypto" | "metals";
+                    target_price: number;
+                    /** @description Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR. */
                     currency?: string;
+                    notes?: string | null;
+                    price_provider_id?: string | null;
+                    added_price?: number | null;
                 };
             };
         };
@@ -7411,6 +7503,13 @@ export interface operations {
                         data?: components["schemas"]["WatchlistItem"];
                     };
                 };
+            };
+            /** @description Malformed watchlist field, including an explicit null or empty currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7471,6 +7570,14 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
+                    symbol?: string | null;
+                    /** @enum {string} */
+                    asset_class?: "stock" | "etf" | "crypto" | "metals";
+                    target_price?: number;
+                    /** @description Three-letter ISO currency code; normalized to uppercase and cannot be cleared. */
+                    currency?: string;
+                    notes?: string | null;
+                    price_provider_id?: string | null;
                 };
             };
         };
@@ -7483,6 +7590,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed watchlist field, including an explicit null or empty currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8037,7 +8151,12 @@ export interface operations {
     };
     getAiConversations: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional page size. Omit both parameters for the legacy full list; when either is supplied, a missing or invalid limit falls back to 50. */
+                limit?: number;
+                /** @description Optional zero-based row offset. When pagination is requested, a missing or invalid offset falls back to 0. */
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8054,6 +8173,10 @@ export interface operations {
                         data?: {
                             items: components["schemas"]["AiConversation"][];
                             total: number;
+                            /** @description Present only when pagination was requested. */
+                            limit?: number;
+                            /** @description Present only when pagination was requested. */
+                            offset?: number;
                         };
                     };
                 };
@@ -8236,7 +8359,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-sent event stream */
+            /** @description Server-sent event stream. Success terminates with canonical `complete` followed by the byte-equivalent deprecated `done` compatibility alias; new clients deduplicate them. Errors carry `{detail, code}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8249,7 +8372,13 @@ export interface operations {
     };
     importCsv: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                bank_name?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8259,8 +8388,8 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    /** @description Bank adapter identifier. The route also accepts it as a query parameter (`req.query.bank_name || req.body.bank_name`, routes/importRoutes.js) — the frontend client sends it in the query string. */
-                    bank_name: string;
+                    /** @description Bank adapter identifier. The multipart body takes precedence. A query parameter remains as a compatibility fallback. */
+                    bank_name?: string;
                 };
             };
         };
@@ -8345,7 +8474,13 @@ export interface operations {
     };
     importCsvStream: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                bank_name?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8355,12 +8490,13 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    bank_name: string;
+                    /** @description Bank adapter identifier. The multipart body takes precedence. A query parameter remains as a compatibility fallback. */
+                    bank_name?: string;
                 };
             };
         };
         responses: {
-            /** @description Server-Sent Events stream; events are progress / review_required / complete / error. The `complete` event carries `{total_processed, imported, duplicates, errors, batch_id, auto_linked_count, status, percent}` (routes/importRoutes.js buildComplete); `review_required` carries `{batch_id, match_source_counts, percent}` — no counts. Event payloads are not modelled as schemas (OpenAPI cannot type SSE events), so the frontend keeps a hand-written `ImportResult` type for this stream. */
+            /** @description Server-Sent Events stream; events are progress / review_required / complete / error. The `complete` event carries `{total_processed, imported, duplicates, errors, batch_id, auto_linked_count, status, percent}` (routes/importRoutes.js buildComplete); `review_required` carries `{batch_id, match_source_counts, percent}` — no counts. Event payloads are not modelled as schemas (OpenAPI cannot type SSE events), so the frontend keeps a hand-written `ImportResult` type for this stream. Error events carry `{detail, code}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8780,7 +8916,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Commit result with counts */
+            /** @description Commit result with counts. Canonical ledger rows are durable; derived materialized-view projections refresh asynchronously. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8894,7 +9030,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-Sent Events stream; events are progress / review_required / complete / error */
+            /** @description Server-Sent Events stream; events are progress / review_required / complete / error. Error events carry `{detail, code}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9348,12 +9484,28 @@ export interface operations {
     };
     adminDatabaseReset: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the JSON body key wins when present.
+                 */
+                force?: true;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Explicit confirmation of the destructive reset.
+                     * @enum {boolean}
+                     */
+                    force?: true;
+                };
+            };
+        };
         responses: {
             /** @description Reset result */
             200: {

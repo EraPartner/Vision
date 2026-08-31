@@ -82,14 +82,24 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
     const x = c * (1 - Math.abs((hp % 2) - 1));
     const m = l - c / 2;
     const seg: Array<[number, number, number]> = [
-        [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
+        [c, x, 0],
+        [x, c, 0],
+        [0, c, x],
+        [0, x, c],
+        [x, 0, c],
+        [c, 0, x],
     ];
     const [r, g, b] = seg[Math.min(5, Math.floor(hp))] ?? [0, 0, 0];
     return [r + m, g + m, b + m];
 }
 
-function resolveThemeColor(varName: string, fallback: [number, number, number]): [number, number, number] {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue(varName);
+function resolveThemeColor(
+    varName: string,
+    fallback: [number, number, number],
+): [number, number, number] {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(
+        varName,
+    );
     const hsl = parseHslComponents(raw);
     return hsl ? hslToRgb(hsl[0], hsl[1], hsl[2]) : fallback;
 }
@@ -143,7 +153,8 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             if (!shader) return null;
             gl!.shaderSource(shader, src);
             gl!.compileShader(shader);
-            if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS)) return null;
+            if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS))
+                return null;
             return shader;
         };
 
@@ -165,12 +176,17 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             gl!.attachShader(program, vs);
             gl!.attachShader(program, fs);
             gl!.linkProgram(program);
-            if (!gl!.getProgramParameter(program, gl!.LINK_STATUS)) return false;
+            if (!gl!.getProgramParameter(program, gl!.LINK_STATUS))
+                return false;
             gl!.useProgram(program);
 
             const buf = gl!.createBuffer();
             gl!.bindBuffer(gl!.ARRAY_BUFFER, buf);
-            gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl!.STATIC_DRAW);
+            gl!.bufferData(
+                gl!.ARRAY_BUFFER,
+                new Float32Array([-1, -1, 3, -1, -1, 3]),
+                gl!.STATIC_DRAW,
+            );
             const aPos = gl!.getAttribLocation(program, "a_pos");
             gl!.enableVertexAttribArray(aPos);
             gl!.vertexAttribPointer(aPos, 2, gl!.FLOAT, false, 0, 0);
@@ -186,6 +202,10 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         };
 
         if (!buildResources()) return;
+        // Freeze the CSS fallback only after a drawable WebGL program exists.
+        // The enhanced tier alone is insufficient: context creation/compilation
+        // may fail, in which case the animated CSS blobs must stay live.
+        document.documentElement.classList.add("fx-webgl-live");
 
         let c1 = resolveThemeColor("--primary", [0.18, 0.65, 0.45]);
         let c2 = resolveThemeColor("--accent", [0.85, 0.7, 0.4]);
@@ -211,10 +231,16 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             if (reducedMotion || staticAtmosphereRef.current) draw(0);
         };
         const themeObserver = new MutationObserver(refreshColors);
-        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+        themeObserver.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class", "style"],
+        });
 
         const resize = () => {
-            const scale = Math.min(RESOLUTION_SCALE, MAX_CANVAS_WIDTH / Math.max(1, window.innerWidth));
+            const scale = Math.min(
+                RESOLUTION_SCALE,
+                MAX_CANVAS_WIDTH / Math.max(1, window.innerWidth),
+            );
             const w = Math.max(1, Math.floor(window.innerWidth * scale));
             const h = Math.max(1, Math.floor(window.innerHeight * scale));
             canvas.width = w;
@@ -264,11 +290,11 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
                 hidden: document.hidden,
                 focused: document.hasFocus(),
             });
-            if (mode === 'loop') {
+            if (mode === "loop") {
                 startLoop();
             } else {
                 stopLoop();
-                if (mode === 'static') draw(0);
+                if (mode === "static") draw(0);
             }
         };
         syncRef.current = syncLoop;
@@ -285,6 +311,7 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         const onContextLost = (e: Event) => {
             e.preventDefault();
             contextLost = true;
+            document.documentElement.classList.remove("fx-webgl-live");
             stopLoop();
         };
         // Without this, a GPU-process restart leaves the aurora permanently blank
@@ -293,6 +320,7 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         const onContextRestored = () => {
             if (!buildResources()) return;
             contextLost = false;
+            document.documentElement.classList.add("fx-webgl-live");
             resize();
             if (reducedMotion) draw(0);
             else syncLoop();
@@ -302,6 +330,7 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
 
         return () => {
             syncRef.current = undefined;
+            document.documentElement.classList.remove("fx-webgl-live");
             stopLoop();
             window.removeEventListener("resize", resize);
             if (!reducedMotion) {
@@ -310,7 +339,10 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
                 document.removeEventListener("visibilitychange", syncLoop);
             }
             canvas.removeEventListener("webglcontextlost", onContextLost);
-            canvas.removeEventListener("webglcontextrestored", onContextRestored);
+            canvas.removeEventListener(
+                "webglcontextrestored",
+                onContextRestored,
+            );
             themeObserver.disconnect();
             gl?.getExtension("WEBGL_lose_context")?.loseContext();
         };

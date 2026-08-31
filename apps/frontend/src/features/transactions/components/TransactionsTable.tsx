@@ -32,7 +32,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Money } from "@/components/shared/Money";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { cn } from "@/lib/utils";
 import type { RawApiTransaction, TableTransaction } from "../types";

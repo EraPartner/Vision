@@ -10,7 +10,7 @@ import type { ExchangeRatesData } from "@/lib/api/info";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 
 const DISMISS_KEY = "fx-status-banner-dismissed-at";
 const DISMISS_TTL_MS = 60 * 60 * 1000;

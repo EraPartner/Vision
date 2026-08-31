@@ -15,7 +15,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { exchangeRateKeys } from "@/lib/queryKeys";

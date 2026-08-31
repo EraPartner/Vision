@@ -33,7 +33,7 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { formatPercent } from "@/utils/currency";
 import { numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";

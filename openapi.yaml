@@ -385,14 +385,17 @@ components:
             `computed_balance` for a single-currency account and differs on a
             multi-currency one, so the reconcile dialog previews an entered
             reading against THIS figure — it is what `POST /accounts/{id}/reconcile`
-            resolves against. Only returned by the list endpoint.
+            resolves against. The declared `currency` partition wins whenever it
+            exists, including at exactly zero. Zero/sub-cent filtering applies only
+            to the fallback when that partition is absent. Only returned by the list
+            endpoint.
         reconcilable_currency:
           type: string
           description: >-
             Currency of `reconcilable_balance` and `drift` — normally `currency`,
-            but the account's sole funded partition's code when the ledger's
-            currency disagrees with the declared one. Only returned by the list
-            endpoint.
+            but the account's sole funded partition's code when the declared
+            currency partition is absent and the ledger contains one funded
+            foreign partition. Only returned by the list endpoint.
         drift:
           type: number
           nullable: true
@@ -711,8 +714,13 @@ components:
           type: string
           format: date
           description: YYYY-MM-DD
+        account_id:
+          type: integer
+          nullable: true
+          description: Stable linked account identity
         bank_account:
           type: string
+          description: Canonical display name projected from the linked account; use account_id as the stable identity
         recipient_id:
           type: integer
         recipient_name:
@@ -2028,19 +2036,26 @@ components:
 
     RecipientBankAccount:
       type: object
-      required: [id, recipient_id, iban, is_primary]
+      required: [id, recipient_id, account_number, is_primary, is_active]
       properties:
         id:
           type: integer
         recipient_id:
           type: integer
-        iban:
-          type: string
-        bic:
+        account_number:
           type: string
         bank_name:
           type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        account_label:
+          type: string
+          nullable: true
         is_primary:
+          type: boolean
+        is_active:
           type: boolean
         created_at:
           type: string
@@ -2102,8 +2117,8 @@ paths:
             schema:
               $ref: "#/components/schemas/TagCreate"
       responses:
-        "201":
-          description: Created or reactivated tag
+        "200":
+          description: Existing active tag returned (`created` is false)
           content:
             application/json:
               schema:
@@ -2112,7 +2127,31 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Tag"
+                        allOf:
+                          - $ref: "#/components/schemas/Tag"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [false]
+        "201":
+          description: Created or reactivated tag (`created` distinguishes the two)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/Tag"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
 
   /api/tags/{id}:
     parameters:
@@ -2824,7 +2863,14 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Category"
+                        allOf:
+                          - $ref: "#/components/schemas/Category"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [false]
         "201":
           description: New category created
           content:
@@ -2835,7 +2881,14 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Category"
+                        allOf:
+                          - $ref: "#/components/schemas/Category"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [true]
 
   /api/categories/{id}:
     parameters:
@@ -2947,7 +3000,14 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Recipient"
+                        allOf:
+                          - $ref: "#/components/schemas/Recipient"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [false]
         "201":
           description: New recipient created
           content:
@@ -2958,7 +3018,14 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Recipient"
+                        allOf:
+                          - $ref: "#/components/schemas/Recipient"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [true]
 
   /api/recipients/{id}:
     parameters:
@@ -3156,6 +3223,8 @@ paths:
                   type: string
                 currency:
                   type: string
+                  pattern: '^\s*[A-Za-z]{3}\s*$'
+                  description: Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR.
                 current_price:
                   type: number
                 interest_rate:
@@ -3190,7 +3259,7 @@ paths:
                       data:
                         $ref: "#/components/schemas/Investment"
         "400":
-          description: name and asset_class are required
+          description: Missing required fields or malformed investment fields, including currency
 
   /api/info/net-worth:
     get:
@@ -3732,7 +3801,12 @@ paths:
   # ─── Categories extra ────────────────────────────────────────────────────────
   /api/categories/assign:
     post:
-      summary: Bulk assign category to transactions
+      summary: Assign a name-resolved category to recipients (deprecated)
+      description: >-
+        Compatibility endpoint that resolves or creates a category from category_general and
+        category_detail, then assigns it to recipient_ids. New callers should resolve the category
+        first and use POST /api/categories/{id}/assign.
+      deprecated: true
       operationId: bulkAssignCategory
       tags: [Categories]
       requestBody:
@@ -3741,21 +3815,37 @@ paths:
           application/json:
             schema:
               type: object
-              required: [category_id, transaction_ids]
+              required: [category_general, category_detail, recipient_ids]
               properties:
-                category_id:
-                  type: integer
-                transaction_ids:
-                  type: array
-                  items:
-                    type: integer
+                category_general:
+                  type: string
+                category_detail:
+                  type: string
+                recipient_ids:
+                  oneOf:
+                    - type: integer
+                    - type: array
+                      items:
+                        type: integer
       responses:
         "200":
           description: Assignment result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [updated_recipients, links]
+                        properties:
+                          updated_recipients:
+                            type: integer
+                          links:
+                            type: array
+                            items: {}
 
   /api/categories/{id}/assign:
     parameters:
@@ -3767,7 +3857,7 @@ paths:
           format: int32
           minimum: 1
     post:
-      summary: Assign category to transactions
+      summary: Assign category to recipients
       operationId: assignCategory
       tags: [Categories]
       requestBody:
@@ -3776,19 +3866,33 @@ paths:
           application/json:
             schema:
               type: object
-              required: [transaction_ids]
+              required: [recipient_ids]
               properties:
-                transaction_ids:
-                  type: array
-                  items:
-                    type: integer
+                recipient_ids:
+                  oneOf:
+                    - type: integer
+                    - type: array
+                      items:
+                        type: integer
       responses:
         "200":
           description: Assignment result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [updated_recipients, links]
+                        properties:
+                          updated_recipients:
+                            type: integer
+                          links:
+                            type: array
+                            items: {}
 
   # ─── Recipients extra ────────────────────────────────────────────────────────
   /api/recipients/clusters:
@@ -4057,17 +4161,37 @@ paths:
           application/json:
             schema:
               type: object
-              required: [iban]
+              required: [account_number]
               properties:
-                iban:
-                  type: string
-                bic:
+                account_number:
                   type: string
                 bank_name:
                   type: string
-                is_primary:
+                address:
+                  type: string
+                account_label:
+                  type: string
+                set_as_primary:
                   type: boolean
       responses:
+        "200":
+          description: Existing bank account returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/RecipientBankAccount"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [false]
         "201":
           description: Created bank account
           content:
@@ -4078,7 +4202,14 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/RecipientBankAccount"
+                        allOf:
+                          - $ref: "#/components/schemas/RecipientBankAccount"
+                          - type: object
+                            required: [created]
+                            properties:
+                              created:
+                                type: boolean
+                                enum: [true]
 
   /api/recipients/{id}/bank-accounts/{accountId}:
     parameters:
@@ -4675,19 +4806,25 @@ paths:
       tags: [Aggregations]
       parameters:
         - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-        - in: query
           name: currency
           schema:
             type: string
+        - in: query
+          name: excluded_category_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - in: query
+          name: excluded_recipient_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
       responses:
         "200":
           description: Monthly totals
@@ -4874,20 +5011,31 @@ paths:
 
   /api/aggregations/sankey:
     get:
-      summary: Sankey flow data (income → category → recipient)
+      summary: Balanced Sankey flow data (income/funding gap → spending → category)
       operationId: getSankey
       tags: [Aggregations]
       parameters:
         - in: query
-          name: start_date
+          name: year
           schema:
-            type: string
-            format: date
+            type: integer
+            minimum: 2001
         - in: query
-          name: end_date
+          name: excluded_category_ids
           schema:
-            type: string
-            format: date
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - in: query
+          name: excluded_recipient_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
         - in: query
           name: currency
           schema:
@@ -4907,19 +5055,25 @@ paths:
       tags: [Aggregations]
       parameters:
         - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-        - in: query
           name: currency
           schema:
             type: string
+        - in: query
+          name: excluded_category_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - in: query
+          name: excluded_recipient_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
       responses:
         "200":
           description: Pivot table data
@@ -4935,13 +5089,25 @@ paths:
       tags: [Aggregations]
       parameters:
         - in: query
-          name: recipient_id
-          schema:
-            type: integer
-        - in: query
           name: currency
           schema:
             type: string
+        - in: query
+          name: excluded_category_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - in: query
+          name: excluded_recipient_ids
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
       responses:
         "200":
           description: Yearly recipient totals
@@ -4953,9 +5119,32 @@ paths:
   /api/aggregations/recipient-pivot:
     get:
       summary: Top-recipient spending pivot (months × recipients)
+      description: >
+        Per-recipient expense series. Selecting either a primary recipient or
+        an alias includes the full primary-recipient cluster. Overlapping ids
+        from one cluster are deduplicated and output uses the primary id/name.
       operationId: getRecipientPivot
       tags: [Aggregations]
       parameters:
+        - in: query
+          name: recipient_ids
+          description: Recipient ids to include as series (repeatable). A primary or alias selects its full cluster.
+          schema:
+            type: array
+            items:
+              type: integer
+        - in: query
+          name: excluded_recipient_ids
+          description: Canonical recipient cluster ids to exclude (repeatable).
+          schema:
+            type: array
+            items:
+              type: integer
+        - in: query
+          name: bucket
+          schema:
+            type: string
+            enum: [monthly, yearly]
         - in: query
           name: start_date
           description: Inclusive start date. Preferred over the deprecated `start` alias when both are present.
@@ -5261,6 +5450,8 @@ paths:
                   $ref: "#/components/schemas/AssetClass"
                 currency:
                   type: string
+                  pattern: '^\s*[A-Za-z]{3}\s*$'
+                  description: Three-letter ISO currency code; normalized to uppercase and cannot be cleared.
                 is_active:
                   type: boolean
                 show_in_ticker:
@@ -5277,6 +5468,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Investment"
+        "400":
+          description: Malformed investment field, including a null, empty, or invalid currency
     delete:
       summary: Delete investment
       operationId: deleteInvestment
@@ -5627,14 +5820,34 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol]
+              required: [name, asset_class, target_price]
               properties:
                 symbol:
                   type: string
                 name:
                   type: string
+                asset_class:
+                  type: string
+                  enum: [stock, etf, crypto, metals]
+                target_price:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 999999999999
                 currency:
                   type: string
+                  pattern: '^\s*[A-Za-z]{3}\s*$'
+                  description: Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR.
+                notes:
+                  type: string
+                  nullable: true
+                price_provider_id:
+                  type: string
+                  nullable: true
+                added_price:
+                  type: number
+                  minimum: 0
+                  maximum: 999999999999
+                  nullable: true
       responses:
         "201":
           description: Added item
@@ -5647,6 +5860,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/WatchlistItem"
+        "400":
+          description: Malformed watchlist field, including an explicit null or empty currency
 
   /api/watchlist/{id}:
     parameters:
@@ -5686,6 +5901,26 @@ paths:
               properties:
                 name:
                   type: string
+                symbol:
+                  type: string
+                  nullable: true
+                asset_class:
+                  type: string
+                  enum: [stock, etf, crypto, metals]
+                target_price:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 999999999999
+                currency:
+                  type: string
+                  pattern: '^\s*[A-Za-z]{3}\s*$'
+                  description: Three-letter ISO currency code; normalized to uppercase and cannot be cleared.
+                notes:
+                  type: string
+                  nullable: true
+                price_provider_id:
+                  type: string
+                  nullable: true
       responses:
         "200":
           description: Updated item
@@ -5693,6 +5928,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed watchlist field, including an explicit null or empty currency
     delete:
       summary: Remove from watchlist
       operationId: deleteWatchlistItem
@@ -6310,6 +6547,20 @@ paths:
       summary: List AI conversations
       operationId: getAiConversations
       tags: [AI]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+          description: Optional page size. Omit both parameters for the legacy full list; when either is supplied, a missing or invalid limit falls back to 50.
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+          description: Optional zero-based row offset. When pagination is requested, a missing or invalid offset falls back to 0.
       responses:
         "200":
           description: Conversation list
@@ -6330,6 +6581,12 @@ paths:
                               $ref: "#/components/schemas/AiConversation"
                           total:
                             type: integer
+                          limit:
+                            type: integer
+                            description: Present only when pagination was requested.
+                          offset:
+                            type: integer
+                            description: Present only when pagination was requested.
     post:
       summary: Create AI conversation
       operationId: createAiConversation
@@ -6518,7 +6775,10 @@ paths:
                   description: Regenerate the latest incomplete turn without appending its user message again. Requires conversationId.
       responses:
         "200":
-          description: Server-sent event stream
+          description: >-
+            Server-sent event stream. Success terminates with canonical `complete`
+            followed by the byte-equivalent deprecated `done` compatibility alias;
+            new clients deduplicate them. Errors carry `{detail, code}`.
           content:
             text/event-stream:
               schema:
@@ -6530,13 +6790,21 @@ paths:
       summary: Import transactions from bank CSV
       operationId: importCsv
       tags: [Import]
+      parameters:
+        - in: query
+          name: bank_name
+          required: false
+          deprecated: true
+          schema:
+            type: string
+          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file, bank_name]
+              required: [file]
               properties:
                 file:
                   type: string
@@ -6544,10 +6812,8 @@ paths:
                 bank_name:
                   type: string
                   description:
-                    Bank adapter identifier. The route also accepts it
-                    as a query parameter (`req.query.bank_name || req.body.bank_name`,
-                    routes/importRoutes.js) — the frontend client sends it in the
-                    query string.
+                    Bank adapter identifier. The multipart body takes precedence.
+                    A query parameter remains as a compatibility fallback.
       responses:
         "201":
           description: All rows matched exactly — batch committed immediately
@@ -6654,19 +6920,30 @@ paths:
       summary: Stream-import large CSV file
       operationId: importCsvStream
       tags: [Import]
+      parameters:
+        - in: query
+          name: bank_name
+          required: false
+          deprecated: true
+          schema:
+            type: string
+          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file, bank_name]
+              required: [file]
               properties:
                 file:
                   type: string
                   format: binary
                 bank_name:
                   type: string
+                  description:
+                    Bank adapter identifier. The multipart body takes precedence.
+                    A query parameter remains as a compatibility fallback.
       responses:
         "200":
           description: Server-Sent Events stream; events are progress /
@@ -6677,6 +6954,7 @@ paths:
             match_source_counts, percent}` — no counts. Event payloads are not
             modelled as schemas (OpenAPI cannot type SSE events), so the
             frontend keeps a hand-written `ImportResult` type for this stream.
+            Error events carry `{detail, code}`.
           content:
             text/event-stream:
               schema:
@@ -7081,7 +7359,7 @@ paths:
       tags: [Import]
       responses:
         "200":
-          description: Commit result with counts
+          description: Commit result with counts. Canonical ledger rows are durable; derived materialized-view projections refresh asynchronously.
           content:
             application/json:
               schema:
@@ -7228,7 +7506,9 @@ paths:
                   format: binary
       responses:
         "200":
-          description: Server-Sent Events stream; events are progress / review_required / complete / error
+          description: >-
+            Server-Sent Events stream; events are progress / review_required /
+            complete / error. Error events carry `{detail, code}`.
           content:
             text/event-stream:
               schema:
@@ -7633,6 +7913,26 @@ paths:
       summary: Reset database (destructive — drops all data)
       operationId: adminDatabaseReset
       tags: [Admin]
+      parameters:
+        - in: query
+          name: force
+          required: false
+          deprecated: true
+          schema:
+            type: boolean
+            enum: [true]
+          description: Compatibility fallback; the JSON body key wins when present.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  enum: [true]
+                  description: Explicit confirmation of the destructive reset.
       responses:
         "200":
           description: Reset result

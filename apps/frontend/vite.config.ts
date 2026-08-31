@@ -10,6 +10,24 @@ const rootPackage = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 ) as { version: string };
 
+const PRELOADED_RADIX_PACKAGES = [
+  "react-alert-dialog",
+  "react-checkbox",
+  "react-context-menu",
+  "react-dialog",
+  "react-dropdown-menu",
+  "react-label",
+  "react-popover",
+  "react-scroll-area",
+  "react-select",
+  "react-separator",
+  "react-slot",
+  "react-switch",
+  "react-tabs",
+  "react-tooltip",
+  "react-visually-hidden",
+];
+
 function liveContractSkipBannerPlugin() {
   return {
     name: "vision:live-contract-skip-banner",
@@ -92,7 +110,7 @@ export default defineConfig(({ mode }) => ({
          *  query          — TanStack Query
          *  tanstack       — TanStack Table + Virtual
          *  charts         — recharts (largest single dep)
-         *  radix-ui       — all @radix-ui/* primitives
+         *  radix-ui       — Radix primitives used by the shell/default route
          *  date-utils     — date-fns
          *  icons          — lucide-react
          */
@@ -132,9 +150,19 @@ export default defineConfig(({ mode }) => ({
           // modulepreload graph via a shared module. Leaving it unnamed
           // lets Rollup keep it inside the AIChatPage async chunk so it
           // loads only when /ai-chat is opened.
-          if (norm.includes("@radix-ui/") || norm.includes("@radix-ui+")) {
+          if (
+            PRELOADED_RADIX_PACKAGES.some(
+              (packageName) =>
+                norm.includes(`@radix-ui/${packageName}`) ||
+                norm.includes(`@radix-ui+${packageName}`),
+            )
+          ) {
             return "radix-ui";
           }
+          // Keep route-only primitives out of the boot chunk. A controlled
+          // 2026-08-31 build reduced boot gzip by 6.40 KB versus grouping all
+          // Radix packages; naming a second lazy Radix chunk pulled it back
+          // into the boot graph through shared package dependencies.
           if (norm.includes("/date-fns") || norm.includes("+date-fns")) {
             return "date-utils";
           }

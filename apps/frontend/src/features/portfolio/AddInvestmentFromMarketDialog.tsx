@@ -32,7 +32,7 @@ import type {
 } from "@/types/portfolio";
 import { getTxnTypeLabel } from "@/types/portfolio";
 import { toast } from "sonner";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";

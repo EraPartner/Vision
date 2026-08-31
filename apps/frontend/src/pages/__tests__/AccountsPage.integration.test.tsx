@@ -7,7 +7,7 @@ import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok, ACCOUNT_STUB } from "@/test/msw/handlers";
-import { toYmd } from "@/components/shared/dateUtils";
+import { toYmd } from "@/lib/dateUtils";
 import AccountsPage from "@/pages/AccountsPage";
 
 const API_BASE = "http://localhost:3002";

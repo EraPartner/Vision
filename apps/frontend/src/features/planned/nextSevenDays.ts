@@ -9,7 +9,7 @@
  * after it, eight columns in all.
  */
 
-import { differenceInDays } from "@/components/shared/dateUtils";
+import { differenceInDays } from "@/lib/dateUtils";
 import { parsePlannedDueDate, toLocalMidnight } from "@/features/planned/plannedDueDate";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 

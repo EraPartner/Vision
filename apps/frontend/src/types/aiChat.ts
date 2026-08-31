@@ -1,6 +1,14 @@
+import type {
+    AiChatDonePayload,
+    AiChatStreamEvent as SharedAiChatStreamEvent,
+    AiChatToolResultEnvelope,
+    AiChatToolResultMeta,
+    ToolRenderAs as SharedToolRenderAs,
+} from "@vision/types/aiChat";
+
 export type ChatRole = "user" | "assistant" | "tool" | "system";
 
-export type ToolRenderAs = "table" | "line" | "bar" | "pie";
+export type ToolRenderAs = SharedToolRenderAs;
 
 /** ai_messages.status — CHECK constraint in migration 0001. */
 export type ChatMessageStatus = "complete" | "streaming" | "aborted" | "error";
@@ -54,19 +62,18 @@ export interface ToolErrorDetail {
     [key: string]: unknown;
 }
 
-export interface ToolResultPayload {
-    ok: boolean;
-    data?: unknown;
-    meta?: {
-        renderAs?: ToolRenderAs;
-        columns?: string[];
-        xKey?: string;
-        yKeys?: string[];
-        total?: number;
-        [key: string]: unknown;
-    };
-    error?: string | ToolErrorDetail;
+export interface ToolResultMeta extends AiChatToolResultMeta {
+    columns?: string[];
+    xKey?: string;
+    yKeys?: string[];
+    total?: number;
 }
+
+export type ToolResultPayload = AiChatToolResultEnvelope<
+    unknown,
+    string | ToolErrorDetail,
+    ToolResultMeta
+>;
 
 /**
  * Usage counters as forwarded from the Ollama generate/chat response by
@@ -88,20 +95,17 @@ export interface ChatTurnResponse {
     iterations: number;
 }
 
-export interface ChatDoneEvent {
-    conversation: Conversation;
-    assistantMessage: ChatMessage;
-    usage: TokenUsage;
-    iterations: number;
-}
+export type ChatDoneEvent = AiChatDonePayload<
+    ChatMessage,
+    Conversation,
+    TokenUsage
+>;
 
-export type ChatStreamEvent =
-    | { type: "user_message"; message: ChatMessage }
-    | { type: "token"; delta: string }
-    | { type: "tool_call"; name: string; args: Record<string, unknown> }
-    | { type: "tool_result"; message: ChatMessage }
-    | { type: "done"; payload: ChatDoneEvent }
-    | { type: "error"; detail: string; code?: string };
+export type ChatStreamEvent = SharedAiChatStreamEvent<
+    ChatMessage,
+    Conversation,
+    TokenUsage
+>;
 
 /**
  * `data` of GET /api/ai/status — exactly what routes/ai.js emits. There is no

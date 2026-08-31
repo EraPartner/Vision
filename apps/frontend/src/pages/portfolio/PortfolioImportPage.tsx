@@ -57,7 +57,7 @@ import {
     useDeletePortfolioParserConfig,
 } from "@/hooks/usePortfolioParserConfigs";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import type { ImportProgress } from "@/lib/api/types";
+import type { ImportProgress } from "@/types/apiClient";
 import { isImportCancelled } from "@/lib/api/importCancelled";
 import { PageShell } from "@/components/shared/PageShell";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";

@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo } from "react";
 import {
     Bar,
     BarChart,
@@ -13,17 +13,24 @@ import {
     Tooltip,
     XAxis,
     YAxis,
-} from 'recharts';
-import { getChartColor } from '@/components/charts';
-import { cn } from '@/lib/utils';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+} from "recharts";
+import { getChartColor } from "@/components/charts";
+import { cn } from "@/lib/utils";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPercent, numberFormatToLocale } from "@/utils/currency";
-import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
+import type {
+    ToolErrorDetail,
+    ToolRenderAs,
+    ToolResultPayload,
+} from "@/types/aiChat";
 
-function formatToolError(error: ToolResultPayload['error'], fallback: string): string {
+function formatToolError(
+    error: ToolResultPayload["error"],
+    fallback: string,
+): string {
     if (!error) return fallback;
-    if (typeof error === 'string') return error;
+    if (typeof error === "string") return error;
     const detail = error as ToolErrorDetail;
     const parts: string[] = [];
     if (detail.field) parts.push(detail.field);
@@ -31,10 +38,14 @@ function formatToolError(error: ToolResultPayload['error'], fallback: string): s
     if (parts.length === 0) {
         if (detail.code) parts.push(detail.code);
         else {
-            try { return JSON.stringify(detail); } catch { return fallback; }
+            try {
+                return JSON.stringify(detail);
+            } catch {
+                return fallback;
+            }
         }
     }
-    return parts.join(': ');
+    return parts.join(": ");
 }
 
 interface ToolResultCardProps {
@@ -42,14 +53,15 @@ interface ToolResultCardProps {
     result: ToolResultPayload;
 }
 
-
 type Row = Record<string, unknown>;
 
 function asRows(data: unknown): Row[] {
     if (Array.isArray(data)) {
-        return data.filter((r): r is Row => r !== null && typeof r === 'object');
+        return data.filter(
+            (r): r is Row => r !== null && typeof r === "object",
+        );
     }
-    if (data && typeof data === 'object') {
+    if (data && typeof data === "object") {
         return [data as Row];
     }
     return [];
@@ -58,14 +70,14 @@ function asRows(data: unknown): Row[] {
 // App number-format locale, not the browser locale — an eu-format user with
 // an en-US browser otherwise got US separators in tool-result tables.
 function formatCell(value: unknown, locale: string): string {
-    if (value === null || value === undefined) return '—';
-    if (typeof value === 'number') {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "number") {
         if (!Number.isFinite(value)) return String(value);
         if (Number.isInteger(value)) return value.toLocaleString(locale);
         return value.toLocaleString(locale, { maximumFractionDigits: 2 });
     }
-    if (typeof value === 'boolean') return value ? 'true' : 'false';
-    if (typeof value === 'string') return value;
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (typeof value === "string") return value;
     try {
         return JSON.stringify(value);
     } catch {
@@ -82,22 +94,26 @@ function inferColumns(rows: Row[], preferred?: string[]): string[] {
 function pickNumericKeys(rows: Row[], exclude: string): string[] {
     if (rows.length === 0) return [];
     return Object.keys(rows[0]).filter(
-        (key) => key !== exclude && typeof rows[0][key] === 'number',
+        (key) => key !== exclude && typeof rows[0][key] === "number",
     );
 }
 
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     const { t } = useLanguage();
-    const rows = useMemo(() => asRows(result.ok ? result.data : null), [result]);
+    const rows = useMemo(
+        () => asRows(result.ok ? result.data : null),
+        [result],
+    );
     const meta = result.meta;
-    const renderAs: ToolRenderAs | 'json' = meta?.renderAs ?? (rows.length > 0 ? 'table' : 'json');
+    const renderAs: ToolRenderAs | "json" =
+        meta?.renderAs ?? (rows.length > 0 ? "table" : "json");
 
     if (!result.ok) {
         return (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <p className="text-xs font-medium text-destructive">
-                    {toolName ? `${toolName}: ` : ''}
-                    {formatToolError(result.error, t('aiChat.toolFailed'))}
+                    {toolName ? `${toolName}: ` : ""}
+                    {formatToolError(result.error, t("aiChat.toolFailed"))}
                 </p>
             </div>
         );
@@ -105,17 +121,33 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
 
     return (
         <div className="space-y-2">
-            {renderAs === 'table' && <TableView rows={rows} columns={meta?.columns} />}
-            {renderAs === 'line' && (
-                <CartesianChartView kind="line" rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
+            {renderAs === "table" && (
+                <TableView rows={rows} columns={meta?.columns} />
             )}
-            {renderAs === 'bar' && (
-                <CartesianChartView kind="bar" rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
+            {renderAs === "line" && (
+                <CartesianChartView
+                    kind="line"
+                    rows={rows}
+                    xKey={meta?.xKey}
+                    yKeys={meta?.yKeys}
+                />
             )}
-            {renderAs === 'pie' && (
-                <PieChartView rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
+            {renderAs === "bar" && (
+                <CartesianChartView
+                    kind="bar"
+                    rows={rows}
+                    xKey={meta?.xKey}
+                    yKeys={meta?.yKeys}
+                />
             )}
-            {renderAs === 'json' && <JsonView data={result.data} />}
+            {renderAs === "pie" && (
+                <PieChartView
+                    rows={rows}
+                    xKey={meta?.xKey}
+                    yKeys={meta?.yKeys}
+                />
+            )}
+            {renderAs === "json" && <JsonView data={result.data} />}
             <Footer meta={meta} rowCount={rows.length} />
         </div>
     );
@@ -131,7 +163,7 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
     return (
         <div className="max-h-72 overflow-auto rounded-lg border border-border/40 bg-background/60">
             <table className="w-full border-collapse text-2xs">
-                <thead className="glass-thin sticky top-0 text-muted-foreground">
+                <thead className="sticky top-0 bg-card text-muted-foreground">
                     <tr>
                         {cols.map((col) => (
                             <th
@@ -146,21 +178,25 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
                 <tbody>
                     {rows.map((row, idx) => (
                         <tr
-                            key={`${idx}-${cols.map((c) => String(row[c] ?? '')).join('|').slice(0, 80)}`}
+                            key={`${idx}-${cols
+                                .map((c) => String(row[c] ?? ""))
+                                .join("|")
+                                .slice(0, 80)}`}
                             className={cn(
-                                'border-b border-border/20 last:border-b-0',
-                                idx % 2 === 1 && 'bg-muted/20',
+                                "border-b border-border/20 last:border-b-0",
+                                idx % 2 === 1 && "bg-muted/20",
                             )}
                         >
                             {cols.map((col) => {
                                 const val = row[col];
-                                const numeric = typeof val === 'number';
+                                const numeric = typeof val === "number";
                                 return (
                                     <td
                                         key={col}
                                         className={cn(
-                                            'px-2 py-1 text-foreground/90',
-                                            numeric && 'text-right tabular-nums',
+                                            "px-2 py-1 text-foreground/90",
+                                            numeric &&
+                                                "text-right tabular-nums",
                                         )}
                                     >
                                         {formatCell(val, locale)}
@@ -182,7 +218,7 @@ interface ChartViewProps {
 }
 
 function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
-    const xk = xKey ?? (rows.length > 0 ? Object.keys(rows[0])[0] : '');
+    const xk = xKey ?? (rows.length > 0 ? Object.keys(rows[0])[0] : "");
     const yk = yKeys && yKeys.length > 0 ? yKeys : pickNumericKeys(rows, xk);
     return { xk, yk };
 }
@@ -190,19 +226,50 @@ function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
 // Line and bar tool-result charts share the entire frame (grid/axes/tooltip/
 // legend) and differ only in the container element and the mark, so one view
 // renders both.
-function CartesianChartView({ rows, xKey, yKeys, kind }: ChartViewProps & { kind: 'line' | 'bar' }) {
+function CartesianChartView({
+    rows,
+    xKey,
+    yKeys,
+    kind,
+}: ChartViewProps & { kind: "line" | "bar" }) {
     const { xk, yk } = resolveAxes(rows, xKey, yKeys);
     if (rows.length === 0 || yk.length === 0) {
         return <p className="text-xs text-muted-foreground">No chart data.</p>;
     }
     const frame = [
-        <CartesianGrid key="grid" strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />,
-        <XAxis key="x" dataKey={xk} tick={{ className: "tabular-nums", fill: "hsl(var(--muted-foreground))", fontFamily: "inherit", fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />,
-        <YAxis key="y" tick={{ className: "tabular-nums", fill: "hsl(var(--muted-foreground))", fontFamily: "inherit", fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />,
+        <CartesianGrid
+            key="grid"
+            strokeDasharray="3 3"
+            stroke="hsl(var(--border))"
+            opacity={0.3}
+        />,
+        <XAxis
+            key="x"
+            dataKey={xk}
+            tick={{
+                className: "tabular-nums",
+                fill: "hsl(var(--muted-foreground))",
+                fontFamily: "inherit",
+                fontSize: 11,
+            }}
+            stroke="hsl(var(--muted-foreground))"
+        />,
+        <YAxis
+            key="y"
+            tick={{
+                className: "tabular-nums",
+                fill: "hsl(var(--muted-foreground))",
+                fontFamily: "inherit",
+                fontSize: 11,
+            }}
+            stroke="hsl(var(--muted-foreground))"
+        />,
         <Tooltip key="tooltip" contentStyle={tooltipStyle} />,
-        ...(yk.length > 1 ? [<Legend key="legend" wrapperStyle={{ fontSize: 11 }} />] : []),
-        ...yk.map((key, i) => (
-            kind === 'line' ? (
+        ...(yk.length > 1
+            ? [<Legend key="legend" wrapperStyle={{ fontSize: 11 }} />]
+            : []),
+        ...yk.map((key, i) =>
+            kind === "line" ? (
                 <Line
                     key={key}
                     type="monotone"
@@ -220,16 +287,26 @@ function CartesianChartView({ rows, xKey, yKeys, kind }: ChartViewProps & { kind
                     radius={[4, 4, 0, 0]}
                     isAnimationActive={false}
                 />
-            )
-        )),
+            ),
+        ),
     ];
     return (
         <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-                {kind === 'line' ? (
-                    <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>{frame}</LineChart>
+                {kind === "line" ? (
+                    <LineChart
+                        data={rows}
+                        margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                    >
+                        {frame}
+                    </LineChart>
                 ) : (
-                    <BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>{frame}</BarChart>
+                    <BarChart
+                        data={rows}
+                        margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                    >
+                        {frame}
+                    </BarChart>
                 )}
             </ResponsiveContainer>
         </div>
@@ -243,8 +320,8 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
         return <p className="text-xs text-muted-foreground">No chart data.</p>;
     }
     const data = rows.map((r) => ({
-        name: String(r[xk] ?? ''),
-        value: typeof r[valueKey] === 'number' ? (r[valueKey] as number) : 0,
+        name: String(r[xk] ?? ""),
+        value: typeof r[valueKey] === "number" ? (r[valueKey] as number) : 0,
     }));
     return (
         <div className="h-56 w-full">
@@ -264,7 +341,10 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
                         isAnimationActive={false}
                     >
                         {data.map((entry, i) => (
-                            <Cell key={`${entry.name}-${i}`} fill={getChartColor(i)} />
+                            <Cell
+                                key={`${entry.name}-${i}`}
+                                fill={getChartColor(i)}
+                            />
                         ))}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} />
@@ -286,29 +366,25 @@ function Footer({
     meta,
     rowCount,
 }: {
-    meta?: ToolResultPayload['meta'];
+    meta?: ToolResultPayload["meta"];
     rowCount: number;
 }) {
-    const total = typeof meta?.total === 'number' ? meta.total : undefined;
+    const total = typeof meta?.total === "number" ? meta.total : undefined;
     if (total === undefined && rowCount === 0) return null;
     const shown = rowCount;
     const label =
         total !== undefined && total !== shown
             ? `Showing ${shown} of ${total}`
-            : `${shown} row${shown === 1 ? '' : 's'}`;
-    return (
-        <p className="eyebrow">
-            {label}
-        </p>
-    );
+            : `${shown} row${shown === 1 ? "" : "s"}`;
+    return <p className="eyebrow">{label}</p>;
 }
 
 const tooltipStyle = {
-    backgroundColor: 'hsl(var(--popover))',
-    border: '1px solid hsl(var(--border))',
-    borderRadius: '8px',
-    fontSize: '11px',
-    color: 'hsl(var(--popover-foreground))',
+    backgroundColor: "hsl(var(--popover))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "8px",
+    fontSize: "11px",
+    color: "hsl(var(--popover-foreground))",
 };
 
 // Memoized: for completed tool messages the props (toolName/result) are stable

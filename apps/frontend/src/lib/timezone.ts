@@ -6,9 +6,9 @@
  * calendar date in any timezone east of UTC.
  */
 
-import { toYmd } from '@/components/shared/dateUtils';
+import { toYmd } from '@/lib/dateUtils';
 
-export { parseLocalDateFromYmd as parseYmd, toYmd } from '@/components/shared/dateUtils';
+export { parseLocalDateFromYmd as parseYmd, toYmd } from '@/lib/dateUtils';
 
 /** Today's date at local midnight (00:00:00.000). */
 export function todayLocal(): Date {

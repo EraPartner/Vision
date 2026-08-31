@@ -1,4 +1,4 @@
-import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/components/shared/dateUtils";
+import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/lib/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { parsePlannedDueDate, toLocalMidnight } from "@/features/planned/plannedDueDate";

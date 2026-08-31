@@ -18,7 +18,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import {
     appLanguageToLocale,
     formatMonthLabelWithLocale,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import type { AssetClass } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";

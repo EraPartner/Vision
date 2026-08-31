@@ -13,7 +13,7 @@ import { importKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { formatDate, parseISO } from "@/lib/dateUtils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import {
@@ -24,21 +24,11 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const PAGE_SIZE = 10;
 
@@ -74,6 +64,7 @@ function RollbackButton({
 }) {
     const { t } = useLanguage();
     const [rolling, setRolling] = useState(false);
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const canRollback =
         batch.status === "complete" && batch.transactions_remaining > 0;
@@ -81,6 +72,18 @@ function RollbackButton({
     if (!canRollback) return null;
 
     const handleRollback = async () => {
+        const accepted = await confirm({
+            title: t("importHistory.rollbackTitle"),
+            description: t("importHistory.rollbackDesc", {
+                n: batch.transactions_remaining,
+                file: batch.source_filename ?? `batch #${batch.id}`,
+            }),
+            confirmLabel: t("importHistory.rollbackConfirm"),
+            cancelLabel: t("common.cancel"),
+            variant: "destructive",
+        });
+        if (!accepted) return;
+
         setRolling(true);
         try {
             const { deleted } = await apiClient.rollbackImportBatch(batch.id);
@@ -101,47 +104,25 @@ function RollbackButton({
     };
 
     return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    disabled={rolling}
-                >
-                    {rolling ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                        <Undo2 className="h-3.5 w-3.5" />
-                    )}
-                    <span className="ml-1 text-xs">
-                        {t("importHistory.rollback")}
-                    </span>
-                </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>
-                        {t("importHistory.rollbackTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                        {t("importHistory.rollbackDesc", {
-                            n: batch.transactions_remaining,
-                            file: batch.source_filename ?? `batch #${batch.id}`,
-                        })}
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={handleRollback}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                        {t("importHistory.rollbackConfirm")}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+        <>
+            <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={rolling}
+                onClick={() => void handleRollback()}
+            >
+                {rolling ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                    <Undo2 className="h-3.5 w-3.5" />
+                )}
+                <span className="ml-1 text-xs">
+                    {t("importHistory.rollback")}
+                </span>
+            </Button>
+            <ConfirmDialog />
+        </>
     );
 }
 

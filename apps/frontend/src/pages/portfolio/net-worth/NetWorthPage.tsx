@@ -8,7 +8,7 @@ import {
     appLanguageToLocale,
     CHART_DATE_PATTERNS,
     formatDate,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
     useCurrencyFormatter,

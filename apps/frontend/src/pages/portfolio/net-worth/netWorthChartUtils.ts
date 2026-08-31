@@ -1,4 +1,4 @@
-import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/lib/dateUtils";
 
 export type NetWorthSnapshot = {
   date: string;

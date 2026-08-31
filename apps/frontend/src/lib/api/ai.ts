@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import type {
     ChatDoneEvent,
     ChatMessage,
@@ -66,13 +67,24 @@ export async function getOllamaModels(): Promise<OllamaModel[]> {
     return response.items ?? [];
 }
 
-/** Canonical `{items, total}` collection body — callers only need the rows. */
-export async function getConversations(): Promise<ConversationSummary[]> {
-    const { items } = await apiRequest<{
-        items: ConversationSummary[];
-        total: number;
-    }>("/api/ai/conversations");
-    return items;
+export interface ConversationPage {
+    items: ConversationSummary[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
+/** The shipped client opts into bounded pages; unpaged compatibility stays server-side. */
+export async function getConversations({
+    limit = 50,
+    offset = 0,
+}: {
+    limit?: number;
+    offset?: number;
+} = {}): Promise<ConversationPage> {
+    return apiRequest<ConversationPage>(
+        `/api/ai/conversations?limit=${limit}&offset=${offset}`,
+    );
 }
 
 export function getConversation(id: string): Promise<ConversationDetail> {
@@ -115,7 +127,7 @@ export function streamChat(
         eventName: string,
         dataRaw: string,
     ): ChatStreamEvent | undefined => {
-        if (eventName === "token") {
+        if (eventName === AI_CHAT_STREAM_EVENT.TOKEN) {
             let delta: string;
             try {
                 delta = JSON.parse(dataRaw);
@@ -123,7 +135,7 @@ export function streamChat(
                 delta = dataRaw;
             }
             return {
-                type: "token",
+                type: AI_CHAT_STREAM_EVENT.TOKEN,
                 delta: typeof delta === "string" ? delta : String(delta),
             };
         }
@@ -134,47 +146,48 @@ export function streamChat(
             return undefined;
         }
         switch (eventName) {
-            case "user_message": {
+            case AI_CHAT_STREAM_EVENT.USER_MESSAGE: {
                 const parsed = chatMessageEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
                 return {
-                    type: "user_message",
+                    type: AI_CHAT_STREAM_EVENT.USER_MESSAGE,
                     message: parsed.data.message as unknown as ChatMessage,
                 };
             }
-            case "tool_call": {
+            case AI_CHAT_STREAM_EVENT.TOOL_CALL: {
                 const parsed = toolCallEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
                 return {
-                    type: "tool_call",
+                    type: AI_CHAT_STREAM_EVENT.TOOL_CALL,
                     name: parsed.data.name,
                     args:
                         (parsed.data.args as
                             Record<string, unknown> | undefined) ?? {},
                 };
             }
-            case "tool_result": {
+            case AI_CHAT_STREAM_EVENT.TOOL_RESULT: {
                 const parsed = chatMessageEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
                 return {
-                    type: "tool_result",
+                    type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
                     message: parsed.data.message as unknown as ChatMessage,
                 };
             }
-            case "done": {
+            case AI_CHAT_STREAM_EVENT.COMPLETE:
+            case AI_CHAT_STREAM_EVENT.DONE: {
                 const parsed = doneEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
                 return {
-                    type: "done",
+                    type: AI_CHAT_STREAM_EVENT.DONE,
                     payload: parsed.data as unknown as ChatDoneEvent,
                 };
             }
-            case "error": {
+            case AI_CHAT_STREAM_EVENT.ERROR: {
                 // `.catch(...)` at both levels: this parse never throws, so a
                 // malformed error payload still surfaces as a terminal error.
                 const parsed = errorEventSchema.parse(payload);
                 return {
-                    type: "error",
+                    type: AI_CHAT_STREAM_EVENT.ERROR,
                     detail: parsed.detail,
                     code: parsed.code,
                 };
@@ -228,6 +241,7 @@ export function streamChat(
                 armWatchdog();
                 const event = decodeEvent(frame.eventName, frame.dataRaw);
                 if (!event) continue;
+                if (event.type === "done" && terminal) continue;
                 logger.debug("[ai] streamChat event", {
                     type: event.type,
                     ms: Date.now() - start,

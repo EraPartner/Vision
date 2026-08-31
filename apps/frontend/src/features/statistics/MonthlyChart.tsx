@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { BarChart, type BarSeries, type BarOverlay } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale } from "@/components/shared/dateUtils";
+import { appLanguageToLocale } from "@/lib/dateUtils";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
 import { computeRollingAverage } from "@/utils/rollingAverage";

@@ -61,7 +61,7 @@ import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
-import { formatDateStringWithAppSettings, toYmd } from '@/components/shared/dateUtils';
+import { formatDateStringWithAppSettings, toYmd } from '@/lib/dateUtils';
 import { parseDecimal } from '@/lib/decimal';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';

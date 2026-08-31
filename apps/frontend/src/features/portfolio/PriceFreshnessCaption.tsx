@@ -1,7 +1,7 @@
 import { Clock3 } from "lucide-react";
 import { useMemo } from "react";
 
-import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";

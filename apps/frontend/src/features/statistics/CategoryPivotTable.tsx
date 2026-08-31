@@ -18,7 +18,7 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale } from "@/components/shared/dateUtils";
+import { appLanguageToLocale } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { TextLink } from "@/components/shared/TextLink";
@@ -309,7 +309,7 @@ export function CategoryPivotTable({
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-border">
-                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 glass-sticky-col z-10">
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 table-sticky-col z-10">
                                         {t("statsPage.category")}
                                     </th>
                                     {filteredPeriods.map((p) => (
@@ -352,7 +352,7 @@ export function CategoryPivotTable({
                                                 key={`group-${group.general}`}
                                             >
                                                 <tr className="border-b border-border/50 bg-muted/30">
-                                                    <td className="py-2 px-3 font-semibold sticky left-0 glass-sticky-col z-10 whitespace-nowrap">
+                                                    <td className="py-2 px-3 font-semibold sticky left-0 table-sticky-col z-10 whitespace-nowrap">
                                                         {expandable ? (
                                                             <button
                                                                 type="button"
@@ -537,7 +537,7 @@ export function CategoryPivotTable({
                                                             hidden={isCollapsed}
                                                             className="border-b border-border/50 hover:bg-muted/50 transition-colors"
                                                         >
-                                                            <td className="py-2 px-3 pl-8 text-muted-foreground sticky left-0 glass-sticky-col z-10 whitespace-nowrap">
+                                                            <td className="py-2 px-3 pl-8 text-muted-foreground sticky left-0 table-sticky-col z-10 whitespace-nowrap">
                                                                 {cat.detailName}
                                                             </td>
                                                             {filteredPeriods.map(
@@ -675,7 +675,7 @@ export function CategoryPivotTable({
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-border font-bold">
-                                    <td className="py-2 px-3 sticky left-0 glass-sticky-col z-10">
+                                    <td className="py-2 px-3 sticky left-0 table-sticky-col z-10">
                                         {t("statsPage.total")}
                                     </td>
                                     {filteredPeriods.map((p) => {

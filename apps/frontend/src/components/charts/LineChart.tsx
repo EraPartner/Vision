@@ -21,7 +21,7 @@ import { durations, easings } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/lib/dateUtils";
 
 export interface LineSeries<Datum> {
     readonly key: string;
@@ -54,7 +54,12 @@ export interface LineChartProps<Datum> {
     readonly referenceLines?: ReadonlyArray<LineReferenceLine>;
     readonly tooltipTitle?: (datum: Datum) => string;
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly margin?: { top: number; right: number; bottom: number; left: number };
+    readonly margin?: {
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+    };
     readonly yDomain?: readonly [number, number];
     readonly ariaLabel?: string;
     /** Opt into synced crosshairs with sibling charts sharing this id (needs ChartSyncProvider). */
@@ -66,7 +71,9 @@ export interface LineChartProps<Datum> {
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
 type LineYScale = ReturnType<typeof scaleLinear<number>>;
-type LineXScale = ReturnType<typeof scaleTime<number>> | ReturnType<typeof scaleLinear<number>>;
+type LineXScale =
+    | ReturnType<typeof scaleTime<number>>
+    | ReturnType<typeof scaleLinear<number>>;
 
 interface LineSeriesLayerProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
@@ -138,7 +145,9 @@ function LineSeriesLayerInner<Datum>({
 }
 
 // memo() erases the generic signature; the cast restores it for callers.
-const LineSeriesLayer = memo(LineSeriesLayerInner) as typeof LineSeriesLayerInner;
+const LineSeriesLayer = memo(
+    LineSeriesLayerInner,
+) as typeof LineSeriesLayerInner;
 
 export function LineChart<Datum>(props: LineChartProps<Datum>) {
     const { height = 280 } = props;
@@ -146,7 +155,9 @@ export function LineChart<Datum>(props: LineChartProps<Datum>) {
         <div style={{ width: "100%", height }}>
             <ParentSize>
                 {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? <Inner {...props} width={w} height={h} /> : null
+                    w > 0 && h > 0 ? (
+                        <Inner {...props} width={w} height={h} />
+                    ) : null
                 }
             </ParentSize>
         </div>
@@ -185,7 +196,10 @@ function Inner<Datum>({
     // with an inline accessor rebuilds the scale, the bisector, and every path.
     const xAccessorRef = useRef(xAccessor);
     xAccessorRef.current = xAccessor;
-    const stableXAccessor = useCallback((d: Datum) => xAccessorRef.current(d), []);
+    const stableXAccessor = useCallback(
+        (d: Datum) => xAccessorRef.current(d),
+        [],
+    );
 
     const xScale = useMemo(() => {
         const xs = data.map((d) => stableXAccessor(d));
@@ -239,7 +253,9 @@ function Inner<Datum>({
     }, [data, innerHeight, referenceLines, series, yDomain]);
 
     const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date).center,
+        () =>
+            bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date)
+                .center,
         [stableXAccessor],
     );
 
@@ -307,26 +323,32 @@ function Inner<Datum>({
         },
         [publishHover, stableXAccessor, data],
     );
-    const { onKeyDown: handleKeyDown, onBlur: handleBlur } = useChartKeyboardNav({
-        pointCount: data.length,
-        index: hoverIdx,
-        onIndexChange: stepToIndex,
-        onClear: handleLeave,
-        scrub: scrubbable ? scrub : undefined,
-    });
+    const { onKeyDown: handleKeyDown, onBlur: handleBlur } =
+        useChartKeyboardNav({
+            pointCount: data.length,
+            index: hoverIdx,
+            onIndexChange: stepToIndex,
+            onClear: handleLeave,
+            scrub: scrubbable ? scrub : undefined,
+        });
 
     const syncedIdx = useMemo(() => {
-        if (hoverIdx != null || syncedX == null || data.length === 0) return null;
+        if (hoverIdx != null || syncedX == null || data.length === 0)
+            return null;
         // Only mirror when the synced x falls inside this chart's domain —
         // disjoint timelines (history vs forecast) must not pin to an edge.
         const lo = Number(stableXAccessor(data[0]));
         const hi = Number(stableXAccessor(data[data.length - 1]));
-        if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi)) return null;
+        if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi))
+            return null;
         let best = 0;
         let bestDist = Infinity;
         for (let i = 0; i < data.length; i++) {
             const dist = Math.abs(Number(stableXAccessor(data[i])) - syncedX);
-            if (dist < bestDist) { bestDist = dist; best = i; }
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = i;
+            }
         }
         return best;
     }, [hoverIdx, syncedX, data, stableXAccessor]);
@@ -343,14 +365,18 @@ function Inner<Datum>({
                 return {
                     label: s.label ?? s.key,
                     color: s.color ?? getChartColor(i),
-                    value: tooltipValueFormat ? tooltipValueFormat(raw, s.key) : String(raw),
+                    value: tooltipValueFormat
+                        ? tooltipValueFormat(raw, s.key)
+                        : String(raw),
                 };
             })
             .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
     const tooltipLeft =
-        hoverDatum != null ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0) : 0;
+        hoverDatum != null
+            ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0)
+            : 0;
 
     return (
         <div style={{ position: "relative", width, height }}>
@@ -358,7 +384,15 @@ function Inner<Datum>({
                 width={width}
                 height={height}
                 role="img"
-                aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.line', data.length, series.map((s) => s.label))}
+                aria-label={
+                    ariaLabel ??
+                    summarizeSeriesChart(
+                        t,
+                        "chart.aria.kind.line",
+                        data.length,
+                        series.map((s) => s.label),
+                    )
+                }
                 tabIndex={data.length > 0 ? 0 : undefined}
                 onKeyDown={handleKeyDown}
                 onBlur={handleBlur}
@@ -445,9 +479,18 @@ function Inner<Datum>({
                     {hoverDatum != null ? (
                         <>
                             <Line
-                                from={{ x: xScale(xAccessor(hoverDatum) as never) ?? 0, y: 0 }}
+                                from={{
+                                    x:
+                                        xScale(
+                                            xAccessor(hoverDatum) as never,
+                                        ) ?? 0,
+                                    y: 0,
+                                }}
                                 to={{
-                                    x: xScale(xAccessor(hoverDatum) as never) ?? 0,
+                                    x:
+                                        xScale(
+                                            xAccessor(hoverDatum) as never,
+                                        ) ?? 0,
                                     y: innerHeight,
                                 }}
                                 stroke={CHART_NEUTRAL.label}
@@ -457,12 +500,17 @@ function Inner<Datum>({
                             />
                             {series.map((s, i) => {
                                 const v = s.accessor(hoverDatum);
-                                if (v == null || !Number.isFinite(v)) return null;
+                                if (v == null || !Number.isFinite(v))
+                                    return null;
                                 const color = s.color ?? getChartColor(i);
                                 return (
                                     <circle
                                         key={`dot-${s.key}`}
-                                        cx={xScale(xAccessor(hoverDatum) as never) ?? 0}
+                                        cx={
+                                            xScale(
+                                                xAccessor(hoverDatum) as never,
+                                            ) ?? 0
+                                        }
                                         cy={yScale(v) ?? 0}
                                         r={4}
                                         fill={CHART_NEUTRAL.background}
@@ -479,7 +527,9 @@ function Inner<Datum>({
                         top={innerHeight}
                         numTicks={Math.max(2, Math.floor(innerWidth / 90))}
                         tickFormat={
-                            xTickFormat ? (v) => xTickFormat(v as Date | number) : undefined
+                            xTickFormat
+                                ? (v) => xTickFormat(v as Date | number)
+                                : undefined
                         }
                     />
                     {yAxisSide === "left" ? (
@@ -487,7 +537,9 @@ function Inner<Datum>({
                             scale={yScale}
                             numTicks={numYTicks}
                             tickFormat={
-                                yTickFormat ? (v) => yTickFormat(v as number) : undefined
+                                yTickFormat
+                                    ? (v) => yTickFormat(v as number)
+                                    : undefined
                             }
                         />
                     ) : (
@@ -496,28 +548,42 @@ function Inner<Datum>({
                             left={innerWidth}
                             numTicks={numYTicks}
                             tickFormat={
-                                yTickFormat ? (v) => yTickFormat(v as number) : undefined
+                                yTickFormat
+                                    ? (v) => yTickFormat(v as number)
+                                    : undefined
                             }
                         />
                     )}
 
-                    {scrub.range ? (() => {
-                        const xA = xScale(xAccessor(data[scrub.range.startIndex]) as never) ?? 0;
-                        const xB = xScale(xAccessor(data[scrub.range.endIndex]) as never) ?? 0;
-                        return (
-                            <rect
-                                x={Math.min(xA, xB)}
-                                y={0}
-                                width={Math.abs(xB - xA)}
-                                height={innerHeight}
-                                fill={CHART_NEUTRAL.label}
-                                fillOpacity={0.08}
-                                stroke={CHART_NEUTRAL.label}
-                                strokeOpacity={0.25}
-                                pointerEvents="none"
-                            />
-                        );
-                    })() : null}
+                    {scrub.range
+                        ? (() => {
+                              const xA =
+                                  xScale(
+                                      xAccessor(
+                                          data[scrub.range.startIndex],
+                                      ) as never,
+                                  ) ?? 0;
+                              const xB =
+                                  xScale(
+                                      xAccessor(
+                                          data[scrub.range.endIndex],
+                                      ) as never,
+                                  ) ?? 0;
+                              return (
+                                  <rect
+                                      x={Math.min(xA, xB)}
+                                      y={0}
+                                      width={Math.abs(xB - xA)}
+                                      height={innerHeight}
+                                      fill={CHART_NEUTRAL.label}
+                                      fillOpacity={0.08}
+                                      stroke={CHART_NEUTRAL.label}
+                                      strokeOpacity={0.25}
+                                      pointerEvents="none"
+                                  />
+                              );
+                          })()
+                        : null}
 
                     <rect
                         x={0}
@@ -525,7 +591,11 @@ function Inner<Datum>({
                         width={innerWidth}
                         height={innerHeight}
                         fill="transparent"
-                        style={scrubbable ? { touchAction: "pan-y", cursor: "crosshair" } : undefined}
+                        style={
+                            scrubbable
+                                ? { touchAction: "pan-y", cursor: "crosshair" }
+                                : undefined
+                        }
                         onPointerMove={handleMove}
                         onPointerLeave={handleLeave}
                         onPointerDown={handleDown}
@@ -535,26 +605,51 @@ function Inner<Datum>({
                 </Group>
             </svg>
 
-            {scrub.range ? (() => {
-                const first = series[0];
-                const a = first?.accessor(data[scrub.range.startIndex]);
-                const b = first?.accessor(data[scrub.range.endIndex]);
-                if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
-                const fmt = (v: number) =>
-                    tooltipValueFormat ? tooltipValueFormat(v, first.key) : String(Math.round(v * 100) / 100);
-                const xA = margin.left + (xScale(xAccessor(data[scrub.range.startIndex]) as never) ?? 0);
-                const xB = margin.left + (xScale(xAccessor(data[scrub.range.endIndex]) as never) ?? 0);
-                const mid = (xA + xB) / 2;
-                const rising = b - a > 0;
-                return (
-                    <div
-                        className={cn("glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums", rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground")}
-                        style={{ left: mid, top: 2 }}
-                    >
-                        {formatScrubDelta(a, b, fmt)}
-                    </div>
-                );
-            })() : null}
+            {scrub.range
+                ? (() => {
+                      const first = series[0];
+                      const a = first?.accessor(data[scrub.range.startIndex]);
+                      const b = first?.accessor(data[scrub.range.endIndex]);
+                      if (
+                          a == null ||
+                          b == null ||
+                          !Number.isFinite(a) ||
+                          !Number.isFinite(b)
+                      )
+                          return null;
+                      const fmt = (v: number) =>
+                          tooltipValueFormat
+                              ? tooltipValueFormat(v, first.key)
+                              : String(Math.round(v * 100) / 100);
+                      const xA =
+                          margin.left +
+                          (xScale(
+                              xAccessor(data[scrub.range.startIndex]) as never,
+                          ) ?? 0);
+                      const xB =
+                          margin.left +
+                          (xScale(
+                              xAccessor(data[scrub.range.endIndex]) as never,
+                          ) ?? 0);
+                      const mid = (xA + xB) / 2;
+                      const rising = b - a > 0;
+                      return (
+                          <div
+                              className={cn(
+                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 text-xs font-semibold tabular-nums shadow-sm",
+                                  rising
+                                      ? "text-gain"
+                                      : b - a < 0
+                                        ? "text-loss"
+                                        : "text-foreground",
+                              )}
+                              style={{ left: mid, top: 2 }}
+                          >
+                              {formatScrubDelta(a, b, fmt)}
+                          </div>
+                      );
+                  })()
+                : null}
 
             <ChartTooltip
                 open={hoverDatum != null && !scrub.range}
@@ -564,7 +659,10 @@ function Inner<Datum>({
                     hoverDatum && tooltipTitle
                         ? tooltipTitle(hoverDatum)
                         : hoverDatum
-                          ? formatTitle(xAccessor(hoverDatum), appSettings.dateFormat)
+                          ? formatTitle(
+                                xAccessor(hoverDatum),
+                                appSettings.dateFormat,
+                            )
                           : undefined
                 }
                 items={tooltipItems}

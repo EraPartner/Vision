@@ -27,9 +27,11 @@ const secondConversation: ConversationSummary = {
     updatedAt: "2025-01-04T10:00:00.000Z",
 };
 
-function stubConversations(items: ConversationSummary[]) {
+function stubConversations(items: ConversationSummary[], total = items.length) {
     server.use(
-        http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items, total: items.length })),
+        http.get(`${API_BASE}/api/ai/conversations`, () =>
+            ok({ items, total, limit: 50, offset: 0 }),
+        ),
     );
 }
 
@@ -41,7 +43,9 @@ describe("ChatConversationList", () => {
             <ChatConversationList selectedId={null} onSelect={onSelect} />,
         );
 
-        expect(await screen.findByText(/no conversations yet/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no conversations yet/i),
+        ).toBeInTheDocument();
     });
 
     it("renders the conversations list with their titles", async () => {
@@ -56,8 +60,43 @@ describe("ChatConversationList", () => {
         expect(await screen.findByText("Tax questions")).toBeInTheDocument();
     });
 
+    it("loads the next conversation page on demand", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/ai/conversations`, ({ request }) => {
+                const offset = Number(
+                    new URL(request.url).searchParams.get("offset"),
+                );
+                return offset === 0
+                    ? ok({
+                          items: [baseConversation],
+                          total: 2,
+                          limit: 50,
+                          offset: 0,
+                      })
+                    : ok({
+                          items: [secondConversation],
+                          total: 2,
+                          limit: 50,
+                          offset,
+                      });
+            }),
+        );
+        const user = userEvent.setup();
+
+        renderWithApp(
+            <ChatConversationList selectedId={null} onSelect={vi.fn()} />,
+        );
+
+        await screen.findByText("Spending review");
+        await user.click(screen.getByRole("button", { name: /load more/i }));
+        expect(await screen.findByText("Tax questions")).toBeInTheDocument();
+    });
+
     it("falls back to the untitled label when title is empty", async () => {
-        const untitled: ConversationSummary = { ...baseConversation, title: "" };
+        const untitled: ConversationSummary = {
+            ...baseConversation,
+            title: "",
+        };
         stubConversations([untitled]);
         const onSelect = vi.fn();
 
@@ -65,7 +104,9 @@ describe("ChatConversationList", () => {
             <ChatConversationList selectedId={null} onSelect={onSelect} />,
         );
 
-        expect(await screen.findByText(/untitled|new conversation/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/untitled|new conversation/i),
+        ).toBeInTheDocument();
     });
 
     it("calls onSelect with the conversation id when a row is clicked", async () => {
@@ -108,7 +149,9 @@ describe("ChatConversationList", () => {
             <ChatConversationList selectedId={null} onSelect={onSelect} />,
         );
 
-        const newBtn = await screen.findByRole("button", { name: /new conversation/i });
+        const newBtn = await screen.findByRole("button", {
+            name: /new conversation/i,
+        });
         await user.click(newBtn);
 
         await waitFor(() => {
@@ -123,16 +166,19 @@ describe("ChatConversationList", () => {
 
         let patchedTitle: string | null = null;
         server.use(
-            http.patch(`${API_BASE}/api/ai/conversations/:id`, async ({ request }) => {
-                const body = (await request.json()) as { title: string };
-                patchedTitle = body.title;
-                return ok({
-                    id: baseConversation.id,
-                    title: body.title,
-                    model: baseConversation.model,
-                    updatedAt: "2025-01-05T10:00:00.000Z",
-                });
-            }),
+            http.patch(
+                `${API_BASE}/api/ai/conversations/:id`,
+                async ({ request }) => {
+                    const body = (await request.json()) as { title: string };
+                    patchedTitle = body.title;
+                    return ok({
+                        id: baseConversation.id,
+                        title: body.title,
+                        model: baseConversation.model,
+                        updatedAt: "2025-01-05T10:00:00.000Z",
+                    });
+                },
+            ),
         );
 
         renderWithApp(
@@ -141,10 +187,14 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtns = screen.getAllByRole("button", { name: /conversation actions/i });
+        const actionBtns = screen.getAllByRole("button", {
+            name: /conversation actions/i,
+        });
         await user.click(actionBtns[0]);
 
-        const renameItem = await screen.findByRole("menuitem", { name: /rename/i });
+        const renameItem = await screen.findByRole("menuitem", {
+            name: /rename/i,
+        });
         await user.click(renameItem);
 
         const dialog = await screen.findByRole("alertdialog");
@@ -171,9 +221,13 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", { name: /conversation actions/i })[0];
+        const actionBtn = screen.getAllByRole("button", {
+            name: /conversation actions/i,
+        })[0];
         await user.click(actionBtn);
-        const renameItem = await screen.findByRole("menuitem", { name: /rename/i });
+        const renameItem = await screen.findByRole("menuitem", {
+            name: /rename/i,
+        });
         await user.click(renameItem);
 
         const dialog = await screen.findByRole("alertdialog");
@@ -191,10 +245,13 @@ describe("ChatConversationList", () => {
 
         let deletedId: string | null = null;
         server.use(
-            http.delete(`${API_BASE}/api/ai/conversations/:id`, ({ params }) => {
-                deletedId = String(params.id);
-                return ok({ ok: true });
-            }),
+            http.delete(
+                `${API_BASE}/api/ai/conversations/:id`,
+                ({ params }) => {
+                    deletedId = String(params.id);
+                    return ok({ ok: true });
+                },
+            ),
         );
 
         renderWithApp(
@@ -203,16 +260,24 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", { name: /conversation actions/i })[0];
+        const actionBtn = screen.getAllByRole("button", {
+            name: /conversation actions/i,
+        })[0];
         await user.click(actionBtn);
 
-        const deleteItem = await screen.findByRole("menuitem", { name: /delete/i });
+        const deleteItem = await screen.findByRole("menuitem", {
+            name: /delete/i,
+        });
         await user.click(deleteItem);
 
         const dialog = await screen.findByRole("alertdialog");
-        expect(within(dialog).getByText(/delete conversation\?/i)).toBeInTheDocument();
+        expect(
+            within(dialog).getByText(/delete conversation\?/i),
+        ).toBeInTheDocument();
 
-        const confirmBtn = within(dialog).getByRole("button", { name: /^delete$/i });
+        const confirmBtn = within(dialog).getByRole("button", {
+            name: /^delete$/i,
+        });
         await user.click(confirmBtn);
 
         await waitFor(() => {
@@ -226,7 +291,9 @@ describe("ChatConversationList", () => {
         const user = userEvent.setup();
 
         server.use(
-            http.delete(`${API_BASE}/api/ai/conversations/:id`, () => ok({ ok: true })),
+            http.delete(`${API_BASE}/api/ai/conversations/:id`, () =>
+                ok({ ok: true }),
+            ),
         );
 
         renderWithApp(
@@ -238,13 +305,19 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", { name: /conversation actions/i })[0];
+        const actionBtn = screen.getAllByRole("button", {
+            name: /conversation actions/i,
+        })[0];
         await user.click(actionBtn);
-        const deleteItem = await screen.findByRole("menuitem", { name: /delete/i });
+        const deleteItem = await screen.findByRole("menuitem", {
+            name: /delete/i,
+        });
         await user.click(deleteItem);
 
         const dialog = await screen.findByRole("alertdialog");
-        const confirmBtn = within(dialog).getByRole("button", { name: /^delete$/i });
+        const confirmBtn = within(dialog).getByRole("button", {
+            name: /^delete$/i,
+        });
         await user.click(confirmBtn);
 
         await waitFor(() => {
@@ -271,13 +344,19 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", { name: /conversation actions/i })[0];
+        const actionBtn = screen.getAllByRole("button", {
+            name: /conversation actions/i,
+        })[0];
         await user.click(actionBtn);
-        const deleteItem = await screen.findByRole("menuitem", { name: /delete/i });
+        const deleteItem = await screen.findByRole("menuitem", {
+            name: /delete/i,
+        });
         await user.click(deleteItem);
 
         const dialog = await screen.findByRole("alertdialog");
-        const cancelBtn = within(dialog).getByRole("button", { name: /cancel/i });
+        const cancelBtn = within(dialog).getByRole("button", {
+            name: /cancel/i,
+        });
         await user.click(cancelBtn);
 
         await waitFor(() => {

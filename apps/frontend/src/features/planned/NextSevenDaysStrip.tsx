@@ -16,7 +16,7 @@ import {
     appLanguageToLocale,
     formatDateStringWithAppSettings,
     toYmd,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { bucketNextSevenDays, WINDOW_DAYS } from "./nextSevenDays";
 import { sumConvertedAmounts } from "./plannedCurrencyTotals";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";

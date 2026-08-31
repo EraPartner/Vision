@@ -29,7 +29,7 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { AccountCombobox } from "@/components/shared/AccountCombobox";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { TagInput } from "@/components/shared/TagInput";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { FieldError } from "@/components/ui/field-error";
 import {
     fieldErrorProps,

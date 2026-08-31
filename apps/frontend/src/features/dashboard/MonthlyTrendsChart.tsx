@@ -13,7 +13,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
-import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 
 interface MonthlyTrendsRow {
     readonly month: number;

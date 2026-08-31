@@ -11,7 +11,13 @@ interface PageHeaderProps {
     actions?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, icon: Icon, iconColor = "from-primary/20 to-primary/5 text-primary", actions }: PageHeaderProps) {
+export function PageHeader({
+    title,
+    subtitle,
+    icon: Icon,
+    iconColor = "from-primary/20 to-primary/5 text-primary",
+    actions,
+}: PageHeaderProps) {
     // Register the title so the topbar can show it when this header scrolls out.
     const { setTitle } = usePageTitle();
     useEffect(() => {
@@ -23,16 +29,32 @@ export function PageHeader({ title, subtitle, icon: Icon, iconColor = "from-prim
         <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="flex items-center gap-4">
                 {Icon && (
-                    <div className={cn("hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br", iconColor, "items-center justify-center icon-tile-glow")}>
+                    <div
+                        className={cn(
+                            "hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br",
+                            iconColor,
+                            "items-center justify-center icon-tile-glow",
+                        )}
+                    >
                         <Icon className="h-6 w-6" />
                     </div>
                 )}
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground tracking-tight">{title}</h1>
-                    {subtitle && <p className="text-muted-foreground mt-1">{subtitle}</p>}
+                    <h1 className="page-header-title text-3xl font-bold text-foreground tracking-tight">
+                        {title}
+                    </h1>
+                    {subtitle && (
+                        <p className="page-header-subtitle text-muted-foreground mt-1">
+                            {subtitle}
+                        </p>
+                    )}
                 </div>
             </div>
-            {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+            {actions && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {actions}
+                </div>
+            )}
         </div>
     );
 }

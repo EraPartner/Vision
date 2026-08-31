@@ -2,7 +2,7 @@ import { Clock } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { isPriceStale } from "@/utils/priceStaleness";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";

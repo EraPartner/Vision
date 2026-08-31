@@ -24,7 +24,7 @@ import {
     CHART_DATE_PATTERNS,
     formatDate,
     parseISO,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";

@@ -2,7 +2,7 @@
  * Shared utilities for the Statistics page and its sub-components.
  */
 
-import { CHART_DATE_PATTERNS, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { CHART_DATE_PATTERNS, formatDate, parseISO } from "@/lib/dateUtils";
 import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
 export type PivotValueMode = "absolute" | "net" | "income" | "expense";

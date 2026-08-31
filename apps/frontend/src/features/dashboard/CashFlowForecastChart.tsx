@@ -29,7 +29,7 @@ import { getChartColor } from "@/components/charts/palette";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 import { apiClient } from "@/lib/api";
 import { cashflowKeys } from "@/lib/queryKeys";
 import type { ForecastMethod } from "@/lib/api/aggregations";

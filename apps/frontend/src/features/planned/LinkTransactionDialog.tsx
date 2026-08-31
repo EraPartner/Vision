@@ -20,7 +20,7 @@ import {
     formatDateStringWithAppSettings,
     parseLocalDateFromYmd,
     toYmd,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { PanelLeftClose } from "lucide-react";
 import { m, useReducedMotion } from "framer-motion";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";

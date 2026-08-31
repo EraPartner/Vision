@@ -4,23 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
-import type {
-    BelgianRegion,
-    ProfessionalExpenseMethod,
-} from "@/contexts/BelgianTaxProfileContext";
+import type { ProfessionalExpenseMethod } from "@/contexts/BelgianTaxProfileContext";
 import type { StepProps } from "./types";
 import { ProfileNumberInput } from "./ProfileNumberInput";
+import { ProfileNumberField } from "./ProfileNumberField";
+import { BelgianRegionSelect } from "./ProfileSelectFields";
 
 export function IncomeStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
@@ -43,46 +35,38 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 </p>
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="gross-income" className="text-sm font-medium">
-                    {t("tax.profile.field.grossAnnualIncome")}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                    {t("tax.profile.field.grossAnnualIncome.desc")}
-                </p>
-                <ProfileNumberInput
-                    id="gross-income"
-                    min={0}
-                    step={100}
-                    value={profile.grossAnnualIncome}
-                    onValueChange={(value) =>
-                        updateProfile({ grossAnnualIncome: value ?? 0 })
-                    }
-                    placeholder={t("tax.profile.placeholder.grossIncome")}
-                />
-            </div>
+            <ProfileNumberField
+                id="gross-income"
+                label={t("tax.profile.field.grossAnnualIncome")}
+                description={t("tax.profile.field.grossAnnualIncome.desc")}
+                min={0}
+                step={100}
+                value={profile.grossAnnualIncome}
+                onValueChange={(value) =>
+                    updateProfile({ grossAnnualIncome: value ?? 0 })
+                }
+                placeholder={t("tax.profile.placeholder.grossIncome")}
+            />
 
-            <div className="space-y-2">
-                <Label htmlFor="other-income" className="text-sm font-medium">
-                    {t("tax.profile.field.otherTaxableIncome")}{" "}
-                    <Badge variant="outline" className="text-2xs ml-1">
-                        {t("common.optional")}
-                    </Badge>
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                    {t("tax.profile.field.otherTaxableIncome.desc")}
-                </p>
-                <ProfileNumberInput
-                    id="other-income"
-                    min={0}
-                    step={100}
-                    value={profile.otherTaxableIncome}
-                    onValueChange={(value) =>
-                        updateProfile({ otherTaxableIncome: value ?? 0 })
-                    }
-                    placeholder={t("tax.profile.placeholder.otherIncome")}
-                />
-            </div>
+            <ProfileNumberField
+                id="other-income"
+                label={
+                    <>
+                        {t("tax.profile.field.otherTaxableIncome")}{" "}
+                        <Badge variant="outline" className="text-2xs ml-1">
+                            {t("common.optional")}
+                        </Badge>
+                    </>
+                }
+                description={t("tax.profile.field.otherTaxableIncome.desc")}
+                min={0}
+                step={100}
+                value={profile.otherTaxableIncome}
+                onValueChange={(value) =>
+                    updateProfile({ otherTaxableIncome: value ?? 0 })
+                }
+                placeholder={t("tax.profile.placeholder.otherIncome")}
+            />
 
             <Separator />
 
@@ -158,52 +142,46 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 </RadioGroup>
 
                 {profile.professionalExpenseMethod === "actual" && (
-                    <div className="space-y-2 pt-1">
-                        <Label
-                            htmlFor="actual-expenses"
-                            className="text-sm font-medium"
-                        >
-                            {t("tax.profile.field.actualProfessionalExpenses")}
-                        </Label>
-                        <ProfileNumberInput
-                            id="actual-expenses"
-                            min={0}
-                            step={100}
-                            value={profile.actualProfessionalExpenses}
-                            onValueChange={(value) =>
-                                updateProfile({
-                                    actualProfessionalExpenses: value ?? 0,
-                                })
-                            }
-                            placeholder={t(
-                                "tax.profile.placeholder.actualExpenses",
-                            )}
-                        />
-                    </div>
+                    <ProfileNumberField
+                        id="actual-expenses"
+                        containerClassName="space-y-2 pt-1"
+                        label={t(
+                            "tax.profile.field.actualProfessionalExpenses",
+                        )}
+                        min={0}
+                        step={100}
+                        value={profile.actualProfessionalExpenses}
+                        onValueChange={(value) =>
+                            updateProfile({
+                                actualProfessionalExpenses: value ?? 0,
+                            })
+                        }
+                        placeholder={t(
+                            "tax.profile.placeholder.actualExpenses",
+                        )}
+                    />
                 )}
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="cadastral" className="text-sm font-medium">
-                    {t("tax.profile.field.cadastralIncome")}{" "}
-                    <Badge variant="outline" className="text-2xs ml-1">
-                        {t("common.optional")}
-                    </Badge>
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                    {t("tax.profile.field.cadastralIncome.desc")}
-                </p>
-                <ProfileNumberInput
-                    id="cadastral"
-                    min={0}
-                    step={10}
-                    value={profile.cadastralIncome}
-                    onValueChange={(value) =>
-                        updateProfile({ cadastralIncome: value ?? 0 })
-                    }
-                    placeholder={t("tax.profile.placeholder.cadastral")}
-                />
-            </div>
+            <ProfileNumberField
+                id="cadastral"
+                label={
+                    <>
+                        {t("tax.profile.field.cadastralIncome")}{" "}
+                        <Badge variant="outline" className="text-2xs ml-1">
+                            {t("common.optional")}
+                        </Badge>
+                    </>
+                }
+                description={t("tax.profile.field.cadastralIncome.desc")}
+                min={0}
+                step={10}
+                value={profile.cadastralIncome}
+                onValueChange={(value) =>
+                    updateProfile({ cadastralIncome: value ?? 0 })
+                }
+                placeholder={t("tax.profile.placeholder.cadastral")}
+            />
 
             <div>
                 <p className="text-sm font-semibold text-foreground mb-2">
@@ -275,7 +253,8 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                             >
                                 {t("tax.profile.field.regionLabel")}
                             </Label>
-                            <Select
+                            <BelgianRegionSelect
+                                id={`residence-region-${residenceUids.current[idx]}`}
                                 value={r.region || profile.region}
                                 onValueChange={(v) => {
                                     const copy = [
@@ -283,31 +262,14 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                     ];
                                     copy[idx] = {
                                         ...copy[idx],
-                                        region: v as BelgianRegion,
+                                        region: v,
                                     };
                                     updateProfile({
                                         additionalResidences: copy,
                                     });
                                 }}
-                            >
-                                <SelectTrigger
-                                    id={`residence-region-${residenceUids.current[idx]}`}
-                                    className="w-full"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="flanders">
-                                        Flanders
-                                    </SelectItem>
-                                    <SelectItem value="wallonia">
-                                        Wallonia
-                                    </SelectItem>
-                                    <SelectItem value="brussels">
-                                        Brussels
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                                className="w-full"
+                            />
                         </div>
                     </div>
                 ))}
@@ -411,86 +373,60 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 >
                                     {t("tax.profile.field.mortgageRegion")}
                                 </Label>
-                                <Select
+                                <BelgianRegionSelect
+                                    id="mortgage-region"
                                     value={
                                         profile.mortgageRegion ?? profile.region
                                     }
                                     onValueChange={(v) =>
                                         updateProfile({
-                                            mortgageRegion: v as BelgianRegion,
+                                            mortgageRegion: v,
                                         })
                                     }
-                                >
-                                    <SelectTrigger
-                                        id="mortgage-region"
-                                        className="w-full"
-                                    >
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="flanders">
-                                            Flanders
-                                        </SelectItem>
-                                        <SelectItem value="wallonia">
-                                            Wallonia
-                                        </SelectItem>
-                                        <SelectItem value="brussels">
-                                            Brussels
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    className="w-full"
+                                />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div>
-                                <Label
-                                    htmlFor="mortgage-interest"
-                                    className="text-xs"
-                                >
-                                    {t(
-                                        "tax.profile.field.mortgageInterestPaid",
-                                    )}
-                                </Label>
-                                <ProfileNumberInput
-                                    id="mortgage-interest"
-                                    min={0}
-                                    step={10}
-                                    value={profile.mortgageInterestPaid}
-                                    onValueChange={(value) =>
-                                        updateProfile({
-                                            mortgageInterestPaid: value ?? 0,
-                                        })
-                                    }
-                                    placeholder={t(
-                                        "tax.profile.placeholder.mortgageInterestPaid",
-                                    )}
-                                />
-                            </div>
-                            <div>
-                                <Label
-                                    htmlFor="mortgage-capital"
-                                    className="text-xs"
-                                >
-                                    {t(
-                                        "tax.profile.field.mortgageCapitalRepaid",
-                                    )}
-                                </Label>
-                                <ProfileNumberInput
-                                    id="mortgage-capital"
-                                    min={0}
-                                    step={10}
-                                    value={profile.mortgageCapitalRepaid}
-                                    onValueChange={(value) =>
-                                        updateProfile({
-                                            mortgageCapitalRepaid: value ?? 0,
-                                        })
-                                    }
-                                    placeholder={t(
-                                        "tax.profile.placeholder.mortgageCapitalRepaid",
-                                    )}
-                                />
-                            </div>
+                            <ProfileNumberField
+                                id="mortgage-interest"
+                                containerClassName=""
+                                labelClassName="text-xs"
+                                label={t(
+                                    "tax.profile.field.mortgageInterestPaid",
+                                )}
+                                min={0}
+                                step={10}
+                                value={profile.mortgageInterestPaid}
+                                onValueChange={(value) =>
+                                    updateProfile({
+                                        mortgageInterestPaid: value ?? 0,
+                                    })
+                                }
+                                placeholder={t(
+                                    "tax.profile.placeholder.mortgageInterestPaid",
+                                )}
+                            />
+                            <ProfileNumberField
+                                id="mortgage-capital"
+                                containerClassName=""
+                                labelClassName="text-xs"
+                                label={t(
+                                    "tax.profile.field.mortgageCapitalRepaid",
+                                )}
+                                min={0}
+                                step={10}
+                                value={profile.mortgageCapitalRepaid}
+                                onValueChange={(value) =>
+                                    updateProfile({
+                                        mortgageCapitalRepaid: value ?? 0,
+                                    })
+                                }
+                                placeholder={t(
+                                    "tax.profile.placeholder.mortgageCapitalRepaid",
+                                )}
+                            />
                         </div>
 
                         <p className="text-2xs text-muted-foreground">

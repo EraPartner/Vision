@@ -1,5 +1,5 @@
 import { getChartColor } from "@/components/charts/palette";
-import { parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd } from "@/lib/dateUtils";
 import type { LineSeries } from "@/components/charts/LineChart";
 import type {
     CashflowForecastMethodsData,

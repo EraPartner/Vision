@@ -1,8 +1,11 @@
-import { useEffect, useState, type ComponentProps } from 'react';
-import { Input } from '@/components/ui/input';
-import { parseDecimal } from '@/lib/decimal';
+import { useEffect, useState, type ComponentProps } from "react";
+import { Input } from "@/components/ui/input";
+import { parseDecimal } from "@/lib/decimal";
 
-type ProfileNumberInputProps = Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'onChange'> & {
+export type ProfileNumberInputProps = Omit<
+    ComponentProps<typeof Input>,
+    "type" | "value" | "onChange"
+> & {
     value: number | null | undefined;
     onValueChange: (value: number | undefined) => void;
     integer?: boolean;
@@ -10,7 +13,7 @@ type ProfileNumberInputProps = Omit<ComponentProps<typeof Input>, 'type' | 'valu
 };
 
 function valueText(value: number | null | undefined): string {
-    return value == null ? '' : String(value);
+    return value == null ? "" : String(value);
 }
 
 /**
@@ -39,12 +42,14 @@ export function ProfileNumberInput({
         if (!shape.test(raw)) return;
         setDraft(raw);
 
-        if (raw === '') {
+        if (raw === "") {
             onValueChange(allowEmpty ? undefined : 0);
             return;
         }
 
-        const parsed = integer ? Number.parseInt(raw, 10) : parseDecimal(raw, NaN);
+        const parsed = integer
+            ? Number.parseInt(raw, 10)
+            : parseDecimal(raw, NaN);
         if (Number.isFinite(parsed)) onValueChange(parsed);
     };
 
@@ -52,8 +57,8 @@ export function ProfileNumberInput({
         <Input
             {...inputProps}
             type="text"
-            inputMode={integer ? 'numeric' : 'decimal'}
-            pattern={integer ? '-?[0-9]*' : '-?[0-9]*([.,][0-9]*)?'}
+            inputMode={integer ? "numeric" : "decimal"}
+            pattern={integer ? "-?[0-9]*" : "-?[0-9]*([.,][0-9]*)?"}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
             onFocus={(event) => {

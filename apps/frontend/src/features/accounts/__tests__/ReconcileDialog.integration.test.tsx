@@ -8,7 +8,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err, ACCOUNT_STUB } from "@/test/msw/handlers";
-import { toYmd } from "@/components/shared/dateUtils";
+import { toYmd } from "@/lib/dateUtils";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
 import type { Account } from "@/types/api";
 import { toast } from "sonner";

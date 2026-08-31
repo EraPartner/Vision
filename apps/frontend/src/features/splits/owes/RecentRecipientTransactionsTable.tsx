@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Money } from "@/components/shared/Money";
 import { TextLink } from "@/components/shared/TextLink";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";

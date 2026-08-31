@@ -7,7 +7,7 @@ import {
     type ChartLegendItem,
     type ChartPeriod,
 } from "@/components/charts";
-import { parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd } from "@/lib/dateUtils";
 import { NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
 
 interface NetWorthChartProps {

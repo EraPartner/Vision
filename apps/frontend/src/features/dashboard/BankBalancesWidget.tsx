@@ -30,7 +30,7 @@ import {
     CHART_DATE_PATTERNS,
     formatDate,
     parseISO,
-} from "@/components/shared/dateUtils";
+} from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";

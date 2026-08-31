@@ -6,13 +6,14 @@
  * perf/arch plan).
  */
 
-import type { components } from '@/types/generated';
+import type { components } from "@/types/generated";
+import type { ResearchNewsArticle } from "@/types/research";
 
 export interface AggregationEnvelope<T> {
     data: T;
     meta: {
         computedAt: string;
-        source: 'mv' | 'live';
+        source: "mv" | "live";
     };
 }
 
@@ -51,7 +52,7 @@ export interface ImportResult {
     auto_linked_count?: number;
 }
 
-export type MatchSource = 'exact' | 'fuzzy' | 'pattern' | 'new';
+export type MatchSource = "exact" | "fuzzy" | "pattern" | "new";
 
 export interface ImportStagingRow {
     id: number;
@@ -127,10 +128,10 @@ export interface NetWorthResponse {
     snapshotsOffset?: number;
 }
 
-export type ChartType = 'line' | 'bar' | 'area';
+export type ChartType = "line" | "bar" | "area";
 // 'ranked' = one bar per entity, sized by total spend over the range (bar only).
-export type ChartVariant = 'default' | 'stacked' | 'grouped' | 'ranked';
-export type TimeBucket = 'monthly' | 'yearly';
+export type ChartVariant = "default" | "stacked" | "grouped" | "ranked";
+export type TimeBucket = "monthly" | "yearly";
 
 export interface SavedChart {
     id: number;
@@ -167,7 +168,7 @@ export interface SavedChartCreate {
     dateRangeEnd?: string | null;
 }
 
-export type ImportBatch = components['schemas']['ImportBatch'];
+export type ImportBatch = components["schemas"]["ImportBatch"];
 
 export interface BatchListResponse {
     items: ImportBatch[];
@@ -176,11 +177,4 @@ export interface BatchListResponse {
     offset: number;
 }
 
-export interface MarketNewsArticle {
-    title: string;
-    link: string;
-    publisher: string;
-    publishedAt: number | null;
-    thumbnail: string | null;
-    relatedSymbols: string[];
-}
+export type MarketNewsArticle = ResearchNewsArticle;

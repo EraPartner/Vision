@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
 import { INVESTMENT_CURRENCIES } from "@/utils/currency";
