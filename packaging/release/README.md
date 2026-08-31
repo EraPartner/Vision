@@ -34,6 +34,15 @@ shasum -a 256 -c Vision-__VERSION__-arm64.dmg.sha256
 
 The line must end with `OK`.
 
+When the GitHub CLI is available, also verify the downloaded archive's repository provenance:
+
+```sh
+gh attestation verify Vision-__VERSION__-arm64.dmg --repo EraPartner/Vision
+```
+
+The release workflow attests the DMG, native application ZIP, and source-launcher ZIP. The checksum
+is the offline integrity check; the attestation binds an artifact to Vision's release workflow.
+
 ### 2. Install the app
 
 1. Open `Vision-__VERSION__-arm64.dmg`.
@@ -132,9 +141,10 @@ Vision does not remove or modify preserved Docker volumes.
 
 ## Optional Docker provider
 
-Docker Compose remains available for explicit server, Demo, continuous-integration, and local
-container deployments. It is a separate runtime provider, not a dependency of the native package.
-Do not activate Docker and native writers at the same time.
+Docker Compose remains available for explicit server, continuous-integration, and local container
+deployments. It is a separate runtime provider, not a dependency of the native package. Vision
+Demo also uses the bundled native runtime and does not use this provider. Do not activate Docker
+and native writers against the same real Vision data at the same time.
 
 ## Source code and issues
 

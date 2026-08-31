@@ -9,5 +9,6 @@
     "icon": "resources-demo/icon-demo.icns",
     "target": [{ "target": "dir", "arch": ["arm64"] }]
   },
-  "extraResources": [{ "from": "resources-demo", "to": "resources" }]
+  "extraResources": [{ "from": "resources-demo", "to": "resources" }],
+  "afterPack": "./scripts/finalize-native-package.js"
 }

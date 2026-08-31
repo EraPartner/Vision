@@ -26,20 +26,16 @@
  * stopped at the next top-level block, so any key added after `volumes:` would
  * have been counted as a volume name.
  *
- * The DEMO compose (packaging/electron/resources-demo/docker-compose.yml) is
- * deliberately NOT compared: it pins its own project name (`visiondemoapp`) so
- * its volumes stay isolated from real data.
- *
  * Usage (from anywhere):
  *   node scripts/check-compose-sync.js
  *   node scripts/check-compose-sync.js --self-test
  */
-const { readFileSync } = require('node:fs');
-const path = require('node:path');
+const { readFileSync } = require("node:fs");
+const path = require("node:path");
 
-const REPO_ROOT = path.resolve(__dirname, '..');
-const ROOT_COMPOSE = 'docker-compose.yml';
-const ELECTRON_COMPOSE = 'packaging/electron/resources/docker-compose.yml';
+const REPO_ROOT = path.resolve(__dirname, "..");
+const ROOT_COMPOSE = "docker-compose.yml";
+const ELECTRON_COMPOSE = "packaging/electron/resources/docker-compose.yml";
 
 const KEY_RE = /^(\s*)([A-Za-z0-9_.-]+):(\s.*|)$/;
 // `key: |`, `key: >-`, `key: |+2` … everything after the indicator is a block
@@ -55,7 +51,11 @@ function stripInlineComment(value) {
 }
 
 function unquote(value) {
-  if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0]) {
+  if (
+    value.length >= 2 &&
+    (value[0] === '"' || value[0] === "'") &&
+    value[value.length - 1] === value[0]
+  ) {
     return value.slice(1, -1);
   }
   return value;
@@ -86,7 +86,7 @@ function parseCompose(text, label) {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (line.trim() === '' || line.trim().startsWith('#')) continue;
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
 
     const indent = line.length - line.trimStart().length;
 
@@ -106,16 +106,18 @@ function parseCompose(text, label) {
       const key = match[2];
       const value = stripInlineComment(match[3]);
       if (BLOCK_SCALAR_RE.test(value)) blockScalarIndent = indent;
-      if (key === 'name' && value !== '') name = unquote(value);
-      if (key === 'services') {
+      if (key === "name" && value !== "") name = unquote(value);
+      if (key === "services") {
         inServices = true;
         serviceIndent = undefined;
         currentService = undefined;
         servicePropertyIndent = undefined;
       }
-      if (key === 'volumes') {
+      if (key === "volumes") {
         if (volumes !== undefined) {
-          throw new Error(`${label}: two top-level 'volumes:' blocks — invalid compose file`);
+          throw new Error(
+            `${label}: two top-level 'volumes:' blocks — invalid compose file`,
+          );
         }
         volumes = [];
         inVolumes = true;
@@ -136,16 +138,17 @@ function parseCompose(text, label) {
         servicePropertyIndent = undefined;
         continue;
       }
-      if (currentService !== 'db') continue;
+      if (currentService !== "db") continue;
       if (servicePropertyIndent === undefined) servicePropertyIndent = indent;
-      if (indent !== servicePropertyIndent || value === '') continue;
-      if (key === 'image') dbImage = unquote(value);
-      if (key === 'platform') dbPlatform = unquote(value);
+      if (indent !== servicePropertyIndent || value === "") continue;
+      if (key === "image") dbImage = unquote(value);
+      if (key === "platform") dbPlatform = unquote(value);
       continue;
     }
 
     if (!inVolumes) {
-      if (match && BLOCK_SCALAR_RE.test(stripInlineComment(match[3]))) blockScalarIndent = indent;
+      if (match && BLOCK_SCALAR_RE.test(stripInlineComment(match[3])))
+        blockScalarIndent = indent;
       continue;
     }
 
@@ -154,7 +157,9 @@ function parseCompose(text, label) {
     if (volumeIndent === undefined) volumeIndent = indent;
     if (indent > volumeIndent) continue;
     if (!match) {
-      throw new Error(`${label}: unexpected line ${i + 1} in the top-level 'volumes:' block: ${line.trim()}`);
+      throw new Error(
+        `${label}: unexpected line ${i + 1} in the top-level 'volumes:' block: ${line.trim()}`,
+      );
     }
     const value = stripInlineComment(match[3]);
     if (BLOCK_SCALAR_RE.test(value)) blockScalarIndent = indent;
@@ -174,24 +179,24 @@ function diffCompose(root, electron) {
   if (!root.name || !electron.name) {
     problems.push(
       "compose 'name:' missing — both files must pin the same project name " +
-        `(root: ${root.name || '(none)'}, electron: ${electron.name || '(none)'})`,
+        `(root: ${root.name || "(none)"}, electron: ${electron.name || "(none)"})`,
     );
   } else if (root.name !== electron.name) {
     problems.push(
       `compose 'name:' out of sync — root '${root.name}' vs electron '${electron.name}'. ` +
-        'Both files must pin the same project name (the shared vision_postgres_data ' +
-        'volume depends on it).',
+        "Both files must pin the same project name (the shared vision_postgres_data " +
+        "volume depends on it).",
     );
   }
 
   for (const [label, key] of [
-    ['database image', 'dbImage'],
-    ['database platform', 'dbPlatform'],
+    ["database image", "dbImage"],
+    ["database platform", "dbPlatform"],
   ]) {
     if (!root[key] || !electron[key]) {
       problems.push(
-        `${label} missing — root: ${root[key] || '(none)'}, ` +
-          `electron: ${electron[key] || '(none)'}`,
+        `${label} missing — root: ${root[key] || "(none)"}, ` +
+          `electron: ${electron[key] || "(none)"}`,
       );
     } else if (root[key] !== electron[key]) {
       problems.push(
@@ -203,8 +208,8 @@ function diffCompose(root, electron) {
   if (root.volumes === undefined || electron.volumes === undefined) {
     problems.push(
       "no top-level 'volumes:' block found — " +
-        `root: ${root.volumes === undefined ? 'missing' : 'present'}, ` +
-        `electron: ${electron.volumes === undefined ? 'missing' : 'present'}`,
+        `root: ${root.volumes === undefined ? "missing" : "present"}, ` +
+        `electron: ${electron.volumes === undefined ? "missing" : "present"}`,
     );
     return problems;
   }
@@ -216,13 +221,13 @@ function diffCompose(root, electron) {
 
   if (missing.length > 0) {
     problems.push(
-      `named volumes missing from ${ELECTRON_COMPOSE}: ${missing.join(', ')} — ` +
-        'add them before releasing (omitting one is what caused the v1.0.2 data loss).',
+      `named volumes missing from ${ELECTRON_COMPOSE}: ${missing.join(", ")} — ` +
+        "add them before releasing (omitting one is what caused the v1.0.2 data loss).",
     );
   }
   if (extra.length > 0) {
     problems.push(
-      `named volumes present only in ${ELECTRON_COMPOSE}: ${extra.join(', ')} — ` +
+      `named volumes present only in ${ELECTRON_COMPOSE}: ${extra.join(", ")} — ` +
         `add them to ${ROOT_COMPOSE} or drop them from the packaged file.`,
     );
   }
@@ -259,21 +264,25 @@ function selfTest() {
   const cases = [];
   const check = (label, ok, detail) => cases.push({ label, ok, detail });
 
-  const root = parseCompose(SELF_TEST_ROOT, 'self-test root');
+  const root = parseCompose(SELF_TEST_ROOT, "self-test root");
   check(
-    'parses project name',
-    root.name === 'vision',
+    "parses project name",
+    root.name === "vision",
     `got ${JSON.stringify(root.name)}`,
   );
   check(
-    'reads only the top-level volumes mapping (service mounts and block scalars ignored)',
+    "reads only the top-level volumes mapping (service mounts and block scalars ignored)",
     JSON.stringify(root.volumes) ===
-      JSON.stringify(['postgres_data', 'attachments_data', 'vision_cache_data']),
+      JSON.stringify([
+        "postgres_data",
+        "attachments_data",
+        "vision_cache_data",
+      ]),
     `got ${JSON.stringify(root.volumes)}`,
   );
   check(
-    'parses the database image and platform',
-    root.dbImage === 'postgres:18-alpine' && root.dbPlatform === 'linux/amd64',
+    "parses the database image and platform",
+    root.dbImage === "postgres:18-alpine" && root.dbPlatform === "linux/amd64",
     `got image=${JSON.stringify(root.dbImage)} platform=${JSON.stringify(root.dbPlatform)}`,
   );
 
@@ -281,75 +290,97 @@ function selfTest() {
   // so keys under anything following `volumes:` were counted as volume names.
   const withTrailingBlock = parseCompose(
     `${SELF_TEST_ROOT}networks:\n  frontend:\n  backend:\n`,
-    'self-test trailing block',
+    "self-test trailing block",
   );
   check(
-    'stops at the next top-level block',
+    "stops at the next top-level block",
     JSON.stringify(withTrailingBlock.volumes) === JSON.stringify(root.volumes),
     `got ${JSON.stringify(withTrailingBlock.volumes)}`,
   );
 
   const nested = parseCompose(
-    'name: vision\nvolumes:\n  postgres_data:\n    driver: local\n    driver_opts:\n      type: none\n  attachments_data:\n',
-    'self-test nested',
+    "name: vision\nvolumes:\n  postgres_data:\n    driver: local\n    driver_opts:\n      type: none\n  attachments_data:\n",
+    "self-test nested",
   );
   check(
-    'volume options are not mistaken for volume names',
-    JSON.stringify(nested.volumes) === JSON.stringify(['postgres_data', 'attachments_data']),
+    "volume options are not mistaken for volume names",
+    JSON.stringify(nested.volumes) ===
+      JSON.stringify(["postgres_data", "attachments_data"]),
     `got ${JSON.stringify(nested.volumes)}`,
   );
 
   check(
-    'identical files pass',
-    diffCompose(root, parseCompose(SELF_TEST_ROOT, 'x')).length === 0,
-    'expected no problems',
+    "identical files pass",
+    diffCompose(root, parseCompose(SELF_TEST_ROOT, "x")).length === 0,
+    "expected no problems",
   );
 
   const missingVolume = parseCompose(
-    SELF_TEST_ROOT.replace('  attachments_data:\n  vision_cache_data:\n', '  vision_cache_data:\n'),
-    'self-test missing volume',
+    SELF_TEST_ROOT.replace(
+      "  attachments_data:\n  vision_cache_data:\n",
+      "  vision_cache_data:\n",
+    ),
+    "self-test missing volume",
   );
   check(
-    'a volume missing from the packaged file is caught',
-    diffCompose(root, missingVolume).some((p) => p.includes('attachments_data')),
+    "a volume missing from the packaged file is caught",
+    diffCompose(root, missingVolume).some((p) =>
+      p.includes("attachments_data"),
+    ),
     JSON.stringify(diffCompose(root, missingVolume)),
   );
 
-  const extraVolume = parseCompose(`${SELF_TEST_ROOT}  stray_data:\n`, 'self-test extra volume');
+  const extraVolume = parseCompose(
+    `${SELF_TEST_ROOT}  stray_data:\n`,
+    "self-test extra volume",
+  );
   check(
-    'a volume only in the packaged file is caught',
-    diffCompose(root, extraVolume).some((p) => p.includes('stray_data')),
+    "a volume only in the packaged file is caught",
+    diffCompose(root, extraVolume).some((p) => p.includes("stray_data")),
     JSON.stringify(diffCompose(root, extraVolume)),
   );
 
-  const renamed = parseCompose(SELF_TEST_ROOT.replace('name: vision', 'name: vision2'), 'self-test rename');
+  const renamed = parseCompose(
+    SELF_TEST_ROOT.replace("name: vision", "name: vision2"),
+    "self-test rename",
+  );
   check(
-    'a project-name change is caught',
+    "a project-name change is caught",
     diffCompose(root, renamed).some((p) => p.includes("'name:' out of sync")),
     JSON.stringify(diffCompose(root, renamed)),
   );
 
-  const unnamed = parseCompose(SELF_TEST_ROOT.replace('name: vision\n', ''), 'self-test unnamed');
+  const unnamed = parseCompose(
+    SELF_TEST_ROOT.replace("name: vision\n", ""),
+    "self-test unnamed",
+  );
   check(
-    'a missing project name is caught',
+    "a missing project name is caught",
     diffCompose(root, unnamed).some((p) => p.includes("'name:' missing")),
     JSON.stringify(diffCompose(root, unnamed)),
   );
 
   const wrongPlatform = parseCompose(
-    SELF_TEST_ROOT.replace('platform: linux/amd64', 'platform: linux/arm64'),
-    'self-test platform mismatch',
+    SELF_TEST_ROOT.replace("platform: linux/amd64", "platform: linux/arm64"),
+    "self-test platform mismatch",
   );
   check(
-    'a database platform mismatch is caught',
-    diffCompose(root, wrongPlatform).some((p) => p.includes('database platform out of sync')),
+    "a database platform mismatch is caught",
+    diffCompose(root, wrongPlatform).some((p) =>
+      p.includes("database platform out of sync"),
+    ),
     JSON.stringify(diffCompose(root, wrongPlatform)),
   );
 
-  const noVolumes = parseCompose('name: vision\nservices:\n  app:\n    image: x\n', 'self-test no volumes');
+  const noVolumes = parseCompose(
+    "name: vision\nservices:\n  app:\n    image: x\n",
+    "self-test no volumes",
+  );
   check(
-    'a missing volumes block is caught',
-    diffCompose(root, noVolumes).some((p) => p.includes("no top-level 'volumes:' block")),
+    "a missing volumes block is caught",
+    diffCompose(root, noVolumes).some((p) =>
+      p.includes("no top-level 'volumes:' block"),
+    ),
     JSON.stringify(diffCompose(root, noVolumes)),
   );
 
@@ -363,14 +394,16 @@ function selfTest() {
     }
   }
   if (failed > 0) {
-    console.error(`[check-compose-sync] self-test: ${failed}/${cases.length} case(s) failed.`);
+    console.error(
+      `[check-compose-sync] self-test: ${failed}/${cases.length} case(s) failed.`,
+    );
     process.exit(1);
   }
   console.log(`[check-compose-sync] self-test passed (${cases.length} cases).`);
 }
 
 function main() {
-  if (process.argv.includes('--self-test')) {
+  if (process.argv.includes("--self-test")) {
     selfTest();
     return;
   }
@@ -378,7 +411,9 @@ function main() {
   const files = [ROOT_COMPOSE, ELECTRON_COMPOSE];
   let parsed;
   try {
-    parsed = files.map((rel) => parseCompose(readFileSync(path.join(REPO_ROOT, rel), 'utf8'), rel));
+    parsed = files.map((rel) =>
+      parseCompose(readFileSync(path.join(REPO_ROOT, rel), "utf8"), rel),
+    );
   } catch (err) {
     console.error(`[check-compose-sync] ${err.message}`);
     process.exit(1);
@@ -387,23 +422,25 @@ function main() {
   const [root, electron] = parsed;
   console.log(
     `[check-compose-sync] ${ROOT_COMPOSE}    : name=${root.name} ` +
-      `db=${root.dbImage} platform=${root.dbPlatform} volumes=${(root.volumes || []).join(' ')}`,
+      `db=${root.dbImage} platform=${root.dbPlatform} volumes=${(root.volumes || []).join(" ")}`,
   );
   console.log(
     `[check-compose-sync] ${ELECTRON_COMPOSE}: name=${electron.name} ` +
       `db=${electron.dbImage} platform=${electron.dbPlatform} ` +
-      `volumes=${(electron.volumes || []).join(' ')}`,
+      `volumes=${(electron.volumes || []).join(" ")}`,
   );
 
   const problems = diffCompose(root, electron);
   if (problems.length > 0) {
-    console.error('[check-compose-sync] ERROR: the packaged compose file is out of sync with the root one:');
+    console.error(
+      "[check-compose-sync] ERROR: the packaged compose file is out of sync with the root one:",
+    );
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
 
   console.log(
-    '[check-compose-sync] in sync: project name, database runtime, and named volumes match.',
+    "[check-compose-sync] in sync: project name, database runtime, and named volumes match.",
   );
 }
 

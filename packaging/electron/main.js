@@ -48,6 +48,13 @@ const {
   readRuntimeSelectionState,
   createRuntimeProvider,
 } = require("./runtime");
+const {
+  DEMO_POSTGRES_PORT,
+  DEMO_RUNTIME_ID,
+  finalizeNativeDemo,
+  prepareNativeDemo,
+  rollbackNativeDemo,
+} = require("./runtime/native-demo");
 const { createBadgePngBuffer } = require("./badge-image");
 const {
   GITHUB_OWNER,
@@ -138,7 +145,8 @@ function t(key, vars, fallback) {
 //
 // Demo builds ship a `resources/DEMO` marker (electron-builder-demo.json). When
 // present, the app runs as a fully separate "Vision Demo" — its own userData dir,
-// its own embedded stack/volumes — and can never reach the real app's data.
+// native runtime, deterministic synthetic database, and attachments directory.
+// It can never reach the real app's data.
 const __IS_DEMO = (() => {
   try {
     return fs.existsSync(
@@ -159,7 +167,11 @@ if (__IS_DEVELOPMENT_PROFILE) {
     path.join(app.getPath("appData"), "Vision Development"),
   );
 }
-const NATIVE_RUNTIME_ID = __IS_DEVELOPMENT_PROFILE ? "vision_dev" : "vision";
+const NATIVE_RUNTIME_ID = __IS_DEMO
+  ? DEMO_RUNTIME_ID
+  : __IS_DEVELOPMENT_PROFILE
+    ? "vision_dev"
+    : "vision";
 
 // Acquire the single-instance lock as early as possible — immediately after
 // setName (the lock lives in userData, so it must run after that) and BEFORE the
@@ -299,6 +311,8 @@ const HEALTH_POLL_BUILD_ATTEMPTS =
   Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
 const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
+const RENDERER_READY_TIMEOUT_MS =
+  Number(process.env.VISION_RENDERER_READY_TIMEOUT_MS) || 12_000;
 
 // Repo paths that affect the Docker image. Changes to these trigger a rebuild;
 // changes to everything else (docs, packaging/electron, etc.) do not.
@@ -1109,7 +1123,7 @@ function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS) {
 
 // Load the error.html shell with localized strings + returns URL the window
 // should present.
-function loadErrorPage() {
+function loadErrorPage({ messageKey = "app.errorPageMessage" } = {}) {
   if (!mainWindow) return;
   const theme = readSplashTheme();
   const palette = deriveSplashPalette(
@@ -1117,7 +1131,7 @@ function loadErrorPage() {
   );
   const params = new URLSearchParams({
     title: t("app.errorPageTitle"),
-    msg: t("app.errorPageMessage"),
+    msg: t(messageKey),
     retry: t("app.errorPageRetry"),
     logs: t("app.errorPageOpenLogs"),
     paletteBase: palette.base,
@@ -1265,7 +1279,8 @@ function renavigateWhenReady(maxAttempts = HEALTH_POLL_BUILD_ATTEMPTS) {
     if (!url.includes("error.html")) return;
     const status = await pingReady();
     if (status && status.ready) {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(APP_URL);
+      const loaded = await loadApplicationPage();
+      if (!loaded) return;
       notify(t("app.running"));
       startHealthWatchdog();
       return;
@@ -1277,15 +1292,78 @@ function renavigateWhenReady(maxAttempts = HEALTH_POLL_BUILD_ATTEMPTS) {
   renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
 }
 
+let rendererBootTimer = null;
+let rendererReloadAttempted = false;
+
+function stopRendererBootWatchdog({ resetRetry = false } = {}) {
+  if (rendererBootTimer) {
+    clearTimeout(rendererBootTimer);
+    rendererBootTimer = null;
+  }
+  if (resetRetry) rendererReloadAttempted = false;
+}
+
+function isCurrentApplicationDocument() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  try {
+    const current = new URL(mainWindow.webContents.getURL());
+    const expected = new URL(APP_URL);
+    return current.origin === expected.origin;
+  } catch {
+    return false;
+  }
+}
+
+function startRendererBootWatchdog() {
+  stopRendererBootWatchdog();
+  if (rendererReady) return;
+  rendererBootTimer = setTimeout(() => {
+    rendererBootTimer = null;
+    if (rendererReady || !isCurrentApplicationDocument()) return;
+
+    if (!rendererReloadAttempted) {
+      rendererReloadAttempted = true;
+      console.warn(
+        "[renderer] ready signal timed out; retrying once without cache",
+      );
+      mainWindow.webContents.reloadIgnoringCache();
+      startRendererBootWatchdog();
+      return;
+    }
+
+    console.error("[renderer] ready signal timed out after cache-bypass retry");
+    loadErrorPage({ messageKey: "app.rendererErrorPageMessage" });
+  }, RENDERER_READY_TIMEOUT_MS);
+}
+
+async function loadApplicationPage() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  stopRendererBootWatchdog({ resetRetry: true });
+  rendererReady = false;
+  try {
+    await mainWindow.loadURL(APP_URL);
+  } catch (error) {
+    console.error(
+      "[renderer] application document failed to load:",
+      redactStartupDiagnostics(error && error.message ? error.message : error),
+    );
+    loadErrorPage({ messageKey: "app.rendererErrorPageMessage" });
+    return false;
+  }
+  startRendererBootWatchdog();
+  return true;
+}
+
 function pollAndLoad({ building = false } = {}) {
   const endPollHealth = bootMark("poll_ready");
   // A fresh boot poll supersedes any background re-navigation loop still running
   // from a previous timeout.
   stopRenavigateWhenReady();
   pollReady(building ? HEALTH_POLL_BUILD_ATTEMPTS : HEALTH_POLL_ATTEMPTS)
-    .then(() => {
+    .then(async () => {
       endPollHealth();
-      if (mainWindow) mainWindow.loadURL(APP_URL);
+      const loaded = await loadApplicationPage();
+      if (!loaded) return;
       notify(t("app.running"));
       startHealthWatchdog();
       bootSummary("launch_total");
@@ -1696,6 +1774,30 @@ function createWindow() {
     }
   });
 
+  // Loading the HTML shell is not enough to prove that the React renderer
+  // started. Keep main-process diagnostics for failures that would otherwise
+  // leave the static boot placeholder spinning forever.
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || errorCode === -3) return; // navigation was superseded
+      let source = "unknown";
+      try {
+        source = path.basename(new URL(validatedURL).pathname) || "/";
+      } catch {
+        /* retain the non-sensitive fallback */
+      }
+      console.error(
+        `[renderer] main-frame load failed (${errorCode}, ${errorDescription || "unknown"}) at ${source}`,
+      );
+    },
+  );
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error(
+      `[renderer] process exited (${details?.reason || "unknown"}, ${Number.isInteger(details?.exitCode) ? details.exitCode : "unknown"})`,
+    );
+  });
+
   // Menu accelerators with click handlers (⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S) are matched
   // here instead of relying on AppKit key-equivalent dispatch: with the
   // sandboxed renderer focused, the unhandled-keystroke → menu redispatch is
@@ -1740,6 +1842,7 @@ function createWindow() {
 
   // Caller is responsible for loading the initial URL.
   mainWindow.on("closed", () => {
+    stopRendererBootWatchdog({ resetRetry: true });
     mainWindow = null;
     rendererReady = false;
   });
@@ -2375,9 +2478,37 @@ function sendToApp(channel, payload) {
 }
 
 registerHandler(
+  "app:renderer-failure",
+  (_event, payload) => {
+    const kind = ["error", "resource", "unhandledrejection"].includes(
+      payload?.kind,
+    )
+      ? payload.kind
+      : "error";
+    const name =
+      typeof payload?.name === "string" &&
+      /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(payload.name)
+        ? payload.name
+        : "UnknownError";
+    const source =
+      typeof payload?.source === "string" &&
+      /^[A-Za-z0-9_.-]{1,160}$/.test(payload.source)
+        ? payload.source
+        : "unknown";
+    const line = Number.isSafeInteger(payload?.line) ? payload.line : 0;
+    console.error(
+      `[renderer] ${kind} (${name}) at ${source}${line > 0 ? `:${line}` : ""}`,
+    );
+    return { success: true };
+  },
+  { senderFailure: { success: false } },
+);
+
+registerHandler(
   "app:renderer-ready",
   () => {
     rendererReady = true;
+    stopRendererBootWatchdog({ resetRetry: true });
     while (pendingAppMessages.length > 0) {
       const [channel, payload] = pendingAppMessages.shift();
       mainWindow.webContents.send(channel, payload);
@@ -2861,19 +2992,48 @@ async function launch() {
           allowExternalPostgres:
             process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
           runtimeId: NATIVE_RUNTIME_ID,
+          postgresPort: __IS_DEMO ? DEMO_POSTGRES_PORT : undefined,
           appPort: () => appPort,
           requireRuntimeManifest: app.isPackaged,
         },
       });
       await activeRuntime.ensureLayout();
-      await activeRuntime.importApplicationEnv(process.env);
-      setSplashStatus("splash.startingServices");
+      if (!__IS_DEMO) await activeRuntime.importApplicationEnv(process.env);
+      const preparedDemo = __IS_DEMO
+        ? await prepareNativeDemo(activeRuntime, {
+            seedRoot: path.join(process.resourcesPath, "demo-seed"),
+          })
+        : undefined;
+      if (preparedDemo?.status === "current") {
+        const finalized = await finalizeNativeDemo(activeRuntime, preparedDemo);
+        if (finalized.resetCleanupWarning) {
+          console.warn(finalized.resetCleanupWarning);
+        }
+      }
       try {
-        await activeRuntime.start();
+        setSplashStatus("splash.startingServices");
+        try {
+          await activeRuntime.start();
+        } catch (error) {
+          if (error?.code !== "PORT_COLLISION") throw error;
+          await repickAppPort();
+          await activeRuntime.start();
+        }
+        if (preparedDemo?.switchToken) {
+          await activeRuntime.waitUntilReady({ detailed: true });
+          const finalized = await finalizeNativeDemo(
+            activeRuntime,
+            preparedDemo,
+          );
+          if (finalized.resetCleanupWarning) {
+            console.warn(finalized.resetCleanupWarning);
+          }
+        }
       } catch (error) {
-        if (error?.code !== "PORT_COLLISION") throw error;
-        await repickAppPort();
-        await activeRuntime.start();
+        if (preparedDemo?.switchToken) {
+          await rollbackNativeDemo(activeRuntime, preparedDemo);
+        }
+        throw error;
       }
       endNative();
       setSplashStatus("splash.waitingApp");

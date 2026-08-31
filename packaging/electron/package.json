@@ -12,7 +12,8 @@
     "prepare:native": "node scripts/prepare-native-runtime.js",
     "dist": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
     "dist:arm64": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
-    "dist:dir": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --dir"
+    "dist:dir": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --dir",
+    "dist:demo": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --demo"
   },
   "dependencies": {
     "archiver": "^8.0.0",

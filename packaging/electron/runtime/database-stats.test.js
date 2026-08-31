@@ -19,6 +19,8 @@ function statsOutput({ transactions = 7 } = {}) {
     "table:accounts\t2",
     "table:attachments\t1",
     `table:transactions\t${transactions}`,
+    "table:user_settings\t2",
+    "stable:user_settings\t2",
     "",
   ].join("\n");
 }
@@ -33,11 +35,12 @@ test("database statistics preserve schema, server version, and exact table count
   const stats = parseDatabaseStats(statsOutput());
   assert.equal(stats.schema, "0064_example");
   assert.equal(stats.postgresVersionNum, 180_006);
-  assert.equal(stats.tableCount, 3);
+  assert.equal(stats.tableCount, 4);
   assert.deepEqual(stats.tableCounts, {
     accounts: 2,
     attachments: 1,
     transactions: 7,
+    user_settings: 2,
   });
   assert.equal(stats.transactions, 7);
   assert.deepEqual(databaseStatsManifest(stats).tableCounts, stats.tableCounts);
@@ -75,6 +78,30 @@ test("post-start comparison permits runtime cache writes but protects user data"
   };
   assert.throws(
     () => assertStableDatabaseStatsEqual(expected, userDataChanged),
+    (error) => error.code === "DATABASE_COUNT_MISMATCH",
+  );
+});
+
+test("post-start comparison permits only runtime-managed user settings", () => {
+  const expected = parseDatabaseStats(statsOutput());
+  const runtimeMarkerInserted = {
+    ...expected,
+    user_settings: 3,
+    tableCounts: { ...expected.tableCounts, user_settings: 3 },
+  };
+  assert.doesNotThrow(() =>
+    assertStableDatabaseStatsEqual(expected, runtimeMarkerInserted),
+  );
+
+  const userSettingInserted = {
+    ...runtimeMarkerInserted,
+    stableImportantRowCounts: {
+      ...runtimeMarkerInserted.stableImportantRowCounts,
+      user_settings: 3,
+    },
+  };
+  assert.throws(
+    () => assertStableDatabaseStatsEqual(expected, userSettingInserted),
     (error) => error.code === "DATABASE_COUNT_MISMATCH",
   );
 });

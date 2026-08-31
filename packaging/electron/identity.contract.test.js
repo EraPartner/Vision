@@ -90,3 +90,39 @@ test("Vision Demo uses a valid, distinct badged macOS icon", () => {
     "ic10",
   ]);
 });
+
+test("Vision Demo is packaged and installed without a Docker dependency", () => {
+  const installer = fs.readFileSync(path.join(root, "install-demo.sh"), "utf8");
+  const config = JSON.parse(read("electron-builder-demo.json"));
+  assert.doesNotMatch(installer, /^\s*(?:docker|command -v docker)\b/im);
+  assert.doesNotMatch(installer, /wait_for_docker_daemon|docker compose/i);
+  assert.match(installer, /build-native-package\.js --demo/);
+  assert.deepEqual(
+    config.extraResources.map((entry) => entry.to),
+    ["resources"],
+  );
+  assert.equal(config.afterPack, "./scripts/finalize-native-package.js");
+});
+
+test("native macOS installers stage frontend output outside the shared dist directory", () => {
+  const helper = fs.readFileSync(
+    path.join(root, "scripts/lib/native-mac-build.sh"),
+    "utf8",
+  );
+  const productionInstaller = fs.readFileSync(
+    path.join(root, "install.sh"),
+    "utf8",
+  );
+  const demoInstaller = fs.readFileSync(
+    path.join(root, "install-demo.sh"),
+    "utf8",
+  );
+
+  assert.match(helper, /mktemp -d .*vision-native-build-/);
+  assert.match(helper, /VISION_FRONTEND_DIST=.*frontend-dist/);
+  assert.match(helper, /vite" build/);
+  assert.match(helper, /--outDir "\$VISION_FRONTEND_DIST"/);
+  assert.doesNotMatch(helper, /bun run build/);
+  assert.match(productionInstaller, /trap cleanup_native_macos_build EXIT/);
+  assert.match(demoInstaller, /trap cleanup_native_macos_build EXIT/);
+});

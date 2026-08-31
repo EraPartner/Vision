@@ -46,6 +46,14 @@ function resolveRuntimeMode({
     error.code = "RUNTIME_CUTOVER_IN_PROGRESS";
     throw error;
   }
+  // Demo data is deterministic and disposable. Older Demo builds never wrote a
+  // native marker and may retain a Docker setting, so the packaged Demo moves
+  // to native without treating its synthetic Compose volume as a production
+  // cutover. The repository-level Docker provider remains available for normal
+  // Vision deployments, but the Demo app has one unambiguous data owner.
+  if (isDemo) {
+    return "native";
+  }
   // Once a runtime has accepted writes, its durable marker is authoritative.
   // Switching providers requires the deliberate cutover/rollback command that
   // updates this marker; an old setting or environment variable must not make
@@ -53,9 +61,6 @@ function resolveRuntimeMode({
   if (activeRuntime) return activeRuntime;
   if (requested) return requested;
   if (persisted) return persisted;
-  // The synthetic Demo image currently depends on its seeded Compose database.
-  // Keep it isolated until the native demo seeder is explicitly selected.
-  if (isDemo) return "docker";
   return "native";
 }
 

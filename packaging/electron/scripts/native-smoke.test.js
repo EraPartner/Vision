@@ -5,13 +5,16 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { gzipSync } = require("node:zlib");
 
 const {
   cleanupSmokeUserData,
+  decodeFrontendBody,
   parseSmokeArgs,
   readSmokeLogTail,
   sanitizeSmokeDiagnostic,
   selectSmokeRuntimeRoot,
+  verifyFrontendAssets,
 } = require("./native-smoke");
 
 test("native smoke accepts only the explicit cleanup flag", () => {
@@ -84,5 +87,51 @@ test("packaged smoke requires the manifest and uses the packaged backend", () =>
       packagedPayload: false,
     }),
     { requireRuntimeManifest: false, runtimeRoot: "/source/Vision" },
+  );
+});
+
+test("native smoke fetches and decodes the packaged frontend entry", async () => {
+  const responses = new Map([
+    [
+      "/",
+      {
+        headers: { "content-type": "text/html; charset=utf-8" },
+        body: Buffer.from(
+          '<div id="root"></div><script type="module" src="/assets/index-abc123.js"></script>',
+        ),
+      },
+    ],
+    [
+      "/assets/index-abc123.js",
+      {
+        headers: {
+          "content-type": "text/javascript; charset=utf-8",
+          "content-encoding": "gzip",
+        },
+        body: gzipSync(Buffer.from('console.log("synthetic frontend");')),
+      },
+    ],
+  ]);
+  const requested = [];
+
+  await verifyFrontendAssets(43210, async (port, route) => {
+    requested.push([port, route]);
+    return responses.get(route);
+  });
+
+  assert.deepEqual(requested, [
+    [43210, "/"],
+    [43210, "/assets/index-abc123.js"],
+  ]);
+});
+
+test("native smoke rejects a corrupt packaged frontend response", () => {
+  assert.throws(
+    () =>
+      decodeFrontendBody({
+        headers: { "content-encoding": "gzip" },
+        body: Buffer.from("not gzip"),
+      }),
+    /incorrect header check|unknown compression method|invalid/i,
   );
 });

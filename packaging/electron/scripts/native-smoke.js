@@ -7,6 +7,7 @@ const http = require("node:http");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { gunzipSync } = require("node:zlib");
 
 const {
   createNativeRuntime,
@@ -78,6 +79,82 @@ function requestJson(port, method, route, payload) {
     if (body) request.write(body);
     request.end();
   });
+}
+
+function requestBuffer(port, route, { acceptEncoding = "gzip" } = {}) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    const request = http.get(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: route,
+        timeout: 10_000,
+        headers: { "Accept-Encoding": acceptEncoding },
+      },
+      (response) => {
+        response.on("data", (chunk) => {
+          size += chunk.length;
+          if (size > 4 * 1024 * 1024) {
+            request.destroy(
+              new Error("Smoke-test frontend response is too large"),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on("end", () => {
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            reject(
+              new Error(
+                `Smoke-test frontend request returned HTTP ${response.statusCode}`,
+              ),
+            );
+            return;
+          }
+          resolve({
+            body: Buffer.concat(chunks),
+            headers: response.headers,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.on("timeout", () =>
+      request.destroy(new Error("Smoke-test frontend request timed out")),
+    );
+  });
+}
+
+function decodeFrontendBody(response) {
+  const encoding = String(response.headers["content-encoding"] || "").trim();
+  if (!encoding) return response.body;
+  if (encoding === "gzip") return gunzipSync(response.body);
+  throw new Error(`Unsupported frontend content encoding: ${encoding}`);
+}
+
+async function verifyFrontendAssets(port, requester = requestBuffer) {
+  const shellResponse = await requester(port, "/");
+  const shellType = String(shellResponse.headers["content-type"] || "");
+  if (!shellType.includes("text/html"))
+    throw new Error("Native frontend shell did not return HTML");
+  const shell = decodeFrontendBody(shellResponse).toString("utf8");
+  const entryMatch = shell.match(
+    /<script\b[^>]*\bsrc=["'](\/assets\/[A-Za-z0-9_.-]+\.js)["'][^>]*>/i,
+  );
+  if (!entryMatch)
+    throw new Error("Native frontend shell has no packaged JavaScript entry");
+
+  const entryResponse = await requester(port, entryMatch[1]);
+  const entryType = String(entryResponse.headers["content-type"] || "");
+  if (!/(?:java|ecma)script/i.test(entryType))
+    throw new Error("Native frontend entry has an invalid content type");
+  if (entryResponse.headers["content-encoding"] !== "gzip")
+    throw new Error("Native frontend entry did not exercise gzip delivery");
+  const entry = decodeFrontendBody(entryResponse);
+  if (entry.length === 0 || entry.subarray(0, 1).toString() === "<")
+    throw new Error("Native frontend entry did not decode as JavaScript");
 }
 
 function parseSmokeArgs(argv) {
@@ -162,6 +239,7 @@ async function main() {
   try {
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
+    await verifyFrontendAssets(port);
     await requestJson(port, "PUT", "/api/settings/services_settings", {
       value: { keepServicesOnQuit: false },
     });
@@ -253,9 +331,12 @@ if (require.main === module) {
 
 module.exports = {
   cleanupSmokeUserData,
+  decodeFrontendBody,
   main,
   parseSmokeArgs,
   readSmokeLogTail,
+  requestBuffer,
   sanitizeSmokeDiagnostic,
   selectSmokeRuntimeRoot,
+  verifyFrontendAssets,
 };

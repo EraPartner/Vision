@@ -2,6 +2,57 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
+function rendererFailureSource(event) {
+  const candidate =
+    event?.filename || event?.target?.src || event?.target?.href || "";
+  try {
+    return new URL(candidate).pathname.split("/").pop() || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function reportRendererFailure(payload) {
+  ipcRenderer.invoke("app:renderer-failure", payload).catch(() => {
+    /* diagnostics are best-effort and must never affect renderer startup */
+  });
+}
+
+// Capture failures before the application bundle executes. Only structural
+// metadata crosses IPC: never exception messages, URLs, or application data.
+window.addEventListener(
+  "error",
+  (event) => {
+    const targetTag = event?.target?.tagName;
+    const isResource = targetTag === "SCRIPT" || targetTag === "LINK";
+    if (event?.target && event.target !== window && !isResource) return;
+    reportRendererFailure({
+      kind: isResource ? "resource" : "error",
+      name:
+        !isResource && typeof event?.error?.name === "string"
+          ? event.error.name
+          : isResource
+            ? "ResourceLoadError"
+            : "UnknownError",
+      source: rendererFailureSource(event),
+      line: Number.isSafeInteger(event?.lineno) ? event.lineno : 0,
+    });
+  },
+  true,
+);
+
+window.addEventListener("unhandledrejection", (event) => {
+  reportRendererFailure({
+    kind: "unhandledrejection",
+    name:
+      typeof event?.reason?.name === "string"
+        ? event.reason.name
+        : "UnhandledRejection",
+    source: "unknown",
+    line: 0,
+  });
+});
+
 /**
  * Expose a minimal, safe update API to the renderer via contextBridge.
  * The renderer (React app running at localhost:3002 inside the Electron shell)

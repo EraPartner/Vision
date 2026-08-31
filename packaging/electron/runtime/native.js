@@ -81,6 +81,14 @@ function safeChildEnv(overrides = {}) {
   return env;
 }
 
+function managedPostgresChildEnv() {
+  return safeChildEnv({
+    LANG: "C",
+    LC_ALL: "C",
+    LC_CTYPE: "C",
+  });
+}
+
 function validateArgs(args) {
   if (!Array.isArray(args) || args.some((arg) => typeof arg !== "string")) {
     throw new TypeError("Process arguments must be a string array");
@@ -1152,7 +1160,11 @@ function createNativeRuntime(options) {
           "--pwfile",
           passwordFile,
         ],
-        { timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 },
+        {
+          timeout: 5 * 60_000,
+          maxBuffer: 16 * 1024 * 1024,
+          env: managedPostgresChildEnv(),
+        },
       );
       const visionConfig = path.join(staging, "vision.conf");
       await fs.promises.writeFile(
@@ -1288,7 +1300,7 @@ function createNativeRuntime(options) {
       managedPostgresArgs(paths.postgresData, postgresPort),
       {
         cwd: paths.postgresRoot,
-        env: safeChildEnv(),
+        env: managedPostgresChildEnv(),
         stdio: ["ignore", logFd, logFd],
         detached: false,
       },
@@ -2193,8 +2205,8 @@ function createNativeRuntime(options) {
   async function validateCustomDump(sourcePath) {
     if (!tools) await discover();
     const source = path.resolve(sourcePath);
-    const stat = await fs.promises.stat(source);
-    if (!stat.isFile() || stat.size <= 0) {
+    const stat = await fs.promises.lstat(source);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
       const error = new Error("PostgreSQL custom dump is empty or not a file");
       error.code = "INVALID_POSTGRES_DUMP";
       throw error;
@@ -2251,6 +2263,49 @@ function createNativeRuntime(options) {
         return parseDatabaseStats(result.stdout);
       },
     );
+  }
+
+  async function applyOwnerSqlFile(sourcePath, { database = undefined } = {}) {
+    const source = path.resolve(sourcePath);
+    const stat = await fs.promises.lstat(source);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
+      const error = new Error("PostgreSQL seed source is empty or not a file");
+      error.code = "INVALID_POSTGRES_SEED";
+      throw error;
+    }
+    const config = await bootstrapDatabase();
+    const target = validateIdentifier(
+      database || config.database,
+      "database name",
+    );
+    await withPgPass(
+      config,
+      config.ownerRole,
+      config.ownerPassword,
+      async (env) => {
+        await runFile(
+          path.join(tools.binDir, "psql"),
+          [
+            "-h",
+            LOOPBACK_HOST,
+            "-p",
+            String(config.port),
+            "-U",
+            config.ownerRole,
+            "-d",
+            target,
+            "--set",
+            "ON_ERROR_STOP=1",
+            "--no-psqlrc",
+            "--single-transaction",
+            "--file",
+            source,
+          ],
+          { timeout: 30 * 60_000, env, maxBuffer: 4 * 1024 * 1024 },
+        );
+      },
+    );
+    return { status: "applied", database: target, bytes: stat.size };
   }
 
   async function rollbackDatabaseSwitch(switchToken) {
@@ -2458,6 +2513,7 @@ function createNativeRuntime(options) {
     finalizeDatabaseSwitch,
     validateCustomDump,
     getDatabaseStats,
+    applyOwnerSqlFile,
   });
 }
 
@@ -2470,6 +2526,7 @@ module.exports = {
   RUNTIME_MANAGED_MATERIALIZED_VIEWS,
   NATIVE_APPLICATION_ENV_KEYS,
   safeChildEnv,
+  managedPostgresChildEnv,
   validateArgs,
   defaultRunFile,
   parsePostgresMajor,

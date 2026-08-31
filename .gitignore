@@ -81,6 +81,8 @@ opencode.json
 dist-demo/
 packaging/electron/native-runtime/
 packaging/electron/native-runtime.previous-*/
+packaging/electron/demo-seed/
+packaging/electron/demo-seed.previous-*/
 
 # Local Bun executable-build scratch files
 *.bun-build

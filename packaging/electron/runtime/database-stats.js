@@ -11,6 +11,15 @@ const IMPORTANT_TABLES = Object.freeze([
   "user_settings",
 ]);
 
+const RUNTIME_MANAGED_USER_SETTINGS = Object.freeze([
+  "fx_full_history_repair_done",
+  "transfers_backfilled",
+]);
+
+const RUNTIME_MANAGED_USER_SETTINGS_SQL = RUNTIME_MANAGED_USER_SETTINGS.map(
+  (key) => `'${key}'`,
+).join(", ");
+
 const DATABASE_STATS_SQL = [
   "CREATE TEMP TABLE vision_migration_table_counts (table_name text PRIMARY KEY, row_count bigint NOT NULL)",
   `DO $vision_table_counts$
@@ -36,6 +45,10 @@ const DATABASE_STATS_SQL = [
    UNION ALL
    SELECT 'postgres_version_num', current_setting('server_version_num')
    UNION ALL
+   SELECT 'stable:user_settings', count(*)::text
+   FROM public.user_settings
+   WHERE key NOT IN (${RUNTIME_MANAGED_USER_SETTINGS_SQL})
+   UNION ALL
    SELECT 'table:' || table_name, row_count::text
    FROM pg_temp.vision_migration_table_counts
    ORDER BY key`,
@@ -43,6 +56,7 @@ const DATABASE_STATS_SQL = [
 
 function parseDatabaseStats(output) {
   const tableCounts = {};
+  const stableImportantRowCounts = {};
   let schema;
   let postgresVersionNum;
   for (const line of String(output || "").split("\n")) {
@@ -65,6 +79,20 @@ function parseDatabaseStats(output) {
         );
       }
       tableCounts[tableName] = count;
+    } else if (key.startsWith("stable:")) {
+      const tableName = key.slice("stable:".length);
+      if (!IMPORTANT_TABLES.includes(tableName)) {
+        throw new Error(
+          "Database statistics returned an invalid stable table name",
+        );
+      }
+      const count = Number(value);
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new Error(
+          `Database statistics returned an invalid stable count for ${tableName}`,
+        );
+      }
+      stableImportantRowCounts[tableName] = count;
     }
   }
   if (!schema)
@@ -79,6 +107,7 @@ function parseDatabaseStats(output) {
     postgresVersionNum,
     tableCount: Object.keys(tableCounts).length,
     tableCounts,
+    stableImportantRowCounts,
   };
   for (const table of IMPORTANT_TABLES) stats[table] = tableCounts[table];
   return stats;
@@ -125,9 +154,20 @@ function assertDatabaseStructureEqual(expected, actual) {
   }
 }
 
-function assertImportantDatabaseStatsEqual(expected, actual) {
+function assertImportantDatabaseStatsEqual(
+  expected,
+  actual,
+  { stable = false } = {},
+) {
   for (const table of IMPORTANT_TABLES) {
-    if (expected[table] !== actual[table]) {
+    const useStableCount = stable && table === "user_settings";
+    const expectedCount = useStableCount
+      ? (expected.stableImportantRowCounts?.[table] ?? expected[table])
+      : expected[table];
+    const actualCount = useStableCount
+      ? (actual.stableImportantRowCounts?.[table] ?? actual[table])
+      : actual[table];
+    if (expectedCount !== actualCount) {
       const error = new Error(
         `Database validation row count mismatch for ${table}`,
       );
@@ -139,7 +179,7 @@ function assertImportantDatabaseStatsEqual(expected, actual) {
 
 function assertStableDatabaseStatsEqual(expected, actual) {
   assertDatabaseStructureEqual(expected, actual);
-  assertImportantDatabaseStatsEqual(expected, actual);
+  assertImportantDatabaseStatsEqual(expected, actual, { stable: true });
 }
 
 function databaseStatsManifest(stats) {
@@ -151,11 +191,13 @@ function databaseStatsManifest(stats) {
     importantRowCounts: Object.fromEntries(
       IMPORTANT_TABLES.map((table) => [table, stats[table]]),
     ),
+    stableImportantRowCounts: stats.stableImportantRowCounts,
   };
 }
 
 module.exports = {
   IMPORTANT_TABLES,
+  RUNTIME_MANAGED_USER_SETTINGS,
   DATABASE_STATS_SQL,
   parseDatabaseStats,
   assertDatabaseStatsEqual,

@@ -138,7 +138,7 @@ async function runIsolatedSmoke({
 async function main() {
   await runIsolatedSmoke();
   console.log(
-    "Disposable PostgreSQL 18 native runtime, API, backup, and restore smoke passed.",
+    "Disposable PostgreSQL 18 native runtime, frontend, API, backup, and restore smoke passed.",
   );
 }
 

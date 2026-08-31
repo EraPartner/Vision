@@ -3,23 +3,8 @@
 # Source this file after REPO_PATH is set:
 #   source "$REPO_PATH/scripts/lib/mac-install.sh"
 #
-# These factor out the shared Docker-Demo wait loop, the built-app candidate
-# scan, and the copy/de-quarantine install block. Normal Vision installation no
-# longer calls the Docker helper; Vision Demo remains an explicitly isolated
-# Docker deployment.
-
-# Wait up to ~60s (30 × 2s) for the Docker daemon to come up. Callers handle the
-# "starting…" / "ready" / failure messaging so each script keeps its own wording.
-# Returns 0 once `docker info` succeeds, 1 if it never does.
-wait_for_docker_daemon() {
-  local i
-  for i in $(seq 1 30); do
-    sleep 2
-    docker info >/dev/null 2>&1 && return 0
-    [ "$i" -eq 30 ] && return 1
-  done
-  return 1
-}
+# These factor out the built-app candidate scan and the copy/de-quarantine
+# install block shared by the production and synthetic native applications.
 
 # Echo the first existing candidate .app path to stdout; return 1 if none exist.
 # Usage: APP_SRC="$(find_built_app "cand1" "cand2" ...)" || { echo ERROR; exit 1; }

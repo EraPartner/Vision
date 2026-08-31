@@ -9,6 +9,7 @@ const { EventEmitter } = require("node:events");
 
 const {
   safeChildEnv,
+  managedPostgresChildEnv,
   validateArgs,
   parsePostgresMajor,
   parsePostgresVersionNumber,
@@ -109,6 +110,28 @@ test("safeChildEnv carries only the declared host environment plus explicit over
   } finally {
     if (previous === undefined) delete process.env.VISION_TEST_SECRET;
     else process.env.VISION_TEST_SECRET = previous;
+  }
+});
+
+test("managed PostgreSQL uses a portable locale instead of the host locale", () => {
+  const previous = {
+    LANG: process.env.LANG,
+    LC_ALL: process.env.LC_ALL,
+    LC_CTYPE: process.env.LC_CTYPE,
+  };
+  process.env.LANG = "invalid-host-locale";
+  process.env.LC_ALL = "invalid-host-locale";
+  process.env.LC_CTYPE = "invalid-host-locale";
+  try {
+    const env = managedPostgresChildEnv();
+    assert.equal(env.LANG, "C");
+    assert.equal(env.LC_ALL, "C");
+    assert.equal(env.LC_CTYPE, "C");
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 });
 
@@ -534,6 +557,82 @@ test("database activation applies materialized-view ownership inside the staging
     const ownershipSql =
       ownershipCall.args[ownershipCall.args.indexOf("--command") + 1];
     assert.match(ownershipSql, /OWNER TO "vision_restore_owner_test_app"/);
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("native seed SQL is applied transactionally with an argument array", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-seed-sql-"),
+  );
+  const calls = [];
+  try {
+    const { binDir } = await createBundledPostgresFixture(temp);
+    const runtimeId = "vision_seed_sql_test";
+    const postgresData = path.join(
+      temp,
+      "user-data",
+      "native",
+      runtimeId,
+      "postgres",
+      "data",
+    );
+    const sqlPath = path.join(temp, "seed data.sql");
+    await fs.promises.writeFile(sqlPath, "SELECT 1;\n");
+    const runtime = createNativeRuntime({
+      userDataDir: path.join(temp, "user-data"),
+      repoRoot: path.resolve(__dirname, "..", "..", ".."),
+      runtimeId,
+      postgresBinDir: binDir,
+      runFile: async (executable, args) => {
+        calls.push({ executable: path.basename(executable), args: [...args] });
+        if (args[0] === "--version") {
+          return {
+            stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
+            stderr: "",
+          };
+        }
+        if (path.basename(executable) === "pg_isready") {
+          return { stdout: "accepting connections", stderr: "" };
+        }
+        const command = args[args.indexOf("--command") + 1] || "";
+        if (command.includes("SHOW server_version_num")) {
+          return {
+            stdout: `180006\nlocalhost\n${postgresData}\n`,
+            stderr: "",
+          };
+        }
+        if (
+          command.includes("SELECT 1 FROM pg_roles") ||
+          command.includes("SELECT 1 FROM pg_database")
+        ) {
+          return { stdout: "1\n", stderr: "" };
+        }
+        return { stdout: "", stderr: "" };
+      },
+    });
+
+    const result = await runtime.applyOwnerSqlFile(sqlPath);
+    assert.equal(result.status, "applied");
+    const applyCall = calls.find(
+      ({ executable, args }) =>
+        executable === "psql" && args.includes("--single-transaction"),
+    );
+    assert.ok(applyCall);
+    assert.equal(applyCall.args[applyCall.args.indexOf("--file") + 1], sqlPath);
+    assert.ok(applyCall.args.includes("ON_ERROR_STOP=1"));
+    assert.equal(
+      applyCall.args.some((arg) => arg.includes("SELECT 1;")),
+      false,
+    );
+
+    const linkedSqlPath = path.join(temp, "linked-seed.sql");
+    await fs.promises.symlink(sqlPath, linkedSqlPath);
+    await assert.rejects(
+      runtime.applyOwnerSqlFile(linkedSqlPath),
+      (error) => error?.code === "INVALID_POSTGRES_SEED",
+    );
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }

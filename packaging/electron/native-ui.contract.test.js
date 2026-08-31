@@ -88,11 +88,31 @@ test("Electron development cannot reuse packaged Vision data", () => {
   assert.match(main, /Vision Development/);
   assert.match(
     main,
-    /NATIVE_RUNTIME_ID = __IS_DEVELOPMENT_PROFILE \? ["']vision_dev["'] : ["']vision["']/,
+    /NATIVE_RUNTIME_ID = __IS_DEMO[\s\S]{0,100}DEMO_RUNTIME_ID[\s\S]{0,120}__IS_DEVELOPMENT_PROFILE[\s\S]{0,80}["']vision_dev["'][\s\S]{0,40}["']vision["']/,
   );
   assert.match(
     main,
     /readRuntimeSelectionState\(\s*app\.getPath\(["']userData["']\),\s*NATIVE_RUNTIME_ID/,
   );
   assert.match(main, /runtimeId: NATIVE_RUNTIME_ID/);
+});
+
+test("renderer boot is verified instead of leaving the static splash forever", () => {
+  const baseConfig = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "electron-builder-base.json"), "utf8"),
+  );
+  const demoConfig = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "electron-builder-demo.json"), "utf8"),
+  );
+  assert.ok(baseConfig.files.includes("main.js"));
+  assert.ok(baseConfig.files.includes("preload.js"));
+  assert.equal(demoConfig.extends, "./electron-builder-base.json");
+  assert.match(preload, /window\.addEventListener\(\s*["']error["']/);
+  assert.match(preload, /app:renderer-failure/);
+  assert.match(main, /RENDERER_READY_TIMEOUT_MS/);
+  assert.match(main, /reloadIgnoringCache\(\)/);
+  assert.match(main, /app\.rendererErrorPageMessage/);
+  assert.match(main, /app:renderer-ready[\s\S]{0,300}stopRendererBootWatchdog/);
+  assert.match(main, /did-fail-load/);
+  assert.match(main, /render-process-gone/);
 });

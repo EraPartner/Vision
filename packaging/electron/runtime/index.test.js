@@ -50,14 +50,26 @@ test("the cutover marker takes precedence over stale explicit configuration", ()
   );
 });
 
-test("the seeded Demo remains isolated in Docker unless explicitly overridden", () => {
+test("the seeded Demo defaults to native and ignores stale Docker settings", () => {
   assert.equal(
     resolveRuntimeMode({ env: {}, settings: {}, isDemo: true }),
-    "docker",
+    "native",
   );
   assert.equal(
     resolveRuntimeMode({
-      env: { VISION_RUNTIME_MODE: "native" },
+      env: {},
+      settings: { runtimeMode: "docker" },
+      runtimeState: { activeRuntime: "docker" },
+      isDemo: true,
+    }),
+    "native",
+  );
+});
+
+test("the Demo ignores Docker overrides to keep one synthetic data owner", () => {
+  assert.equal(
+    resolveRuntimeMode({
+      env: { VISION_RUNTIME_MODE: "docker" },
       settings: {},
       isDemo: true,
     }),
