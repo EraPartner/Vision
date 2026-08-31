@@ -57,7 +57,7 @@ jobs:
     outputs:
       code: ${{ steps.classify.outputs.code }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           fetch-depth: 0
 
@@ -127,7 +127,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           fetch-depth: 0
 
@@ -172,7 +172,7 @@ jobs:
       # integration") on every PR.
       pull-requests: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           fetch-depth: 0
 
@@ -196,7 +196,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -218,10 +218,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5
         with:
           python-version: "3.12"
 
@@ -240,7 +240,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -263,7 +263,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -294,7 +294,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -320,7 +320,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -366,7 +366,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -393,7 +393,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -406,7 +406,7 @@ jobs:
 
       - name: Report coverage on PR
         if: always()
-        uses: davelosert/vitest-coverage-report-action@3c054a2d2e2ca45446417ad5d6d5eb33092af8f1 # v2
+        uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2
         with:
           vite-config-path: apps/frontend/vite.config.ts
           json-summary-path: apps/frontend/coverage/coverage-summary.json
@@ -459,7 +459,7 @@ jobs:
       DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
       TEST_DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -467,7 +467,7 @@ jobs:
       # Migrations are Alembic (Python) even though the backend is Node, so the
       # bun toolchain alone cannot build the schema.
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5
         with:
           python-version: "3.12"
 
@@ -498,7 +498,7 @@ jobs:
 
       - name: Report backend coverage on PR
         if: always()
-        uses: davelosert/vitest-coverage-report-action@3c054a2d2e2ca45446417ad5d6d5eb33092af8f1 # v2
+        uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2
         with:
           name: backend
           vite-config-path: apps/node-backend/vitest.config.js
@@ -607,7 +607,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # No setup-toolchain step on purpose: the checker is Node-stdlib-only and
       # ubuntu-24.04 ships node, so this stays as dependency-free as the awk it
@@ -637,7 +637,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
       # ubuntu-24.04 ships python3, so this stays as dependency-free as the awk in
@@ -676,7 +676,7 @@ jobs:
       - verify-destructive-migrations
     if: always()
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Check all gates passed
         # Values reach the script through env, never via ${{ }} interpolation
@@ -732,7 +732,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # The producer: builds with no image export at all (`load: false`, no
       # `outputs:`) — its only product is the cache the consumers read. The
@@ -759,7 +759,7 @@ jobs:
       contents: read
       security-events: write # required to upload SARIF to GitHub Security
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # Cache-hit rebuild of the image `build-image` just exported — same build
       # inputs, so this is a materialisation, not a real build. Leaves
@@ -791,7 +791,7 @@ jobs:
 
       - name: Upload Trivy SARIF to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy
@@ -813,7 +813,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: vision_ci
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # Cache-hit rebuild of the image `build-image` exported; `vision-image`
       # below is what makes compose consume this exact image instead of
@@ -871,7 +871,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: vision_ci
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       # See docker-verify above — cache-hit rebuild, then compose consumes the
       # loaded `vision:ci` via docker-compose.ci.yml.
@@ -924,7 +924,7 @@ jobs:
       ]
     if: always()
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
       - name: Check Docker-tier stages passed
         # Values reach the script through env, never via ${{ }} interpolation
