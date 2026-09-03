@@ -15,7 +15,7 @@ import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useCreateSplits, useSplitsByTransaction } from "@/hooks/useSplits";
 import { Split, Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatCurrency } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { parseDecimal } from "@/lib/decimal";
 import { toDecimal, addAll, multiply, roundMoney } from "@/lib/money";
 
@@ -48,6 +48,7 @@ export function SplitTransactionDialog({
     const { data: existingSplitsData, isLoading: isLoadingExistingSplits } =
         useSplitsByTransaction(open ? transactionId : null);
     const { t } = useLanguage();
+    const formatCurrency = useCurrencyFormatter(transactionCurrency);
 
     const absAmount = Math.abs(transactionAmount);
 

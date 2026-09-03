@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 export interface LineSeries<Datum> {
     readonly key: string;
@@ -186,6 +187,7 @@ function Inner<Datum>({
 }: LineChartProps<Datum> & { width: number; height: number }) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const formatPercent = usePercentFormatter();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -645,7 +647,7 @@ function Inner<Datum>({
                               )}
                               style={{ left: mid, top: 2 }}
                           >
-                              {formatScrubDelta(a, b, fmt)}
+                              {formatScrubDelta(a, b, fmt, formatPercent)}
                           </div>
                       );
                   })()

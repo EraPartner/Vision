@@ -17,7 +17,10 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
@@ -50,7 +53,6 @@ import { ExportDialog } from "@/features/reports/ExportDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { Money } from "@/components/shared/Money";
-import { formatPercent } from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
 
@@ -127,6 +129,7 @@ export default function StocksPage({
     priceColumnsInTargetCurrency = false,
     simplePnlPercentSource = "costBasis",
 }: StocksPageProps = {}) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();

@@ -20,8 +20,8 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getRequestMetrics, getEndpointManifest } from "@/lib/api/admin";
 import type { RouteMetric, EndpointEntry } from "@/lib/api/admin";
-import { formatPercent } from "@/utils/currency";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 function methodBadgeClass(method: string) {
     switch (method) {
@@ -48,6 +48,7 @@ function errorRateBadgeClass(rate: number) {
 type MergedRow = EndpointEntry & Partial<RouteMetric>;
 
 export default function EndpointLivenessPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [filter, setFilter] = useState("");

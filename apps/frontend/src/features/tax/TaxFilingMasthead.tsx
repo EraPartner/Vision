@@ -16,20 +16,23 @@
  * No number is computed here. Every figure is a pass-through read of the
  * calculation the page already had.
  */
-import { History, Lock, Plus, Snowflake, Sparkles } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { formatPercent } from '@/utils/currency';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import type { BelgianTaxCalculation, BelgianTaxProfile } from '@/lib/belgianTax';
-import { TaxYearSwitcher } from './TaxYearSwitcher';
-import { YearActionsMenu } from './YearActionsMenu';
-import { resolveHistoricalBannerMode } from './historicalBannerMode';
-import type { HistoricalYearBannerMode } from './HistoricalYearBanner';
+import { History, Lock, Plus, Snowflake, Sparkles } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type {
+    BelgianTaxCalculation,
+    BelgianTaxProfile,
+} from "@/lib/belgianTax";
+import { TaxYearSwitcher } from "./TaxYearSwitcher";
+import { YearActionsMenu } from "./YearActionsMenu";
+import { resolveHistoricalBannerMode } from "./historicalBannerMode";
+import type { HistoricalYearBannerMode } from "./HistoricalYearBanner";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 /** `live` = the year the profile is actually on; the rest mirror the banner modes. */
-type FilingStatus = 'live' | HistoricalYearBannerMode;
+type FilingStatus = "live" | HistoricalYearBannerMode;
 
 const STATUS_ICON: Record<FilingStatus, typeof History> = {
     live: Sparkles,
@@ -41,11 +44,11 @@ const STATUS_ICON: Record<FilingStatus, typeof History> = {
 
 /** Jewel/warning accents from the ADR-105 palette — one tone per document state. */
 const STATUS_CLASS: Record<FilingStatus, string> = {
-    live: 'border-primary/40 bg-primary/10 text-primary',
-    estimate: 'border-border bg-secondary/60 text-muted-foreground',
-    snapshot: 'border-primary/30 bg-primary/5 text-primary',
-    frozen: 'border-info/40 bg-info/10 text-info',
-    filed: 'border-warning/40 bg-warning/10 text-warning',
+    live: "border-primary/40 bg-primary/10 text-primary",
+    estimate: "border-border bg-secondary/60 text-muted-foreground",
+    snapshot: "border-primary/30 bg-primary/5 text-primary",
+    frozen: "border-info/40 bg-info/10 text-info",
+    filed: "border-warning/40 bg-warning/10 text-warning",
 };
 
 interface TaxFilingMastheadProps {
@@ -55,7 +58,11 @@ interface TaxFilingMastheadProps {
     calculation: BelgianTaxCalculation;
 }
 
-export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadProps) {
+export function TaxFilingMasthead({
+    profile,
+    calculation,
+}: TaxFilingMastheadProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const {
         profile: liveProfile,
@@ -78,7 +85,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
           })
         : undefined;
 
-    const status: FilingStatus = historical?.mode ?? 'live';
+    const status: FilingStatus = historical?.mode ?? "live";
     const StatusIcon = STATUS_ICON[status];
 
     return (
@@ -101,9 +108,7 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                     {/* ── Identity: the year, its state, and the year controls ── */}
                     <div className="min-w-0">
-                        <p className="eyebrow">
-                            {t('tax.masthead.eyebrow')}
-                        </p>
+                        <p className="eyebrow">{t("tax.masthead.eyebrow")}</p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
                             <h2
                                 id="tax-filing-year"
@@ -113,12 +118,14 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                             </h2>
                             <span
                                 className={cn(
-                                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 eyebrow ',
+                                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 eyebrow ",
                                     STATUS_CLASS[status],
                                 )}
                             >
                                 <StatusIcon className="h-3 w-3" aria-hidden />
-                                <span className="sr-only">{t('tax.masthead.statusLabel')}: </span>
+                                <span className="sr-only">
+                                    {t("tax.masthead.statusLabel")}:{" "}
+                                </span>
                                 {t(`tax.masthead.status.${status}`)}
                             </span>
                         </div>
@@ -132,29 +139,35 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                     <dl className="flex flex-wrap items-end gap-x-8 gap-y-5">
                         <div className="min-w-0">
                             <dt className="eyebrow">
-                                {t('tax.masthead.meta.region')}
+                                {t("tax.masthead.meta.region")}
                             </dt>
                             {/* Resolves the stored enum through the same
                                 `tax.profile.region.*.label` keys RegionStep uses, so it
                                 reads "Flanders (Vlaanderen)" rather than `flanders`. */}
                             <dd className="mt-1.5 text-sm font-semibold text-foreground">
-                                {t(`tax.profile.region.${profile.region}.label`)}
+                                {t(
+                                    `tax.profile.region.${profile.region}.label`,
+                                )}
                             </dd>
                         </div>
                         <div>
                             <dt className="eyebrow">
-                                {t('tax.masthead.meta.marginalRate')}
+                                {t("tax.masthead.meta.marginalRate")}
                             </dt>
                             <dd className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
-                                {formatPercent(calculation.marginalRate, { digits: 0 })}
+                                {formatPercent(calculation.marginalRate, {
+                                    digits: 0,
+                                })}
                             </dd>
                         </div>
                         <div className="border-border/60 sm:border-l sm:pl-8">
                             <dt className="eyebrow">
-                                {t('tax.masthead.meta.effectiveBurden')}
+                                {t("tax.masthead.meta.effectiveBurden")}
                             </dt>
                             <dd className="mt-1 font-display text-4xl font-semibold leading-none tracking-tight tabular-nums text-primary sm:text-5xl">
-                                {formatPercent(calculation.effectiveRate, { digits: 1 })}
+                                {formatPercent(calculation.effectiveRate, {
+                                    digits: 1,
+                                })}
                             </dd>
                         </div>
                     </dl>
@@ -165,34 +178,53 @@ export function TaxFilingMasthead({ profile, calculation }: TaxFilingMastheadPro
                     <div className="mt-5 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-muted-foreground">
                             <span className="font-semibold text-foreground">
-                                {t(`tax.historical.banner.${historical.mode}Title`, {
-                                    year: String(viewedYear),
-                                })}
-                            </span>{' '}
+                                {t(
+                                    `tax.historical.banner.${historical.mode}Title`,
+                                    {
+                                        year: String(viewedYear),
+                                    },
+                                )}
+                            </span>{" "}
                             {t(`tax.historical.banner.${historical.mode}Desc`, {
                                 year: String(viewedYear),
                             })}
-                            {historical.mode === 'filed' && historical.filingReference && (
-                                <span className="ml-1 font-medium text-warning">
-                                    ({t('tax.historical.banner.filedReferencePrefix')}:{' '}
-                                    {historical.filingReference})
-                                </span>
-                            )}
+                            {historical.mode === "filed" &&
+                                historical.filingReference && (
+                                    <span className="ml-1 font-medium text-warning">
+                                        (
+                                        {t(
+                                            "tax.historical.banner.filedReferencePrefix",
+                                        )}
+                                        : {historical.filingReference})
+                                    </span>
+                                )}
                         </p>
                         <span className="flex shrink-0 items-center gap-2">
-                            {historical.mode === 'estimate' && (
+                            {historical.mode === "estimate" && (
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => createSnapshotFromLive(viewedYear)}
+                                    onClick={() =>
+                                        createSnapshotFromLive(viewedYear)
+                                    }
                                     className="gap-1"
                                 >
                                     <Plus className="h-3 w-3" />
-                                    {t('tax.historical.banner.createCta', { year: String(viewedYear) })}
+                                    {t("tax.historical.banner.createCta", {
+                                        year: String(viewedYear),
+                                    })}
                                 </Button>
                             )}
-                            <Button size="sm" variant="ghost" onClick={() => setViewedYear(liveProfile.taxYear)}>
-                                {t('tax.historical.banner.returnCta', { year: String(liveProfile.taxYear) })}
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                    setViewedYear(liveProfile.taxYear)
+                                }
+                            >
+                                {t("tax.historical.banner.returnCta", {
+                                    year: String(liveProfile.taxYear),
+                                })}
                             </Button>
                         </span>
                     </div>

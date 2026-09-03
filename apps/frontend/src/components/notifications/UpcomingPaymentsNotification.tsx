@@ -45,7 +45,7 @@ export function UpcomingPaymentsNotification() {
             <span className="flex items-center gap-2 text-muted-foreground">
               <span>{formatDateStringWithAppSettings(pt.planned_date, appSettings.dateFormat)}</span>
               <span className="font-semibold text-foreground">
-                {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale)}
+                {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)}
               </span>
               <button
                 type="button"

@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatPercent } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -72,6 +74,7 @@ const isIncluded = (inv: InvestmentSummary): boolean =>
  * prefers-reduced-motion (see .ticker-track in index.css).
  */
 export function PortfolioTicker({ items }: PortfolioTickerProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const isOnline = useOnlineStatus();
@@ -168,7 +171,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
             });
         }
         return out;
-    }, [data, included, fmt]);
+    }, [data, included, fmt, formatPercent]);
 
     // Build the duplicated tile track once per quote change. Decoupling it from
     // the `active` state means scrolling the tape in/out of view only flips a data

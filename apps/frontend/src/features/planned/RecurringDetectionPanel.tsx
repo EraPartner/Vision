@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
-import { formatCurrency, formatPercent } from "@/utils/currency";
 import {
     Card,
     CardContent,
@@ -32,6 +31,10 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
@@ -53,6 +56,8 @@ interface Props {
 }
 
 export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
+    const formatPercent = usePercentFormatter();
+    const formatCurrency = useCurrencyFormatter();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const queryClient = useQueryClient();

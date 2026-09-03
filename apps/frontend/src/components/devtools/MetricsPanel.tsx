@@ -4,7 +4,7 @@ import {
 } from "@/lib/devtools/queryMetrics";
 import { clearApiRequestLog } from "@/lib/devtools/apiRequestLog";
 import { cn } from "@/lib/utils";
-import { formatPercent } from "@/utils/currency";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 function StatCard({
     label,
@@ -36,6 +36,7 @@ function StatCard({
 }
 
 export function MetricsPanel() {
+    const formatPercent = usePercentFormatter();
     const metrics = useQueryMetrics();
     const errorPct = formatPercent(metrics.errorRate * 100, { digits: 1 });
     const cachePct = formatPercent(metrics.cacheHitRatio * 100, { digits: 1 });

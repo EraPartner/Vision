@@ -28,7 +28,7 @@ import { apiClient } from "@/lib/api";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -45,6 +45,10 @@ import {
     pushPaletteRecent,
     readPaletteRecents,
 } from "@/lib/commandPalette";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 
 interface PaletteQuote {
     symbol: string;
@@ -76,6 +80,8 @@ export function CommandPalette({
     onOpenSettings,
     onOpenShortcuts,
 }: CommandPaletteProps) {
+    const formatPercent = usePercentFormatter();
+    const formatCurrency = useCurrencyFormatter();
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
@@ -97,28 +103,19 @@ export function CommandPalette({
     const fxParsed = useMemo(() => parseFxQuery(query.trim()), [query]);
     const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
     const { convertToTarget } = useCurrencyConverter(fxTarget);
-    // One safe currency formatter for both the FX answer and the ticker quote:
-    // user-typed / provider-supplied currency codes can be invalid, so fall back
-    // to "<amount> <code>" instead of throwing (the reason this stays off
-    // useCurrencyFormatter, which assumes valid codes).
+    // User-typed/provider currency codes share the canonical guarded formatter.
+    // Keep this surface's useful code-bearing fallback for malformed values.
     const fmtSafeCurrency = useCallback(
         (val: number, currency: string, decimals?: number) => {
-            try {
-                return new Intl.NumberFormat(locale, {
-                    style: "currency",
-                    currency,
-                    ...(decimals != null
-                        ? {
-                              minimumFractionDigits: decimals,
-                              maximumFractionDigits: decimals,
-                          }
-                        : {}),
-                }).format(val);
-            } catch {
-                return `${val.toFixed(2)} ${currency}`;
-            }
+            const formatted = formatCurrency(val, {
+                currency,
+                decimals: decimals ?? appSettings.showDecimalPlaces ?? 2,
+            });
+            return formatted === `${val}`
+                ? `${val.toFixed(2)} ${currency}`
+                : formatted;
         },
-        [locale],
+        [appSettings.showDecimalPlaces, formatCurrency],
     );
 
     const fxResult = useMemo(() => {
@@ -280,7 +277,6 @@ export function CommandPalette({
                                                 {
                                                     digits: 2,
                                                     signed: true,
-                                                    locale,
                                                 },
                                             )}
                                         </span>

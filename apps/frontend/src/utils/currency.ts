@@ -9,9 +9,36 @@
  * first 12), so add new currencies with that in mind.
  */
 export const SUPPORTED_CURRENCIES = [
-    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
-    'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'TRY', 'SAR', 'AED', 'INR',
-    'BRL', 'MXN', 'ZAR', 'SGD', 'HKD', 'NZD', 'KRW', 'THB', 'MYR', 'PHP',
+    "EUR",
+    "USD",
+    "GBP",
+    "CHF",
+    "JPY",
+    "CAD",
+    "AUD",
+    "SEK",
+    "NOK",
+    "DKK",
+    "PLN",
+    "CZK",
+    "HUF",
+    "RON",
+    "BGN",
+    "HRK",
+    "TRY",
+    "SAR",
+    "AED",
+    "INR",
+    "BRL",
+    "MXN",
+    "ZAR",
+    "SGD",
+    "HKD",
+    "NZD",
+    "KRW",
+    "THB",
+    "MYR",
+    "PHP",
 ];
 
 /**
@@ -19,19 +46,27 @@ export const SUPPORTED_CURRENCIES = [
  * investment forms). Deliberately not a subset of SUPPORTED_CURRENCIES: it
  * includes BTC.
  */
-export const INVESTMENT_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SAR', 'BTC'];
+export const INVESTMENT_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "SAR", "BTC"];
 
-type CurrencyFormatDefaults = {
-  defaultCurrency: string;
-  locale: string;
-  fractionDigits: number;
-};
+const numberFormatterCache = new Map<string, Intl.NumberFormat>();
+const MAX_FORMATTER_CACHE_SIZE = 100;
 
-const currencyFormatDefaults: CurrencyFormatDefaults = {
-  defaultCurrency: 'EUR',
-  locale: 'en-US',
-  fractionDigits: 2,
-};
+function getNumberFormatter(
+    locale: string,
+    options: Intl.NumberFormatOptions,
+): Intl.NumberFormat {
+    const key = JSON.stringify([locale, options]);
+    let formatter = numberFormatterCache.get(key);
+    if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, options);
+        if (numberFormatterCache.size >= MAX_FORMATTER_CACHE_SIZE) {
+            const oldestKey = numberFormatterCache.keys().next().value;
+            if (oldestKey !== undefined) numberFormatterCache.delete(oldestKey);
+        }
+        numberFormatterCache.set(key, formatter);
+    }
+    return formatter;
+}
 
 /**
  * Map a numberFormat setting value (from AppSettings) to a BCP 47 locale string
@@ -47,63 +82,57 @@ const currencyFormatDefaults: CurrencyFormatDefaults = {
  * Heuristic: if both "," and "." are present, the rightmost wins as decimal.
  * If only "," and the segment after it is not 3 digits, treat as decimal.
  */
-export function parseLocaleNumber(input: string | number | null | undefined): number {
-  if (typeof input === 'number') return input;
-  if (input == null) return NaN;
-  let s = String(input).trim();
-  if (!s) return NaN;
-  s = s.replace(/\s/g, '').replace(/[$€£¥]/g, '');
-  let negative = false;
-  if (s.startsWith('(') && s.endsWith(')')) { negative = true; s = s.slice(1, -1); }
-  if (s.startsWith('-')) { negative = !negative; s = s.slice(1); }
-  else if (s.startsWith('+')) { s = s.slice(1); }
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
-  if (lastComma >= 0 && lastDot >= 0) {
-    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
-    else s = s.replace(/,/g, '');
-  } else if (lastComma >= 0) {
-    const tail = s.length - lastComma - 1;
-    if (tail === 3) s = s.replace(/,/g, '');
-    else s = s.replace(',', '.');
-  } else if (lastDot >= 0 && s.indexOf('.') !== lastDot) {
-    // Only dots, more than one of them → EU thousands grouping (e.g.
-    // "1.234.567"). A single dot is left untouched as the decimal point.
-    s = s.replace(/\./g, '');
-  }
-  const n = parseFloat(s);
-  if (isNaN(n)) return NaN;
-  return negative ? -n : n;
+export function parseLocaleNumber(
+    input: string | number | null | undefined,
+): number {
+    if (typeof input === "number") return input;
+    if (input == null) return NaN;
+    let s = String(input).trim();
+    if (!s) return NaN;
+    s = s.replace(/\s/g, "").replace(/[$€£¥]/g, "");
+    let negative = false;
+    if (s.startsWith("(") && s.endsWith(")")) {
+        negative = true;
+        s = s.slice(1, -1);
+    }
+    if (s.startsWith("-")) {
+        negative = !negative;
+        s = s.slice(1);
+    } else if (s.startsWith("+")) {
+        s = s.slice(1);
+    }
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    if (lastComma >= 0 && lastDot >= 0) {
+        if (lastComma > lastDot) s = s.replace(/\./g, "").replace(",", ".");
+        else s = s.replace(/,/g, "");
+    } else if (lastComma >= 0) {
+        const tail = s.length - lastComma - 1;
+        if (tail === 3) s = s.replace(/,/g, "");
+        else s = s.replace(",", ".");
+    } else if (lastDot >= 0 && s.indexOf(".") !== lastDot) {
+        // Only dots, more than one of them → EU thousands grouping (e.g.
+        // "1.234.567"). A single dot is left untouched as the decimal point.
+        s = s.replace(/\./g, "");
+    }
+    const n = parseFloat(s);
+    if (isNaN(n)) return NaN;
+    return negative ? -n : n;
 }
 
 export function numberFormatToLocale(numberFormat: string): string {
-  switch (numberFormat) {
-    case 'eu': return 'de-DE';   // 1.234,56 — European
-    case 'us': return 'en-US';   // 1,234.56 — US / UK
-    case 'ch': return 'de-CH';   // 1'234.56 — Swiss
-    case 'in': return 'en-IN';   // 1,23,456.78 — Indian
-    default:   return 'en-US';
-  }
-}
-
-export function configureCurrencyFormatDefaults(
-  updates: Partial<CurrencyFormatDefaults>
-): void {
-  if (updates.defaultCurrency) {
-    currencyFormatDefaults.defaultCurrency = updates.defaultCurrency;
-  }
-  if (updates.locale) {
-    currencyFormatDefaults.locale = updates.locale;
-  }
-  if (updates.fractionDigits !== undefined) {
-    currencyFormatDefaults.fractionDigits = Number.isFinite(updates.fractionDigits)
-      ? Math.max(0, Math.min(6, updates.fractionDigits))
-      : 2;
-  }
-}
-
-export function getCurrencyFormatDefaults(): CurrencyFormatDefaults {
-  return { ...currencyFormatDefaults };
+    switch (numberFormat) {
+        case "eu":
+            return "de-DE"; // 1.234,56 — European
+        case "us":
+            return "en-US"; // 1,234.56 — US / UK
+        case "ch":
+            return "de-CH"; // 1'234.56 — Swiss
+        case "in":
+            return "en-IN"; // 1,23,456.78 — Indian
+        default:
+            return "en-US";
+    }
 }
 
 /**
@@ -111,88 +140,104 @@ export function getCurrencyFormatDefaults(): CurrencyFormatDefaults {
  * @param currencyCode ISO 4217 currency code (e.g., 'EUR', 'USD', 'GBP')
  * @returns Currency symbol (e.g., '€', '$', '£')
  */
-export function getCurrencySymbol(currencyCode: string = 'EUR'): string {
-  const symbols: Record<string, string> = {
-    EUR: '€',
-    USD: '$',
-    GBP: '£',
-    JPY: '¥',
-    CHF: 'CHF',
-    CAD: 'CA$',
-    AUD: 'A$',
-    CNY: '¥',
-    INR: '₹',
-    BRL: 'R$',
-    RUB: '₽',
-    KRW: '₩',
-    MXN: 'MX$',
-    SEK: 'kr',
-    NOK: 'kr',
-    DKK: 'kr',
-    PLN: 'zł',
-    CZK: 'Kč',
-    HUF: 'Ft',
-  };
+export function getCurrencySymbol(currencyCode: string = "EUR"): string {
+    const symbols: Record<string, string> = {
+        EUR: "€",
+        USD: "$",
+        GBP: "£",
+        JPY: "¥",
+        CHF: "CHF",
+        CAD: "CA$",
+        AUD: "A$",
+        CNY: "¥",
+        INR: "₹",
+        BRL: "R$",
+        RUB: "₽",
+        KRW: "₩",
+        MXN: "MX$",
+        SEK: "kr",
+        NOK: "kr",
+        DKK: "kr",
+        PLN: "zł",
+        CZK: "Kč",
+        HUF: "Ft",
+    };
 
-  return symbols[currencyCode.toUpperCase()] || currencyCode;
+    return symbols[currencyCode.toUpperCase()] || currencyCode;
 }
 
 /**
  * Format amount with currency using Intl.NumberFormat
  * @param amount The amount to format
  * @param currencyCode ISO 4217 currency code
- * @param locale Optional locale override.
- * @param fractionDigits Optional fraction digits override.
+ * @param locale Explicit BCP 47 locale resolved by the caller.
+ * @param fractionDigits Explicit number of fraction digits.
  * @returns Formatted currency string
  */
 export function formatCurrency(
-  amount: number,
-  currencyCode?: string,
-  locale?: string,
-  fractionDigits?: number,
-  /** Render an explicit locale-correct sign (+/−) for non-zero amounts. */
-  signed?: boolean
+    amount: number,
+    currencyCode: string,
+    locale: string,
+    fractionDigits: number,
+    /** Render an explicit locale-correct sign (+/−) for non-zero amounts. */
+    signed = false,
 ): string {
-  const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
-  const effectiveLocale = locale || currencyFormatDefaults.locale;
-  const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
+    // Mirrors the Money.tsx / useCurrencyPartsFormatter guard: a malformed
+    // currency code or out-of-range fraction digits makes the Intl.NumberFormat
+    // constructor throw RangeError. Those siblings degrade to a bare `${val}`
+    // number; this string path must degrade to the byte-identical text, or the
+    // same bad input renders on one surface and crashes the page from the other
+    // (e.g. the forecast odometer degrades while the chart axis beside it throws
+    // into the error boundary).
+    try {
+        return getNumberFormatter(locale, {
+            style: "currency",
+            currency: currencyCode,
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits,
+            signDisplay: signed ? "exceptZero" : "auto",
+        }).format(amount);
+    } catch {
+        return `${amount}`;
+    }
+}
 
-  // Mirrors the Money.tsx / useCurrencyPartsFormatter guard: a malformed
-  // currency code or out-of-range fraction digits makes the Intl.NumberFormat
-  // constructor throw RangeError. Those siblings degrade to a bare `${val}`
-  // number; this string path must degrade to the byte-identical text, or the
-  // same bad input renders on one surface and crashes the page from the other
-  // (e.g. the forecast odometer degrades while the chart axis beside it throws
-  // into the error boundary).
-  try {
-    return new Intl.NumberFormat(effectiveLocale, {
-      style: 'currency',
-      currency: effectiveCurrency,
-      minimumFractionDigits: effectiveFractionDigits,
-      maximumFractionDigits: effectiveFractionDigits,
-      signDisplay: signed ? 'exceptZero' : 'auto',
-    }).format(amount);
-  } catch {
-    return `${amount}`;
-  }
+export function formatCurrencyParts(
+    amount: number,
+    currencyCode: string,
+    locale: string,
+    fractionDigits: number,
+    signed = false,
+): Intl.NumberFormatPart[] {
+    try {
+        return getNumberFormatter(locale, {
+            style: "currency",
+            currency: currencyCode,
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits,
+            signDisplay: signed ? "exceptZero" : "auto",
+        }).formatToParts(amount);
+    } catch {
+        return [{ type: "literal", value: `${amount}` }];
+    }
 }
 
 export interface PercentFormatOptions {
-  /**
-   * Fraction digits. Defaults to 1 — the house standard for gain/loss deltas.
-   * Non-delta readouts (tax rates, allocation shares) pass their own.
-   */
-  digits?: number;
-  /**
-   * Minimum fraction digits, when a site wants "up to N" rather than a fixed N
-   * (e.g. the rebalance weight column shows "7.5%" but "60%", not "60.0%").
-   * Defaults to `digits`, i.e. a fixed count.
-   */
-  minDigits?: number;
-  /** Render an explicit sign for non-zero values. See the sign note below. */
-  signed?: boolean;
-  /** Locale override; defaults to the configured app number-format locale. */
-  locale?: string;
+    /**
+     * Fraction digits. Defaults to 1 — the house standard for gain/loss deltas.
+     * Non-delta readouts (tax rates, allocation shares) pass their own.
+     */
+    digits?: number;
+    /**
+     * Minimum fraction digits, when a site wants "up to N" rather than a fixed N
+     * (e.g. the rebalance weight column shows "7.5%" but "60%", not "60.0%").
+     * Defaults to `digits`, i.e. a fixed count.
+     */
+    minDigits?: number;
+    /** Render an explicit sign for non-zero values. See the sign note below. */
+    signed?: boolean;
+    /** Locale resolved by the settings-aware caller. */
+    locale: string;
 }
 
 /**
@@ -227,83 +272,92 @@ export interface PercentFormatOptions {
  * sharing the convention. Do not switch a single site to 'always'/'auto'
  * without moving its money sibling too.
  */
-export function formatPercent(value: number, options: PercentFormatOptions = {}): string {
-  const { digits = 1, minDigits, signed = false, locale } = options;
-  const effectiveLocale = locale || currencyFormatDefaults.locale;
+export function formatPercent(
+    value: number,
+    options: PercentFormatOptions,
+): string {
+    const { digits = 1, minDigits, signed = false, locale } = options;
 
-  // Same degradation contract as formatCurrency: out-of-range fraction digits
-  // make the Intl.NumberFormat constructor throw RangeError, and a percent
-  // readout must never take a card into the error boundary.
-  try {
-    return `${new Intl.NumberFormat(effectiveLocale, {
-      minimumFractionDigits: minDigits ?? digits,
-      maximumFractionDigits: digits,
-      signDisplay: signed ? 'exceptZero' : 'auto',
-    }).format(value)}%`;
-  } catch {
-    return `${value}%`;
-  }
+    // Same degradation contract as formatCurrency: out-of-range fraction digits
+    // make the Intl.NumberFormat constructor throw RangeError, and a percent
+    // readout must never take a card into the error boundary.
+    try {
+        return `${getNumberFormatter(locale, {
+            minimumFractionDigits: minDigits ?? digits,
+            maximumFractionDigits: digits,
+            signDisplay: signed ? "exceptZero" : "auto",
+        }).format(value)}%`;
+    } catch {
+        return `${value}%`;
+    }
 }
 
 export interface CompactFormatResult {
-  display: string;
-  full: string;
-  isCompact: boolean;
-  /** formatToParts of `display` — feed to `<RollingNumber parts>` for the Money treatment. */
-  parts: Intl.NumberFormatPart[];
+    display: string;
+    full: string;
+    isCompact: boolean;
+    /** formatToParts of `display` — feed to `<RollingNumber parts>` for the Money treatment. */
+    parts: Intl.NumberFormatPart[];
 }
 
 const COMPACT_LENGTH_THRESHOLD = 9;
 
 export function formatCurrencyCompact(
-  amount: number,
-  currencyCode?: string,
-  locale?: string,
-  fractionDigits?: number,
-  /** Render a locale-correct sign for non-zero amounts. */
-  signed?: boolean,
+    amount: number,
+    currencyCode: string,
+    locale: string,
+    fractionDigits: number,
+    /** Render a locale-correct sign for non-zero amounts. */
+    signed = false,
 ): CompactFormatResult {
-  const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
-  const effectiveLocale = locale || currencyFormatDefaults.locale;
-  const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
+    try {
+        const fullParts = formatCurrencyParts(
+            amount,
+            currencyCode,
+            locale,
+            fractionDigits,
+            signed,
+        );
+        if (fullParts.length === 1 && fullParts[0]?.type === "literal") {
+            const fallback = fullParts[0].value;
+            return {
+                display: fallback,
+                full: fallback,
+                isCompact: false,
+                parts: fullParts,
+            };
+        }
+        const full = fullParts.map((p) => p.value).join("");
+        if (full.length <= COMPACT_LENGTH_THRESHOLD) {
+            return { display: full, full, isCompact: false, parts: fullParts };
+        }
 
-  try {
-    const fullParts = new Intl.NumberFormat(effectiveLocale, {
-      style: 'currency',
-      currency: effectiveCurrency,
-      minimumFractionDigits: effectiveFractionDigits,
-      maximumFractionDigits: effectiveFractionDigits,
-      signDisplay: signed ? 'exceptZero' : 'auto',
-    }).formatToParts(amount);
-    const full = fullParts.map((p) => p.value).join('');
-    if (full.length <= COMPACT_LENGTH_THRESHOLD) {
-      return { display: full, full, isCompact: false, parts: fullParts };
+        const compactParts = getNumberFormatter(locale, {
+            style: "currency",
+            currency: currencyCode,
+            notation: "compact",
+            maximumFractionDigits: 1,
+            signDisplay: signed ? "exceptZero" : "auto",
+        }).formatToParts(amount);
+        const compact = compactParts.map((p) => p.value).join("");
+        const hasCompactNotation = compactParts.some(
+            (p) => p.type === "compact",
+        );
+
+        if (!hasCompactNotation || compact.length >= full.length) {
+            return { display: full, full, isCompact: false, parts: fullParts };
+        }
+
+        return { display: compact, full, isCompact: true, parts: compactParts };
+    } catch {
+        const fallback = `${amount}`;
+        return {
+            display: fallback,
+            full: fallback,
+            isCompact: false,
+            parts: [{ type: "literal", value: fallback }],
+        };
     }
-
-    const compactParts = new Intl.NumberFormat(effectiveLocale, {
-      style: 'currency',
-      currency: effectiveCurrency,
-      notation: 'compact',
-      maximumFractionDigits: 1,
-      signDisplay: signed ? 'exceptZero' : 'auto',
-    }).formatToParts(amount);
-    const compact = compactParts.map((p) => p.value).join('');
-    const hasCompactNotation = compactParts.some((p) => p.type === 'compact');
-
-    if (!hasCompactNotation || compact.length >= full.length) {
-      return { display: full, full, isCompact: false, parts: fullParts };
-    }
-
-    return { display: compact, full, isCompact: true, parts: compactParts };
-  } catch {
-    const fallback = `${amount}`;
-    return {
-      display: fallback,
-      full: fallback,
-      isCompact: false,
-      parts: [{ type: 'literal', value: fallback }],
-    };
-  }
 }
 
 /**
@@ -313,38 +367,40 @@ export function formatCurrencyCompact(
  * let `Intl` keep the locale's decimal separator and currency ordering.
  */
 export function formatCurrencyAxisCompact(
-  amount: number,
-  currencyCode: string,
-  locale: string,
+    amount: number,
+    currencyCode: string,
+    locale: string,
 ): string {
-  const magnitude = Math.abs(amount);
-  const [divisor, suffix] = magnitude >= 1e12
-    ? [1e12, 'T']
-    : magnitude >= 1e9
-      ? [1e9, 'B']
-      : magnitude >= 1e6
-        ? [1e6, 'M']
-        : magnitude >= 1e3
-          ? [1e3, 'k']
-          : [1, ''];
-  let parts: Intl.NumberFormatPart[];
-  try {
-    parts = new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: suffix ? 1 : 0,
-    }).formatToParts(amount / divisor);
-  } catch {
-    return `${amount}`;
-  }
+    const magnitude = Math.abs(amount);
+    const [divisor, suffix] =
+        magnitude >= 1e12
+            ? [1e12, "T"]
+            : magnitude >= 1e9
+              ? [1e9, "B"]
+              : magnitude >= 1e6
+                ? [1e6, "M"]
+                : magnitude >= 1e3
+                  ? [1e3, "k"]
+                  : [1, ""];
+    let parts: Intl.NumberFormatPart[];
+    try {
+        parts = getNumberFormatter(locale, {
+            style: "currency",
+            currency: currencyCode,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: suffix ? 1 : 0,
+        }).formatToParts(amount / divisor);
+    } catch {
+        return `${amount}`;
+    }
 
-  if (!suffix) return parts.map((part) => part.value).join('');
+    if (!suffix) return parts.map((part) => part.value).join("");
 
-  let lastNumberPart = -1;
-  parts.forEach((part, index) => {
-    if (part.type === 'integer' || part.type === 'fraction') lastNumberPart = index;
-  });
-  parts.splice(lastNumberPart + 1, 0, { type: 'literal', value: suffix });
-  return parts.map((part) => part.value).join('');
+    let lastNumberPart = -1;
+    parts.forEach((part, index) => {
+        if (part.type === "integer" || part.type === "fraction")
+            lastNumberPart = index;
+    });
+    parts.splice(lastNumberPart + 1, 0, { type: "literal", value: suffix });
+    return parts.map((part) => part.value).join("");
 }

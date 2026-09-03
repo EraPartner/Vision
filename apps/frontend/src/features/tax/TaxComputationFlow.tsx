@@ -21,10 +21,19 @@
  */
 import type { ReactNode } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { formatPercent } from "@/utils/currency";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { BelgianTaxCalculation } from "@/lib/belgianTax";
 
@@ -64,7 +73,11 @@ interface TaxComputationFlowProps {
 
 /** A step written as prose (no amount) rather than a signed line item. */
 function isProse(group: FlowOperationGroup): boolean {
-    return !group.heading && group.items.length === 1 && group.items[0].value === undefined;
+    return (
+        !group.heading &&
+        group.items.length === 1 &&
+        group.items[0].value === undefined
+    );
 }
 
 const FIGURE_SIZE: Record<0 | 1 | 2, string> = {
@@ -80,6 +93,7 @@ export function TaxComputationFlow({
     totalTaxIncludingPropertyEstimate,
     viewedYear,
 }: TaxComputationFlowProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     // Parts formatter keeps the Money micro-typography inside the odometer,
@@ -97,9 +111,21 @@ export function TaxComputationFlow({
             then: {
                 heading: t("tax.flow.opGroup.deductions"),
                 items: [
-                    { label: t("tax.pit.row.employeeSS"), value: calculation.employeeSocialSecurity, sign: "−" },
-                    { label: t("tax.profile.field.professionalExpenses"), value: calculation.professionalExpenses, sign: "−" },
-                    { label: t("tax.profile.section.otherDeductions.title"), value: calculation.otherDeductionsTotal, sign: "−" },
+                    {
+                        label: t("tax.pit.row.employeeSS"),
+                        value: calculation.employeeSocialSecurity,
+                        sign: "−",
+                    },
+                    {
+                        label: t("tax.profile.field.professionalExpenses"),
+                        value: calculation.professionalExpenses,
+                        sign: "−",
+                    },
+                    {
+                        label: t("tax.profile.section.otherDeductions.title"),
+                        value: calculation.otherDeductionsTotal,
+                        sign: "−",
+                    },
                 ],
             },
         },
@@ -117,7 +143,11 @@ export function TaxComputationFlow({
             tone: "text-loss",
             then: {
                 items: [
-                    { label: t("tax.pit.row.communalSurcharge"), value: calculation.communalSurcharge, sign: "+" },
+                    {
+                        label: t("tax.pit.row.communalSurcharge"),
+                        value: calculation.communalSurcharge,
+                        sign: "+",
+                    },
                 ],
             },
         },
@@ -131,9 +161,21 @@ export function TaxComputationFlow({
             then: {
                 heading: t("tax.flow.opGroup.alsoOwed"),
                 items: [
-                    { label: t("tax.pit.row.employeeSS"), value: calculation.employeeSocialSecurity, sign: "+" },
-                    { label: t("tax.pit.row.specialSS"), value: calculation.specialSocialSecurityContribution, sign: "+" },
-                    { label: t("tax.pit.row.propertyTaxEstimate"), value: calculation.propertyTaxEstimate, sign: "+" },
+                    {
+                        label: t("tax.pit.row.employeeSS"),
+                        value: calculation.employeeSocialSecurity,
+                        sign: "+",
+                    },
+                    {
+                        label: t("tax.pit.row.specialSS"),
+                        value: calculation.specialSocialSecurityContribution,
+                        sign: "+",
+                    },
+                    {
+                        label: t("tax.pit.row.propertyTaxEstimate"),
+                        value: calculation.propertyTaxEstimate,
+                        sign: "+",
+                    },
                 ],
             },
         },
@@ -158,7 +200,9 @@ export function TaxComputationFlow({
 
     const coda = [
         {
-            label: t("tax.pit.row.portfolioTaxesYear", { year: String(viewedYear) }),
+            label: t("tax.pit.row.portfolioTaxesYear", {
+                year: String(viewedYear),
+            }),
             value: portfolioTaxesForYear,
             tone: "text-loss",
         },
@@ -181,7 +225,9 @@ export function TaxComputationFlow({
         <Card className="overflow-hidden">
             <CardHeader>
                 <CardTitle>{t("tax.flow.title")}</CardTitle>
-                <CardDescription>{t("tax.flow.description", { year: String(viewedYear) })}</CardDescription>
+                <CardDescription>
+                    {t("tax.flow.description", { year: String(viewedYear) })}
+                </CardDescription>
             </CardHeader>
             <CardContent>
                 <ol className="relative">
@@ -189,7 +235,10 @@ export function TaxComputationFlow({
                         const isLast = index === stages.length - 1;
                         const weight = stage.weight ?? 0;
                         return (
-                            <li key={stage.id} className="relative flex gap-4 sm:gap-5">
+                            <li
+                                key={stage.id}
+                                className="relative flex gap-4 sm:gap-5"
+                            >
                                 {/* Gutter: the document's spine. The rail runs from this
                                     stage's node down into the next one; the last stage
                                     ends it. */}
@@ -211,13 +260,20 @@ export function TaxComputationFlow({
                                     />
                                 </div>
 
-                                <div className={cn("min-w-0 flex-1", isLast ? "pb-1" : "pb-5")}>
+                                <div
+                                    className={cn(
+                                        "min-w-0 flex-1",
+                                        isLast ? "pb-1" : "pb-5",
+                                    )}
+                                >
                                     {/* Anchor: a running total in the computation. */}
                                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                                         <p
                                             className={cn(
                                                 "font-semibold text-foreground",
-                                                weight === 2 ? "text-base" : "text-sm",
+                                                weight === 2
+                                                    ? "text-base"
+                                                    : "text-sm",
                                             )}
                                         >
                                             {stage.label}
@@ -229,13 +285,17 @@ export function TaxComputationFlow({
                                                 stage.tone,
                                             )}
                                         >
-                                            <RollingNumber parts={fmtParts(stage.value)} />
+                                            <RollingNumber
+                                                parts={fmtParts(stage.value)}
+                                            />
                                         </p>
                                     </div>
                                     {(stage.note || stage.chip) && (
                                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                                             {stage.note && (
-                                                <span className="text-xs text-muted-foreground">{stage.note}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {stage.note}
+                                                </span>
                                             )}
                                             {stage.chip && (
                                                 <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/50 px-2 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
@@ -266,8 +326,11 @@ export function TaxComputationFlow({
                                                         key={op.label}
                                                         className="flex items-baseline justify-between gap-4 text-xs"
                                                     >
-                                                        <span className="text-muted-foreground">{op.label}</span>
-                                                        {op.value !== undefined && (
+                                                        <span className="text-muted-foreground">
+                                                            {op.label}
+                                                        </span>
+                                                        {op.value !==
+                                                            undefined && (
                                                             <span className="shrink-0 font-medium tabular-nums text-foreground">
                                                                 {op.sign}
                                                                 {fmt(op.value)}
@@ -286,14 +349,22 @@ export function TaxComputationFlow({
 
                 {/* Coda: figures that sit outside the personal-income-tax chain. */}
                 <div className="mt-5 border-t border-border/60 pt-4">
-                    <p className="eyebrow">
-                        {t("tax.flow.coda.title")}
-                    </p>
+                    <p className="eyebrow">{t("tax.flow.coda.title")}</p>
                     <ul className="mt-2 space-y-1.5">
                         {coda.map((row) => (
-                            <li key={row.label} className="flex items-baseline justify-between gap-4 text-sm">
-                                <span className="text-muted-foreground">{row.label}</span>
-                                <span className={cn("shrink-0 font-semibold tabular-nums", row.tone)}>
+                            <li
+                                key={row.label}
+                                className="flex items-baseline justify-between gap-4 text-sm"
+                            >
+                                <span className="text-muted-foreground">
+                                    {row.label}
+                                </span>
+                                <span
+                                    className={cn(
+                                        "shrink-0 font-semibold tabular-nums",
+                                        row.tone,
+                                    )}
+                                >
                                     {fmt(row.value)}
                                 </span>
                             </li>

@@ -20,7 +20,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { getChartColor } from "@/components/charts/palette";
-import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCashflowForecastAccuracy } from "@/lib/api/aggregations";
@@ -41,15 +42,25 @@ const METHOD_COLORS: Record<string, string> = {
     monte_carlo_block_bootstrap: getChartColor(6),
 };
 
-function mapeLabel(mape: number): string {
-    if (!Number.isFinite(mape) || mape > 9999) return "N/A";
-    return formatPercent(mape, { digits: 1 });
-}
-
 function RankBadge({ rank }: { rank: number }) {
-    if (rank === 1) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">#{rank}</Badge>;
-    if (rank === 2) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">#{rank}</Badge>;
-    if (rank === 3) return <Badge className="text-2xs px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">#{rank}</Badge>;
+    if (rank === 1)
+        return (
+            <Badge className="text-2xs px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">
+                #{rank}
+            </Badge>
+        );
+    if (rank === 2)
+        return (
+            <Badge className="text-2xs px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">
+                #{rank}
+            </Badge>
+        );
+    if (rank === 3)
+        return (
+            <Badge className="text-2xs px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">
+                #{rank}
+            </Badge>
+        );
     return <span className="text-xs text-muted-foreground">#{rank}</span>;
 }
 
@@ -57,10 +68,18 @@ interface MethodRowProps {
     entry: ForecastBacktestEntry & { rank: number };
     currency: string;
     locale: string;
+    fractionDigits: number;
     persistedHistory: AccuracyHistoryPoint[] | undefined;
 }
 
-function MethodRow({ entry, currency, locale, persistedHistory }: MethodRowProps) {
+function MethodRow({
+    entry,
+    currency,
+    locale,
+    fractionDigits,
+    persistedHistory,
+}: MethodRowProps) {
+    const formatPercent = usePercentFormatter();
     const color = METHOD_COLORS[entry.method_id] ?? getChartColor(7);
 
     const maePoints = useMemo(() => {
@@ -82,13 +101,15 @@ function MethodRow({ entry, currency, locale, persistedHistory }: MethodRowProps
                 </div>
             </TableCell>
             <TableCell className="py-2 text-right tabular-nums text-sm">
-                {formatCurrency(entry.mae, currency, locale)}
+                {formatCurrency(entry.mae, currency, locale, fractionDigits)}
             </TableCell>
             <TableCell className="py-2 text-right tabular-nums text-sm">
-                {formatCurrency(entry.rmse, currency, locale)}
+                {formatCurrency(entry.rmse, currency, locale, fractionDigits)}
             </TableCell>
             <TableCell className="py-2 text-right tabular-nums text-sm">
-                {mapeLabel(entry.mape)}
+                {!Number.isFinite(entry.mape) || entry.mape > 9999
+                    ? "N/A"
+                    : formatPercent(entry.mape, { digits: 1 })}
             </TableCell>
             <TableCell className="py-2 text-right tabular-nums text-xs text-muted-foreground">
                 {entry.months}
@@ -98,7 +119,12 @@ function MethodRow({ entry, currency, locale, persistedHistory }: MethodRowProps
             </TableCell>
             <TableCell className="py-2 w-24">
                 {maePoints.length > 1 ? (
-                    <Sparkline data={maePoints} height={24} color={color} strokeWidth={1.5} />
+                    <Sparkline
+                        data={maePoints}
+                        height={24}
+                        color={color}
+                        strokeWidth={1.5}
+                    />
                 ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                 )}
@@ -134,7 +160,9 @@ export function CashFlowForecastDiagnostics({
 
     const persistedByMethod = useMemo(() => {
         if (!persistedData) return new Map<string, AccuracyHistoryPoint[]>();
-        return new Map(persistedData.methods.map((m) => [m.method_id, m.history]));
+        return new Map(
+            persistedData.methods.map((m) => [m.method_id, m.history]),
+        );
     }, [persistedData]);
 
     const hasPersistedData = persistedData && persistedData.methods.length > 0;
@@ -161,32 +189,54 @@ export function CashFlowForecastDiagnostics({
                 methodId: e.method_id,
                 rmse: e.rmse,
                 // Approximate the per-method sample size from the backtest months.
-                sampleDays: e.per_month.reduce((s, p) => s + (p.sample_days || 0), 0) || DEFAULT_SAMPLE_DAYS,
+                sampleDays:
+                    e.per_month.reduce((s, p) => s + (p.sample_days || 0), 0) ||
+                    DEFAULT_SAMPLE_DAYS,
             }));
         if (rows.length === 0) return new Map<string, number>();
 
         const meanRmse = rows.reduce((s, r) => s + r.rmse, 0) / rows.length;
         const raw = rows.map((r) => {
-            const shrunkRmse = (r.sampleDays * r.rmse + SHRINKAGE_PRIOR_DAYS * meanRmse) / (r.sampleDays + SHRINKAGE_PRIOR_DAYS);
-            return { methodId: r.methodId, w: 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2 };
+            const shrunkRmse =
+                (r.sampleDays * r.rmse + SHRINKAGE_PRIOR_DAYS * meanRmse) /
+                (r.sampleDays + SHRINKAGE_PRIOR_DAYS);
+            return {
+                methodId: r.methodId,
+                w: 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2,
+            };
         });
         const total = raw.reduce((s, r) => s + r.w, 0);
         const m = raw.length;
-        return new Map(raw.map((r) => [r.methodId, (1 - UNIFORM_FLOOR) * (r.w / total) + UNIFORM_FLOOR / m]));
+        return new Map(
+            raw.map((r) => [
+                r.methodId,
+                (1 - UNIFORM_FLOOR) * (r.w / total) + UNIFORM_FLOOR / m,
+            ]),
+        );
     }, [ranked]);
 
-    const topWeight = Math.max(...Array.from(inverseWeights.values(), (v) => v), 0);
+    const topWeight = Math.max(
+        ...Array.from(inverseWeights.values(), (v) => v),
+        0,
+    );
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+            <SheetContent
+                side="right"
+                className="w-full sm:max-w-2xl overflow-y-auto"
+            >
                 <SheetHeader className="mb-6">
                     <div className="flex items-center gap-2">
                         <FlaskConical className="h-5 w-5 text-primary" />
-                        <SheetTitle>{t("cashflow.diagnostics.title")}</SheetTitle>
+                        <SheetTitle>
+                            {t("cashflow.diagnostics.title")}
+                        </SheetTitle>
                     </div>
                     <SheetDescription>
-                        {t("cashflow.diagnostics.desc", { months: String(diagnostics.history_months) })}
+                        {t("cashflow.diagnostics.desc", {
+                            months: String(diagnostics.history_months),
+                        })}
                     </SheetDescription>
                 </SheetHeader>
 
@@ -198,7 +248,9 @@ export function CashFlowForecastDiagnostics({
                         {hasPersistedData && (
                             <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                                 <Database className="h-3 w-3" />
-                                <span>{t("cashflow.diagnostics.persistedHistory")}</span>
+                                <span>
+                                    {t("cashflow.diagnostics.persistedHistory")}
+                                </span>
                             </div>
                         )}
                     </div>
@@ -206,13 +258,27 @@ export function CashFlowForecastDiagnostics({
                         <Table>
                             <TableHeader>
                                 <TableRow className="text-xs">
-                                    <TableHead className="py-2">{t("cashflow.diagnostics.method")}</TableHead>
-                                    <TableHead className="py-2 text-right">MAE</TableHead>
-                                    <TableHead className="py-2 text-right">RMSE</TableHead>
-                                    <TableHead className="py-2 text-right">MAPE</TableHead>
-                                    <TableHead className="py-2 text-right">{t("cashflow.diagnostics.months")}</TableHead>
-                                    <TableHead className="py-2">{t("cashflow.diagnostics.rank")}</TableHead>
-                                    <TableHead className="py-2">{t("cashflow.diagnostics.maeTrend")}</TableHead>
+                                    <TableHead className="py-2">
+                                        {t("cashflow.diagnostics.method")}
+                                    </TableHead>
+                                    <TableHead className="py-2 text-right">
+                                        MAE
+                                    </TableHead>
+                                    <TableHead className="py-2 text-right">
+                                        RMSE
+                                    </TableHead>
+                                    <TableHead className="py-2 text-right">
+                                        MAPE
+                                    </TableHead>
+                                    <TableHead className="py-2 text-right">
+                                        {t("cashflow.diagnostics.months")}
+                                    </TableHead>
+                                    <TableHead className="py-2">
+                                        {t("cashflow.diagnostics.rank")}
+                                    </TableHead>
+                                    <TableHead className="py-2">
+                                        {t("cashflow.diagnostics.maeTrend")}
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -222,7 +288,12 @@ export function CashFlowForecastDiagnostics({
                                         entry={entry}
                                         currency={currency}
                                         locale={locale}
-                                        persistedHistory={persistedByMethod.get(entry.method_id)}
+                                        fractionDigits={
+                                            appSettings.showDecimalPlaces ?? 2
+                                        }
+                                        persistedHistory={persistedByMethod.get(
+                                            entry.method_id,
+                                        )}
                                     />
                                 ))}
                             </TableBody>
@@ -231,7 +302,10 @@ export function CashFlowForecastDiagnostics({
                     <p className="mt-2 text-2xs text-muted-foreground">
                         {hasPersistedData
                             ? t("cashflow.diagnostics.backtestNoteWithHistory")
-                            : t("cashflow.diagnostics.backtestNote", { n: String(diagnostics.history_months), currency })}
+                            : t("cashflow.diagnostics.backtestNote", {
+                                  n: String(diagnostics.history_months),
+                                  currency,
+                              })}
                     </p>
                 </section>
 
@@ -247,17 +321,28 @@ export function CashFlowForecastDiagnostics({
                             {ranked
                                 .filter((e) => inverseWeights.has(e.method_id))
                                 .map((e) => {
-                                    const w = inverseWeights.get(e.method_id) ?? 0;
+                                    const w =
+                                        inverseWeights.get(e.method_id) ?? 0;
                                     const pct = Math.round(w * 100);
-                                    const barPct = topWeight > 0 ? (w / topWeight) * 100 : 0;
-                                    const color = METHOD_COLORS[e.method_id] ?? getChartColor(7);
+                                    const barPct =
+                                        topWeight > 0
+                                            ? (w / topWeight) * 100
+                                            : 0;
+                                    const color =
+                                        METHOD_COLORS[e.method_id] ??
+                                        getChartColor(7);
                                     return (
-                                        <div key={e.method_id} className="flex items-center gap-3">
+                                        <div
+                                            key={e.method_id}
+                                            className="flex items-center gap-3"
+                                        >
                                             <span
                                                 className="inline-block size-2 rounded-full flex-shrink-0"
                                                 style={{ background: color }}
                                             />
-                                            <span className="text-xs w-44 truncate">{e.label}</span>
+                                            <span className="text-xs w-44 truncate">
+                                                {e.label}
+                                            </span>
                                             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                                                 <div
                                                     className="h-full rounded-full transition-[width] duration-normal"

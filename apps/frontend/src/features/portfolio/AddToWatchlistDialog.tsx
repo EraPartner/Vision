@@ -27,7 +27,6 @@ import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { formatPercent } from "@/utils/currency";
 
 import {
     searchMarket,
@@ -35,6 +34,7 @@ import {
     createWatchlistItem,
     type MarketSearchResult,
 } from "@/lib/api/market";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 type SearchResult = MarketSearchResult;
 type AssetClass = "stock" | "etf" | "crypto" | "metals";
@@ -71,6 +71,7 @@ export function AddToWatchlistDialog({
     onOpenChange,
     prefill,
 }: AddToWatchlistDialogProps) {
+    const formatPercent = usePercentFormatter();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedAsset, setSelectedAsset] = useState<SearchResult | null>(
         null,

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useInsightsDigest } from "@/hooks/useInsightsDigest";
-import { formatCurrency, formatPercent } from "@/utils/currency";
 import {
     Card,
     CardContent,
@@ -33,6 +32,10 @@ import {
 } from "@/lib/insightsDismiss";
 import type { CategoryOutlier } from "@/lib/api/info";
 import { DeltaPill } from "@/components/shared/DeltaPill";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 
 /**
  * AI-insights digest for the Statistics page (detection layer, no LLM):
@@ -44,6 +47,8 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
  * expand/collapse, X-dismiss rows).
  */
 export function InsightsDigestPanel() {
+    const formatPercent = usePercentFormatter();
+    const formatCurrency = useCurrencyFormatter();
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(true);
     const [dismissState, setDismissState] = useState(loadDismissState);

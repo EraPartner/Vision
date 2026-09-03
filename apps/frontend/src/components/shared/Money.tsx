@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 
 interface MoneyProps {
     amount: number;
@@ -14,59 +13,41 @@ interface MoneyProps {
     className?: string;
 }
 
-// Intl.NumberFormat construction is ~50-200µs; a Money instance renders 30-50
-// times per virtual-scroll batch. Cache one formatter per distinct
-// locale/currency/digits/signed combination so only formatToParts(amount) runs
-// per render.
-const currencyFormatterCache = new Map<string, Intl.NumberFormat>();
-
-function getCurrencyFormatter(
-    locale: string,
-    currency: string,
-    digits: number,
-    signed: boolean,
-): Intl.NumberFormat {
-    const key = `${locale}:${currency}:${digits}:${signed}`;
-    let fmt = currencyFormatterCache.get(key);
-    if (!fmt) {
-        fmt = new Intl.NumberFormat(locale, {
-            style: "currency",
-            currency,
-            minimumFractionDigits: digits,
-            maximumFractionDigits: digits,
-            signDisplay: signed ? "exceptZero" : "auto",
-        });
-        currencyFormatterCache.set(key, fmt);
-    }
-    return fmt;
-}
-
 /**
  * Currency micro-typography: the symbol renders small and raised, decimals
  * (separator + fraction) render at reduced size/opacity — the Apple Wallet
  * treatment. Built on Intl.NumberFormat.formatToParts so it is correct for
  * every locale/currency combination the app supports.
  */
-export function Money({ amount, currency, fractionDigits, signed = false, className }: MoneyProps) {
-    const { appSettings } = useAppSettings();
-    const resolvedCurrency = currency || appSettings.defaultCurrency || "EUR";
-    const locale = numberFormatToLocale(appSettings.numberFormat);
-    const digits = fractionDigits ?? appSettings.showDecimalPlaces ?? 2;
+export function Money({
+    amount,
+    currency,
+    fractionDigits,
+    signed = false,
+    className,
+}: MoneyProps) {
+    const formatParts = useCurrencyPartsFormatter(currency);
 
-    const parts = useMemo(() => {
-        try {
-            return getCurrencyFormatter(locale, resolvedCurrency, digits, signed).formatToParts(amount);
-        } catch {
-            return [{ type: "literal" as const, value: `${amount}` }];
-        }
-    }, [amount, resolvedCurrency, locale, digits, signed]);
+    const parts = useMemo(
+        () =>
+            formatParts(amount, { currency, decimals: fractionDigits, signed }),
+        [amount, currency, formatParts, fractionDigits, signed],
+    );
 
     return (
-        <span className={cn("inline-flex items-baseline tabular-nums whitespace-nowrap", className)}>
+        <span
+            className={cn(
+                "inline-flex items-baseline tabular-nums whitespace-nowrap",
+                className,
+            )}
+        >
             {parts.map((part, i) => {
                 if (part.type === "currency") {
                     return (
-                        <span key={i} className="text-[0.85em] font-medium opacity-85 self-start mt-[0.04em] mr-[0.06em]">
+                        <span
+                            key={i}
+                            className="text-[0.85em] font-medium opacity-85 self-start mt-[0.04em] mr-[0.06em]"
+                        >
                             {part.value}
                         </span>
                     );

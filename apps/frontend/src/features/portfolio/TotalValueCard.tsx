@@ -6,7 +6,8 @@
  *   2. Asset-class mini bars (split by group)
  *   3. Best / worst performer rows
  *
- * All data is supplied by the parent; no hooks, no side effects.
+ * All financial data is supplied by the parent. Leaf components only read the
+ * shared percent-format settings; they do not fetch data or cause side effects.
  */
 
 import { type ReactNode } from "react";
@@ -23,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { cn } from "@/lib/utils";
-import { formatPercent } from "@/utils/currency";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -90,16 +91,6 @@ export interface TotalValueCardProps {
     isGain?: boolean;
 }
 
-/**
- * Signed delta percent. Thin wrapper over the shared formatter so this file
- * keeps its "presentational, no hooks" contract: the locale comes from the
- * app-synced module default (same source `formatCurrency` uses when a caller
- * passes no locale), not from a context read.
- */
-function formatDeltaPercent(pct: number): string {
-    return formatPercent(pct, { digits: 1, signed: true });
-}
-
 function AssetSplitBars({
     allocation,
     total,
@@ -113,6 +104,7 @@ function AssetSplitBars({
     showValues: boolean;
     fractionDigits: number;
 }) {
+    const formatPercent = usePercentFormatter();
     if (allocation.length === 0 || total <= 0) return null;
     const palette = [
         "hsl(217, 91%, 60%)",
@@ -180,6 +172,7 @@ function PerformerRow({
     kind: "best" | "worst";
     formatCurrency: (v: number) => string;
 }) {
+    const formatPercent = usePercentFormatter();
     if (!entry) return null;
     const positive = entry.gainLossPercent >= 0;
     const Icon = kind === "best" ? ArrowUpRight : ArrowDownRight;
@@ -207,7 +200,10 @@ function PerformerRow({
             </div>
             <div className={cn("text-right shrink-0 tabular-nums", tone)}>
                 <p className="text-xs font-semibold leading-none">
-                    {formatDeltaPercent(entry.gainLossPercent)}
+                    {formatPercent(entry.gainLossPercent, {
+                        digits: 1,
+                        signed: true,
+                    })}
                 </p>
                 <p className="text-2xs leading-tight mt-0.5">
                     <Money amount={entry.gainLossInTarget} signed />
@@ -226,6 +222,7 @@ function Sparkline({
     label: string;
     neutral?: boolean;
 }) {
+    const formatPercent = usePercentFormatter();
     if (points.length < 2) return null;
     const first = points[0].v;
     const last = points[points.length - 1].v;
@@ -257,7 +254,7 @@ function Sparkline({
                     )}
                 >
                     <Trend className="h-3 w-3" aria-hidden />
-                    {formatDeltaPercent(pct)}
+                    {formatPercent(pct, { digits: 1, signed: true })}
                 </span>
             </div>
             <ChartSparkline

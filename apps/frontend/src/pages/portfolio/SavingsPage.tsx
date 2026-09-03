@@ -21,7 +21,10 @@ import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDia
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
@@ -31,7 +34,6 @@ import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { formatPercent } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 
@@ -41,6 +43,7 @@ function daysUntil(dateStr?: string) {
 }
 
 export default function SavingsPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
@@ -90,7 +93,10 @@ export default function SavingsPage() {
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("savings.title")} icon={PAGE_ICONS["/portfolio/savings"]} />
+                <PageHeader
+                    title={t("savings.title")}
+                    icon={PAGE_ICONS["/portfolio/savings"]}
+                />
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-64 w-full" />
             </PageShell>
@@ -99,7 +105,10 @@ export default function SavingsPage() {
     if (isError) {
         return (
             <PageShell className="">
-                <PageHeader title={t("savings.title")} icon={PAGE_ICONS["/portfolio/savings"]} />
+                <PageHeader
+                    title={t("savings.title")}
+                    icon={PAGE_ICONS["/portfolio/savings"]}
+                />
                 <PageError
                     title={t("savings.pageErrorTitle")}
                     message={error?.message ?? t("common.error")}

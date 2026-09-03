@@ -25,11 +25,6 @@ import {
 } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
-import {
-    configureCurrencyFormatDefaults,
-    numberFormatToLocale,
-} from "@/utils/currency";
-
 import { lazy, Suspense, useCallback, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { GlobalMutationErrorToaster } from "@/components/shared/GlobalMutationErrorToaster";
@@ -154,18 +149,6 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
         }
         setNativeLanguage(language);
     }, [language]);
-
-    useEffect(() => {
-        configureCurrencyFormatDefaults({
-            defaultCurrency: appSettings.defaultCurrency,
-            locale: numberFormatToLocale(appSettings.numberFormat),
-            fractionDigits: appSettings.showDecimalPlaces,
-        });
-    }, [
-        appSettings.defaultCurrency,
-        appSettings.numberFormat,
-        appSettings.showDecimalPlaces,
-    ]);
 
     return (
         <LanguageProvider language={language} setLanguage={setLanguage}>

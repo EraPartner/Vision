@@ -27,10 +27,12 @@ import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
-import { formatPercent } from "@/utils/currency";
 
 type RecipientDetailRow = {
     recipientId: number;
@@ -50,6 +52,7 @@ interface RecipientInsightsTabProps {
 export function RecipientInsightsTab({
     statisticsTopRecipientsChart,
 }: RecipientInsightsTabProps) {
+    const formatPercent = usePercentFormatter();
     // Resolve exclusions (settings + hidden categories, alias-aware) and pass them
     // to the SERVER. The old client-side filter compared raw settings ids against
     // the server's alias-rolled-up primary ids, so excluding an alias filtered

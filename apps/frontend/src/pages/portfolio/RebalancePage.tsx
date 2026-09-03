@@ -36,8 +36,10 @@ import {
 import { Scale, Loader2, Plus, Trash2, Save } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatPercent } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { cn } from "@/lib/utils";
@@ -190,6 +192,7 @@ export default function RebalancePage() {
     // Intl.NumberFormat passed `undefined` locale, ignoring the user's
     // number-format setting; amounts now follow it like every other page.
     const fmtCurrency = useCurrencyFormatter(currency);
+    const formatPercent = usePercentFormatter();
     const fmt = (v: number) => fmtCurrency(v, currency, 0);
     // Show up to one decimal so fractional targets (e.g. All Weather's 7.5%) read
     // accurately and the column doesn't visibly sum to 101% from rounding.

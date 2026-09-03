@@ -4,11 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    formatCurrency,
-    formatPercent,
-    numberFormatToLocale,
-} from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -46,6 +42,7 @@ import {
     enumSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -123,6 +120,7 @@ function PerformanceEmptyState() {
 }
 
 export default function PerformancePage() {
+    const formatPercent = usePercentFormatter();
     const { t, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -527,7 +525,12 @@ export default function PerformancePage() {
                                 v: point.value,
                             }))}
                             formatCurrency={(value) =>
-                                formatCurrency(value, defaultCurrency, locale)
+                                formatCurrency(
+                                    value,
+                                    defaultCurrency,
+                                    locale,
+                                    appSettings.showDecimalPlaces ?? 2,
+                                )
                             }
                         />
                     </div>
@@ -747,7 +750,12 @@ export default function PerformancePage() {
                             )
                         }
                         yTickFormat={(v) =>
-                            formatCurrency(v as number, defaultCurrency, locale)
+                            formatCurrency(
+                                v as number,
+                                defaultCurrency,
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
+                            )
                         }
                         tooltipTitle={(d) =>
                             formatDate(
@@ -757,7 +765,12 @@ export default function PerformancePage() {
                             )
                         }
                         tooltipValueFormat={(v) =>
-                            formatCurrency(v, defaultCurrency, locale)
+                            formatCurrency(
+                                v,
+                                defaultCurrency,
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
+                            )
                         }
                         height={360}
                         margin={{ top: 16, right: 24, bottom: 28, left: 110 }}

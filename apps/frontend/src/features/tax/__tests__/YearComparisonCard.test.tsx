@@ -1,21 +1,22 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
 
-vi.mock('@/contexts/LanguageContext', () => ({
+vi.mock("@/contexts/LanguageContext", () => ({
     useLanguage: () => ({
         t: (key: string, vars?: Record<string, string | number>) => {
             const dict: Record<string, string> = {
-                'tax.comparison.description': 'Compare the viewed year against another year on file.',
-                'tax.comparison.header.delta': 'Delta',
-                'tax.comparison.header.metric': 'Metric',
-                'tax.comparison.row.effectiveRate': 'Effective tax rate',
-                'tax.comparison.row.grossIncome': 'Gross income',
-                'tax.comparison.row.netTakeHome': 'Net take-home',
-                'tax.comparison.row.totalPIT': 'Total PIT',
-                'tax.comparison.selectYear': 'Compare with year',
-                'tax.comparison.title': '{year} vs another year',
-                'tax.comparison.versus': 'vs',
+                "tax.comparison.description":
+                    "Compare the viewed year against another year on file.",
+                "tax.comparison.header.delta": "Delta",
+                "tax.comparison.header.metric": "Metric",
+                "tax.comparison.row.effectiveRate": "Effective tax rate",
+                "tax.comparison.row.grossIncome": "Gross income",
+                "tax.comparison.row.netTakeHome": "Net take-home",
+                "tax.comparison.row.totalPIT": "Total PIT",
+                "tax.comparison.selectYear": "Compare with year",
+                "tax.comparison.title": "{year} vs another year",
+                "tax.comparison.versus": "vs",
             };
             let value = dict[key] ?? key;
             for (const [name, replacement] of Object.entries(vars ?? {})) {
@@ -26,33 +27,38 @@ vi.mock('@/contexts/LanguageContext', () => ({
     }),
 }));
 
-vi.mock('@/contexts/BelgianTaxProfileContext', () => ({
+vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
     useBelgianTaxProfile: vi.fn(),
 }));
 
-vi.mock('@/hooks/useAvailableTaxYears', () => ({
+vi.mock("@/hooks/useAvailableTaxYears", () => ({
     useAvailableTaxYears: vi.fn(),
 }));
 
-vi.mock('@/hooks/useCurrencyFormatter', () => ({
-    useCurrencyFormatter: () => (
-        value: number,
-        options?: string | { signed?: boolean },
-    ) => {
-        const signed = typeof options === 'object' && options.signed;
-        const sign = signed ? (value > 0 ? '+' : value < 0 ? '-' : '') : '';
-        return `${sign}€${signed ? Math.abs(value) : value}`;
-    },
+vi.mock("@/hooks/useCurrencyFormatter", () => ({
+    useCurrencyFormatter:
+        () => (value: number, options?: string | { signed?: boolean }) => {
+            const signed = typeof options === "object" && options.signed;
+            const sign = signed ? (value > 0 ? "+" : value < 0 ? "-" : "") : "";
+            return `${sign}€${signed ? Math.abs(value) : value}`;
+        },
+    usePercentFormatter:
+        () =>
+        (value: number, options?: { digits?: number; signed?: boolean }) => {
+            const digits = options?.digits ?? 1;
+            const sign = options?.signed && value > 0 ? "+" : "";
+            return `${sign}${value.toFixed(digits)}%`;
+        },
 }));
 
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
-import { YearComparisonCard } from '../YearComparisonCard';
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import { YearComparisonCard } from "../YearComparisonCard";
 
 const mockedProfile = vi.mocked(useBelgianTaxProfile);
 const mockedYears = vi.mocked(useAvailableTaxYears);
 
-describe('YearComparisonCard', () => {
+describe("YearComparisonCard", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockedProfile.mockReturnValue({
@@ -84,29 +90,33 @@ describe('YearComparisonCard', () => {
         ]);
     });
 
-    it('gives the comparison-year selector a localized accessible name', () => {
+    it("gives the comparison-year selector a localized accessible name", () => {
         render(<YearComparisonCard />);
 
-        expect(screen.getByRole('combobox', { name: 'Compare with year' })).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: "Compare with year" }),
+        ).toBeInTheDocument();
     });
 
-    it('uses gain/loss DeltaPill tones with inverted tax semantics', () => {
+    it("uses gain/loss DeltaPill tones with inverted tax semantics", () => {
         render(<YearComparisonCard />);
 
-        const grossRow = screen.getByText('Gross income').closest('tr');
-        const taxRow = screen.getByText('Total PIT').closest('tr');
+        const grossRow = screen.getByText("Gross income").closest("tr");
+        const taxRow = screen.getByText("Total PIT").closest("tr");
         expect(grossRow).not.toBeNull();
         expect(taxRow).not.toBeNull();
 
-        const grossPill = within(grossRow!).getAllByRole('cell')[3].firstElementChild;
-        const taxPill = within(taxRow!).getAllByRole('cell')[3].firstElementChild;
-        expect(grossPill).toHaveClass('text-gain', 'bg-gain/12');
-        expect(taxPill).toHaveClass('text-loss', 'bg-loss/12');
-        expect(grossPill).toHaveTextContent('+€5000 (+9.1%)');
-        expect(taxPill).toHaveTextContent('+€2000 (+15.4%)');
+        const grossPill = within(grossRow!).getAllByRole("cell")[3]
+            .firstElementChild;
+        const taxPill = within(taxRow!).getAllByRole("cell")[3]
+            .firstElementChild;
+        expect(grossPill).toHaveClass("text-gain", "bg-gain/12");
+        expect(taxPill).toHaveClass("text-loss", "bg-loss/12");
+        expect(grossPill).toHaveTextContent("+€5000 (+9.1%)");
+        expect(taxPill).toHaveTextContent("+€2000 (+15.4%)");
     });
 
-    it('keeps a negative sign on money deltas', () => {
+    it("keeps a negative sign on money deltas", () => {
         mockedProfile.mockReturnValue({
             viewedYear: 2026,
             displayCalculationForYear: (year: number) => ({
@@ -118,7 +128,9 @@ describe('YearComparisonCard', () => {
         } as unknown as ReturnType<typeof useBelgianTaxProfile>);
 
         render(<YearComparisonCard />);
-        const grossRow = screen.getByText('Gross income').closest('tr');
-        expect(within(grossRow!).getAllByRole('cell')[3]).toHaveTextContent('-€5000');
+        const grossRow = screen.getByText("Gross income").closest("tr");
+        expect(within(grossRow!).getAllByRole("cell")[3]).toHaveTextContent(
+            "-€5000",
+        );
     });
 });

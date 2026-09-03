@@ -22,7 +22,10 @@ import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -31,7 +34,6 @@ import type { WatchlistItem } from "@/types/watchlist";
 import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
-import { formatPercent } from "@/utils/currency";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
 
 interface WatchlistChartDialogProps {
@@ -45,6 +47,7 @@ export function WatchlistChartDialog({
     open,
     onOpenChange,
 }: WatchlistChartDialogProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();

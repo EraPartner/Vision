@@ -1,5 +1,8 @@
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import type { BelgianTaxYearTable } from "@/lib/belgianTax";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,7 +12,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { formatPercent } from "@/utils/currency";
 
 interface BelgianPortfolioRulesCardProps {
     totalDividendIncome: number;
@@ -39,6 +41,7 @@ export function BelgianPortfolioRulesCard({
     reyndersEstimate,
     taxTable,
 }: BelgianPortfolioRulesCardProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const dividendMetrics = [

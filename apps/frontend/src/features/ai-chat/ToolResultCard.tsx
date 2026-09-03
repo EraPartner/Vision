@@ -18,12 +18,13 @@ import { getChartColor } from "@/components/charts";
 import { cn } from "@/lib/utils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import type {
     ToolErrorDetail,
     ToolRenderAs,
     ToolResultPayload,
 } from "@/types/aiChat";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 function formatToolError(
     error: ToolResultPayload["error"],
@@ -314,6 +315,7 @@ function CartesianChartView({
 }
 
 function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
+    const formatPercent = usePercentFormatter();
     const { xk, yk } = resolveAxes(rows, xKey, yKeys);
     const valueKey = yk[0];
     if (rows.length === 0 || !valueKey) {

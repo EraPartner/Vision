@@ -3,7 +3,12 @@ import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseLocalDateFromYmd } from "@/lib/dateUtils";
+import {
+    appLanguageToLocale,
+    CHART_DATE_PATTERNS,
+    formatDate,
+    parseLocalDateFromYmd,
+} from "@/lib/dateUtils";
 
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { mergeForViewRolling, type MergedDayDate } from "@/utils/forecastMerge";
@@ -35,7 +40,8 @@ function ForecastInnerRollingImpl({
     // Month abbreviations follow the app language, not the number-format locale
     // (numberFormatToLocale maps 'eu' -> 'de-DE', which would yield German months).
     const monthLabelLocale = appLanguageToLocale(language);
-    const actualLabel = t("cashflow.actualToDate") ?? t("cashflow.actualThisMonth");
+    const actualLabel =
+        t("cashflow.actualToDate") ?? t("cashflow.actualThisMonth");
 
     const { rows, series } = useMemo(
         () => mergeForViewRolling(data, view, visibleMethodIds, actualLabel),
@@ -43,8 +49,14 @@ function ForecastInnerRollingImpl({
     );
 
     const yTickFormat = useMemo(
-        () => (v: number) => formatCurrency(v, currency, locale),
-        [currency, locale],
+        () => (v: number) =>
+            formatCurrency(
+                v,
+                currency,
+                locale,
+                appSettings.showDecimalPlaces ?? 2,
+            ),
+        [currency, locale, appSettings.showDecimalPlaces],
     );
 
     const xTickFormat = useMemo(

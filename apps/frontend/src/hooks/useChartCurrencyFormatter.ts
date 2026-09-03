@@ -5,67 +5,73 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
-  formatCurrencyAxisCompact,
-  formatCurrencyCompact,
-  getCurrencySymbol,
-  numberFormatToLocale,
-  type CompactFormatResult,
+    useCurrencyFormatter,
+    useCurrencyFormatSettings,
+} from "@/hooks/useCurrencyFormatter";
+import {
+    formatCurrencyAxisCompact,
+    formatCurrencyCompact,
+    getCurrencySymbol,
+    type CompactFormatResult,
 } from "@/utils/currency";
 
 export interface ChartCurrencyFormatter {
-  formatCurrency: (val: number) => string;
-  formatCompact: (val: number, signed?: boolean) => CompactFormatResult;
-  formatAxisCompact: (val: number) => string;
-  currencySymbol: string;
-  locale: string;
-  currency: string;
+    formatCurrency: (val: number) => string;
+    formatCompact: (val: number, signed?: boolean) => CompactFormatResult;
+    formatAxisCompact: (val: number) => string;
+    currencySymbol: string;
+    locale: string;
+    currency: string;
 }
 
 export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
-  const { appSettings } = useAppSettings();
-  const currency = appSettings.defaultCurrency || "EUR";
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const currencySymbol = getCurrencySymbol(currency);
-  const fractionDigits = appSettings.showDecimalPlaces;
+    const {
+        currency,
+        locale,
+        decimals: fractionDigits,
+    } = useCurrencyFormatSettings();
+    const currencyFormatter = useCurrencyFormatter(currency);
+    const currencySymbol = getCurrencySymbol(currency);
 
-  // A single Intl.NumberFormat instance reused across every call — these
-  // formatters run once per axis tick / table cell, so rebuilding the
-  // (relatively expensive) formatter per call is wasteful.
-  const currencyNumberFormat = useMemo(
-    () => {
-      try {
-        return new Intl.NumberFormat(locale, {
-          style: "currency",
-          currency,
-          minimumFractionDigits: fractionDigits,
-          maximumFractionDigits: fractionDigits,
-        });
-      } catch {
-        return undefined;
-      }
-    },
-    [locale, currency, fractionDigits],
-  );
+    const formatCurrency = useCallback(
+        (val: number) => currencyFormatter(val),
+        [currencyFormatter],
+    );
 
-  const formatCurrency = useCallback(
-    (val: number) => currencyNumberFormat?.format(val) ?? `${val}`,
-    [currencyNumberFormat],
-  );
+    const formatCompact = useCallback(
+        (val: number, signed = false) =>
+            formatCurrencyCompact(
+                val,
+                currency,
+                locale,
+                fractionDigits,
+                signed,
+            ),
+        [currency, locale, fractionDigits],
+    );
 
-  const formatCompact = useCallback(
-    (val: number, signed = false) => formatCurrencyCompact(val, currency, locale, fractionDigits, signed),
-    [currency, locale, fractionDigits],
-  );
+    const formatAxisCompact = useCallback(
+        (val: number) => formatCurrencyAxisCompact(val, currency, locale),
+        [currency, locale],
+    );
 
-  const formatAxisCompact = useCallback(
-    (val: number) => formatCurrencyAxisCompact(val, currency, locale),
-    [currency, locale],
-  );
-
-  return useMemo(
-    () => ({ formatCurrency, formatCompact, formatAxisCompact, currencySymbol, locale, currency }),
-    [formatCurrency, formatCompact, formatAxisCompact, currencySymbol, locale, currency],
-  );
+    return useMemo(
+        () => ({
+            formatCurrency,
+            formatCompact,
+            formatAxisCompact,
+            currencySymbol,
+            locale,
+            currency,
+        }),
+        [
+            formatCurrency,
+            formatCompact,
+            formatAxisCompact,
+            currencySymbol,
+            locale,
+            currency,
+        ],
+    );
 }

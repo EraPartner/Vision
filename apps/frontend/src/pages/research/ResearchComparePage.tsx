@@ -3,7 +3,7 @@ import { useCallback, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
     formatDateWithAppSettings,
@@ -52,6 +52,7 @@ import {
     normalizeResearchSymbol,
     parseResearchSymbols,
 } from "./researchCompareUrlState";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
@@ -303,6 +304,7 @@ function rebaseTo100(
 }
 
 export default function ResearchComparePage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
@@ -340,7 +342,7 @@ export default function ResearchComparePage() {
             val == null || isNaN(val)
                 ? "—"
                 : formatPercent(val * 100, { digits: 2, signed: true }),
-        [],
+        [formatPercent],
     );
     const fmtRatio = useCallback(
         (val: number | null | undefined) =>
@@ -522,7 +524,7 @@ export default function ResearchComparePage() {
                     : formatPercent(val * 100, { digits: 2 });
             return fmtRatio(val);
         },
-        [fmtRatio],
+        [fmtRatio, formatPercent],
     );
 
     const toggleSort = (key: FundamentalsMetricKey) => {

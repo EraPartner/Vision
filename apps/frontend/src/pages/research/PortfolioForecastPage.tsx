@@ -9,11 +9,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import {
-    formatCurrency,
-    formatPercent,
-    numberFormatToLocale,
-} from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import {
     formatDateWithAppSettings,
     parseLocalDateFromYmd,
@@ -32,7 +28,10 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -61,6 +60,7 @@ export default function PortfolioForecastPage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const currency = appSettings.defaultCurrency || "EUR";
+    const formatPercent = usePercentFormatter();
 
     const [horizonMonths, setHorizonMonths] = useState(60);
     const [monthlyContribution, setMonthlyContribution] = useState("");

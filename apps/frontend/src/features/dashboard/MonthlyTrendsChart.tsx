@@ -119,7 +119,7 @@ export function MonthlyTrendsChart({
                     maxBarSize={40}
                     valueTickFormat={(v) => formatCompact(v).display}
                     tooltipValueFormat={(v) =>
-                        formatCurrency(v, defaultCurrency, locale)
+                        formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
                     }
                 />
             </div>

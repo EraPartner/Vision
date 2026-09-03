@@ -277,7 +277,7 @@ export function BankBalancesWidget() {
                             const r = formatCurrencyCompact(
                                 total_net_position,
                                 defaultCurrency,
-                                locale,
+                                locale, appSettings.showDecimalPlaces ?? 2
                             );
                             return (
                                 <CompactValueDisclosure
@@ -373,7 +373,7 @@ export function BankBalancesWidget() {
                                             const r = formatCurrencyCompact(
                                                 balance,
                                                 a.currency,
-                                                locale,
+                                                locale, appSettings.showDecimalPlaces ?? 2
                                             );
                                             return (
                                                 <CompactValueDisclosure
@@ -458,7 +458,7 @@ export function BankBalancesWidget() {
                                 )
                             }
                             yTickFormat={(v) =>
-                                formatCurrency(v, defaultCurrency, locale)
+                                formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
                             }
                             tooltipTitle={(d) =>
                                 formatDate(
@@ -468,7 +468,7 @@ export function BankBalancesWidget() {
                                 )
                             }
                             tooltipValueFormat={(v) =>
-                                formatCurrency(v, defaultCurrency, locale)
+                                formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
                             }
                         />
                         <ChartLegend items={legendItems} align="center" />

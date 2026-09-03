@@ -2,21 +2,35 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, render } from "@testing-library/react";
 import { useSettingsStore, DEFAULT_APP_SETTINGS } from "@/stores/settingsStore";
-import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { Money } from "@/components/shared/Money";
 
 beforeEach(() => {
-    useSettingsStore.setState({ appSettings: DEFAULT_APP_SETTINGS, isAppSettingsLoading: false });
+    useSettingsStore.setState({
+        appSettings: DEFAULT_APP_SETTINGS,
+        isAppSettingsLoading: false,
+    });
 });
 
 describe("useCurrencyPartsFormatter — malformed currency degrades like Money", () => {
     it("uses the same two-digit fallback as Money when the stored setting is undefined", () => {
         useSettingsStore.setState({
-            appSettings: { ...DEFAULT_APP_SETTINGS, showDecimalPlaces: undefined as unknown as number },
+            appSettings: {
+                ...DEFAULT_APP_SETTINGS,
+                showDecimalPlaces: undefined as unknown as number,
+            },
         });
-        const stringFormatter = renderHook(() => useCurrencyFormatter()).result.current;
-        const partsFormatter = renderHook(() => useCurrencyPartsFormatter()).result.current;
-        const partsText = partsFormatter(1234, { currency: "JPY" }).map((part) => part.value).join("");
+        const stringFormatter = renderHook(() => useCurrencyFormatter()).result
+            .current;
+        const partsFormatter = renderHook(() => useCurrencyPartsFormatter())
+            .result.current;
+        const partsText = partsFormatter(1234, { currency: "JPY" })
+            .map((part) => part.value)
+            .join("");
         const { container } = render(<Money amount={1234} currency="JPY" />);
 
         expect(stringFormatter(1234, "JPY")).toBe("1.234,00\u00a0¥");
@@ -26,14 +40,22 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
 
     it("preserves an explicit zero-decimal override", () => {
         useSettingsStore.setState({
-            appSettings: { ...DEFAULT_APP_SETTINGS, showDecimalPlaces: undefined as unknown as number },
+            appSettings: {
+                ...DEFAULT_APP_SETTINGS,
+                showDecimalPlaces: undefined as unknown as number,
+            },
         });
-        const stringFormatter = renderHook(() => useCurrencyFormatter()).result.current;
-        const partsFormatter = renderHook(() => useCurrencyPartsFormatter()).result.current;
+        const stringFormatter = renderHook(() => useCurrencyFormatter()).result
+            .current;
+        const partsFormatter = renderHook(() => useCurrencyPartsFormatter())
+            .result.current;
 
         expect(stringFormatter(1234.4, "JPY", 0)).toBe("1.234\u00a0¥");
-        expect(partsFormatter(1234.4, { currency: "JPY", decimals: 0 }).map((part) => part.value).join(""))
-            .toBe("1.234\u00a0¥");
+        expect(
+            partsFormatter(1234.4, { currency: "JPY", decimals: 0 })
+                .map((part) => part.value)
+                .join(""),
+        ).toBe("1.234\u00a0¥");
     });
 
     it("returns a bare-number literal instead of throwing RangeError", () => {
@@ -49,7 +71,8 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
 
     it("degrades to the exact same output Money produces for the same bad code", () => {
         const { result } = renderHook(() => useCurrencyPartsFormatter());
-        const hookText = result.current(1234.56, { currency: "US" })
+        const hookText = result
+            .current(1234.56, { currency: "US" })
             .map((p) => p.value)
             .join("");
 
@@ -77,7 +100,9 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
 
     it("still formats a valid currency normally", () => {
         const { result } = renderHook(() => useCurrencyPartsFormatter());
-        expect(result.current(1234.56, { currency: "EUR", decimals: 2 })).toEqual([
+        expect(
+            result.current(1234.56, { currency: "EUR", decimals: 2 }),
+        ).toEqual([
             { type: "integer", value: "1" },
             { type: "group", value: "." },
             { type: "integer", value: "234" },
@@ -90,13 +115,17 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
 
     it("pins signed positive and zero formatting", () => {
         const { result } = renderHook(() => useCurrencyPartsFormatter());
-        expect(result.current(12, { currency: "EUR", decimals: 0, signed: true })).toEqual([
+        expect(
+            result.current(12, { currency: "EUR", decimals: 0, signed: true }),
+        ).toEqual([
             { type: "plusSign", value: "+" },
             { type: "integer", value: "12" },
             { type: "literal", value: "\u00a0" },
             { type: "currency", value: "€" },
         ]);
-        expect(result.current(0, { currency: "EUR", decimals: 0, signed: true })).toEqual([
+        expect(
+            result.current(0, { currency: "EUR", decimals: 0, signed: true }),
+        ).toEqual([
             { type: "integer", value: "0" },
             { type: "literal", value: "\u00a0" },
             { type: "currency", value: "€" },
@@ -124,7 +153,8 @@ describe("useCurrencyFormatter (string path) — malformed currency degrades lik
 
     it("degrades to the exact text the parts hook and Money produce for the same bad code", () => {
         const str = renderHook(() => useCurrencyFormatter()).result.current;
-        const parts = renderHook(() => useCurrencyPartsFormatter()).result.current;
+        const parts = renderHook(() => useCurrencyPartsFormatter()).result
+            .current;
         const partsText = parts(1234.56, { currency: "US" })
             .map((p) => p.value)
             .join("");
@@ -153,9 +183,31 @@ describe("useCurrencyFormatter (string path) — malformed currency degrades lik
 
     it("supports the signed options form without changing the legacy call shape", () => {
         const { result } = renderHook(() => useCurrencyFormatter("EUR"));
-        expect(result.current(12, { signed: true, decimals: 0 })).toBe("+12\u00a0€");
-        expect(result.current(-12, { signed: true, decimals: 0 })).toBe("-12\u00a0€");
-        expect(result.current(0, { signed: true, decimals: 0 })).toBe("0\u00a0€");
+        expect(result.current(12, { signed: true, decimals: 0 })).toBe(
+            "+12\u00a0€",
+        );
+        expect(result.current(-12, { signed: true, decimals: 0 })).toBe(
+            "-12\u00a0€",
+        );
+        expect(result.current(0, { signed: true, decimals: 0 })).toBe(
+            "0\u00a0€",
+        );
         expect(result.current(12, "USD", 0)).toBe("12\u00a0$");
+    });
+});
+
+describe("usePercentFormatter", () => {
+    it("binds percentages to the current app number-format locale", () => {
+        useSettingsStore.setState({
+            appSettings: { ...DEFAULT_APP_SETTINGS, numberFormat: "eu" },
+        });
+        const eu = renderHook(() => usePercentFormatter()).result.current;
+        expect(eu(12.5)).toBe("12,5%");
+
+        useSettingsStore.setState({
+            appSettings: { ...DEFAULT_APP_SETTINGS, numberFormat: "us" },
+        });
+        const us = renderHook(() => usePercentFormatter()).result.current;
+        expect(us(12.5)).toBe("12.5%");
     });
 });

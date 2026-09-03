@@ -34,8 +34,14 @@ export function CategoryPieChart({
     const tooltipFmt = useMemo(
         () =>
             formatValue ??
-            ((v: number) => formatCurrency(v, defaultCurrency, locale)),
-        [formatValue, defaultCurrency, locale],
+            ((v: number) =>
+                formatCurrency(
+                    v,
+                    defaultCurrency,
+                    locale,
+                    appSettings.showDecimalPlaces ?? 2,
+                )),
+        [formatValue, defaultCurrency, locale, appSettings.showDecimalPlaces],
     );
 
     const chartContent = (

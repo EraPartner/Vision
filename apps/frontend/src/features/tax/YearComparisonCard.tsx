@@ -17,8 +17,10 @@ import { useMemo, useState, useEffect } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatPercent } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import {
     Card,
     CardContent,
@@ -85,6 +87,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
     // Shared cached currency formatter; whole-euro amounts (decimals pinned to
     // 0, same rendering as the old maximumFractionDigits: 0 formatter).
     const fmtBase = useCurrencyFormatter();
+    const formatPercent = usePercentFormatter();
     const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
     // Unsigned 1dp — these rows are rate readouts (effective rate), not deltas.
     function fmtPercent(val: number) {

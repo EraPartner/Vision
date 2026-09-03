@@ -13,6 +13,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
     useCurrencyFormatter,
     useCurrencyPartsFormatter,
+    usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,6 @@ import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { formatPercent } from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
 import {
     enumSearchParamCodec,
@@ -61,6 +61,7 @@ const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
 );
 
 export default function NetWorthPage() {
+    const formatPercent = usePercentFormatter();
     const { t, language } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();

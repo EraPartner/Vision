@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 export interface AreaSeries<Datum> {
     readonly key: string;
@@ -269,6 +270,7 @@ function AreaChartInner<Datum>({
 }: InnerProps<Datum>) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const formatPercent = usePercentFormatter();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -746,7 +748,7 @@ function AreaChartInner<Datum>({
                               )}
                               style={{ left: mid, top: 2 }}
                           >
-                              {formatScrubDelta(a, b, fmt)}
+                              {formatScrubDelta(a, b, fmt, formatPercent)}
                           </div>
                       );
                   })()

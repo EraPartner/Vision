@@ -8,7 +8,6 @@ import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { formatPercent } from "@/utils/currency";
 import {
     REGION_OPTIONS,
     REGION_VIEWS,
@@ -21,6 +20,7 @@ import {
 import { marketChangeHeatStyle } from "./marketHeat";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageShell } from "@/components/shared/PageShell";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 interface OverviewQuote {
     symbol: string;
@@ -28,6 +28,7 @@ interface OverviewQuote {
 }
 
 export default function MarketOverviewPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const { data: investmentsData } = useInvestmentsQuery();
     const [region, setRegion] = useState<Region>("worldwide");

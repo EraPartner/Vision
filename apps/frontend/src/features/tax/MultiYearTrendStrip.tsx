@@ -17,8 +17,10 @@ import { useMemo } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { formatPercent } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import {
     Card,
     CardContent,
@@ -45,6 +47,7 @@ export function MultiYearTrendStrip({
     className,
     maxYears = DEFAULT_MAX_YEARS,
 }: MultiYearTrendStripProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const { viewedYear, setViewedYear, displayCalculationForYear } =
         useBelgianTaxProfile();

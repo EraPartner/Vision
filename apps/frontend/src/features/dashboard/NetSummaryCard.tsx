@@ -9,12 +9,13 @@ import { TrendHue } from "@/components/shared/TrendHue";
 import { ArrowUpRight, Banknote, TrendingDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
 import { cn } from "@/lib/utils";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 interface NetSummaryCardProps {
     netBalance: number;
@@ -31,6 +32,7 @@ export function NetSummaryCard({
     history,
     animateNumber = true,
 }: NetSummaryCardProps) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -105,8 +107,8 @@ export function NetSummaryCard({
     const incomeCompact = formatCompact(incomeTotal);
     const spendingCompact = formatCompact(spendingTotal);
     const splitBarLabel = [
-        `${t("dashboard.stat.income")}: ${formatCurrency(incomeTotal)} (${formatPercent(incomePct, { digits: 1, locale })})`,
-        `${t("dashboard.stat.spending")}: ${formatCurrency(spendingTotal)} (${formatPercent(spendingPct, { digits: 1, locale })})`,
+        `${t("dashboard.stat.income")}: ${formatCurrency(incomeTotal)} (${formatPercent(incomePct, { digits: 1 })})`,
+        `${t("dashboard.stat.spending")}: ${formatCurrency(spendingTotal)} (${formatPercent(spendingPct, { digits: 1 })})`,
     ].join("; ");
 
     return (
@@ -168,7 +170,7 @@ export function NetSummaryCard({
                             className="font-semibold text-xs"
                         >
                             {t("dashboard.stat.savingsRate")}:{" "}
-                            {formatPercent(savingsRate, { digits: 1, locale })}
+                            {formatPercent(savingsRate, { digits: 1 })}
                         </Badge>
                     )}
                 </div>

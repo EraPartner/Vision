@@ -10,10 +10,10 @@ import { useCallback, useMemo, useState } from "react";
 
 import { ChartTooltip } from "./ChartTooltip";
 import { getChartColor } from "./palette";
-import { formatPercent } from "@/utils/currency";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartKeyboardNav } from "./keyboardNav";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 export interface PieDatum {
     readonly name: string;
@@ -56,6 +56,7 @@ function Inner({
     height,
     ariaLabel,
 }: PieChartProps & { width: number; height: number }) {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const reduce = useReducedMotion();
     const radius = Math.min(width, height) / 2 - 8;

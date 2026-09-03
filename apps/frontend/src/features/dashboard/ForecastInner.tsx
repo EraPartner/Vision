@@ -38,8 +38,14 @@ function ForecastInnerImpl({
     );
 
     const yTickFormat = useMemo(
-        () => (v: number) => formatCurrency(v, currency, locale),
-        [currency, locale],
+        () => (v: number) =>
+            formatCurrency(
+                v,
+                currency,
+                locale,
+                appSettings.showDecimalPlaces ?? 2,
+            ),
+        [currency, locale, appSettings.showDecimalPlaces],
     );
     const tooltipValueFormat = yTickFormat;
 

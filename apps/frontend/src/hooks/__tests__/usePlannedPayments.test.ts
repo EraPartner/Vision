@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/api";
 import { usePlannedPayments } from "@/hooks/usePlannedPayments";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import type { PlannedTransaction } from "@/types/api";
+import { DEFAULT_APP_SETTINGS, useSettingsStore } from "@/stores/settingsStore";
 
 // The hook now backs its list with React Query (queryKey ['plannedTransactions',
 // showInactive]) and busts ['upcomingPlannedPayments'] on mutations, so it must
@@ -12,7 +13,13 @@ import type { PlannedTransaction } from "@/types/api";
 // list from one test can't leak into the next (which would make isLoading read
 // false against stale data before the new fetch settles).
 let wrapper: ReturnType<typeof createQueryWrapper>;
-beforeEach(() => { wrapper = createQueryWrapper(); });
+beforeEach(() => {
+    wrapper = createQueryWrapper();
+    useSettingsStore.setState({
+        appSettings: DEFAULT_APP_SETTINGS,
+        isAppSettingsLoading: false,
+    });
+});
 
 const STUB: PlannedTransaction = {
     id: 1,
@@ -57,13 +64,17 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("usePlannedPayments", () => {
     it("starts in loading state", () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            emptyList,
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         expect(result.current.loading).toBe(true);
     });
 
     it("resolves with empty payments list", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            emptyList,
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toEqual([]);
@@ -71,7 +82,9 @@ describe("usePlannedPayments", () => {
     });
 
     it("maps API response to PlannedPayment shape", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            oneItem,
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
@@ -83,15 +96,47 @@ describe("usePlannedPayments", () => {
         expect(p.frequency).toBe("monthly");
     });
 
+    it("remaps missing currencies when the app default changes", async () => {
+        const missingCurrency = {
+            ...oneItem,
+            items: [{ ...STUB, currency: undefined }],
+        };
+        const spy = vi
+            .spyOn(apiClient, "getPlannedTransactions")
+            .mockResolvedValue(missingCurrency);
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
+
+        await waitFor(() =>
+            expect(result.current.payments[0]?.currency).toBe("EUR"),
+        );
+        act(() => {
+            useSettingsStore.setState({
+                appSettings: {
+                    ...DEFAULT_APP_SETTINGS,
+                    defaultCurrency: "CHF",
+                },
+            });
+        });
+
+        await waitFor(() =>
+            expect(result.current.payments[0]?.currency).toBe("CHF"),
+        );
+        expect(spy).toHaveBeenCalledTimes(2);
+    });
+
     it("sets error when fetch fails", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockRejectedValue(new Error("Network error"));
+        vi.spyOn(apiClient, "getPlannedTransactions").mockRejectedValue(
+            new Error("Network error"),
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.error).toBe("Network error");
     });
 
     it("addPayment appends to the list", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            emptyList,
+        );
         vi.spyOn(apiClient, "createPlannedTransaction").mockResolvedValue(STUB);
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
@@ -112,8 +157,12 @@ describe("usePlannedPayments", () => {
     });
 
     it("deletePayment removes the payment from the list", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
-        vi.spyOn(apiClient, "deletePlannedTransaction").mockResolvedValue(undefined);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            oneItem,
+        );
+        vi.spyOn(apiClient, "deletePlannedTransaction").mockResolvedValue(
+            undefined,
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
@@ -124,37 +173,57 @@ describe("usePlannedPayments", () => {
     });
 
     it("updatePayment replaces the matching payment", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            oneItem,
+        );
         const updated = { ...STUB, amount: 1500, memo: "Updated rent" };
-        vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(updated);
+        vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(
+            updated,
+        );
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
             await result.current.updatePayment(1, { amount: 1500 });
         });
-        await waitFor(() => expect(result.current.payments[0].amount).toBe(1500));
+        await waitFor(() =>
+            expect(result.current.payments[0].amount).toBe(1500),
+        );
         expect(result.current.payments[0].name).toBe("Updated rent");
     });
 
     it("updatePayment forwards cleared recurrence bounds as explicit null", async () => {
-        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
-        const spy = vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(STUB);
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(
+            oneItem,
+        );
+        const spy = vi
+            .spyOn(apiClient, "updatePlannedTransaction")
+            .mockResolvedValue(STUB);
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
-            await result.current.updatePayment(1, { end_date: null, max_occurrences: null });
+            await result.current.updatePayment(1, {
+                end_date: null,
+                max_occurrences: null,
+            });
         });
-        expect(spy).toHaveBeenCalledWith(1, expect.objectContaining({
-            recurrence_end_date: null,
-            max_occurrences: null,
-        }));
+        expect(spy).toHaveBeenCalledWith(
+            1,
+            expect.objectContaining({
+                recurrence_end_date: null,
+                max_occurrences: null,
+            }),
+        );
     });
 
     it("refetch re-calls the API", async () => {
-        const spy = vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
+        const spy = vi
+            .spyOn(apiClient, "getPlannedTransactions")
+            .mockResolvedValue(emptyList);
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
-        await act(async () => { await result.current.refetch(); });
+        await act(async () => {
+            await result.current.refetch();
+        });
         expect(spy).toHaveBeenCalledTimes(2);
     });
 });

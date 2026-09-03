@@ -7,11 +7,7 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
-import {
-    formatCurrency,
-    formatPercent,
-    numberFormatToLocale,
-} from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { TrendingUp, TrendingDown } from "lucide-react";
@@ -22,6 +18,7 @@ import {
 import type { AssetClass } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 interface BreakdownItem {
     id: number;
@@ -64,6 +61,7 @@ function PerformerRow({
     defaultCurrency: string;
     t: TranslateFn;
 }) {
+    const formatPercent = usePercentFormatter();
     return (
         <div className="flex items-center justify-between">
             <div className="min-w-0">
@@ -130,6 +128,7 @@ export default function PerformanceBreakdown({
     heatmapData,
     breakdownSummary,
 }: Props) {
+    const formatPercent = usePercentFormatter();
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -260,6 +259,7 @@ export default function PerformanceBreakdown({
                                             classInvested,
                                             defaultCurrency,
                                             locale,
+                                            appSettings.showDecimalPlaces ?? 2,
                                         ),
                                     })}
                                 </div>

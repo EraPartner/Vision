@@ -5,6 +5,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
     useCurrencyFormatter,
     useCurrencyPartsFormatter,
+    usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import {
     Card,
@@ -59,7 +60,6 @@ import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { formatPercent } from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
@@ -103,6 +103,7 @@ const COLORS = [
 ];
 
 export default function PortfolioOverviewPage() {
+    const formatPercent = usePercentFormatter();
     const { t, tc } = useLanguage();
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";

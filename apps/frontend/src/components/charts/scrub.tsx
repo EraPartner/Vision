@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { formatPercent } from "@/utils/currency";
+import type { PercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 export interface ScrubRange {
     startIndex: number;
@@ -31,7 +31,10 @@ export function useChartScrub() {
 
     const range: ScrubRange | null =
         anchor !== null && head !== null && anchor !== head
-            ? { startIndex: Math.min(anchor, head), endIndex: Math.max(anchor, head) }
+            ? {
+                  startIndex: Math.min(anchor, head),
+                  endIndex: Math.max(anchor, head),
+              }
             : null;
 
     return { scrubbing: anchor !== null, range, begin, move, end };
@@ -42,6 +45,7 @@ export function formatScrubDelta(
     startValue: number,
     endValue: number,
     formatValue: (v: number) => string,
+    formatPercent: PercentFormatter,
 ): string {
     const delta = endValue - startValue;
     const sign = delta > 0 ? "+" : delta < 0 ? "−" : "±";

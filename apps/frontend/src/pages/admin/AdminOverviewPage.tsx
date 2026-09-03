@@ -24,7 +24,7 @@ import {
     hasAdminToken,
 } from "@/lib/adminToken";
 import { cn } from "@/lib/utils";
-import { formatPercent } from "@/utils/currency";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 function OverviewCard({
     label,
@@ -148,6 +148,7 @@ function AdminTokenCard() {
 }
 
 export default function AdminOverviewPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 

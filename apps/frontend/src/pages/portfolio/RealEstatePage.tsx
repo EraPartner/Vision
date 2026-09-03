@@ -9,7 +9,10 @@ import {
 } from "@/components/ui/card";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyPartsFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
 import {
     Building2,
@@ -29,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
@@ -41,6 +44,7 @@ import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 
 export default function RealEstatePage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
@@ -121,7 +125,10 @@ export default function RealEstatePage() {
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("realestate.title")} icon={PAGE_ICONS["/portfolio/real-estate"]} />
+                <PageHeader
+                    title={t("realestate.title")}
+                    icon={PAGE_ICONS["/portfolio/real-estate"]}
+                />
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-64 w-full" />
             </PageShell>
@@ -130,7 +137,10 @@ export default function RealEstatePage() {
     if (isError) {
         return (
             <PageShell className="">
-                <PageHeader title={t("realestate.title")} icon={PAGE_ICONS["/portfolio/real-estate"]} />
+                <PageHeader
+                    title={t("realestate.title")}
+                    icon={PAGE_ICONS["/portfolio/real-estate"]}
+                />
                 <PageError
                     title={t("realestate.pageErrorTitle")}
                     message={error?.message ?? t("common.error")}
