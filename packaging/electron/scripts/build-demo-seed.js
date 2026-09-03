@@ -31,8 +31,11 @@ function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-async function loadGenerator() {
-  return import(`${pathToFileURL(generatorPath).href}?build=${Date.now()}`);
+async function loadGenerator(referenceDate) {
+  const url = new URL(pathToFileURL(generatorPath).href);
+  url.searchParams.set("build", String(Date.now()));
+  if (referenceDate) url.searchParams.set("referenceDate", referenceDate);
+  return import(url.href);
 }
 
 function assertSummaryMatchesStats(summary, stats) {
@@ -61,6 +64,7 @@ async function buildDemoSeed({
   createRuntime = createNativeRuntime,
   load = loadGenerator,
   reserve = reservePort,
+  referenceDate = new Date().toISOString().slice(0, 10),
 } = {}) {
   const payloadRoot = path.resolve(nativeRuntimeRoot || "");
   fs.accessSync(path.join(payloadRoot, "manifest.json"), fs.constants.R_OK);
@@ -84,7 +88,7 @@ async function buildDemoSeed({
     appPort: 0,
   });
   try {
-    const generated = await load();
+    const generated = await load(referenceDate);
     const sql = String(generated.demoSeedSql || "");
     const summary = generated.demoSeedSummary;
     if (!sql.trim() || !summary || typeof summary !== "object") {
@@ -111,6 +115,7 @@ async function buildDemoSeed({
       logicalSha256: sha256(sql),
       dumpSha256: sha256(await fs.promises.readFile(dumpPath)),
       schemaRevision: stats.schema,
+      referenceDate: generated.demoSeedReferenceDate,
       database: databaseStatsManifest(stats),
       summary,
     };

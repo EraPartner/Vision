@@ -11,7 +11,7 @@
     "test:watch": "bun vitest",
     "db:migrate": "bun run scripts/db-migrate.js",
     "db:migrate:down": "bun run scripts/db-migrate.js downgrade",
-    "db:new-migration": "cd ../.. && alembic revision -m",
+    "db:new-migration": "cd ../.. && node apps/node-backend/scripts/alembic-command.js revision -m",
     "db:reset": "bun run scripts/db-migrate.js reset",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",

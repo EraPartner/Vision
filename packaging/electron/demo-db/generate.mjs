@@ -22,10 +22,30 @@ const chance = (p) => rand() < p;
 
 // ---- date helpers (UTC) ----
 const fmt = (dt) => dt.toISOString().slice(0, 10);
-const ymd = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
+const rawYmd = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
+const ANCHOR_DATE = rawYmd(2026, 6, 18);
+const requestedReferenceDate = new URL(import.meta.url).searchParams.get(
+  "referenceDate",
+);
+const referenceDateText =
+  requestedReferenceDate || new Date().toISOString().slice(0, 10);
+const REFERENCE_DATE = new Date(`${referenceDateText}T00:00:00.000Z`);
+if (
+  !/^\d{4}-\d{2}-\d{2}$/.test(referenceDateText) ||
+  Number.isNaN(REFERENCE_DATE.getTime()) ||
+  fmt(REFERENCE_DATE) !== referenceDateText
+) {
+  throw new Error("Demo referenceDate must be an ISO calendar date");
+}
+const SHIFT_DAYS = Math.round(
+  (REFERENCE_DATE.getTime() - ANCHOR_DATE.getTime()) / 86400000,
+);
+const ymd = (y, m, d) =>
+  new Date(Date.UTC(y, m - 1, d) + SHIFT_DAYS * 86400000);
 const addDaysUTC = (dt, n) => new Date(dt.getTime() + n * 86400000);
-const daysInMonth = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const daysInMonth = (y, m) => rawYmd(y, m + 1, 0).getUTCDate();
 const TODAY = ymd(2026, 6, 18);
+const HOLIDAY_TAG = `holiday-${ymd(2025, 7, 1).getUTCFullYear()}`;
 const nlMonths = [
   "januari",
   "februari",
@@ -538,7 +558,7 @@ for (let y = 2024; y <= 2026; y++) {
       on(y, m, ri(1, md), (d) => {
         const a = -rf(180, 900);
         const t = tx(d, a, pick(travel), "LEISURE:TRAVEL", "Reis / vakantie");
-        if (y === 2025) tagLinks.push({ txId: t, slug: "holiday-2025" });
+        if (y === 2025) tagLinks.push({ txId: t, slug: HOLIDAY_TAG });
         splitCands.push({ txId: t, amount: Math.abs(a), date: d });
       });
     }
@@ -639,7 +659,7 @@ for (const t of txns.slice().sort((a, b) => a.id - b.id)) {
 const TAGS = [
   ["subscription", "#6366f1"],
   ["tax-deductible", "#16a34a"],
-  ["holiday-2025", "#f59e0b"],
+  [HOLIDAY_TAG, "#f59e0b"],
   ["work", "#0ea5e9"],
 ];
 const tagId = {};
@@ -1053,30 +1073,31 @@ invId++;
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2024-01-15',12000.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 1, 15))}',12000.0000,'EUR',${AID.SAVINGS});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','2025-01-02',180.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 1, 2))}',180.0000,'EUR',${AID.SAVINGS});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2025-06-10',3000.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2025, 6, 10))}',3000.0000,'EUR',${AID.SAVINGS});`,
   );
 }
 invId++;
 {
   const id = invId;
+  const maturityDate = ymd(2027, 9, 4);
   S(
-    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon 2027','bond','EUR',true,'manual',5000.000000,2.8500,'2027-09-04');`,
+    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon ${maturityDate.getUTCFullYear()}','bond','EUR',true,'manual',5000.000000,2.8500,'${fmt(maturityDate)}');`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2024-09-04',5000.0000,'EUR',${AID.DEGIRO});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 9, 4))}',5000.0000,'EUR',${AID.DEGIRO});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','2025-09-04',142.5000,'EUR',${AID.DEGIRO});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 9, 4))}',142.5000,'EUR',${AID.DEGIRO});`,
   );
 }
 invId++;
@@ -1087,11 +1108,11 @@ invId++;
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2018-05-01',298000.0000,'EUR');`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','${fmt(ymd(2018, 5, 1))}',298000.0000,'EUR');`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','2025-12-31',27000.0000,'EUR');`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','${fmt(ymd(2025, 12, 31))}',27000.0000,'EUR');`,
   );
 }
 
@@ -1135,7 +1156,7 @@ const taxProfile = {
   lifeInsurancePremiums: 0,
   mortgageInterestPaid: 3300,
   mortgageCapitalRepaid: 7900,
-  mortgageStartYear: 2018,
+  mortgageStartYear: MORTGAGE.start.getUTCFullYear(),
   mortgageRegion: "flanders",
   mortgageIsPrimaryResidence: true,
   charitableDonations: 120,
@@ -1149,7 +1170,7 @@ const taxProfile = {
   annualDividendIncome: 115,
   annualSavingsInterest: 60,
   taxIncomeCategoryIds: [catId["INCOME:SALARY"], catId["INCOME:BONUS"]],
-  taxYear: 2025,
+  taxYear: ymd(2025, 12, 31).getUTCFullYear(),
 };
 S(
   `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_profile', '${JSON.stringify(taxProfile).replace(/'/g, "''")}'::jsonb);`,
@@ -1182,6 +1203,7 @@ for (const [s, v] of seqs) {
 }
 
 export const demoSeedSql = out.join("\n") + "\n";
+export const demoSeedReferenceDate = fmt(REFERENCE_DATE);
 export const demoSeedSummary = Object.freeze({
   accounts: 6,
   transactions: txId,
