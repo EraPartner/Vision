@@ -571,12 +571,12 @@ export default function DashboardPage() {
     const incomeCompact = formatCurrencyCompact(
         totalIncome,
         appSettings.defaultCurrency,
-        locale,
+        locale, appSettings.showDecimalPlaces ?? 2
     );
     const spendingCompact = formatCurrencyCompact(
         totalSpending,
         appSettings.defaultCurrency,
-        locale,
+        locale, appSettings.showDecimalPlaces ?? 2
     );
 
     return (

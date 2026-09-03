@@ -253,6 +253,8 @@ export interface TransactionCreate {
     category_id?: number;
     comment?: string;
     tags?: string[];
+    /** Explicit user confirmation that an otherwise matching manual row is intentional. */
+    allow_duplicate?: boolean;
 }
 
 // Nullable fields carry PATCH null-to-clear semantics: explicit null clears

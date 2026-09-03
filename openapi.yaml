@@ -62,6 +62,556 @@ components:
         status:
           type: integer
 
+    UpdateCheck:
+      type: object
+      required: [up_to_date, current_version, latest_version, update_mode]
+      properties:
+        up_to_date: { type: boolean }
+        current_version: { type: string }
+        latest_version: { type: string, nullable: true }
+        published_at: { type: string, format: date-time }
+        release_notes: { type: string }
+        html_url: { type: string, format: uri }
+        update_mode:
+          type: string
+          enum: [source, docker, native, dev, docker-compose]
+        source_launcher_available: { type: boolean }
+        error: { type: string }
+
+    UpdateCheckEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/UpdateCheck" }
+
+    # Research wire contracts. These are named even where most provider fields
+    # are optional so generated clients and the hand-written UI adapters cannot
+    # silently drift apart.
+    ResearchMeta:
+      type: object
+      required: [provider, source]
+      properties:
+        provider: { type: string, nullable: true }
+        source: { type: string, enum: [cache, live, unavailable] }
+        requestId: { type: string }
+
+    ResearchSearchItem:
+      type: object
+      required: [symbol]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        type: { type: string }
+        exchange: { type: string }
+
+    ResearchSearchData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchSearchItem" }
+
+    ResearchQuote:
+      type: object
+      required: [symbol, price]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        price: { type: number }
+        change: { type: number }
+        changePercent: { type: number }
+        currency: { type: string }
+        exchange: { type: string }
+        type: { type: string }
+        open: { type: number }
+        dayHigh: { type: number }
+        dayLow: { type: number }
+        prevClose: { type: number }
+        volume: { type: number }
+        avgVolume: { type: number }
+        high52w: { type: number }
+        low52w: { type: number }
+
+    ResearchChartPoint:
+      type: object
+      required: [time, close]
+      properties:
+        time: { type: number }
+        close: { type: number }
+        high: { type: number }
+        low: { type: number }
+        volume: { type: number }
+
+    ResearchChartData:
+      type: object
+      required: [points]
+      properties:
+        symbol: { type: string }
+        currency: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchChartPoint" }
+
+    ResearchFundamentals:
+      type: object
+      additionalProperties: true
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        currency: { type: string }
+        marketCap: { type: number, nullable: true }
+        pe: { type: number, nullable: true }
+        forwardPE: { type: number, nullable: true }
+        dividendYield: { type: number, nullable: true }
+        eps: { type: number, nullable: true }
+        beta: { type: number, nullable: true }
+        priceToBook: { type: number, nullable: true }
+        profitMargin: { type: number, nullable: true }
+        revenue: { type: number, nullable: true }
+        returnOnEquity: { type: number, nullable: true }
+        sector: { type: string, nullable: true }
+        pegRatio: { type: number, nullable: true }
+        payoutRatio: { type: number, nullable: true }
+        grossMargin: { type: number, nullable: true }
+        operatingMargin: { type: number, nullable: true }
+        revenueGrowth: { type: number, nullable: true }
+        earningsGrowth: { type: number, nullable: true }
+        debtToEquity: { type: number, nullable: true }
+        currentRatio: { type: number, nullable: true }
+        quickRatio: { type: number, nullable: true }
+        interestCoverage: { type: number, nullable: true }
+        freeCashFlow: { type: number, nullable: true }
+        fcfYield: { type: number, nullable: true }
+
+    ResearchAnalystConsensus:
+      type: object
+      required: [strongBuy, buy, hold, sell, strongSell]
+      properties:
+        strongBuy: { type: number }
+        buy: { type: number }
+        hold: { type: number }
+        sell: { type: number }
+        strongSell: { type: number }
+
+    ResearchAnalystAction:
+      type: object
+      properties:
+        date:
+          oneOf: [{ type: string }, { type: number }]
+        firm: { type: string }
+        toGrade: { type: string }
+        fromGrade: { type: string, nullable: true }
+        action: { type: string }
+
+    ResearchAnalystData:
+      type: object
+      properties:
+        symbol: { type: string }
+        consensus:
+          {
+            $ref: "#/components/schemas/ResearchAnalystConsensus",
+            nullable: true,
+          }
+        targetMean: { type: number, nullable: true }
+        targetHigh: { type: number, nullable: true }
+        targetLow: { type: number, nullable: true }
+        numberOfAnalysts: { type: number, nullable: true }
+        recentActions:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchAnalystAction" }
+
+    ResearchNewsArticle:
+      type: object
+      properties:
+        title: { type: string }
+        link: { type: string }
+        publisher: { type: string }
+        publishedAt: { type: number, nullable: true }
+        thumbnail: { type: string, nullable: true }
+        relatedSymbols:
+          type: array
+          items: { type: string }
+
+    ResearchNewsData:
+      type: object
+      required: [articles]
+      properties:
+        articles:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchNewsArticle" }
+
+    ResearchMacroSeriesItem:
+      type: object
+      required: [provider, seriesId]
+      properties:
+        provider: { type: string, enum: [fred, eurostat, dbnomics] }
+        seriesId: { type: string }
+        title: { type: string }
+        region: { type: string }
+        units: { type: string }
+        frequency: { type: string }
+        source: { type: string }
+
+    ResearchMacroSearchData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchMacroSeriesItem" }
+
+    ResearchMacroSeriesData:
+      type: object
+      required: [provider, seriesId, points]
+      properties:
+        provider: { type: string, enum: [fred, eurostat, dbnomics] }
+        seriesId: { type: string }
+        title: { type: string }
+        units: { type: string }
+        frequency: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchChartPoint" }
+
+    InstrumentProviderMapping:
+      type: object
+      required: [id, instrument_key, key_type, provider, status]
+      properties:
+        id: { type: integer }
+        instrument_key: { type: string }
+        key_type: { type: string, enum: [isin, internal] }
+        provider: { type: string }
+        provider_symbol: { type: string, nullable: true }
+        resolved_name: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
+        currency: { type: string, nullable: true }
+        status: { type: string }
+        verified_at: { type: string, nullable: true }
+        created_at: { type: string }
+        updated_at: { type: string }
+
+    ResearchMappingsData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InstrumentProviderMapping" }
+        total: { type: integer }
+
+    ResearchMappingProposal:
+      type: object
+      required: [provider, status]
+      additionalProperties: true
+      properties:
+        provider: { type: string }
+        status: { type: string }
+        providerSymbol: { type: string }
+        resolvedName: { type: string }
+        exchange: { type: string }
+        currency: { type: string }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchSearchItem" }
+        fromStore: { type: boolean }
+        fromHolding: { type: boolean }
+        reason: { type: string }
+        error: { type: string }
+
+    ResearchMappingResolveData:
+      type: object
+      required: [instrument_key, key_type, proposals, existing]
+      properties:
+        instrument_key: { type: string }
+        key_type: { type: string, enum: [isin, internal] }
+        proposals:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchMappingProposal" }
+        existing:
+          type: array
+          items: { $ref: "#/components/schemas/InstrumentProviderMapping" }
+
+    ResearchMappingAuditData:
+      type: object
+      required: [ok, quotes, discrepancies]
+      properties:
+        ok: { type: boolean }
+        quotes:
+          type: array
+          items:
+            type: object
+            required: [provider]
+            properties:
+              provider: { type: string }
+              currency: { type: string }
+              price: { type: number }
+              skipped: { type: string }
+              error: { type: string }
+        discrepancies:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    ResearchProviderKeyStatus:
+      type: object
+      required: [provider, label, envVar, configured, source]
+      properties:
+        provider: { type: string }
+        label: { type: string }
+        envVar: { type: string }
+        configured: { type: boolean }
+        source: { type: string, enum: [settings, env, none] }
+        masked: { type: string }
+
+    ResearchProviderKeysData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchProviderKeyStatus" }
+        total: { type: integer }
+
+    ResearchScorecardFlag:
+      type: object
+      required:
+        [
+          metric,
+          category,
+          better,
+          value,
+          severity,
+          code,
+          reasonKey,
+          reason,
+          benchmark,
+        ]
+      properties:
+        metric: { type: string }
+        category:
+          {
+            type: string,
+            enum:
+              [
+                liquidity,
+                leverage,
+                profitability,
+                cashflow,
+                growth,
+                valuation,
+                dividend,
+              ],
+          }
+        better: { type: string, enum: [higher, lower] }
+        value: { type: number }
+        severity: { type: string, enum: [ok, caution, warn, risk] }
+        code: { type: string }
+        reasonKey: { type: string }
+        reason: { type: string }
+        benchmark: { type: string }
+
+    ResearchScorecard:
+      type: object
+      required: [score, grade, evaluated, counts, flags]
+      properties:
+        score: { type: number, nullable: true }
+        grade:
+          { type: string, enum: [strong, healthy, mixed, weak, poor, unknown] }
+        evaluated: { type: integer }
+        counts:
+          type: object
+          required: [ok, caution, warn, risk]
+          properties:
+            ok: { type: integer }
+            caution: { type: integer }
+            warn: { type: integer }
+            risk: { type: integer }
+        flags:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchScorecardFlag" }
+
+    ResearchScorecardData:
+      type: object
+      required: [symbol, fundamentals, scorecard]
+      properties:
+        symbol: { type: string }
+        fundamentals: { $ref: "#/components/schemas/ResearchFundamentals" }
+        scorecard: { $ref: "#/components/schemas/ResearchScorecard" }
+
+    ResearchForecastPoint:
+      type: object
+      required: [monthIndex, date, netInvested, p10, p25, p50, p75, p90]
+      properties:
+        monthIndex: { type: integer }
+        date: { type: string }
+        netInvested: { type: number }
+        p10: { type: number }
+        p25: { type: number }
+        p50: { type: number }
+        p75: { type: number }
+        p90: { type: number }
+
+    ResearchForecastForwardHolding:
+      type: object
+      required: [symbol, expectedAnnual, growth]
+      properties:
+        symbol: { type: string }
+        expectedAnnual: { type: number }
+        growth: { type: number }
+        dividendYield: { type: number }
+
+    ResearchForecastProjected:
+      type: object
+      required: [mean, p10, p25, p50, p75, p90]
+      properties:
+        mean: { type: number }
+        p10: { type: number }
+        p25: { type: number }
+        p50: { type: number }
+        p75: { type: number }
+        p90: { type: number }
+
+    ResearchPortfolioForecastData:
+      type: object
+      required: [available]
+      properties:
+        available: { type: boolean }
+        reason: { type: string, enum: [no_holdings, insufficient_history] }
+        currency: { type: string }
+        method: { type: string, enum: [parametric, block_bootstrap] }
+        horizonMonths: { type: integer }
+        paths: { type: integer }
+        seed: { type: string }
+        historyDays: { type: integer }
+        flowArtifactDays: { type: integer }
+        lowConfidence: { type: boolean }
+        startValue: { type: number }
+        startInvested: { type: number }
+        monthlyContribution: { type: number }
+        totalContributions: { type: number }
+        netInvested: { type: number }
+        expectedAnnualReturn: { type: number }
+        historicalAnnualReturn: { type: number }
+        annualVolatility: { type: number }
+        forwardBlend: { type: number }
+        usedForward: { type: boolean }
+        forwardHoldings:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchForecastForwardHolding" }
+        projected: { $ref: "#/components/schemas/ResearchForecastProjected" }
+        probBelowInvested: { type: number }
+        targetValue: { type: number }
+        probTarget: { type: number }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchForecastPoint" }
+
+    ResearchEnvelopeBase:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        meta: { $ref: "#/components/schemas/ResearchMeta" }
+        error: { $ref: "#/components/schemas/ErrorPayload" }
+
+    ResearchSearchEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchSearchData" }
+    ResearchQuoteEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchQuote", nullable: true }
+    ResearchChartEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchChartData" }
+    ResearchFundamentalsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data:
+              {
+                $ref: "#/components/schemas/ResearchFundamentals",
+                nullable: true,
+              }
+    ResearchAnalystEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data:
+              {
+                $ref: "#/components/schemas/ResearchAnalystData",
+                nullable: true,
+              }
+    ResearchNewsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchNewsData" }
+    ResearchMacroSearchEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchMacroSearchData" }
+    ResearchMacroSeriesEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchMacroSeriesData" }
+    ResearchScorecardEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data:
+              {
+                $ref: "#/components/schemas/ResearchScorecardData",
+                nullable: true,
+              }
+    ResearchPortfolioForecastEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
+    ResearchMappingsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchMappingsData" }
+    ResearchMappingResolveEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchMappingResolveData" }
+    ResearchMappingAuditEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchMappingAuditData" }
+    ResearchProviderKeysEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchProviderKeysData" }
+
     Link:
       type: object
       required: [rel, href, method]
@@ -802,6 +1352,11 @@ components:
           items:
             type: string
           description: Tag slugs to assign (replaces existing tags)
+        allow_duplicate:
+          type: boolean
+          description: >-
+            Explicit confirmation that a matching active manual transaction is
+            intentional. Omit or false to retain the default 409 duplicate guard.
 
     TransactionUpdate:
       type: object
@@ -2752,6 +3307,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Transaction"
+        "409":
+          description: Matching active manual transaction exists and allow_duplicate was omitted or false
 
   /api/transactions/{id}:
     parameters:
@@ -8141,7 +8698,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/UpdateCheckEnvelope"
 
   /api/admin/update/apply:
     post:
@@ -8331,7 +8888,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchSearchEnvelope"
 
   /api/research/quote:
     get:
@@ -8355,7 +8912,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchQuoteEnvelope"
         "400":
           description: symbol parameter required
 
@@ -8391,7 +8948,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchChartEnvelope"
         "400":
           description: symbol parameter required
 
@@ -8416,7 +8973,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchFundamentalsEnvelope"
         "400":
           description: symbol parameter required
 
@@ -8441,7 +8998,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchAnalystEnvelope"
         "400":
           description: symbol parameter required
 
@@ -8462,7 +9019,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchNewsEnvelope"
         "400":
           description: symbol parameter required
   # Macro economic indicators (ADR-082) — provider-pinned (FRED/Eurostat/DBnomics)
@@ -8486,7 +9043,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMacroSearchEnvelope"
   /api/research/macro/series:
     get:
       summary: Observations for one provider-pinned macro series (value→close chart points)
@@ -8518,7 +9075,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMacroSeriesEnvelope"
         "400":
           description: invalid provider or series_id
   # Research analytics (ADR-081)
@@ -8543,7 +9100,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchScorecardEnvelope"
         "400":
           description: symbol parameter required
   /api/research/portfolio-forecast:
@@ -8576,7 +9133,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchPortfolioForecastEnvelope"
   # Research symbol mapping (ADR-079)
   /api/research/mappings:
     get:
@@ -8602,7 +9159,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMappingsEnvelope"
         "400":
           description: instrument_key required or invalid key_type
     post:
@@ -8633,7 +9190,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMappingsEnvelope"
         "400":
           description: instrument_key required or mappings must be a non-empty array
   /api/research/mappings/resolve:
@@ -8672,7 +9229,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMappingResolveEnvelope"
         "400":
           description: instrument_key and query required
   /api/research/mappings/audit:
@@ -8700,7 +9257,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchMappingAuditEnvelope"
         "400":
           description: instrument_key required
   /api/research/mappings/{id}:
@@ -8733,7 +9290,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchProviderKeysEnvelope"
   /api/research/provider-keys/{provider}:
     put:
       summary: Set or replace a provider's API key (takes effect immediately)
@@ -8745,7 +9302,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+            enum: [twelve_data, finnhub, fmp, alpha_vantage, fred]
       requestBody:
         required: true
         content:
@@ -8762,7 +9319,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/ResearchProviderKeysEnvelope"
         "400":
           description: unknown provider or empty api_key
     delete:
@@ -8775,7 +9332,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+            enum: [twelve_data, finnhub, fmp, alpha_vantage, fred]
       responses:
         "204":
           description: No Content (refetch GET /provider-keys for the new statuses)

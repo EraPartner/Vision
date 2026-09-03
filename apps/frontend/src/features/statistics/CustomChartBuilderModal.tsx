@@ -16,7 +16,7 @@ import { useCreateSavedChart, useUpdateSavedChart } from "@/hooks/useSavedCharts
 import { useRecipients } from "@/hooks/useRecipients";
 import { useTags } from "@/hooks/useTags";
 import type { StatisticsData } from "@/hooks/useStatistics";
-import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/lib/api/types";
+import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/types/apiClient";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";

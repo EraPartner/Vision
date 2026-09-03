@@ -52,7 +52,7 @@ import {
 } from "@/hooks/useCustomParserConfigs";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { consumePendingImportFile } from "@/lib/importHandoff";
-import type { ImportProgress, ImportResult } from "@/lib/api/types";
+import type { ImportProgress, ImportResult } from "@/types/apiClient";
 import { isReviewRequired, type ImportCsvResult } from "@/lib/api/imports";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 

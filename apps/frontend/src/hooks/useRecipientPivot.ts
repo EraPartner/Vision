@@ -1,5 +1,5 @@
 import { getAggregationRecipientPivot, type RecipientPivotItem } from '@/lib/api/aggregations';
-import type { SavedChart } from '@/lib/api/types';
+import type { SavedChart } from '@/types/apiClient';
 import { usePivotQuery, type PivotConfig } from './usePivotQuery';
 
 export type { RecipientPivotItem };

@@ -21,7 +21,10 @@ interface EnvelopeMeta {
  * status column pinned per row in contracts.test.ts.
  */
 function okWithStatus<T>(status: number, data: T, meta?: EnvelopeMeta) {
-    return HttpResponse.json({ ok: true, data, ...(meta ? { meta } : {}) }, { status });
+    return HttpResponse.json(
+        { ok: true, data, ...(meta ? { meta } : {}) },
+        { status },
+    );
 }
 
 /** 200 OK — routes that call `res.ok(...)` with no preceding `res.status(...)`. */
@@ -308,8 +311,12 @@ export const IMPORT_CSV_REVIEW_REQUIRED_STUB = {
  * narrow on alongside `requires_review`.
  */
 export const importCsvReviewRequiredHandlers = [
-    http.post(`${API_BASE}/api/import/csv`, () => ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB)),
-    http.post(`${API_BASE}/api/import/csv/custom`, () => ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB)),
+    http.post(`${API_BASE}/api/import/csv`, () =>
+        ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB),
+    ),
+    http.post(`${API_BASE}/api/import/csv/custom`, () =>
+        ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB),
+    ),
 ];
 
 /**
@@ -325,7 +332,9 @@ export const defaultHandlers = [
     // what the real route would answer. Every `saveSetting` caller today is
     // fire-and-forget, but the client types it `Promise<{ key, value }>`.
     http.put(`${API_BASE}/api/settings/:key`, async ({ params, request }) => {
-        const body = (await request.json().catch(() => ({}))) as { value?: unknown };
+        const body = (await request.json().catch(() => ({}))) as {
+            value?: unknown;
+        };
         return ok({ key: String(params.key), value: body.value ?? null });
     }),
 
@@ -343,7 +352,9 @@ export const defaultHandlers = [
     // Accounts API (ADR-088) — account pickers/filters now mount across the
     // transactions, portfolio, and net-worth surfaces. An empty list keeps those
     // fetches from leaking past teardown or tripping the unhandled-request guard.
-    http.get(`${API_BASE}/api/accounts`, () => ok({ items: [], total: 0, links: [] })),
+    http.get(`${API_BASE}/api/accounts`, () =>
+        ok({ items: [], total: 0, links: [] }),
+    ),
     http.get(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     // Tags API — used by TagPicker inside dialogs/forms across the app.
     // Returning an empty list keeps async fetches from leaking past test
@@ -351,7 +362,9 @@ export const defaultHandlers = [
     // handler" warnings flooding the test output. Real route answers the
     // opt-in-pagination list body: `{items, total, links}` (no limit/offset
     // when the request did not paginate — routes/tags.js).
-    http.get(`${API_BASE}/api/tags`, () => ok({ items: [], total: 0, links: [] })),
+    http.get(`${API_BASE}/api/tags`, () =>
+        ok({ items: [], total: 0, links: [] }),
+    ),
     http.get(`${API_BASE}/api/transactions`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
     ),
@@ -363,20 +376,26 @@ export const defaultHandlers = [
         ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
     ),
     http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-        aggOk({
-            months: [],
-            summary: {
-                total_spending: 0,
-                total_income: 0,
-                net_amount: 0,
-                transaction_count: 0,
-                period_start: "",
-                period_end: "",
+        aggOk(
+            {
+                months: [],
+                summary: {
+                    total_spending: 0,
+                    total_income: 0,
+                    net_amount: 0,
+                    transaction_count: 0,
+                    period_start: "",
+                    period_end: "",
+                },
             },
-        }, "2025-01-01T00:00:00.000Z"),
+            "2025-01-01T00:00:00.000Z",
+        ),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-        aggOk({ topMerchants: [], monthOverMonth: [] }, "2025-01-01T00:00:00.000Z"),
+        aggOk(
+            { topMerchants: [], monthOverMonth: [] },
+            "2025-01-01T00:00:00.000Z",
+        ),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-comparison`, () =>
         aggOk({
@@ -494,9 +513,15 @@ export const defaultHandlers = [
     // — scorecard fires on load, analyst/news on tab-click). Default to an
     // unavailable envelope so component tests degrade gracefully; integration
     // tests override per-flow via server.use().
-    http.get(`${API_BASE}/api/research/scorecard`, () => ok(null, { provider: null, source: "unavailable" })),
-    http.get(`${API_BASE}/api/research/analyst`, () => ok(null, { provider: null, source: "unavailable" })),
-    http.get(`${API_BASE}/api/research/news`, () => ok(null, { provider: null, source: "unavailable" })),
+    http.get(`${API_BASE}/api/research/scorecard`, () =>
+        ok(null, { provider: null, source: "unavailable" }),
+    ),
+    http.get(`${API_BASE}/api/research/analyst`, () =>
+        ok(null, { provider: null, source: "unavailable" }),
+    ),
+    http.get(`${API_BASE}/api/research/news`, () =>
+        ok(null, { provider: null, source: "unavailable" }),
+    ),
     http.get(`${API_BASE}/api/watchlist`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
@@ -504,7 +529,9 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/ai/status`, () =>
         ok({ ok: false, baseUrl: "", defaultModel: "", enabled: false }),
     ),
-    http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/ai/conversations`, () =>
+        ok({ items: [], total: 0 }),
+    ),
 
     http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
         ok({
@@ -529,8 +556,12 @@ export const defaultHandlers = [
     // impossible API states (e.g. res.adapters undefined) and made the msw
     // contract suite pin a shape that contradicted the live-contracts suite.
     // (transaction-summary handler removed — Phase 9 deleted that route.)
-    http.get(`${API_BASE}/api/info/transaction-count`, () => ok({ total_transactions: 0 })),
-    http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok({ patterns: [], total: 0 })),
+    http.get(`${API_BASE}/api/info/transaction-count`, () =>
+        ok({ total_transactions: 0 }),
+    ),
+    http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
+        ok({ patterns: [], total: 0 }),
+    ),
     http.get(`${API_BASE}/api/info/insights-digest`, () =>
         ok({
             subscriptionCreep: { new: [], priceChanges: [] },
@@ -539,16 +570,26 @@ export const defaultHandlers = [
         }),
     ),
     http.get(`${API_BASE}/api/info/banks`, () => ok({ items: [], total: 0 })),
-    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/info/supported-adapters`, () =>
+        ok({ items: [], total: 0 }),
+    ),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
 
-    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () =>
+        ok({ items: [], total: 0 }),
+    ),
     http.get(`${API_BASE}/api/admin/database/stats`, () =>
         ok({ tables: [], db_size: null }),
     ),
-    http.get(`${API_BASE}/api/admin/providers/health`, () => ok({ items: [], total: 0 })),
-    http.get(`${API_BASE}/api/admin/metrics/requests`, () => ok({ items: [], total: 0 })),
-    http.get(`${API_BASE}/api/admin/endpoints`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/admin/providers/health`, () =>
+        ok({ items: [], total: 0 }),
+    ),
+    http.get(`${API_BASE}/api/admin/metrics/requests`, () =>
+        ok({ items: [], total: 0 }),
+    ),
+    http.get(`${API_BASE}/api/admin/endpoints`, () =>
+        ok({ items: [], total: 0 }),
+    ),
 
     // ── Mutation stubs ───────────────────────────────────────────────────────
     // These prevent onUnhandledRequest:"error" and are validated by contract
@@ -577,24 +618,44 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     http.delete(`${API_BASE}/api/accounts/:id`, () => noContent()),
     http.post(`${API_BASE}/api/accounts/:id/merge`, () =>
-        ok({ into: 1, merged: [2], reassigned: { transactions: 0, planned: 0, portfolio: 0, funding: 0 } }),
+        ok({
+            into: 1,
+            merged: [2],
+            reassigned: {
+                transactions: 0,
+                planned: 0,
+                portfolio: 0,
+                funding: 0,
+            },
+        }),
     ),
 
     // 201: routes/plannedTransactions.js:443. The /:id/execute route below is
     // a plain 200 — it updates an existing row rather than creating one.
-    http.post(`${API_BASE}/api/planned-transactions`, () => ok201(PLANNED_TRANSACTION_STUB)),
-    http.patch(`${API_BASE}/api/planned-transactions/:id`, () => ok(PLANNED_TRANSACTION_STUB)),
+    http.post(`${API_BASE}/api/planned-transactions`, () =>
+        ok201(PLANNED_TRANSACTION_STUB),
+    ),
+    http.patch(`${API_BASE}/api/planned-transactions/:id`, () =>
+        ok(PLANNED_TRANSACTION_STUB),
+    ),
     http.delete(`${API_BASE}/api/planned-transactions/:id`, () => noContent()),
     http.post(`${API_BASE}/api/planned-transactions/:id/execute`, () =>
         ok({ ...PLANNED_TRANSACTION_STUB, is_executed: true }),
     ),
-    http.get(`${API_BASE}/api/planned-transactions/due-soon`, () => ok({ items: [], total: 0, days: 7 })),
+    http.get(`${API_BASE}/api/planned-transactions/due-soon`, () =>
+        ok({ items: [], total: 0, days: 7 }),
+    ),
 
     // ── Phase F1: full contract surface coverage ────────────────────────────
 
     // Admin
     http.get(`${API_BASE}/api/admin/update/check`, () =>
-        ok({ available: false, current: "test", latest: "test" }),
+        ok({
+            up_to_date: true,
+            current_version: "test",
+            latest_version: null,
+            update_mode: "docker-compose",
+        }),
     ),
     // `res.ok({ vacuumed: table ?? 'all' })` — routes/admin.js:282. There is no
     // `message` on this route; `lib/api/admin.ts::vacuumTable` reads `vacuumed`.
@@ -609,11 +670,41 @@ export const defaultHandlers = [
     // types/aiChat.ts). The frontend only uses /api/ai/chat/stream today.
     http.post(`${API_BASE}/api/ai/chat`, () =>
         ok({
-            conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
-            userMessage: { id: "msg-1", conversationId: "conv-1", role: "user", content: "test", toolName: null, toolArgs: null, toolResult: null, status: "complete", createdAt: "2025-01-01T00:00:00Z" },
+            conversation: {
+                id: "conv-1",
+                title: "New Conversation",
+                model: "llama3",
+                createdAt: "2025-01-01T00:00:00Z",
+                updatedAt: "2025-01-01T00:00:00Z",
+            },
+            userMessage: {
+                id: "msg-1",
+                conversationId: "conv-1",
+                role: "user",
+                content: "test",
+                toolName: null,
+                toolArgs: null,
+                toolResult: null,
+                status: "complete",
+                createdAt: "2025-01-01T00:00:00Z",
+            },
             toolMessages: [],
-            assistantMessage: { id: "msg-2", conversationId: "conv-1", role: "assistant", content: "ok", toolName: null, toolArgs: null, toolResult: null, status: "complete", createdAt: "2025-01-01T00:00:00Z" },
-            usage: { evalCount: null, promptEvalCount: null, totalDurationMs: null },
+            assistantMessage: {
+                id: "msg-2",
+                conversationId: "conv-1",
+                role: "assistant",
+                content: "ok",
+                toolName: null,
+                toolArgs: null,
+                toolResult: null,
+                status: "complete",
+                createdAt: "2025-01-01T00:00:00Z",
+            },
+            usage: {
+                evalCount: null,
+                promptEvalCount: null,
+                totalDurationMs: null,
+            },
             iterations: 1,
         }),
     ),
@@ -623,13 +714,25 @@ export const defaultHandlers = [
     // (services/aiChatService.js:468-475) — same shape as GET /:id.
     http.post(`${API_BASE}/api/ai/conversations`, () =>
         ok201({
-            conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
+            conversation: {
+                id: "conv-1",
+                title: "New Conversation",
+                model: "llama3",
+                createdAt: "2025-01-01T00:00:00Z",
+                updatedAt: "2025-01-01T00:00:00Z",
+            },
             messages: [],
         }),
     ),
     http.get(`${API_BASE}/api/ai/conversations/:id`, () =>
         ok({
-            conversation: { id: "conv-1", title: "Test", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
+            conversation: {
+                id: "conv-1",
+                title: "Test",
+                model: "llama3",
+                createdAt: "2025-01-01T00:00:00Z",
+                updatedAt: "2025-01-01T00:00:00Z",
+            },
             messages: [],
         }),
     ),
@@ -637,16 +740,30 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [], total: 0 })),
 
     // Attachments
-    http.get(`${API_BASE}/api/attachments/transaction/:id`, () => ok({ items: [] })),
+    http.get(`${API_BASE}/api/attachments/transaction/:id`, () =>
+        ok({ items: [] }),
+    ),
     // 201: routes/attachments.js:113. Body is `attachmentRepository.formatRow`
     // (attachmentRepository.js:19-29) — `size_bytes` (a number) and
     // `stored_path`, NOT `size`. `AttachmentPanel.tsx:61` renders
     // `attachment.size_bytes`.
     http.post(`${API_BASE}/api/attachments/transaction/:id`, () =>
-        ok201({ id: 1, transaction_id: 1, filename: "test.pdf", stored_path: "attachments/test.pdf", mime_type: "application/pdf", size_bytes: 1024, created_at: "2025-01-01T00:00:00Z" }),
+        ok201({
+            id: 1,
+            transaction_id: 1,
+            filename: "test.pdf",
+            stored_path: "attachments/test.pdf",
+            mime_type: "application/pdf",
+            size_bytes: 1024,
+            created_at: "2025-01-01T00:00:00Z",
+        }),
     ),
-    http.get(`${API_BASE}/api/attachments/:id`, () =>
-        new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
+    http.get(
+        `${API_BASE}/api/attachments/:id`,
+        () =>
+            new Response(new Blob(["data"], { type: "application/pdf" }), {
+                status: 200,
+            }),
     ),
     http.delete(`${API_BASE}/api/attachments/:id`, () => noContent()),
 
@@ -663,8 +780,12 @@ export const defaultHandlers = [
     // 201 on the auto-commit arm: routes/importRoutes.js:242 (/csv) and :283
     // (/csv/custom). The review arm answers 202 — see
     // `importCsvReviewRequiredHandlers` above.
-    http.post(`${API_BASE}/api/import/csv`, () => ok201(IMPORT_CSV_RESULT_STUB)),
-    http.post(`${API_BASE}/api/import/csv/custom`, () => ok201(IMPORT_CSV_RESULT_STUB)),
+    http.post(`${API_BASE}/api/import/csv`, () =>
+        ok201(IMPORT_CSV_RESULT_STUB),
+    ),
+    http.post(`${API_BASE}/api/import/csv/custom`, () =>
+        ok201(IMPORT_CSV_RESULT_STUB),
+    ),
     // 201: routes/importRoutes.js:406 (categories), :388 (recipients). Both
     // answer `{ ...result, status }` where `result` is the CSV importer's
     // counter object (`dataImportService.js` — total_processed/imported/
@@ -672,10 +793,23 @@ export const defaultHandlers = [
     // `status` is derived from `errors`. There is no `message`/`count`:
     // `SimpleImportCard`'s success toast reads imported/skipped/errors.
     http.post(`${API_BASE}/api/import/categories`, () =>
-        ok201({ total_processed: 0, imported: 0, skipped: 0, errors: 0, status: "completed" }),
+        ok201({
+            total_processed: 0,
+            imported: 0,
+            skipped: 0,
+            errors: 0,
+            status: "completed",
+        }),
     ),
     http.post(`${API_BASE}/api/import/recipients`, () =>
-        ok201({ total_processed: 0, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0, status: "completed" }),
+        ok201({
+            total_processed: 0,
+            imported: 0,
+            skipped: 0,
+            errors: 0,
+            bank_account_errors: 0,
+            status: "completed",
+        }),
     ),
     http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
         ok({ message: "Committed", batch_id: 1, transactions_committed: 0 }),
@@ -683,8 +817,13 @@ export const defaultHandlers = [
     // POST, not PUT: routes/importRoutes.js:549. `lib/api/imports.ts:274`
     // posts, so the old `http.put` mock served a verb the backend does not
     // register. Body is `{ row_id, user_override_recipient_id }`, not a message.
-    http.post(`${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`, ({ params }) =>
-        ok({ row_id: Number(params.rowId), user_override_recipient_id: null }),
+    http.post(
+        `${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`,
+        ({ params }) =>
+            ok({
+                row_id: Number(params.rowId),
+                user_override_recipient_id: null,
+            }),
     ),
 
     // Info / portfolio extras
@@ -717,7 +856,9 @@ export const defaultHandlers = [
     ),
 
     // Investments sub-routes
-    http.get(`${API_BASE}/api/investments/providers`, () => ok({ providers: [] })),
+    http.get(`${API_BASE}/api/investments/providers`, () =>
+        ok({ providers: [] }),
+    ),
     http.post(`${API_BASE}/api/investments/refresh-prices`, () =>
         ok({
             message: "Prices refreshed",
@@ -736,16 +877,44 @@ export const defaultHandlers = [
     // 201: controllers/investmentController.js:612. The PATCH below is 200
     // (same controller, :682).
     http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
-        ok201({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({
+            id: 1,
+            investment_id: 1,
+            type: "buy",
+            date: "2025-01-01",
+            amount: 100,
+            units: 1,
+            price_per_unit: 100,
+            currency: "EUR",
+            is_recurring: false,
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.patch(`${API_BASE}/api/investments/transactions/:id`, () =>
-        ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok({
+            id: 1,
+            investment_id: 1,
+            type: "buy",
+            date: "2025-01-01",
+            amount: 100,
+            units: 1,
+            price_per_unit: 100,
+            currency: "EUR",
+            is_recurring: false,
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
+        }),
     ),
-    http.delete(`${API_BASE}/api/investments/transactions/:id`, () => noContent()),
+    http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
+        noContent(),
+    ),
 
     // Recipients sub-routes
     http.get(`${API_BASE}/api/recipients/clusters`, () => ok({ clusters: [] })),
-    http.get(`${API_BASE}/api/recipients/:id/aliases`, () => ok({ aliases: [] })),
+    http.get(`${API_BASE}/api/recipients/:id/aliases`, () =>
+        ok({ aliases: [] }),
+    ),
     // `res.ok({ primary, merged_ids, reassigned, aliases, patternSuggestion })`
     // — routes/recipients.js:157-163. `primary` is the re-read recipient row
     // (`{ ...updatedPrimary, links: [] }`), `reassigned` is
@@ -758,7 +927,12 @@ export const defaultHandlers = [
         ok({
             primary: { ...RECIPIENT_STUB },
             merged_ids: [2],
-            reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 },
+            reassigned: {
+                transactions: 0,
+                splits: 0,
+                planned: 0,
+                bankAccounts: 0,
+            },
             aliases: [{ id: 2, name: "Merged Alias" }],
             patternSuggestion: null,
         }),
@@ -774,35 +948,70 @@ export const defaultHandlers = [
     ),
     // 201: routes/recipients.js:201.
     http.post(`${API_BASE}/api/recipients/:id/patterns`, () =>
-        ok201({ id: 1, pattern: "TEST*", pattern_kind: "glob", case_sensitive: false, priority: 1, is_active: true, source: "user", notes: null, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({
+            id: 1,
+            pattern: "TEST*",
+            pattern_kind: "glob",
+            case_sensitive: false,
+            priority: 1,
+            is_active: true,
+            source: "user",
+            notes: null,
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.patch(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
         ok({ patternId: 1 }),
     ),
-    http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () => noContent()),
+    http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
+        noContent(),
+    ),
     http.post(`${API_BASE}/api/recipients/:id/patterns/preview`, () =>
         ok({ matches: [] }),
     ),
 
     // Reports
-    http.post(`${API_BASE}/api/reports/financial`, () =>
-        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    http.post(
+        `${API_BASE}/api/reports/financial`,
+        () =>
+            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
+                status: 200,
+            }),
     ),
-    http.post(`${API_BASE}/api/reports/portfolio`, () =>
-        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    http.post(
+        `${API_BASE}/api/reports/portfolio`,
+        () =>
+            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
+                status: 200,
+            }),
     ),
-    http.post(`${API_BASE}/api/reports/tax`, () =>
-        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    http.post(
+        `${API_BASE}/api/reports/tax`,
+        () =>
+            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
+                status: 200,
+            }),
     ),
 
     // Saved charts
     http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [], total: 0 })),
     // 201: routes/savedCharts.js:175.
     http.post(`${API_BASE}/api/saved-charts`, () =>
-        ok201({ id: 1, name: "Test chart", config: {}, created_at: "2025-01-01T00:00:00Z" }),
+        ok201({
+            id: 1,
+            name: "Test chart",
+            config: {},
+            created_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.patch(`${API_BASE}/api/saved-charts/:id`, () =>
-        ok({ id: 1, name: "Updated", config: {}, created_at: "2025-01-01T00:00:00Z" }),
+        ok({
+            id: 1,
+            name: "Updated",
+            config: {},
+            created_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.delete(`${API_BASE}/api/saved-charts/:id`, () => noContent()),
 
@@ -836,26 +1045,52 @@ export const defaultHandlers = [
 
     // Transactions sub-routes
     http.get(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
-    http.get(`${API_BASE}/api/transactions/export/csv`, () =>
-        new Response("date,amount\n", {
-            status: 200,
-            headers: { "Content-Type": "text/csv" },
-        }),
+    http.get(
+        `${API_BASE}/api/transactions/export/csv`,
+        () =>
+            new Response("date,amount\n", {
+                status: 200,
+                headers: { "Content-Type": "text/csv" },
+            }),
     ),
-    http.get(`${API_BASE}/api/transactions/export/json`, () =>
-        new Response("[]\n", {
-            status: 200,
-            headers: { "Content-Type": "application/x-ndjson" },
-        }),
+    http.get(
+        `${API_BASE}/api/transactions/export/json`,
+        () =>
+            new Response("[]\n", {
+                status: 200,
+                headers: { "Content-Type": "application/x-ndjson" },
+            }),
     ),
 
     // Watchlist sub-routes
     // 201: routes/watchlist.js:196.
     http.post(`${API_BASE}/api/watchlist`, () =>
-        ok201({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({
+            id: 1,
+            symbol: "TEST",
+            name: "Test",
+            asset_class: "stock",
+            currency: "USD",
+            target_price: 100,
+            notes: null,
+            price_provider_id: "TEST",
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.patch(`${API_BASE}/api/watchlist/:id`, () =>
-        ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok({
+            id: 1,
+            symbol: "TEST",
+            name: "Test",
+            asset_class: "stock",
+            currency: "USD",
+            target_price: 100,
+            notes: null,
+            price_provider_id: "TEST",
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
+        }),
     ),
     http.delete(`${API_BASE}/api/watchlist/:id`, () => noContent()),
 

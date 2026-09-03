@@ -1,9 +1,26 @@
-import type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
-import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery } from '@/lib/api/helpers';
+import type {
+    WatchlistItem,
+    WatchlistCreate,
+    WatchlistUpdate,
+    WatchlistListResponse,
+} from "@/types/watchlist";
+import { apiRequest } from "@/lib/api/client";
+import { requestWithQuery } from "@/lib/api/helpers";
 import type { MarketNewsArticle } from "@/types/apiClient";
+import type {
+    MarketChartPoint,
+    MarketChartResponse,
+    MarketQuote,
+    MarketSearchResult,
+} from "@/types/research";
 
 export type { MarketNewsArticle };
+export type {
+    MarketChartPoint,
+    MarketChartResponse,
+    MarketQuote,
+    MarketSearchResult,
+};
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getMarketNews(
@@ -11,20 +28,13 @@ export async function getMarketNews(
     count?: number,
 ): Promise<MarketNewsArticle[]> {
     const params: Record<string, string | number> = {};
-    if (symbols?.length) params.symbols = symbols.join(',');
+    if (symbols?.length) params.symbols = symbols.join(",");
     if (count) params.count = count;
-    const { items } = await requestWithQuery<{ items: MarketNewsArticle[]; total: number }>(
-        '/api/market/news',
-        params,
-    );
+    const { items } = await requestWithQuery<{
+        items: MarketNewsArticle[];
+        total: number;
+    }>("/api/market/news", params);
     return items;
-}
-
-export interface MarketQuote {
-    symbol: string;
-    price: number;
-    change: number;
-    changePercent: number;
 }
 
 /**
@@ -39,28 +49,14 @@ export interface MarketQuote {
  */
 export async function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
-    opts?: { detail?: 'basic' | 'full' },
+    opts?: { detail?: "basic" | "full" },
 ): Promise<Q[]> {
-    const detail = opts?.detail === 'basic' ? '&detail=basic' : '';
+    const detail = opts?.detail === "basic" ? "&detail=basic" : "";
     // Canonical `{items, total}` collection body — callers only need the rows.
     const { items } = await apiRequest<{ items: Q[]; total: number }>(
         `/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`,
     );
     return items;
-}
-
-export interface MarketChartPoint {
-    time: number;
-    close: number;
-    high: number;
-    low: number;
-    volume: number;
-}
-
-export interface MarketChartResponse<P = MarketChartPoint> {
-    symbol?: string;
-    currency?: string;
-    points: P[];
 }
 
 /**
@@ -78,15 +74,8 @@ export async function getMarketChart<P = MarketChartPoint>(
         currency?: string;
         items: P[];
         total: number;
-    }>('/api/market/chart', { symbol, range, interval });
+    }>("/api/market/chart", { symbol, range, interval });
     return { symbol: rest.symbol, currency: rest.currency, points: items };
-}
-
-export interface MarketSearchResult {
-    symbol: string;
-    name: string;
-    type: string;
-    exchange: string;
 }
 
 export function searchMarket(
@@ -105,18 +94,29 @@ export function getWatchlist(params?: {
                   .filter(([, v]) => v !== undefined)
                   .map(([k, v]) => [k, String(v)]),
           ).toString()}`
-        : '';
+        : "";
     return apiRequest(`/api/watchlist${query}`);
 }
 
-export function createWatchlistItem(data: WatchlistCreate): Promise<WatchlistItem> {
-    return apiRequest('/api/watchlist', { method: 'POST', body: JSON.stringify(data) });
+export function createWatchlistItem(
+    data: WatchlistCreate,
+): Promise<WatchlistItem> {
+    return apiRequest("/api/watchlist", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
 }
 
-export function updateWatchlistItem(id: number, data: WatchlistUpdate): Promise<WatchlistItem> {
-    return apiRequest(`/api/watchlist/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export function updateWatchlistItem(
+    id: number,
+    data: WatchlistUpdate,
+): Promise<WatchlistItem> {
+    return apiRequest(`/api/watchlist/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+    });
 }
 
 export async function deleteWatchlistItem(id: number): Promise<void> {
-    await apiRequest(`/api/watchlist/${id}`, { method: 'DELETE' });
+    await apiRequest(`/api/watchlist/${id}`, { method: "DELETE" });
 }

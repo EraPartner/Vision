@@ -4,7 +4,7 @@ import type { LineSeries } from "@/components/charts/LineChart";
 import type {
     CashflowForecastMethodsData,
     CashflowForecastRollingData,
-    ForecastMethod,
+    CashflowForecastMethod,
 } from "@/lib/api/aggregations";
 
 export const ACTUAL_COLOR = "hsl(var(--primary))";
@@ -57,7 +57,7 @@ function bandBoundaryKeys(bands: Record<string, unknown>): {
 }
 
 function buildSeries<T extends MergedDay | MergedDayDate>(
-    methods: ReadonlyArray<ForecastMethod>,
+    methods: ReadonlyArray<CashflowForecastMethod>,
     visibleMethodIds: ReadonlySet<string>,
     actualLabel: string,
 ): LineSeries<T>[] {
@@ -65,7 +65,8 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
         {
             key: "actual",
             label: actualLabel,
-            accessor: (d) => (d as MergedDay | MergedDayDate).actual as number | null,
+            accessor: (d) =>
+                (d as MergedDay | MergedDayDate).actual as number | null,
             color: ACTUAL_COLOR,
             strokeWidth: 2.5,
             connectNulls: false,
@@ -79,7 +80,8 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
         series.push({
             key: m.id,
             label: m.label,
-            accessor: (d) => ((d as Record<string, unknown>)[m.id] as number | null) ?? null,
+            accessor: (d) =>
+                ((d as Record<string, unknown>)[m.id] as number | null) ?? null,
             color,
             strokeWidth: 1.5,
             dashed: false,
@@ -91,7 +93,9 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
             series.push({
                 key: `${m.id}__pLo`,
                 label: `${m.label} ${loLabel}`,
-                accessor: (d) => ((d as Record<string, unknown>)[`${m.id}__pLo`] as number | null) ?? null,
+                accessor: (d) =>
+                    ((d as Record<string, unknown>)[`${m.id}__pLo`] as
+                        number | null) ?? null,
                 color,
                 strokeWidth: 1,
                 dashed: true,
@@ -100,7 +104,9 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
             series.push({
                 key: `${m.id}__pHi`,
                 label: `${m.label} ${hiLabel}`,
-                accessor: (d) => ((d as Record<string, unknown>)[`${m.id}__pHi`] as number | null) ?? null,
+                accessor: (d) =>
+                    ((d as Record<string, unknown>)[`${m.id}__pHi`] as
+                        number | null) ?? null,
                 color,
                 strokeWidth: 1,
                 dashed: true,
@@ -113,7 +119,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
 }
 
 function buildBandMaps(
-    methods: ReadonlyArray<ForecastMethod>,
+    methods: ReadonlyArray<CashflowForecastMethod>,
     visibleMethodIds: ReadonlySet<string>,
     view: "cumulative" | "daily",
     lastActualCum: number,
@@ -167,7 +173,8 @@ export function mergeForView(
     const allDates = data.actual.map((p) => p.date);
 
     const lastActualCum =
-        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ?? 0;
+        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ??
+        0;
 
     const { bandsCum, bandsDaily } = buildBandMaps(
         data.methods,
@@ -195,7 +202,10 @@ export function mergeForView(
         for (const m of data.methods) {
             if (!visibleMethodIds.has(m.id)) continue;
             row[m.id] = methodMaps.get(m.id)?.get(date) ?? null;
-            const bands = view === "cumulative" ? bandsCum.get(m.id) : bandsDaily.get(m.id);
+            const bands =
+                view === "cumulative"
+                    ? bandsCum.get(m.id)
+                    : bandsDaily.get(m.id);
             if (bands) {
                 row[`${m.id}__pLo`] = bands.pLo.get(date) ?? null;
                 row[`${m.id}__pHi`] = bands.pHi.get(date) ?? null;
@@ -205,7 +215,11 @@ export function mergeForView(
         return row;
     });
 
-    const series = buildSeries<MergedDay>(data.methods, visibleMethodIds, actualLabel);
+    const series = buildSeries<MergedDay>(
+        data.methods,
+        visibleMethodIds,
+        actualLabel,
+    );
     return { rows, series };
 }
 
@@ -222,12 +236,17 @@ export function mergeForViewRolling(
     visibleMethodIds: ReadonlySet<string>,
     actualLabel: string,
 ): { rows: MergedDayDate[]; series: LineSeries<MergedDayDate>[] } {
-    const cumulativeByDate = new Map(data.actual.map((p) => [p.date, p.cumulative]));
+    const cumulativeByDate = new Map(
+        data.actual.map((p) => [p.date, p.cumulative]),
+    );
     const actualByDate = new Map(data.actual.map((p) => [p.date, p.net]));
-    const allDates = data.actual.map((p) => p.date).filter((d) => ISO_DATE_RE.test(d));
+    const allDates = data.actual
+        .map((p) => p.date)
+        .filter((d) => ISO_DATE_RE.test(d));
 
     const lastActualCum =
-        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ?? 0;
+        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ??
+        0;
 
     const { bandsCum, bandsDaily } = buildBandMaps(
         data.methods,
@@ -255,7 +274,10 @@ export function mergeForViewRolling(
         for (const m of data.methods) {
             if (!visibleMethodIds.has(m.id)) continue;
             row[m.id] = methodMaps.get(m.id)?.get(date) ?? null;
-            const bands = view === "cumulative" ? bandsCum.get(m.id) : bandsDaily.get(m.id);
+            const bands =
+                view === "cumulative"
+                    ? bandsCum.get(m.id)
+                    : bandsDaily.get(m.id);
             if (bands) {
                 row[`${m.id}__pLo`] = bands.pLo.get(date) ?? null;
                 row[`${m.id}__pHi`] = bands.pHi.get(date) ?? null;
@@ -265,6 +287,10 @@ export function mergeForViewRolling(
         return row;
     });
 
-    const series = buildSeries<MergedDayDate>(data.methods, visibleMethodIds, actualLabel);
+    const series = buildSeries<MergedDayDate>(
+        data.methods,
+        visibleMethodIds,
+        actualLabel,
+    );
     return { rows, series };
 }

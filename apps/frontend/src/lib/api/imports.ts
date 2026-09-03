@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
+import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/types/apiClient';
 import type { components } from '@/types/generated';
 import { ImportCancelledError } from '@/lib/api/importCancelled';
 
 /**
  * Runtime guards for the import SSE streams (ZOD-10). Loose objects so the
  * backend may add fields; TypeScript shapes stay sourced from
- * `@/lib/api/types` — these schemas only gate the untrusted payloads before
+ * `@/types/apiClient` — these schemas only gate the untrusted payloads before
  * the existing casts. A failing payload rejects the stream through the same
  * `Invalid SSE payload` path as malformed JSON; the `error` event stays
  * schema-free because `extractErrorDetail` is already shape-tolerant.

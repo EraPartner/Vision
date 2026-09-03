@@ -384,9 +384,9 @@ describe("Portfolio pages (integration)", () => {
         expect(hero).toHaveTextContent("Asset gain");
         expect(hero).toHaveTextContent("FX effect");
         expect(hero).toHaveTextContent("Asset allocation");
-        expect(hero).toHaveTextContent("900,00 € (72.0%)");
-        expect(hero).toHaveTextContent("220,00 € (17.6%)");
-        expect(hero).toHaveTextContent("130,00 € (10.4%)");
+        expect(hero).toHaveTextContent("900,00 € (72,0%)");
+        expect(hero).toHaveTextContent("220,00 € (17,6%)");
+        expect(hero).toHaveTextContent("130,00 € (10,4%)");
         expect(
             screen.getByRole("heading", { name: "Total Return" }),
         ).toBeInTheDocument();
@@ -1707,6 +1707,8 @@ describe("Portfolio pages (integration)", () => {
 
         it("WatchlistPage delete mutation invalidates watchlist list (stale refetch)", async () => {
             let getCalls = 0;
+            let deleteCalls = 0;
+            let deleted = false;
             const item = {
                 id: 1,
                 symbol: "AAPL",
@@ -1723,15 +1725,17 @@ describe("Portfolio pages (integration)", () => {
                 http.get(`${API_BASE}/api/watchlist`, () => {
                     getCalls += 1;
                     return ok({
-                        items: [item],
-                        total: 1,
+                        items: deleted ? [] : [item],
+                        total: deleted ? 0 : 1,
                         limit: 50,
                         offset: 0,
                     });
                 }),
-                http.delete(`${API_BASE}/api/watchlist/:id`, () =>
-                    ok({ message: "deleted" }),
-                ),
+                http.delete(`${API_BASE}/api/watchlist/:id`, () => {
+                    deleteCalls += 1;
+                    deleted = true;
+                    return ok({ message: "deleted" });
+                }),
             );
 
             const user = userEvent.setup();
@@ -1746,7 +1750,16 @@ describe("Portfolio pages (integration)", () => {
                 name: /remove from watchlist/i,
             });
             await user.click(trashBtn);
+            expect(deleteCalls).toBe(0);
+            expect(getCalls).toBe(before);
+            await user.click(
+                await screen.findByRole("button", { name: /^remove$/i }),
+            );
+            await waitFor(() => expect(deleteCalls).toBe(1));
             await waitFor(() => expect(getCalls).toBeGreaterThan(before));
+            await waitFor(() =>
+                expect(screen.queryByText("Apple")).not.toBeInTheDocument(),
+            );
         });
 
         it("PortfolioTaxPage does not crash on 5xx investments endpoint", async () => {

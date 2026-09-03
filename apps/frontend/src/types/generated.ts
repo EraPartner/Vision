@@ -3063,6 +3063,354 @@ export interface components {
             code?: string;
             status?: number;
         };
+        UpdateCheck: {
+            up_to_date: boolean;
+            current_version: string;
+            latest_version: string | null;
+            /** Format: date-time */
+            published_at?: string;
+            release_notes?: string;
+            /** Format: uri */
+            html_url?: string;
+            /** @enum {string} */
+            update_mode: "source" | "docker" | "native" | "dev" | "docker-compose";
+            source_launcher_available?: boolean;
+            error?: string;
+        };
+        UpdateCheckEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["UpdateCheck"];
+        };
+        ResearchMeta: {
+            provider: string | null;
+            /** @enum {string} */
+            source: "cache" | "live" | "unavailable";
+            requestId?: string;
+        };
+        ResearchSearchItem: {
+            symbol: string;
+            name?: string;
+            type?: string;
+            exchange?: string;
+        };
+        ResearchSearchData: {
+            items: components["schemas"]["ResearchSearchItem"][];
+        };
+        ResearchQuote: {
+            symbol: string;
+            name?: string;
+            price: number;
+            change?: number;
+            changePercent?: number;
+            currency?: string;
+            exchange?: string;
+            type?: string;
+            open?: number;
+            dayHigh?: number;
+            dayLow?: number;
+            prevClose?: number;
+            volume?: number;
+            avgVolume?: number;
+            high52w?: number;
+            low52w?: number;
+        };
+        ResearchChartPoint: {
+            time: number;
+            close: number;
+            high?: number;
+            low?: number;
+            volume?: number;
+        };
+        ResearchChartData: {
+            symbol?: string;
+            currency?: string;
+            points: components["schemas"]["ResearchChartPoint"][];
+        };
+        ResearchFundamentals: {
+            symbol?: string;
+            name?: string;
+            currency?: string;
+            marketCap?: number | null;
+            pe?: number | null;
+            forwardPE?: number | null;
+            dividendYield?: number | null;
+            eps?: number | null;
+            beta?: number | null;
+            priceToBook?: number | null;
+            profitMargin?: number | null;
+            revenue?: number | null;
+            returnOnEquity?: number | null;
+            sector?: string | null;
+            pegRatio?: number | null;
+            payoutRatio?: number | null;
+            grossMargin?: number | null;
+            operatingMargin?: number | null;
+            revenueGrowth?: number | null;
+            earningsGrowth?: number | null;
+            debtToEquity?: number | null;
+            currentRatio?: number | null;
+            quickRatio?: number | null;
+            interestCoverage?: number | null;
+            freeCashFlow?: number | null;
+            fcfYield?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        ResearchAnalystConsensus: {
+            strongBuy: number;
+            buy: number;
+            hold: number;
+            sell: number;
+            strongSell: number;
+        };
+        ResearchAnalystAction: {
+            date?: string | number;
+            firm?: string;
+            toGrade?: string;
+            fromGrade?: string | null;
+            action?: string;
+        };
+        ResearchAnalystData: {
+            symbol?: string;
+            consensus?: components["schemas"]["ResearchAnalystConsensus"];
+            targetMean?: number | null;
+            targetHigh?: number | null;
+            targetLow?: number | null;
+            numberOfAnalysts?: number | null;
+            recentActions?: components["schemas"]["ResearchAnalystAction"][];
+        };
+        ResearchNewsArticle: {
+            title?: string;
+            link?: string;
+            publisher?: string;
+            publishedAt?: number | null;
+            thumbnail?: string | null;
+            relatedSymbols?: string[];
+        };
+        ResearchNewsData: {
+            articles: components["schemas"]["ResearchNewsArticle"][];
+        };
+        ResearchMacroSeriesItem: {
+            /** @enum {string} */
+            provider: "fred" | "eurostat" | "dbnomics";
+            seriesId: string;
+            title?: string;
+            region?: string;
+            units?: string;
+            frequency?: string;
+            source?: string;
+        };
+        ResearchMacroSearchData: {
+            items: components["schemas"]["ResearchMacroSeriesItem"][];
+        };
+        ResearchMacroSeriesData: {
+            /** @enum {string} */
+            provider: "fred" | "eurostat" | "dbnomics";
+            seriesId: string;
+            title?: string;
+            units?: string;
+            frequency?: string;
+            points: components["schemas"]["ResearchChartPoint"][];
+        };
+        InstrumentProviderMapping: {
+            id: number;
+            instrument_key: string;
+            /** @enum {string} */
+            key_type: "isin" | "internal";
+            provider: string;
+            provider_symbol?: string | null;
+            resolved_name?: string | null;
+            exchange?: string | null;
+            currency?: string | null;
+            status: string;
+            verified_at?: string | null;
+            created_at?: string;
+            updated_at?: string;
+        };
+        ResearchMappingsData: {
+            items: components["schemas"]["InstrumentProviderMapping"][];
+            total: number;
+        };
+        ResearchMappingProposal: {
+            provider: string;
+            status: string;
+            providerSymbol?: string;
+            resolvedName?: string;
+            exchange?: string;
+            currency?: string;
+            candidates?: components["schemas"]["ResearchSearchItem"][];
+            fromStore?: boolean;
+            fromHolding?: boolean;
+            reason?: string;
+            error?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        ResearchMappingResolveData: {
+            instrument_key: string;
+            /** @enum {string} */
+            key_type: "isin" | "internal";
+            proposals: components["schemas"]["ResearchMappingProposal"][];
+            existing: components["schemas"]["InstrumentProviderMapping"][];
+        };
+        ResearchMappingAuditData: {
+            ok: boolean;
+            quotes: {
+                provider: string;
+                currency?: string;
+                price?: number;
+                skipped?: string;
+                error?: string;
+            }[];
+            discrepancies: {
+                [key: string]: unknown;
+            }[];
+        };
+        ResearchProviderKeyStatus: {
+            provider: string;
+            label: string;
+            envVar: string;
+            configured: boolean;
+            /** @enum {string} */
+            source: "settings" | "env" | "none";
+            masked?: string;
+        };
+        ResearchProviderKeysData: {
+            items: components["schemas"]["ResearchProviderKeyStatus"][];
+            total: number;
+        };
+        ResearchScorecardFlag: {
+            metric: string;
+            /** @enum {string} */
+            category: "liquidity" | "leverage" | "profitability" | "cashflow" | "growth" | "valuation" | "dividend";
+            /** @enum {string} */
+            better: "higher" | "lower";
+            value: number;
+            /** @enum {string} */
+            severity: "ok" | "caution" | "warn" | "risk";
+            code: string;
+            reasonKey: string;
+            reason: string;
+            benchmark: string;
+        };
+        ResearchScorecard: {
+            score: number | null;
+            /** @enum {string} */
+            grade: "strong" | "healthy" | "mixed" | "weak" | "poor" | "unknown";
+            evaluated: number;
+            counts: {
+                ok: number;
+                caution: number;
+                warn: number;
+                risk: number;
+            };
+            flags: components["schemas"]["ResearchScorecardFlag"][];
+        };
+        ResearchScorecardData: {
+            symbol: string;
+            fundamentals: components["schemas"]["ResearchFundamentals"];
+            scorecard: components["schemas"]["ResearchScorecard"];
+        };
+        ResearchForecastPoint: {
+            monthIndex: number;
+            date: string;
+            netInvested: number;
+            p10: number;
+            p25: number;
+            p50: number;
+            p75: number;
+            p90: number;
+        };
+        ResearchForecastForwardHolding: {
+            symbol: string;
+            expectedAnnual: number;
+            growth: number;
+            dividendYield?: number;
+        };
+        ResearchForecastProjected: {
+            mean: number;
+            p10: number;
+            p25: number;
+            p50: number;
+            p75: number;
+            p90: number;
+        };
+        ResearchPortfolioForecastData: {
+            available: boolean;
+            /** @enum {string} */
+            reason?: "no_holdings" | "insufficient_history";
+            currency?: string;
+            /** @enum {string} */
+            method?: "parametric" | "block_bootstrap";
+            horizonMonths?: number;
+            paths?: number;
+            seed?: string;
+            historyDays?: number;
+            flowArtifactDays?: number;
+            lowConfidence?: boolean;
+            startValue?: number;
+            startInvested?: number;
+            monthlyContribution?: number;
+            totalContributions?: number;
+            netInvested?: number;
+            expectedAnnualReturn?: number;
+            historicalAnnualReturn?: number;
+            annualVolatility?: number;
+            forwardBlend?: number;
+            usedForward?: boolean;
+            forwardHoldings?: components["schemas"]["ResearchForecastForwardHolding"][];
+            projected?: components["schemas"]["ResearchForecastProjected"];
+            probBelowInvested?: number;
+            targetValue?: number;
+            probTarget?: number;
+            points?: components["schemas"]["ResearchForecastPoint"][];
+        };
+        ResearchEnvelopeBase: {
+            ok: boolean;
+            meta?: components["schemas"]["ResearchMeta"];
+            error?: components["schemas"]["ErrorPayload"];
+        };
+        ResearchSearchEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchSearchData"];
+        };
+        ResearchQuoteEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchQuote"];
+        };
+        ResearchChartEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchChartData"];
+        };
+        ResearchFundamentalsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchFundamentals"];
+        };
+        ResearchAnalystEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchAnalystData"];
+        };
+        ResearchNewsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchNewsData"];
+        };
+        ResearchMacroSearchEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchMacroSearchData"];
+        };
+        ResearchMacroSeriesEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchMacroSeriesData"];
+        };
+        ResearchScorecardEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchScorecardData"];
+        };
+        ResearchPortfolioForecastEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchPortfolioForecastData"];
+        };
+        ResearchMappingsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchMappingsData"];
+        };
+        ResearchMappingResolveEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchMappingResolveData"];
+        };
+        ResearchMappingAuditEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchMappingAuditData"];
+        };
+        ResearchProviderKeysEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+            data?: components["schemas"]["ResearchProviderKeysData"];
+        };
         Link: {
             rel: string;
             href: string;
@@ -3374,6 +3722,8 @@ export interface components {
             comment?: string;
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
+            /** @description Explicit confirmation that a matching active manual transaction is intentional. Omit or false to retain the default 409 duplicate guard. */
+            allow_duplicate?: boolean;
         };
         /** @description PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key leaves it unchanged. */
         TransactionUpdate: {
@@ -4535,6 +4885,13 @@ export interface operations {
                         data?: components["schemas"]["Transaction"];
                     };
                 };
+            };
+            /** @description Matching active manual transaction exists and allow_duplicate was omitted or false */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9734,7 +10091,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["UpdateCheckEnvelope"];
                 };
             };
         };
@@ -9946,7 +10303,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchSearchEnvelope"];
                 };
             };
         };
@@ -9970,7 +10327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchQuoteEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10004,7 +10361,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchChartEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10034,7 +10391,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchFundamentalsEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10064,7 +10421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchAnalystEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10093,7 +10450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchNewsEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10122,7 +10479,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMacroSearchEnvelope"];
                 };
             };
         };
@@ -10147,7 +10504,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMacroSeriesEnvelope"];
                 };
             };
             /** @description invalid provider or series_id */
@@ -10177,7 +10534,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchScorecardEnvelope"];
                 };
             };
             /** @description symbol parameter required */
@@ -10219,7 +10576,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchPortfolioForecastEnvelope"];
                 };
             };
         };
@@ -10242,7 +10599,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMappingsEnvelope"];
                 };
             };
             /** @description instrument_key required or invalid key_type */
@@ -10281,7 +10638,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMappingsEnvelope"];
                 };
             };
             /** @description instrument_key required or mappings must be a non-empty array */
@@ -10323,7 +10680,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMappingResolveEnvelope"];
                 };
             };
             /** @description instrument_key and query required */
@@ -10361,7 +10718,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchMappingAuditEnvelope"];
                 };
             };
             /** @description instrument_key required */
@@ -10415,7 +10772,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchProviderKeysEnvelope"];
                 };
             };
         };
@@ -10425,7 +10782,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage";
+                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage" | "fred";
             };
             cookie?: never;
         };
@@ -10443,7 +10800,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["ResearchProviderKeysEnvelope"];
                 };
             };
             /** @description unknown provider or empty api_key */
@@ -10460,7 +10817,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage";
+                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage" | "fred";
             };
             cookie?: never;
         };

@@ -3,7 +3,7 @@ import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from 
 import { postMultipartImport } from '@/lib/api/helpers';
 import { importProgressSchema } from '@/lib/api/imports';
 import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress } from '@/lib/api/types';
+import type { ImportProgress } from '@/types/apiClient';
 import type { AssetClass as AssetClassValue } from '@vision/types/assetClasses';
 import type { PortfolioTxnType as PortfolioTxnTypeValue } from '@vision/types/portfolioTxnTypes';
 import { ImportCancelledError } from '@/lib/api/importCancelled';

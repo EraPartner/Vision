@@ -53,9 +53,14 @@ const BASE = "http://localhost:3002";
  * repeated as an identical column across ~60 rows. A GET that ever needs a
  * different code should take the second argument.
  */
-async function getEnvelope(path: string, expectedStatus = 200): Promise<unknown> {
+async function getEnvelope(
+    path: string,
+    expectedStatus = 200,
+): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`);
-    expect(res.status, `expected ${expectedStatus} for GET ${path}`).toBe(expectedStatus);
+    expect(res.status, `expected ${expectedStatus} for GET ${path}`).toBe(
+        expectedStatus,
+    );
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${path}`).toBe(true);
     return json.data;
@@ -72,7 +77,9 @@ async function mutateEnvelope(
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     });
-    expect(res.status, `expected ${expectedStatus} for ${method} ${path}`).toBe(expectedStatus);
+    expect(res.status, `expected ${expectedStatus} for ${method} ${path}`).toBe(
+        expectedStatus,
+    );
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${method} ${path}`).toBe(true);
     return json.data;
@@ -93,30 +100,38 @@ async function expectNoContent(path: string): Promise<void> {
 function validate<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
     const result = schema.safeParse(data);
     if (!result.success) {
-        throw new Error(`Contract violation [${label}]:\n${result.error.toString()}`);
+        throw new Error(
+            `Contract violation [${label}]:\n${result.error.toString()}`,
+        );
     }
     return result.data;
 }
 
 describe("shared contract schema strictness", () => {
     it("rejects unknown resource and envelope fields", () => {
-        expect(CategoryItemSchema.safeParse({
-            ...CATEGORY_STUB,
-            unexpected: true,
-        }).success).toBe(false);
-        expect(collectionSchema().safeParse({
-            items: [],
-            total: 0,
-            unexpected: true,
-        }).success).toBe(false);
-        expect(paginatedOf(CategoryItemSchema).safeParse({
-            items: [],
-            total: 0,
-            limit: 10,
-            offset: 0,
-            links: [],
-            unexpected: true,
-        }).success).toBe(false);
+        expect(
+            CategoryItemSchema.safeParse({
+                ...CATEGORY_STUB,
+                unexpected: true,
+            }).success,
+        ).toBe(false);
+        expect(
+            collectionSchema().safeParse({
+                items: [],
+                total: 0,
+                unexpected: true,
+            }).success,
+        ).toBe(false);
+        expect(
+            paginatedOf(CategoryItemSchema).safeParse({
+                items: [],
+                total: 0,
+                limit: 10,
+                offset: 0,
+                links: [],
+                unexpected: true,
+            }).success,
+        ).toBe(false);
     });
 });
 
@@ -202,17 +217,72 @@ const PortfolioSummarySchema = z.object({
 
 describe("MSW handler contracts", () => {
     it.each<[string, z.ZodTypeAny, string, string]>([
-        ["GET /api/settings conforms to settings schema", SettingsSchema, "/api/settings", "settings"],
-        ["GET /api/settings/:key conforms to nullable value schema", SettingValueSchema, "/api/settings/language", "settings/:key"],
-        ["GET /api/info conforms to app-info schema", InfoSchema, "/api/info", "info"],
-        ["GET /api/info/health conforms to health schema", HealthSchema, "/api/info/health", "health"],
-        ["GET /api/aggregations/:name accepts nullable blob", z.unknown(), "/api/aggregations/monthly", "aggregations/:name"],
-        ["GET /api/info/exchange-rates conforms to rates schema", ExchangeRatesSchema, "/api/info/exchange-rates", "exchange-rates"],
-        ["GET /api/market/news conforms to news schema", MarketNewsSchema, "/api/market/news", "market/news"],
-        ["GET /api/import/batches conforms to batches schema", ImportBatchesSchema, "/api/import/batches", "import/batches"],
-        ["GET /api/portfolio/summary conforms to portfolio-summary schema", PortfolioSummarySchema, "/api/portfolio/summary", "portfolio/summary"],
-        ["GET /api/admin/endpoint-liveness conforms to collection schema", collectionSchema(), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
-        ["GET /api/planned conforms to array schema", z.array(z.unknown()), "/api/planned", "planned"],
+        [
+            "GET /api/settings conforms to settings schema",
+            SettingsSchema,
+            "/api/settings",
+            "settings",
+        ],
+        [
+            "GET /api/settings/:key conforms to nullable value schema",
+            SettingValueSchema,
+            "/api/settings/language",
+            "settings/:key",
+        ],
+        [
+            "GET /api/info conforms to app-info schema",
+            InfoSchema,
+            "/api/info",
+            "info",
+        ],
+        [
+            "GET /api/info/health conforms to health schema",
+            HealthSchema,
+            "/api/info/health",
+            "health",
+        ],
+        [
+            "GET /api/aggregations/:name accepts nullable blob",
+            z.unknown(),
+            "/api/aggregations/monthly",
+            "aggregations/:name",
+        ],
+        [
+            "GET /api/info/exchange-rates conforms to rates schema",
+            ExchangeRatesSchema,
+            "/api/info/exchange-rates",
+            "exchange-rates",
+        ],
+        [
+            "GET /api/market/news conforms to news schema",
+            MarketNewsSchema,
+            "/api/market/news",
+            "market/news",
+        ],
+        [
+            "GET /api/import/batches conforms to batches schema",
+            ImportBatchesSchema,
+            "/api/import/batches",
+            "import/batches",
+        ],
+        [
+            "GET /api/portfolio/summary conforms to portfolio-summary schema",
+            PortfolioSummarySchema,
+            "/api/portfolio/summary",
+            "portfolio/summary",
+        ],
+        [
+            "GET /api/admin/endpoint-liveness conforms to collection schema",
+            collectionSchema(),
+            "/api/admin/endpoint-liveness",
+            "admin/endpoint-liveness",
+        ],
+        [
+            "GET /api/planned conforms to array schema",
+            z.array(z.unknown()),
+            "/api/planned",
+            "planned",
+        ],
     ])("%s", async (_name, schema, path, label) => {
         validate(schema, await getEnvelope(path), label);
     });
@@ -225,11 +295,20 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
         ["/api/categories", CategoryItemSchema, CATEGORY_STUB, 200],
         ["/api/recipients", RecipientItemSchema, RECIPIENT_STUB, 200],
         ["/api/transactions", TransactionItemSchema, TRANSACTION_STUB, 50],
-        ["/api/planned-transactions", PlannedTransactionItemSchema, PLANNED_TRANSACTION_STUB, 1000],
+        [
+            "/api/planned-transactions",
+            PlannedTransactionItemSchema,
+            PLANNED_TRANSACTION_STUB,
+            1000,
+        ],
         ["/api/investments", InvestmentItemSchema, INVESTMENT_STUB, 100],
     ])("%s", (path, ItemSchema, STUB, limit) => {
         it("empty list envelope is valid", async () => {
-            validate(paginatedOf(ItemSchema), await getEnvelope(path), `${path} empty`);
+            validate(
+                paginatedOf(ItemSchema),
+                await getEnvelope(path),
+                `${path} empty`,
+            );
         });
 
         it("item shape matches schema", async () => {
@@ -237,12 +316,22 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
                 http.get(`${BASE}${path}`, () =>
                     HttpResponse.json({
                         ok: true,
-                        data: { items: [STUB], total: 1, limit, offset: 0, links: [] },
+                        data: {
+                            items: [STUB],
+                            total: 1,
+                            limit,
+                            offset: 0,
+                            links: [],
+                        },
                     }),
                 ),
             );
             const data = await getEnvelope(path);
-            const parsed = validate(paginatedOf(ItemSchema), data, `${path} item`);
+            const parsed = validate(
+                paginatedOf(ItemSchema),
+                data,
+                `${path} item`,
+            );
             expect(parsed.items).toHaveLength(1);
         });
     });
@@ -266,7 +355,12 @@ describe("Mutation handler contracts (E2)", () => {
         ["categories", "/api/categories", CategoryItemSchema, 200],
         ["recipients", "/api/recipients", RecipientItemSchema, 200],
         ["investments", "/api/investments", InvestmentItemSchema, 201],
-        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema, 201],
+        [
+            "planned-transactions",
+            "/api/planned-transactions",
+            PlannedTransactionItemSchema,
+            201,
+        ],
     ])("%s", (label, path, ItemSchema, createStatus) => {
         it(`POST ${path} answers ${createStatus} and matches item schema`, async () => {
             validate(
@@ -317,7 +411,9 @@ describe("ADR-026 error envelope (E3)", () => {
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/categories`).then((r) => r.json());
+        const json = await fetch(`${BASE}/api/categories`).then((r) =>
+            r.json(),
+        );
         validate(ErrorEnvelopeSchema, json, "500 error envelope");
     });
 
@@ -325,12 +421,17 @@ describe("ADR-026 error envelope (E3)", () => {
         server.use(
             http.get(`${BASE}/api/transactions`, () =>
                 HttpResponse.json(
-                    { ok: false, error: { message: "Not found", code: "NOT_FOUND" } },
+                    {
+                        ok: false,
+                        error: { message: "Not found", code: "NOT_FOUND" },
+                    },
                     { status: 404 },
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/transactions`).then((r) => r.json());
+        const json = await fetch(`${BASE}/api/transactions`).then((r) =>
+            r.json(),
+        );
         validate(ErrorEnvelopeSchema, json, "404 error envelope with code");
     });
 
@@ -338,12 +439,20 @@ describe("ADR-026 error envelope (E3)", () => {
         server.use(
             http.post(`${BASE}/api/transactions`, () =>
                 HttpResponse.json(
-                    { ok: false, error: { message: "Validation failed", code: "VALIDATION_ERROR" } },
+                    {
+                        ok: false,
+                        error: {
+                            message: "Validation failed",
+                            code: "VALIDATION_ERROR",
+                        },
+                    },
                     { status: 422 },
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/transactions`, { method: "POST" }).then((r) => r.json());
+        const json = await fetch(`${BASE}/api/transactions`, {
+            method: "POST",
+        }).then((r) => r.json());
         validate(ErrorEnvelopeSchema, json, "422 mutation error envelope");
     });
 
@@ -351,12 +460,17 @@ describe("ADR-026 error envelope (E3)", () => {
         server.use(
             http.get(`${BASE}/api/recipients`, () =>
                 HttpResponse.json(
-                    { ok: false, error: { message: "Database connection failed" } },
+                    {
+                        ok: false,
+                        error: { message: "Database connection failed" },
+                    },
                     { status: 503 },
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/recipients`).then((r) => r.json());
+        const json = await fetch(`${BASE}/api/recipients`).then((r) =>
+            r.json(),
+        );
         validate(ErrorEnvelopeSchema, json, "503 error envelope without code");
     });
 });
@@ -576,9 +690,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "/api/admin/update/check",
             "GET /api/admin/update/check",
             z.object({
-                available: z.boolean(),
-                current: z.string(),
-                latest: z.string(),
+                up_to_date: z.boolean(),
+                current_version: z.string(),
+                latest_version: z.string().nullable(),
+                update_mode: z.literal("docker-compose"),
             }),
         ],
         [
@@ -651,19 +766,27 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "GET /api/aggregations/category-pivot returns expected shape",
             "/api/aggregations/category-pivot",
             "GET /api/aggregations/category-pivot",
-            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.string(), z.unknown()) })),
+            aggregationsEnvelope(
+                z.object({ categoryPivot: z.record(z.string(), z.unknown()) }),
+            ),
         ],
         [
             "GET /api/aggregations/recipient-by-year returns expected shape",
             "/api/aggregations/recipient-by-year",
             "GET /api/aggregations/recipient-by-year",
-            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.string(), z.unknown()) })),
+            aggregationsEnvelope(
+                z.object({
+                    recipientsByYear: z.record(z.string(), z.unknown()),
+                }),
+            ),
         ],
         [
             "GET /api/aggregations/recipient-pivot returns expected shape",
             "/api/aggregations/recipient-pivot",
             "GET /api/aggregations/recipient-pivot",
-            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.string(), z.unknown()) })),
+            aggregationsEnvelope(
+                z.object({ recipientPivot: z.record(z.string(), z.unknown()) }),
+            ),
         ],
         [
             "GET /api/aggregations/sankey returns expected shape",
@@ -681,7 +804,9 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "GET /api/aggregations/category-breakdown returns expected shape",
             "/api/aggregations/category-breakdown",
             "GET /api/aggregations/category-breakdown",
-            aggregationsEnvelope(z.object({ categories: z.array(z.unknown()) })),
+            aggregationsEnvelope(
+                z.object({ categories: z.array(z.unknown()) }),
+            ),
         ],
         [
             "GET /api/aggregations/bank-balances returns expected shape",
@@ -1099,7 +1224,10 @@ describe("Phase F1: extended mutation contracts", () => {
                     bankAccounts: z.number().int().nonnegative(),
                 }),
                 aliases: z.array(
-                    z.object({ id: z.number().int().positive(), name: z.string() }),
+                    z.object({
+                        id: z.number().int().positive(),
+                        name: z.string(),
+                    }),
                 ),
                 patternSuggestion: z
                     .object({
@@ -1289,7 +1417,11 @@ describe("Phase F1: extended mutation contracts", () => {
             "POST override",
             z.object({
                 row_id: z.number().int().positive(),
-                user_override_recipient_id: z.number().int().positive().nullable(),
+                user_override_recipient_id: z
+                    .number()
+                    .int()
+                    .positive()
+                    .nullable(),
             }),
             200, // routes/importRoutes.js:568 — bare res.ok
         ],
@@ -1338,7 +1470,11 @@ describe("Phase F1: extended mutation contracts", () => {
             201, // routes/importRoutes.js:388
         ],
     ])("%s", async (_name, method, path, body, label, schema, status) => {
-        validate(schema, await mutateEnvelope(method, path, body, status), label);
+        validate(
+            schema,
+            await mutateEnvelope(method, path, body, status),
+            label,
+        );
     });
 
     // The other arm of the same two routes. Both import routes answer 202 with
@@ -1349,7 +1485,10 @@ describe("Phase F1: extended mutation contracts", () => {
     const ImportCsvReviewRequiredSchema = z.object({
         batch_id: z.number().int().positive(),
         requires_review: z.literal(true),
-        match_source_counts: z.record(z.string(), z.number().int().nonnegative()),
+        match_source_counts: z.record(
+            z.string(),
+            z.number().int().nonnegative(),
+        ),
     });
 
     it.each([

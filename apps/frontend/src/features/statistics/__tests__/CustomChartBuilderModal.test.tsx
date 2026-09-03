@@ -8,7 +8,7 @@ import { server } from "@/test/msw/server";
 import { ok, err, RECIPIENT_STUB } from "@/test/msw/handlers";
 import { CustomChartBuilderModal } from "@/features/statistics/CustomChartBuilderModal";
 import type { StatisticsData } from "@/hooks/useStatistics";
-import type { SavedChart } from "@/lib/api/types";
+import type { SavedChart } from "@/types/apiClient";
 
 const API_BASE = "http://localhost:3002";
 

@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
-import { TotalValueCard, type TotalValueCardProps } from "@/features/portfolio/TotalValueCard";
+import {
+    TotalValueCard,
+    type TotalValueCardProps,
+} from "@/features/portfolio/TotalValueCard";
 
 const baseProps: TotalValueCardProps = {
     formattedTotal: "€12,345",
@@ -70,7 +73,7 @@ describe("TotalValueCard", () => {
         expect(screen.getByText("Allocation")).toBeInTheDocument();
         expect(screen.getByText("Stocks")).toBeInTheDocument();
         expect(screen.getByText("Crypto")).toBeInTheDocument();
-        expect(screen.getByText("€9000 (72.9%)")).toBeInTheDocument();
+        expect(screen.getByText("€9000 (72,9%)")).toBeInTheDocument();
         expect(screen.getByText("Last 30 days")).toBeInTheDocument();
         expect(screen.getByText("Best performer")).toBeInTheDocument();
         expect(screen.getByText("Worst performer")).toBeInTheDocument();
@@ -79,21 +82,26 @@ describe("TotalValueCard", () => {
     });
 
     it("keeps PerformancePage from defining a second TotalValueCard", () => {
-        const source = readFileSync(join(
-            process.cwd(),
-            "src/pages/portfolio/PerformancePage.tsx",
-        ), "utf8");
+        const source = readFileSync(
+            join(process.cwd(), "src/pages/portfolio/PerformancePage.tsx"),
+            "utf8",
+        );
         expect(source).not.toMatch(/function TotalValueCard\s*\(/);
         expect(source).toContain('from "@/features/portfolio/TotalValueCard"');
     });
 
     it("keeps the Net Worth hero intrinsic instead of matching the breakdown height", () => {
-        const source = readFileSync(join(
-            process.cwd(),
-            "src/pages/portfolio/net-worth/NetWorthPage.tsx",
-        ), "utf8");
+        const source = readFileSync(
+            join(
+                process.cwd(),
+                "src/pages/portfolio/net-worth/NetWorthPage.tsx",
+            ),
+            "utf8",
+        );
         expect(source).not.toContain("[&>*]:h-full");
         expect(source).not.toMatch(/lg:row-span-[23]/);
-        expect(source).toContain('className="grid items-start gap-4 lg:grid-cols-2 animate-stagger"');
+        expect(source).toContain(
+            'className="grid items-start gap-4 lg:grid-cols-2 animate-stagger"',
+        );
     });
 });

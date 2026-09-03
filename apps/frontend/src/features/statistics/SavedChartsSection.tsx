@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, TrendingUp } from "lucide-react";
 import { useSavedCharts, useDeleteSavedChart } from "@/hooks/useSavedCharts";
-import type { SavedChart } from "@/lib/api/types";
+import type { SavedChart } from "@/types/apiClient";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { CustomChart } from "./CustomChart";

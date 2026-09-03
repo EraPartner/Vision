@@ -4,6 +4,10 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { RestoreFromBackupCard } from "@/features/onboarding/RestoreFromBackupCard";
+import type {
+    ElectronBackupBridge,
+    ElectronUpdaterBridge,
+} from "@vision/types/electron";
 
 // Mock sonner toasts so we can assert without polluting the DOM.
 vi.mock("sonner", () => ({
@@ -27,13 +31,6 @@ type ElectronUpdaterMock = {
     pullImage: ReturnType<typeof vi.fn>;
 };
 
-declare global {
-    interface Window {
-        electronUpdater?: ElectronUpdaterMock;
-        electronBackup?: ElectronBackupMock;
-    }
-}
-
 function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
     backup: ElectronBackupMock;
     updater: ElectronUpdaterMock;
@@ -51,8 +48,8 @@ function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
     const updater: ElectronUpdaterMock = {
         pullImage: vi.fn(),
     };
-    window.electronBackup = backup;
-    window.electronUpdater = updater;
+    window.electronBackup = backup as unknown as ElectronBackupBridge;
+    window.electronUpdater = updater as unknown as ElectronUpdaterBridge;
     return { backup, updater };
 }
 

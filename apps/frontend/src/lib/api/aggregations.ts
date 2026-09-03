@@ -1,100 +1,112 @@
-import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery, buildExclusionQuery } from '@/lib/api/helpers';
-import type { AggregationEnvelope } from '@/lib/api/types';
+import { apiRequest } from "@/lib/api/client";
+import { requestWithQuery, buildExclusionQuery } from "@/lib/api/helpers";
+import type { AggregationEnvelope } from "@/types/apiClient";
 
 export function getAggregationMonthlySummary(params?: {
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
     currency?: string;
     all_time?: boolean;
-}): Promise<AggregationEnvelope<{
-    months: Array<{
-        month: number;
-        year: number;
-        period_start: string;
-        period_end: string;
-        total_spending: number;
-        total_income: number;
-        net_amount: number;
-        transaction_count: number;
-    }>;
-    summary: {
-        total_spending: number;
-        total_income: number;
-        net_amount: number;
-        transaction_count: number;
-        period_start: string;
-        period_end: string;
-    };
-}>> {
+}): Promise<
+    AggregationEnvelope<{
+        months: Array<{
+            month: number;
+            year: number;
+            period_start: string;
+            period_end: string;
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+        }>;
+        summary: {
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+            period_start: string;
+            period_end: string;
+        };
+    }>
+> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.all_time) qp.set('all_time', 'true');
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.all_time) qp.set("all_time", "true");
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`);
 }
 
 export function getAggregationRecipientInsights(params?: {
     currency?: string;
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
-}): Promise<AggregationEnvelope<{
-    topMerchants: Array<{
-        recipientId: number;
-        name: string;
-        totalSpend: number;
-        transactionCount: number;
-        avgAmount: number;
-        firstSeen: string;
-        lastSeen: string;
-    }>;
-    monthOverMonth: Array<{
-        recipientId: number;
-        name: string;
-        currentSpend: number;
-        previousSpend: number;
-        changePercent: number;
-    }>;
-}>> {
+}): Promise<
+    AggregationEnvelope<{
+        topMerchants: Array<{
+            recipientId: number;
+            name: string;
+            totalSpend: number;
+            transactionCount: number;
+            avgAmount: number;
+            firstSeen: string;
+            lastSeen: string;
+        }>;
+        monthOverMonth: Array<{
+            recipientId: number;
+            name: string;
+            currentSpend: number;
+            previousSpend: number;
+            changePercent: number;
+        }>;
+    }>
+> {
     const q = buildExclusionQuery(params);
-    return apiRequest(`/api/aggregations/recipient-insights${q ? `?${q}` : ''}`);
+    return apiRequest(
+        `/api/aggregations/recipient-insights${q ? `?${q}` : ""}`,
+    );
 }
 
 export function getAggregationBankBalances(params?: {
     currency?: string;
-}): Promise<AggregationEnvelope<{
-    accounts: Array<{
-        account_id: number;
-        bank_account: string;
-        display_name: string;
-        balance: number;
-        drift?: number;
-        anchor_date?: string;
-        post_anchor_count?: number;
-        transaction_count: number;
-        first_transaction: string;
-        last_transaction: string;
-    }>;
-    total_net_position: number;
-    // Daily balance points (YYYY-MM-DD) over the last 12 months.
-    history: Record<string, Array<{ date: string; balance: number }>>;
-    total_history: Array<{ date: string; balance: number }>;
-}>> {
-    return requestWithQuery('/api/aggregations/bank-balances', params);
+}): Promise<
+    AggregationEnvelope<{
+        accounts: Array<{
+            account_id: number;
+            bank_account: string;
+            display_name: string;
+            balance: number;
+            drift?: number;
+            anchor_date?: string;
+            post_anchor_count?: number;
+            transaction_count: number;
+            first_transaction: string;
+            last_transaction: string;
+        }>;
+        total_net_position: number;
+        // Daily balance points (YYYY-MM-DD) over the last 12 months.
+        history: Record<string, Array<{ date: string; balance: number }>>;
+        total_history: Array<{ date: string; balance: number }>;
+    }>
+> {
+    return requestWithQuery("/api/aggregations/bank-balances", params);
 }
 
 export interface CategoryPivotItem {
     categoryId: number | null;
     categoryName: string;
-    total: number;          // net (income + expense)
-    income?: number;        // sum of amount >= 0 (explicit, not sign-of-net)
-    expense?: number;       // sum of amount < 0 (negative)
+    total: number; // net (income + expense)
+    income?: number; // sum of amount >= 0 (explicit, not sign-of-net)
+    expense?: number; // sum of amount < 0 (negative)
     transactionCount: number;
 }
 
@@ -109,34 +121,48 @@ export function getAggregationCategoryPivot(params?: {
     currency?: string;
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
-}): Promise<AggregationEnvelope<{ categoryPivot: Record<string, CategoryPivotItem[]> }>> {
+}): Promise<
+    AggregationEnvelope<{ categoryPivot: Record<string, CategoryPivotItem[]> }>
+> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.currency) qp.set("currency", params.currency);
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`);
 }
 
 export function getAggregationRecipientByYear(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
     excluded_category_ids?: number[];
-}): Promise<AggregationEnvelope<{ recipientsByYear: Record<string, RecipientYearlySpending[]> }>> {
+}): Promise<
+    AggregationEnvelope<{
+        recipientsByYear: Record<string, RecipientYearlySpending[]>;
+    }>
+> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.currency) qp.set("currency", params.currency);
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ""}`);
 }
 
 export interface RecipientPivotItem {
@@ -150,23 +176,31 @@ export function getAggregationRecipientPivot(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
     recipient_ids?: number[];
-    bucket?: 'monthly' | 'yearly';
+    bucket?: "monthly" | "yearly";
     start_date?: string | null;
     end_date?: string | null;
-}): Promise<AggregationEnvelope<{ recipientPivot: Record<string, RecipientPivotItem[]> }>> {
+}): Promise<
+    AggregationEnvelope<{
+        recipientPivot: Record<string, RecipientPivotItem[]>;
+    }>
+> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.bucket) qp.set('bucket', params.bucket);
-    if (params?.start_date) qp.set('start_date', params.start_date);
-    if (params?.end_date) qp.set('end_date', params.end_date);
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.bucket) qp.set("bucket", params.bucket);
+    if (params?.start_date) qp.set("start_date", params.start_date);
+    if (params?.end_date) qp.set("end_date", params.end_date);
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     if (params?.recipient_ids?.length) {
-        params.recipient_ids.forEach((id) => qp.append('recipient_ids', String(id)));
+        params.recipient_ids.forEach((id) =>
+            qp.append("recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`);
 }
 
 export interface TagPivotItem {
@@ -180,23 +214,23 @@ export function getAggregationTagPivot(params?: {
     currency?: string;
     tag_ids?: number[];
     all?: boolean;
-    bucket?: 'monthly' | 'yearly';
+    bucket?: "monthly" | "yearly";
     start_date?: string | null;
     end_date?: string | null;
 }): Promise<AggregationEnvelope<{ tagPivot: Record<string, TagPivotItem[]> }>> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.bucket) qp.set('bucket', params.bucket);
-    if (params?.start_date) qp.set('start_date', params.start_date);
-    if (params?.end_date) qp.set('end_date', params.end_date);
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.bucket) qp.set("bucket", params.bucket);
+    if (params?.start_date) qp.set("start_date", params.start_date);
+    if (params?.end_date) qp.set("end_date", params.end_date);
     if (params?.all) {
         // "all tags": let the server return every tag with spend in range.
-        qp.set('all', 'true');
+        qp.set("all", "true");
     } else if (params?.tag_ids?.length) {
-        params.tag_ids.forEach((id) => qp.append('tag_ids', String(id)));
+        params.tag_ids.forEach((id) => qp.append("tag_ids", String(id)));
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`);
 }
 
 export interface SankeyNode {
@@ -227,7 +261,7 @@ export interface ForecastDailyPoint {
 /** Dynamic-percentile bands: keys are "p{N}" for each requested percentile. */
 export type ForecastBands = Record<string, ForecastDailyPoint[]>;
 
-export interface ForecastMethod {
+export interface CashflowForecastMethod {
     readonly id: string;
     readonly label: string;
     readonly daily: ForecastDailyPoint[];
@@ -274,7 +308,7 @@ export interface CashflowForecastMethodsData {
     readonly days_in_month: number;
     readonly current_day: number;
     readonly actual: ForecastActualPoint[];
-    readonly methods: ForecastMethod[];
+    readonly methods: CashflowForecastMethod[];
     readonly planned: ForecastPlannedPoint[];
     readonly diagnostics: ForecastDiagnostics | null;
     readonly history_months: number;
@@ -292,22 +326,33 @@ export function getCashflowForecastMethods(params?: {
     include_backtest?: boolean;
 }): Promise<AggregationEnvelope<CashflowForecastMethodsData>> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.history_months != null) qp.set('history_months', String(params.history_months));
-    if (params?.mc_paths != null) qp.set('mc_paths', String(params.mc_paths));
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.history_months != null)
+        qp.set("history_months", String(params.history_months));
+    if (params?.mc_paths != null) qp.set("mc_paths", String(params.mc_paths));
     if (params?.mc_percentiles?.length) {
-        params.mc_percentiles.forEach((p) => qp.append('mc_percentiles', String(p)));
+        params.mc_percentiles.forEach((p) =>
+            qp.append("mc_percentiles", String(p)),
+        );
     }
-    if (params?.include_planned != null) qp.set('include_planned', params.include_planned ? 'true' : 'false');
-    if (params?.include_backtest != null) qp.set('include_backtest', params.include_backtest ? 'true' : 'false');
+    if (params?.include_planned != null)
+        qp.set("include_planned", params.include_planned ? "true" : "false");
+    if (params?.include_backtest != null)
+        qp.set("include_backtest", params.include_backtest ? "true" : "false");
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ''}`);
+    return apiRequest(
+        `/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ""}`,
+    );
 }
 
 // ==================== Rolling-Window Cash Flow Forecast ====================
@@ -320,7 +365,7 @@ export interface CashflowForecastRollingData {
     readonly days_back: number;
     readonly days_forward: number;
     readonly actual: ForecastActualPoint[];
-    readonly methods: ForecastMethod[];
+    readonly methods: CashflowForecastMethod[];
     readonly planned: ForecastPlannedPoint[];
     readonly diagnostics: ForecastDiagnostics | null;
     readonly history_months: number;
@@ -340,24 +385,37 @@ export function getCashflowForecastRolling(params?: {
     include_backtest?: boolean;
 }): Promise<AggregationEnvelope<CashflowForecastRollingData>> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.history_months != null) qp.set('history_months', String(params.history_months));
-    if (params?.days_back != null) qp.set('days_back', String(params.days_back));
-    if (params?.days_forward != null) qp.set('days_forward', String(params.days_forward));
-    if (params?.mc_paths != null) qp.set('mc_paths', String(params.mc_paths));
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.history_months != null)
+        qp.set("history_months", String(params.history_months));
+    if (params?.days_back != null)
+        qp.set("days_back", String(params.days_back));
+    if (params?.days_forward != null)
+        qp.set("days_forward", String(params.days_forward));
+    if (params?.mc_paths != null) qp.set("mc_paths", String(params.mc_paths));
     if (params?.mc_percentiles?.length) {
-        params.mc_percentiles.forEach((p) => qp.append('mc_percentiles', String(p)));
+        params.mc_percentiles.forEach((p) =>
+            qp.append("mc_percentiles", String(p)),
+        );
     }
-    if (params?.include_planned != null) qp.set('include_planned', params.include_planned ? 'true' : 'false');
-    if (params?.include_backtest != null) qp.set('include_backtest', params.include_backtest ? 'true' : 'false');
+    if (params?.include_planned != null)
+        qp.set("include_planned", params.include_planned ? "true" : "false");
+    if (params?.include_backtest != null)
+        qp.set("include_backtest", params.include_backtest ? "true" : "false");
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ''}`);
+    return apiRequest(
+        `/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ""}`,
+    );
 }
 
 export interface AccuracyHistoryPoint {
@@ -387,9 +445,12 @@ export function getCashflowForecastAccuracy(params?: {
     limit_months?: number;
 }): Promise<AggregationEnvelope<CashflowForecastAccuracyData>> {
     const qp = new URLSearchParams();
-    if (params?.limit_months != null) qp.set('limit_months', String(params.limit_months));
+    if (params?.limit_months != null)
+        qp.set("limit_months", String(params.limit_months));
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ''}`);
+    return apiRequest(
+        `/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ""}`,
+    );
 }
 
 export function getSankeyFlow(params?: {
@@ -399,14 +460,18 @@ export function getSankeyFlow(params?: {
     excluded_recipient_ids?: number[];
 }): Promise<AggregationEnvelope<SankeyFlowData>> {
     const qp = new URLSearchParams();
-    if (params?.currency) qp.set('currency', params.currency);
-    if (params?.year != null) qp.set('year', String(params.year));
+    if (params?.currency) qp.set("currency", params.currency);
+    if (params?.year != null) qp.set("year", String(params.year));
     if (params?.excluded_category_ids?.length) {
-        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+        params.excluded_category_ids.forEach((id) =>
+            qp.append("excluded_category_ids", String(id)),
+        );
     }
     if (params?.excluded_recipient_ids?.length) {
-        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+        params.excluded_recipient_ids.forEach((id) =>
+            qp.append("excluded_recipient_ids", String(id)),
+        );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ''}`);
+    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ""}`);
 }

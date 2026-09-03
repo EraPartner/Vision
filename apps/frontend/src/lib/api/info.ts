@@ -1,7 +1,7 @@
 import logger from '@/lib/logger';
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
-import type { NetWorthResponse } from '@/lib/api/types';
+import type { NetWorthResponse } from '@/types/apiClient';
 
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)

@@ -31,7 +31,7 @@ import {
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useRecipientPivot } from "@/hooks/useRecipientPivot";
 import { useTagPivot } from "@/hooks/useTagPivot";
-import type { SavedChart } from "@/lib/api/types";
+import type { SavedChart } from "@/types/apiClient";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getChartColor } from "@/components/charts/palette";

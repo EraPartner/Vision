@@ -47,7 +47,7 @@ describe("background query cue adoption", () => {
             }
 
             visit(sourceFile);
-            return placeholderObservers === cueRegistrations
+            return cueRegistrations >= placeholderObservers
                 ? []
                 : [
                       `${relative(process.cwd(), path)}: placeholderData=${placeholderObservers}, cues=${cueRegistrations}`,

@@ -102,7 +102,7 @@ export function RecipientOwesDetail({
                 amount: formatCurrency(
                     totalOutstanding,
                     defaultCurrency,
-                    locale,
+                    locale, appSettings.showDecimalPlaces ?? 2
                 ),
             }),
             confirmLabel: t("owesPage.settleAll.confirmAction"),
@@ -225,7 +225,7 @@ export function RecipientOwesDetail({
                                                             ),
                                                             split.transaction_currency ||
                                                                 defaultCurrency,
-                                                            locale,
+                                                            locale, appSettings.showDecimalPlaces ?? 2
                                                         ),
                                                     })}
                                                     {split.note &&
@@ -378,7 +378,7 @@ export function RecipientOwesDetail({
                                             amount: formatCurrency(
                                                 payDialog.remaining,
                                                 defaultCurrency,
-                                                locale,
+                                                locale, appSettings.showDecimalPlaces ?? 2
                                             ),
                                         })}
                                     </p>

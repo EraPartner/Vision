@@ -48,16 +48,24 @@ function servePatternsAndCapturePost(direction: "income" | "expense") {
         http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
             ok({ patterns: [patternFixture(direction)], total: 1 }),
         ),
-        http.post(`${API_BASE}/api/planned-transactions`, async ({ request }) => {
-            captured.body = (await request.json()) as Record<string, unknown>;
-            return ok({ id: 99 });
-        }),
+        http.post(
+            `${API_BASE}/api/planned-transactions`,
+            async ({ request }) => {
+                captured.body = (await request.json()) as Record<
+                    string,
+                    unknown
+                >;
+                return ok({ id: 99 });
+            },
+        ),
     );
     return captured;
 }
 
 async function clickTrack(user: ReturnType<typeof userEvent.setup>) {
-    const toggle = await screen.findByRole("button", { name: /show or hide detected recurring patterns/i });
+    const toggle = await screen.findByRole("button", {
+        name: /show or hide detected recurring patterns/i,
+    });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     await user.click(toggle);
     const trackBtn = await screen.findByRole("button", { name: /track/i });
@@ -75,7 +83,9 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
 
         renderWithApp(<RecurringDetectionPanel />);
 
-        expect(await screen.findByText(/detected recurring patterns/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/detected recurring patterns/i),
+        ).toBeInTheDocument();
         expect(screen.queryByText("Employer NV")).not.toBeInTheDocument();
         await clickTrack(user);
 
@@ -96,7 +106,9 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
 
         renderWithApp(<RecurringDetectionPanel />);
 
-        expect(await screen.findByText(/detected recurring patterns/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/detected recurring patterns/i),
+        ).toBeInTheDocument();
         expect(screen.queryByText("Landlord SA")).not.toBeInTheDocument();
         await clickTrack(user);
 
@@ -109,28 +121,38 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
 
     it("keeps amount changes collapsed until the user opens the disclosure", async () => {
         const user = userEvent.setup();
-        server.use(http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok({
-            patterns: [{
-                ...patternFixture("expense"),
-                isAlreadyPlanned: true,
-                amountChanges: [{
-                    previousAmount: 100,
-                    newAmount: 110,
-                    percentChange: 10,
-                    direction: "increased",
-                    date: "2025-07-01",
-                }],
-            }],
-            total: 1,
-        })));
+        server.use(
+            http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
+                ok({
+                    patterns: [
+                        {
+                            ...patternFixture("expense"),
+                            isAlreadyPlanned: true,
+                            amountChanges: [
+                                {
+                                    previousAmount: 100,
+                                    newAmount: 110,
+                                    percentChange: 10,
+                                    direction: "increased",
+                                    date: "2025-07-01",
+                                },
+                            ],
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+        );
 
         renderWithApp(<RecurringDetectionPanel />);
 
-        const toggle = await screen.findByRole("button", { name: /show or hide amount changes/i });
+        const toggle = await screen.findByRole("button", {
+            name: /show or hide amount changes/i,
+        });
         expect(toggle).toHaveAttribute("aria-expanded", "false");
         expect(screen.queryByText(/€100/)).not.toBeInTheDocument();
         await user.click(toggle);
         expect(toggle).toHaveAttribute("aria-expanded", "true");
-        expect(await screen.findByText(/€100/)).toBeInTheDocument();
+        expect(await screen.findByText(/100,00.*€/)).toBeInTheDocument();
     });
 });

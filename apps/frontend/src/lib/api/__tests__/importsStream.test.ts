@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { importCSVWithProgress } from '@/lib/api/imports';
 import { importPortfolioCSVWithProgress } from '@/lib/api/portfolioImports';
-import type { ImportProgress } from '@/lib/api/types';
+import type { ImportProgress } from '@/types/apiClient';
 
 /** Build a Response whose body streams `text` as a single chunk. */
 function sseResponse(text: string): Response {

@@ -32,7 +32,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 import { apiClient } from "@/lib/api";
 import { cashflowKeys } from "@/lib/queryKeys";
-import type { ForecastMethod } from "@/lib/api/aggregations";
+import type { CashflowForecastMethod } from "@/lib/api/aggregations";
 import { ACTUAL_COLOR, METHOD_COLORS } from "@/utils/forecastMerge";
 import { CashFlowForecastDiagnostics } from "./CashFlowForecastDiagnostics";
 import { ForecastInner } from "./ForecastInner";
@@ -326,7 +326,7 @@ export function CashFlowForecastChart({
                 />
                 {t("cashflow.thisMonth")}
             </span>
-            {data.methods.map((m: ForecastMethod) => {
+            {data.methods.map((m: CashflowForecastMethod) => {
                 const active = visibleMethodIds.has(m.id);
                 const color = METHOD_COLORS[m.id] ?? getChartColor(7);
                 return (

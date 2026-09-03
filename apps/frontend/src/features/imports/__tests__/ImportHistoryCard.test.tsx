@@ -7,7 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { ImportHistoryCard } from "@/features/imports/ImportHistoryCard";
-import type { ImportBatch } from "@/lib/api/types";
+import type { ImportBatch } from "@/types/apiClient";
 
 const API_BASE = "http://localhost:3002";
 

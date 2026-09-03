@@ -104,7 +104,7 @@ function RatesTable({
                                 {formatCurrency(
                                     100 * rate,
                                     defaultCurrency,
-                                    locale,
+                                    locale, appSettings.showDecimalPlaces ?? 2
                                 )}
                             </TableCell>
                         </TableRow>

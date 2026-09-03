@@ -173,7 +173,7 @@ export default function OwesPage() {
                                                 amount: formatCurrency(
                                                     item.total_paid,
                                                     defaultCurrency,
-                                                    locale,
+                                                    locale, appSettings.showDecimalPlaces ?? 2
                                                 ),
                                             })}
                                         </span>
@@ -182,7 +182,7 @@ export default function OwesPage() {
                                                 amount: formatCurrency(
                                                     item.total_owed,
                                                     defaultCurrency,
-                                                    locale,
+                                                    locale, appSettings.showDecimalPlaces ?? 2
                                                 ),
                                             })}
                                         </span>

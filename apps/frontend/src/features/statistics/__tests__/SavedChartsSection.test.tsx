@@ -4,7 +4,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { SavedChartsSection } from "@/features/statistics/SavedChartsSection";
-import type { SavedChart } from "@/lib/api/types";
+import type { SavedChart } from "@/types/apiClient";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));

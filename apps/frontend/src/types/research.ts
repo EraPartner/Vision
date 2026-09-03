@@ -9,7 +9,7 @@
  */
 
 /** Provenance of a research response, lifted from the envelope `meta`. */
-export type ResearchSource = 'cache' | 'live' | 'unavailable';
+export type ResearchSource = "cache" | "live" | "unavailable";
 
 export interface ResearchMeta {
     provider: string | null;
@@ -36,6 +36,9 @@ export interface ResearchSearchResponse {
     items: ResearchSearchItem[];
 }
 
+/** Market-lookup compatibility alias for the same search-result wire shape. */
+export type MarketSearchResult = ResearchSearchItem;
+
 export interface ResearchQuote {
     symbol: string;
     name: string;
@@ -55,6 +58,12 @@ export interface ResearchQuote {
     low52w: number;
 }
 
+/** Price-only market quote used by dashboard, ticker, and watchlist consumers. */
+export type MarketQuote = Pick<
+    ResearchQuote,
+    "symbol" | "price" | "change" | "changePercent"
+>;
+
 export interface ResearchChartPoint {
     time: number;
     close: number;
@@ -67,6 +76,15 @@ export interface ResearchChartResponse {
     symbol: string;
     currency: string;
     points: ResearchChartPoint[];
+}
+
+export type MarketChartPoint = ResearchChartPoint;
+
+/** Market chart client shape after `{items}` is renamed to the domain `points`. */
+export interface MarketChartResponse<P = MarketChartPoint> {
+    symbol?: string;
+    currency?: string;
+    points: P[];
 }
 
 export interface ResearchFundamentals {
@@ -139,15 +157,16 @@ export interface ResearchNewsResponse {
 }
 
 /** Time ranges accepted by the chart endpoint. */
-export type ResearchRange = '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y' | '2y' | '5y' | 'max';
+export type ResearchRange =
+    "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y" | "max";
 
 /** Asset-class routing hint passed to quote/chart/fundamentals. */
-export type ResearchAssetClass = 'stock' | 'etf' | 'crypto' | 'metals';
+export type ResearchAssetClass = "stock" | "etf" | "crypto" | "metals";
 
 // ── Macro economic indicators (ADR-082) ──────────────────────────────────────
 
 /** Macro data providers (provider-pinned; a series lives at exactly one). */
-export type MacroProvider = 'fred' | 'eurostat' | 'dbnomics';
+export type MacroProvider = "fred" | "eurostat" | "dbnomics";
 
 /** One macroeconomic series in a search result (CPI, rates, unemployment, …). */
 export interface MacroSeriesItem {
@@ -182,16 +201,16 @@ export interface MacroSeriesResponse {
 
 // ── Symbol-mapping endpoints ────────────────────────────────────────────────
 
-export type MappingKeyType = 'isin' | 'internal';
+export type MappingKeyType = "isin" | "internal";
 
 export type MappingStatus =
-    | 'confirmed'
-    | 'auto'
-    | 'failed'
-    | 'skipped'
-    | 'none'
-    | 'unavailable'
-    | 'error';
+    | "confirmed"
+    | "auto"
+    | "failed"
+    | "skipped"
+    | "none"
+    | "unavailable"
+    | "error";
 
 export interface InstrumentProviderMapping {
     id: number;
@@ -204,13 +223,15 @@ export interface InstrumentProviderMapping {
     currency: string | null;
     status: MappingStatus;
     verified_at: string | null;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface MappingProposalCandidate {
-    providerSymbol: string;
-    resolvedName?: string;
+    symbol: string;
+    name?: string;
+    type?: string;
     exchange?: string;
-    currency?: string;
 }
 
 export interface MappingProposal {
@@ -225,6 +246,8 @@ export interface MappingProposal {
     fromStore?: boolean;
     /** Pre-seeded from a held investment's already-configured provider. */
     fromHolding?: boolean;
+    reason?: string;
+    error?: string;
 }
 
 export interface MappingResolveResponse {
@@ -248,7 +271,7 @@ export interface MappingsResponse {
     total: number;
 }
 
-export type MappingDiscrepancyType = 'currency_mismatch' | 'price_outlier';
+export type MappingDiscrepancyType = "currency_mismatch" | "price_outlier";
 
 export interface MappingDiscrepancy {
     type: MappingDiscrepancyType;
@@ -260,7 +283,7 @@ export interface MappingAuditQuote {
     provider: string;
     currency?: string;
     price?: number;
-    skipped?: boolean;
+    skipped?: string;
     error?: string;
 }
 
@@ -277,7 +300,7 @@ export interface ProviderKeyStatus {
     label: string;
     envVar: string;
     configured: boolean;
-    source: 'settings' | 'env' | 'none';
+    source: "settings" | "env" | "none";
     masked?: string;
 }
 
@@ -289,13 +312,21 @@ export interface ProviderKeysResponse {
 
 // ── Fundamentals scorecard (ADR-081) ─────────────────────────────────────────
 
-export type ScorecardSeverity = 'ok' | 'caution' | 'warn' | 'risk';
-export type ScorecardGrade = 'strong' | 'healthy' | 'mixed' | 'weak' | 'poor' | 'unknown';
+export type ScorecardSeverity = "ok" | "caution" | "warn" | "risk";
+export type ScorecardGrade =
+    "strong" | "healthy" | "mixed" | "weak" | "poor" | "unknown";
 
 export interface ScorecardFlag {
     metric: string;
-    category: 'liquidity' | 'leverage' | 'profitability' | 'cashflow' | 'growth' | 'valuation' | 'dividend';
-    better: 'higher' | 'lower';
+    category:
+        | "liquidity"
+        | "leverage"
+        | "profitability"
+        | "cashflow"
+        | "growth"
+        | "valuation"
+        | "dividend";
+    better: "higher" | "lower";
     value: number;
     severity: ScorecardSeverity;
     /** Stable `<metric>.<severity>` code (severity-derived; can collide across reasons). */
@@ -323,8 +354,8 @@ export interface ResearchScorecardResponse {
 
 // ── Portfolio forecast (ADR-081, Pillar C) ───────────────────────────────────
 
-export type ForecastMethod = 'parametric' | 'block_bootstrap';
-export type ForecastReturnSource = 'historical' | 'blended';
+export type ForecastMethod = "parametric" | "block_bootstrap";
+export type ForecastReturnSource = "historical" | "blended";
 
 export interface PortfolioForecastInput {
     horizonMonths: number;
@@ -358,7 +389,7 @@ export interface ForecastForwardHolding {
 
 export interface PortfolioForecast {
     available: boolean;
-    reason?: 'no_holdings' | 'insufficient_history';
+    reason?: "no_holdings" | "insufficient_history";
     currency?: string;
     method?: ForecastMethod;
     horizonMonths?: number;
