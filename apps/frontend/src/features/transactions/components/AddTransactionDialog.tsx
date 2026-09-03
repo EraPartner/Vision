@@ -43,6 +43,7 @@ import {
     type FieldErrorMap,
 } from "@/hooks/useFieldErrors";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import type { TransactionCreate } from "@/types/api";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -56,6 +57,7 @@ export function AddTransactionDialog() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const [open, setOpen] = useState(false);
+    const [duplicateDetected, setDuplicateDetected] = useState(false);
     const createMutation = useCreateTransaction();
     // Same cached list the AccountCombobox reads (identical query key) — used to
     // resolve the chosen account's statement anchor for the backdated note below.
@@ -128,7 +130,46 @@ export function AddTransactionDialog() {
 
     const resetForm = () => {
         setForm(createAddTransactionFormState(appSettings.defaultCurrency));
+        setDuplicateDetected(false);
         resetErrors();
+    };
+
+    useEffect(() => {
+        setDuplicateDetected(false);
+    }, [form]);
+
+    const submitTransaction = (transaction: TransactionCreate) => {
+        createMutation.mutate(transaction, {
+            onSuccess: () => {
+                resetForm();
+                setOpen(false);
+            },
+            onError: (error: Error) => {
+                if (
+                    error instanceof ApiClientError &&
+                    error.code === ApiErrorCode.CONFLICT
+                ) {
+                    setDuplicateDetected(true);
+                    toast.error(t("addTxn.duplicateError"));
+                }
+            },
+        });
+    };
+
+    const transactionFromForm = (): TransactionCreate | null => {
+        if (!parsed.success) return null;
+        return {
+            transaction_date: form.transaction_date,
+            bank_account: form.bank_account.trim(),
+            recipient_id: Number(form.recipient_id),
+            category_id: form.category_id
+                ? Number(form.category_id)
+                : undefined,
+            memo: form.memo.trim() || undefined,
+            amount: parsed.data.amount,
+            currency: form.currency || appSettings.defaultCurrency,
+            comment: form.comment.trim() || undefined,
+        };
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -138,38 +179,8 @@ export function AddTransactionDialog() {
         // type system, not the user.
         if (!checkValid() || !parsed.success) return;
 
-        createMutation.mutate(
-            {
-                transaction_date: form.transaction_date,
-                bank_account: form.bank_account.trim(),
-                recipient_id: Number(form.recipient_id),
-                category_id: form.category_id
-                    ? Number(form.category_id)
-                    : undefined,
-                memo: form.memo.trim() || undefined,
-                amount: parsed.data.amount,
-                currency: form.currency || appSettings.defaultCurrency,
-                comment: form.comment.trim() || undefined,
-            },
-            {
-                onSuccess: () => {
-                    resetForm();
-                    setOpen(false);
-                },
-                onError: (error: Error) => {
-                    // Backend signals the manual-dedup hit as ConflictError (409,
-                    // ApiErrorCode.CONFLICT) — see transactionService.createManualTransaction.
-                    // Key off the machine code, not the English message text, so a
-                    // reworded message can't silently stop this branch from firing.
-                    if (
-                        error instanceof ApiClientError &&
-                        error.code === ApiErrorCode.CONFLICT
-                    ) {
-                        toast.error(t("addTxn.duplicateError"));
-                    }
-                },
-            },
-        );
+        const transaction = transactionFromForm();
+        if (transaction) submitTransaction(transaction);
     };
 
     return (
@@ -402,6 +413,31 @@ export function AddTransactionDialog() {
                     </div>
 
                     <DialogFooter className="pt-2">
+                        {duplicateDetected && (
+                            <div
+                                className="mr-auto space-y-2 text-sm"
+                                role="alert"
+                            >
+                                <p>{t("addTxn.duplicatePrompt")}</p>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={createMutation.isPending}
+                                    onClick={() => {
+                                        const transaction =
+                                            transactionFromForm();
+                                        if (transaction) {
+                                            submitTransaction({
+                                                ...transaction,
+                                                allow_duplicate: true,
+                                            });
+                                        }
+                                    }}
+                                >
+                                    {t("addTxn.addAnyway")}
+                                </Button>
+                            </div>
+                        )}
                         <Button
                             type="button"
                             variant="outline"

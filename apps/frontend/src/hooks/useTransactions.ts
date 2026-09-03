@@ -21,6 +21,8 @@ import type {
 } from "@/types/api";
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { ApiClientError } from "@/lib/api/client";
+import { ApiErrorCode } from "@vision/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
@@ -102,9 +104,14 @@ export function useCreateTransaction() {
         onError: (error: Error, _vars, context) => {
             if (context?.snapshot)
                 rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t("transactions.createFailedTitle"), {
-                description: apiErrorToMessage(error, t),
-            });
+            if (
+                !(error instanceof ApiClientError) ||
+                error.code !== ApiErrorCode.CONFLICT
+            ) {
+                toast.error(t("transactions.createFailedTitle"), {
+                    description: apiErrorToMessage(error, t),
+                });
+            }
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);

@@ -168,9 +168,17 @@ export async function isManualDuplicate({
   const fieldResult = await query(
     `SELECT id FROM transactions
      WHERE date = $1 AND amount = $2 AND recipient_id = $3
-       AND COALESCE(TRIM(memo), '') = $4 AND is_active = true
+       AND COALESCE(TRIM(memo), '') = $4
+       AND COALESCE(UPPER(bank_account), '') = $5
+       AND is_active = true
      LIMIT 1`,
-    [date, amount, recipientId, (memo || "").trim()],
+    [
+      date,
+      amount,
+      recipientId,
+      (memo || "").trim(),
+      (bankAccount || "").toUpperCase(),
+    ],
   );
   if (fieldResult.rows.length > 0) {
     return { isDuplicate: true, existingTransactionId: fieldResult.rows[0].id };

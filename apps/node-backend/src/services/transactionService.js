@@ -52,6 +52,7 @@ import { logger } from "../config/logger.js";
  *   category_id?: number|null,
  *   comment?: string|null,
  *   tags?: string[]|null,
+ *   allow_duplicate?: boolean,
  * }} data zod-validated POST body — loose passthrough (see module doc above).
  * @returns {Promise<{ transaction: object, autoLink: { autoLinkedCount: number, links: Array<{ plannedTransactionId?: number }> } }>}
  */
@@ -66,9 +67,14 @@ async function createManualTransaction(data) {
     bankAccount: data.bank_account,
   });
 
-  if (dupCheck.isDuplicate) {
+  if (dupCheck.isDuplicate && data.allow_duplicate !== true) {
     throw new ConflictError("Duplicate transaction detected", {
       details: { existing_transaction_id: dupCheck.existingTransactionId },
+    });
+  }
+  if (dupCheck.isDuplicate) {
+    logger.info("Manual duplicate explicitly allowed", {
+      existingTransactionId: dupCheck.existingTransactionId,
     });
   }
 

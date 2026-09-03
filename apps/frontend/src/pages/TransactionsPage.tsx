@@ -400,6 +400,7 @@ export default function TransactionsPage() {
                 tags: row.tags?.length
                     ? row.tags.map((tag) => tag.slug)
                     : undefined,
+                allow_duplicate: true,
                 // balance deliberately not copied — the running balance belongs to
                 // the original row, not a new transaction.
             });

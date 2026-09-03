@@ -167,6 +167,7 @@ const createTransactionSchema = z
     currency: currencyField(),
     bank_account: bankAccountField,
     category_id: nullableFkField("category_id"),
+    allow_duplicate: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const txDate = data.transaction_date || data.date;
@@ -860,7 +861,7 @@ router.post(
     // createManualTransaction's required-field param type.
     const { transaction, autoLink } =
       await transactionService.createManualTransaction(
-        /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null }} */ (
+        /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null, allow_duplicate?: boolean }} */ (
           data
         ),
       );

@@ -233,17 +233,22 @@ describe("AddTransactionDialog (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows duplicate error toast when server returns 409", async () => {
+    it("requires an explicit Add anyway action after a duplicate 409", async () => {
         const user = userEvent.setup();
         const toastSpy = vi.spyOn(toast, "error");
+        const posted: Array<Record<string, unknown>> = [];
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
                 ok(testRecipientsList),
             ),
-            http.post(`${API_BASE}/api/transactions`, () =>
-                err(409, "Duplicate transaction detected"),
-            ),
+            http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
+                posted.push((await request.json()) as Record<string, unknown>);
+                if (posted.length === 1) {
+                    return err(409, "Duplicate transaction detected");
+                }
+                return ok({ id: 99, ...posted[1], links: [] });
+            }),
         );
 
         renderWithApp(<AddTransactionDialog />);
@@ -263,6 +268,18 @@ describe("AddTransactionDialog (integration)", () => {
             expect(toastSpy).toHaveBeenCalledWith(
                 expect.stringMatching(/duplicate transaction detected/i),
             ),
+        );
+        expect(toastSpy).toHaveBeenCalledTimes(1);
+        expect(posted).toHaveLength(1);
+        expect(posted[0]).not.toHaveProperty("allow_duplicate");
+
+        await user.click(
+            await screen.findByRole("button", { name: /add anyway/i }),
+        );
+        await waitFor(() => expect(posted).toHaveLength(2));
+        expect(posted[1]).toMatchObject({ allow_duplicate: true });
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
     });
 
