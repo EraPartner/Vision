@@ -3,12 +3,13 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
-updated: 2026-08-27
+updated: 2026-09-03
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
 related_code:
   - apps/frontend/src/pages/research/MarketLookupPage.tsx
+  - apps/frontend/src/features/research/useMarketLookupData.ts
   - apps/frontend/src/App.tsx
   - apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx
   - apps/node-backend/src/routes/marketLookup.js

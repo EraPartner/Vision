@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-27
+updated: 2026-09-03
 tags:
   [
     components,
@@ -960,6 +960,6 @@ All components follow WAI-ARIA patterns via Radix primitives:
 
 Shared chart tooltip numeric rendering is hardened to be zero-safe and robust for mixed numeric payloads (including `0`, undefined-like values, and formatted values).
 
-Numeric fallback formatting now uses `getCurrencyFormatDefaults().locale` from [[apps/frontend/src/utils/currency.ts]] (instead of bare `Intl.NumberFormat()` locale defaults) for settings-consistent locale output.
+Currency and percent formatting now resolves locale and decimal settings through [[apps/frontend/src/hooks/useCurrencyFormatter.ts]]. `Money` and chart currency adapters compose the same resolver and the pure utilities accept explicit configuration, so rendering no longer depends on an `App.tsx` bootstrap effect.
 
 Code links: `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/pages/StatisticsPage.tsx]]

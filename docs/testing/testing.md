@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-31
-last-updated: 2026-08-31
-last_updated_timestamp: 2026-08-31T00:00:00Z
+updated: 2026-09-03
+last-updated: 2026-09-03
+last_updated_timestamp: 2026-09-03T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -170,7 +170,9 @@ The installed Vision Demo is a native-runtime test target. It uses deterministic
 under `~/Library/Application Support/Vision Demo/native/vision_demo` and never connects to Docker
 or the real Vision database. `./install-demo.sh` rebuilds the native payload and seed against the
 current migration head. `bun run demo:reset-native` requests an atomic seed restore for the next
-Demo launch. Seed build tests verify data-only SQL, row-count drift rejection, checksum validation,
+Demo launch. Seed build tests verify data-only SQL, fixed-reference-date
+repeatability, date freshness and future planned rows, invalid reference-date
+rejection, row-count drift rejection, checksum validation,
 interrupted activation recovery, failed-readiness rollback, and Demo path isolation.
 
 ## Test Structure
@@ -503,11 +505,31 @@ describe("API Endpoints", () => {
 
 ```javascript
 import { vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn().mockResolvedValue({ rows: [] }),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/services/currency/currencyConversionService.js", () =>
+  mockCurrencyConversion(),
+);
 ```
+
+`tests/helpers/repoMocks.js` is the canonical database seam. Its variants share the complete
+`connection.js` export surface and model inert, ambient-client, or pooled transaction behavior.
+Only the two real-PostgreSQL instrumentation suites use an explicit partial-real connection mock.
+`tests/helpers/mockCurrencyConversion.js` keeps named and default exports on the same spies. Its
+default conversion is identity; tests that need converted values prime explicit output rows or use
+the single already-in-target-currency fixture. Do not embed exchange-rate arithmetic in a mock.
+
+#### Shared domain row builders
+
+`tests/builders/domainRows.js` provides builders for transaction, planned-transaction, investment,
+portfolio-transaction, import-staging, and portfolio-import-staging rows. Raw PostgreSQL builders
+keep `NUMERIC` and `BIGINT` values as strings and `DATE` values as `Date` objects. Mapped investment
+and portfolio-transaction builders use numeric values and `YYYY-MM-DD` dates, matching their
+repository mappers. Each call creates fresh dates and collections, then applies shallow overrides.
+Inline CSV strings in adapter tests remain local because they are parser and synthetic-PII fixtures,
+not domain-row fixtures.
 
 ### Frontend Error-State Test Timeout Gotcha: apiRequest Retry Loop
 

@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-08-31
-last_modified: 2026-08-31
+updated: 2026-09-03
+last_modified: 2026-09-03
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -298,7 +298,18 @@ Create a new transaction.
 - `category_id` had **no guard at all** on this operation — the create schema validated `recipient_id` and `amount` and forwarded the rest raw. `12abc`, `1e3`, `true`, `[7]` and `''` reached Postgres as a 22P02 cast error and `0`/negatives as an FK violation, so the create path for the app's core entity answered **500** rather than 400; `0x10` was worse, landing on category 16 wherever that row exists (Postgres reads hex integer literals). It now uses the same validator as the PATCH body.
 - **`null` and an absent `category_id` both mean "uncategorized" and still answer 201** — unchanged, and pinned.
 
-**Duplicate Detection:** Automatically checks for duplicate transactions based on date, amount, recipient, and bank account. Returns 409 if duplicate found.
+**Duplicate Detection:** By default, the service checks active transactions with the same date,
+amount, recipient, memo, and bank account and returns 409 when it finds one. The fallback lookup uses
+the same five fields as the hash, including a case-insensitive bank-account comparison. Deleted
+transactions do not block a later re-add because stale manual-import hash rows are joined back to an
+active transaction.
+
+Clients may resubmit an intentional duplicate with `"allow_duplicate": true`. This is an explicit
+per-request override: the normal create path remains guarded, the duplicate is still recorded in
+the manual-import provenance table, and the add dialog sends the flag only after the user chooses
+**Add anyway** in the duplicate warning. The existing row menu's **Duplicate** command is itself an
+explicit duplication action, so it sends the flag on its single create request. Omitting the field
+or sending `false` preserves the 409 behavior.
 
 **Response:** Created transaction with 201 status.
 

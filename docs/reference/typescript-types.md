@@ -3,11 +3,32 @@ title: TypeScript Types Reference
 type: reference
 status: active
 date: 2026-04-02
-updated: 2026-08-25
-tags: [reference, typescript, types, interfaces, frontend, contract-guard, openapi, generated-types, type-safety]
+updated: 2026-09-03
+tags:
+  [
+    reference,
+    typescript,
+    types,
+    interfaces,
+    frontend,
+    contract-guard,
+    openapi,
+    generated-types,
+    type-safety,
+  ]
 description: Complete reference of Vision frontend TypeScript types. generated.ts is load-bearing through contract-guard.ts, including nullable portfolio transaction PATCH payloads.
 aliases: [typescript types, type definitions, interfaces, type reference]
-related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/generated.ts", "apps/frontend/src/types/contract-guard.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/lib/api/splits.ts"]
+related_code:
+  [
+    "apps/frontend/src/types/api.ts",
+    "apps/frontend/src/types/generated.ts",
+    "apps/frontend/src/types/contract-guard.ts",
+    "apps/frontend/src/types/portfolio.ts",
+    "apps/frontend/src/types/watchlist.ts",
+    "apps/frontend/src/lib/api/splits.ts",
+    "packaging/electron/electron-api.d.ts",
+    "packages/types/src/electron.d.ts",
+  ]
 ---
 
 # TypeScript Types Reference
@@ -18,6 +39,13 @@ related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/genera
 ---
 
 ## Contract Architecture (June 2026)
+
+Electron inter-process communication has a separate shared contract because it is not HTTP or
+OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 24 invoke channels,
+6 event channels, their payloads and results, and the five optional `Window` bridges. The
+`@vision/types/electron` entry point is a thin type re-export used by the frontend. Preload JSDoc
+and main-process channel registration import the canonical declaration directly, while
+`packaging/electron/ipc-contract.test.js` enforces channel-set parity.
 
 > [!info] generated.ts is now load-bearing
 > The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.
@@ -44,9 +72,9 @@ related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/genera
 ```typescript
 interface Transaction {
   id: number;
-  date: string;          // ISO date (YYYY-MM-DD)
-  amount: number;        // Negative = expense, Positive = income
-  currency: string;      // ISO 4217
+  date: string; // ISO date (YYYY-MM-DD)
+  amount: number; // Negative = expense, Positive = income
+  currency: string; // ISO 4217
   balance: number | null;
   memo: string | null;
   comment: string | null;
@@ -65,8 +93,8 @@ interface Transaction {
 ```typescript
 interface Category {
   id: number;
-  general: string;       // e.g., "FOOD"
-  detail: string;        // e.g., "GROCERIES"
+  general: string; // e.g., "FOOD"
+  detail: string; // e.g., "GROCERIES"
   description: string | null;
   is_active: boolean;
   created_at: string;
@@ -149,8 +177,8 @@ interface Investment {
   current_price: number | null;
   interest_rate: number | null;
   maturity_date: string | null;
-  location: string | null;        // Real estate
-  municipality: string | null;    // Belgian
+  location: string | null; // Real estate
+  municipality: string | null; // Belgian
   cadastral_income: number | null;
   municipality_tax_rate: number | null;
   notes: string | null;
@@ -167,13 +195,14 @@ interface Investment {
 ### AssetClass
 
 ```typescript
-type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
+type AssetClass =
+  "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
 ```
 
 ### PriceProvider
 
 ```typescript
-type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'kinesis' | 'custom';
+type PriceProvider = "manual" | "binance" | "yahoo" | "kinesis" | "custom";
 ```
 
 ### PortfolioTransaction
@@ -205,13 +234,23 @@ interface PortfolioTransaction {
 ### PortfolioTxnType
 
 ```typescript
-type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
+type PortfolioTxnType =
+  | "buy"
+  | "sell"
+  | "dividend"
+  | "fee"
+  | "tax"
+  | "interest"
+  | "rent_income"
+  | "appreciation"
+  | "gift";
 ```
 
 ### RecurrenceInterval
 
 ```typescript
-type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
+type RecurrenceInterval =
+  "daily" | "weekly" | "bi-weekly" | "monthly" | "quarterly" | "yearly";
 ```
 
 ### InvestmentSummary
@@ -251,8 +290,8 @@ interface WatchlistItem {
   price_provider_id: string | null;
   created_at: string;
   updated_at: string;
-  current_price?: number;   // Populated by API
-  price_change?: number;    // Populated by API
+  current_price?: number; // Populated by API
+  price_change?: number; // Populated by API
 }
 ```
 
@@ -318,7 +357,7 @@ interface OwedSummaryItem {
 
 ```typescript
 interface AppSettings {
-  language: 'en' | 'nl';
+  language: "en" | "nl";
   defaultCurrency: string;
   numberFormat: string;
   dateFormat: string;

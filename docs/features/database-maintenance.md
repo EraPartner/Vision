@@ -3,7 +3,7 @@ title: Database Maintenance UI
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-08-26
+updated: 2026-09-03
 tags:
   [
     feature,
@@ -32,6 +32,7 @@ related_code:
   - apps/node-backend/src/services/dbEditor.js
   - apps/frontend/src/pages/DbMaintenancePage.tsx
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
+  - apps/frontend/src/features/admin/useTableDataEditorData.ts
   - apps/node-backend/src/services/databaseMaintenanceService.js
 ---
 

@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-08-27
+updated: 2026-09-03
 tags:
   - url-state
   - feature
@@ -60,6 +60,8 @@ related_code:
   - apps/frontend/src/pages/research/marketViews.ts
   - apps/frontend/src/components/charts/ResearchRangeSelector.tsx
   - apps/frontend/src/features/research/ResearchScorecard.tsx
+  - apps/frontend/src/features/research/useMarketLookupData.ts
+  - apps/frontend/src/features/research/useWatchlistData.ts
   - apps/frontend/src/lib/research/indicators.ts
   - apps/frontend/src/types/research.ts
   - apps/frontend/src/lib/api/research.ts
@@ -67,6 +69,14 @@ related_code:
 ---
 
 # Research Feature
+
+The frontend keeps its ergonomic Research domain types in
+`apps/frontend/src/types/research.ts`. Market lookup reuses those types rather
+than maintaining a third DTO set, and the compile-time contract guard checks
+each Research operation's generated OpenAPI `data` type. This makes a schema
+attached to the wrong endpoint a type-check failure. Provider-backed endpoints
+carry provenance metadata; forecast, mapping, and provider-key operations use
+the ordinary API envelope.
 
 ## Comparison URL state
 

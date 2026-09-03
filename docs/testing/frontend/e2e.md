@@ -3,7 +3,7 @@ title: Frontend E2E Tests (Playwright)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-27
+updated: 2026-09-03
 tags:
   - testing
   - frontend
@@ -22,6 +22,7 @@ description: Current Playwright E2E discovery, scheduled CI, accessibility, and 
 > Run Playwright against a real backend (local dev server or the scheduled CI Docker Compose stack). The automatically discovered non-visual specs cover page loads, dialog behavior, selected mutations, accessibility scans, and network drift. The separate manual visual project captures and compares full-page screenshots. Together they catch browser and integration failures that component tests (MSW + jsdom) cannot.
 >
 > Complements:
+>
 > - **Component-integration tests** — fast, network-mocked, no backend (Phase A)
 > - **Unit tests** — pure functions / hooks
 > - **Visual regression** — catch unintended layout/style changes (Phase C)
@@ -31,10 +32,10 @@ description: Current Playwright E2E discovery, scheduled CI, accessibility, and 
 
 Playwright has two explicit projects:
 
-| Project | Selection | Execution |
-|---------|-----------|-----------|
-| `chromium` | Every `e2e/*.spec.ts` except `visual.spec.ts` | `bun run test:e2e`; nightly scheduled workflow or `workflow_dispatch` |
-| `visual-chromium` | Only `e2e/visual.spec.ts` | Manual local run; not scheduled in Linux CI |
+| Project           | Selection                                     | Execution                                                             |
+| ----------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| `chromium`        | Every `e2e/*.spec.ts` except `visual.spec.ts` | `bun run test:e2e`; nightly scheduled workflow or `workflow_dispatch` |
+| `visual-chromium` | Only `e2e/visual.spec.ts`                     | Manual local run; not scheduled in Linux CI                           |
 
 The hardened devcontainer does not include a browser or the system libraries needed to install
 one, and its egress policy excludes browser download hosts. Run browser-backed E2E and visual tests
@@ -45,6 +46,12 @@ The non-visual package script selects the project rather than naming spec files.
 `e2e/*.spec.ts` file therefore joins the scheduled suite automatically. The scheduled workflow is
 `.github/workflows/e2e.yml`; it is deliberately outside pull-request CI and runs nightly or on
 manual dispatch against the Docker Compose stack.
+
+Every spec imports `test` and `expect` from `e2e/fixtures.ts`. Its automatic fixture subscribes to
+`pageerror` before test code runs and fails teardown if any uncaught browser error occurred. This
+replaces per-test collectors and applies equally to non-visual and visual projects.
+`fixtures.spec.ts` deliberately triggers a sentinel page error under `test.fail()`; if the automatic
+fixture stops enforcing the contract, that expected-failure test becomes an unexpected pass.
 
 Visual screenshots are platform-sensitive. Linux CI and local macOS rendering require different
 baselines, so no visual workflow job currently runs. Use:
@@ -90,11 +97,12 @@ Every smoke test now calls `checkA11y(page)` using `@axe-core/playwright`. This 
 - **Failure behavior:** Test fails if critical or serious violations found; warnings and minors are reported but do not block
 
 **Example:**
+
 ```typescript
-test('dashboard loads with no a11y violations', async ({ page }) => {
-  await page.goto('/');
+test("dashboard loads with no a11y violations", async ({ page }) => {
+  await page.goto("/");
   await checkA11y(page); // Axe scan + assertion
-  await expect(page.getByRole('heading', { name: 'Vision' })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vision" })).toBeVisible();
 });
 ```
 
@@ -110,10 +118,11 @@ New `visual.spec.ts` captures full-page screenshots of 5 critical pages. Subsequ
 - **Network idle wait:** All tests call `page.waitForLoadState('networkidle')` after navigation to ensure the page is fully rendered before screenshot (prevents incomplete/loading states)
 
 **Example:**
+
 ```typescript
-test('dashboard visual regression', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');  // Wait for page to be fully interactive
+test("dashboard visual regression", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForLoadState("networkidle"); // Wait for page to be fully interactive
   await expect(page).toHaveScreenshot({ fullPage: true });
 });
 ```
@@ -121,15 +130,17 @@ test('dashboard visual regression', async ({ page }) => {
 ### NPM Scripts
 
 **Frontend package.json:**
+
 ```json
 {
-  "test:e2e": "playwright test e2e/smoke.spec.ts",
-  "test:e2e:visual": "playwright test e2e/visual.spec.ts --update-snapshots",
-  "test:e2e:update-snapshots": "playwright test --update-snapshots"
+  "test:e2e": "playwright test --project=chromium",
+  "test:e2e:visual": "playwright test --project=visual-chromium --update-snapshots=missing",
+  "test:e2e:update-snapshots": "playwright test --project=visual-chromium --update-snapshots"
 }
 ```
 
 **Root package.json:**
+
 ```json
 {
   "test:e2e:visual": "bun run --filter 'vision-frontend' test:e2e:visual"
@@ -138,11 +149,11 @@ test('dashboard visual regression', async ({ page }) => {
 
 ### Scripts Explained
 
-| Script | Purpose | Use Case |
-|--------|---------|----------|
-| `bun run test:e2e` | Run smoke + a11y tests (no visual comparison) | Every PR, local dev |
-| `bun run test:e2e:visual` | Run visual regression with snapshot update | After intentional design changes (main only) |
-| `bun run test:e2e:update-snapshots` | Update all E2E screenshots | Emergency baseline refresh |
+| Script                              | Purpose                                       | Use Case                                     |
+| ----------------------------------- | --------------------------------------------- | -------------------------------------------- |
+| `bun run test:e2e`                  | Run smoke + a11y tests (no visual comparison) | Every PR, local dev                          |
+| `bun run test:e2e:visual`           | Run visual regression with snapshot update    | After intentional design changes (main only) |
+| `bun run test:e2e:update-snapshots` | Update all E2E screenshots                    | Emergency baseline refresh                   |
 
 ### CI Configuration
 
@@ -154,11 +165,11 @@ Runs **only on push to main**, automatically updates baselines (no manual interv
 test-e2e-visual:
   name: E2E Visual Regression (Main Only)
   runs-on: ubuntu-latest
-  if: github.event_name == 'push'  # Only on push, not PR
+  if: github.event_name == 'push' # Only on push, not PR
   steps:
     # ... build, start stack, install Playwright ...
     - name: Run Visual Regression Tests
-      run: bun run test:e2e:visual  # --update-snapshots is implicit
+      run: bun run test:e2e:visual # --update-snapshots is implicit
     - name: Upload Visual Snapshots
       uses: actions/upload-artifact@v3
       with:
@@ -175,28 +186,29 @@ test-e2e-visual:
 
 ```typescript
 export default defineConfig({
-  testDir: './e2e',
-  testMatch: '**/*.spec.ts',
-  
-  timeout: 90_000,                    // Global test timeout (90 seconds)
-  
+  testDir: "./e2e",
+  testMatch: "**/*.spec.ts",
+
+  timeout: 90_000, // Global test timeout (90 seconds)
+
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080',
-    navigationTimeout: 60_000,        // Page navigation timeout (60 seconds)
-    actionTimeout: 30_000,            // Action timeout (30 seconds)
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:8080",
+    navigationTimeout: 60_000, // Page navigation timeout (60 seconds)
+    actionTimeout: 30_000, // Action timeout (30 seconds)
     // ... webServer config ...
   },
 
-  snapshotDir: './e2e/__screenshots__',  // Visual snapshot baseline dir
+  snapshotDir: "./e2e/__screenshots__", // Visual snapshot baseline dir
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,  // 2% tolerance for pixel diffs
+      maxDiffPixelRatio: 0.02, // 2% tolerance for pixel diffs
     },
   },
 });
 ```
 
 **Timeout Rationale:**
+
 - **Global timeout (90s):** Accounts for slow Docker environments and network I/O in CI
 - **Navigation timeout (60s):** Page.goto() waits up to 60s for DOM to be ready
 - **Action timeout (30s):** User actions (click, fill, etc.) timeout after 30s if element is unresponsive
@@ -204,16 +216,19 @@ export default defineConfig({
 ### When to Update Baselines
 
 **Do update baselines when:**
+
 - Intentional design/layout changes (styling refresh, component redesign)
 - Dependency upgrades that affect rendering (e.g., Radix UI, Tailwind versions)
 - Browser rendering differences discovered and accepted as expected
 
 **Do NOT update baselines when:**
+
 - Layout shift is unintended (indicates CSS bug)
 - Text rendering differs unexpectedly (may indicate font issue)
 - Interactive states don't match (focus/hover styles broken)
 
 **How to update (local):**
+
 ```bash
 cd /path/to/Vision
 
@@ -245,6 +260,7 @@ bun run test:e2e
 ```
 
 This:
+
 1. Detects `NODE_ENV !== "test"` (CI not set)
 2. Boots `bun run dev` from the workspace root
 3. Waits for the frontend dev server on `http://localhost:8080`
@@ -259,6 +275,7 @@ bun run test:e2e:visual
 ```
 
 This runs `visual.spec.ts` with `--update-snapshots`. Use this when:
+
 - You've made intentional design/styling changes
 - You want to refresh all visual baselines after a dependency upgrade
 - The comparison test failed because the baseline is stale/incorrect
@@ -333,25 +350,26 @@ GitHub Actions `test-e2e-visual` job runs visual regression tests **only on push
 
 **Smoke tests with a11y checks** — 5 critical user flows + accessibility audit:
 
-| Test | File | Coverage | Assertions |
-|------|------|----------|-----------|
-| Dashboard loads | `smoke.spec.ts` | `/` (dashboard) | Heading "Vision" visible + no a11y violations |
-| Transactions page loads | `smoke.spec.ts` | `/transactions` | Heading "Transactions" visible + no a11y violations |
-| Import page loads | `smoke.spec.ts` | `/import` | Heading "Import" visible + no a11y violations |
-| Planned page loads | `smoke.spec.ts` | `/planned` | Heading "Planned Payments" visible + no a11y violations |
-| Portfolio page loads | `smoke.spec.ts` | `/portfolio` | Heading "Portfolio" visible + no a11y violations |
+| Test                    | File            | Coverage        | Assertions                                              |
+| ----------------------- | --------------- | --------------- | ------------------------------------------------------- |
+| Dashboard loads         | `smoke.spec.ts` | `/` (dashboard) | Heading "Vision" visible + no a11y violations           |
+| Transactions page loads | `smoke.spec.ts` | `/transactions` | Heading "Transactions" visible + no a11y violations     |
+| Import page loads       | `smoke.spec.ts` | `/import`       | Heading "Import" visible + no a11y violations           |
+| Planned page loads      | `smoke.spec.ts` | `/planned`      | Heading "Planned Payments" visible + no a11y violations |
+| Portfolio page loads    | `smoke.spec.ts` | `/portfolio`    | Heading "Portfolio" visible + no a11y violations        |
 
 **Visual regression tests** — 5 full-page screenshots:
 
-| Test | File | Coverage | Baseline |
-|------|------|----------|----------|
-| Dashboard visual | `visual.spec.ts` | `/` (dashboard) | `dashboard.png` |
+| Test                | File             | Coverage        | Baseline           |
+| ------------------- | ---------------- | --------------- | ------------------ |
+| Dashboard visual    | `visual.spec.ts` | `/` (dashboard) | `dashboard.png`    |
 | Transactions visual | `visual.spec.ts` | `/transactions` | `transactions.png` |
-| Import visual | `visual.spec.ts` | `/import` | `import.png` |
-| Planned visual | `visual.spec.ts` | `/planned` | `planned.png` |
-| Portfolio visual | `visual.spec.ts` | `/portfolio` | `portfolio.png` |
+| Import visual       | `visual.spec.ts` | `/import`       | `import.png`       |
+| Planned visual      | `visual.spec.ts` | `/planned`      | `planned.png`      |
+| Portfolio visual    | `visual.spec.ts` | `/portfolio`    | `portfolio.png`    |
 
 **File structure:**
+
 ```
 apps/frontend/
 ├── e2e/
@@ -373,29 +391,32 @@ apps/frontend/
 **File:** `apps/frontend/playwright.config.ts`
 
 ```typescript
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './e2e',
-  testMatch: '**/*.spec.ts',
-  
+  testDir: "./e2e",
+  testMatch: "**/*.spec.ts",
+
   // Run chromium only (no webkit/firefox for now)
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:8080",
     // ... other options
   },
 
   // Boot dev server when not in CI
-  webServer: process.env.CI ? undefined : {
-    command: 'bun run dev',
-    cwd: process.cwd().replace(/\/apps\/frontend$/, ''), // Root workspace
-    url: 'http://localhost:8080',
-    reuseExistingServer: false,
-  },
+  webServer: process.env.CI
+    ? undefined
+    : {
+        command: "bun run dev",
+        cwd: process.cwd().replace(/\/apps\/frontend$/, ""), // Root workspace
+        url: "http://localhost:8080",
+        reuseExistingServer: false,
+      },
 });
 ```
 
 **Key settings:**
+
 - **baseURL:** Configured from `PLAYWRIGHT_BASE_URL` env var (default `http://localhost:8080`)
 - **Browser:** Chromium only
 - **webServer:** Automatic dev-server boot when not in CI
@@ -406,17 +427,17 @@ export default defineConfig({
 
 ```typescript
 // apps/frontend/e2e/my-feature.spec.ts
-import { test, expect } from '@playwright/test';
-import { checkA11y } from 'axe-playwright';
+import { test, expect } from "./fixtures";
+import { checkA11y } from "axe-playwright";
 
-test('my feature page loads with no a11y violations', async ({ page }) => {
-  await page.goto('/my-feature');
-  
+test("my feature page loads with no a11y violations", async ({ page }) => {
+  await page.goto("/my-feature");
+
   // Accessibility check (Phase C)
   await checkA11y(page);
-  
+
   // Functional assertion
-  const heading = page.getByRole('heading', { name: /my feature/i });
+  const heading = page.getByRole("heading", { name: /my feature/i });
   await expect(heading).toBeVisible();
 });
 ```
@@ -425,20 +446,21 @@ test('my feature page loads with no a11y violations', async ({ page }) => {
 
 ```typescript
 // apps/frontend/e2e/visual.spec.ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from "./fixtures";
 
-test('my feature page visual regression', async ({ page }) => {
-  await page.goto('/my-feature');
-  await page.waitForLoadState('networkidle');
-  
+test("my feature page visual regression", async ({ page }) => {
+  await page.goto("/my-feature");
+  await page.waitForLoadState("networkidle");
+
   // Capture full-page screenshot (Phase C)
-  await expect(page).toHaveScreenshot('my-feature.png', { fullPage: true });
+  await expect(page).toHaveScreenshot("my-feature.png", { fullPage: true });
 });
 ```
 
 ### Best Practices
 
 **Functional Testing:**
+
 - **Use semantic selectors:** `page.getByRole('heading', { name: /xyz/i })` preferred over `page.locator('.xyz')`
 - **Avoid flaky waits:** Let Playwright retry assertions; don't add manual `waitFor` or `sleep`
 - **Test user flows, not implementation:** Click buttons, fill forms, assert on visible results
@@ -446,11 +468,13 @@ test('my feature page visual regression', async ({ page }) => {
 - **One feature per file:** Group related tests in one `.spec.ts` file
 
 **Accessibility Testing (Phase C):**
+
 - **Always call `checkA11y(page)`** after navigating to a page in smoke tests
 - **Understand critical vs. serious violations:** The `checkA11y()` helper fails on critical/serious but reports minors/warnings (informational only)
 - **Fix violations in source code, not test mocks:** If a test finds an a11y issue, fix the component/page, not the test
 
 **Visual Regression Testing (Phase C):**
+
 - **Capture visual state after interactions:** Wait for `networkidle` or specific elements before calling `toHaveScreenshot()`
 - **Test both light and dark themes** if the page supports theme switching (use `page.emulateMedia({ colorScheme: 'dark' })`)
 - **Ignore intentional animations:** Some pages may have intentionally animated elements; capture them in their final stable state
@@ -459,19 +483,19 @@ test('my feature page visual regression', async ({ page }) => {
 ### Example: Form Submission
 
 ```typescript
-test('adds transaction via form', async ({ page }) => {
-  await page.goto('/transactions');
-  
+test("adds transaction via form", async ({ page }) => {
+  await page.goto("/transactions");
+
   // Open dialog
-  await page.getByRole('button', { name: /add transaction/i }).click();
-  
+  await page.getByRole("button", { name: /add transaction/i }).click();
+
   // Fill form
-  await page.getByLabel(/amount/i).fill('12.50');
-  await page.getByLabel(/recipient/i).selectOption('Alice');
-  
+  await page.getByLabel(/amount/i).fill("12.50");
+  await page.getByLabel(/recipient/i).selectOption("Alice");
+
   // Submit
-  await page.getByRole('button', { name: /submit/i }).click();
-  
+  await page.getByRole("button", { name: /submit/i }).click();
+
   // Verify result
   await expect(page.getByText(/transaction created/i)).toBeVisible();
 });
@@ -485,8 +509,8 @@ test('adds transaction via form', async ({ page }) => {
 # Run all smoke tests with a11y checks (auto-boots dev server)
 bun run test:e2e
 
-# Run specific smoke test
-bun exec playwright test e2e/smoke.spec.ts
+# Run the non-visual smoke spec only
+bun exec playwright test --project=chromium e2e/critical-flows.spec.ts
 
 # Run smoke tests matching a pattern
 bun exec playwright test -g "dashboard"
@@ -505,7 +529,7 @@ bun exec playwright test --debug
 bun run test:e2e:visual
 
 # Run visual tests only, with comparison (no update)
-bun exec playwright test e2e/visual.spec.ts
+bun exec playwright test --project=visual-chromium e2e/visual.spec.ts
 
 # Update all E2E screenshots
 bun run test:e2e:update-snapshots
@@ -580,6 +604,7 @@ bun exec playwright show-report
 ```
 
 Opens HTML report with:
+
 - Full test output
 - Screenshots at each step
 - Network logs
@@ -588,23 +613,28 @@ Opens HTML report with:
 ### Common Issues
 
 **"Connection refused on localhost:8080"**
+
 - Dev server failed to boot. Check logs and ensure `bun run dev` works standalone.
 - Fallback: Start backend on 3002 with `PLAYWRIGHT_BASE_URL=http://localhost:3002`
 
 **"Target page, context or browser has been closed"**
+
 - Test exceeded the global timeout (90s) or navigation timeout (60s). Causes: slow backend, many async requests, or test not waiting for page readiness. Solution: ensure all tests call `page.waitForLoadState('networkidle')` after `page.goto()`; check backend performance logs; consider increasing timeouts if CI is slower than local dev
 
 **"Timeout waiting for selector"**
+
 - Element didn't appear. Check if backend returned expected data. Use `--debug` to inspect state.
 
 ### A11y Violation Debugging (Phase C)
 
 **Test output shows a11y violations but CI doesn't fail:**
+
 - Violations at "minor" or "warning" severity are reported but don't fail the test (informational)
 - Check `checkA11y()` helper output or run `bun exec axe-playwright --target "page_url"` for detailed violation list
 - Fix the violation in the source component/page, then re-run the test
 
 **Example: Missing alt text**
+
 ```
 FAIL violation: Images must have alternative text (serious)
 Target: <img src="chart.png" />
@@ -614,17 +644,20 @@ Fix: Add alt="..." attribute
 ### Visual Regression Debugging (Phase C)
 
 **Screenshot comparison fails with "image mismatch":**
+
 1. Run `bun exec playwright show-report` to view the diff
 2. Compare "Expected" (baseline) vs. "Actual" (current render)
 3. If the change is intentional (design update, theme change), run `bun run test:e2e:visual` to update baseline
 4. If the change is unintended (CSS regression, font load issue), fix the source code and re-run
 
 **Screenshot comparison shows slight pixel differences:**
+
 - Minor rendering differences (1-2 pixels on Chrome vs. Firefox) are expected
 - The default `maxDiffPixelRatio: 0.02` (2%) allows for browser/OS rendering variation
 - If differences exceed 2%, the test fails; increase the tolerance only if variations are expected and benign
 
 **Screenshot is blank or shows wrong content:**
+
 - Ensure `page.waitForLoadState('networkidle')` is called before `toHaveScreenshot()`
 - If network request hangs, increase the wait timeout: `await page.waitForLoadState('networkidle', { timeout: 10000 })`
 - Check that the backend returned expected data (use `--debug` or `--headed` to inspect network tab)

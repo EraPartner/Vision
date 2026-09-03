@@ -3,6 +3,7 @@ title: ADR-114 Native deterministic Vision Demo runtime
 type: adr
 status: accepted
 date: 2026-08-31
+updated: 2026-09-03
 tags:
   [adr, macos, electron, demo, native-runtime, postgresql, packaging, testing]
 description: Vision Demo uses the same bundled native PostgreSQL runtime as Vision, with an isolated identity and an atomically activated deterministic synthetic seed instead of a Demo-specific Docker stack.
@@ -100,6 +101,22 @@ Before a seed switch is finalized, Vision Demo automatically restores the previo
 After finalization, reinstalling the prior Demo application reuses the isolated Demo directory;
 use that version's normal reset workflow if its seed differs. Returning the Demo app itself to
 Docker would require restoring the removed Demo packaging and is not an application-data rollback.
+
+## Follow-up: build-date-relative scenario (2026-09-03)
+
+The seed remains deterministic for a supplied ISO reference date, but it no
+longer freezes the household at 2026-06-18. The generator shifts every emitted
+application date by the UTC-day difference from that original scenario anchor
+to the seed build date. This includes transactions, planned payments, price and
+exchange-rate history, portfolio events, maturity dates, statement dates, tax
+year, and the year-bearing holiday tag. The logical scenario and pseudorandom
+values remain stable while current and planned views stay useful in later
+packages.
+
+The manifest records `referenceDate`. Unit tests pin repeatability for a fixed
+date, reject invalid calendar dates, require historical transactions not to
+exceed the reference date, and require planned rows at and after it. The
+generator remains data-only and never writes `alembic_version`.
 
 ## Related
 

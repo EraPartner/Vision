@@ -3,7 +3,7 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-03
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -269,13 +269,14 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 **Optional Encryption:** AES-256-GCM with PBKDF2 key derivation for current bundles. The restore
 reader retains AES-256-CBC compatibility for legacy encrypted `.visionbak` files.
 
-**IPC Handlers (8 total):** New handlers in `packaging/electron/main.js`:
+**Backup IPC handlers (9 total):** Handlers in `packaging/electron/main.js`:
 
 - `backup:run` — Create bundle with optional encryption
 - `backup:restore` — Restore bundle; rejects newer schemas, stages database and attachments behind
   the selected runtime provider, atomically activates them, rolls back on failure, and hydrates
   supported localStorage
 - `backup:select-file` / `backup:select-dir` — Native file/folder dialogs
+- `backup:is-encrypted` — Detect encrypted bundles selected through the file picker
 - `backup:save-settings` / `backup:load-settings` — Persist backup config
 - `backup:get-encryption-status` / `backup:set-passphrase` — Manage encryption
 
@@ -283,6 +284,7 @@ reader retains AES-256-CBC compatibility for legacy encrypted `.visionbak` files
 
 **Frontend Integration:**
 
+- `packaging/electron/electron-api.d.ts` — Canonical 24-invoke, 6-event contract for all five bridges
 - `apps/frontend/src/lib/api/electron.ts` — TypeScript wrapper types and functions
 - `apps/frontend/src/features/settings/sections/BackupSection.tsx` — UI for backup/restore, passphrase management, error handling
 
@@ -292,7 +294,7 @@ Documentation:
 
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]] — Coverage matrix, bundle format, restore process
 - [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
-- [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
+- [[docs/reference/api-endpoint-matrix#ipc-contract--electron-desktop-24-invoke-channels-6-event-channels|API Endpoint Matrix — IPC Section]]
 
 ## Apple-Refined Visual Pass — base design (June 2026, ADR-105)
 

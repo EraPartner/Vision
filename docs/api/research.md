@@ -3,7 +3,7 @@ title: Research API
 type: endpoint
 status: active
 date: 2026-06-16
-updated: 2026-08-11
+updated: 2026-09-03
 tags:
   - api
   - research
@@ -62,12 +62,16 @@ All endpoints are mounted under the existing `marketRateLimiter` (same limiter a
 
 ## Response Envelope
 
-Every endpoint returns the standard ADR-026 envelope with two additional provenance fields in `meta`:
+The nine provider-backed data endpoints return the standard ADR-026 envelope
+with two additional provenance fields in `meta`: search, quote, chart,
+fundamentals, analyst, news, macro search, macro series, and scorecard. The
+portfolio forecast, mapping, and provider-key endpoints use the ordinary
+ADR-026 envelope and do not claim provider provenance.
 
 ```json
 {
   "ok": true,
-  "data": { /* endpoint-specific payload, or null when unavailable */ },
+  "data": {/* endpoint-specific payload, or null when unavailable */},
   "meta": {
     "provider": "yahoo",
     "source": "live"
@@ -75,15 +79,22 @@ Every endpoint returns the standard ADR-026 envelope with two additional provena
 }
 ```
 
-| `meta` field | Values | Meaning |
-|---|---|---|
-| `provider` | string or `null` | Which provider answered. `null` if all providers were skipped or unavailable. |
-| `source` | `"cache"` | Response served from the in-memory TTL cache — no outbound call made, no quota spent. |
-| | `"live"` | Fresh response from the winning provider. |
-| | `"unavailable"` | All providers in the chain were exhausted (quota, unhealthy, or unkeyed); `data` is the stable empty shape for the type (`{ items: [] }`, `{ points: [] }`, etc.). |
+| `meta` field | Values           | Meaning                                                                                                                                                            |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `provider`   | string or `null` | Which provider answered. `null` if all providers were skipped or unavailable.                                                                                      |
+| `source`     | `"cache"`        | Response served from the in-memory TTL cache — no outbound call made, no quota spent.                                                                              |
+|              | `"live"`         | Fresh response from the winning provider.                                                                                                                          |
+|              | `"unavailable"`  | All providers in the chain were exhausted (quota, unhealthy, or unkeyed); `data` is the stable empty shape for the type (`{ items: [] }`, `{ points: [] }`, etc.). |
 
 > [!info] Provenance on the frontend
 > When `meta.source === 'unavailable'` the UI should show a "not available" indicator rather than a loading spinner or empty state — the data genuinely could not be fetched for this session.
+
+Successful responses now have endpoint-specific schemas in `openapi.yaml`.
+Provider-dependent fields remain optional where adapters cannot guarantee
+them. Quote, fundamentals, analyst, and scorecard responses use explicit
+`null` data when unavailable; collection endpoints use stable empty arrays.
+`POST /mappings/resolve` exposes snake-case `instrument_key` and `key_type` at
+the HTTP boundary while proposal fields remain camel-case domain fields.
 
 ## Endpoints
 
@@ -95,9 +106,9 @@ Search for tickers or securities by name or ticker symbol.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `q` | string | Yes | Search query (e.g., `"apple"` or `"AAPL"`) |
+| Parameter | Type   | Required | Description                                |
+| --------- | ------ | -------- | ------------------------------------------ |
+| `q`       | string | Yes      | Search query (e.g., `"apple"` or `"AAPL"`) |
 
 **Behavior:** If `q` is blank or missing, returns immediately with `{ items: [] }` and `source: 'live'` (no provider call).
 
@@ -130,10 +141,10 @@ Current quote for a single symbol.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol (e.g., `AAPL`) |
-| `asset_class` | string | No | Asset class hint for provider routing: `stock`, `crypto`, `metals`, `etf`. Defaults to the `default` capability chain when omitted. |
+| Parameter     | Type   | Required | Description                                                                                                                         |
+| ------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `symbol`      | string | Yes      | Ticker symbol (e.g., `AAPL`)                                                                                                        |
+| `asset_class` | string | No       | Asset class hint for provider routing: `stock`, `crypto`, `metals`, `etf`. Defaults to the `default` capability chain when omitted. |
 
 **Response:** `200 OK`
 
@@ -155,6 +166,7 @@ Current quote for a single symbol.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 10 minutes
@@ -167,12 +179,12 @@ Historical price chart points for a symbol.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol` | string | Yes | — | Ticker symbol |
-| `asset_class` | string | No | — | Asset class hint for provider routing |
-| `range` | string | No | `1mo` | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max` |
-| `provider` | string | No | — | Pin a preferred provider to the front of the chart capability chain (e.g. `"finnhub"`, `"twelve_data"`). The aggregator still falls through to the next provider if the pinned one is unkeyed or failing — this is a preference, not a hard requirement. |
+| Parameter     | Type   | Required | Default | Description                                                                                                                                                                                                                                              |
+| ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `symbol`      | string | Yes      | —       | Ticker symbol                                                                                                                                                                                                                                            |
+| `asset_class` | string | No       | —       | Asset class hint for provider routing                                                                                                                                                                                                                    |
+| `range`       | string | No       | `1mo`   | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max`                                                                                                                                                                                     |
+| `provider`    | string | No       | —       | Pin a preferred provider to the front of the chart capability chain (e.g. `"finnhub"`, `"twelve_data"`). The aggregator still falls through to the next provider if the pinned one is unkeyed or failing — this is a preference, not a hard requirement. |
 
 **Response:** `200 OK`
 
@@ -181,7 +193,13 @@ Historical price chart points for a symbol.
   "ok": true,
   "data": {
     "points": [
-      { "time": 1748304000000, "close": 211.12, "high": 213.00, "low": 209.50, "volume": 52000000 }
+      {
+        "time": 1748304000000,
+        "close": 211.12,
+        "high": 213.0,
+        "low": 209.5,
+        "volume": 52000000
+      }
     ]
   },
   "meta": { "provider": "yahoo", "source": "live" }
@@ -189,6 +207,7 @@ Historical price chart points for a symbol.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 12 hours
@@ -201,30 +220,30 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol |
-| `asset_class` | string | No | Asset class hint for provider routing |
+| Parameter     | Type   | Required | Description                           |
+| ------------- | ------ | -------- | ------------------------------------- |
+| `symbol`      | string | Yes      | Ticker symbol                         |
+| `asset_class` | string | No       | Asset class hint for provider routing |
 
 **Data sourcing — merged FMP + Yahoo (2026-06-16):** This endpoint does **not** race through the capability map chain. It calls `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges the results **field-by-field with FMP preferred**: a field from FMP wins when present and non-null/non-NaN; Yahoo fills every gap. This yields the union of both providers — FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) both appear. Finnhub is not called by this route (it remains in `capabilityMap.fundamentals.default` for the generic `fetch()` path only). FMP requires `FMP_API_KEY` in `.env.local`; without it Yahoo is the sole provider. Cache key: `fundamentals:merged:<assetClass>:<symbol>`. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
 
 **Extended fields (ADR-081):** The response includes the following fields when available from either provider. Each field is `undefined` (omitted from the response object) when neither provider exposes it.
 
-| Field | Description |
-|---|---|
-| `sector` | Sector classification string |
-| `pegRatio` | Price/Earnings-to-Growth ratio |
-| `payoutRatio` | Dividend payout as a fraction of earnings (0–1+) |
-| `grossMargin` | Gross profit margin as a fraction (0–1) |
-| `operatingMargin` | Operating profit margin as a fraction |
-| `revenueGrowth` | YoY revenue growth as a fraction |
-| `earningsGrowth` | YoY earnings growth as a fraction |
-| `debtToEquity` | Total debt / total equity ratio (normalized to ratio, not %) |
-| `currentRatio` | Current assets / current liabilities |
-| `quickRatio` | (Current assets − inventory) / current liabilities |
-| `interestCoverage` | EBIT / interest expense |
-| `freeCashFlow` | Free cash flow in the reporting currency |
-| `fcfYield` | Free cash flow yield as a fraction of market cap |
+| Field              | Description                                                  |
+| ------------------ | ------------------------------------------------------------ |
+| `sector`           | Sector classification string                                 |
+| `pegRatio`         | Price/Earnings-to-Growth ratio                               |
+| `payoutRatio`      | Dividend payout as a fraction of earnings (0–1+)             |
+| `grossMargin`      | Gross profit margin as a fraction (0–1)                      |
+| `operatingMargin`  | Operating profit margin as a fraction                        |
+| `revenueGrowth`    | YoY revenue growth as a fraction                             |
+| `earningsGrowth`   | YoY earnings growth as a fraction                            |
+| `debtToEquity`     | Total debt / total equity ratio (normalized to ratio, not %) |
+| `currentRatio`     | Current assets / current liabilities                         |
+| `quickRatio`       | (Current assets − inventory) / current liabilities           |
+| `interestCoverage` | EBIT / interest expense                                      |
+| `freeCashFlow`     | Free cash flow in the reporting currency                     |
+| `fcfYield`         | Free cash flow yield as a fraction of market cap             |
 
 **Response:** `200 OK`
 
@@ -255,12 +274,14 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
 ```
 
 > [!info] `meta.provider` values for fundamentals
+>
 > - `"fmp+yahoo"` — both providers contributed at least one field (typical when both are keyed and healthy).
 > - `"fmp"` — only FMP responded (Yahoo unavailable or returned no fields).
 > - `"yahoo"` — only Yahoo responded (FMP unkeyed or failing).
 > - `null` with `source: "unavailable"` — both failed.
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 12 hours (`fundamentals:merged:<assetClass>:<symbol>`)
@@ -273,10 +294,10 @@ Analyst consensus ratings, price targets, and recent rating actions for a symbol
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol |
-| `asset_class` | string | No | Asset class hint for provider routing |
+| Parameter     | Type   | Required | Description                           |
+| ------------- | ------ | -------- | ------------------------------------- |
+| `symbol`      | string | Yes      | Ticker symbol                         |
+| `asset_class` | string | No       | Asset class hint for provider routing |
 
 **Capability chain:** `[yahoo, finnhub, fmp]` for stocks/ETFs.
 
@@ -310,6 +331,7 @@ Analyst consensus ratings, price targets, and recent rating actions for a symbol
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 24 hours
@@ -322,9 +344,9 @@ News articles for a symbol.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol |
+| Parameter | Type   | Required | Description   |
+| --------- | ------ | -------- | ------------- |
+| `symbol`  | string | Yes      | Ticker symbol |
 
 **Capability chain:** `[finnhub, yahoo]`. Finnhub requires `FINNHUB_API_KEY` in `.env.local`; without the key Yahoo is the sole provider.
 
@@ -349,6 +371,7 @@ News articles for a symbol.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 2 hours
@@ -361,10 +384,10 @@ Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via `researc
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbol` | string | Yes | Ticker symbol |
-| `asset_class` | string | No | Asset class hint for provider routing |
+| Parameter     | Type   | Required | Description                           |
+| ------------- | ------ | -------- | ------------------------------------- |
+| `symbol`      | string | Yes      | Ticker symbol                         |
+| `asset_class` | string | No       | Asset class hint for provider routing |
 
 **Response:** `200 OK`
 
@@ -373,7 +396,7 @@ Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via `researc
   "ok": true,
   "data": {
     "symbol": "AAPL",
-    "fundamentals": { /* same shape as GET /api/research/fundamentals */ },
+    "fundamentals": {/* same shape as GET /api/research/fundamentals */},
     "scorecard": {
       "score": 72,
       "grade": "B",
@@ -400,7 +423,11 @@ Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via `researc
 When fundamentals are unavailable from all providers:
 
 ```json
-{ "ok": true, "data": { "unavailable": true }, "meta": { "provider": null, "source": "unavailable" } }
+{
+  "ok": true,
+  "data": null,
+  "meta": { "provider": null, "source": "unavailable" }
+}
 ```
 
 > [!info] Scorecard design invariants
@@ -409,6 +436,7 @@ When fundamentals are unavailable from all providers:
 > **i18n note:** The `reason` field in each flag is an English sentence. Structured fields (`metric`, `severity`, `code`, `grade`, `benchmark`) are localized. The English-only `reason` is a known gap tracked as a follow-up.
 
 **Error Responses:**
+
 - `400 Bad Request` — `symbol` parameter missing
 
 ---
@@ -419,16 +447,16 @@ Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit wi
 
 **Request Body:**
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `horizon_months` | integer | Yes | — | Projection horizon in months (1–360) |
-| `monthly_contribution` | number | No | `0` | Fixed monthly cash contribution in `currency` |
-| `paths` | integer | No | `1000` | Number of simulation paths (10–10000) |
-| `forward_blend` | number | No | `0` | Fraction of drift from forward-looking provider inputs (0 = pure historical, 1 = pure analyst consensus) |
-| `method` | string | No | `"parametric"` | Simulation method: `"parametric"` (Gaussian monthly steps) or `"block_bootstrap"` (stationary Politis–Romano resample of daily residuals) |
-| `target_value` | number | No | — | Optional target portfolio value — enables `probTarget` in summary |
-| `currency` | string | No | app default | Display currency for output values |
-| `seed` | integer | No | random | PRNG seed for deterministic reproduction |
+| Field                  | Type    | Required | Default        | Description                                                                                                                               |
+| ---------------------- | ------- | -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `horizon_months`       | integer | Yes      | —              | Projection horizon in months (1–360)                                                                                                      |
+| `monthly_contribution` | number  | No       | `0`            | Fixed monthly cash contribution in `currency`                                                                                             |
+| `paths`                | integer | No       | `1000`         | Number of simulation paths (10–10000)                                                                                                     |
+| `forward_blend`        | number  | No       | `0`            | Fraction of drift from forward-looking provider inputs (0 = pure historical, 1 = pure analyst consensus)                                  |
+| `method`               | string  | No       | `"parametric"` | Simulation method: `"parametric"` (Gaussian monthly steps) or `"block_bootstrap"` (stationary Politis–Romano resample of daily residuals) |
+| `target_value`         | number  | No       | —              | Optional target portfolio value — enables `probTarget` in summary                                                                         |
+| `currency`             | string  | No       | app default    | Display currency for output values                                                                                                        |
+| `seed`                 | integer | No       | random         | PRNG seed for deterministic reproduction                                                                                                  |
 
 **Response:** `200 OK`
 
@@ -437,7 +465,14 @@ Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit wi
   "ok": true,
   "data": {
     "bands": [
-      { "month": "2026-07", "p10": 98000, "p25": 101000, "p50": 105000, "p75": 110000, "p90": 116000 }
+      {
+        "month": "2026-07",
+        "p10": 98000,
+        "p25": 101000,
+        "p50": 105000,
+        "p75": 110000,
+        "p90": 116000
+      }
     ],
     "summary": {
       "projectedP10": 115000,
@@ -475,6 +510,7 @@ Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit wi
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` — missing or invalid body fields
 - `422 Unprocessable Entity` — insufficient portfolio snapshot history (< 60 days); response: `{ "error": "insufficient_history", "message": "..." }`
 
@@ -503,9 +539,9 @@ Catalog search for macroeconomic series. Fans out across all usable macro adapte
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `q` | string | Yes | Search query (e.g. `"cpi"`, `"unemployment"`, `"policy rate"`) |
+| Parameter | Type   | Required | Description                                                    |
+| --------- | ------ | -------- | -------------------------------------------------------------- |
+| `q`       | string | Yes      | Search query (e.g. `"cpi"`, `"unemployment"`, `"policy rate"`) |
 
 **Response:** `200 OK`
 
@@ -543,6 +579,7 @@ Catalog search for macroeconomic series. Fans out across all usable macro adapte
 **Cache TTL:** 1 hour
 
 **Error Responses:**
+
 - `400 Bad Request` — `q` missing or blank
 
 ---
@@ -553,11 +590,11 @@ Fetch observations for a specific macro series from a specific provider (no fall
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `provider` | string | Yes | — | Macro provider: `fred`, `eurostat`, or `dbnomics` |
-| `series_id` | string | Yes | — | Provider-native series identifier (e.g. `CPIAUCSL` for FRED; `Eurostat/prc_hicp_midx/M.I15.CP00.BE` for DBnomics/Eurostat) |
-| `range` | string | No | `5y` | Time range: `1y`, `2y`, `5y`, `10y`, `max` |
+| Parameter   | Type   | Required | Default | Description                                                                                                                |
+| ----------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `provider`  | string | Yes      | —       | Macro provider: `fred`, `eurostat`, or `dbnomics`                                                                          |
+| `series_id` | string | Yes      | —       | Provider-native series identifier (e.g. `CPIAUCSL` for FRED; `Eurostat/prc_hicp_midx/M.I15.CP00.BE` for DBnomics/Eurostat) |
+| `range`     | string | No       | `5y`    | Time range: `1y`, `2y`, `5y`, `10y`, `max`                                                                                 |
 
 > [!info] Range anchoring on last observation, not wall clock
 > `macroRange.trimToRange` anchors the window on the **last available observation**, not today. Macro data lags publication; anchoring on "now" produced empty charts for short ranges when a series had not yet published its most recent point.
@@ -585,6 +622,7 @@ Fetch observations for a specific macro series from a specific provider (no fall
 `points` are `ResearchChartPoint[]` with the observation value mapped to `close`; `high`, `low`, and `volume` are `undefined` — so macro series drop directly into the Chart Builder's existing `ComposedChart` renderer. Missing observations (FRED returns `"."` for unreleased values) are skipped.
 
 **Error Responses:**
+
 - `400 Bad Request` — `provider` or `series_id` missing; `provider` not in `[fred, eurostat, dbnomics]`; `series_id` fails the adapter's shape guard (`isValidSeriesId`)
 - `503 Service Unavailable` — provider unkeyed (FRED without `FRED_API_KEY`) or adapter error
 
@@ -624,7 +662,7 @@ Delete one stored mapping. **Response:** `204 No Content` — empty body, and id
 no stored mapping is not an error.
 
 `:id` must be a plain positive integer; anything else is `400 VALIDATION_ERROR` (`"id must be a
-positive integer"`). Idempotency covers *unknown* ids, not *malformed* ones. **Changed 2026-08-11:**
+positive integer"`). Idempotency covers _unknown_ ids, not _malformed_ ones. **Changed 2026-08-11:**
 `DELETE /mappings/12abc` used to coerce to id 12 and delete that mapping — it now rejects. See
 [[docs/security/input-validation#ID Validation|Input Validation]].
 
@@ -667,50 +705,50 @@ The six data endpoints are thin wrappers over the `researchAggregator` singleton
 
 ### Type-Aware Cache TTLs
 
-| Data type | TTL |
-|---|---|
-| `search` | 10 min |
-| `quote` | 10 min |
-| `chart` | 12 h |
+| Data type      | TTL                                                                 |
+| -------------- | ------------------------------------------------------------------- |
+| `search`       | 10 min                                                              |
+| `quote`        | 10 min                                                              |
+| `chart`        | 12 h                                                                |
 | `fundamentals` | 12 h (merged cache key `fundamentals:merged:<assetClass>:<symbol>`) |
-| `analyst` | 12 h |
-| `news` | 2 h |
-| `macro_search` | 1 h |
-| `macro_series` | 12 h |
+| `analyst`      | 12 h                                                                |
+| `news`         | 2 h                                                                 |
+| `macro_search` | 1 h                                                                 |
+| `macro_series` | 12 h                                                                |
 
 The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`).
 
 ### Capability Map (as shipped)
 
-| Data type | Default chain | Crypto | Metals |
-|---|---|---|---|
-| `search` | yahoo → twelve_data → finnhub → fmp | — | — |
-| `quote` | twelve_data → yahoo → finnhub → fmp → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
-| `chart` | twelve_data → yahoo → finnhub → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
-| `fundamentals` | fmp → finnhub → yahoo *(capability map — used by generic `fetch()` only; `/fundamentals` + `/scorecard` routes use parallel FMP+Yahoo merge instead)* | — | — |
-| `analyst` | yahoo → finnhub → fmp | — | — |
-| `news` | finnhub → yahoo | — | — |
+| Data type      | Default chain                                                                                                                                         | Crypto                        | Metals                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------- |
+| `search`       | yahoo → twelve_data → finnhub → fmp                                                                                                                   | —                             | —                             |
+| `quote`        | twelve_data → yahoo → finnhub → fmp → alpha_vantage                                                                                                   | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
+| `chart`        | twelve_data → yahoo → finnhub → alpha_vantage                                                                                                         | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
+| `fundamentals` | fmp → finnhub → yahoo _(capability map — used by generic `fetch()` only; `/fundamentals` + `/scorecard` routes use parallel FMP+Yahoo merge instead)_ | —                             | —                             |
+| `analyst`      | yahoo → finnhub → fmp                                                                                                                                 | —                             | —                             |
+| `news`         | finnhub → yahoo                                                                                                                                       | —                             | —                             |
 
 > [!info] Provider key gating
 > Providers requiring an API key (`twelve_data`, `finnhub`, `fmp`, `alpha_vantage`) are treated as permanently unavailable when their key is absent from `.env.local`. Yahoo, Binance, and Kinesis need no key and are always included if the relevant adapter is present.
 
 ### Provider Keys (`.env.local`)
 
-| Provider | Environment variable |
-|---|---|
-| Twelve Data | `TWELVE_DATA_API_KEY` |
-| Finnhub | `FINNHUB_API_KEY` |
-| FMP | `FMP_API_KEY` |
-| Alpha Vantage | `ALPHA_VANTAGE_API_KEY` |
-| FRED (economic data) | `FRED_API_KEY` |
+| Provider             | Environment variable    |
+| -------------------- | ----------------------- |
+| Twelve Data          | `TWELVE_DATA_API_KEY`   |
+| Finnhub              | `FINNHUB_API_KEY`       |
+| FMP                  | `FMP_API_KEY`           |
+| Alpha Vantage        | `ALPHA_VANTAGE_API_KEY` |
+| FRED (economic data) | `FRED_API_KEY`          |
 
 ### DB Tables Created by Migrations 0042–0043
 
-| Table | Purpose |
-|---|---|
-| `provider_quota` | Per-provider, per-UTC-day request counters persisted so daily budgets survive restarts |
-| `instrument_provider_map` | User-confirmed cross-provider symbol mappings (ISIN-anchored where available); exposed via the `/api/research/mappings*` endpoints documented above |
-| `provider_api_keys` | Settings-managed keyed-provider API keys (migration 0043); masked in responses, env-overriding; exposed via the `/api/research/provider-keys*` endpoints |
+| Table                     | Purpose                                                                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider_quota`          | Per-provider, per-UTC-day request counters persisted so daily budgets survive restarts                                                                   |
+| `instrument_provider_map` | User-confirmed cross-provider symbol mappings (ISIN-anchored where available); exposed via the `/api/research/mappings*` endpoints documented above      |
+| `provider_api_keys`       | Settings-managed keyed-provider API keys (migration 0043); masked in responses, env-overriding; exposed via the `/api/research/provider-keys*` endpoints |
 
 ## Rate Limiting
 

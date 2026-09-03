@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-31
-last_modified: 2026-08-31
+updated: 2026-09-03
+last_modified: 2026-09-03
 tags:
   [
     feature,
@@ -88,6 +88,7 @@ related_code:
     "apps/frontend/src/features/imports/ExportCard.tsx",
     "apps/frontend/src/features/imports/SupportedBanksCard.tsx",
     "apps/frontend/src/features/imports/useAdapters.ts",
+    "apps/frontend/src/features/imports/useImportReviewData.tsx",
     "apps/frontend/src/features/imports/csvSeparator.ts",
     "apps/frontend/src/hooks/useCustomParserConfigs.ts",
     "apps/frontend/src/lib/importHandoff.ts",

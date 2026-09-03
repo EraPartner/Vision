@@ -3,7 +3,7 @@ title: Admin API
 type: endpoint
 status: active
 date: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-03
 tags:
   - api
   - admin
@@ -539,7 +539,7 @@ Check for application updates via GitHub Releases API.
 **Network Timeout (2026-04-26):**
 
 - GitHub fetch timeout: **5000ms** (5 seconds)
-- If GitHub is unreachable, endpoint returns a generic "No published releases found" response rather than failing with a network error
+- A transport timeout or invalid response fails through the normal API error envelope; a valid GitHub `Not Found` payload returns the successful no-release shape below.
 - Uses `https.get()` with `timeout` option and `req.on('timeout', ...)` handler that calls `req.destroy()`
 
 **Response:** `200 OK`
@@ -551,17 +551,20 @@ Check for application updates via GitHub Releases API.
   "latest_version": "v1.2.3",
   "published_at": "2025-03-15T12:00:00Z",
   "release_notes": "Bug fixes and improvements...",
-  "html_url": "https://github.com/EraPartner/Vision/releases/tag/v1.2.3"
+  "html_url": "https://github.com/EraPartner/Vision/releases/tag/v1.2.3",
+  "update_mode": "docker-compose"
 }
 ```
 
-**Response:** `200 OK` (no releases found or timeout)
+**Response:** `200 OK` (no release exists)
 
 ```json
 {
   "up_to_date": true,
+  "current_version": "1.2.3",
   "error": "No published releases found",
-  "latest_version": null
+  "latest_version": null,
+  "update_mode": "docker-compose"
 }
 ```
 
@@ -577,7 +580,8 @@ Check for application updates via GitHub Releases API.
 Implementation notes:
 
 - Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
-- The endpoint behavior is unchanged: same no-release fallback payload, same up-to-date comparison (`latest === current` or `latest === v${current}`), and same response fields ([[apps/node-backend/src/routes/admin.js]]).
+- Every successful response uses the same core contract: `up_to_date`, `current_version`, `latest_version`, and `update_mode`. The no-release fallback therefore remains safe for the same frontend type as a normal release response.
+- The up-to-date comparison remains `latest === current` or `latest === v${current}` ([[apps/node-backend/src/routes/admin.js]]).
 
 ---
 

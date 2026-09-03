@@ -3,7 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-03
 tags:
   [
     guide,
@@ -883,8 +883,10 @@ When a user runs Vision in **source mode** with `--useRepoMode`:
 4. **Download** → fetch `vision-source-launcher-x.y.z-arm64.zip` and its sibling `.sha256`
 5. **Verify** → compute SHA256, compare against sibling `.sha256` file
 6. **Extract** → validate the `unsigned/Vision/` tree and run the generated
-   rollback-capable source replacement helper; preserve the locally generated
-   `packaging/electron/native-runtime` payload
+   rollback-capable source replacement helper. The helper applies the checked-in
+   `.gitignore` rules during both install and rollback, so ignored local directories
+   such as virtual environments survive `rsync --delete`; it also preserves the
+   locally generated `packaging/electron/native-runtime` payload.
 7. **Restart** → app restarts with new version
 
 See [[docs/features/application-updates|Application Updates Feature]] for details.

@@ -3,7 +3,7 @@ title: Application Updates
 type: feature
 status: active
 date: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-03
 tags:
   [
     feature,
@@ -25,6 +25,8 @@ related_code:
   - packaging/electron/native-update-installer.js
   - packaging/electron/main.js
   - packaging/electron/preload.js
+  - packaging/electron/electron-api.d.ts
+  - packages/types/src/electron.d.ts
   - apps/frontend/src/lib/api/electron.ts
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/features/settings/sections/AboutSection.tsx
@@ -143,6 +145,10 @@ install button.
 
 The preload exposes only these fixed operations. Renderer input cannot supply an executable or a
 shell command.
+
+The channel argument and result types come from `@vision/types/electron`. The same shared contract
+types all five preload bridges, including startup recovery, and a contract test requires the main
+handler list and preload invocation list to match its 24-channel map exactly.
 
 ## Release pipeline
 

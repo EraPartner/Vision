@@ -3,7 +3,7 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-03
 tags:
   [
     guide,
@@ -37,13 +37,14 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 
 ## Quick Reference
 
-| Action                        | Repository command                 |
-| ----------------------------- | ---------------------------------- |
-| Run all pending migrations    | `bun run db:upgrade`               |
-| Create a migration            | `bun run db:revision -- "message"` |
-| Check current schema revision | `bun run db:current`               |
-| View the migration chain      | `bun run db:history`               |
-| Disposable rollback test only | `bun run db:downgrade -- <target>` |
+| Action                            | Repository command                 |
+| --------------------------------- | ---------------------------------- |
+| Run all pending migrations        | `bun run db:upgrade`               |
+| Create a migration                | `bun run db:revision -- "message"` |
+| Check graph and rollback fidelity | `bun run db:check`                 |
+| Check current schema revision     | `bun run db:current`               |
+| View the migration chain          | `bun run db:history`               |
+| Disposable rollback test only     | `bun run db:downgrade -- <target>` |
 
 > [!warning] Don't invoke bare `alembic` for anything that writes the version table
 > Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
@@ -82,6 +83,11 @@ def downgrade():
 ```
 
 ## Creating a New Migration
+
+Run `bun run db:check` before and after authoring a revision. It first rejects
+duplicate, unknown-parent, zero-head, or multi-head migration graphs. It then
+uses a disposable PostgreSQL database to run `upgrade head`, `downgrade -1`,
+and `upgrade head` again. It never targets the configured user database.
 
 ```bash
 # Using the convenience script (recommended)

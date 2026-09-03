@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-08-31
+updated: 2026-09-03
 tags:
   [
     feature,
@@ -594,7 +594,7 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 - **Pagination defaults**: `defaultPageSize` now drives Transactions, Recipients, and Recipient Insights load-more pagination
 - **Reset behavior**: `Reset all` now resets both general app settings and dashboard exclusions
 - **Strict date-format enforcement complete (frontend month labels)**: After the latest pass, no `toLocaleDateString(` remains under `apps/frontend/src`; month labels route through app helpers including `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)` in [[apps/frontend/src/lib/dateUtils.ts]]
-- **Final readability + enforcement pass**: Dense month x-axes in [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] and [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] enforce `interval="preserveStartEnd"` + `minTickGap={20}`; tooltip numeric fallback locale is sourced from `getCurrencyFormatDefaults().locale` in [[apps/frontend/src/utils/currency.ts]] via `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+- **Final readability + enforcement pass**: Dense month x-axes in [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]] and [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] enforce `interval="preserveStartEnd"` + `minTickGap={20}`. Currency and percent output resolves settings through [[apps/frontend/src/hooks/useCurrencyFormatter.ts]]; chart adapters compose that hook, while pure currency utilities require explicit configuration.
 - **Grep verification snapshot**: no `toLocaleDateString(` or `toLocaleString(` in `apps/frontend/src`; no `form.currency || 'EUR'`; no persisted `defaultBankAccount` (removed — was unused)
 - **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]]
 

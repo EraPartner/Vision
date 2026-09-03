@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-03
 tags:
   [
     architecture,
@@ -480,7 +480,7 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 ### Native Desktop Integration (V12, June 2026 — ADR-072)
 
 > [!info] Added in ADR-072
-> This section documents the third contextBridge surface (`window.electronAPI`), native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record.
+> This section documents the `window.electronAPI` contextBridge surface, native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record. All five bridge surfaces (`electronUpdater`, `electronBackup`, `electronServices`, `electronAPI`, and `electronRecovery`) share their TypeScript contract through `@vision/types/electron`.
 
 #### `window.electronAPI` contextBridge Surface (preload.js)
 
@@ -496,11 +496,11 @@ The new surface sits alongside the existing `window.electronUpdater` and `window
 | `onAccentColorChanged(cb)` | Subscribe to `AppleColorPreferencesChangedNotification` pushes           |
 | `onMenuAction(cb)`         | Subscribe to `menu:action` — receives `{action, payload}` objects        |
 | `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
-| `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with `{isFullScreen: boolean}`          |
+| `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with a boolean fullscreen state         |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. Types: `ElectronMenuAction`, `ElectronCsvFile`.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 24 main handlers, 24 preload invokes, and 6 renderer events against it.
 
-**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. No handler ever accepts a filesystem path from the renderer.
+**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
 
 #### Renderer-Ready Queue Protocol
 
@@ -552,7 +552,7 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 | `vibrancy`             | `'under-window'` | NSVisualEffectView behind the window content          |
 | `visualEffectState`    | `'followWindow'` | Active/inactive vibrancy follows window focus         |
 
-`enter-full-screen` and `leave-full-screen` Electron events push `{isFullScreen: boolean}` over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
+`enter-full-screen` and `leave-full-screen` Electron events push a boolean over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
 
 The same lights also overlap the **sidebar's** top-left corner (the rail reaches the top of the window). `index.css` reserves a Finder-style strip above the sidebar header — `html.electron-mac:not(.electron-fullscreen) [data-sidebar="header"] { margin-top: 28px; }` — so the logo clears the buttons; the strip collapses in fullscreen along with the lights (fixed 2026-06-11, user-reported logo/close-button collision).
 
@@ -1080,7 +1080,10 @@ The Demo app uses `~/Library/Application Support/Vision Demo/native/vision_demo`
 `54329`. The package contains the same native PostgreSQL, migration, Bun backend, frontend, and
 Chrome Headless Shell payload as production plus the deterministic `demo-seed` resource. First
 launch and seed updates use a staged database-name switch with rollback until detailed readiness
-passes. `bun run demo:reset-native` requests the same verified seed activation on the next launch.
+passes. The seed manifest records its build reference date; all application
+dates are shifted from the canonical scenario anchor so historical rows end at
+the reference date and planned rows remain current. The same explicit
+reference date always generates identical logical SQL. `bun run demo:reset-native` requests the same verified seed activation on the next launch.
 No Demo startup or installer path invokes Docker. See
 [[docs/adr/114-native-deterministic-demo-runtime|ADR-114]].
 

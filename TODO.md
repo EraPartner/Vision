@@ -324,7 +324,7 @@ look-changing one.
   - `revolut.js:54-57,66` — Revolut's `Amount` excludes `Fee`; actual balance delta is `amount − fee`. Adapter imports `amount` (fee comment-only) _and_ the `Balance` column → consecutive balances don't differ by the amounts; total spend understated by all fees.
   - Fix: book `amount − fee` (Decimal arithmetic) or emit a separate fee transaction.
 
-- [ ] **Manual-dedup hash blocks re-adding a transaction forever after deletion (dangling `manual_raw_transactions` row)** 🔼
+- [x] **Manual-dedup hash blocks re-adding a transaction forever after deletion (dangling `manual_raw_transactions` row)** 🔼 ✅ 2026-09-03 (the existing active-transaction join and hash upsert remain the stale-row repair; the fallback lookup now includes the same case-insensitive bank-account field as the hash. Manual creates still return documented 409 by default, while an optional `allow_duplicate: true` supports two explicit UI confirmations: **Add anyway** after a dialog conflict and the row menu's deliberate **Duplicate** action. Conflict handling suppresses the generic mutation toast, records provenance, and logs the override. Backend 21/21 and frontend 31/31 focused tests, both typechecks, scoped lints, locale validation, generated-type optionality, and endpoint-matrix validation pass; socket-bound route tests remain blocked by host EPERM. Independent review passed.)
   - Tracking: ✅ 2026-07-12 · 3ba6a29 (#84) (active-transaction join and hash-row upsert fixed the dangling-row root cause; the explicit add-anyway override and fallback account inconsistency were not taken) 🔎 partial-audit 2026-08-28 (a legitimate identical live purchase is still rejected with no force/add-anyway API or UI; the fallback lookup also still ignores `bankAccount`)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `services/deduplication.js:69-79,105-121` + `routes/transactions.js:552-564`; FK is `ON DELETE SET NULL` (`alembic/versions/0024_add_manual_raw_transaction_fks.py:46`)
@@ -4385,7 +4385,7 @@ look-changing one.
 
 - [x] **Three coexisting pagination conventions + six unbounded list route files** ⏫ ✅ 2026-07-27 · 95ed4b8 (#133) (convention decision INVERTED from this finding's parenthetical, deliberately: {items,total(,limit,offset)} in the data body won — it is the deployed majority and the list-key finding standardized on it — so meta.pagination was retired rather than adopted: its sole emitter (info/netWorth) migrated losslessly into the body (consumer already read the body, never meta) and ResponsePagination deleted from @vision/types with the body convention documented. Unbounded endpoints: investments + tags had already gained pagination since 2026-07-11; the remaining six (accounts, saved-charts, attachments-by-txn, splits ×3 + owed) got opt-in pagination via new parseOptionalPagination — absent params serve the full collection byte-identically, so no UI truncates; supplied params → parameterized LIMIT/OFFSET + real COUNT, cap 1000. openapi PaginationMeta renamed PaginationFields + 3 pre-existing spec drifts closed. Full suites green)
 
-- [ ] **Updater residuals from the 2026-07-27 fix: rsync --delete can eat untracked dirs, uncontracted update-check payload, stale MSW shape** 🔽
+- [x] **Updater residuals from the 2026-07-27 fix: rsync --delete can eat untracked dirs, uncontracted update-check payload, stale MSW shape** 🔽 ✅ 2026-09-03 (the generated source installer now snapshots Git-ignored paths into a protect filter used by both install and rollback rsync passes, while ordinary stale files still delete; executable native-script tests cover successful replacement and failed-install rollback. `/api/admin/update/check` now has an exact OpenAPI/shared-type/frontend contract including no-release and update-mode fields, the MSW handler matches it, and rejected IPC checks no longer return a third ad-hoc error shape. CI/update docs describe the current release flow and protected source-mode behavior. Electron 141/141, focused frontend 141/141, frontend/backend typechecks and endpoint-matrix validation pass; the Supertest admin suite remains unverified because this sandbox rejects listener binding with EPERM. Independent review passed.)
   - ↪ _from: Orchestration session 2026-07-27 · updater fix_
   - (a) `packaging/electron/updater.js` `writeInstallerScript`'s `rsync --delete` excludes only `.env`/`postgres_data`/`.git`/`node_modules` — a source-mode update deletes any other untracked dir in the user's clone (e.g. `venv/`). Pre-existing; consider a broader exclude list or `--filter=':- .gitignore'`. (b) openapi models `/api/admin/update/check` as a bare Envelope — the whole payload (incl. the new `update_mode`) is uncontracted. (c) MSW default handler for the endpoint returns `{available,current,latest}`, a shape the backend never produced. (d) `admin.js`'s no-releases early return omits `update_mode` (harmless — up_to_date hides the UI). (e) `docs/guides/cicd-pipelines.md` §package-mac describes a diverged release flow (artifact list was corrected in 95ed4b8 (#133); the rest still drifts).
   - Fix: broaden the rsync excludes, add an UpdateCheck schema + contract-guard entry, fix the MSW shape, add update_mode to the early return, refresh the cicd doc section.
@@ -4541,7 +4541,7 @@ look-changing one.
   - evidence: apps/frontend/src/components/shared/VirtualDataTable.tsx props interface spans ~25 props with two operating modes multiplexed (local-sort vs server-sort via `onSortChange`/`sortKeyProp`/`sortDirProp`; local vs server search) plus 8 row-interaction callbacks. features/transactions/components/TransactionsTable.tsx declares ~29 props, most drilled untouched from pages/TransactionsPage.tsx:425 into VirtualDataTable (search, pagination, sort, suggestions).
   - fix: split into a table core + a `serverMode` config object (or context provider for search/sort/pagination) so intermediate components stop re-declaring the pass-through surface.
 
-- [ ] **ImportReviewPage and TableDataEditorPage orchestrate 4-5 inline mutations each — worst pages/ data-layer offenders** 🔼
+- [x] **ImportReviewPage and TableDataEditorPage orchestrate 4-5 inline mutations each — worst pages/ data-layer offenders** 🔼 ✅ 2026-09-03 (moved import-review, table-editor, watchlist, research-home, and market-lookup server-state orchestration into feature hooks; preserved page behavior, corrected import-batch invalidation, registered placeholder refetch cues at the hook boundary, and added mutation/refetch/provider/range regressions. Four focused integration files pass 150 tests; independent review approved the thin-page and cache contracts.)
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: pages/ImportReviewPage.tsx:96-117 (1 useQuery + 4 useMutations: override, categoryOverride, persistDefault, commit) and pages/admin/TableDataEditorPage.tsx:161-267 (useQuery + preview/commit mutations amid a 544-line page); pages/research/{WatchlistPage,ResearchHomePage,MarketLookupPage}.tsx each hold 5 query/mutation sites. Complements A3's inline-useQuery count — these are the pages where a feature module (`features/imports` already exists next door) would absorb the most.
@@ -4553,7 +4553,7 @@ look-changing one.
   - evidence: pages/research/MarketOverviewPage.tsx is 1111 lines but the component starts at line 929; lines 46-916 are constant data (`REGION_VIEWS` at :46, `SECTOR_VIEWS` at :323, option tables at :893-916). Cohesive logic, wrong altitude — config swamps the code.
   - fix: move the view/option constants to a `marketViews.ts` data module beside the page.
 
-- [ ] **FE hand-written DTOs live in three homes; contract-guard covers only one** 🔼
+- [x] **FE hand-written DTOs live in three homes; contract-guard covers only one** 🔼
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: hand types split across `apps/frontend/src/types/api.ts` (594 lines, guarded by `types/contract-guard.ts:25-35` against generated.ts), `types/{portfolio,research,watchlist,splits,aiChat}.ts` (~760 lines, unguarded), and `lib/api/types.ts` (177 lines, unguarded, imported by 9 modules vs 29 for types/api). Structural duplicate found: `MarketNewsArticle` (lib/api/types.ts:170-177) is field-identical to `ResearchNewsArticle` (types/research.ts:128-135).
@@ -4645,7 +4645,7 @@ look-changing one.
   - evidence: `grep -l createContext contexts/*.tsx` → only Language, BelgianTaxProfile, PageTitle, SettingsPreload. `contexts/SettingsContext.tsx:34-47`, `contexts/AppSettingsContext.tsx:45-47`, ThemeContext are hydrate/persist shims that read `useSettingsStore` (documented design, settingsStore.ts:9-15 — not overlap, but the files keep context-era names and re-export types "so existing consumers don't change imports", SettingsContext.tsx:21). `contexts/WorkspaceContext.tsx:31` exports `useWorkspace()` — a route+sessionStorage hook with no context at all. `LanguageContext` is a second source for `appSettings.language`, bridged in `App.tsx:115-133`.
   - fix: rename/relocate (WorkspaceContext → hooks/useWorkspace; settings shims → e.g. `stores/hydration/`), and fold LanguageContext into a store selector to remove the bridge.
 
-- [ ] **Currency formatting has three parallel implementations plus module-global mutable defaults; formatDate lives in components/** 🔽
+- [x] **Currency formatting has three parallel implementations plus module-global mutable defaults; formatDate lives in components/** 🔽 ✅ 2026-09-03 (removed mutable process-wide defaults, made the pure currency utilities require explicit settings, centralized the bounded `Intl.NumberFormat` cache, and made string/parts/percent/chart/Money adapters compose one settings resolver. Planned-payment fallback currency is explicit and query-keyed; all consumers were migrated, the duplicate component date utility and page-local formatter are gone, and locale-change regressions cover live rerendering. Frontend lint and typecheck pass; 2,906 tests pass with 36 live-contract tests skipped; a disposable production build compiles 5,638 modules; independent review approved.)
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: (1) `utils/currency.ts:127` `formatCurrency` reads process-wide mutable defaults set by `configureCurrencyFormatDefaults` from an `App.tsx:120-126` effect (hidden temporal coupling — wrong output before settings hydrate); (2) `hooks/useCurrencyFormatter.ts:20` re-derives locale/currency from settings with its own Intl cache; (3) `hooks/useChartCurrencyFormatter.ts:19` wraps the same again for charts. Date: `components/shared/dateUtils.ts:5` `formatDate` is a pure util misfiled under components/, and `pages/ImportReviewPage.tsx:81` defines a private `formatDate` besides it.
@@ -5203,13 +5203,13 @@ look-changing one.
   - evidence: `src/test/live-contracts/live-contracts.test.ts:4-6` says it validates "against the same Zod schemas used in MSW fixture contracts", but it imports only `server` (line 15) and re-declares its own `LinkSchema`/`paginatedOf`/6 item schemas (lines 40-70) — looser than the 19 schemas in `src/test/msw/contracts.test.ts` (e.g. its `TransactionItemSchema` checks 5 fields vs the full stub shape). So the contract now lives in four places: `openapi.yaml` → `generated.ts` (type-guarded via `src/types/contract-guard.ts`), hand-written `api.ts`, the MSW-side Zod set, and the live-side Zod subset — the two Zod copies can drift so MSW fixtures and the live backend are held to different shapes.
   - fix: extract the Zod schemas into `src/test/contracts/schemas.ts` imported by both suites (live suite can `.pick()` a lax subset from the strict schema rather than redefine it); fix the misleading header either way.
 
-- [ ] **`database/connection.js` and `convertRowsToEur` mocks reinvented per file with divergent shapes/semantics — drift risk in the fakes themselves** 🔼
+- [x] **`database/connection.js` and `convertRowsToEur` mocks reinvented per file with divergent shapes/semantics — drift risk in the fakes themselves** 🔼 ✅ 2026-09-03
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: the connection mock's export set varies by file — `{query}` only (`tests/categoryRepository.test.js:3`), `{query, queryPrepared, withTransaction}` (`tests/transactionRepositoryBehavior.test.js`), and a `withTransaction` that actually threads the mock client (`tests/investmentRepository.test.js:1-7`) vs `withTransaction: vi.fn()` that doesn't (`tests/tagRepository.test.js`) — same seam, different transaction semantics per suite. `convertRowsToEur` is faked in 13 places with 5 distinct implementations, two of which re-implement conversion logic inline (identity pass-through ×6-7 vs `amount_eur: Number(r.amount || 0)` mapping in `tests/infoRepository.test.js:7`) — a business-logic re-implementation that will silently diverge if the real converter's row contract changes.
   - fix: one `tests/helpers/mockDb.js` exporting the canonical connection mock (full export surface + client-threading `withTransaction`) and one canonical currency fake; per-file `vi.mock` bodies become one-liners delegating to it.
 
-- [ ] **No factory/builder layer for domain rows — repository/service suites hand-roll row literals per file** 🔽
+- [x] **No factory/builder layer for domain rows — repository/service suites hand-roll row literals per file** 🔽 ✅ 2026-09-03
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: no shared builders exist anywhere under `apps/node-backend/tests/` (only `setup/db.js` + `golden/runGolden.js`); transaction/investment/staging row shapes are inlined per test (e.g. `tests/routes/transactions.test.js:80`, and throughout the 694-line `plannedTransactionRepository.test.js`). With 159 backend files / ~2,405 cases, a column rename means grep-and-fix across dozens of literals. (Inline CSV strings in adapter tests are the known deliberate PII guard — not this finding.) The e2e suite similarly copy-pastes the `pageerror`-collector block into every test (`e2e/critical-flows.spec.ts:14-19` ×10+, `mutations-parity.spec.ts:22-23`).
@@ -5376,7 +5376,7 @@ look-changing one.
   - evidence: main.js module-scope mutables: `i18n` (15), `appPort`/`APP_URL`/`HEALTH_URL` (212–214), `healthWatchdogTimer`/`watchdogFailureCount`/`backendReportedLost` (1083–1085), `mainWindow` (1321), `windowBoundsSaveTimer` (1464), `shellUpdateCheckInFlight`/`pendingShellUpdate` (1568–1569), `backupInFlight` (2690), `rendererReady` (2797), `workDir`/`overrideFiles`/`useRepoMode` (3098–3102), `isQuitting` (3428). The URL pair is derived from `appPort` yet stored separately and re-synced by hand inside `launch()` (main.js:3151–3153) — a forgot-to-update bug waiting for the next writer. No lifecycle/state object groups any of this.
   - fix: cheapest wins first — replace the trio with `appUrl()`/`healthUrl()` accessor functions over the single `appPort`; when extracting modules (see monolith finding) let each extracted module own its state (watchdog state → health module, update flags → updater module) instead of introducing a big state object.
 
-- [ ] **Electron IPC contract triplicated by hand: main.js handlers ↔ preload JSDoc ↔ renderer TS types (with `electronRecovery` untyped)** 🔽
+- [x] **Electron IPC contract triplicated by hand: main.js handlers ↔ preload JSDoc ↔ renderer TS types (with `electronRecovery` untyped)** 🔽 ✅ 2026-09-03 (`packaging/electron/electron-api.d.ts` is now the canonical type-only contract for all 24 invoke channels, 6 renderer events, arguments, results, and five preload bridges. `@vision/types/electron` thinly re-exports it; renderer helpers and `Window` augmentation consume that export, while preload JSDoc consumes the canonical source directly. Recovery is typed, local duplicate bridge/result types and casts were removed, and a parity test checks main registrations, preload invokes/subscriptions, and bridge annotations. Electron 141/141, focused frontend 66/66, frontend typecheck and endpoint-matrix validation pass. Independent review passed after correcting nullable backup and IPC documentation.)
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: the same 20-method surface is described in `packaging/electron/main.js` (handler returns), `packaging/electron/preload.js:10–188` (JSDoc), and `apps/frontend/src/lib/api/electron.ts:6–63` (hand-written `ElectronUpdater`/`ElectronBackup`/`ElectronAPI` types, accessed via per-call `window as` casts at electron.ts:71–81 rather than a global `Window` augmentation). Optional members (`checkRelease?`, `isEncrypted?` etc., electron.ts:7,32) are a deliberate old-shell-compat strategy — good — but nothing ties the three copies together, and `electronRecovery` (preload.js:175–188) has no renderer type at all (used only by `error.html`). Return-shape drift between a handler and electron.ts would be caught by nothing.
@@ -5661,7 +5661,7 @@ look-changing one.
   - Drift note: the Docker-wait/preflight/copy logic is hand-duplicated from `install.sh` (and waits 60s vs 120s in `vision-setup.command`) — three copies to keep aligned.
   - Fix: make regen failure prompt/abort unless `SKIP_DEMO_DATA_REGEN=1`, drop `|| true` from codesign and verify with `codesign -v` before declaring success.
 
-- [ ] **No Alembic heads guard or local migration-fidelity check; some inspection/revision scripts remain hardwired to a fragile venv path** 🔽
+- [x] **No Alembic heads guard or local migration-fidelity check; some inspection/revision scripts remain hardwired to a fragile venv path** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `package.json` now routes database writes through `apps/node-backend/scripts/db-migrate.js`, but `db:current`, `db:history`, and `db:revision` still call `venv/bin/alembic` directly and fail when that environment is absent or was built for another host. There is no `alembic heads`-count check anywhere (a parallel-branch merge creating two heads only surfaces indirectly when CI's `upgrade head` errors), and downgrade fidelity is checked only in CI and only for the top revision — nothing equivalent runs locally.
@@ -5689,7 +5689,7 @@ look-changing one.
   - `apps/node-backend/scripts/densify-asset-history.js:24-33` — inserts into `asset_price_history` and recomputes snapshots with no `--dry-run` or confirmation prompt. Mitigated by the operation being additive-only and idempotent, but running it against the wrong environment gives no warning first. (`index-stats.js` and `check-precision-drift.js`, the other two scripts in the same directory, are read-only and clean.)
   - Fix: add a `--dry-run` flag or an explicit `--yes` confirmation gate before the writes.
 
-- [ ] **Demo-data generator hardcodes `TODAY` to a fixed past date and stamps a literal Alembic revision — the mechanism behind the known demo multi-head crash-loop** 🔽
+- [x] **Demo-data generator hardcodes `TODAY` to a fixed past date and stamps a literal Alembic revision — the mechanism behind the known demo multi-head crash-loop** 🔽 ✅ 2026-09-03 · demo generation now shifts every date from an explicit/current reference date, derives year-bearing labels and tax fields from shifted dates, and emits data-only SQL; the builder migrates a disposable database to the repository head before loading the seed and records both schema and reference date in the manifest. Focused 6-test generator suite and full 135-test Electron suite passed; independent review passed after a year-boundary correction. A real seed build was attempted but host loopback binding was denied with `EPERM`.
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `packaging/electron/demo-db/generate.mjs:19` — `TODAY` is hard-anchored to 2026-06-18, so regenerated demo data goes stale/overdue as calendar time passes.
@@ -6295,6 +6295,23 @@ dismissedAt, deviationAtDismiss}` for category outliers, so the 14-day suppressi
     export a same-named function, easy to import the wrong one
   - Only call it out prominently when P50 crosses zero (overdraft risk) or moves meaningfully since
     the last digest; otherwise a standing one-line read
+
+---
+
+### Investment lifecycle / portfolio visibility
+
+- [ ] **Add activate/deactivate controls for investments so sold holdings can be hidden without deleting their history** 🔼
+  - Reuse the existing `investments.is_active` field, `PATCH /api/investments/:id`, and list filter;
+    expose an Archive/Restore action from the investment detail or edit flow, consistent with the
+    active/inactive transaction lifecycle.
+  - Show active investments by default. Add an explicit "Show inactive" view or archived group so
+    hidden investments remain discoverable and can be restored. Mark inactive entries clearly when
+    they are shown.
+  - Deactivation is an explicit user action, not an automatic consequence of reaching zero units.
+    It must preserve portfolio transactions, price history, and reporting/tax history while keeping
+    the inactive holding out of current portfolio cards, ticker choices, and current-value totals.
+  - Add frontend interaction and query-invalidation coverage, plus backend contract coverage for
+    deactivation, inactive filtering, history retention, and reactivation.
 
 ---
 

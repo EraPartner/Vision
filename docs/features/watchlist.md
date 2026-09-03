@@ -3,13 +3,14 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-06-18
-last_modified: 2026-08-27
-updated: 2026-08-27
+last_modified: 2026-09-03
+updated: 2026-09-03
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/research/WatchlistPage.tsx
+  - apps/frontend/src/features/research/useWatchlistData.ts
   - apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
@@ -125,7 +126,7 @@ Watchlist prices are updated when:
 
 1. The user manually refreshes investment prices via `POST /api/investments/refresh-prices`
 2. The price provider service fetches live prices for all tracked symbols
-3. **Phase 3.6**: WatchlistPage uses `useQuery({ queryKey: ["watchlist-quotes", symbols], queryFn: () => apiClient.getMarketQuotes(symbols) })` with 60s refetch interval for automatic market quote updates
+3. **Phase 3.6**: `useWatchlist()` and `useDeleteWatchlistItem()` in `features/research/useWatchlistData.ts` own watchlist reads/deletion, while `useMarketQuotesQuery` uses `watchlistKeys.quotes(symbols)` for the shared current-quote cache.
 
 ## API Client Migration (2026-04-29)
 
