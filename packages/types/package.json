@@ -41,6 +41,10 @@
     "./chartRanges": {
       "types": "./src/chartRanges.d.ts",
       "default": "./src/chartRanges.js"
+    },
+    "./electron": {
+      "types": "./src/electron.d.ts",
+      "default": "./src/electron.js"
     }
   },
   "types": "./src/index.d.ts",

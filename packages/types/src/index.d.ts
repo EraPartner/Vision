@@ -6,3 +6,4 @@ export * from "./recurrence.js";
 export * from "./aiChat.js";
 export * from "./reportThemeDefaults.js";
 export * from "./chartRanges.js";
+export * from "./electron.js";

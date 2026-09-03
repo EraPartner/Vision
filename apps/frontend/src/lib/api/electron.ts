@@ -1,147 +1,35 @@
 import { apiRequest } from "@/lib/api/client";
 import { saveSetting, getSetting } from "@/lib/api/settings";
+import type {
+    BackupResult,
+    ElectronApiBridge,
+    InstallUpdateResult,
+    PullImageResult,
+    RestoreResult,
+    SplashThemeColors,
+    UpdateCheckStatus,
+} from "@vision/types/electron";
+export type {
+    ElectronCsvFile,
+    ElectronMenuAction,
+    SplashThemeColors,
+    UpdateCheckStatus,
+} from "@vision/types/electron";
 
-type UpdateMode = "source" | "docker" | "native" | "dev";
-
-type ElectronUpdater = {
-    checkRelease?: () => Promise<{
-        up_to_date: boolean;
-        current_version: string;
-        latest_version: string | null;
-        published_at?: string;
-        release_notes?: string;
-        html_url?: string;
-        update_mode?: UpdateMode;
-        error?: string;
-    }>;
-    pullImage: () => Promise<{
-        success: boolean;
-        wasNew: boolean;
-        error?: string;
-    }>;
-    installShellUpdate?: () => Promise<{
-        success: boolean;
-        version?: string;
-        error?: string;
-    }>;
-    getMode?: () => Promise<{
-        mode: UpdateMode;
-        is_packaged: boolean;
-        use_repo_mode: boolean;
-    }>;
-    preUpdateBackup?: () => Promise<{
-        success: boolean;
-        file?: string;
-        error?: string;
-    }>;
-};
-
-/** Snapshot of frontend localStorage keys collected before a backup. */
-type FrontendStateSnapshot = { keys: Record<string, string> };
-
-type ElectronBackup = {
-    runBackup: (
-        destDir: string,
-        frontendStateJson?: string | null,
-    ) => Promise<{
-        success: boolean;
-        file?: string;
-        encrypted?: boolean;
-        warning?: string;
-        cleanupRemoved?: number;
-        error?: string;
-    }>;
-    selectFile: () => Promise<string | null>;
-    /** Accepts .visionbak, .visionbak.enc, or legacy .sql / .enc files. */
-    restoreBackup: (
-        filePath: string,
-        opts?: { passphrase?: string },
-    ) => Promise<{
-        success: boolean;
-        file?: string;
-        frontendState?: FrontendStateSnapshot | null;
-        error?: string;
-    }>;
-    /** Detect whether a backup file is encrypted (bundle or legacy). */
-    isEncrypted?: (filePath: string) => Promise<boolean>;
-    selectDir: () => Promise<string | null>;
-    saveSettings: (settings: {
-        backupDir: string;
-        backupOnQuit: boolean;
-    }) => Promise<void>;
-    loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
-    getEncryptionStatus?: () => Promise<{
-        success: boolean;
-        secureStorageAvailable: boolean;
-        hasStoredPassphrase: boolean;
-        hasEnvPassphrase: boolean;
-    }>;
-    setPassphrase?: (
-        passphrase: string,
-    ) => Promise<{ success: boolean; available: boolean; error?: string }>;
-};
-
-type ElectronServices = {
-    saveSettings: (settings: { keepServicesOnQuit: boolean }) => Promise<void>;
-    loadSettings: () => Promise<{ keepServicesOnQuit: boolean }>;
-};
-
-/** Native menu / dock menu message — see packaging/electron/main.js menuAction(). */
-export interface ElectronMenuAction {
-    action:
-        | "navigate"
-        | "open-settings"
-        | "open-shortcuts"
-        | "new-transaction"
-        | "toggle-sidebar";
-    payload?: unknown;
+function getElectronUpdater() {
+    return window.electronUpdater;
 }
 
-/** CSV handed over by Finder/dock "open with Vision". */
-export interface ElectronCsvFile {
-    name: string;
-    content: string;
+function getElectronBackup() {
+    return window.electronBackup;
 }
 
-type ElectronAPI = {
-    platform: string;
-    ready: () => Promise<{ success: boolean }>;
-    setDockBadge: (count: number) => Promise<{ success: boolean }>;
-    setLanguage?: (language: "en" | "nl") => Promise<{ success: boolean }>;
-    getAccentColor: () => Promise<string | null>;
-    onAccentColorChanged: (cb: (color: string | null) => void) => () => void;
-    onMenuAction: (cb: (message: ElectronMenuAction) => void) => () => void;
-    onCsvOpen: (cb: (file: ElectronCsvFile) => void) => () => void;
-    onFullScreenChange: (cb: (isFullScreen: boolean) => void) => () => void;
-    /** Persist the active theme's primary colors so the next boot splash matches. */
-    persistSplashTheme?: (
-        colors: SplashThemeColors,
-    ) => Promise<{ success: boolean }>;
-};
-
-/** HSL component strings (e.g. "158 64% 52%") for the boot-splash background/text. */
-export interface SplashThemeColors {
-    background: string;
-    foreground: string;
+function getElectronServices() {
+    return window.electronServices;
 }
 
-function getElectronUpdater(): ElectronUpdater | undefined {
-    return (window as Window & { electronUpdater?: ElectronUpdater })
-        .electronUpdater;
-}
-
-function getElectronBackup(): ElectronBackup | undefined {
-    return (window as Window & { electronBackup?: ElectronBackup })
-        .electronBackup;
-}
-
-function getElectronServices(): ElectronServices | undefined {
-    return (window as Window & { electronServices?: ElectronServices })
-        .electronServices;
-}
-
-export function getElectronAPI(): ElectronAPI | undefined {
-    return (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
+export function getElectronAPI(): ElectronApiBridge | undefined {
+    return window.electronAPI;
 }
 
 export function isElectron(): boolean {
@@ -196,22 +84,7 @@ export async function getSystemAccentColor(): Promise<string | null> {
     }
 }
 
-export async function checkForUpdates(): Promise<{
-    up_to_date: boolean;
-    current_version: string;
-    latest_version: string | null;
-    published_at?: string;
-    release_notes?: string;
-    html_url?: string;
-    error?: string;
-    /**
-     * How this deployment installs updates. Electron supplies 'source' | 'docker'
-     * | 'dev' over IPC; the HTTP route (reached only outside Electron) reports
-     * 'docker-compose', which has no in-app installer — the user runs
-     * `docker compose pull` themselves.
-     */
-    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
-}> {
+export async function checkForUpdates(): Promise<UpdateCheckStatus> {
     const updater = getElectronUpdater();
     if (updater?.checkRelease) {
         return updater.checkRelease();
@@ -219,39 +92,19 @@ export async function checkForUpdates(): Promise<{
     return apiRequest("/api/admin/update/check");
 }
 
-export async function triggerDockerUpdate(): Promise<{
-    success: boolean;
-    wasNew: boolean;
-    error?: string;
-} | null> {
+export async function triggerDockerUpdate(): Promise<PullImageResult | null> {
     const updater = getElectronUpdater();
     if (!updater) return null;
     return updater.pullImage();
 }
 
-export async function installShellUpdate(): Promise<{
-    success: boolean;
-    version?: string;
-    error?: string;
-    /**
-     * Set when the release carries no source-launcher asset to install from
-     * (every release published before the pipeline started building one). The
-     * main process has already opened `html_url` in the browser — the UI should
-     * say so rather than report a failure.
-     */
-    manual_download?: boolean;
-    html_url?: string;
-} | null> {
+export async function installShellUpdate(): Promise<InstallUpdateResult | null> {
     const updater = getElectronUpdater();
     if (!updater?.installShellUpdate) return null;
     return updater.installShellUpdate();
 }
 
-export async function preUpdateBackup(): Promise<{
-    success: boolean;
-    file?: string;
-    error?: string;
-} | null> {
+export async function preUpdateBackup(): Promise<BackupResult | null> {
     const updater = getElectronUpdater();
     if (!updater?.preUpdateBackup) return null;
     return updater.preUpdateBackup();
@@ -260,14 +113,7 @@ export async function preUpdateBackup(): Promise<{
 export async function runBackup(
     destDir: string,
     frontendStateJson: string | null = null,
-): Promise<{
-    success: boolean;
-    file?: string;
-    encrypted?: boolean;
-    warning?: string;
-    cleanupRemoved?: number;
-    error?: string;
-} | null> {
+): Promise<BackupResult | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
     return backup.runBackup(destDir, frontendStateJson);
@@ -282,12 +128,7 @@ export async function selectBackupFile(): Promise<string | null> {
 export async function restoreBackup(
     filePath: string,
     opts?: { passphrase?: string },
-): Promise<{
-    success: boolean;
-    file?: string;
-    frontendState?: FrontendStateSnapshot | null;
-    error?: string;
-} | null> {
+): Promise<RestoreResult | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
     return backup.restoreBackup(filePath, opts);

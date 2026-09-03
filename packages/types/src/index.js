@@ -17,3 +17,4 @@ export {
 export { AI_CHAT_STREAM_EVENT, AI_CHAT_STREAM_EVENT_NAMES } from "./aiChat.js";
 export { REPORT_THEME_DEFAULTS } from "./reportThemeDefaults.js";
 export { CHART_RANGE_KEYS, makeChartRangeMap } from "./chartRanges.js";
+export * from "./electron.js";

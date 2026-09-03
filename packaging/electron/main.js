@@ -1927,6 +1927,15 @@ function httpPut(url, payload) {
 // come from mainWindow.webContents like every other channel.
 const REJECT_SENDER = Symbol("reject-unauthorized-sender");
 
+/**
+ * @param {import("./electron-api").ElectronInvokeChannel} channel
+ * @param {(...args: any[]) => any} fn
+ * @param {object} [options]
+ * @param {boolean} [options.allowAnySender]
+ * @param {any} [options.senderFailure]
+ * @param {boolean} [options.requireWorkDir]
+ * @param {boolean} [options.wrapErrors]
+ */
 function registerHandler(
   channel,
   fn,
@@ -2002,13 +2011,7 @@ registerHandler(
 
 registerHandler(
   "update:check-github",
-  async () => {
-    try {
-      return await checkForShellUpdate();
-    } catch (err) {
-      return { error: String(err), update_mode: getUpdateMode() };
-    }
-  },
+  async () => await checkForShellUpdate(),
   { senderFailure: REJECT_SENDER },
 );
 
