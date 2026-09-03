@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
+import { makeImportStagingRow } from "./builders/domainRows.js";
 import { validateBatch } from "../src/services/importPipeline/validate.js";
 import { stageBatch } from "../src/services/importPipeline/stage.js";
 import { matchBatch } from "../src/services/importPipeline/match.js";
@@ -64,7 +65,7 @@ describe("validateBatch", () => {
       .mockResolvedValueOnce({ rows: [row] }); // SELECT pending
   }
 
-  const baseRow = {
+  const baseRow = makeImportStagingRow({
     id: 1,
     row_index: 0,
     tx_date: "2024-01-15",
@@ -75,7 +76,7 @@ describe("validateBatch", () => {
     raw_data: null,
     bank_account: "BE12",
     balance: null,
-  };
+  });
 
   function getValidationUpdate() {
     const call = poolQuery.mock.calls.find(([sql]) =>
@@ -296,7 +297,7 @@ describe("matchBatch", () => {
 // ---------------------------------------------------------------------------
 
 describe("commitBatch", () => {
-  const matchedRow = {
+  const matchedRow = makeImportStagingRow({
     id: 1,
     row_index: 0,
     tx_date: "2024-01-15",
@@ -312,7 +313,7 @@ describe("commitBatch", () => {
     matched_pattern_id: 7,
     override_category_id: null,
     recipient_default_category_id: 3,
-  };
+  });
 
   // The account id the run's one distinct staging label ('BE12') resolves to
   // (ADR-088: dedup and the INSERT key on the FK, not the retired string).
@@ -410,18 +411,19 @@ describe("commitBatch", () => {
     // node-postgres parses DATE columns into a server-local-midnight Date.
     // toISOString() would roll this back a day under a TZ east of UTC.
     setupCommit({ ...matchedRow, tx_date: new Date(2026, 5, 15) });
-    let insertedDate;
     mockClient.query.mockImplementation(async (sql, params) => {
-      if (sql.includes("INSERT INTO transactions")) {
-        // The chunk INSERT is multi-row (SELECT UNNEST(...)), so the date
-        // parameter is the column array — this chunk holds the one row.
-        insertedDate = params[0][0];
+      if (/INSERT INTO transactions\s+\(/.test(sql)) {
         return { rows: [{ id: 100, tx_hash: null }] };
       }
       return { rows: [] };
     });
     await commitBatch({ batchId: 7 });
-    expect(insertedDate).toBe("2026-06-15");
+    const insertCall = mockClient.query.mock.calls.find(([sql]) =>
+      /INSERT INTO transactions\s+\(/.test(sql),
+    );
+    // The chunk INSERT is multi-row (SELECT UNNEST(...)), so the date
+    // parameter is the column array — this chunk holds the one row.
+    expect(insertCall[1][0][0]).toBe("2026-06-15");
   });
 
   it("marks a duplicate row and skips aggregation refresh", async () => {

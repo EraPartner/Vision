@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,9 +28,9 @@ vi.mock("pg", () => ({
   },
 }));
 
-vi.mock("../src/database/connection.js", () => ({
-  query: mocks.appQuery,
-}));
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({ query: mocks.appQuery }),
+);
 
 vi.mock("../src/config/logger.js", () => ({
   logger: {

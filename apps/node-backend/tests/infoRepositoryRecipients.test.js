@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
-vi.mock("../src/services/currency/currencyConversionService.js", () => ({
-  convertRowsToEur: vi.fn(),
-}));
+vi.mock("../src/services/currency/currencyConversionService.js", () =>
+  mockCurrencyConversion(),
+);
 
 import { query } from "../src/database/connection.js";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";

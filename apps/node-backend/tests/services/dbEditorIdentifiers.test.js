@@ -8,11 +8,9 @@
  * the catalog must be rejected, never quoted-and-used.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.js";
 
-vi.mock("../../src/database/connection.js", () => ({
-  query: vi.fn(),
-  getClient: vi.fn(),
-}));
+vi.mock("../../src/database/connection.js", () => mockConnection());
 vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.js";
 
-vi.mock("../../src/database/connection.js", () => ({ query: vi.fn() }));
+vi.mock("../../src/database/connection.js", () => mockConnection());
 vi.mock("../../src/repositories/infoRepositoryHelpers.js", () => ({
   getIncludeTransfers: vi.fn(),
 }));

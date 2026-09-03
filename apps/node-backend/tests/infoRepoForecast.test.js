@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 // getIncludeTransfers() reads `user_settings` (ADR-083). Stub it so the module
 // under test does not spend a `query` mock call on the settings lookup — the

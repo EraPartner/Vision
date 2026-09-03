@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
   update: vi.fn(),
+  isManualDuplicate: vi.fn(),
+  recordManualRawTransaction: vi.fn(),
+  autoLinkTransactions: vi.fn(),
   resolveRecipientIdByName: vi.fn(),
   resolveCategoryIdByName: vi.fn(),
   scheduleReconcile: vi.fn(),
@@ -11,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/repositories/transactionRepository.js", () => ({
-  default: { update: mocks.update },
+  default: { create: mocks.create, update: mocks.update },
 }));
 vi.mock("../../src/services/recipientService.js", () => ({
   resolveRecipientIdByName: mocks.resolveRecipientIdByName,
@@ -26,11 +30,11 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
   unmarkTransfer: mocks.unmarkTransfer,
 }));
 vi.mock("../../src/services/deduplication.js", () => ({
-  isManualDuplicate: vi.fn(),
-  recordManualRawTransaction: vi.fn(),
+  isManualDuplicate: mocks.isManualDuplicate,
+  recordManualRawTransaction: mocks.recordManualRawTransaction,
 }));
 vi.mock("../../src/services/plannedMatchService.js", () => ({
-  autoLinkTransactions: vi.fn(),
+  autoLinkTransactions: mocks.autoLinkTransactions,
 }));
 vi.mock("../../src/services/attachmentRecordService.js", () => ({
   attachmentRepository: { listPathsByTransactionIds: vi.fn() },
@@ -50,6 +54,49 @@ beforeEach(() => {
 });
 
 describe("transactionService route orchestration", () => {
+  it("blocks a matching manual transaction by default", async () => {
+    mocks.isManualDuplicate.mockResolvedValue({
+      isDuplicate: true,
+      existingTransactionId: 42,
+    });
+
+    await expect(
+      transactionService.createManualTransaction({
+        transaction_date: "2026-09-03",
+        bank_account: "Main",
+        recipient_id: 7,
+        amount: -12.5,
+      }),
+    ).rejects.toThrow("Duplicate transaction detected");
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a matching manual transaction only after explicit confirmation", async () => {
+    mocks.isManualDuplicate.mockResolvedValue({
+      isDuplicate: true,
+      existingTransactionId: 42,
+    });
+    mocks.create.mockResolvedValue({ id: 43 });
+    mocks.autoLinkTransactions.mockResolvedValue({
+      autoLinkedCount: 0,
+      links: [],
+    });
+
+    await expect(
+      transactionService.createManualTransaction({
+        transaction_date: "2026-09-03",
+        bank_account: "Main",
+        recipient_id: 7,
+        amount: -12.5,
+        allow_duplicate: true,
+      }),
+    ).resolves.toMatchObject({ transaction: { id: 43 } });
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.recordManualRawTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionId: 43 }),
+    );
+  });
+
   it("resolves PATCH names, strips convenience fields, updates, and reconciles", async () => {
     mocks.resolveRecipientIdByName.mockResolvedValue(11);
     mocks.resolveCategoryIdByName.mockResolvedValue(22);

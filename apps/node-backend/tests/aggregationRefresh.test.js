@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 async function loadAggregationRefresh() {
   vi.resetModules();
@@ -16,7 +17,7 @@ async function loadAggregationRefresh() {
   const clearMcCache = vi.fn().mockResolvedValue(undefined);
   const clearRollingMcCache = vi.fn().mockResolvedValue(undefined);
 
-  vi.doMock("../src/database/connection.js", () => ({ query }));
+  vi.doMock("../src/database/connection.js", () => mockConnection({ query }));
   vi.doMock("../src/config/logger.js", () => ({ logger }));
   vi.doMock("../src/services/materializedViewService.js", () => ({
     refreshMaterializedViews: refreshLegacyMaterializedViews,

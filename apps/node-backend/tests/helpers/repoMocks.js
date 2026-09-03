@@ -14,6 +14,24 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { vi } from "vitest";
 
+function completeConnectionSurface(base = {}) {
+  const surface = {
+    default: {},
+    query: vi.fn(),
+    queryPrepared: vi.fn(),
+    getClient: vi.fn(),
+    getAmbientTransactionClient: vi.fn(() => null),
+    withTransaction: vi.fn(),
+    withSavepointIfInTransaction: vi.fn(),
+    checkConnection: vi.fn(),
+    getTableCount: vi.fn(),
+    getPoolStats: vi.fn(),
+    closePool: vi.fn(),
+    ...base,
+  };
+  return surface;
+}
+
 /**
  * Inert connection mock: `query` and `withTransaction` are bare spies.
  * Pass `extra` to add or override members (e.g. a primed `query`,
@@ -22,7 +40,11 @@ import { vi } from "vitest";
  * @param {Record<string, any>} [extra]
  */
 export function mockConnection(extra = {}) {
-  return { query: vi.fn(), withTransaction: vi.fn(), ...extra };
+  return completeConnectionSurface({
+    query: vi.fn(),
+    withTransaction: vi.fn(),
+    ...extra,
+  });
 }
 
 /**
@@ -157,7 +179,7 @@ export function mockTxConnection(client, extra = {}) {
     }
   });
 
-  return {
+  return completeConnectionSurface({
     query,
     queryPrepared,
     poolQuery,
@@ -167,7 +189,7 @@ export function mockTxConnection(client, extra = {}) {
     withTransaction,
     withSavepointIfInTransaction,
     ...restExtra,
-  };
+  });
 }
 
 /**
@@ -179,7 +201,7 @@ export function mockTxConnection(client, extra = {}) {
  */
 export function mockPooledTxConnection() {
   const getClient = vi.fn();
-  return {
+  return completeConnectionSurface({
     query: vi.fn(),
     getClient,
     withTransaction: vi.fn(async (fn) => {
@@ -200,5 +222,5 @@ export function mockPooledTxConnection() {
         client.release();
       }
     }),
-  };
+  });
 }

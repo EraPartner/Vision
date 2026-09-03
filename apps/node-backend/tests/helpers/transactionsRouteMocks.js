@@ -10,7 +10,7 @@
  *   import { mockTransactionRepository } from '../helpers/transactionsRouteMocks.js';
  *   vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
  */
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 /** Default-export repository stub covering every method the routes touch. */
 export function mockTransactionRepository() {
@@ -52,10 +52,7 @@ export function mockMaterializedViews() {
   return { scheduleRefresh: vi.fn() };
 }
 
-/** `services/currency/currencyConversionService.js`: EUR conversion is a passthrough. */
-export function mockCurrencyConversion() {
-  return { convertRowsToEur: vi.fn(async (rows) => rows) };
-}
+export { mockCurrencyConversion } from "./mockCurrencyConversion.js";
 
 /** `services/attachmentRecordService.js`: no attachments on any transaction. */
 export function mockAttachmentRecordService() {

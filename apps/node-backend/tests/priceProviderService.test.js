@@ -3,6 +3,7 @@
  * Tests price fetching from Binance, Yahoo, Kinesis, and custom endpoints.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockConnection } from './helpers/repoMocks.js';
 import { mockLogger } from './helpers/mockLogger.js';
 
 const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
@@ -23,9 +24,7 @@ vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 // The SSRF guard (lib/urlSafety) resolves custom-provider hostnames before fetch.
 // Stub DNS to a public address so these hermetic tests don't hit the network;

@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn().mockResolvedValue({ rows: [] }),
-  queryPrepared: vi.fn().mockResolvedValue({ rows: [] }),
-  withTransaction: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({
+    query: vi.fn().mockResolvedValue({ rows: [] }),
+    queryPrepared: vi.fn().mockResolvedValue({ rows: [] }),
+    withTransaction: vi.fn(),
+  }),
+);
 
 import {
   query,

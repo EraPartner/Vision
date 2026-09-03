@@ -6,11 +6,10 @@
  * transactions when calculating spending and income statistics.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockConnection } from './helpers/repoMocks.js';
 import { mockLogger } from './helpers/mockLogger.js';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),

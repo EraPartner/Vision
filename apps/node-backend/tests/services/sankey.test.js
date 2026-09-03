@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockCurrencyConversion } from "../helpers/mockCurrencyConversion.js";
 
 vi.mock("../../src/repositories/infoRepositorySankey.js", () => ({
   getSankeyAggregates: vi.fn(),
 }));
-vi.mock("../../src/services/currency/currencyConversionService.js", () => ({
-  convertRowsToEur: vi.fn(),
-}));
+vi.mock("../../src/services/currency/currencyConversionService.js", () =>
+  mockCurrencyConversion(),
+);
 import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.js";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
 import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.js";
@@ -48,13 +49,32 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         amount: "400",
       },
     ]);
-    // Latest-rate conversion: USD → ×0.9, EUR → ×1.
-    convertRowsToEur.mockImplementation(async (rows) =>
-      rows.map((r) => ({
-        ...r,
-        amount_eur: r.currency === "USD" ? r.amount * 0.9 : r.amount,
-      })),
-    );
+    convertRowsToEur.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        is_income: true,
+        amount_eur: 1000,
+      },
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        is_income: true,
+        amount_eur: 90,
+      },
+      {
+        category_id: 2,
+        category_name: "Food: Groceries",
+        is_income: false,
+        amount_eur: 300,
+      },
+      {
+        category_id: 3,
+        category_name: "Housing: Rent",
+        is_income: false,
+        amount_eur: 400,
+      },
+    ]);
 
     const env = await computeSankeyFlow({ targetCurrency: "EUR", year: 2025 });
     const { nodes, links } = env.data;
@@ -113,9 +133,32 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         amount: "50",
       },
     ]);
-    convertRowsToEur.mockImplementation(async (rows) =>
-      rows.map((row) => ({ ...row, amount_eur: row.amount })),
-    );
+    convertRowsToEur.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        is_income: true,
+        amount_eur: 1000,
+      },
+      {
+        category_id: null,
+        category_name: null,
+        is_income: false,
+        amount_eur: 100,
+      },
+      {
+        category_id: 7,
+        category_name: "Uncategorised",
+        is_income: false,
+        amount_eur: 200,
+      },
+      {
+        category_id: 8,
+        category_name: "Uncategorised",
+        is_income: false,
+        amount_eur: 50,
+      },
+    ]);
 
     const env = await computeSankeyFlow({ year: 2025 });
 
@@ -159,9 +202,20 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         amount: "150",
       },
     ]);
-    convertRowsToEur.mockImplementation(async (rows) =>
-      rows.map((row) => ({ ...row, amount_eur: row.amount })),
-    );
+    convertRowsToEur.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income: Salary",
+        is_income: true,
+        amount_eur: 100,
+      },
+      {
+        category_id: 2,
+        category_name: "Food",
+        is_income: false,
+        amount_eur: 150,
+      },
+    ]);
 
     const env = await computeSankeyFlow({ year: 2025 });
     expect(env.data.nodes).toEqual(
@@ -200,9 +254,32 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         amount: "0.335",
       })),
     ]);
-    convertRowsToEur.mockImplementation(async (rows) =>
-      rows.map((row) => ({ ...row, amount_eur: row.amount })),
-    );
+    convertRowsToEur.mockResolvedValueOnce([
+      {
+        category_id: 1,
+        category_name: "Income",
+        is_income: true,
+        amount_eur: 1.005,
+      },
+      {
+        category_id: 2,
+        category_name: "Category 2",
+        is_income: false,
+        amount_eur: 0.335,
+      },
+      {
+        category_id: 3,
+        category_name: "Category 3",
+        is_income: false,
+        amount_eur: 0.335,
+      },
+      {
+        category_id: 4,
+        category_name: "Category 4",
+        is_income: false,
+        amount_eur: 0.335,
+      },
+    ]);
 
     const env = await computeSankeyFlow({ year: 2025 });
     const { nodes, links } = env.data;

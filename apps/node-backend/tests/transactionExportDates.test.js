@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.js";
+import { mockConnection } from "./helpers/repoMocks.js";
+import { makeTransactionRow } from "./builders/domainRows.js";
 // Export date serialization (TODO E11): the CSV column was String(pg Date)
 // ("Wed Jul 01 2026 00:00:00 GMT+0200 …" — unusable in Excel, a day off on
 // cross-TZ re-import) and buildNdjsonRow went through JSON.stringify's
@@ -9,10 +11,7 @@ import { mockLogger } from "./helpers/mockLogger.js";
 vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/database/connection.js", () => ({
-  getClient: vi.fn(),
-  query: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 import { getClient, query as dbQuery } from "../src/database/connection.js";
 import {
@@ -26,8 +25,7 @@ import {
 const JULY_FIRST = new Date(2026, 6, 1);
 
 function exportRow(overrides = {}) {
-  return {
-    id: 1,
+  return makeTransactionRow({
     date: JULY_FIRST,
     bank_account: "BE12",
     recipient_name: "Shop",
@@ -39,7 +37,7 @@ function exportRow(overrides = {}) {
     comment: null,
     tags: ["a", "b"],
     ...overrides,
-  };
+  });
 }
 
 function mockRes() {

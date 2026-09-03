@@ -1,75 +1,76 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from './helpers/mockLogger.js';
-vi.mock('../src/database/connection.js', () => {
-  const queryFn = vi.fn();
-  return {
-    query: queryFn,
-    withTransaction: vi.fn(async (fn) => {
-      await queryFn('BEGIN');
-      const result = await fn({ query: queryFn });
-      await queryFn('COMMIT');
-      return result;
-    }),
-  };
-});
+import { mockLogger } from "./helpers/mockLogger.js";
+import { mockPooledTxConnection } from "./helpers/repoMocks.js";
+vi.mock("../src/database/connection.js", () => mockPooledTxConnection());
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-import { query } from '../src/database/connection.js';
-import { logger } from '../src/config/logger.js';
+import { getClient, query } from "../src/database/connection.js";
+import { logger } from "../src/config/logger.js";
 import {
   clearInflationMemoryCache,
   getInflationRates,
   warmInflationCache,
-} from '../src/services/belgianInflationService.js';
+} from "../src/services/belgianInflationService.js";
 
-describe('belgianInflationService', () => {
+describe("belgianInflationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getClient.mockResolvedValue({ query, release: vi.fn() });
     clearInflationMemoryCache();
   });
 
-  it('returns cached database rates without external fetch', async () => {
+  it("returns cached database rates without external fetch", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       });
 
-    const result = await getInflationRates({ startMonth: '2024-01', endMonth: '2024-12' });
+    const result = await getInflationRates({
+      startMonth: "2024-01",
+      endMonth: "2024-12",
+    });
 
-    expect(result.source).toBe('database');
-    expect(result.rates).toEqual([{ month: '2024-01', monthly_rate: 0.004 }]);
+    expect(result.source).toBe("database");
+    expect(result.rates).toEqual([{ month: "2024-01", monthly_rate: 0.004 }]);
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it('keys a pg-read Date month_date to its OWN month (local extraction, not toISOString)', async () => {
+  it("keys a pg-read Date month_date to its OWN month (local extraction, not toISOString)", async () => {
     // pg returns DATE columns as local-midnight Date objects. Under a TZ east
     // of UTC, toISOString().slice(0,7) rendered 2024-06-01 as '2024-05' — every
     // rate labeled with the prior month. Simulate the pg shape directly.
     const prevTz = process.env.TZ;
-    process.env.TZ = 'Europe/Brussels';
+    process.env.TZ = "Europe/Brussels";
     try {
       const pgDate = new Date(2024, 5, 1); // local midnight, June 1
       query
-        .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00300000' }] })
-        .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00300000' }] });
+        .mockResolvedValueOnce({
+          rows: [{ month_date: pgDate, monthly_rate: "0.00300000" }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ month_date: pgDate, monthly_rate: "0.00300000" }],
+        });
 
-      const result = await getInflationRates({ startMonth: '2024-06', endMonth: '2024-06' });
+      const result = await getInflationRates({
+        startMonth: "2024-06",
+        endMonth: "2024-06",
+      });
 
-      expect(result.source).toBe('database');
-      expect(result.rates).toEqual([{ month: '2024-06', monthly_rate: 0.003 }]);
+      expect(result.source).toBe("database");
+      expect(result.rates).toEqual([{ month: "2024-06", monthly_rate: 0.003 }]);
     } finally {
       process.env.TZ = prevTz;
     }
   });
 
-  it('fetches Statbel rates and saves to database when db is empty', async () => {
+  it("fetches Statbel rates and saves to database when db is empty", async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
@@ -81,46 +82,49 @@ describe('belgianInflationService', () => {
       ok: true,
       json: async () => ({
         data: [
-          { year: 2024, month: 1, value: '0.30' },
-          { year: 2024, month: 2, value: '0.20' },
+          { year: 2024, month: 1, value: "0.30" },
+          { year: 2024, month: 2, value: "0.20" },
         ],
       }),
     });
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await getInflationRates({ forceRefresh: true });
 
-    expect(result.source).toBe('statbel');
+    expect(result.source).toBe("statbel");
     expect(result.rates).toEqual([
-      { month: '2024-01', monthly_rate: 0.003 },
-      { month: '2024-02', monthly_rate: 0.002 },
+      { month: "2024-01", monthly_rate: 0.003 },
+      { month: "2024-02", monthly_rate: 0.002 },
     ]);
     expect(fetchMock).toHaveBeenCalled();
-    expect(query).toHaveBeenCalledWith('BEGIN');
-    expect(query).toHaveBeenCalledWith('COMMIT');
+    expect(query).toHaveBeenCalledWith("BEGIN");
+    expect(query).toHaveBeenCalledWith("COMMIT");
     vi.unstubAllGlobals();
   });
 
-  it('falls back to database when Statbel fetch fails', async () => {
+  it("falls back to database when Statbel fetch fails", async () => {
     // The catch path now reloads the *full* rate set for the memory cache
     // (never a date-range subset), so it issues an extra loadFromDatabase() —
     // a blanket mock keeps the test robust to the exact query count.
     query.mockResolvedValue({
-      rows: [{ month_date: '2023-12-01', monthly_rate: '0.00150000' }],
+      rows: [{ month_date: "2023-12-01", monthly_rate: "0.00150000" }],
     });
 
-    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
 
-    const result = await getInflationRates({ startMonth: '2023-12', forceRefresh: true });
+    const result = await getInflationRates({
+      startMonth: "2023-12",
+      forceRefresh: true,
+    });
 
-    expect(result.source).toBe('database');
-    expect(result.rates).toEqual([{ month: '2023-12', monthly_rate: 0.0015 }]);
+    expect(result.source).toBe("database");
+    expect(result.rates).toEqual([{ month: "2023-12", monthly_rate: 0.0015 }]);
     vi.unstubAllGlobals();
   });
 
-  it('retries Statbel fetch and succeeds on a later attempt', async () => {
+  it("retries Statbel fetch and succeeds on a later attempt", async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
@@ -128,38 +132,46 @@ describe('belgianInflationService', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
-    const fetchMock = vi.fn()
-      .mockRejectedValueOnce(new Error('timeout'))
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("timeout"))
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{ year: 2024, month: 1, value: '0.30' }],
+          data: [{ year: 2024, month: 1, value: "0.30" }],
         }),
       });
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await getInflationRates({ forceRefresh: true });
 
-    expect(result.source).toBe('statbel');
-    expect(result.rates).toEqual([{ month: '2024-01', monthly_rate: 0.003 }]);
+    expect(result.source).toBe("statbel");
+    expect(result.rates).toEqual([{ month: "2024-01", monthly_rate: 0.003 }]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
   });
 
-  it('throttles repeated Statbel fallback warnings while offline', async () => {
+  it("throttles repeated Statbel fallback warnings while offline", async () => {
     vi.useFakeTimers();
-    query
-      .mockResolvedValue({ rows: [{ month_date: '2023-12-01', monthly_rate: '0.00150000' }] });
+    query.mockResolvedValue({
+      rows: [{ month_date: "2023-12-01", monthly_rate: "0.00150000" }],
+    });
 
-    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
 
-    const first = getInflationRates({ startMonth: '2023-12', forceRefresh: true });
+    const first = getInflationRates({
+      startMonth: "2023-12",
+      forceRefresh: true,
+    });
     await vi.runAllTimersAsync();
     await first;
 
-    const second = getInflationRates({ startMonth: '2023-12', forceRefresh: true });
+    const second = getInflationRates({
+      startMonth: "2023-12",
+      forceRefresh: true,
+    });
     await vi.runAllTimersAsync();
     await second;
 
@@ -169,7 +181,7 @@ describe('belgianInflationService', () => {
     vi.useRealTimers();
   });
 
-  it('falls back to Eurostat when Statbel is unreachable', async () => {
+  it("falls back to Eurostat when Statbel is unreachable", async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
@@ -178,8 +190,11 @@ describe('belgianInflationService', () => {
       .mockResolvedValueOnce({ rows: [] });
 
     const fetchMock = vi.fn(async (url) => {
-      if (String(url).includes('bestat.statbel') || String(url).includes('bestat.economie.fgov')) {
-        throw new Error('statbel unreachable');
+      if (
+        String(url).includes("bestat.statbel") ||
+        String(url).includes("bestat.economie.fgov")
+      ) {
+        throw new Error("statbel unreachable");
       }
 
       return {
@@ -189,9 +204,9 @@ describe('belgianInflationService', () => {
             time: {
               category: {
                 index: {
-                  '2024-01': 0,
-                  '2024-02': 1,
-                  '2024-03': 2,
+                  "2024-01": 0,
+                  "2024-02": 1,
+                  "2024-03": 2,
                 },
               },
             },
@@ -205,51 +220,51 @@ describe('belgianInflationService', () => {
       };
     });
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await getInflationRates({ forceRefresh: true });
 
-    expect(result.source).toBe('eurostat');
+    expect(result.source).toBe("eurostat");
     // monthly_rate is now kept to the column's full 8-dp scale (was 6 dp).
     expect(result.rates).toEqual([
-      { month: '2024-02', monthly_rate: 0.005 },
-      { month: '2024-03', monthly_rate: 0.00497512 },
+      { month: "2024-02", monthly_rate: 0.005 },
+      { month: "2024-03", monthly_rate: 0.00497512 },
     ]);
-    expect(query).toHaveBeenCalledWith('BEGIN');
-    expect(query).toHaveBeenCalledWith('COMMIT');
+    expect(query).toHaveBeenCalledWith("BEGIN");
+    expect(query).toHaveBeenCalledWith("COMMIT");
 
     vi.unstubAllGlobals();
   });
 
-  it('returns database rates in dbOnly mode and schedules background refresh', async () => {
+  it("returns database rates in dbOnly mode and schedules background refresh", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         data: [
-          { year: 2024, month: 1, value: '0.30' },
-          { year: 2024, month: 2, value: '0.20' },
+          { year: 2024, month: 1, value: "0.30" },
+          { year: 2024, month: 2, value: "0.20" },
         ],
       }),
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await getInflationRates({
-      startMonth: '2024-01',
-      endMonth: '2024-12',
+      startMonth: "2024-01",
+      endMonth: "2024-12",
       dbOnly: true,
       scheduleBackgroundRefresh: true,
     });
 
-    expect(result.source).toBe('database');
-    expect(result.rates).toEqual([{ month: '2024-01', monthly_rate: 0.004 }]);
+    expect(result.source).toBe("database");
+    expect(result.rates).toEqual([{ month: "2024-01", monthly_rate: 0.004 }]);
 
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
@@ -258,29 +273,29 @@ describe('belgianInflationService', () => {
     vi.unstubAllGlobals();
   });
 
-  it('does not use memory shortcut in dbOnly mode when db slice is empty', async () => {
+  it("does not use memory shortcut in dbOnly mode when db slice is empty", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       });
 
     await getInflationRates();
 
     query.mockResolvedValueOnce({ rows: [] });
     const dbOnlyResult = await getInflationRates({
-      startMonth: '2025-01',
-      endMonth: '2025-12',
+      startMonth: "2025-01",
+      endMonth: "2025-12",
       dbOnly: true,
     });
 
-    expect(dbOnlyResult.source).toBe('database');
+    expect(dbOnlyResult.source).toBe("database");
     expect(dbOnlyResult.rates).toEqual([]);
   });
 
-  it('saves all fetched rates with a single batched INSERT (no N+1)', async () => {
+  it("saves all fetched rates with a single batched INSERT (no N+1)", async () => {
     // 5 empty pre-checks during the refresh path (db loads + filter checks),
     // then BEGIN, then exactly ONE INSERT for all rates, then COMMIT.
     query
@@ -294,18 +309,20 @@ describe('belgianInflationService', () => {
       ok: true,
       json: async () => ({
         data: [
-          { year: 2024, month: 1, value: '0.30' },
-          { year: 2024, month: 2, value: '0.20' },
-          { year: 2024, month: 3, value: '0.10' },
+          { year: 2024, month: 1, value: "0.30" },
+          { year: 2024, month: 2, value: "0.20" },
+          { year: 2024, month: 3, value: "0.10" },
         ],
       }),
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     await getInflationRates({ forceRefresh: true });
 
-    const insertCalls = query.mock.calls.filter(([sql]) =>
-      typeof sql === 'string' && sql.includes('INSERT INTO belgian_inflation_rates')
+    const insertCalls = query.mock.calls.filter(
+      ([sql]) =>
+        typeof sql === "string" &&
+        sql.includes("INSERT INTO belgian_inflation_rates"),
     );
     expect(insertCalls).toHaveLength(1);
 
@@ -318,27 +335,27 @@ describe('belgianInflationService', () => {
     vi.unstubAllGlobals();
   });
 
-  it('warmInflationCache returns DB quickly when available and refreshes in background', async () => {
+  it("warmInflationCache returns DB quickly when available and refreshes in background", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ month_date: '2024-01-01', monthly_rate: '0.00400000' }],
+        rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
       });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ year: 2024, month: 1, value: '0.30' }],
+        data: [{ year: 2024, month: 1, value: "0.30" }],
       }),
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await warmInflationCache();
 
-    expect(result.source).toBe('database');
-    expect(result.rates).toEqual([{ month: '2024-01', monthly_rate: 0.004 }]);
+    expect(result.source).toBe("database");
+    expect(result.rates).toEqual([{ month: "2024-01", monthly_rate: 0.004 }]);
 
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();

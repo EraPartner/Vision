@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => ({ query: vi.fn() }));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 import { query } from "../src/database/connection.js";
 import { aiChatRepository } from "../src/repositories/aiChatRepository.js";

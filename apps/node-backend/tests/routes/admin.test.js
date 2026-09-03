@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 import { createAdminAuthMiddleware } from "../../src/middleware/adminAuth.js";
+import { mockConnection } from "../helpers/repoMocks.js";
 
 vi.mock("https", () => ({
   default: {
@@ -26,12 +27,14 @@ vi.mock("https", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => ({
-  checkConnection: vi.fn(),
-  getTableCount: vi.fn(),
-  getClient: vi.fn(),
-  query: vi.fn(),
-}));
+vi.mock("../../src/database/connection.js", () =>
+  mockConnection({
+    checkConnection: vi.fn(),
+    getTableCount: vi.fn(),
+    getClient: vi.fn(),
+    query: vi.fn(),
+  }),
+);
 
 const settings = vi.hoisted(() => ({
   admin: { enableResetDb: false, authToken: undefined },
@@ -319,8 +322,10 @@ describe("Admin Routes", () => {
       expect(res.body).toEqual(
         okEnvelope({
           up_to_date: true,
+          current_version: "unknown",
           error: "No published releases found",
           latest_version: null,
+          update_mode: "docker-compose",
         }),
       );
     });

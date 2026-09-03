@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockConnection } from './helpers/repoMocks.js';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 import { query } from '../src/database/connection.js';
 import mcRepo, { get as mcGet, isFresh as mcIsFresh, upsert as mcUpsert, getActiveUserIds } from '../src/repositories/cashflowForecastMcRepository.js';

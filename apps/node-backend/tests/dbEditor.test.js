@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
@@ -10,10 +11,7 @@ vi.mock("../src/services/materializedViewService.js", () => ({
   refreshMaterializedViews: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-  getClient: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 import { query, getClient } from "../src/database/connection.js";
 import { scheduleRefresh } from "../src/services/materializedViewService.js";

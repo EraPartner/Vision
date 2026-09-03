@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 // Keep convertWithRates real (pure math); only stub the DB-backed current-rate loader.
 vi.mock(

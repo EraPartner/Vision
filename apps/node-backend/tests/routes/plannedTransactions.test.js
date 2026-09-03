@@ -8,6 +8,7 @@
  * every `/:id` route here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockConnection } from '../helpers/repoMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
 import { routeAgent } from '../helpers/routeApp.js';
 
@@ -25,9 +26,7 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
   },
 }));
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
+vi.mock('../../src/database/connection.js', () => mockConnection());
 
 // The per-route PATCH limiter (routes/plannedTransactions.js:417) is stubbed
 // here on purpose: this suite issues ~28 PATCHes against one in-memory counter

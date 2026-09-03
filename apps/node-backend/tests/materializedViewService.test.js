@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 async function loadMaterializedViewService() {
   vi.resetModules();
@@ -26,7 +27,9 @@ async function loadMaterializedViewService() {
     release,
   }));
 
-  vi.doMock("../src/database/connection.js", () => ({ query, getClient }));
+  vi.doMock("../src/database/connection.js", () =>
+    mockConnection({ query, getClient }),
+  );
   vi.doMock("../src/config/logger.js", () => ({ logger }));
   const invalidateStatisticsCaches = vi.fn();
   vi.doMock("../src/services/info/cache.js", () => ({

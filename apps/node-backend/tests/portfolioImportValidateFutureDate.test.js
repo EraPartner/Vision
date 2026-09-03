@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 import { mockLogger } from "./helpers/mockLogger.js";
 // Future-dated portfolio rows used to pass validation and commit silently: a
@@ -9,9 +10,7 @@ vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 import { query } from "../src/database/connection.js";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";

@@ -1,23 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
+import { mockTxConnection } from "./helpers/repoMocks.js";
 
-const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
-
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn().mockResolvedValue({ rows: [] }),
-  withTransaction: vi.fn(async (cb) => cb({ query: clientQuery })),
+const {
+  clientQuery,
+  getAdapter,
+  genericParseWithConfig,
+  portfolioParseWithConfig,
+} = vi.hoisted(() => ({
+  clientQuery: vi.fn().mockResolvedValue({ rows: [] }),
+  getAdapter: vi.fn(),
+  genericParseWithConfig: vi.fn().mockResolvedValue([]),
+  portfolioParseWithConfig: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock("../src/database/connection.js", () =>
+  mockTxConnection(
+    { query: clientQuery },
+    { query: vi.fn().mockResolvedValue({ rows: [] }) },
+  ),
+);
 
 vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-const getAdapter = vi.fn();
 vi.mock("../src/services/importPipeline/adapters/index.js", () => ({
   getAdapter: (...args) => getAdapter(...args),
 }));
 
-const genericParseWithConfig = vi.fn().mockResolvedValue([]);
 vi.mock("../src/services/importPipeline/adapters/generic.js", () => ({
   default: {
     name: "generic",
@@ -25,7 +36,6 @@ vi.mock("../src/services/importPipeline/adapters/generic.js", () => ({
   },
 }));
 
-const portfolioParseWithConfig = vi.fn().mockResolvedValue([]);
 vi.mock(
   "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js",
   () => ({

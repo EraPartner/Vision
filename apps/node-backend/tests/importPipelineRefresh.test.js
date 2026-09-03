@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -13,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../src/database/connection.js", () => ({ query: mocks.query }));
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({ query: mocks.query }),
+);
 vi.mock("../src/config/logger.js", () => ({ logger: mocks.logger }));
 vi.mock("../src/services/importPipeline/stage.js", () => ({
   createBatch: vi.fn(),

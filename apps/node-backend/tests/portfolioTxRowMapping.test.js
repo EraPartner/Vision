@@ -1,51 +1,52 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-  withSavepointIfInTransaction: vi.fn((_n, fn) => fn()),
-}));
+vi.mock("../src/database/connection.js", () => mockConnection());
 
-import { mapPortfolioTxRow } from '../src/repositories/portfolioTxRepo.reads.js';
+import { mapPortfolioTxRow } from "../src/repositories/portfolioTxRepo.reads.js";
 
-describe('mapPortfolioTxRow — wire shape', () => {
-  it('emits DATE columns as calendar-day strings, not raw pg Dates', () => {
+describe("mapPortfolioTxRow — wire shape", () => {
+  it("emits DATE columns as calendar-day strings, not raw pg Dates", () => {
     // pg parses DATE into a local-midnight Date; JSON-serializing that emits
     // an ISO timestamp of the PREVIOUS day east of UTC, which the edit dialog
     // T-split and wrote back — date−1 per save.
     const prevTz = process.env.TZ;
-    process.env.TZ = 'Europe/Brussels';
+    process.env.TZ = "Europe/Brussels";
     try {
       const row = mapPortfolioTxRow({
         id: 1,
         date: new Date(2026, 6, 1), // local midnight July 1 (pg shape)
         recurrence_end_date: new Date(2026, 11, 31),
-        amount: '1000.50',
-        units: '10',
+        amount: "1000.50",
+        units: "10",
       });
-      expect(row.date).toBe('2026-07-01');
-      expect(row.recurrence_end_date).toBe('2026-12-31');
+      expect(row.date).toBe("2026-07-01");
+      expect(row.recurrence_end_date).toBe("2026-12-31");
       expect(row.amount).toBe(1000.5); // NUMERIC coercion still applies
     } finally {
       process.env.TZ = prevTz;
     }
   });
 
-  it('passes through string dates and null untouched', () => {
+  it("passes through string dates and null untouched", () => {
     const row = mapPortfolioTxRow({
       id: 2,
-      date: '2026-07-01',
+      date: "2026-07-01",
       recurrence_end_date: null,
-      amount: '1',
+      amount: "1",
       import_batch_id: null,
     });
-    expect(row.date).toBe('2026-07-01');
+    expect(row.date).toBe("2026-07-01");
     expect(row.recurrence_end_date).toBeNull();
     expect(row.import_batch_id).toBeNull();
   });
 
-  it('preserves BIGINT import batch provenance as a string', () => {
-    const row = mapPortfolioTxRow({ id: 3, date: '2026-07-01', import_batch_id: '7' });
-    expect(row.import_batch_id).toBe('7');
+  it("preserves BIGINT import batch provenance as a string", () => {
+    const row = mapPortfolioTxRow({
+      id: 3,
+      date: "2026-07-01",
+      import_batch_id: "7",
+    });
+    expect(row.import_batch_id).toBe("7");
   });
 });

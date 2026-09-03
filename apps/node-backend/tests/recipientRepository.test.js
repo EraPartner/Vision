@@ -3,8 +3,9 @@
  * assert the SQL the repository builds and how it shapes rows.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockConnection } from './helpers/repoMocks.js';
 
-vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
+vi.mock('../src/database/connection.js', () => mockConnection());
 vi.mock('../src/lib/textNormalization.js', () => ({
   normalizeForMatching: vi.fn((s) => `norm:${String(s).trim().toLowerCase()}`),
 }));

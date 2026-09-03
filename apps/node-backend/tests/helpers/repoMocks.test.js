@@ -9,7 +9,51 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { mockTxConnection } from "./repoMocks.js";
+import {
+  mockConnection,
+  mockPooledTxConnection,
+  mockTxConnection,
+} from "./repoMocks.js";
+
+const productionSurface = [
+  "default",
+  "query",
+  "queryPrepared",
+  "getClient",
+  "getAmbientTransactionClient",
+  "withTransaction",
+  "withSavepointIfInTransaction",
+  "checkConnection",
+  "getTableCount",
+  "getPoolStats",
+  "closePool",
+];
+
+describe("connection mock surface", () => {
+  it.each([
+    ["inert", () => mockConnection()],
+    ["ambient transaction", () => mockTxConnection()],
+    ["pooled transaction", () => mockPooledTxConnection()],
+  ])(
+    "keeps the %s helper aligned with every production export",
+    (_name, build) => {
+      expect(Object.keys(build())).toEqual(
+        expect.arrayContaining(productionSurface),
+      );
+    },
+  );
+
+  it("applies explicit inert overrides after the defaults", async () => {
+    const query = vi.fn(async () => ({ rows: [{ id: 7 }] }));
+    const conn = mockConnection({ query, checkConnection: vi.fn(() => true) });
+
+    await expect(conn.query("SELECT 7")).resolves.toEqual({
+      rows: [{ id: 7 }],
+    });
+    expect(conn.query).toBe(query);
+    expect(conn.checkConnection()).toBe(true);
+  });
+});
 
 describe("mockTxConnection — ambient transaction routing", () => {
   it("routes module-level query onto the transaction client while a tx is open", async () => {

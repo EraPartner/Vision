@@ -9,21 +9,21 @@
  * fetch to empty) so the test is deterministic and offline.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mockLogger } from '../helpers/mockLogger.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mockLogger } from "../helpers/mockLogger.js";
+import { mockConnection } from "../helpers/repoMocks.js";
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(async () => ({ rows: [] })),
-}));
-vi.mock('../../src/config/logger.js', () => ({
+vi.mock("../../src/database/connection.js", () =>
+  mockConnection({
+    query: vi.fn(async () => ({ rows: [] })),
+  }),
+);
+vi.mock("../../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-const {
-  convertToCurrency,
-  clearMemoryCache,
-  FALLBACK_RATES,
-} = await import('../../src/services/currency/currencyConversionService.js');
+const { convertToCurrency, clearMemoryCache, FALLBACK_RATES } =
+  await import("../../src/services/currency/currencyConversionService.js");
 
 const originalFetch = global.fetch;
 const EPSILON_RATIO = 1e-9; // 1 part per billion
@@ -39,11 +39,13 @@ function seeded(seed) {
   };
 }
 
-describe('property: currency round-trip identity', () => {
+describe("property: currency round-trip identity", () => {
   beforeEach(() => {
     clearMemoryCache();
     // Force fetch failure so FALLBACK_RATES is used deterministically
-    global.fetch = vi.fn().mockRejectedValue(new Error('offline-for-property-test'));
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("offline-for-property-test"));
   });
 
   afterEach(() => {
@@ -51,10 +53,12 @@ describe('property: currency round-trip identity', () => {
     else delete global.fetch;
   });
 
-  const CURRENCIES = Object.keys(FALLBACK_RATES).filter((c) => FALLBACK_RATES[c] > 0);
+  const CURRENCIES = Object.keys(FALLBACK_RATES).filter(
+    (c) => FALLBACK_RATES[c] > 0,
+  );
 
-  it('convert(convert(x, A, B), B, A) ≈ x across 200 random (x, A, B) triples', async () => {
-    const rng = seeded(0xFACE0FF);
+  it("convert(convert(x, A, B), B, A) ≈ x across 200 random (x, A, B) triples", async () => {
+    const rng = seeded(0xface0ff);
     for (let i = 0; i < 200; i++) {
       const from = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
       const to = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
@@ -62,21 +66,24 @@ describe('property: currency round-trip identity', () => {
       const forward = await convertToCurrency(amount, from, to);
       const back = await convertToCurrency(forward, to, from);
       const ratio = Math.abs(back - amount) / amount;
-      expect(ratio, `round-trip ${amount} ${from}→${to}→${from} got ${back}`).toBeLessThan(EPSILON_RATIO);
+      expect(
+        ratio,
+        `round-trip ${amount} ${from}→${to}→${from} got ${back}`,
+      ).toBeLessThan(EPSILON_RATIO);
     }
   });
 
-  it('EUR→EUR identity returns input unchanged for arbitrary x', async () => {
-    const rng = seeded(0xFEE1DEAD);
+  it("EUR→EUR identity returns input unchanged for arbitrary x", async () => {
+    const rng = seeded(0xfee1dead);
     for (let i = 0; i < 50; i++) {
       const amount = rng() * 1e6;
-      const result = await convertToCurrency(amount, 'EUR', 'EUR');
+      const result = await convertToCurrency(amount, "EUR", "EUR");
       expect(result).toBe(amount);
     }
   });
 
-  it('cross-currency triangulation: A→B→C == A→C within ratio tolerance', async () => {
-    const rng = seeded(0xDEADDEAD);
+  it("cross-currency triangulation: A→B→C == A→C within ratio tolerance", async () => {
+    const rng = seeded(0xdeaddead);
     for (let i = 0; i < 100; i++) {
       const a = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
       const b = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
