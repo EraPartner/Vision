@@ -506,8 +506,12 @@ describe("Import Routes", () => {
       const errFrame = frames.find((f) => f.name === "error");
       // A plain Error (not a ValidationError) maps to the generic detail —
       // the raw 'adapter failed' message is deliberately not echoed to the
-      // client (importProgress.js's streamImport).
-      expect(errFrame.data).toEqual({ detail: "Import failed" });
+      // client (importProgress.js's streamImport). The stable code lets clients
+      // distinguish an unexpected failure without exposing that raw detail.
+      expect(errFrame.data).toEqual({
+        detail: "Import failed",
+        code: "INTERNAL_SERVER_ERROR",
+      });
       expect(frames.some((f) => f.name === "complete")).toBe(false);
     });
 
