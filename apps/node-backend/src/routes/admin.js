@@ -240,17 +240,19 @@ router.get(
     res,
   ) => {
     const release = await fetchLatestRelease();
+    const currentVersion = detectCurrentAppVersion();
 
     if (!hasValidReleaseTag(release)) {
       res.ok({
         up_to_date: true,
+        current_version: currentVersion,
         error: "No published releases found",
         latest_version: null,
+        update_mode: UPDATE_MODE_DOCKER_COMPOSE,
       });
       return;
     }
 
-    const currentVersion = detectCurrentAppVersion();
     const { payload, latestVersion, upToDate } = buildUpdateCheckPayload(
       release,
       currentVersion,

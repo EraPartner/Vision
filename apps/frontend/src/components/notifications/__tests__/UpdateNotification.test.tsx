@@ -26,8 +26,9 @@ const UPDATE_AVAILABLE = {
     update_mode: "source" as const,
 };
 
-/** Same release, payload shape of a backend that never sends update_mode. */
-const { update_mode: _unusedMode, ...UPDATE_AVAILABLE_NO_MODE } = UPDATE_AVAILABLE;
+/** Compatibility fixture for a legacy server that did not send update_mode. */
+const { update_mode: _unusedMode, ...UPDATE_AVAILABLE_NO_MODE } =
+    UPDATE_AVAILABLE;
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -38,7 +39,9 @@ afterEach(() => {
 describe("UpdateNotification", () => {
     it("renders nothing when app is up to date", async () => {
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UP_TO_DATE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UP_TO_DATE),
+            ),
         );
 
         const { container } = renderWithApp(<UpdateNotification />);
@@ -51,54 +54,80 @@ describe("UpdateNotification", () => {
 
     it("renders update badge when a newer version is available", async () => {
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UPDATE_AVAILABLE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UPDATE_AVAILABLE),
+            ),
         );
 
         renderWithApp(<UpdateNotification />);
 
-        expect(await screen.findByText(/update available/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/update available/i),
+        ).toBeInTheDocument();
     });
 
     it("opens dialog with version details on badge click", async () => {
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UPDATE_AVAILABLE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UPDATE_AVAILABLE),
+            ),
         );
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
 
-        const badge = await screen.findByRole("button", { name: /update available/i });
+        const badge = await screen.findByRole("button", {
+            name: /update available/i,
+        });
         await user.click(badge);
 
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toBeInTheDocument();
-        expect(await screen.findByText(/version 1\.3\.0 is available/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/version 1\.3\.0 is available/i),
+        ).toBeInTheDocument();
         expect(screen.getByText(/Bug fixes/)).toBeInTheDocument();
     });
 
     it("renders release notes link to the GitHub html_url", async () => {
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UPDATE_AVAILABLE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UPDATE_AVAILABLE),
+            ),
         );
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
 
-        const link = await screen.findByRole("link", { name: /release notes/i });
-        expect(link).toHaveAttribute("href", "https://example.com/release/1.3.0");
+        const link = await screen.findByRole("link", {
+            name: /release notes/i,
+        });
+        expect(link).toHaveAttribute(
+            "href",
+            "https://example.com/release/1.3.0",
+        );
         expect(link).toHaveAttribute("target", "_blank");
-        expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+        expect(link).toHaveAttribute(
+            "rel",
+            expect.stringContaining("noopener"),
+        );
     });
 
     it("dismisses the dialog when 'Later' is clicked", async () => {
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UPDATE_AVAILABLE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UPDATE_AVAILABLE),
+            ),
         );
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.click(screen.getByRole("button", { name: /later/i }));
@@ -114,35 +143,50 @@ describe("UpdateNotification", () => {
         // to promise something it could not deliver.
         server.use(
             http.get(`${API_BASE}/api/admin/update/check`, () =>
-                ok({ ...UPDATE_AVAILABLE, update_mode: "docker-compose" })),
+                ok({ ...UPDATE_AVAILABLE, update_mode: "docker-compose" }),
+            ),
         );
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         const dialog = await screen.findByRole("dialog");
 
-        expect(screen.queryByRole("button", { name: /install update/i })).not.toBeInTheDocument();
-        expect(dialog).toHaveTextContent(/docker compose pull && docker compose up -d/i);
+        expect(
+            screen.queryByRole("button", { name: /install update/i }),
+        ).not.toBeInTheDocument();
+        expect(dialog).toHaveTextContent(
+            /docker compose pull && docker compose up -d/i,
+        );
         // The dismiss button is still there — the notice stays, only the dead
         // Install button goes away.
-        expect(screen.getByRole("button", { name: /later/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /later/i }),
+        ).toBeInTheDocument();
     });
 
     it("hides the Install button outside Electron even when update_mode is absent", async () => {
-        // Legacy payloads (and the no-release early return) omit update_mode.
+        // Legacy payloads can omit update_mode.
         // The gate must be isElectron(), not the mode default — the old code
         // defaulted to 'source' and rendered a dead button.
         server.use(
-            http.get(`${API_BASE}/api/admin/update/check`, () => ok(UPDATE_AVAILABLE_NO_MODE)),
+            http.get(`${API_BASE}/api/admin/update/check`, () =>
+                ok(UPDATE_AVAILABLE_NO_MODE),
+            ),
         );
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         await screen.findByRole("dialog");
 
-        expect(screen.queryByRole("button", { name: /install update/i })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /install update/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("closes the dialog without erroring when the release has no installable asset", async () => {
@@ -152,7 +196,8 @@ describe("UpdateNotification", () => {
         const installShellUpdate = vi.fn().mockResolvedValue({
             success: false,
             manual_download: true,
-            html_url: "https://github.com/EraPartner/Vision/releases/tag/v1.3.0",
+            html_url:
+                "https://github.com/EraPartner/Vision/releases/tag/v1.3.0",
             error: "This release has no in-app installer. Opening the download page in your browser.",
         });
         const preUpdateBackup = vi.fn().mockResolvedValue({ success: true });
@@ -168,10 +213,14 @@ describe("UpdateNotification", () => {
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         await screen.findByRole("dialog");
 
-        await user.click(screen.getByRole("button", { name: /install update/i }));
+        await user.click(
+            screen.getByRole("button", { name: /install update/i }),
+        );
 
         await waitFor(() => {
             expect(installShellUpdate).toHaveBeenCalledTimes(1);
@@ -197,10 +246,14 @@ describe("UpdateNotification", () => {
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         await screen.findByRole("dialog");
 
-        await user.click(screen.getByRole("button", { name: /install update/i }));
+        await user.click(
+            screen.getByRole("button", { name: /install update/i }),
+        );
 
         await waitFor(() => {
             expect(preUpdateBackup).toHaveBeenCalledTimes(1);
@@ -226,10 +279,14 @@ describe("UpdateNotification", () => {
         const user = userEvent.setup();
 
         renderWithApp(<UpdateNotification />);
-        await user.click(await screen.findByRole("button", { name: /update available/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /update available/i }),
+        );
         await screen.findByRole("dialog");
 
-        await user.click(screen.getByRole("button", { name: /install update/i }));
+        await user.click(
+            screen.getByRole("button", { name: /install update/i }),
+        );
 
         await waitFor(() => {
             expect(preUpdateBackup).toHaveBeenCalledTimes(1);

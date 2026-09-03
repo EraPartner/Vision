@@ -16,23 +16,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { electronErrorToMessage } from "@/lib/api/electronErrorMessage";
+import type { UpdateCheckStatus } from "@/lib/api/electron";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-interface UpdateStatus {
-    up_to_date: boolean;
-    current_version: string;
-    latest_version: string | null;
-    published_at?: string;
-    release_notes?: string;
-    html_url?: string;
-    /**
-     * 'source' | 'docker' | 'native' | 'dev' come from the Electron IPC updater. The HTTP
-     * route — the only source outside Electron — reports 'docker-compose',
-     * which has no in-app installer: the operator runs `docker compose pull`.
-     */
-    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
-}
 
 type ApplyPhase =
     "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
@@ -40,7 +26,7 @@ type ApplyPhase =
 export function UpdateNotification() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const [status, setStatus] = useState<UpdateStatus | null>(null);
+    const [status, setStatus] = useState<UpdateCheckStatus | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [phase, setPhase] = useState<ApplyPhase>("idle");
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);

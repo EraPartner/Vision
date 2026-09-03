@@ -28,6 +28,7 @@ import {
     SettingRow,
 } from "../SettingsPrimitives";
 import { electronErrorToMessage } from "@/lib/api/electronErrorMessage";
+import type { UpdateCheckStatus } from "@/lib/api/electron";
 import { VisionMark } from "@/components/shared/VisionMark";
 import {
     APP_DOCUMENTATION_URL,
@@ -36,18 +37,6 @@ import {
     APP_REPOSITORY_URL,
     APP_VERSION,
 } from "@/lib/appIdentity";
-
-type UpdateStatus = {
-    up_to_date: boolean;
-    current_version: string;
-    latest_version: string | null;
-    published_at?: string;
-    release_notes?: string;
-    html_url?: string;
-    /** 'docker-compose' comes from the HTTP route — non-Electron, no in-app installer. */
-    update_mode?: "source" | "docker" | "native" | "dev" | "docker-compose";
-    error?: string;
-} | null;
 
 type ApplyPhase =
     "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
@@ -66,7 +55,9 @@ export const AboutSection = memo(function AboutSection({
     const { resetSettings } = useSettings();
     const queryClient = useQueryClient();
 
-    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
+    const [updateStatus, setUpdateStatus] = useState<UpdateCheckStatus | null>(
+        null,
+    );
     const [checkingUpdate, setCheckingUpdate] = useState(false);
     const [applyPhase, setApplyPhase] = useState<ApplyPhase>("idle");
     const applyingUpdate = applyPhase !== "idle" && applyPhase !== "done";
