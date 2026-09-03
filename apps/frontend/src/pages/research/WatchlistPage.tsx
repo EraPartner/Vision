@@ -1,6 +1,5 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +9,11 @@ import { LineChart, Plus, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/features/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -21,11 +22,13 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { toast } from "sonner";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 
-import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
+import {
+    useDeleteWatchlistItem,
+    useWatchlist,
+} from "@/features/research/useWatchlistData";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
 
@@ -36,22 +39,18 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
 };
 
 export default function WatchlistPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
     const isOnline = useOnlineStatus();
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(
         null,
     );
-    const queryClient = useQueryClient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const { data, isLoading } = useQuery({
-        queryKey: watchlistKeys.all,
-        queryFn: () => apiClient.getWatchlist(),
-    });
+    const { data, isLoading } = useWatchlist();
 
     const symbols =
         data?.items
@@ -59,20 +58,14 @@ export default function WatchlistPage() {
             .filter(Boolean)
             .join(",") || "";
     const { data: quotesData, isError: quotesError } = useMarketQuotesQuery(
-        ["watchlist-quotes", symbols],
+        watchlistKeys.quotes(symbols),
         symbols,
     );
     const quotesUnavailable = !isOnline || quotesError;
 
     const priceMap = new Map(quotesData?.map((q) => [q.symbol, q]) || []);
 
-    const deleteMutation = useMutation({
-        mutationFn: (id: number) => apiClient.deleteWatchlistItem(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
-            toast.success(t("watchlist.removedSuccess"));
-        },
-    });
+    const deleteMutation = useDeleteWatchlistItem();
 
     // Removal destroys the user's notes and target price with no undo, so it goes
     // through the same confirm every other destructive surface in the app uses.
@@ -264,7 +257,6 @@ export default function WatchlistPage() {
                                                             ),
                                                             {
                                                                 digits: 1,
-                                                                locale,
                                                             },
                                                         )} ${t(
                                                             "watchlist.aboveTarget",
@@ -310,7 +302,6 @@ export default function WatchlistPage() {
                                                     {
                                                         digits: 1,
                                                         signed: true,
-                                                        locale,
                                                     },
                                                 )}
                                             />

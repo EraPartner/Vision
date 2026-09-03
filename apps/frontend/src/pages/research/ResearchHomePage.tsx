@@ -1,18 +1,21 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Target, ArrowRight, Plus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { numberFormatToLocale } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
+import { useWatchlist } from "@/features/research/useWatchlistData";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PortfolioNewsFeed } from "@/features/portfolio/PortfolioNewsFeed";
 import { ResearchUnavailableNote } from "@/features/research/ResearchUnavailableNote";
@@ -35,6 +38,7 @@ const BENCHMARKS: ReadonlyArray<{ symbol: string; label: string }> = [
 const BENCHMARK_SYMBOLS = BENCHMARKS.map((b) => b.symbol).join(",");
 
 export default function ResearchHomePage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -66,11 +70,7 @@ export default function ResearchHomePage() {
         [benchmarkData],
     );
 
-    const { data: watchlist } = useQuery({
-        queryKey: watchlistKeys.all,
-        queryFn: () => apiClient.getWatchlist(),
-        staleTime: 60_000,
-    });
+    const { data: watchlist } = useWatchlist(60_000);
     const watchlistItems = useMemo(() => watchlist?.items ?? [], [watchlist]);
     const watchlistPreview = useMemo(
         () => watchlistItems.slice(0, 9),
@@ -87,7 +87,7 @@ export default function ResearchHomePage() {
         [watchlistItems],
     );
     const { data: watchlistQuotes } = useMarketQuotesQuery(
-        ["watchlist-quotes", watchlistSymbols],
+        watchlistKeys.quotes(watchlistSymbols),
         watchlistSymbols,
         { staleTime: 60_000 },
     );

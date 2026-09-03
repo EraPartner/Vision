@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { INVESTMENT_STUB, ok, err } from "@/test/msw/handlers";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";
 
 const API_BASE = "http://localhost:3002";
@@ -65,7 +65,9 @@ describe("MarketLookupPage (integration)", () => {
         renderWithApp(<MarketLookupPage />);
         // market.searchTicker = "Search for a ticker"
         expect(
-            await screen.findByRole("heading", { name: /search for a ticker/i }),
+            await screen.findByRole("heading", {
+                name: /search for a ticker/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -76,7 +78,12 @@ describe("MarketLookupPage (integration)", () => {
             http.get(`${API_BASE}/api/market/search`, () =>
                 ok({
                     items: [
-                        { symbol: "AAPL", name: "Apple Inc.", type: "Equity", exchange: "NASDAQ" },
+                        {
+                            symbol: "AAPL",
+                            name: "Apple Inc.",
+                            type: "Equity",
+                            exchange: "NASDAQ",
+                        },
                     ],
                 }),
             ),
@@ -87,7 +94,9 @@ describe("MarketLookupPage (integration)", () => {
         await user.type(input, "AAPL");
 
         // Dropdown result shows the symbol
-        expect(await screen.findByText("AAPL", {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(
+            await screen.findByText("AAPL", {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
     });
 
     it("selects a symbol from dropdown and requests quote", async () => {
@@ -98,7 +107,12 @@ describe("MarketLookupPage (integration)", () => {
             http.get(`${API_BASE}/api/market/search`, () =>
                 ok({
                     items: [
-                        { symbol: "AAPL", name: "Apple Inc.", type: "Equity", exchange: "NASDAQ" },
+                        {
+                            symbol: "AAPL",
+                            name: "Apple Inc.",
+                            type: "Equity",
+                            exchange: "NASDAQ",
+                        },
                     ],
                 }),
             ),
@@ -109,7 +123,9 @@ describe("MarketLookupPage (integration)", () => {
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
         renderWithApp(<MarketLookupPage />);
@@ -117,7 +133,11 @@ describe("MarketLookupPage (integration)", () => {
         await user.type(input, "AAPL");
 
         // Click first dropdown result
-        const resultBtn = await screen.findByRole("option", { name: /apple inc/i }, { timeout: 5000 });
+        const resultBtn = await screen.findByRole(
+            "option",
+            { name: /apple inc/i },
+            { timeout: 5000 },
+        );
         await user.click(resultBtn);
 
         expect(quoteFetched).toBe(true);
@@ -130,7 +150,12 @@ describe("MarketLookupPage (integration)", () => {
             http.get(`${API_BASE}/api/market/search`, () =>
                 ok({
                     items: [
-                        { symbol: "AAPL", name: "Apple Inc.", type: "Equity", exchange: "NASDAQ" },
+                        {
+                            symbol: "AAPL",
+                            name: "Apple Inc.",
+                            type: "Equity",
+                            exchange: "NASDAQ",
+                        },
                     ],
                 }),
             ),
@@ -140,14 +165,20 @@ describe("MarketLookupPage (integration)", () => {
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
         renderWithApp(<MarketLookupPage />);
         const input = await screen.findByPlaceholderText(/search ticker/i);
         await user.type(input, "AAPL");
 
-        const resultBtn = await screen.findByRole("option", { name: /apple inc/i }, { timeout: 5000 });
+        const resultBtn = await screen.findByRole(
+            "option",
+            { name: /apple inc/i },
+            { timeout: 5000 },
+        );
         await user.click(resultBtn);
 
         // Quote card shows symbol and company name
@@ -156,29 +187,108 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows quote card when symbol is supplied via URL query param", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({ items: [appleQuote], total: 1 }),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // Company name from quote data appears
         expect(await screen.findByText("Apple Inc.")).toBeInTheDocument();
     });
 
+    it("maps provider price history and refetches it for the selected range", async () => {
+        const user = userEvent.setup({ delay: null });
+        const now = Date.UTC(2026, 8, 3, 12);
+        const dateSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+        const historyUrls: URL[] = [];
+        const providerInvestment = {
+            ...INVESTMENT_STUB,
+            id: 42,
+            name: "Bitcoin",
+            symbol: "BTC",
+            asset_class: "crypto",
+            currency: "EUR",
+            current_price: 100,
+            price_provider: "binance",
+            price_provider_id: "BTCUSDT",
+        };
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [providerInvestment],
+                    total: 1,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(
+                `${API_BASE}/api/investments/:id/price-history`,
+                ({ request }) => {
+                    historyUrls.push(new URL(request.url));
+                    return ok({
+                        investment_id: 42,
+                        provider: "binance",
+                        points: [
+                            { timestampMs: now - 1_000, price: 100 },
+                            { timestampMs: now, price: 125 },
+                        ],
+                    });
+                },
+            ),
+        );
+
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=BTC&investmentId=42"],
+        });
+
+        expect(await screen.findByText("Bitcoin")).toBeInTheDocument();
+        await waitFor(() => expect(historyUrls).toHaveLength(1));
+        expect(historyUrls[0].searchParams.get("from_ms")).toBe(
+            String(now - 30 * 24 * 60 * 60 * 1000),
+        );
+        expect(historyUrls[0].searchParams.get("db_only")).toBe("false");
+        expect(await screen.findByText(/125,00/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: /^1y$/i }));
+        await waitFor(() =>
+            expect(
+                historyUrls.some(
+                    (url) =>
+                        url.searchParams.get("from_ms") ===
+                        String(now - 365 * 24 * 60 * 60 * 1000),
+                ),
+            ).toBe(true),
+        );
+        dateSpy.mockRestore();
+    });
+
     it("shows Price Chart section when a symbol is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({ items: [appleQuote], total: 1 }),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // market.priceChart = "Price Chart"
         expect(await screen.findByText(/price chart/i)).toBeInTheDocument();
@@ -186,14 +296,20 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows Latest News section when a symbol is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({ items: [appleQuote], total: 1 }),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // market.latestNews = "Latest News"
         expect(await screen.findByText(/latest news/i)).toBeInTheDocument();
@@ -202,7 +318,9 @@ describe("MarketLookupPage (integration)", () => {
     it("shows No news message when the news tab has no articles", async () => {
         const user = userEvent.setup({ delay: null });
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({ items: [appleQuote], total: 1 }),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
@@ -213,50 +331,76 @@ describe("MarketLookupPage (integration)", () => {
             ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // Default Details tab is Fundamentals; switch to News.
-        await user.click(await screen.findByRole("tab", { name: /latest news/i }));
+        await user.click(
+            await screen.findByRole("tab", { name: /latest news/i }),
+        );
 
-        expect(await screen.findByText(/no recent news for this symbol/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no recent news for this symbol/i),
+        ).toBeInTheDocument();
     });
 
     it("shows time range buttons when quote is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({ items: [appleQuote], total: 1 }),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // Range buttons: 1D, 5D, 1M, etc.
-        expect(await screen.findByRole("button", { name: /^1d$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("button", { name: /^1y$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /^1d$/i }),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /^1y$/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows no-quote message when quote API fails for URL-supplied symbol", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => err(500, "Server error")),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                err(500, "Server error"),
+            ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                ok({ items: [], total: 0 }),
+            ),
         );
 
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
 
         // market.noQuote = "No quote data available for {symbol}"
-        expect(await screen.findByText(/no quote data available for aapl/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no quote data available for aapl/i),
+        ).toBeInTheDocument();
     });
 
     it("renders without crashing when search API fails", async () => {
         const user = userEvent.setup({ delay: null });
 
         server.use(
-            http.get(`${API_BASE}/api/market/search`, () => err(500, "Server error")),
+            http.get(`${API_BASE}/api/market/search`, () =>
+                err(500, "Server error"),
+            ),
         );
 
         renderWithApp(<MarketLookupPage />);
@@ -264,16 +408,22 @@ describe("MarketLookupPage (integration)", () => {
         await user.type(input, "FAIL");
 
         // Page still renders heading — no crash despite search API failure
-        expect(screen.getByRole("heading", { name: /market lookup/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: /market lookup/i }),
+        ).toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("renders without crashing when quote API returns 404 for unknown symbol", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => err(404, "Symbol not found")),
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                err(404, "Symbol not found"),
+            ),
         );
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=NOTREAL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=NOTREAL"],
+        });
         // Heading still renders despite the 404
         expect(
             await screen.findByRole("heading", { name: /market lookup/i }),
@@ -283,9 +433,13 @@ describe("MarketLookupPage (integration)", () => {
     it("renders without crashing when news API fails (5xx)", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/market/news`, () => err(503, "news unavailable")),
+            http.get(`${API_BASE}/api/market/news`, () =>
+                err(503, "news unavailable"),
+            ),
         );
-        renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+        renderWithApp(<MarketLookupPage />, {
+            initialEntries: ["/?symbol=AAPL"],
+        });
         expect(
             await screen.findByRole("heading", { name: /market lookup/i }),
         ).toBeInTheDocument();

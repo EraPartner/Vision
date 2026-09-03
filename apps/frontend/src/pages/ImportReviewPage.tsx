@@ -1,19 +1,15 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import {
-    importKeys,
-    invalidateAccountDerived,
-    invalidateTransactionData,
-    plannedKeys,
-} from "@/lib/queryKeys";
+    useImportPreview,
+    useImportReviewMutations,
+} from "@/features/imports/useImportReviewData";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Button } from "@/components/ui/button";
@@ -51,7 +47,11 @@ interface GroupState {
     categorySaving: boolean;
 }
 
-function matchSourceBadge(source: MatchSource, similarity?: number | null) {
+function matchSourceBadge(
+    source: MatchSource,
+    locale: string,
+    similarity?: number | null,
+) {
     switch (source) {
         case "exact":
             return (
@@ -70,7 +70,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
                 >
                     fuzzy{" "}
                     {similarity != null
-                        ? formatPercent(similarity * 100, { digits: 0 })
+                        ? formatPercent(similarity * 100, { digits: 0, locale })
                         : ""}
                 </Badge>
             );
@@ -136,7 +136,6 @@ export default function ImportReviewPage() {
     const { batchId: batchIdParam } = useParams<{ batchId: string }>();
     const batchId = Number(batchIdParam);
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
@@ -158,11 +157,7 @@ export default function ImportReviewPage() {
         isLoading,
         error,
         refetch,
-    } = useQuery({
-        queryKey: importKeys.preview(batchId),
-        queryFn: () => apiClient.getImportPreview(batchId),
-        enabled: Number.isFinite(batchId),
-    });
+    } = useImportPreview(batchId);
 
     // WP-B6 import disclosure — which accounts will this batch write to, and
     // will any of them be created on commit? Read-only: computed purely from the
@@ -201,112 +196,13 @@ export default function ImportReviewPage() {
     }, [preview, accountsData]);
 
     const newAccountCount = accountDisclosure.filter((e) => e.isNew).length;
-
-    // These three are driven via `mutateAsync` and toast their own localized
-    // copy in the callers' catch blocks — the meta flag keeps the global
-    // mutation-error backstop from toasting the same failure twice.
-    const overrideMutation = useMutation({
-        mutationFn: ({
-            rowId,
-            recipientId,
-        }: {
-            rowId: number;
-            recipientId: number | null;
-        }) => apiClient.overrideImportRow(batchId, rowId, recipientId),
-        meta: { suppressErrorToast: true },
-    });
-
-    const categoryOverrideMutation = useMutation({
-        mutationFn: ({
-            rowId,
-            categoryId,
-        }: {
-            rowId: number;
-            categoryId: number | null;
-        }) => apiClient.overrideImportRowCategory(batchId, rowId, categoryId),
-        meta: { suppressErrorToast: true },
-    });
-
-    const persistDefaultMutation = useMutation({
-        mutationFn: ({
-            recipientId,
-            categoryId,
-        }: {
-            recipientId: number;
-            categoryId: number | null;
-        }) =>
-            apiClient.updateRecipient(recipientId, {
-                default_category_id: categoryId,
-            }),
-        meta: { suppressErrorToast: true },
-    });
-
-    const commitMutation = useMutation({
-        mutationFn: () => apiClient.commitImportBatch(batchId),
-        onSuccess: (data) => {
-            toast.success(
-                t("importReview.toast.success", {
-                    imported: data.imported,
-                    duplicates: data.duplicates,
-                    errors: data.errors,
-                }),
-                { icon: <CheckCircle2 className="h-4 w-4" /> },
-            );
-            if (data.auto_linked_count && data.auto_linked_count > 0) {
-                toast.success(
-                    t("importReview.toast.autoLinked", {
-                        n: data.auto_linked_count,
-                    }),
-                );
-                queryClient.invalidateQueries({
-                    queryKey: plannedKeys.matchSuggestions,
-                });
-                queryClient.invalidateQueries({
-                    queryKey: plannedKeys.upcomingAll,
-                });
-            }
-            // WP-B6: committing rows under an unknown account label auto-creates the
-            // account (DB trigger, migration 0056). Nudge the user to the accounts
-            // hub to classify/name the new account(s), and refresh account-derived
-            // views so the hub shows them immediately.
-            if (newAccountCount > 0) {
-                invalidateAccountDerived(queryClient);
-                toast.success(
-                    t("importReview.toast.newAccounts", { n: newAccountCount }),
-                    {
-                        action: {
-                            label: t("importReview.toast.reviewAccounts"),
-                            onClick: () => navigate("/accounts"),
-                        },
-                        duration: 10000,
-                    },
-                );
-            }
-            queryClient.invalidateQueries({ queryKey: ["import-batches"] });
-            // A commit inserts the staged rows into `transactions`; refresh the
-            // transactions list, dashboard stat cards, monthly summary and
-            // aggregations so the imported rows appear immediately instead of after
-            // staleTime expires (window-focus refetch is disabled globally).
-            invalidateTransactionData(queryClient);
-            // Replace, don't push: this batch is consumed, so Back must skip the
-            // review URL (it no longer previews) instead of re-inviting a commit.
-            navigate("/import", {
-                replace: true,
-                state: {
-                    importCommitReceipt: {
-                        imported: data.imported,
-                        duplicates: data.duplicates,
-                        errors: data.errors,
-                    },
-                },
-            });
-        },
-        onError: (err: Error) => {
-            toast.error(t("importReview.toast.commitFailed"), {
-                description: apiErrorToMessage(err, t),
-            });
-        },
-    });
+    const {
+        overrideRows,
+        overrideCategories,
+        persistDefaultCategory,
+        commit,
+        isCommitting,
+    } = useImportReviewMutations(batchId, newAccountCount);
 
     const groupStateFor = (
         group: ImportPreviewGroup,
@@ -354,19 +250,11 @@ export default function ImportReviewPage() {
         );
 
         try {
-            await Promise.all(
-                rows.map((row) =>
-                    overrideMutation.mutateAsync({
-                        rowId: row.id,
-                        recipientId,
-                    }),
-                ),
+            await overrideRows(
+                rows.map((row) => row.id),
+                recipientId,
             );
             updateGroupState(groupKey, { recipientSaving: false }, fallback);
-            // Recipient changed — recipient default category may differ. Refresh.
-            queryClient.invalidateQueries({
-                queryKey: importKeys.preview(batchId),
-            });
         } catch (err) {
             toast.error(t("importReview.toast.overrideFailed"), {
                 description: apiErrorToMessage(err, t),
@@ -393,13 +281,9 @@ export default function ImportReviewPage() {
         );
 
         try {
-            await Promise.all(
-                rows.map((row) =>
-                    categoryOverrideMutation.mutateAsync({
-                        rowId: row.id,
-                        categoryId,
-                    }),
-                ),
+            await overrideCategories(
+                rows.map((row) => row.id),
+                categoryId,
             );
             updateGroupState(groupKey, { categorySaving: false }, fallback);
 
@@ -412,10 +296,7 @@ export default function ImportReviewPage() {
 
             if (persist && targetRecipientId != null && categoryId != null) {
                 try {
-                    await persistDefaultMutation.mutateAsync({
-                        recipientId: targetRecipientId,
-                        categoryId,
-                    });
+                    await persistDefaultCategory(targetRecipientId, categoryId);
                 } catch (persistErr) {
                     toast.error(t("importReview.toast.persistDefaultFailed"), {
                         description: apiErrorToMessage(persistErr, t),
@@ -645,7 +526,7 @@ export default function ImportReviewPage() {
                                 }
                             >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    {matchSourceBadge(dominant)}
+                                    {matchSourceBadge(dominant, locale)}
                                     <span className="font-medium text-sm truncate">
                                         {groupHeading}
                                     </span>
@@ -720,6 +601,7 @@ export default function ImportReviewPage() {
                                             <div className="shrink-0">
                                                 {matchSourceBadge(
                                                     row.match_source,
+                                                    locale,
                                                     row.match_similarity,
                                                 )}
                                             </div>
@@ -749,7 +631,7 @@ export default function ImportReviewPage() {
                                                 {formatCurrency(
                                                     Number(row.amount),
                                                     row.currency ?? "EUR",
-                                                    locale,
+                                                    locale, appSettings.showDecimalPlaces ?? 2
                                                 )}
                                             </span>
                                         </div>
@@ -766,10 +648,10 @@ export default function ImportReviewPage() {
                 <Button
                     size="lg"
                     className="h-11 px-8"
-                    onClick={() => commitMutation.mutate()}
-                    disabled={commitMutation.isPending}
+                    onClick={commit}
+                    disabled={isCommitting}
                 >
-                    {commitMutation.isPending ? (
+                    {isCommitting ? (
                         <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                             {t("importReview.committing")}

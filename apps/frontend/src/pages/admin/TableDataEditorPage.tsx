@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminKeys } from "@/lib/queryKeys";
 import {
     ArrowLeft,
     Plus,
@@ -19,7 +17,6 @@ import {
     Search,
     KeyRound,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
@@ -46,21 +43,20 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import {
-    getTableRows,
-    previewTableMutation,
-    commitTableMutation,
     type DbColumn,
     type DbRow,
     type DbChange,
     type DbFilter,
     type PreviewStatement,
 } from "@/lib/api/dbEditor";
+import {
+    useTableMutationData,
+    useTableRows,
+} from "@/features/admin/useTableDataEditorData";
 
 const PAGE_SIZE = 100;
 const MATVIEW_BASE_TABLES = new Set([
@@ -275,7 +271,6 @@ function EditableCell({
 export default function TableDataEditorPage() {
     const { table = "" } = useParams();
     const navigate = useNavigate();
-    const qc = useQueryClient();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
@@ -296,19 +291,7 @@ export default function TableDataEditorPage() {
         PreviewStatement[]
     >([]);
 
-    const query = useQuery({
-        queryKey: adminKeys.dbTable(table, page, sort, appliedFilters),
-        queryFn: () =>
-            getTableRows(table, {
-                limit: PAGE_SIZE,
-                offset: page * PAGE_SIZE,
-                orderBy: sort?.column,
-                dir: sort?.dir,
-                filters: appliedFilters,
-            }),
-        placeholderData: (prev) => prev, // keep previous page while paging/sorting/filtering round-trips
-    });
-    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    const { query, refresh } = useTableRows(table, page, sort, appliedFilters);
 
     const data = query.data;
     const columns = useMemo(() => data?.columns ?? [], [data]);
@@ -444,33 +427,8 @@ export default function TableDataEditorPage() {
         setPage(0);
     }
 
-    const previewMutation = useMutation({
-        mutationFn: () => previewTableMutation(table, changes),
-        onSuccess: (res) => {
-            setPreviewStatements(res.statements);
-            setPreviewOpen(true);
-        },
-        onError: (err: Error) =>
-            toast.error(t("dbEditor.previewFailed"), {
-                description: apiErrorToMessage(err, t),
-            }),
-    });
-
-    const commitMutation = useMutation({
-        mutationFn: () => commitTableMutation(table, changes),
-        onSuccess: (res) => {
-            toast.success(t("dbEditor.commitSuccess"), {
-                description: `${res.applied} ${t("dbEditor.statementsApplied")}`,
-            });
-            setPreviewOpen(false);
-            discardAll();
-            qc.invalidateQueries({ queryKey: adminKeys.dbTableAll(table) });
-        },
-        onError: (err: Error) =>
-            toast.error(t("dbEditor.commitFailed"), {
-                description: apiErrorToMessage(err, t),
-            }),
-    });
+    const { preview: previewMutation, commit: commitMutation } =
+        useTableMutationData(table);
 
     const total = data?.total ?? 0;
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -496,11 +454,7 @@ export default function TableDataEditorPage() {
                             size="sm"
                             className="gap-2"
                             disabled={query.isFetching}
-                            onClick={() =>
-                                qc.invalidateQueries({
-                                    queryKey: adminKeys.dbTableAll(table),
-                                })
-                            }
+                            onClick={refresh}
                         >
                             <RefreshCw
                                 className={cn(
@@ -565,7 +519,14 @@ export default function TableDataEditorPage() {
                         <Button
                             size="sm"
                             className="gap-2"
-                            onClick={() => previewMutation.mutate()}
+                            onClick={() =>
+                                previewMutation.mutate(changes, {
+                                    onSuccess: (res) => {
+                                        setPreviewStatements(res.statements);
+                                        setPreviewOpen(true);
+                                    },
+                                })
+                            }
                             disabled={previewMutation.isPending}
                         >
                             <Eye className="h-4 w-4" />
@@ -925,7 +886,14 @@ export default function TableDataEditorPage() {
                         </Button>
                         <Button
                             variant={hasDeletes ? "destructive" : "default"}
-                            onClick={() => commitMutation.mutate()}
+                            onClick={() =>
+                                commitMutation.mutate(changes, {
+                                    onSuccess: () => {
+                                        setPreviewOpen(false);
+                                        discardAll();
+                                    },
+                                })
+                            }
                             disabled={
                                 commitMutation.isPending ||
                                 previewStatements.length === 0

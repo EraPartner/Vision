@@ -10,6 +10,9 @@ import { server } from "@/test/msw/server";
 import { ACCOUNT_STUB, RECIPIENT_STUB, err, ok } from "@/test/msw/handlers";
 import ImportReviewPage from "@/pages/ImportReviewPage";
 import ImportPage from "@/pages/ImportPage";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { importKeys } from "@/lib/queryKeys";
 
 const API_BASE = "http://localhost:3002";
 
@@ -38,6 +41,14 @@ function ImportRouteProbe() {
             </button>
         </div>
     );
+}
+
+function ImportBatchesProbe() {
+    useQuery({
+        queryKey: importKeys.batches(0),
+        queryFn: () => apiClient.listImportBatches(10, 0),
+    });
+    return null;
 }
 
 describe("ImportReviewPage (integration)", () => {
@@ -281,6 +292,44 @@ describe("ImportReviewPage (integration)", () => {
         await user.click(approveBtn);
 
         expect(commitCalled).toBe(true);
+    });
+
+    it("invalidates active import-batch queries after commit", async () => {
+        const user = userEvent.setup({ delay: null });
+        let batchGets = 0;
+        server.use(
+            http.get(`${API_BASE}/api/import/batches`, () => {
+                batchGets += 1;
+                return ok({ items: [], total: 0, limit: 10, offset: 0 });
+            }),
+            http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
+                ok({ batch_id: 1, imported: 0, duplicates: 0, errors: 0 }),
+            ),
+        );
+
+        renderWithApp(
+            <>
+                <ImportBatchesProbe />
+                <Routes>
+                    <Route
+                        path="/import/:batchId/review"
+                        element={<ImportReviewPage />}
+                    />
+                    <Route
+                        path="/import"
+                        element={<div>Import complete</div>}
+                    />
+                </Routes>
+            </>,
+            { initialEntries: ["/import/1/review"] },
+        );
+
+        await waitFor(() => expect(batchGets).toBe(1));
+        const before = batchGets;
+        await user.click(
+            await screen.findByRole("button", { name: /approve & import/i }),
+        );
+        await waitFor(() => expect(batchGets).toBeGreaterThan(before));
     });
 
     it("replaces review history and consumes receipt route state after commit", async () => {

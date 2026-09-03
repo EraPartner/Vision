@@ -1,14 +1,16 @@
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatPercent, numberFormatToLocale } from "@/utils/currency";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { numberFormatToLocale } from "@/utils/currency";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
     formatDateTimeWithAppSettings,
     formatDateWithAppSettings,
 } from "@/lib/dateUtils";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,8 +27,6 @@ import {
 } from "@/components/charts";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/features/portfolio/AddInvestmentFromMarketDialog";
 import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog";
 import { useSearchParams } from "react-router";
@@ -45,36 +45,9 @@ import { apiClient } from "@/lib/api";
 
 import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
 import { PageShell } from "@/components/shared/PageShell";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { useMarketLookupData } from "@/features/research/useMarketLookupData";
 
 const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
-
-// Lower bound (epoch ms) for a range, used when serving the chart from an
-// investment's own price provider instead of Yahoo. 'max' returns 0 (all data).
-function rangeToFromMs(range: string): number {
-    const now = Date.now();
-    switch (range) {
-        case "1d":
-            return now - 1 * DAY_MS;
-        case "5d":
-            return now - 5 * DAY_MS;
-        case "1mo":
-            return now - 30 * DAY_MS;
-        case "3mo":
-            return now - 91 * DAY_MS;
-        case "6mo":
-            return now - 182 * DAY_MS;
-        case "1y":
-            return now - 365 * DAY_MS;
-        case "5y":
-            return now - 5 * 365 * DAY_MS;
-        case "max":
-            return 0;
-        default:
-            return now - 30 * DAY_MS;
-    }
-}
 
 interface AnalystConsensus {
     strongBuy: number;
@@ -121,14 +94,6 @@ interface Quote {
     recentAnalystActions: AnalystAction[];
 }
 
-interface ChartPoint {
-    time: number;
-    close: number;
-    high: number;
-    low: number;
-    volume: number;
-}
-
 function fmtDate(
     ts: number,
     range: string,
@@ -146,6 +111,7 @@ function fmtDate(
 }
 
 export default function MarketLookupPage() {
+    const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
@@ -201,7 +167,6 @@ export default function MarketLookupPage() {
     const effectiveSelectedSymbol =
         searchParams.get("symbol")?.trim().toUpperCase() || null;
     const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
-    const isOnline = useOnlineStatus();
 
     // When the page is opened from a portfolio holding (double-click), the URL
     // carries its investmentId. If that holding prices via a non-Yahoo provider
@@ -243,80 +208,21 @@ export default function MarketLookupPage() {
         trim: false,
     });
 
-    // Quote — price-only (detail=basic); the rich fundamentals/analyst/news now
-    // come from the multi-provider research tabs below, so the quoteSummary fetch
-    // is no longer needed here.
-    const { data: quoteData, isFetching: isQuoteLoading } = useQuery({
-        queryKey: ["market-quote", effectiveSelectedSymbol],
-        queryFn: async () => {
-            const quotes = await apiClient.getMarketQuotes<Quote>(
-                effectiveSelectedSymbol!,
-                { detail: "basic" },
-            );
-            return quotes[0] ?? null;
-        },
-        enabled: useYahoo && isOnline,
-        staleTime: 30_000,
-        // Don't keep polling a failing quote endpoint while offline (matches the
-        // sibling research pages that gate their price polls on online state).
-        refetchInterval: isOnline ? 60_000 : false,
+    const {
+        quoteData,
+        isQuoteLoading,
+        chartData,
+        isChartLoading,
+        providerChartData,
+        isProviderChartLoading,
+    } = useMarketLookupData<Quote>({
+        symbol: effectiveSelectedSymbol,
+        range: selectedRange.range,
+        interval: selectedRange.interval,
+        providerInvestment,
+        isProviderAsset,
+        useYahoo,
     });
-
-    // Chart
-    const { data: chartData, isFetching: isChartLoading } = useQuery({
-        queryKey: [
-            "market-chart",
-            effectiveSelectedSymbol,
-            selectedRange.range,
-            selectedRange.interval,
-        ],
-        queryFn: () =>
-            apiClient.getMarketChart(
-                effectiveSelectedSymbol!,
-                selectedRange.range,
-                selectedRange.interval,
-            ),
-        enabled: useYahoo,
-        staleTime: 60_000,
-    });
-
-    // Provider-aware chart — served from the holding's own price provider when
-    // Yahoo can't (Kinesis/custom/binance). Points carry only a price, so high/low
-    // collapse to close and volume is omitted (no volume bars in this mode).
-    const { data: providerChartData, isFetching: isProviderChartLoading } =
-        useQuery({
-            queryKey: [
-                "provider-chart",
-                providerInvestment?.id,
-                selectedRange.range,
-            ],
-            queryFn: async () => {
-                const res = await getInvestmentPriceHistory(
-                    providerInvestment!.id,
-                    {
-                        from_ms: rangeToFromMs(selectedRange.range),
-                        db_only: false,
-                    },
-                );
-                const points: ChartPoint[] = res.points.map((p) => ({
-                    time: p.timestampMs,
-                    close: p.price,
-                    high: p.price,
-                    low: p.price,
-                    volume: 0,
-                }));
-                return {
-                    symbol:
-                        providerInvestment!.symbol ??
-                        effectiveSelectedSymbol ??
-                        "",
-                    currency: providerInvestment!.currency,
-                    points,
-                };
-            },
-            enabled: isProviderAsset && !!providerInvestment,
-            staleTime: 60_000,
-        });
 
     // Minimal quote synthesized from provider history: price = latest point,
     // change = move across the visible range. Fundamentals/news don't exist for

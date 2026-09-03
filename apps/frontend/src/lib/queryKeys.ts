@@ -17,45 +17,46 @@
  * useAccounts and useInvestments.
  */
 
-import type { QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from "@tanstack/react-query";
 
 // ── Transactions ────────────────────────────────────────────────────────────
 
 export const transactionKeys = {
     /** Invalidation/snapshot prefix for every plain transaction list. */
-    all: ['transactions'] as const,
+    all: ["transactions"] as const,
     /** `useTransactions(params)` list cache (one entry per params object). */
-    list: (params?: object) => ['transactions', params] as const,
+    list: (params?: object) => ["transactions", params] as const,
     /** /accounts/:id running-balance ledger (WP-B4, replaced the detail
      *  sheet's 'account-detail' family); `limit` grows via Load more. */
     accountLedger: (accountId: number | undefined, limit: number) =>
-        ['transactions', 'account-ledger', accountId, limit] as const,
+        ["transactions", "account-ledger", accountId, limit] as const,
     /** Owes page: per-recipient settlement group. */
     owesRecipientGroup: (recipientId: number) =>
-        ['transactions', 'owes-recipient-group', recipientId] as const,
+        ["transactions", "owes-recipient-group", recipientId] as const,
     /** Invalidation prefix for the virtualised transaction table. */
-    virtualAll: ['transactions-virtual'] as const,
+    virtualAll: ["transactions-virtual"] as const,
     /** Virtualised table first page (params = filter/sort/page object). */
-    virtualList: (params: object) => ['transactions-virtual', params] as const,
+    virtualList: (params: object) => ["transactions-virtual", params] as const,
 };
 
 // ── Recipients / categories / tags / accounts ───────────────────────────────
 
 export const recipientKeys = {
-    all: ['recipients'] as const,
-    list: (params?: object) => ['recipients', params] as const,
-    detail: (id: number | null | undefined) => ['recipients', 'detail', id] as const,
+    all: ["recipients"] as const,
+    list: (params?: object) => ["recipients", params] as const,
+    detail: (id: number | null | undefined) =>
+        ["recipients", "detail", id] as const,
     /** Settings → Statistics exclusion picker (full list snapshot). */
-    allList: ['recipients', 'all'] as const,
+    allList: ["recipients", "all"] as const,
     /** Merge-recipients dialog (full list snapshot). */
-    mergeAll: ['recipients', 'merge-all'] as const,
+    mergeAll: ["recipients", "merge-all"] as const,
     /** Virtualised recipients table first page. */
-    virtualList: (params: object) => ['recipients', 'virtual', params] as const,
+    virtualList: (params: object) => ["recipients", "virtual", params] as const,
 };
 
 export const categoryKeys = {
-    all: ['categories'] as const,
-    list: (params?: object) => ['categories', params] as const,
+    all: ["categories"] as const,
+    list: (params?: object) => ["categories", params] as const,
     /**
      * Full-list snapshot (`limit: CATEGORY_FETCH_LIMIT`) shared by every
      * "all categories" surface — the Settings → Statistics exclusion picker
@@ -65,80 +66,128 @@ export const categoryKeys = {
      * do not reintroduce a second key — consumers derive their own shape from
      * the shared `Category[]` instead.
      */
-    allList: ['categories', 'all'] as const,
+    allList: ["categories", "all"] as const,
 };
 
 export const tagKeys = {
-    all: ['tags'] as const,
+    all: ["tags"] as const,
     /** `useTags` list — call as `tagKeys.list(params ?? {})` (never undefined). */
-    list: (params: object) => ['tags', params] as const,
+    list: (params: object) => ["tags", params] as const,
 };
 
 export const accountKeys = {
-    all: ['accounts'] as const,
-    list: (params?: object) => ['accounts', params] as const,
+    all: ["accounts"] as const,
+    list: (params?: object) => ["accounts", params] as const,
     /** Read-only merge dry-run (WP-B5 dialog preview). Under the 'accounts'
      *  prefix so account mutations invalidate stale previews too. */
     mergePreview: (sourceId: number, targetId: number) =>
-        ['accounts', 'merge-preview', sourceId, targetId] as const,
+        ["accounts", "merge-preview", sourceId, targetId] as const,
 };
 
 export const bankAccountKeys = {
     /** Distinct bank-account names (no params). */
-    all: ['bankAccounts'] as const,
+    all: ["bankAccounts"] as const,
 };
 
 // ── Splits ──────────────────────────────────────────────────────────────────
 
 export const splitKeys = {
-    all: ['splits'] as const,
-    owedSummary: ['splits', 'owed'] as const,
-    owedByRecipient: (recipientId: number | null) => ['splits', 'owed', recipientId] as const,
+    all: ["splits"] as const,
+    owedSummary: ["splits", "owed"] as const,
+    owedByRecipient: (recipientId: number | null) =>
+        ["splits", "owed", recipientId] as const,
     byTransaction: (transactionId: number | null) =>
-        ['splits', 'transaction', transactionId] as const,
+        ["splits", "transaction", transactionId] as const,
 };
 
 // ── Dashboard-derived stats ─────────────────────────────────────────────────
 
 export const monthlySummaryKeys = {
     /** Invalidation prefix — what invalidateTransactionData refetches. */
-    all: ['monthlySummary'] as const,
-    summary: (currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['monthlySummary', currency, excludedCategoryIds, excludedRecipientIds] as const,
+    all: ["monthlySummary"] as const,
+    summary: (
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "monthlySummary",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
 };
 
 export const dashboardKeys = {
     /** Invalidation prefix for the dashboard stat cards family. */
-    filteredStatsAll: ['filteredDashboardStats'] as const,
+    filteredStatsAll: ["filteredDashboardStats"] as const,
     /** DB-total transaction count (filter/currency independent). */
-    transactionCount: ['filteredDashboardStats', 'transactionCount'] as const,
+    transactionCount: ["filteredDashboardStats", "transactionCount"] as const,
     /** Invalidation prefix for the recent-transactions widget. */
-    recentTransactionsAll: ['dashboardRecentTransactions'] as const,
+    recentTransactionsAll: ["dashboardRecentTransactions"] as const,
     recentTransactions: (
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
         exclusionsApply: boolean,
     ) =>
-        ['dashboardRecentTransactions', excludedCategoryIds, excludedRecipientIds, exclusionsApply] as const,
+        [
+            "dashboardRecentTransactions",
+            excludedCategoryIds,
+            excludedRecipientIds,
+            exclusionsApply,
+        ] as const,
 };
 
 // ── Aggregations (Statistics page, pivots, sankey) ──────────────────────────
 
 export const aggregationKeys = {
     /** Invalidation prefix for every server-side aggregation. */
-    all: ['aggregations'] as const,
+    all: ["aggregations"] as const,
     monthlySummaryUnfiltered: (currency: string) =>
-        ['aggregations', 'monthly-summary', 'unfiltered', currency] as const,
-    monthlySummaryFiltered: (currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['aggregations', 'monthly-summary', 'filtered', currency, excludedCategoryIds, excludedRecipientIds] as const,
+        ["aggregations", "monthly-summary", "unfiltered", currency] as const,
+    monthlySummaryFiltered: (
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "aggregations",
+            "monthly-summary",
+            "filtered",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
     categoryPivotUnfiltered: (currency: string) =>
-        ['aggregations', 'category-pivot', 'unfiltered', currency] as const,
-    categoryPivotFiltered: (currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['aggregations', 'category-pivot', 'filtered', currency, excludedCategoryIds, excludedRecipientIds] as const,
+        ["aggregations", "category-pivot", "unfiltered", currency] as const,
+    categoryPivotFiltered: (
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "aggregations",
+            "category-pivot",
+            "filtered",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
     recipientInsights: (currency: string) =>
-        ['aggregations', 'recipient-insights', currency] as const,
-    recipientInsightsFiltered: (currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['aggregations', 'recipient-insights', 'filtered', currency, excludedCategoryIds, excludedRecipientIds] as const,
+        ["aggregations", "recipient-insights", currency] as const,
+    recipientInsightsFiltered: (
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "aggregations",
+            "recipient-insights",
+            "filtered",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
     /**
      * Recipient-insights tab variant — historical 5-element shape WITHOUT the
      * 'filtered' discriminator (distinct cache entry from the two above).
@@ -148,13 +197,42 @@ export const aggregationKeys = {
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
     ) =>
-        ['aggregations', 'recipient-insights', currency, excludedCategoryIds, excludedRecipientIds] as const,
+        [
+            "aggregations",
+            "recipient-insights",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
     recipientByYearUnfiltered: (currency: string) =>
-        ['aggregations', 'recipient-by-year', 'unfiltered', currency] as const,
-    recipientByYearFiltered: (currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['aggregations', 'recipient-by-year', 'filtered', currency, excludedCategoryIds, excludedRecipientIds] as const,
-    sankey: (year: number, currency: string, excludedCategoryIds: number[], excludedRecipientIds: number[]) =>
-        ['aggregations', 'sankey', year, currency, excludedCategoryIds, excludedRecipientIds] as const,
+        ["aggregations", "recipient-by-year", "unfiltered", currency] as const,
+    recipientByYearFiltered: (
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "aggregations",
+            "recipient-by-year",
+            "filtered",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
+    sankey: (
+        year: number,
+        currency: string,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "aggregations",
+            "sankey",
+            year,
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
     /**
      * Chart-builder pivots. The selected entities MUST key the cache (ADR-041
      * amendment) — else one chart's narrowed payload would be served to a
@@ -167,56 +245,73 @@ export const aggregationKeys = {
         bucket: string,
         start: string | null,
         end: string | null,
-        selection: 'all' | number[],
-    ) => ['aggregations', kind, currency, bucket, start, end, selection] as const,
+        selection: "all" | number[],
+    ) =>
+        [
+            "aggregations",
+            kind,
+            currency,
+            bucket,
+            start,
+            end,
+            selection,
+        ] as const,
 };
 
 // ── Planned payments ────────────────────────────────────────────────────────
 
 export const plannedKeys = {
     /** Shared so the planned-payments page can invalidate after a confirm. */
-    matchSuggestions: ['plannedMatchSuggestions'] as const,
+    matchSuggestions: ["plannedMatchSuggestions"] as const,
     /** Invalidation prefix (the hook keys per-day below it). */
-    upcomingAll: ['upcomingPlannedPayments'] as const,
-    upcoming: (dateYmd: string) => ['upcomingPlannedPayments', dateYmd] as const,
+    upcomingAll: ["upcomingPlannedPayments"] as const,
+    upcoming: (dateYmd: string) =>
+        ["upcomingPlannedPayments", dateYmd] as const,
     /**
      * Invalidation prefix for usePlannedPayments' `['plannedTransactions',
      * showInactive]` caches (that hook still keys inline).
      */
-    transactionsAll: ['plannedTransactions'] as const,
-    recurringPatterns: ['recurringPatterns'] as const,
+    transactionsAll: ["plannedTransactions"] as const,
+    recurringPatterns: ["recurringPatterns"] as const,
 };
 
 // ── AI-insights digest (detection layer, no LLM) ────────────────────────────
 
 export const insightsKeys = {
     /** Shared by the Statistics panel and the badge — one cache entry. */
-    digest: ['insightsDigest'] as const,
+    digest: ["insightsDigest"] as const,
 };
 
 // ── Tax (transaction-derived) ───────────────────────────────────────────────
 
 export const taxKeys = {
     /** Invalidation prefix for every per-year deduction-candidates entry. */
-    deductionCandidatesAll: ['tax', 'deduction-candidates'] as const,
+    deductionCandidatesAll: ["tax", "deduction-candidates"] as const,
     /** GET /api/info/deduction-candidates?year=… (one entry per year). */
-    deductionCandidates: (year: number) => ['tax', 'deduction-candidates', year] as const,
+    deductionCandidates: (year: number) =>
+        ["tax", "deduction-candidates", year] as const,
 };
 
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────
 
 export const cashflowKeys = {
-    bankBalancesAll: ['bankBalances'] as const,
-    bankBalances: (currency: string) => ['bankBalances', currency] as const,
-    forecastMethodsAll: ['cashflowForecastMethods'] as const,
+    bankBalancesAll: ["bankBalances"] as const,
+    bankBalances: (currency: string) => ["bankBalances", currency] as const,
+    forecastMethodsAll: ["cashflowForecastMethods"] as const,
     forecastMethods: (
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
         includePlanned: boolean,
     ) =>
-        ['cashflowForecastMethods', currency, excludedCategoryIds, excludedRecipientIds, includePlanned] as const,
-    forecastRollingAll: ['cashflowForecastRolling'] as const,
+        [
+            "cashflowForecastMethods",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+        ] as const,
+    forecastRollingAll: ["cashflowForecastRolling"] as const,
     forecastRolling: (
         currency: string,
         excludedCategoryIds: number[],
@@ -224,8 +319,17 @@ export const cashflowKeys = {
         includePlanned: boolean,
         rollingDays: number,
     ) =>
-        ['cashflowForecastRolling', currency, excludedCategoryIds, excludedRecipientIds, includePlanned, rollingDays] as const,
-    forecastRollingDiagnosticsAll: ['cashflowForecastRollingDiagnostics'] as const,
+        [
+            "cashflowForecastRolling",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+            rollingDays,
+        ] as const,
+    forecastRollingDiagnosticsAll: [
+        "cashflowForecastRollingDiagnostics",
+    ] as const,
     forecastRollingDiagnostics: (
         currency: string,
         excludedCategoryIds: number[],
@@ -233,31 +337,38 @@ export const cashflowKeys = {
         includePlanned: boolean,
         rollingDays: number,
     ) =>
-        ['cashflowForecastRollingDiagnostics', currency, excludedCategoryIds, excludedRecipientIds, includePlanned, rollingDays] as const,
-    forecastAccuracy: ['cashflow-forecast-accuracy'] as const,
+        [
+            "cashflowForecastRollingDiagnostics",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+            rollingDays,
+        ] as const,
+    forecastAccuracy: ["cashflow-forecast-accuracy"] as const,
 };
 
 // ── Net worth ───────────────────────────────────────────────────────────────
 
 export const netWorthKeys = {
-    all: ['net-worth'] as const,
-    byCurrency: (currency: string) => ['net-worth', currency] as const,
-    table: (params: object) => ['net-worth', 'table', params] as const,
+    all: ["net-worth"] as const,
+    byCurrency: (currency: string) => ["net-worth", currency] as const,
+    table: (params: object) => ["net-worth", "table", params] as const,
 };
 
 // ── Portfolio ───────────────────────────────────────────────────────────────
 
 export const portfolioKeys = {
-    investments: ['investments'] as const,
-    providers: ['investment-providers'] as const,
-    transactionsAll: ['portfolio-transactions'] as const,
+    investments: ["investments"] as const,
+    providers: ["investment-providers"] as const,
+    transactionsAll: ["portfolio-transactions"] as const,
     transactions: (investmentIdsCsv: string) =>
-        ['portfolio-transactions', investmentIdsCsv] as const,
-    summaryAll: ['portfolio-summary'] as const,
-    summary: (currency: string) => ['portfolio-summary', currency] as const,
-    performanceAll: ['portfolio-performance'] as const,
+        ["portfolio-transactions", investmentIdsCsv] as const,
+    summaryAll: ["portfolio-summary"] as const,
+    summary: (currency: string) => ["portfolio-summary", currency] as const,
+    performanceAll: ["portfolio-performance"] as const,
     performance: (currency: string, period: string) =>
-        ['portfolio-performance', currency, period] as const,
+        ["portfolio-performance", currency, period] as const,
 };
 
 // ── Exchange rates ──────────────────────────────────────────────────────────
@@ -267,69 +378,78 @@ export const exchangeRateKeys = {
      * Shared FX cache: useExchangeRates, useCurrencyConverter and the admin
      * ExchangeRatesPage all read/invalidate this one namespace.
      */
-    all: ['exchange-rates'] as const,
+    all: ["exchange-rates"] as const,
     /**
      * Legacy camelCase namespace used only by the FX status banner — a
      * DISTINCT cache family from `all`; do not merge them.
      */
-    fxStatus: ['exchangeRates', { dbOnly: true }] as const,
+    fxStatus: ["exchangeRates", { dbOnly: true }] as const,
 };
 
 // ── AI chat / Ollama ────────────────────────────────────────────────────────
 
 export const aiKeys = {
-    conversations: ['ai', 'conversations'] as const,
-    conversation: (id: string | null) => ['ai', 'conversations', id] as const,
+    conversations: ["ai", "conversations"] as const,
+    conversation: (id: string | null) => ["ai", "conversations", id] as const,
     /** Invalidation prefix covering both Ollama status and models. */
-    ollamaAll: ['ai', 'ollama'] as const,
-    ollamaStatus: ['ai', 'ollama', 'status'] as const,
-    ollamaModels: ['ai', 'ollama', 'models'] as const,
+    ollamaAll: ["ai", "ollama"] as const,
+    ollamaStatus: ["ai", "ollama", "status"] as const,
+    ollamaModels: ["ai", "ollama", "models"] as const,
 };
 
 // ── Imports ─────────────────────────────────────────────────────────────────
 
 export const importKeys = {
-    batchesAll: ['importBatches'] as const,
-    batches: (offset: number) => ['importBatches', offset] as const,
-    preview: (batchId: number) => ['import-preview', batchId] as const,
-    supportedParsers: ['supported-parsers'] as const,
-    customParserConfigs: ['custom-parser-configs'] as const,
-    portfolioParserConfigs: ['portfolio-parser-configs'] as const,
+    batchesAll: ["importBatches"] as const,
+    batches: (offset: number) => ["importBatches", offset] as const,
+    preview: (batchId: number) => ["import-preview", batchId] as const,
+    supportedParsers: ["supported-parsers"] as const,
+    customParserConfigs: ["custom-parser-configs"] as const,
+    portfolioParserConfigs: ["portfolio-parser-configs"] as const,
 };
 
 // ── Settings-backed values ──────────────────────────────────────────────────
 
 export const settingKeys = {
     /** Single key-value setting (note singular `'setting'` root). */
-    byKey: (key: string) => ['setting', key] as const,
+    byKey: (key: string) => ["setting", key] as const,
     /** Rebalance plans persisted under the generic settings store (ADR-098). */
-    rebalancePlans: ['settings', 'rebalance_plans'] as const,
+    rebalancePlans: ["settings", "rebalance_plans"] as const,
 };
 
 // ── Misc singletons ─────────────────────────────────────────────────────────
 
 export const savedChartKeys = {
-    all: ['saved-charts'] as const,
+    all: ["saved-charts"] as const,
 };
 
 export const watchlistKeys = {
-    all: ['watchlist'] as const,
+    all: ["watchlist"] as const,
+    quotes: (symbols: string) => ["watchlist-quotes", symbols] as const,
+};
+
+export const marketKeys = {
+    quote: (symbol: string | null) => ["market-quote", symbol] as const,
+    chart: (symbol: string | null, range: string, interval: string) =>
+        ["market-chart", symbol, range, interval] as const,
+    providerChart: (investmentId: number | undefined, range: string) =>
+        ["provider-chart", investmentId, range] as const,
 };
 
 export const researchKeys = {
-    providerKeys: ['research-provider-keys'] as const,
+    providerKeys: ["research-provider-keys"] as const,
 };
 
 // ── Admin ───────────────────────────────────────────────────────────────────
 
 export const adminKeys = {
-    endpoints: ['admin', 'endpoints'] as const,
-    requestMetrics: ['admin', 'request-metrics'] as const,
-    dbStats: ['admin', 'db-stats'] as const,
-    providerHealth: ['admin', 'provider-health'] as const,
-    dbTableAll: (table: string) => ['admin', 'db-table', table] as const,
+    endpoints: ["admin", "endpoints"] as const,
+    requestMetrics: ["admin", "request-metrics"] as const,
+    dbStats: ["admin", "db-stats"] as const,
+    providerHealth: ["admin", "provider-health"] as const,
+    dbTableAll: (table: string) => ["admin", "db-table", table] as const,
     dbTable: (table: string, page: number, sort: unknown, filters: unknown) =>
-        ['admin', 'db-table', table, page, sort, filters] as const,
+        ["admin", "db-table", table, page, sort, filters] as const,
 };
 
 // ── Cross-domain invalidation fan-out helpers ───────────────────────────────
@@ -350,7 +470,9 @@ export function invalidateTransactionData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: monthlySummaryKeys.all });
     queryClient.invalidateQueries({ queryKey: dashboardKeys.filteredStatsAll });
     queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
-    queryClient.invalidateQueries({ queryKey: dashboardKeys.recentTransactionsAll });
+    queryClient.invalidateQueries({
+        queryKey: dashboardKeys.recentTransactionsAll,
+    });
 }
 
 /**
@@ -379,9 +501,15 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
     // The dashboard bank-balances widget (history + net-position) and the
     // cash-flow forecast both key off account balances, so a repoint restates them.
     queryClient.invalidateQueries({ queryKey: cashflowKeys.bankBalancesAll });
-    queryClient.invalidateQueries({ queryKey: cashflowKeys.forecastMethodsAll });
-    queryClient.invalidateQueries({ queryKey: cashflowKeys.forecastRollingAll });
-    queryClient.invalidateQueries({ queryKey: cashflowKeys.forecastRollingDiagnosticsAll });
+    queryClient.invalidateQueries({
+        queryKey: cashflowKeys.forecastMethodsAll,
+    });
+    queryClient.invalidateQueries({
+        queryKey: cashflowKeys.forecastRollingAll,
+    });
+    queryClient.invalidateQueries({
+        queryKey: cashflowKeys.forecastRollingDiagnosticsAll,
+    });
     // Planned payments can reference the merged/closed account.
     queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
     queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
