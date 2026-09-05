@@ -17,6 +17,10 @@ CHECKBOX_RE = re.compile(r"^- \[([ xX])\] (.+)$")
 TITLE_RE = re.compile(r"\*\*(.+?)\*\*")
 PRIORITY_RE = re.compile(r"(🔺|⏫|🔼|🔽|⏬|⬇)")
 SOURCE_RE = re.compile(r"↪ _from: (.+?)_")
+TRACKING_MARKER_RE = re.compile(
+    r"🔎\s+(verified-present|partial|decision-needed|runtime-unverified|needs-github-check)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -33,7 +37,24 @@ class TodoItem:
 
 
 def classify_state(text: str) -> str:
-    lowered = text.lower()
+    tracking_lines = [
+        line for line in text.splitlines() if line.lstrip().startswith("- Tracking:")
+    ]
+    # State comes from explicit tracking metadata when it exists. Searching the
+    # whole record makes ordinary prose such as "partial-month" look like a
+    # historical `partial-<sha>` marker.
+    state_text = "\n".join(tracking_lines) if tracking_lines else text
+    lowered = state_text.lower()
+    marker_matches = TRACKING_MARKER_RE.findall(state_text)
+    if len(marker_matches) == 1:
+        marker = marker_matches[0].lower()
+        return {
+            "verified-present": "verified",
+            "partial": "partial",
+            "decision-needed": "blocked",
+            "runtime-unverified": "unverified",
+            "needs-github-check": "platform-check",
+        }[marker]
     if "needs-github-check" in lowered:
         return "platform-check"
     blocking_markers = (
@@ -53,7 +74,7 @@ def classify_state(text: str) -> str:
         return "blocked"
     if "🔎 partial" in lowered or "partial-" in lowered or "left:" in lowered:
         return "partial"
-    if "✅" in text and any(
+    if "✅" in state_text and any(
         marker in lowered
         for marker in (
             "remaining scope",
@@ -155,6 +176,17 @@ def validate(items: list[TodoItem]) -> list[str]:
         if not item.source:
             errors.append(
                 f"TODO.md:{item.line}: open finding needs a '↪ from' source line"
+            )
+        tracking_lines = [
+            line for line in item.body if line.lstrip().startswith("- Tracking:")
+        ]
+        if len(tracking_lines) != 1:
+            errors.append(
+                f"TODO.md:{item.line}: open finding needs exactly one 'Tracking:' line"
+            )
+        elif len(TRACKING_MARKER_RE.findall(tracking_lines[0])) != 1:
+            errors.append(
+                f"TODO.md:{item.line}: Tracking line needs exactly one recognized state marker"
             )
         if len(item.heading) > 240:
             errors.append(

@@ -1,1933 +1,567 @@
 # TODO
 
-Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 medium / 🔽 low / ⏬ lowest. Dates 📅 due / 🛫 start / ⏳ scheduled.
+Vision's live implementation queue. Priority: 🔺 highest, ⏫ high, 🔼 medium, 🔽 low,
+⏬ lowest.
 
-## Status markers (implementation tracking)
+## Queue contract
 
-Use these to tell _implemented_ from _still open_ at a glance. A checkbox is only the truth when it is backed by a code-level check:
+- `- [ ]` means open. Revalidate the current code before implementing it.
+- A completed and independently verified item is removed. Git history, tests, and the merged pull
+  request are the completion record; this file is not an archive.
+- Put evidence or a blocker on an indented `Tracking:` line. Do not put history in the title.
+- Every finding has one owner-sized outcome. A dependency may be named, but unrelated work must be
+  a separate item.
+- `🔎 verified-present YYYY-MM-DD` means the issue was reproduced on that date.
+- `🔎 partial YYYY-MM-DD` means only the stated remainder is open.
+- `🔎 decision-needed YYYY-MM-DD` means implementation waits for a product or data decision.
+- `🔎 runtime-unverified YYYY-MM-DD` means source work is complete but a live environment check is
+  still required.
+- `🔎 needs-GitHub-check YYYY-MM-DD` means the current platform state must be read from GitHub.
 
-- `- [ ]` — **open**; not yet implemented.
-- `- [x]` — **implemented and verified in code.** This is a transient review state: after an independent current-tree check confirms the complete scope, remove the item from this live queue. Git history and the merged pull request are the completion record. Never tick or remove an item without confirming the complete fix exists in the current tree.
-- `🔎 verified-present YYYY-MM-DD` — the finding was re-checked against current code on that date and the bug is **still present** (confirmed real, _not_ done). This is a live work queue, not a completion mark.
-- `🔎 partial YYYY-MM-DD (…)` — part of the finding is implemented but a described sub-case remains, so the item stays open. State what is done and the exact remaining scope. Historical `partial-<sha> (#NN)` and `partial-#NN` markers remain valid but are not required for new work.
-- `🔎 needs-GitHub-check YYYY-MM-DD` — cannot be confirmed from the repo alone (e.g. GitHub branch-protection / ruleset settings); check the platform side.
-- `🔎 decision-needed YYYY-MM-DD (…)` — implementation is blocked on the stated user or design decision. Do not select it until that decision is recorded.
-- `🔎 runtime-unverified YYYY-MM-DD (…)` — source and tests support the checked implementation, but a required live database, Demo, browser, Electron, or platform acceptance step has not been repeated. Keep the item checked only when no source-side scope remains, and state the exact missing check.
-- _no status marker_ — open finding, not re-verified since it was filed.
-- Put tracking markers and historical notes on an indented `Tracking:` line. Keep the checkbox line to the stable title, optional size, and priority so agents can cite it without copying its history.
-- **Historical stamps are optional metadata.** Existing `✅ … · <sha>` and `partial-<sha>` tokens are retained as history. `bun run check-todo-stamps` remains available as a manual legacy audit, but new completions do not add stamps and normal backlog delivery does not run that checker.
-- **⚠️ Run `git fetch --unshallow` before legacy SHA archaeology.** Agent sessions often start from a shallow clone, and ancestry tests on one give _false_ answers. Check for `.git/shallow` first if you intentionally investigate an existing stamp.
+Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledger hygiene.
 
-> **History note:** a bare `✅` on an _unchecked_ item used to mean "confirmed real finding." Because that reads as "done," it was misleading. On **2026-07-11** all 71 such items were re-verified — first against `main` (every one still present) — then against **PR #82** (`accounts-feature`, the branch where the backlog is being implemented). Result: **8 are fixed by #82** (now ticked `- [x]` with #82's commit), **2 are partially fixed** (`partial-#82`, kept open), and the remaining **61 are still open** (`🔎 verified-present` / one `needs-GitHub-check`). Existing `✅` tokens now remain historical completion metadata; new completions need only the checked box in the implementation change.
+## Continuation checkpoint — 2026-09-05
 
-> **Full re-verification — 2026-07-11 (PR #84 tree).** Every one of the **813** checkbox items in this file (all sections: Findings, Feature work, Stale docs, resume-points, coverage notes) was checked against the actual code on this branch (`claude/review-todo-backlog-jrbvpo`), file-by-file, in a fan-out of 34 batches. Each item now carries a status marker so the next agent can act without re-deriving state: **103 done** (`- [x] ✅ 2026-07-11 · <commit>` — 30 previously ticked + **73 newly confirmed fixed**, overwhelmingly by the integrated #82 tree, each stamped with its fixing commit), **685 still-present** (`🔎 verified-present 2026-07-11` — confirmed the bug/gap reproduces in the current tree, with file:line evidence), **21 partial** (`🔎 partial… 2026-07-11 (done vs. left)` — root cause addressed but a described sub-case remains), and **4 needs-GitHub-check** (platform/host state not confirmable from the repo: branch protection + the three host-side devcontainer sync/guard items). Nothing was deleted — resolved items are ticked, not removed. The 73 newly-fixed items span the import/export & date-shift correctness class (CSV negative amounts, same-day dedup, brokerage sign/rollback, systemic `formatDateToYmd`), the security backend fixes, the account-rewrite Phase A/B features (migrations 0065–0071), and a large set of performance/GPU items — all with commits recorded inline.
+This is the current hand-off point after the complete TODO normalization audit. Do not repeat a
+repository-wide audit before selecting work. The queue contains **84 open records and no checked
+records**. The records are intentionally independent and fall into these states:
 
-> **Completed-item audit — 2026-08-10 (`main` @ 899a5220, full history).** All **727** ticked (`- [x]`) items in this file were re-checked against the current tree — one reviewer per 10-item batch clustered by code area, then an **independent adversarial reviewer** re-derived every non-clean verdict from scratch. Result: **691 genuinely fixed** (the only items left ticked), **26 partial** (`🔎 partial-audit 2026-08-10` — root fix confirmed, a sub-case the item itself names still remains), **10 refuted** (`🔎 re-verified-open 2026-08-10`). Both the partial and the refuted items are now **un-ticked `- [ ]`**, per this file's rule that a partial is kept open (see the marker list above): ticked count 727 → **691**, open 366 → **402**. **Nothing rated high severity** — no security, data-integrity or user-facing-correctness tick was false. All 39 adversarial re-checks agreed with the first pass; the only corrections were two items whose verdicts had been dropped, both confirmed fixed. Three first-pass claims were **refuted by the orchestrator** and discarded rather than reported (notably a NOT_FIXED on the endpoint-matrix item that missed `scripts/check-endpoint-matrix.js`, wired into `ci.yml` — `bun run check-endpoint-matrix` reports `in sync: 212 operations`); one claim cited `routes/accountRoutes.js`, a file that does not exist. Dominant failure mode by far: an item enumerated several sites and only the first was fixed. **Stamp integrity (mechanical, whole-file):** 553 items' `✅ · <sha>` stamps resolve on `main`; **97 items carry a dangling pre-squash branch SHA** (56 distinct) — every one recoverable via its `(#NN)` PR number, so this is bookkeeping rot, not missing work. Left unrepaired on purpose (separate change) — see the follow-ups in `docs/audits/completed-items-audit-2026-08-10.md`.
+- **38 verified-present**: source work is still required; revalidate the named evidence, then
+  implement one item at a time.
+- **4 partial**: only the exact remainder in the `Tracking:` line is open; do not redo the part
+  already described as complete.
+- **15 blocked**: record the stated product, data, or policy decision before writing code.
+- **26 runtime-unverified**: source work is complete or substantially complete; perform only the
+  named live database, Demo, browser, Electron, or external acceptance check.
+- **1 platform-check**: inspect the named GitHub state before changing repository code.
 
-> **Completed-item audit — 2026-08-28 (`main` @ d6aa9044, current tree).** All **1,013** ticked records were re-checked from their complete item text against current source, tests, contracts, and documentation, followed by an independent adversarial review of every proposed exception. Result before correcting checkbox state: **945 fixed**, **14 partial**, **4 not fixed or later regressed**, **18 moot/safely superseded**, **14 source-complete but runtime-unverified**, and **18 research/archive milestones**. The **18 partial or regressed records below are now un-ticked** and carry exact remaining scope; no new finding headings were created. Checked count 1,013 → **995** and raw open count 140 → **158**. The 14 source-complete records remain checked but carry `🔎 runtime-unverified 2026-08-28` notes for their outstanding Demo, live-Postgres, or browser acceptance. Current verification also found two repository gates red: ADR-067 backend lint and the fresh production bundle budgets. Full frontend tests passed; full backend HTTP tests were sandbox-blocked by socket-bind `EPERM`; live database suites had no `TEST_DATABASE_URL`.
+Continue as follows:
 
-## How to use this file
+1. Run `bun run todo:list -- --state verified` and choose one item by priority and subsystem.
+2. Read its `Tracking:` line and source evidence. If it is `decision-needed`, stop and record the
+   decision before implementation. If it is `runtime-unverified`, perform the named acceptance
+   instead of reopening the implementation audit.
+3. Keep one owner-sized outcome per change. Run the focused tests, `bun run todo:check`, and the
+   relevant typecheck/lint before removing the item from this file.
+4. Remove an item only after its complete stated scope is implemented and independently verified.
+   Leave it here when a required external check is unavailable, with the exact blocker on
+   `Tracking:`.
 
-- **Findings** (grouped by domain, ordered by priority) = what to implement. Each carries a `↪ from:` line naming the research pass it came from.
-- **Feature work** = designed-but-unbuilt features (specs, not audit findings).
-- **Still to research — resume points** = where an audit stopped; pick these up to continue researching.
-- **Checked clean — do NOT re-audit** = already verified sound; don't spend time re-checking.
-- **Refuted — do NOT re-add** = claims investigated and disproven; don't re-file them.
-- **Stale docs** = KB/doc fixes noticed in passing (not code bugs).
-- **Research context & coverage notes** = scope/method/caveats from the original passes (archive; safe to trim).
+Important current hand-off facts:
 
-Findings are single-pass research unless a `from:` line says "adversarially verified" (the 2026-06-30 audit) — confirm against current code before acting. Completed records may be pruned after current-tree verification; this file is a live work queue, not the completion archive.
+- Account funding-graph locking, its source-side tests, and the related documentation are already
+  implemented in the working tree. The remaining record is the real-PostgreSQL concurrency run;
+  the suite covers **PATCH/PATCH, PATCH/merge, and DELETE/PATCH**.
+- Portfolio per-broker history is deliberately last. Do not start it before the current-point
+  broker surfaces have shipped and soaked.
+- The queue includes Demo, real-export, live-database, and GitHub acceptance obligations. These are
+  not reopened implementation defects; complete the named acceptance or leave the record open.
+- No publication was performed. Inspect the working-tree diff and preserve unrelated changes
+  before making the next implementation change.
 
-### Agent queue view
+## Binding constraints
 
-Run `bun run todo:list` for the concise, authoritative open-findings queue. Use `--json` when a
-coordinator needs machine-readable records, or filter with `--state` and `--priority`. The reported
-state is derived from tracking text and is only a triage aid; revalidate the finding against current
-code before selecting it. `bun run todo:check` enforces stable headings, source metadata, unique open
-titles, and that every open findings section stays inside `## Findings`.
-
-## ⚠️ Binding constraints (read before acting)
-
-**Design direction constraint (from the user — binding):** the rich aesthetic (aurora/WebGL,
-glass, jewel accents per ADR-105, hover character) is deliberate and was _re-instated after a
-flatten redesign was reverted_. Findings must refine toward "Apple-polished rich", never propose
-flattening, removing the aurora, or genericizing toward shadcn defaults. "Less AI slop" here
-means _more_ intentionality and specificity, not less character.
-
-**⚠️ Visual-impact caveat (added 2026-07-02, per the user's design stance — keep the rich
-aurora/glass/hover aesthetic, ADR-105; a flatten redesign was reverted once already):** the
-_findings_ are invisible GPU/paint costs, but some of the _suggested fixes_ would visibly change
-the look. Prefer the visually-free fix where one is listed; get user sign-off before applying any
-look-changing one.
+- Keep the rich aurora, glass, jewel-accent, and hover design direction from ADR-105. Visual work
+  refines that system; it does not flatten it into generic defaults.
+- Use the Vision Demo app with synthetic data for browser and visual acceptance. Never use the real
+  financial stack for UI testing.
+- Database migrations require a downgrade path and disposable-database proof. Never apply a
+  destructive migration or live-data cleanup without the user's explicit approval.
+- Portfolio account work follows ADR-108: whole-lot broker tagging, global tax and cost-basis truth,
+  and no synthetic trade cash legs.
+- Per-broker history stays last. Do not start it before the current-point broker surfaces have
+  shipped and soaked.
 
 ## Findings
 
-### 🔒 Security
-
-- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼
-  - Tracking: 🔎 partial 2026-09-05 (new and opt-in installations have split migration/runtime roles, but existing Electron installations deliberately retain the bootstrap-superuser runtime URL; the original least-privilege claim is therefore not complete)
-  - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
-  - `docker-compose.yml:7` (`POSTGRES_USER: ftm_user`), `.env.example:19-20`
-  - The runtime connection pool (including the dbEditor path above) runs as the same superuser the official Postgres image bootstraps. Any successful injection or compromised dependency has instance-level reach.
-  - Fix: create a non-superuser application role scoped to the app schema; keep DDL/migrations on a separate, more-privileged role used only by Alembic.
-
-- [ ] **WP-C4 residues from the 091d9ad1 (#157) pass (grouped)** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (null-account income-only streams can still produce an Unassigned row while fullyAssigned is true; decide display and attribution semantics)
-  - ↪ _from: Orchestration session 2026-08-10 · WP-C4 partitioned-engine pass (adversarial verifier + implementer residue; the engine itself shipped verified)_
-  - (a) **Partition oversell is invisible**: a sell tagged to a broker holding fewer units than it sold clamps to that partition's lots, so re-tagging lots away from an account with sells silently INCREASES global units/value (verifier probe: +2 units, +20 value); the calculators' `_oversold` flag is dropped by `buildInvestmentSummaryCore` and has no partition-level equivalent. Propagate an oversold signal to the summary/read surfaces (natural WP-C5 companion) so mis-tagged sells surface instead of resurrecting units. (b) **`usePortfolioSummaries.ts:37` still runs the FLAT core client-side** — its header's "the two sides cannot drift" promise is now false: PortfolioOverviewPage/StocksPage/PerformancePage/NetWorthPage/InvestmentDetailDialog show flat realized while the summary API shows partitioned figures on fully-assigned multi-broker instruments. Switch it to `buildInvestmentSummaryCorePartitioned` (scheduled naturally with WP-C5's read surfaces). (c) `snapshotBuilder.js` still replays flat — historical snapshot invested/realized can diverge from the live summary for fully-assigned multi-broker instruments (value/units identical since units are partition-invariant); WP-C7 territory. (d) Cosmetic: a NULL-account dividend on a fully-assigned instrument mints an `account_id: null` byAccount row carrying just that income while `fullyAssigned: true` — consistent totals, odd display. (e) Sell validation gained one EXISTS query per account-carrying sell (incl. per staged import row) — fine now, fold into the C3/C4 batch-commit perf pass if import profiles ever regress.
-
-- [ ] **System-recipient follow-ups from the c1d6761 (#142) pass (grouped)** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (recipient pivot drops historical-FX fallback metadata; decide the API and UI signal shape)
-  - ↪ _from: Orchestration session 2026-08-02 · merge-preview/recipient_id pass (adversarial verifier findings; none are correctness breaks in shipped paths)_
-  - (a) A user creating a payee whose name normalizes to `SYSTEM` (e.g. "System") via `recipientRepository.createOrGet` silently receives the existing INACTIVE system recipient — it never appears in the active list or pickers and nothing reactivates it. Decide: reactivate on user adoption, or reserve the name with a clear error. (b) First-ever system-recipient creation introduces an `accounts → recipients` lock-order edge (reconcile holds the account FOR UPDATE, then upserts the recipient); no shipped reverse-order path exists today (verified: dbEditor is single-table per tx, recipientMergeService never locks accounts), but it constrains future code — a deadlock is constructible if one ever appears. (c) `recipientRepository.createOrGet`'s own `DO NOTHING` + re-SELECT can find nothing against a concurrent uncommitted insert and throws 'Recipient not found after conflict' — pre-existing on the import path; `getOrCreateSystemId`'s DO-UPDATE-on-miss shape is the fix pattern. (d) `transactionRepository.create` passes `recipient_id` straight from the POST body — if route validation ever admits null, that's a 23502; validation not audited. (e) ADR-094's field tables for the opening/adjustment rows now omit `recipient_id`; the ADR is a historical record, so add a decision-log addendum rather than editing it. (f) `convertWithRates` missing-FROM-rate fallback is identity 1:1 (100 EUR + 200 unrated GBP prints 300 EUR) — pre-existing hub semantics now faithfully mirrored by previewMerge; a visible "rate missing" signal would be the real fix. (g) `computedBalanceByCurrencyAggLateral` interpolates its `account` expression into a `--` comment line too — a multi-line expression would break out of the comment; doc says literal-only, worth a hard assert.
-
-- [ ] **ADR-109 conversion residues from the c1d6761 (#142) pass (grouped)** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (decide when to drop retained legacy_inh rollback relations and helper views; PostgreSQL 18 execution proof remains external)
-  - ↪ _from: Orchestration session 2026-08-02 · ADR-109 conversion pass (implementer + adversarial verifier residue; none affect converted-install correctness)_
-  - (a) Housekeeping drop (ADR-109 step 4, deliberate future work): converted installs keep the `legacy_inh_*` rollback tables, the `*_investments_full` helper views, and the pre-0013 `investments_legacy`/`portfolio_transactions_legacy` snapshots until a later revision drops them. Note for that revision: `legacy_inh_portfolio_transactions_base` still carries FKs to `accounts`/`portfolio_import_batches` (inert but present), and `BACKUP_COVERED_TABLES` (`src/backup/coverage.js`) deliberately excludes the `legacy_inh_*` copies — decide whether the drop needs a backup-coverage note. (b) ~15 docs beyond data-model.md still describe `investments_base`/inheritance as live (e.g. `docs/features/portfolio.md`, `docs/reference/repository-layer.md`, `docs/reference/database-triggers.md`, `docs/api/investments.md`, `docs/diagrams/backend-database-schema.puml`) — docs-only sweep to mark the shape legacy/converted. (c) `docs/guides/migrations.md` Migration Inventory table stops at 0024 (pre-existing staleness). (d) Backend has no symbol-length validation — `normalizeSymbol` (`investmentRepository.js`) only trims/uppercases and only the UI input enforces maxLength=20, so the API/import paths can 500 on >20-char symbols against the VARCHAR(20) column; 0087's pre-flight guards the conversion but the runtime gap remains. (e) CI runs postgres:18 while local verification ran Postgres 16 — `hashtextextended` and all DDL used exist in both, but 0087 was not exercised on 18 outside CI.
-
-- [ ] **All-time pivot endpoints ship near-transaction-cardinality intermediate rows per request — no default date bound, no cache** 🔼
-  - Tracking: 🔎 reopened 2026-09-05 (cache is complete; decide whether cold requests should keep all-time semantics or use a user-visible rolling startDate default)
-  - History: 🔎 verified-present 2026-07-11 🔎 partial-2026-07-19 (the TTL-cache half is done: category/recipient-by-year/recipient/tag pivots now go through a shared 5-min statistics cache (`_statisticsCache.js` → `statisticsResponseCache` in routes/info/_cache.js) with inflight-dedup, keyed on all inputs (currency, exclusions, bucket, dates, ids, allTags), busted synchronously on every transaction/category/recipient mutation via a new `invalidateStatisticsCaches()` hooked into `scheduleReconcile` + `scheduleRefresh` + `refreshMaterializedViews` — repeated statistics-page loads no longer re-run the full all-time scan. LEFT: the rolling-window `startDate` default (reduces the COLD-request intermediate-set size too) is a user-visible behavior change — statistics would default to a window instead of all-time — deliberately not applied without sign-off. Exact per-date FX semantics preserved (pure memoization, no grain change).)
-  - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
-  - `infoRepositoryStatistics.js:113-133` (`getCategoryPivot`: groups by `t.date` over the whole table, then **doubles** the set in JS — two conversion legs pushed per row at `:139-144`), `infoRepositoryRecipients.js:183-200` (`getRecipientByYear`, no date filter), `:274-292` (`getRecipientPivot`, dates optional/default null), `infoRepositoryTags.js:53-70` (`getTagPivot` with `allTags=true`)
-  - Grouping by `t.date` is deliberate (per-date FX, documented at `:106-112`), but the intermediate set ≈ distinct (entity, day, currency) pairs ≈ transaction count for sparse data, growing forever; all are `source:'live'` on every statistics-page load.
-  - Fix (cheapest first): default `startDate` to a rolling window in the routes; add a short in-process TTL cache keyed on (endpoint, currency, exclusions) invalidated by the existing transaction-mutation hook; longer term, month-grain pre-aggregation for the ≥1-year-old portion. **DECIDED 2026-07-10: NO grain policy — exact per-date FX semantics are binding everywhere.** Pursue only the semantics-preserving fixes (rolling-window defaults, TTL cache); any pre-aggregation must aggregate rows that were each converted at their own exact date rate — never month-average rates. Do not re-raise the grain-policy ADR.
-
-- [ ] **`Card` primitive defaults every instance to the most expensive glass-blur tier** 🔽
-  - Tracking: 🔎 re-verified-open 2026-09-05 (`card.tsx` still includes `glass-regular premium-frame` unconditionally; later hover work did not change the default material)
-  - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
-  - `apps/frontend/src/components/ui/card.tsx:9`
-  - Blur tier is baked unconditionally into the base `className`, with no variant prop to opt out — only an additive override is possible.
-  - Fix: default `Card` to a flat surface; require an explicit `glass-*` className for hero/standalone cards.
-
-- [ ] **CategoryPivotTable renders every period column eagerly for multi-year data** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-05 (the remaining remedies change first-load scope or column sizing; choose latest-year default, fixed-width windowing, or explicitly accept the current DOM size)
-  - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
-  - `CategoryPivotTable.tsx:76,242-360` defaults to "all" years and renders every period × category eagerly — multi-year data ≈ 3-4k `<td>`s rebuilt per valueMode/collapse/year toggle (computation memos are fine; cost is DOM size). Default to latest year or window the period columns.
-  - `BankBalancesWidget.tsx:113-147` builds its ~365-point × N-accounts chart dataset in the render body unmemoized — fresh `data` identity per dashboard re-render, which would also defeat any chart-level memoization added for the findings above. Wrap in `useMemo` keyed on `data`.
-
-- [ ] **Sorting by memo/recipient/category/currency computes expression sort keys over the fully materialized set with no supporting index** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (expression sorts remain unindexed; require query-plan and scale evidence before adding indexes)
-  - History: 🔎 verified-present 2026-07-11
-  - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
-  - `apps/node-backend/src/repositories/transactionRepository.js:27-40,428-434`
-  - `TRANSACTION_SORT_COLUMNS` maps recipient → `COALESCE(pr.name, r.name)` and category → a 3-branch CASE with string concatenation; memo and currency have no btree index. Any non-date sort string-computes a sort key per row and sorts the entire filtered set each page (compounded by the `COUNT(*) OVER ()` materialization filed above). Interpolation itself is safe — whitelist map + ternary direction, values parameterized.
-  - Fix: low priority at current scale; if non-date sorts get hot, add btree indexes on `(memo)`, `(currency, date)` and consider sorting by the joined name only after restricting to page candidates.
-
-- [ ] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (short first pages skip the scan; full and deep pages still need an estimate/cache/window-count and keyset design)
-  - History: 🔎 verified-present 2026-07-11 🔎 reverted-2026-07-14 (a first-page count-skip was implemented in fab7a77 (#99) then reverted: it relocated the pre-existing `client.query(countSql, params)` sink into a changed hunk, which CodeQL re-flags as a "new" taint alert on this admin editor even though columns are allowlisted against the live schema and values are parameterized. Left open to avoid re-introducing that sink line; a future fix should compute the total without moving the interpolated-WHERE query — e.g. a windowed count on the data query, or keep it on `main`'s line)
-  - ↪ _from: Performance research 2026-07-09 · Wave F2_
-  - `apps/node-backend/src/services/dbEditor.js:196,204` (count alongside every data page, same READ-ONLY txn), `:195` (`LIMIT/OFFSET` paging)
-  - With no filter the count is a full scan of the table (worst: `transactions`) re-executed on every page/sort/filter change, racing the 15s `READ_TIMEOUT_MS`; deep offsets scan-and-discard.
-  - Fix: skip the exact count when `offset===0 && rows<limit`, use `pg_class.reltuples` estimates for large tables or cache the count per filter signature; keyset paging for deep pages.
-
-- [ ] **Run browser accessibility and keyboard-order verification for the completed a11y sweep** ⏬
-  - Tracking: 🔎 needs-browser-check 2026-09-05 (source and focused tests are complete; run Playwright a11y and keyboard tab-order verification in a browser-capable environment)
-  - ↪ _from: 2026-09-05 full checked-item revalidation of the 0e8d7c34 (#154) a11y sweep_
-  - Evidence: the source, focused tests, locale validation, and documentation clauses were independently revalidated as complete on 2026-09-05.
-  - Completion: run `apps/frontend/e2e/a11y.spec.ts` and verify the affected dialog and chart tab order in a browser-capable environment.
-
-- [ ] **Gain/loss card-wash gradient has four dialects despite `TrendHue` declaring itself the single source of truth** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (add or reject a strong TrendHue role and route the remaining NetSummaryCard and StatCard gradients through the chosen contract)
-  - History: 🔎 verified-present 2026-07-11
-  - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
-  - `apps/frontend/src/components/shared/TrendHue.tsx:3-7` defines the wash as `from-gain/10 to-gain/5` ("the single source of truth for the card tint") and is used by 4 surfaces — but siblings inline their own stops: `components/statistics/SummaryCards.tsx:67-69` `/20→/5 + ring`, `components/dashboard/StatCard.tsx:31-33` `/20→/10`, `components/dashboard/NetSummaryCard.tsx:57` duplicates TrendHue's exact gradient inline instead of rendering it, `pages/portfolio/RealEstatePage.tsx:190` `/15→/5`, `pages/portfolio/StocksPage.tsx:226` `/20→/5`. Same meaning, four intensities — the tint reads as accident, not signal.
-  - Fix: give `TrendHue` an `intensity` prop (`subtle` = 10/5 card wash, `strong` = 20/5 icon-tile fill) and route all six sites through it; inline `from-(gain|loss)/` outside TrendHue becomes the grep guard.
-
-- [ ] **`/import` is a single narrow centered column — wide empty side margins on desktop** ⏬
-  - Tracking: 🔎 reopened 2026-09-05 (implementation is unchanged; record a deliberate centered-layout decision or implement the optional desktop composition)
-  - History: 🔎 verified-present 2026-07-11
-  - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
-  - `apps/frontend/src/pages/ImportPage.tsx` — all sections (CSV/Recipients/Categories import, Export, History, Supported Banks) stack in one ~680px centered column, leaving large empty left/right gutters at ≥1440px. Cosmetic; a deliberate form-centering choice.
-  - Fix (optional): widen the column, or use a 2-column arrangement for the independent import blocks.
-
-- [ ] **AI-chat tool sub-states are the smallest remaining gap in the three-tier loading system, plus five small copy nits** ⏬
-  - Tracking: 🔎 reopened 2026-09-05 (raw backend status.error can still leak English and Dutch shortcut labels still mix verb forms; other clauses are complete)
-  - History: 🔎 verified-present 2026-07-11
-  - ↪ _from: Design authenticity 2026-07-03 · Wave S6 (residue, closed 2026-07-03)_
-  - The error card is on-token (`border-destructive/30 bg-destructive/5`, `ToolResultCard.tsx:95-105`) but its fallback string 'Tool failed.' (`:21`) is hardcoded English; there's no designed tool-running intermediate state (the crafted thinking dots already carry this — acceptable as-is). Copy nits found alongside: ⬇ `OllamaStatusBanner.tsx:38` prefers the raw English `status?.error` over its own localized hint; ⏬ `aria.toggleSidebar` nl "Zijbalk wisselen" means "swap sidebar", not toggle — should be in-/uitklappen; ⏬ nl `shortcuts.*` mixes imperative and infinitive verb forms; ⬇ `cashflow.window30` nl reads "30 d" vs en "30d".
-  - Fix: translate 'Tool failed.'; fix the four copy nits alongside any other nl.json sweep.
-
-- [ ] **Truncation gaps on long entity names in Recipients, Watchlist, and Categories** 🔽
-  - Tracking: 🔎 reopened 2026-09-05 (Recipients and Categories are complete; Watchlist truncates without exposing the full company name)
-  - History: 🔎 verified-present 2026-07-11
-  - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
-  - `RecipientsPage.tsx:159-171` — name + merge-target render unbounded in a flex row (no `truncate`/`min-w-0`); `WatchlistPage.tsx:174-182` — CardTitle company name competes with the right-hand percentage with no truncation; `CategoriesPage.tsx:213-219` — the detail Badge is unclamped (though the description below it correctly uses `truncate max-w-[200px]`).
-  - Fix: add `truncate min-w-0` (plus a `title` attribute) to the three sites.
-
-- [ ] **`controllers/` is a one-file orphan layer that still bypasses the enforced route boundary** 🔼
-  - Tracking: 🔎 partial 2026-09-05 (ESLint now warns on the controller boundary, but `investmentController.js` remains a roughly 1,030-line Express controller with direct repository imports; the architectural fix is not complete)
-  - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
-  - evidence: controllers/investmentController.js (524 lines) is the only controller in the codebase; its exports are `(req, res)` Express handlers with 17 `res.ok()` calls (e.g. :180-201, :253-254), i.e. route code by another name — but because it sits outside `src/routes/**` the ESLint files-glob (eslint.config.js:118) never applies, so its direct `investmentRepository`/`portfolioTransactionRepository` imports (:14-15) are unlinted. routes/investments.js is a thin dispatch table over it.
-  - fix: consolidate toward the codebase-wide pattern — extract the logic into `services/investmentService.js` (+ existing services/portfolio/*), turn the handlers into routes/investments.js bodies, and delete controllers/; alternatively at minimum add `src/controllers/**` to the ESLint boundary glob.
-
-- [ ] **Recurrence vocabulary forked: 'bi-weekly' vs 'biweekly', plus in-FE duplicate enum** 🔼
-  - Tracking: 🔎 reopened 2026-09-05 (shared declarations are complete; aligning the two wire vocabularies still needs an explicit compatibility and migration decision)
-  - History: 🔎 verified-present 2026-07-11 🔎 partial-899a5220 (#158) 2026-08-10 (DONE — the whole non-breaking half. New `@vision/types/recurrence` module holds one canonical tuple per vocabulary (`PORTFOLIO_RECURRENCE_INTERVALS` hyphenated, `PLANNED_RECURRENCE_PATTERNS` not), following the existing assetClasses/portfolioTxnTypes precedent; the duplicate FE `RecurrenceInterval` is collapsed (`types/api.ts` + `types/portfolio.ts` both now re-export, so every existing import path still resolves and no consumer changed), and the four hand-maintained copies are re-pointed: backend `lib/calculations/recurrence.js` `SUPPORTED_PATTERNS`, `portfolioTxRepo.common.js` `VALID_RECURRENCE_INTERVALS`, `lib/plannedPaymentMapper.ts`. **Zero wire values moved — proven at runtime, not asserted:** both tuples and the derived Set print byte-identical to their previous literals. The definition site now carries the _why_, which the finding didn't have: the hyphen is load-bearing because `'bi-weekly'` in `recurrence_pattern` is rejected by migration 0089's `chk_planned_transactions_recurrence_pattern`, and before that CHECK existed such rows rendered as biweekly but never advanced in the calculator — orchestrator confirmed 0001:98 (PG enum), 0089:92 (the CHECK) and 0089:62 (a prior `'bi-weekly'`→`'biweekly'` data rewrite, i.e. there is already precedent for the migration shape). Verified: backend 3368 green, frontend 2423 green, both typechecks + lint exit 0. LEFT: the **breaking** half only — aligning the two spellings on the wire, which needs a compat mapping on every read path, a data migration, an `ALTER TYPE` on the 0001 enum (whose values cannot be dropped), and an openapi.yaml change plus `generate:types` regeneration of generated.ts. That is a user decision, not a sweep)
-  - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
-  - evidence: portfolio recurrence uses `'bi-weekly'` (apps/frontend/src/types/portfolio.ts:63, types/api.ts:348 — identical `RecurrenceInterval` declared twice in FE — and generated.ts:3352), while planned-transaction recurrence uses `'biweekly'` (apps/node-backend/src/services/calculations/recurrence.js:20 `SUPPORTED_PATTERNS`, FE hooks/usePlannedPayments.ts:22). Two hand-maintained vocabularies for the same concept, differing only in a hyphen — a standing trap for anyone unifying planned/portfolio recurrence.
-  - fix: define one shared recurrence-token list in `@vision/types` (breaking-change note: aligning the wire value needs a compat mapping) and delete the duplicate FE declaration.
-
-- [ ] **Non-GET request parameters still use inconsistent body/query precedence** 🔼
-  - Tracking: 🔎 reopened 2026-09-05 (the bank-name paths are body-first, but CSV separator/encoding remain query-first and destructive admin reset still accepts a query fallback)
-  - ↪ _from: 2026-09-05 full checked-item revalidation_
-  - Evidence: `apps/node-backend/src/routes/importRoutes.js` reads CSV `separator` and `encoding` from query before body, while `apps/node-backend/src/routes/admin.js` accepts `force` through `bodyFirstParam` although its error text names the body as canonical.
-  - Completion: make multipart option precedence consistent and either remove or explicitly document the destructive `force` query compatibility path.
-
-- [ ] **`validateIdParam` mutates Express path parameters from strings into numbers** ⏬
-  - Tracking: 🔎 reopened 2026-09-05 (strict parsing is complete, but middleware still writes the parsed number back to `req.params.id` and tests pin that mutation)
-  - ↪ _from: 2026-09-05 full checked-item revalidation_
-  - Evidence: `apps/node-backend/src/middleware/validation.js` assigns the parsed numeric value to `req.params.id`; `apps/node-backend/tests/validation.test.js` expects it.
-  - Completion: preserve Express string params and expose the parsed identifier separately, or document and adopt numeric params as an explicit project contract.
-
-### 🏗️ DevOps / CI-CD / Packaging
-
-- [ ] **Add or explicitly waive an end-to-end backup/restore journey** 🔼
-  - Tracking: 🔎 reopened 2026-09-05 (CSV import and transaction lifecycle journeys exist; backup/restore remains uncovered)
-  - ↪ _from: 2026-09-05 full checked-item revalidation of the high-risk E2E finding_
-  - Evidence: `apps/frontend/e2e/high-risk-journeys.spec.ts` covers CSV preview/commit and transaction create/edit, but contains no backup/restore journey.
-  - Completion: add the missing journey in a suitable Electron-capable harness, or document why focused Electron backup tests are the accepted boundary.
-
-- [ ] **Verify the deployed `vision-claude-sync` pull behavior matches the fixed canonical function** 🔽
-  - Tracking: 🔎 needs-host-check 2026-09-05 (canonical dotfiles implementation is complete; installed-host parity and forced-failure behavior are unverified)
-  - ↪ _from: 2026-09-05 full checked-item revalidation of the D4 sync finding_
-  - Evidence: the canonical function now returns nonzero for rsync or merge failure and makes staged host values win conflicts.
-  - Completion: compare the installed Fish function byte-for-byte, then force a failing container command and confirm a nonzero result plus visible failure message.
-
-- [ ] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫
-  - Tracking: 🔎 needs-GitHub-check 2026-09-05 (local workflow structure and high-risk journeys pass, but the current scheduled-run result and alerting behavior have not been verified on GitHub)
-  - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
-  - `.github/workflows/e2e.yml:8-11` claims "has not yet had a live run on GitHub Actions" — that comment is **stale**. Live `gh run list --workflow=e2e.yml` shows it has run on its nightly schedule every day since at least 2026-06-01 (30/30 fetched runs) and **failed every single time**. Root cause confirmed from an actual job log: the workflow never writes a `.env` file before `docker compose -f docker-compose.yml up -d --build`, so the stack never comes up (`env file ... not found`). The only failure handling (`if: failure()` at `:86-88`) dumps logs into the run's own output — no issue creation, no Slack/email — so this has been silently red for ~30 consecutive days.
-  - Fix: have the workflow write a minimal `.env` before `docker compose up` (mirror `ci.yml`'s pattern at lines 532/601), re-verify via `workflow_dispatch`, then add failure notification (issue auto-creation or similar). Also fix the stale in-file comment.
-  - Verification (2026-07-03, D1 residue): even once the `.env` fix lands, the a11y gate itself (`a11y.spec.ts:44-55`, fails on any critical OR serious axe violation across 9 pages) has never actually executed in CI — one supervised `workflow_dispatch` run is still needed to confirm it passes, alongside real job runtime vs. the 30-minute budget (`e2e.yml:31`, tight with 36 tests at `workers:1` + 2 retries and no buildx/GHA cache in this workflow) and empty-DB safety of all 36 tests. Rest of the wiring checks out statically: browser install matches the pinned Playwright version (`bun.lock:434`), `PLAYWRIGHT_BASE_URL`/CI env (`e2e.yml:86-88`) matches `playwright.config.ts:3-5`, `global-setup`'s onboarding PUT passes `csrfGuard.js:42`, the stub `.env` is byte-identical to `docker-verify`'s, and all 6 specs exist (no `.only`, no hardcoded ports). Minor accompanying nits: a redundant host-side `generate-locales` step (`e2e.yml:50-51` — the image already builds its own per `Dockerfile:45`); `visual.spec.ts` running in no workflow is likely deliberate (Linux screenshot baseline) — see the already-filed "hardcodes six spec files" finding below.
-
-## 🧩 Feature work
-
-### AI insight / anomaly agent (scoped from brainstorm — 2026-07-01, redesigned — 2026-07-01)
-
-Two independent layers, split by _cost_, not by feature:
-
-1. **Detection layer (deterministic, runs on normal page load)** — plain-code computation, same cost
-   class as any other page in the app (`recurringDetectionService` already runs this way today), so
-   no privacy/hardware concern running it automatically. Surfaces directly in the UI with zero LLM
-   involvement.
-2. **Narration layer (local LLM, on-demand only)** — the _only_ part gated behind an explicit user
-   click, because it's the only part that spends inference. Never runs unprompted, on any hardware —
-   that's the whole reason the earlier scheduled-background design was dropped, and that reasoning is
-   scoped to this layer only, not the detection layer above.
-
-**Privacy constraint (non-negotiable, no exceptions):** local model only, via the existing Ollama
-integration (`apps/node-backend/src/integrations/ollama/`) — transactions never leave the box, not
-even for "non-sensitive synthesis." Extends the no-external-calls guarantee in ADR-024 /
-`docs/security/ai-data-access.md`; does not weaken it. Applies only to the narration layer — the
-detection layer never touches an LLM, so it's unaffected either way.
-
-**Architecture — two strictly separate stages, do not blur them:**
-
-1. **Deterministic / precalculated (detection layer).** Every _finding_ (new subscription, price
-   change, category outlier, forecast figure) is computed by plain code — the recurring-pattern diff,
-   the outlier z-score, the cached cashflow forecast. No LLM involved, fully reproducible, no
-   hallucination risk. Runs automatically on relevant page views (Statistics page, a lightweight badge
-   check elsewhere) — _not_ gated behind a button. Also exposed as one read-only tool (working name
-   `insightsDigest`, alongside `getRecurringDetected`/`getSpendingPace`/`getRecipientInsights` in
-   `apps/node-backend/src/services/aiChat/tools/insights.js`) so the narration layer reads the same
-   findings instead of recomputing them. Return contract (this is the sole interface between the two
-   layers — worth pinning down so two engineers building either side don't diverge):
-   `{ subscriptionCreep: { new: [...], priceChanges: [...] }, categoryOutliers: [...], cashForecast:
-{...} }`, each finding array pre-capped per the per-item limits specified below, undismissed
-   findings only.
-2. **Local LLM analysis (narration layer).** The model only ever sees the _already-computed_ findings
-   from stage 1 — it never touches raw transactions and never computes a number itself. Its job is to
-   prioritize, explain, and phrase, not to detect (same "never cite figures not returned by a tool"
-   rule ADR-024 already enforces for interactive chat). **Resolved 2026-07-01: tool-augmented, by
-   construction, not a separate choice to make.** Triggered on-demand inside a normal interactive chat
-   turn, so it already runs through the existing `dispatchTool` loop with tools enabled — the model
-   can call the other read-only Insights tools for extra context (e.g. "how unusual is this recipient
-   historically") exactly like it would for any other query.
-
-- [ ] Surfacing: Statistics page panel + button badge, no new banner or dashboard card 🔼 ✅ 2026-07-23 · `GET /api/info/insights-digest` (shared `insightsDigestService`) → `useInsightsDigest` hook → `InsightsDigestPanel` on the Statistics page (mirrors RecurringDetectionPanel UI: card, expand/collapse, per-row X dismiss) + `InsightsNavBadge` on the Statistics nav item (undismissed count, live-synced to panel dismisses). Client-side dismiss store `insightsDismiss.ts` with the two key shapes (`{recipientId,findingType}` permanent; `{categoryId,monthKey,dismissedAt,deviationAtDismiss}` 14-day + worsening re-alert). EN/NL i18n. No new dashboard banner/card. Backend 11 + FE 30 tests; full FE suite green.
-  - Tracking: 🔎 partial-audit 2026-08-28 (the badge calls the full digest instead of a persisted cheap count, triggering expensive detection/backtesting; transaction invalidation also omits the insights digest key and can leave the badge stale)
-  - New panel on the Statistics page mirroring `RecurringDetectionPanel.tsx`'s _UI_ pattern only
-    (today it only lives on `PlannedPaymentsPage.tsx`) — full card, expand/collapse, default
-    expanded. **Not** the same dismiss data structure: the real panel dismisses via one permanent
-    `Set<recipientId>` with no expiry (`RecurringDetectionPanel.tsx:36,131-135`), which doesn't fit
-    this feature (see key shapes below) — reuse the Card/X-button UI, write new dismiss-tracking
-    underneath it
-  - Per-item dismiss key shapes (replaces the earlier "diff against a saved last-run snapshot" idea
-    for subscription-creep, below): `{recipientId, findingType: 'new' | 'priceChange'}` — new-
-    subscription and price-change dismiss _independently_, unlike the recurring panel's single
-    shared set, since dismissing one must not silently clear the other; `{categoryId, monthKey,
-dismissedAt, deviationAtDismiss}` for category outliers, so the 14-day suppression window and
-    "worsened since dismissal" re-alert (below) can both be computed from the stored record
-  - Badge semantics: reflects _undismissed findings only_ — the exact predicate the panel itself
-    filters on, no separate "last viewed" state. It clears when the underlying finding is dismissed,
-    not when the Statistics page is merely opened
-  - Badge data source: reads a persisted count from the same cached detection results the Statistics
-    panel renders (see caching note below) — it does not independently re-run detection just to
-    render a dot; that's what keeps checking it from the AI-chat page cheap
-  - Explicitly **not** a new dashboard banner or card. Two reasons found by direct inspection:
-    (1) `FxStatusBanner` and `UpcomingPaymentsNotification` already render on every page via
-    `AppLayout.tsx` and simply stack with no priority/arbiter mechanism — a third one repeats that
-    problem app-wide, not just on the dashboard; (2) `SuggestionCard` was already removed from the
-    dashboard once (commit `6785a3eb`) specifically for being "redundant — the upcoming-payments
-    banner already covers every page," the same objection that applies to adding a new one here
-  - Dependency: the detection layer now runs on every Statistics-page view, not just behind an
-    on-demand click — this promotes the existing "`GET /api/info/recurring-patterns` does uncached
-    synchronous recomputation" perf finding (TODO.md:360-363 as of this writing) from optional
-    cleanup to a prerequisite, since it will now run far more often. The new category-outlier
-    detector (below) needs the same caching treatment from day one — don't ship a second uncached
-    hot path alongside the fix for the first one
-  - 🔎 attempt 2026-07-11: blocked on the detection layer this panel/badge renders. The panel shows the
-    `{ subscriptionCreep, categoryOutliers, cashForecast }` return contract and the badge reads its
-    cached undismissed count, but none of the producers exist yet — no `insightsDigest` tool, no
-    category-outlier service, no `findingType` dismiss-tracking (grep clean across apps/). Depends on
-    three still-open detector items below (Subscription-creep digest, Category-level spend-outlier
-    detection, Month-end cash forecast) plus the recurring-patterns caching fix (TODO.md:1387) that
-    this item itself promotes to a prerequisite — all still '- [ ]'. Ship those first; there's nothing
-    to surface until the return contract has a real producer.
-
-- [ ] On-demand narration: chat button + insights tool 🔼 ✅ 2026-07-23 · `insightsDigest` tool (aggregates the 3 detectors into the `{subscriptionCreep, categoryOutliers, cashForecast}` contract, registered in TOOLS) + ADR-110 §4 server-side pre-call (`insightsPreCall` flag on `/api/ai/chat` + `/chat/stream` → `preCallTool` injects the digest before the model turn so it only narrates; fetch-spy no-external-calls test extended) + AIChatPage empty-state quick-action button (forces tools on, EN/NL i18n). Chose §4 pre-call over the soft-hint (ADR corrected); a complementary soft prompt hint remains for typed queries.
-  - Tracking: 🔎 partial-audit 2026-08-28 (`renderAs: 'insightsDigest'` is unsupported by the frontend tool-result renderer, producing an empty card; dismissed findings are not passed into the server-side detectors and can still be narrated)
-  - New read-only tool (detection layer above) registered in the existing `TOOLS` map
-    (`apps/node-backend/src/services/aiChat/tools/index.js`)
-  - New button in the AI chat UI (`apps/frontend/src/features/ai-chat/ChatComposer.tsx` or the empty
-    state in `AIChatPage.tsx` — neither currently has any quick-action/canned-prompt pattern, this
-    would be the first one) that sends a fixed prompt (e.g. "Give me my insights digest for today")
-    into a normal chat turn with tools enabled
-  - Tool-call reliability is genuinely unresolved, not "already solved elsewhere" — `prompts.js`
-    only does soft, generic steering ("call tools when you need numbers"); nothing in this codebase
-    today reliably forces one specific tool for one specific prompt. Pick one before coding, in the
-    ADR above: (a) soft system-prompt hint, accept occasional misses; (b) Ollama's forced
-    `tool_choice` pinned to the new tool, if the client library supports it; (c) bypass `dispatchTool`
-    entirely and call the tool server-side before the model turn, feeding its result into context so
-    the model only ever narrates, never decides whether to fetch
-  - Reuse the user's already-configured default model (`OLLAMA_DEFAULT_MODEL`/conversation model);
-    no new model-selection UI for v1
-  - Delivery: no pinned system conversation — the reply lands as a normal assistant message
-    (existing `ToolResultCard` + message rendering) in whichever conversation the user clicked the
-    button from. Discovery of "something's new" is handled by the badge above, not by this reply, so
-    there's no separate notification problem to solve here
-
-- [ ] Subscription-creep digest 🔽 ✅ 2026-07-23 · `subscriptionCreepService.js` (pure diff layer over `detectRecurringPatterns`; expense-only; `new` = undismissed recurring expenses, `priceChanges` = undismissed patterns with amountChanges; independent `{recipientId, findingType}` dismissal, top-5-by-confidence cap; 9 unit tests). Persistence of dismiss records owned by the surfacing UI item.
-  - Tracking: 🔎 partial-audit 2026-08-28 (`previousAmount` is the all-history median rather than the immediately preceding charge, and applying the top-five cap before client-side dismissal can permanently hide lower-ranked findings)
-  - Diff layer only, not new detection — `recurringDetectionService.detectRecurringPatterns()`
-    already recomputes full history and already flags amount changes (`detectAmountChanges`)
-  - Flag `recipientId`s without a matching `{recipientId, findingType:'new'}` dismiss record as new
-    subscriptions; flag `amountChanges` without a matching `{recipientId, findingType:'priceChange'}`
-    dismiss record as price changes — independently dismissible, per the key shape in the surfacing
-    item above (replaces the earlier snapshot-diff approach)
-  - Cap the alert list (e.g. top 5 by confidence) so a long gap since the panel was last opened
-    doesn't dump a wall of "news"
-
-- [ ] Category-level spend-outlier detection (new service) 🔽 ✅ 2026-07-23 · `categoryOutlierService.js` (median+MAD, modified-z 3.5 w/ near-zero-MAD €50 floor, like-for-like day-1..N windows, ≥4 populated prior months, 14-day dismiss suppression + worsening re-alert, 3-min cache; 11 unit tests). NOTE: threshold-vs-real-history backtest still deferred (no live data here) — calibrate 3.5 before user-facing enable.
-  - Tracking: 🔎 partial-audit 2026-08-28 (the required real-history calibration/backtest was never completed before the detector became user-facing; partial-month windows are still labelled as normal “this month” versus “typical” comparisons)
-  - Sibling to `recurringDetectionService.js`, not folded into it — different concern (magnitude
-    distribution vs. interval pattern)
-  - Baseline: median + MAD of monthly category totals over the last 6-7 months. Precedent is
-    `quoteBackfillService.js:132-166` + `lib/math.js`'s `median()` helper — **not**
-    `detectAmountChanges`, which despite the surface similarity only does a flat ±5% band and has no
-    MAD or z-score anywhere in it
-  - Compare like-for-like — day-1-through-day-N this month vs. the same window in prior months, not
-    a full-month pace projection (avoids "it's the 2nd and you're 15x over" false positives)
-  - Flag via modified z-score (`0.6745 × (current − median) / MAD`), threshold 3.5, with an
-    absolute-euro floor guard for near-zero-MAD categories; require ≥4 of the last 6 months
-    populated before trusting a baseline. This formula/threshold is net-new, not reused from
-    anywhere in the codebase — **backtest against real category histories before shipping**, since
-    3.5 is uncalibrated for the n=4-6 sample sizes in play here
-  - Suppress re-alerting a dismissed category outlier for ~14 days using its own `dismissedAt` field
-    (key shape in the surfacing item above); reactivate early if the current deviation visibly
-    exceeds `deviationAtDismiss`
-  - Cache the result the same way the recurring-patterns prerequisite fix above does — this also
-    runs on every Statistics-page view
-
-- [ ] Month-end cash forecast surfacing 🔽 ✅ 2026-07-23 · `cashForecastInsightService.js` (reuses the MC `computeCashflowForecast` from `forecast/index.js` — not the non-MC namesake; distills month-end P50, min-future dip → `crossesZero` overdraft flag, p10/p90 cumulative bounds, significant-move detection vs prior digest; prominence alert/standing; 12 unit tests). "Since last digest" delta takes `previousMonthEndProjected` from the caller (persistence owned by the surfacing item).
-  - Tracking: 🔎 partial-audit 2026-08-28 (the forecast starts from zero and sums net cashflow but the UI calls it an account balance and raises overdraft warnings; daily p10/p90 values are summed as if they were cumulative quantiles, and production never supplies the prior projection)
-  - No new detection — call `computeCashflowForecast` from
-    `services/calculations/forecast/index.js:255` (the Monte Carlo version the nightly
-    `refreshCashflowForecastMc` job uses, which already checks `cashflowForecastMcRepository.get()`
-    internally and only recomputes on a cache miss). **Not** the differently-scoped, non-MC function
-    of the same name in `services/calculations/aggregation/cashflowForecast.js:142` — two files
-    export a same-named function, easy to import the wrong one
-  - Only call it out prominently when P50 crosses zero (overdraft risk) or moves meaningfully since
-    the last digest; otherwise a standing one-line read
-
----
-
-### Investment lifecycle / portfolio visibility
-
-- [ ] **Add activate/deactivate controls for investments so sold holdings can be hidden without deleting their history** 🔼
-  - Reuse the existing `investments.is_active` field, `PATCH /api/investments/:id`, and list filter;
-    expose an Archive/Restore action from the investment detail or edit flow, consistent with the
-    active/inactive transaction lifecycle.
-  - Show active investments by default. Add an explicit "Show inactive" view or archived group so
-    hidden investments remain discoverable and can be restored. Mark inactive entries clearly when
-    they are shown.
-  - Deactivation is an explicit user action, not an automatic consequence of reaching zero units.
-    It must preserve portfolio transactions, price history, and reporting/tax history while keeping
-    the inactive holding out of current portfolio cards, ticker choices, and current-value totals.
-  - Add frontend interaction and query-invalidation coverage, plus backend contract coverage for
-    deactivation, inactive filtering, history retention, and reactivation.
-
----
-
-### Belgian tax pre-fill (deterministic — independent of the insight agent above) 🔽
-
-Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
-
-- [ ] Surface mapped candidates as a reviewable list on the Tax Overview page (same pattern as ✅ 2026-07-23
-      `RecurringDetectionPanel.tsx`) instead of chat-only 🔽 — `GET /api/info/deduction-candidates` (shared `deductionCandidatesService`) → `useDeductionCandidates(year)` hook → `DeductionCandidatesCard` on the Tax Overview page (mounted after `SuggestedDeductionsCard`). Confirm/reject **per deduction-type group**: Confirm SETS the mapped `BelgianTaxProfile` field to the transaction total AND flips the eligibility flag where one exists (type-safe map in `deductionCandidateFields.ts`, verified against `types.ts`) — no new tax math; Dismiss persists year-scoped in localStorage. Current profile value shown per row. 18 EN/NL i18n keys. 7 card tests + full suite green.
-  - Tracking: 🔎 partial-audit 2026-08-28 (Confirm writes the current transaction total directly into an annual tax-profile field; for an in-progress year this is year-to-date data presented and stored without an incomplete-period warning)
-  - Confirm/reject per deduction-type group, not per transaction
-  - A confirmed total writes into the existing `BelgianTaxProfile` field (e.g. `childcareCosts`,
-    `apps/frontend/src/lib/belgianTax/types.ts:108` — verify each target field name against
-    `types.ts` rather than trusting this list, several are illustrative not exhaustive)
-    that `computeBelgianPIT` already consumes — no new tax-calculation logic
-
----
-
-### Accounts rewrite (consolidated plan — plan review 2026-07-09)
-
-**Why a rewrite, not more patches.** The findings sections track ~20 account symptoms as
-independent items, but they share three roots — patching them one-by-one leaves the architecture
-that keeps producing them:
-
-1. **Two identities for one concept.** `transactions.bank_account` (free text, the _write-side_
-   source of truth — every create path writes the string and the 0051/0062 trigger mints/resolves
-   `accounts` rows from it) vs `accounts.id` (the _read-side_ source of truth — running balances,
-   bank balances, net worth all join on the FK). ADR-088's contract step never happened
-   (`0055_drop_bank_account_string.py` is a deliberate no-op after the premature drop broke boot;
-   `0056` restored the string), and stragglers still read the string: list-filter/search
-   `t.bank_account ILIKE` (`transactionRepository.js:195,261`) and `mv_bank_balances` grain-keyed on
-   `(bank_account, currency)` (`materializedViewService.js:104-118`). Every phantom-account,
-   casing, rename-fan-out, and typo finding is this root.
-2. **Three balance definitions that disagree.** Accounts hub = anchor+delta
-   (`accountBalanceSql.js:26-46`); net-worth history + bank-balances widget = latest-_stamped_
-   balance per account (`infoRepositoryNetWorth.js:108-120`, `infoRepositoryBanks.js:80-89`);
-   `mv_bank_balances` = raw `Σ(amount)` grouped by the _string_. They diverge exactly when
-   unstamped rows (manual entries, trade legs) follow the last import — the very case the
-   anchor+delta lateral was written to fix. Post-ADR-094-addendum only the CSV import pipeline may
-   stamp `transactions.balance`, so the divergence is permanent for any account with manual
-   activity. Also FX-blind sleeve sums (`accountBalanceSql.js:37`, filed) belong to this root.
-3. **A half-live epic.** The holdings half (ADR-090 cash legs, 091 per-account lots, 095 brokerage
-   import, 100 by-account net worth) is built + tested but dark behind
-   `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103) with known pre-enable bugs; the cash half runs
-   live. Meanwhile the Accounts _page_ predates the app's current interaction standards
-   (double-click-only open, native `title` tooltips, dual-personality Add/Edit dialog, bare-`<p>`
-   error state) and the dashboard renders a **second, parallel account UI** from a different data
-   path (`BankBalancesWidget` keyed on `bank_account` strings via `getBankBalances`, own
-   IBAN-shortening — vs the entity cards on `AccountsPage`).
-
-**Decisions — DECIDED 2026-07-10 (owner sign-off); recorded as ADR addenda (088/089/094/103),
-no implementation yet. Note D1/D2/D3 went the _other_ way from the original recommendation —
-the phases below are updated accordingly:**
-
-- [x] Normalized identity (D1): swap `uq_accounts_name` for a unique expression index on ✅ 2026-07-11 · 6283a6b
-      `lower(btrim(name))` (one-time duplicate-merge check first), retarget the trigger's
-      `ON CONFLICT` + lookup, normalize in `accountService.create/update` +
-      `resolveOrCreateByName`; blank-on-UPDATE also NULLs `account_id`. Closes both filed 0062
-      case findings + the service-side casing gap in one move. 🔺
-- [x] `bank_account` free-text inputs in Add Transaction + Planned Payment forms → account ✅ 2026-07-11 · 76cdad8
-      combobox with an explicit "create account…" affordance (filed 🔼; free text remains a valid
-      escape hatch under D1 — it now resolves case-insensitively)
-- [x] Flip the last string readers: list-filter/search → `account_id` predicate (subsumes the filed ✅ 2026-07-11 · 8f18086 (list/count/uncategorised/export/bulk filters flipped to account_id per b223a7a; mv_bank_balances now re-grained on (account_id, currency) — migration 0072 drops the stale MV so the service recreates it)
-      "exact bank-account filter as ILIKE" perf item — route the dropdown through the FK rather
-      than anchoring the string), `mv_bank_balances` re-grained on `(account_id, currency)` (filed
-      inside the dual-write-exit item; the grain choice is also the D2 multi-currency grain) ⏫
-- [ ] Then the contract runbook now pinned in the ADR-088 addendum ⏫: parity-check query returns 🔎 verified-present 2026-07-11 🔎 partial-c1d6761 (#142) 2026-08-02 (code side DONE, adversarially verified: all readers flipped to account_id — filters/search/sort/uncategorised/export/splits-owed/recurring/transfer-suggestions/import-dedup-probe; import commit resolves labels inside the chunk tx and writes the FK; UPDATE path pulled forward — bank_account edits resolve-or-create and stamp account_id, killing the ghost-row class; JS resolution now btrim-exact so it can never fork identity from the trigger; down.sql repaired to restore the 0083 trigger, up.sql dry-run passed on a throwaway DB; parity 0/0; pinned by adr088StringDecouple.db.test.js. LEFT: the out-of-band drop itself — MANUAL user-run step per the runbook, plus its lockstep write-side change enumerated in the runbook README)
-      zero, all readers flipped, import writes the FK, out-of-band drop as its own revision with
-      rollback. Sequencing note: do **not** fix the string stragglers piecemeal outside this
-      phase — each one binds new code to the string.
-  - 🔎 attempt 2026-07-11: blocked — needs a live DB + user-applied out-of-band drop. Runbook + `up.sql`/`down.sql` are authored and `mv_bank_balances` is already re-grained on `(account_id, currency)` (8f18086), but the reader/writer decouple is still incomplete (readers ILIKE the string: `filterBuilder.js:133,139,212`, `transactionRepository.js:211,283`, `plannedTransactionRepository.js:28,38`; writers still INSERT it: `transactionRepository.js:364-377`, `plannedTransactionRepository.js:337-364`, `importPipeline/commit.js:171-178`, `importPipeline/stage.js:108`). Exit criteria (parity query = 0, apply `alembic/manual/contract_drop_bank_account/up.sql`, healthy boot after MV refresh, import/dedup/net-worth smoke) all require a live DB — `DATABASE_URL` is empty here — and the README pins the drop as a MANUAL, user-run step. Cannot verify end-to-end in this environment.
-- [x] Lifecycle (D5): `closed_at` column revision, close flow stamps it, DELETE 409 + UI route to ✅ 2026-07-11 · 48e87c5
-      close 🔽
-
-**Phase C — one balance engine + multi-currency + reconcile UX:**
-
-- [x] Single shared per-account balance source (the anchor+delta lateral) consumed by the accounts ✅ 2026-07-11 · 5938370
-      hub, `getBankBalances`, and net worth — removes the three-way divergence (root 2). **New
-      finding:** the hub vs net-worth/widget disagreement itself was previously unfiled. ⏫
-- [ ] Multi-currency cash (D2, ADR-089 addendum): the shared balance source partitions by 🔎 verified-present 2026-07-11
-      `(account_id, currency)`; per-currency read-time FX conversion (subsumes the filed
-      "cash sleeve balances mix currencies" FX-blind finding); statement/drift moves to the
-      `account_statement_balances` side table with backfill + per-currency drift; Revolut adapter
-      keeps one account, rows keep currency (supersedes the filed Revolut split-per-currency fix);
-      per-currency presentation on hub/widget for `multi_currency_cash` accounts. 🔺
-  - 🔎 attempt 2026-07-11: blocked — env (no live DB) + phase dep. The `account_statement_balances` side table doesn't exist yet (no migration/code); this item's core (create side table + backfill from `accounts.statement_balance` + per-currency drift, re-grain the balance lateral by `(account_id, currency)`, "healthy boot after MV refresh") needs a live DB, but `DATABASE_URL=''` and the pg socket is unresponsive here — same live-DB wall as the sibling contract-drop (4551). Also gated on the still-open Phase B contract runbook (4551, itself blocked on live DB + manual out-of-band drop). Code-only slices (Revolut adapter one-account/rows-keep-currency, lateral partition SQL) can't be honestly ticked without the backfill/refresh verified end-to-end, so leaving the box open for a session with `DATABASE_URL` set.
-- [x] Opening-balance mechanism (D4, ADR-094 second addendum): endpoint + `transfer_source
-='opening'` CHECK value + "Set opening balance" in the account detail/reconcile flow;
-      exempt `'opening'` rows from the planned zero-amount rejection ⏫ ✅ 2026-07-11 · 39ff5f0
-- [x] ~~Persist the per-account split alongside snapshots + incremental rebuild~~ 🗑️ moot per
-      ADR-108 / WP-C1. The snapshot `splitByAccount` / `value_by_account` payloads,
-      `getNetWorthByAccount`, endpoint, UI, and flag were deleted instead of implementing this
-      persistence. Migration 0074's table remains dormant and backup-covered; WP-C7 owns any
-      future forward-only per-broker history. Active docs were synchronized and the current money,
-      snapshot, and backup suites passed 56/56; independently reviewed. ✅ 2026-08-26
-- [x] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta → 🔎 verified-present 2026-07-11
-      either "accept" (update statement figures) or explicit opt-in "add adjustment transaction"
-      (server-created, preserves ADR-094 descriptive-only default). Today the badge is a dead-end
-      `title` tooltip; Edit → Advanced is the only path. 🔼 ✅ 2026-07-11 · 51c443c
-
-**Phase D — Accounts page + dialog redesign (respect the binding design constraint — refine the
-rich aesthetic, don't flatten):**
-
-- [x] Card grid stays, but **single-click opens an account detail view** (drawer or route): 🔎 verified-present 2026-07-11
-      balance + sparkline from existing history, drift/reconcile CTA, recent transactions, holdings
-      section (dark until Phase E), metadata; per-card ⋮ menu keeps the rare actions. Kills the
-      double-click-only affordance (filed 🔼 for the widget; same fix here), gives cards
-      `role="button"`/`tabIndex`/Enter. 🔼 ✅ 2026-07-11 · 9dc7371
-- [x] **Unify the dashboard widget onto the entity**: `BankBalancesWidget` reads the same accounts 🔎 verified-present 2026-07-11 + shared balance source (Phase C), cards link to the same detail view — one concept, one code
-      path. **New finding:** the two-parallel-UIs split was previously unfiled. 🔼 ✅ 2026-07-11 · d3f7398
-- [x] Split `AddAccountDialog` into create + edit (or remount via `key={editing.id}`): fixes the 🔎 partial 2026-07-11 (key={editing.id} remount + mode="edit" done, fixes the revert bug; Advanced-collapse-in-edit, non-clobbering type-change, and Currency Select still missing) ✅ 2026-07-11 · 0b9eb80
-      filed revert bug; **new:** edit mode must not hide populated fields behind a collapsed
-      "Advanced" toggle, and type-change must only apply `flagsForType` defaults to fields the user
-      hasn't touched (today it silently clobbers manually-set `spendable`/`liquidity_class`/
-      `tax_wrapper`/`has_cash_sleeve`). Currency becomes a Select of known codes. 🔼
-- [x] Replace native `title` tooltips with the app Tooltip (drift, balance provenance, open-hint — 🔎 verified-present 2026-07-11 ✅ 2026-07-11 · 041eb35
-      filed inside the touch-tooltip sweep); real error state with retry (filed); accessible name
-      on the ⋮ button (filed); distinct page icon — `Landmark` currently doubles as Taxes (filed);
-      `Money` component for balances instead of plain `formatCurrency` (filed in the Money-adoption
-      sweep) 🔽
-- [x] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow 🔎 partial 2026-07-11 (merge direction confirm + closed_at/only-if-empty-delete lifecycle done; targeted invalidation map still the blanket queryClient.invalidateQueries()) ✅ 2026-07-11 · 83e126d
-      gets `closed_at` + only-if-empty delete (D5); targeted invalidation map instead of the blanket
-      `queryClient.invalidateQueries()` 🔽
-
-**Phase E — enable the holdings half (COMMITTED per D3, ADR-103 addendum; final phase, strictly
-after B+C):**
-
-Flip `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` to default-on (keep temporarily as kill-switch, remove
-after soak) once the 8-item prerequisite gate is green — all filed: (1) sell-units validation
-per `(investment, account)` (ADR-103's own known bug), (2) `moveHoldingService` wrong
-units/cost-basis (🔺), (3) the account-close NaN landmine (🔼), (4) snapshot `value_by_account`
-split-rescale (🔼), (5) `sanitizeSnapshotSpikes` breaking the Σ-invariant (🔽), (6)
-portfolio-import dedup ignoring `account_id` (🔼), (7) account-level dividend/interest/fee rows
-without instrument (🔽 — path decided via D6: signed cash row, ADR-095 addendum), (8) per-account
-snapshot persistence (built in Phase C). ADR-109's legacy-install conversion (D8) lands before or
-early in this phase so `account_id` is a real FK on every install. Also in scope
-with the flip: the ADR-090 funding-account picker for sleeve-less wallets (revives the dead
-`funding_account_id` surface — resolves the Phase D either/or), and a bulk "assign lots to
-account" action for legacy `account_id = NULL` lots (user-driven, no backfill migration —
-ADR-091's stance stands).
-
-**Gaps this review found in the previously-filed plan (net-new, verified against code 2026-07-09):**
-
-1. The hub-vs-net-worth **balance-definition divergence** (root 2) — pieces were filed
-   (`mv_bank_balances` string grain, FX-blind sums) but not the anchor+delta vs latest-stamped
-   disagreement itself.
-2. **No opening-balance path exists** for manual accounts post-ADR-094-addendum (D4) — nothing
-   filed anywhere.
-3. **Service-side casing gap** (`accountService` trims, writers UPPER) — only the trigger's
-   case-sensitivity was filed.
-4. **Edit-dialog flag clobber + hidden populated Advanced fields** — only the useEffect revert was
-   filed.
-5. **`funding_account_id` dead in the UI** — unfiled.
-6. **Two parallel account card UIs** (AccountsPage vs BankBalancesWidget) on two data paths —
-   individual widget bugs were filed, the duplication wasn't.
-7. **Sequencing risk**: several filed fixes (exact-filter ILIKE, widget a11y, combobox) would bind
-   _more_ code to the `bank_account` string or the duplicated widget path if done before Phases
-   B/D — the filed items don't order themselves; this plan does.
-
----
-
-## Still to research — resume points
-
-Where each audit stopped. Pick these up to continue researching.
-
-### 🐛 Correctness
-
-**Correctness research 2026-07-02**
-
-**Wave 1a remaining residue:** BLOCKED — real-export verification of BNP/SABB status vocabulary and Belfius/KBC encoding: zero real bank-export fixtures exist in the repo (no `*.csv` outside `node_modules`; every adapter test uses inline synthetic strings). Needs user-provided real exports — do not fabricate.
-
-**Wave 2a remaining residue:** nothing 500-class/boundary-case was runtime-reproduced against a live API (would need a demo-app pass to pin before fixing) · nl eyeball still not done for tax, research, portfolio, statsPage, customChart, addInv, rebalance, performance, export, admin, cashflow, insights, owesPage, aiChat, dbEditor, recipients*, invDetail, market, networth, exchangeRates + small namespaces (mechanical parity/placeholder screens already covered the whole file) · `pit.ts` full per-deduction clamp walk not done · planned PATCH beyond the form mapper (inline toggleActive, execute/link flows, repo update whitelist) not swept · not audited: transaction-side `CsvColumnMapper` + import-review row-edit UI, `InvestmentDetailDialog`/`MoveHoldingDialog` + `POST /api/investments/:id/move`, `POST /api/transactions/bulk` update/delete paths, bank-CSV adapters' truncation vs bounded raw-table columns, `translateRepoError` 400-vs-500 envelope consistency · unverified: changing an investment's native currency in `EditInvestmentDialog` doesn't re-stamp existing txns' `fx_rate_to_eur` · unclear whether any UI surface promises auto-generation of portfolio recurring transactions (decides the stored-but-inert finding's real severity).
-
-**Wave 2b remaining residue:** `SettingsPreloadContext`/`ThemeContext` hydration read only for default parity, not fully audited · Belgian tax-profile settings blobs (`BelgianTaxProfileContext` keys) remain unvalidated-by-design and unaudited · `lib/fileSniff.js` internals (magic-byte tables) not read · `cleanupOldBackups`, backup passphrase storage, and `withPgPassEnvFile` env-file lifecycle not read.
-
-**Wave 2c remaining residue:** the out-of-band contract-phase drop referenced by migration 0055 (a manual `bank_account`-drop script, if one exists outside `alembic/versions/`) was not searched for or reviewed.
-
-### ⚡ Performance
-
-**Performance research 2026-07-09 (fresh-ground waves — in progress)**
-
-**Wave F1 residue (migration-at-upgrade boot cost):** real wall-clock durations unconfirmed — 500k-row `transactions` / multi-GB `asset_price_history` are hypotheses; needs a populated DB + timings to confirm which migrations actually breach the 120s/60s thresholds (the O(table)-with-no-cap structure is confirmed either way) · whether the manual shell updater (`setupManualShellUpdater`, `packaging/electron/main.js:3337`) could flip `composeDidBuild`/`building` to true on its compose invocation was not fully read (all `composeStartOrUp` paths confirmed `built:false` in packaged mode) · exact cumulative cost of a specific version jump (e.g. 0043→0064) not derivable statically.
-
-**Wave F2 residue (backend residues):** export running-balance CPU at extreme scale unbenchmarked (per-row Decimal work yields at socket-write awaits, but a fast client may make those resolve near-synchronously — needs a multi-hundred-k-row `include_balance=true` load test) · `agg_split_outstanding` write-side triggers (`trg_split_outstanding_sync`/`trg_split_payment_outstanding_sync`) not audited — analogous to the filed `agg_recipient_totals` trigger finding but unverified · whether the dbEditor per-page COUNT actually approaches the 15s timeout on a real `transactions` table unconfirmed (no live EXPLAIN).
-
-**Wave F3 residue (frontend residues):** only the vibrancy double-blur finding needs empirical confirmation (macOS device, enhanced tier, GPU frame capture) — everything else in the F3 scope was settled statically.
-
-**Wave F4 residue (fresh-ground sweep):** `snapshotBuilder.computeAndStoreSnapshots` full-rebuild persist path (DELETE-all + reinsert-all per scheduled run, `snapshotBuilder.js:659-679`) not separately quantified — same O(days×investments) walk as the already-filed per-request replay finding, but off the request path · no live measurement this pass (the FIFO/LIFO constant-factor estimate is reasoned, not profiled).
-
-**Pass complete (2026-07-09/10, Waves F1-F4 all run).** The static fresh-ground space is now essentially exhausted after 8 passes — the remaining perf work is (a) implementing the filed findings, (b) the live-measurement residues (real .app boot trace, SPA-phase timings, RAM cost of keep-alive options, macOS vibrancy capture, populated-DB migration timings), and (c) re-checking the demo-scale "fine at this size" verdicts against a real multi-year install.
-
-**Codebase audit 2026-06-30**
-
-**Open gap:** the React Query per-hook configuration audit (staleTime/gcTime overrides on individual hooks, duplicate/overlapping queries across components, mutation-invalidation scope) did not complete in either pass. The verified global default (`App.tsx:93-102`: `staleTime: 30s`, `gcTime: 5min`, `refetchOnWindowFocus: false`, `retry: 1`) is sensible — per-hook overrides are unverified and should be checked separately. _(Closed 2026-07-02 — see the "Performance Research — 2026-07-02" section below.)_
-
-**UI/GPU research 2026-07-02**
-
-**Wave A remaining residue:** ~~Electron `vibrancy` tier interaction with glass surfaces~~ — **closed 2026-07-09** (Performance research Wave F3): the interaction is a static double-blur stacking finding, filed in §⚡ Performance ("Enhanced-tier macOS vibrancy stacks the OS under-window blur…"); only empirical device confirmation remains.
-
-### 🎨 UI/UX & Design
-
-**Design authenticity 2026-07-03 / UI/UX research 2026-07-03**
-
-**Eyes-on Demo-app pass still needed** (grep/read alone can't judge these): light-vs-dark _designed-first_ parity (grep can't judge washed-out light glass; the token structure suggests dark-first tuning of `--glass-*` alphas) · per-theme-variant visual QA (Dracula/Nord chart-token contrast against glass) · Fraunces' optical size at 14px · rendered decimal alignment in tables and RollingNumber reel alignment against Money's parts · the stat-tile dialect visual clash and EntryCard grid feel · motion _feel_: the double-entrance mush (PageTransition + `.animate-in` stacking), the menu-vs-dialog physics mismatch, sonner toast enter/exit/swipe physics beyond the icon bounce, ChartTooltip follow/cursor physics, and sheet slide-from-side character · splash→app handoff (no `backgroundColor` on the BrowserWindow — potential flash before the splash data-URL paints on cold boot) and first-run dashboard-behind-wizard feel.
-
-**Live-device verification still needed** (the user skipped the Playwright pass): mobile Sheet-sidebar focus behavior and per-dialog focus-landing (Radix default assumed, not verified per-dialog) · SR/focus reality checks — route-change + wizard focus stranding as actually experienced, Escape focus-return under `portalContainer` overrides, sonner Alt+T reachability inside the 4s toast window · DatePicker Shift+PageUp/PageDown year-jump behavior in the installed react-day-picker version, and whether SymbolSearchBox consumers add their own arrow-key handlers · on-screen keyboard vs fixed-centered dialogs (does it cover the focused field?), landscape-phone short-viewport behavior of `h-[82vh]`/`max-h` dialogs, and 125-150% browser-zoom sweep for text-container clipping (incl. the `leading-none` collision) · AddTransactionDialog actual clipping at 375×667 and landscape; long-name overflow rendering on RecipientsPage/WatchlistPage; ExportDialog's outline+sm primary button eyeball · chart-tooltip tap-away dismissal on touch · 375px sweeps of Onboarding/ImportReview/Owes/planned-payments surfaces, and dialog rounded-corner/edge-flush cosmetics at exactly 375px · real autofill behavior on unlabeled search inputs.
-
-**Remaining static gaps**: none — the last one (~~full nl.json read-through~~) closed 2026-07-10 by Wave R3 (all 22 remaining namespaces read in full, incl. tax ×437 keys). Previously **closed 2026-07-10** (UI/UX review 2026-07-10, findings + checked-clean filed): ~~raw network-error copy sweep~~ + ~~MarkAsFiledDialog / bulk-dialog field-level audit~~ (Wave R1) · ~~Electron icon/dock/menubar color language~~ + ~~native font surfaces (menus, about panel)~~ + ~~native menu strings vs in-app language~~ + ~~TableDataEditorPage composition audit~~ (Wave R2).
-
-**UI/UX review 2026-07-10 — open residue:** BulkTagDialog fields not audited in depth (only its BulkActionsBar wiring reviewed) · backend not checked for whether bulk endpoints _could_ return requested/skipped counts (frontend types only expose `{deleted}`/`{updated}`).
-
-### 🏛️ Architecture & API
-
-**Architecture & code design research 2026-07-06**
-
-**Wave W1 unchecked residue (resume points):** (1) Frontend client coupling — API hooks in `apps/frontend/src` were not traced to see which of the shape drifts (list keys, DELETE bodies, casing) are already absorbed by per-endpoint client code vs. genuinely biting — would sharpen fix priorities. (2) `openapi.yaml` — not checked whether the spec documents the inconsistent shapes faithfully per-endpoint or papers over them with a generic schema (convention-level spec accuracy; field drift was excluded as covered). (3) Boundedness of remaining unpaginated lists — ai conversations, recipient clusters, and tags verified at the repository layer; splits `getOwedSummary`, `attachmentRepository.listByTransaction`, `savedChartsRepository.getAll` judged small by domain, not by reading their SQL. (4) Non-`routes/` HTTP surface — `/health` and endpoints defined directly in `main.js` (root, static, CSRF) not audited against these conventions. (5) Response field-level naming inside single objects (e.g. marketLookup camel fields vs research provider payloads for the same concepts) spot-checked only, not inventoried.
-
-**Wave W2 unchecked residue (resume points):** (1) App-side value agreement for the remaining PG enums beyond `price_provider`/`recurrence_interval` — `asset_class`, `portfolio_txn_type`, and the four `account_*` enums vs frontend/backend literals (generated.ts suggests OpenAPI-derived agreement, unconfirmed at write sites). (2) `alembic/legacy_versions/` and `alembic/manual/` contents, plus `migrate.js` legacy-revision rewrite logic beyond the `0025_exchange_rate_cache` reference. (3) `docs/reference/database-triggers.md` and `schema-initialization.md` not cross-checked against the live trigger/function set (only data-model.md + materialized-views.md drift-checked, table level). (4) No live-DB `information_schema` diff — a live install predating 0001 could carry extra legacy objects static review can't see. (5) Full inheritance-branching surface not quantified beyond 3 `to_regclass` probes + an 11-file grep hit list (per-file read of the portfolio repo family would give an exact LOC-of-debt figure). (6) Boolean naming drift (accounts' bare `spendable`/`in_net_worth` vs dominant `is_*`) inventoried but not filed — cosmetic, revisit only if a rename window opens.
-
-**Wave W3 unchecked residue (resume points):** (1) The **portfolio/brokerage import adapter seam** (services/portfolioImportPipeline/ + brokerageFanout/brokerageRouting, ADR-095) — routing confirmed kind-based not adapter-name-based, but how a new _brokerage_ adapter registers and its frontend touchpoints were not traced. (2) The **forecast-method registry** (services/calculations/forecast/methods/ — ensemble/prophetLite) as a possible additional plugin surface. (3) Whether **openapi.yaml covers** the adapter catalog (`/api/info/supported-parsers`) and report endpoints' section-ID enums (only the PriceProvider enum at openapi.yaml:835 verified). (4) Report **theming/`themeCss.js` + `sectionHelpers.SECTION_CSS`** conventions — whether a new section needs CSS registration or inherits. (5) The saved **custom-parser (generic adapter config)** UX as an alternate no-code extension path — noted at stage.js:42-46, not traced through the frontend. (6) `docs/features/ai-chat.md` 30-tool inventory not verified line-by-line against tools/index.js (counts matched at domain level only).
-
-**Wave W4 unchecked residue (resume points):** (1) Neither coverage suite was run for current measured numbers — the backend "reached-files-only" gate means the printed 85/88 may sit far above true codebase coverage; worth one `test:coverage` run each side. (2) The 19 MSW Zod schemas not field-by-field verified against `openapi.yaml` (duplication question answered structurally only). (3) `stryker.config.json` scope/mutation-score config unaudited (frontend has it; backend does not — mutation-testing-in-no-workflow already known/deliberate). (4) AI-chat test cluster unread (`aiChatTools/aiChatService/ollamaClient`, ~2,300 lines — likely heavy fetch mocking). (5) Golden-fixture freshness not assessed against `INVENTORY.md` claims (fixture counts unverified). (6) `apps/frontend/src/test/property/` depth and the `tests/golden/__fixtures__/aggregations` shadow-middleware path unexamined. (7) No endpoint-matrix × test cross-reference — which of the 164 API operations have neither a route test nor a contract schema would quantify the route-coverage gap precisely.
-
-**Wave W5 unchecked residue (resume points):** (1) `tsc -p tsconfig.check.json` with `noImplicitAny:true` was not run — that one command would size the ratchet effort for the checkJs finding. (2) The 167 backend `new Date()` sites were counted, not classified — spot-check `services/calculations/*` for compliance with timezone.js's "no raw new Date() in calc modules" rule. (3) `importPipeline/match.js` crash-mid-match recovery (batch stuck in `'matching'` status — janitor/resume path?) not traced. (4) Electron _renderer_-side logging (preload console forwarding, webContents crash-path logging, demo/dev build differences) not examined. (5) Whether `VISION_CACHE_DIR`/`VISION_BOOT_TRACE`/`PUPPETEER_EXECUTABLE_PATH` are all listed in `docs/reference/environment-variables.md` (only ALEMBIC_BIN confirmed, line 44). (6) Frontend request-correlation end-to-end (does the FE send an X-Request-Id it also logs, closing the loop with the backend's SAFE_REQUEST_ID reuse path) not traced beyond ApiClientError carrying the id.
-
-**Wave W6 unchecked residue (resume points):** (1) main.js was mapped structurally (function-boundary grep + targeted reads), not read line-by-line — the updater internals (1571–1999, esp. the shell-installer script writer 1629–1700), backup crypto bodies (578–981), `launch()` tail (3195–3429) and quit lifecycle (3430–3514) have had no design-lens read. (2) The 29 AI tools were sampled (expenses.js head fully, others signatures/renderAs sites only) — per-tool data-shaping consistency (field naming across `data` rows, `meta` key vocabulary beyond renderAs) unassessed. (3) Frontend ai-chat component design (`ChatMessageList`, `ToolResultCard` rendering of the renderAs contract, `ChatComposer`) not reviewed. (4) `docs/features/ai-chat.md`, ADR-024, ADR-048 located but not cross-checked against the current implementation for doc drift. (5) `error.html` + the recovery surface, and `backup/bundle.js` internals (only header read), unexamined. (6) `lib/sse.js` (`createSseWriter`) internals not reviewed (backpressure behavior documented in docs/api/ai.md but unverified against code).
-
-**Code/architecture 2026-07-03**
-
-**Wave A1 residual:** `controllers/`, `database/`, `integrations/`, `jobs/`, `startup/` internals not re-read after the Wave A1 follow-up (jobs/startup covered only at seam level).
-
-**Wave A2 residual:** the dead-export scan (services/repositories/lib/utils) is a word-boundary heuristic, not re-verified repo-wide incl. packaging/scripts — misses dynamic/string-keyed access, and the ~70 test-only exports were bucketed rather than individually judged for whether the test should target the public surface instead; `coerceNumericFields` per-repo coverage (a June 2026 pass claims it's done) was not re-verified this pass.
-
-**Wave A3 residual:** the 146 component-level `useQuery` call sites (counted, not individually reviewed) are still unreviewed; the lib/ dead-file sweep (0 of 64 dead) did not extend to `features/`, `stores/`, or `hooks/`.
-
-**Wave A4 residual:** tax dialogs were skimmed, not line-read; `pages/research/MarketOverviewPage.tsx` (1111 lines) and `TableDataEditorPage.tsx` (544) remain unread for cohesion/duplication.
-
-**Wave A5 residual:** duplicate-type detection across the frontend was manual on suspicious pairs only — no structural diff across all ~180 exported FE interfaces, and `features/` type homes were not diffed against `types/`; `generated.ts` field-fidelity was audited only for the splits/watchlist/aiChat/attachment schemas, not the full OpenAPI spec (static reads only, no runtime response captures); madge's cycle-detection may still under-detect cycles introduced via dynamic `import()` (unconfirmed).
-
-### 🏗️ DevOps / CI-CD / Packaging
-
-**DevOps research 2026-07-03**
-
-**Wave D1 remaining residue:** one supervised e2e workflow dispatch run remains open — needed to confirm the a11y gate (`a11y.spec.ts`, never yet executed, fails on any critical/serious axe violation across 9 pages), real job runtime vs. the 30-minute budget, and empty-DB safety of all 36 tests. Also open: whether the `code_scanning` ruleset rule should hard-require a fresh Trivy analysis per PR (a GitHub-side settings question, not repo-side — empirically it does not block merges today, per the PR #73 evidence in the Findings above).
-
-**Wave D2 remaining residue:** in-container empirical PID-1/SIGTERM drain verification remains open (needs running the image; the static verdict — bun is PID 1 via `exec bun run <file>`, so signals reach `main.js`'s drain handlers — is already clean).
-
-**Wave D3 remaining residue:** `installPreparedShellUpdate()`/`checkForShellUpdate()` internals (`packaging/electron/main.js` ~1620-1910) were only skimmed, not read for correctness; `packaging/electron/demo-db/02-onboarding.sql` was not read (its driver `regenerate.sh` was already checked clean).
-
-**Wave D4 remaining residue:** apple/container `cp` mtime preservation needs a live sandbox test (filed as a Finding above with the load-bearing risk it creates); whether the staged `claude.json`'s full `.projects` map is intentional is a user call (also filed above).
-
-**Codebase audit 2026-06-30**
-
-- [x] Backend code-design: route→service boundary full sweep beyond the ADR-067 spot-check above, dead-shim sweep, empty-catch-block check 🔽 — **closed 2026-07-03**, see "Code Design & Architecture Research — 2026-07-03" Wave A1 (boundary loophole + reverse-layering findings; empty-catch check came back clean)
-- [x] Backend performance: full systematic pass over `services/reports/sections/*` and the complete `aggregations.js` index cross-check (spot-checked only, lower-confidence-clean) 🔽 — **closed 2026-07-02**, see "Performance Research — 2026-07-02" below
-- [x] Frontend performance: React Query per-hook config audit (staleTime/gcTime overrides, duplicate queries, invalidation scope per individual hook — see gap note above) 🔽 — **closed 2026-07-02**, see "Performance Research — 2026-07-02" below
-
-## Checked clean — do NOT re-audit
-
-Already verified sound in the passes below.
-
-### 🐛 Correctness
-
-**Correctness research 2026-07-02**
-
-**Wave 1a checked clean (don't re-audit):** `parseDayMonthYear` + `parseDateFlexibleUtc` (round-trip validated, UTC-midnight, no TZ shift; SABB guards the DD/MM trap explicitly) · amount-parsing core (`parseDecimalSafe`/`parseCommaDecimal`/`parseAmountField` — Decimal throughout, EU/US formats, parentheses; lone `1.234`/`1,234` ambiguity is a documented fixed choice) · BOM/CRLF handling · IBAN propagation in Belfius/KBC/ING/BNP (KBC collapse class fixed in all IBAN adapters; SABB has no account column) · sign/direction in all adapters (Wise Direction handling correct) · stage/commit date paths · hash dedup + SAVEPOINT race-safety at commit · skipped-row counters surfaced · generic adapter fail-fast on bad date_format · match-phase recipient upsert · `transactionExport.js` keyset pagination + `toYmd` cursor + Decimal running balance + backpressure (2026-07-03) · `stage.js` `parsedDateToYmd` use — adapter-UTC Dates, safe side of the TZ boundary (2026-07-03) · `rawTransactionRepository`'s ON-CONFLICT dedup pattern is internally sound, just dead (2026-07-03, see the dead-code Finding).
-
-**Wave 1b checked clean (don't re-audit):** repo choke-point numeric guards (zero/negative units/price/amount, `|units×price − amount| ≤ 0.01` cross-check, `fx_rate_to_eur ≤ 0` rejected) · FX stamping at commit (row rate wins; on-or-before rate for correct currency at row date) · ADR-095 double-count guard in the staged path · `computeTradeCashLegAmount` signs match ADR-090 exactly, Decimal-based · type normalization (unknown types error, no silent default) · dedup hash includes route+type · snapshot date boundaries (todayAppDateString both sides; txn-date FX for invested, valuation-day FX for value; Decimal accumulators; latest day reconciles with live summary; `'unassigned'` covers NULL-account lots) · snapshot persistence (DELETE+INSERT in one txn) · orchestrator failure path marks batch `failed` · `commitBrokerageFanout` confirmed no production callers · (2026-07-03) `accountBalanceSql.js` anchor+delta logic itself (sound for single-currency accounts; only FX-blind, see the FX-on-sleeve Finding) · `portfolioTxRepo.reads.js` NUMERIC coercion (6 tx fields + summary fields + counts) · `getById` round-trip via `createThroughInheritanceTables` (create returns through `getByIdFn` → identical mapped shape; duplicate-id sequence resync sound) · `getAllWithCount`/`getAllByInvestmentIds` SQL (aliasing, ranked-CTE limits) · `buildInvestmentSummaryCore` unit-based RoC/split handling (applied in all three cost-basis methods — non-unit RoC is a separate filed Finding) · `allocationAnalytics.js` (pure weight math, no snapshot/RoC involvement) · `sanitizeIsolatedValueSpikes` bridge guard (sustained repricings kept; no chain-smoothing of 2-day plateaus — distinct from the buggy `sanitizeSnapshotSpikes`, see the Finding) · test suites RUN: `brokerageFanout`/`portfolioImportCommit`/`tradeCashLegService`/`accountSnapshotParity`, 4 files, 36/36 pass (see the test-quality-gaps Finding for what they miss) · `computeTradeCashLegAmount` unit tests (real math, ADR-090 signs) · plan-side fanout tests (importActual, non-over-mocked) · ING/BNP factory tests (exact field values).
-
-**Wave 1c checked clean (don't re-audit):** import-pipeline dates (`wise.js`/`revolut.js`/`_shared.js`/`importDates.js`/`commit.js`; `deduplication.js:13,44` `toISOString` is safe on adapter-produced UTC-midnight Dates) · `loanSchedule.js` (fully `Date.UTC`) · `snapshotBuilder.js:324` (consistent UTC roundtrip) · `aiChat/tools/_validate.js:30` · provider-timestamp→ymd WRITE paths (`rateFetcher.js:200`, `quotaGovernor.js`, `finnhubAdapter.js`, forecast toIso — light check; `priceCache.js`'s READ path has a confirmed bug instead, see the Finding — corrected 2026-07-03, do not treat `priceCache.js` as clean) · benign ISO timestamps (backend main/logger/admin/warmup, filename stamps, frontend timestamp-only hits) · backend `parseFloat`-on-NUMERIC sites (`sankey.js`, `normalization.js:112`, `rateFetcher.js:62`, `priceProviderRegistry.js:365`, `belgianInflationService.parseNumeric`) — per-site coercion before arithmetic, not the canonical helper but no correctness bug · `infoRepositoryPlanned.js:40-47` month-window construction · (2026-07-03) frontend date core: `shared/dateUtils.ts` (`parseISO` ymd→local branch, `toYmd`, `differenceInDays` UTC-normalized, `formatDateStringWithAppSettings`'s own T-split logic) · `lib/timezone.ts` (`todayLocal`/`todayYmd`/`daysBetween`) · `chartPeriods.ts` `filterByPeriod` · `CategoryPivotTable` month range · `useUpcomingPlannedPayments` window · `LinkTransactionDialog.tsx:52-54` −14d window math · `PlannedPaymentsPage` badge day-math itself (only its input is poisoned by the raw-pg-Date passthrough) · local `new Date(y,m-1,1)` ctor family (`MonthlyTrendsChart`, `NetSummaryCard`, `TaxOverviewPage`, `PerformanceBreakdown`, `SankeyTab`, `TransactionSearchSuggestions`, `IncomeStep`) · statistics `parseISO` month-key family · `PerformancePage` `parseISO(d.day)` on snapshot ymds · epoch-ms chart `time` fields · NO hand-rolled month arithmetic in frontend src · `toYmd(new Date())` ≡ `todayYmd()` bypasses (style only) · shared-utils `daysBetweenYmd`/`calculateAccruedInterest` (timestamp-tolerant) · numeric sweep clean end-to-end (backend coerces at every route seam checked; frontend defensively `Number()`s at consumption; no string-concat-instead-of-add or `toFixed`-on-string site found; `api/types.ts:46` `amount: string` is stale doc drift, harmless) · backend date-conversion call sites verified clean: `portfolioImportBatchRepository.js:63`, `importPipeline/commit.js:26,84-86`, `portfolioImportPipeline/commit.js:36`, `quoteBackfillService.js:204,286`, `reports/dataFetcherTax.js:102-104`, `infoRepositoryNetWorth.js:67,101`, `snapshotBuilder.js:98,559`, `utils/portfolioMath.js:97-104` · raw-bank tables + `recipient_aggregations.last_transaction_date` never reach any route · `watchlist` has no DATE column · aiChat `expenses.js` `toYmd` usage (local-getter fix already in) + `insights.js:38-41` bank-balance first/last dates · `middleware/envelope.js:20-36` `res.ok` confirmed pure pass-through (the fix point is per-field ymd conversion, not the envelope).
-
-**Wave 2a checked clean (don't re-audit):** NO semantic inversions in nl — all 218 financial-term keys (income/expense, buy/sell, gain/loss, deposit/withdraw, owed, realized/unrealized) reviewed side-by-side, directions correct · all dynamic-key families enumerated and present (portfolio.assetClass 7/7, txnType 9/9, accounts._, research.scorecard/metric, tax.history.kind 6/6, tax.profile._, cashflow.window, performance._, export._, rebalance.* incl. unknown-sleeve fallback) · all 6 `tc()` plural families correct in both languages (nl/en share CLDR one/other, no category gap possible) · no English-literal `toast.*()` calls · no hardcoded `Intl.*Format('en-US')` locales · `AddPortfolioTxnDialog` amount/units/price validation (≤0/NaN/Infinity rejected, buy/sell 2-of-3 consistency, gift-zero intentional) · single-brace interpolation matches runtime (`LanguageContext.tsx:104-108`) · backend `recipient_id` positive-int validation · (2026-07-03) **splits: best-validated surface end-to-end** — cap-only invariant (`sum(new)+sum(existing) ≤ |txn.amount|`, partial splitting by design), zero/negative/over-allocation blocked both sides, client math is shared-Decimal round-to-cents before the cap compare, server re-sums under `SELECT … FOR UPDATE` (race-proof), payments overpayment-capped · **portfolio edit path does NOT bypass create guards** — PATCH merges then re-normalizes (2-of-3 on partial patches, sell-units re-check, `type`/`asset_class` immutable, gift forces fees/taxes 0 matching backend) · **money wire precision fine** — portfolio dialogs send pre-rounded JSON numbers (4/8/6 dp, no parseFloat loss), no client-side FX conversion in any submit path, `packages/shared-utils/src/money.js` Decimal HALF_EVEN single-source for both apps · **recurrence month-end math correct** (`recurrence.js:34-52` clamps monthly/yearly correctly; pattern whitelist enforced POST+PATCH; loan config server-derived, term 1-600 both sides) · **date fields otherwise clean** — empty-date submit blocked in all portfolio/planned forms, past planned dates deliberately allowed, DatePicker is calendar-popover only (no typed-entry invalid-date vector) · **AddAccountDialog otherwise solid** — name required+trimmed both sides, enums match exactly, balance non-editability intact, duplicate name → clean 409 · **TaxProfileDialog mechanics** — NaN/Infinity can never persist, dependent counts Select-bound + double-clamped, `POST /api/reports/tax` Zod contract matches frontend · **watchlist POST is reference-quality** — required trio, asset-class enum matches frontend union, currency regex, numeric coercion prevents string-price 500s · **portfolio CSV import otherwise** — required-mapping rules agree client/server exactly, asset-class/type/separator/account_id server-validated, negative-cell magnitude+direction intentional and documented · **transactions API otherwise** — tags array-type both POST/PATCH + 50-slug cap, recipient/category name-resolution 400s, read-only field stripping · **varchar widths otherwise safe** across investments/accounts/categories/recipients/transactions/planned/portfolio-tx/tags/settings · **nl mechanical screens (file-wide)**: 3,529/3,529 key parity, 0 missing/extra, 0 placeholder-token mismatches; namespaces eyeballed key-by-key (~1,050 keys) with no meaning inversions found: transactions/txPage/addTxn/txnEdit, dashboard, settings (all 236), onboarding, importPage/import/importReview/importHistory, planned/plannedPage/plannedForm/recurring/upcoming, accounts.
-
-**Backup coverage: verified in sync (not a finding)** — the agent RAN `tests/backup-coverage.test.js`: 6/6 pass; the test derives the table set from all Alembic migrations, so accounts-epic tables, `portfolio_import_*`, `db_editor_audit`, `watchlist` are covered. Only staleness: `backup/coverage.js:23` header says "Last verified against: 0035" — update the comment.
-
-**Wave 2b checked clean (don't re-audit):** transfer date-window inclusivity consistent (SQL BETWEEN vs JS ±3d) · same-account pairing excluded on both paths; `findTransferMatches`' bank_account comparison is test-only (no production callers) · sign handling consistent (zero-amount rows counted as income everywhere, deliberately) · hard-delete of one leg correctly releases the survivor via FK-NULL + `releaseOrphans` · edit-invalidation symmetric for reciprocal auto pairs · `resolveTransferMatches` mutual-unambiguity correct (contended matches demote to suggestions) · live-path month boundaries half-open (no double count) · MV transaction_count halving exact · MV fast-path gating on `includeTransfers`/currency homogeneity/exclusions consistent with live paths · `mvAvailable` allowlist + negative-TTL recovery · attachment download filename sanitization + 404s · attachment upload content-sniffing before store · (2026-07-03) **settings**: single + bulk PUT share `validateSettingValue` (bulk can't bypass); rebalance-plans validator solid (id/name/weights/cashCap, ≥1 positive weight, 50-plan cap); theme validator null-safe with HH:MM regex; `setMany` parameterized UNNEST upsert; DELETE-any-key safe (defaults kick in); `transferReconciliationService.js:250` writes proper jsonb boolean for its sentinel; db-editor writes to `user_settings` parameterized, xmin-guarded, audited · **electron restore (main.js side)**: plain pg_dump format self-handles FK ordering + sequence `setval`s; legacy investments-VIEW installs dump/restore fine; dbName/dbUser from own `.env`; connection termination → drop → recreate ordering correct; attachments staging + atomic swap awaited · **attachmentService**: `randomUUID()` filenames; `resolveAbsolutePath` double guard (string-prefix + realpath symlink resolution) blocks absolute paths, `..`, and symlink escapes; multer caps count/size correctly; client-MIME prefilter backstopped by magic-byte sniff · **`infoRepo.forecast.js`**: interval interpolations integer-range-validated (no injection); cumulative day-walk correct across month lengths; planned vs actual series kept separate · **`infoRepositoryNetWorth.js`**: forward-fill of missing snapshot days correct; ADR-092 liability split consistent; NUMERIC coercion throughout; historical-FX conversion batched with fallback.
-
-**Wave 2c checked clean (don't re-audit):** ADR-026 envelope unwrapping correct in both `httpGet` consumers · the memory-noted crash-recovery port-walk bug is FIXED · health-poll vs window-load race handled (splash → matview-gated `pollReady` → watchdog) · quit ordering (backup before `compose stop`, SIGTERM graceful) · IPC path-traversal guards on restore/zip-extract/update-ZIP + sender checks on restore/badge/accent/splash · update download (mandatory checksum, SHA256, cleanup, timeout) · single-instance lock + macOS activate · contextIsolation/sandbox/preload posture · compose volume parity root↔resources · backup crypto streams (v1/v2, GCM tag, keys zeroed) · migration 0061 (side-table design safe on legacy investments-VIEW installs, re-run-safe, documented no-FK) · 0062 otherwise (NULL-safe `IS DISTINCT FROM`, BEFORE UPDATE row trigger, split-guard tolerance + ERRCODE, downgrade is a true reverse restoring the 0056 function verbatim) · (2026-07-03) **migrations 0044-0064 downgrade-fidelity sweep, otherwise clean:** 0044 additive/re-run-safe; 0045 upgrade-side trigger swap correct (only its downgrade has the filed drift); 0046 EUR-backfill-before-tighten ordering correct, and 0046-vs-0049 confirmed YES the NOT VALID CHECKs are VALIDATEd in 0049 after a normalization pass (only the boot-blocking case above); 0047 collision handling correct (demotes all-but-MIN(id) before the partial-unique build, null-safe); 0048 dynamic FK-name lookup covers all three RESTRICT category FKs correctly; 0050 backfill dedup/currency-pick logic otherwise correct (only the planned_transactions gap above); 0051 + 0062→0051 downgrade interplay verified correct (no stale-function or leftover-trigger window in the chain); 0054/0057/0058/0059/0060/0063/0064 additive nullable columns or new tables with symmetric downgrades; 0055/0056 correctly neutralized/idempotent; 0063/0064 `server_default` vs app default confirmed NO drift · `/health/detailed` contract vs `pingReady` holds (semantics match by design) · `packaging/electron/assets/error.{html,css,js}` CSP-safe, no XSS, localized correctly · electron-builder demo-vs-main config drift is all intended isolation (only the demo-update-gating finding above is real).
-
-### ⚡ Performance
-
-**Performance research 2026-07-09 · Wave F1 (migration-at-upgrade boot cost) checked clean (don't re-audit):**
-Additive constant-default columns are metadata-only on PG18, no rewrite (`0044:39` `is_transfer BOOLEAN NOT NULL DEFAULT false`, `0050:116` nullable `account_id`, `0053:45` `portfolio_transaction_id`, `0036:36` `tx_hash`) · 0051 dual-write trigger creates triggers only, no backfill/scan (`0051:76-88`; comment at `:20` confirms account_id stays NULL) · 0047 touches only small `recipient_bank_accounts` (bounded UPDATE + partial index, `0047:33-54`) · alembic has NO `statement_timeout`/`lock_timeout` (env.py NullPool, alembic.ini no connect args, DATABASE_URL no `options`) — the app pool's 30s timeout (`connection.js:27`) cannot reach the separate alembic process; the migrate.js 120s execFile cap is the sole limiter (that cap is the filed 🔺 finding) · `alembic/manual/contract_drop_bank_account/` is out-of-band — runner only does `alembic upgrade head`, and 0055 is a neutralized `pass` no-op (`0055:30-32`) · skip-at-head cache short-circuits everything when at head and versions/ unchanged (`migrate.js:45-59,205-208`) — all filed costs are cache-miss/first-boot-after-update only · DROP INDEX migrations (0033, 0034) and MV drops are metadata-only.
-
-**Performance research 2026-07-09 · Wave F2 (backend residues) checked clean (don't re-audit):**
-`transactionExport.js` streaming core solid — keyset cursor (`buildExportChunkSql:68-94`), `EXPORT_CHUNK_SIZE=1000`, per-row backpressure await (`:171` / `writeWithBackpressure:55-60`), one-time `LIMIT 1` probe (`:42-44,147`), filters built once, tags/category/recipient resolved in-SQL (only the per-row correlated tag subquery is filed), `res.end()` on mid-stream error · `savedChartsRepository.getAll` single query, scalar columns + small int arrays, one call per `GET /savedCharts` (`savedChartsRepository.js:18-21`, `routes/savedCharts.js:81-84`) · `attachmentRepository.listByTransaction` single indexed query (`idx_attachments_transaction_id`, 0004), on-demand per transaction, no list N+1 (`attachmentRepository.js:27-35`, `routes/attachments.js:91-95`) · `getOwedSummary` single set-based query over trigger-maintained `agg_split_outstanding` with its indexes, called exactly once per `GET /owed` (`splitRepository.js:197-217`, `routes/splits.js:57-60`); `/batch` audit writes `Promise.all`-parallel · `investmentController.js` response caches with TTL (`:46-50,184,317`), `processInBatches` cap 10, fire-and-forget quote refresh off the request path (beyond the already-filed `refreshPrices` loop) · `jobs/refreshCashflowForecastMc.js` 24h cadence, `forEachConcurrent` cap 3, ~1 active user self-hosted · `startup/warmup.js` intervals `withInFlightGuard`-wrapped (:55-69), online-probe gated, Kinesis deferred off boot (:153-162) · `integrations/ollama/client.js` timeouts on request/health/stream, per-chunk idle-timeout re-arm (:358), `await onToken` backpressure (:334), lazy singleton (:416-419).
-
-**Performance research 2026-07-09 · Wave F3 (frontend residues) checked clean (don't re-audit):**
-Search debounce cadence fine — shared `SEARCH_DEBOUNCE_MS = 300` (`useDebounce.ts:8`), single trailing timer cleared per keystroke + on unmount (`VirtualDataTable.tsx:169-173,192`); the problems are the missing abort/min-length (filed), not the cadence · `TransactionSearchSuggestions.tsx:42-205` fires ZERO network requests — pure local quick-filter UI, no per-keystroke request storm · `useUpcomingPlannedPayments` dismissed-keys snapshot stable — module-level cached `Set`, rebuilt only in `dismissOccurrences` (`:70-83`), localStorage read once lazily, `useSyncExternalStore` gets a referentially stable snapshot (`:33,58-61,91`) · `PlannedPaymentForm` keystroke light — local `useState` fields, no schedule/amortization preview, `parseDecimal` only in `handleSubmit` (`:87,95-97`), comboboxes render only trigger buttons while closed (`:176,188`) · NO markdown parser in the chat stream — `ChatBubble.tsx:37` renders plain text via `whitespace-pre-wrap`, no react-markdown/remark/marked in the feature (the classic quadratic re-parse-per-token cost is absent) · no `JSON.parse` of tool payloads per render (`ToolResultCard.tsx:94` operates on already-parsed `result.data` inside `useMemo`) · conversation switching per-id cached, no full refetch/remount (`useAIChat.ts:25-26`) · `lib/devtools/` correctly excluded from prod — `DevtoolsRoot` lazy + env/adminMode-gated (`App.tsx:73-91`); `queryMetrics.ts:92`/`apiRequestLog.ts:30` subscriptions execute only when that chunk loads; only 32-line `apiEventBus.ts` ships statically and its emits short-circuit at `listeners.size === 0` (`apiEventBus.ts:27`).
-
-**Performance research 2026-07-09 · Wave F4 (adversarial fresh-ground sweep) checked clean (don't re-audit):**
-**Dockerfile/update-pull path well-designed** — multi-stage (`Dockerfile:4/:56`), `bun install --frozen-lockfile --production` (`:103`, no devDeps), both Puppeteer browser downloads skipped (`:35,:101-102`; only Alpine `chromium` apk `:72`), layer ordering pull-delta-optimal (heavy immutable apk/pip/bun layers precede the small app-code/dist/alembic COPYs `:110-115`), `.dockerignore` excludes node_modules/dist/tests/.git · **middleware chain clean for static requests** — csrfGuard + rate limiters mount on `/api` only (`main.js:308,316-331`), `requestId` = pooled `randomUUID`, `express.json` no-ops on non-JSON, constant CSP setHeader; 1y-immutable caching means the gzip wrapper re-compresses each hashed asset at most once per cold load — no precompression gap at single-user scale · **crossWorkspaceAnalytics** pure bounded math (`:17-112`); `crossWorkspaceDataService.assembleRebalanceInputs` one summary + one accounts query + per-account convert loop (tens), on-demand only (`:40-82`) · **recipientClusterService** prefix-bucketed LCP with `MAX_CLUSTERS=50` cap (`recipientClusterService.js:18,36-84`); `applyPatterns` O(distinctRaw·patterns) on the import path with the verified 512-LRU (`recipientPatternService.js:164-190`) · **cleanupStaleQuotes** one batched DELETE with unnest windows (`quoteBackfillService.js:637-687`); backfill loops `forEachConcurrent` cap 4, bounded by investment count, off request path · **recurrence/planned matching bounded** — detection 3-year-bounded per-recipient-linear (already-filed as uncached); `plannedMatchService` O(txs·activePlanned) with both sides small/date-bounded · **Electron IPC runtime chatter clean** — all renderer→main calls are invoke or mount-once subscriptions (`preload.js:124-186`); `setDockBadge` only on badge-count change (`UpcomingPaymentsNotification.tsx:20-24`); splash-theme/accent persist only on theme/OS-accent events; nothing crosses IPC per-scroll/per-keystroke · **shared-utils otherwise clean** (`money.js`/`slugify.js` trivial, LTTB O(n)) · **RecipientInsightsPage** fully server-aggregated, paged, top-10 sliced — no client O(n²).
-
-**Startup/Electron performance research 2026-07-05 · Wave S1 (live instrumented boot, demo app) measured-fine (don't re-measure at this scale):**
-First-ever live boot measurement (Vision Demo app, 3 warm + 2 hot runs, epochs aligned across Electron trace / HTTP poller / `docker logs --timestamps` to within 27ms). Boot trace is **always-on** (opt-out `VISION_BOOT_TRACE=0`), Electron→stderr `[startup] {json}`, backend→visible in `docker logs` — no env var needed, just capture stdout by launching the .app binary from a terminal. Measured fine: **backend in-container boot 92ms total** (db_poll 19–30 · alembic skip-cache hit 8–31 · MV create-if-not-exists 9–15 · MV indexes 4–5 · listen 10–11) — nothing to optimize; alembic skip cache + deferred MV refresh verified working live · **MV refresh post-listen 31ms / gate cost 33–38ms** (re-priced the P4 finding — keep the gate) · **compose all-running hot-boot fast path 73–79ms**, no container mutation · **compose all-stopped → `compose start`** fast path taken on every warm run (events show Starting/Started only, no create/build) · **health-poll quantization ≤100ms** warm, 15–16ms hot · **`check_docker` socket ping steady-state 15–21ms** (2.2s only on the daemon-wake path, filed) · **Postgres data-volume start ~100ms to accepting connections** — the db itself is not a cost · **splash loadURL precedes all Docker I/O** — confirmed live in trace ordering. Headline numbers: demo warm boot spawn→loadURL 6.8s (5.9s = demo-only compose healthcheck idle, filed ⏫), hot boot 0.6–1.1s, spawn→splash-visible 337–653ms. _Not measured (residue): the REAL Vision.app against real data (its parallel-start compose dodges the demo's 5s, projected ~2–2.5s warm — trace is always-on, just needs stdout capture) · cold boot with image pull / first-ever run (needs volume wipe — forbidden on demo) · SPA-side phases after loadURL (needs a devtools/Playwright pass) · the Docker-not-running dialog path (needs daemon shutdown, disruptive)._
-
-**Startup/Electron performance research 2026-07-05 · Wave S2 (main-process cold-start static sweep) checked clean (don't re-audit):**
-**Overall verdict: the Electron main process is tight** — outside the filed archiver-at-eval item there is no heavyweight machinery in the spawn→loadURL path. Specifics: **no auto-updater at boot** (electron-updater not a dep; `Resources/app-update.yml` is inert electron-builder output; updates are custom IPC `update:*` main.js:2394-2433, `setupManualShellUpdater()` called at :3337 _after_ pollAndLoad and internally delayed 30s per :164,1979) · **Electron 42.2.0** (current — no framework-init win from upgrading) · **packaging config clean**: asar enabled, `files` globs tight (`main.js`, `preload.js`, `backup/**`, `assets/**` — package.json:58-63), zero native modules so no `asarUnpack` needed, i18n + compose templates correctly in `extraResources` outside the asar read async (main.js:22-48); demo config mirrors this · **module-eval top only Node builtins + electron** (~1ms) besides the filed bundle.js; rest of module scope = constants, `ipcMain.handle` registrations, dockerEnv IIFE (:501-508), keep-alive `http.Agent` (:979) — trivial · **pre-splash sync fs all sub-ms and justified** (`__IS_DEMO` existsSync :81, migrateLegacyUserData 1-2 existsSync :90-113, readSplashTheme/readSavedWindowBounds small-JSON readFileSync :1342,:1442); **no execSync/spawnSync anywhere in main.js** · **whenReady→createWindow**: `registerSecurityHeaders` handler-registration-only packaged-only (:193-209); initI18n async 6-11ms fine; `subscribeAccentColorChanges` (:3045) single cheap subscription (can move with the menu/dock batch) · **window options**: sandbox/contextIsolation posture correct (:1503-1509), `titleBarStyle: 'hiddenInset'` cheap, **show-immediately (no ready-to-show) is the RIGHT strategy** for perceived startup · **preload.js 188 lines**, requires only `electron`, pure contextBridge — nothing sync-heavy · **open-file handler** module-scope with whenReady deferral (:3076-3081) — correct macOS pattern · **splash handoff mechanics** (for S3): single BrowserWindow throughout — data-URL splash (`splashDataUrl()` :1372-1414) loaded :3127, later `loadURL(APP_URL)` in pollAndLoad :1126 + recovery :2804 + activate :3507; `setSplashStatus` guards on data:-URL prefix :1419; preload runs for both documents; `did-start-navigation` resets rendererReady :1552-1554. _Residue: split of the 187-429ms spawn→module-eval window (Electron framework init vs asar open vs parse vs require I/O) needs runtime tracing — the planned Electron-shell instrumented pass is the vehicle; `vibrancy: 'under-window'` create-time cost unmeasured (only touch if instrumented pass shows create_window dominated by window-server setup); V8 snapshot machinery judged not worth it for ≤50ms of unmeasured parse._
-
-**Startup/Electron performance research 2026-07-05 · Wave S3 (splash→SPA handoff + SPA boot + keep-alive options) checked clean (don't re-audit):**
-Splash→SPA color continuity CORRECT — prod stylesheet render-blocking with `body { background-color: hsl(var(--background)) }` (index.css:28-29) + theme-flash pre-paint (theme-flash.ts:3-25), so the new document's first paint is theme-correct; the handoff gap is _blank_, not _wrong-colored_ (only wrong-color window = the filed missing-`backgroundColor` frame-1 flash) · `setSplashStatus` data:-URL guard (main.js:1416-1426) can never poke the real app; splash palette derivation from persisted theme (`readSplashTheme`/`deriveSplashPalette` :1340-1370, persisted via `theme:persist-splash` preload.js:140) works and matches the app backdrop · splash messages all truthful (issue filed = coarseness, not honesty) · LanguageProvider never blocks children (LanguageContext.tsx:69-140) — no i18n loading wall; en+active locale fetch in parallel for non-en users once triggered · `main.tsx` mount sequence (:1-26) has no async gate before render · quit path bounded (45s unref'd force-exit main.js:3437-3441; `compose stop` not `down` :1296-1298 — volumes safe; watchdog torn down before container stop :3477-3478) · `pollReady` interval ladder (:1050-1065) + `pollAndLoad` build-aware budget (:1121-1147) nothing serial to shave statically · preload.js thin, runs for both documents at negligible cost · renderer→main ready signal exists (`electronAPI.ready()` ElectronBridge.tsx:102 → `app:renderer-ready` main.js:2817-2825, reset on navigation :1552-1554) — available for a paint-holding handoff if ever wanted. **Assessed and PARKED (don't pursue): pre-navigating the SPA during the compose wait** — the shell is served by the backend from memory only after listen (connection-refused before), the only loophole is Chromium's HTTP cache via the `max-age=1y` index.html header that's already filed as a bug to REMOVE, and the SPA has no boot-time connecting gate (React Query `retry: 1` would surface error states page-wide); a proper version needs an `app://` protocol + connection gate = meaningful effort for ~0.3-1s of overlap that hide-on-close/keep-services dwarf. _Residue: runtime durations of the SPA-side phases (loadURL → first paint → shell → strings-real) — mechanism-certain, magnitude-estimated; RAM cost of hidden renderer (C1) and idle containers (C2) — measure before the user decides._
-
-**Performance research 2026-07-05 · Wave P1 (backend query paths) checked clean (don't re-audit):**
-trigram/GIN coverage exists and survives all migrations (`idx_transactions_memo_trgm`/`idx_transactions_comment_trgm` 0001:711-712, `idx_recipients_name_trgm` 0001:691; 0033 drops only `idx_transactions_date`, 0034 only legacy `ix_*` duplicates — the search problem is predicate shape, not missing indexes) · sort-column handling injection-safe and plan-cache-sane (whitelist map + ternary direction, parameterized LIMIT/OFFSET, stable `t.id DESC` tiebreaker — transactionRepository.js:27-40,105-112,428-434) · `transaction_tags` PK (transaction_id, tag_id) + `idx_transaction_tags_tag` (0031) — tag EXISTS probes and `tagSlugs = ANY(…)` index-served; `tags.slug` unique · `attachTagsToRows` one batched `ANY($1::int[])` per list call (transactionRepository.js:42-59) · **settings trio clean** (first audit ever): `GET /` one query via `getAll` (settingsRepository.js:48-58), `get()` single PK lookup, `setMany` one UNNEST upsert (:87-105), no per-key loops, no settings reads in middleware; the per-request settings reads that exist are single PK lookups (infoRepositoryHelpers.js:19, plannedMatchService.js:92, portfolioSummaryService.js:37) · bulk endpoints set-based (bulk-tag UNNEST CROSS JOIN + ANY delete routes/transactions.js:350-373; bulk-update/delete single statement :485-491,394-400; bulkSelection 5000-row cap with COUNT precheck) · manual-create dedup index-served (`idx_transactions_amount_date`, `deduplication_hash`/`normalized_name` inline UNIQUE) · `convertRowsToEur` one `getRates()` + per-(currency,date) memo, no per-row queries · categories/recipients count queries parallel on small tables · `listRecentUnlinked` date-bounded with indexed NOT EXISTS (transactionRepository.js:575-598). _Not covered: EXPLAIN-level verification on a live DB (planner claims are from PG semantics, not measured plans); transactionExport.js streamer internals; frontend search-box debounce cadence._
-
-**Performance research 2026-07-05 · Wave P2 (in-process memory & cache boundedness) checked clean (don't re-audit):**
-the backend is unusually well-bounded — every major cache has TTL + size cap or fixed key cardinality, all module-scope intervals unref'd or cleared on shutdown, SSE/AI streaming state per-request with abort wiring. Specifics: `routes/info/_cache.js` all three response caches (TTL + hard `MAX_CACHE_ENTRIES=100` on every set, expired prune on get/set, inflight protected from eviction, error path self-cleans :103-108) · `middleware/requestMetrics.js` internals (first-ever read — `MAX_ROUTE_STORES=500`, 15-min bucket eviction per request, latency arrays reservoir-sampled at 1000/bucket, unmatched URLs collapsed to one key so scanners can't inflate it) · `priceCache._cache` (cardinality = configured investments, 5-min TTL + unref'd sweep :141-142) · `mvCache` hard-bounded to 2-name allowlist · aiChat `toolCache` created per turn inside `runChatTurnInner`, never escapes; `memoizeAsync` keys are asset-class discriminators not user text · `lib/sse.js` + all three consumers: no module-level client registry, per-request writer GC'd with response, `routes/ai.js:224-227,303-306` wires AbortController to `res.on('close')` so abandoned AI streams abort the Ollama call · `ollama/client.js` timers cleared in `finally` both paths, reader lock released, `{once:true}` abort listeners · warmup's four intervals created once, `withInFlightGuard` (skip not stack), cleared on shutdown (main.js:534-537) · MV/reconcile debounce timers cleared before re-set, no stacking · `process.on` only at main.js module scope (:558-583), grep-verified none inside functions · researchAggregator `inFlight` deleted in `finally` · puppeteerRenderer beyond the filed race: page closed in `finally`, PDF in-memory Buffer, no temp files, no page accumulation · single-slot replace-not-accumulate caches (currencyConversionService `memoryCache`/`liveFallbackRates`, belgianInflation, network reachability) · `recipientPatternService.patternCache` true LRU capped 512 · quotaGovernor `minuteBuckets` one entry/provider · logger console-only, no buffer · frontend module scope: no unbounded module-level Maps; `useCurrencyFormatter` Map is per-component useRef, GC'd on unmount. _Not covered: Docker stdout log rotation (infra layer); whether abandoned import SSE should cancel the pipeline mid-parse (runs to completion by design, transient memory only); multer/express.json upload buffer limits (request-size/DoS pass territory)._
-
-**Performance research 2026-07-05 · Wave P3 (frontend state/context/i18n runtime) checked clean (don't re-audit):**
-**i18n lookup:** `t()`/`tc()` resolve against a flat `Record<string,string>` — single property access, no per-call key splitting/nested walking (LanguageContext.tsx:99-112,114-128); interpolation only when `vars` passed; `Intl.PluralRules` cached per locale (:51-59) · `t` referentially stable in steady state (`useCallback([dicts, language])`; `dicts` changes only on locale-chunk load); language switch: loaded locales cached, no re-fetch on switch-back, no state loss (the only instability is the LanguageBridge finding, filed) · no `t()` hot loops — VirtualDataTable t() calls are chrome-only (:511,675-676,830-831), not per-row · **zustand:** exactly one store (stores/settingsStore.ts, grep-confirmed); all three consumer hooks select slices with `useShallow` (AppSettingsContext.tsx:125-134, SettingsContext.tsx:101-110, ThemeContext.tsx:249-265); no high-frequency set calls (all 19 update sites are discrete Select/Switch handlers, no scroll/pointer writers) · settings persistence debounced 500ms API save, no per-set localStorage stringify (theme mirrors one string key on resolved-theme change only, ThemeContext.tsx:194,224) · **aiChatStreamStore internals** (read in full): per-conversation snapshots reference-stable (getState returns Map entry or frozen INITIAL_STREAM_STATE, :143-146 — no fresh-object-per-getSnapshot risk), global listener set leak-safe (:131-136), non-matching consumers bail via unchanged snapshot; the `activeIds` identity churn is filed separately as a Finding ("aiChatStreamStore emits a new `activeIds` array on every token", 🏛️ Architecture & API) · **context values:** LanguageContext/PageTitleContext/BelgianTaxProfileContext/SidebarContext all memoized; PageHeader setTitle fires only on mount/title change; AppLayout scroll collapse is local boolean state with same-value bailout · **list surfaces:** RecipientsPage:385, OwesPage:461, PlannedPaymentsPage:500 all VirtualDataTable; CategoriesPage bounded grouped accordion (:166-194); AccountsPage bounded cards; StatisticsPage maps bounded widgetDefs; StocksPage/CryptoPage holdings bounded by distinct positions; no TagsPage exists · **form hotspots:** AddTransactionDialog keystroke re-render light (Radix SelectContent mounts only while open, so 200-item lists don't render per keystroke); TransactionInfoDialog ~20 light rows, local edit state · WorkspaceContext is a plain hook, sessionStorage read on agnostic routes only. _Not covered: lib/devtools/_ hand-rolled stores (dev-gated, unread); useUpcomingPlannedPayments dismissed-keys snapshot (:91); PlannedPaymentForm keystroke behavior; no runtime profiling (LanguageBridge blast radius untested empirically).*
-
-**Performance research 2026-07-05 · Wave P4 (startup/boot latency) checked clean (don't re-audit):**
-Electron `parallel_init` genuinely parallel (port resolve, .env ensure, Docker check, conditional pre-pull, dev skip-build in one `Promise.all` — packaging/electron/main.js:3144-3246) · Docker daemon check fast path via Unix-socket `/_ping` (<50ms warm), CLI fallback only (main.js:1156-1200) · warm-boot compose fast paths correct and cheap (all-running → no compose mutation; all-stopped → `compose start`, no build/pull; port-drift guard falls through to `up` recreate; quit uses `stop` not `down` precisely to keep this path alive — main.js:1245-1298; packaged `up -d` never passes `--build`, `pull_policy: missing` + parallel pre-pull only when image absent) · health poll cadence well-tuned (100ms×20 then 300ms, keep-alive agent, connection-refused fails fast — main.js:979-1013,1050-1065) · splash shows before any Docker I/O (createWindow main.js:3122-3128; the awaited initI18n is only small local JSON) · container entrypoint execs bun immediately, no serial pg_isready loop (removed deliberately, docker-entrypoint.sh) · no `depends_on: service_healthy` chain; db/image healthchecks informational only — Electron polls HTTP directly, so healthcheck intervals add zero boot latency (docker-compose.yml:12-19,61-73, Dockerfile:134-135) · alembic skip-at-head cache persists across container recreation (`/app/.vision-cache` = `vision_cache_data` volume, writable despite read_only rootfs, both composes; miss only on first boot or changed alembic/versions/, miss cost one alembic spawn 1-3s; `stampBaselineIfLegacy` ~3 trivial queries — migrate.js:30-76,132-207) · backend DB wait immediate-first with 50ms→1s exponential backoff (main.js:434-470) · pre-listen MV work is create/index-only (`IF NOT EXISTS`), refresh correctly deferred post-listen (main.js:452-462) · puppeteer lazy at first render; offline probe bounded (1.5s TCP, 30s cache), doesn't gate the materializedViews readiness key · frontend providers render children immediately, no loading walls; DashboardPage skeletons instant (App.tsx:164-247, DashboardPage.tsx:305-330) · dev loop clean — `bun run dev` = concurrently vite + `bun --watch`, no locale regeneration (root package.json:16) · port resolution persisted, random-pick ms-scale, crash-recovery port-walk confirmed fixed; quit bounded by 45s force-exit so it can't poison the next boot (main.js:3437-3441) · quit-time backup opt-in, bounded, doesn't touch boot. _Not covered: no live measurement — both shells emit structured `VISION_BOOT_TRACE` phase timings; a single instrumented boot would turn the per-stage estimates (MV refresh, container start) into numbers. Demo-app boot path / install-demo.sh unswept._
-
-**Performance research 2026-07-02**
-
-- **React Query:** global defaults respected everywhere (no `staleTime: 0` / `refetchOnMount: 'always'` in src); PortfolioTicker polling is exemplary (IntersectionObserver + `document.hidden` + online gating); dialog-scoped queries properly `enabled`-gated (Merge/Patterns/Watchlist/Research dialogs, CommandPalette); research-tab staleTimes correct; no unstable query keys found (exclusion arrays deduped+sorted+memoized); portfolio mutations invalidate scoped prefixes; watchlist/market polls online-gated and deduped across pages.
-- **Runtime:** `useCountUp` rAF-driven with reduced-motion snap; `RollingNumber` pure CSS; `ThemeContext`/`UpdateNotification` timers gated; zero `JSON.parse(JSON.stringify)`/`structuredClone` in the frontend; `useStatistics` fully server-aggregated; DashboardPage/RecipientsPage/PlannedPaymentsPage/PortfolioOverview/Stocks derived data memoized; `useCurrencyFormatter` caches correctly.
-- **Bundle:** sourcemaps off in prod; no moment/lodash/jspdf/xlsx anywhere; date-fns in a non-preloaded chunk; visx isolated in a lazy chunk; all 38 routes lazy with sidebar hover-prefetch (`lib/routePreload.ts:51-58`); devtools env-gated and absent from prod chunks; Tailwind content globs tight (25 KB gz total CSS); `public/` is tiny.
-- **Backend infra:** gzip wrapper is SSE-exempt + backpressure-correct; `express.json` 1MB limit; SPA shell preloaded into memory at boot; per-request middleware all O(1) with bounded memory; in-memory rate limiter O(1) with unref'd sweep; `/health` DB-free (detailed probe 1s-cached); PG pool sizing/withTransaction-release/poisoned-client handling all correct; startup fully parallelized post-listen with an offline short-circuit and an alembic skip-at-head cache; MV refresh CONCURRENTLY + coalesced (only the scheduling/timeout issues above); background jobs overlap-guarded with cleared intervals; graceful shutdown drains correctly; Electron health watchdog cheap (10s, keep-alive agent, no execSync anywhere).
-- **Reports:** Puppeteer page-per-render closed in `finally` (only the launch race above); all 21 section renderers are pure string builders over pre-aggregated data with top-N caps, zero DB access; `dataFetcherTax` FX loop uses a binary-searched rate index (no per-row queries); sankey fully SQL-aggregated; `mvAvailable` probe cached; MC paths clamped at the route; backtest doesn't forward user `paths`.
-- **DB:** systematic FK-index pass over migrations 0001→0064 found all _other_ queried FK columns indexed (transactions, planned, splits, attachments, tags junctions, staging batch ids, portfolio 0052 columns, recipients); all 4 MVs have the unique indexes CONCURRENTLY requires with a correct non-concurrent fallback; `asset_price_history` pruned to holding windows; `rateFetcher`/`belgianInflationService`/`settingsRepository.setMany`/`cleanupStaleQuotes` all batch correctly; raw bank tables grow by design (dedup source of truth, indexed).
-
-**UI/GPU research 2026-07-02**
-
-**Wave A checked clean (don't re-audit):** theme switch (theme-flash.ts flips `.dark` class pre-paint; no `* { transition }`, no root/body color transition — switch is one style-recalc + single repaint, no animation wave) · `will-change`/layer-promotion (only 3 sites in index.css:573,727,941 — aurora blobs, micro-lift hover, ticker — all justified, no `translateZ(0)` hacks) · PortfolioTicker marquee gating (IntersectionObserver + visibilitychange + hover pause + conditional will-change, PortfolioTicker.tsx:83-95 — exemplary) · `drop-shadow()`/SVG filters (single 3.5px star icon at MarketOverviewPage.tsx:1025, no feGaussianBlur anywhere) · no `background-attachment: fixed`/`bg-fixed` · no transitions on `filter`/`backdrop-filter` anywhere · form controls & button variants use explicit `transition-[...]` property lists rather than transition-all (button/input/select/switch/checkbox/toggle/slider) · reduced-motion + reduced-transparency + prefers-contrast + fx-tier fallbacks comprehensive and mutually consistent (index.css:977-1122) · `animate-in`/`animate-stagger`/dialog enter-exit keyframes finite, opacity/transform-only · `animate-spin`/`animate-pulse` instances are transient loading spinners (compositor-friendly) · app-topbar correctly drops its backdrop-filter at scroll-top (index.css:500-503) · sonner toasts/popovers/menus glass-thick (transient, bounded) · scrollbar styling · the four `glass-regular` hotspot pages (RealEstatePage 8, StocksPage 7, TaxOverviewPage 7, MarketLookupPage 7) have no nested blur or per-row blur multiplication — every use is a top-level `<Card>`, inner list items use plain fills (`bg-card/50`, `bg-muted/30`), and mapped-card counts are bounded (Tax summary ≤6, one Card per RealEstate property, MarketLookup sections mutually exclusive at ~5-6 concurrent max) · framer `whileHover`/`animate` sweep outside the app shell: importers are exactly the 9 lazy-route chart components + the app-shell trio (AppSidebar/PageTransition/tabs, already filed) + `lib/motion.ts`, with the only non-shell `whileHover` being DonutChart's event-driven slice scale — no hidden per-frame motion sites (this also means `lib/motion.ts`'s unused `microLift`/`pressFeedback` presets carry zero runtime cost; their dead-export cleanup is tracked as a UI/UX-domain finding, not a performance item) · visx SVG paint statics: no SVG `filter=`/feGaussianBlur anywhere in `components/charts/`, exactly one `LinearGradient` per AreaChart (`AreaChart.tsx:290-305`), grid lines ≤5 per chart · CommandPalette surface cost when open: one standard glass-thick DialogContent + the shared blur-md overlay, ~35 static CommandItems + bounded dynamic groups (≤5 recipients, 1 ticker, 1 calc row), cmdk filtering trivial, FX/calc memos O(1) · OnboardingWizard: single shared Dialog surface, one step rendered at a time (largest step 15 category buttons), no framer, no extra glass layers, adapters fetched only while open · the ~29 redundant `glass-regular`/`premium-frame` Card call sites named as Wave A hotspot counts (`components/ui/card.tsx:9` already bakes both in) have zero GPU/render cost — duplicate classnames dedupe, so the counts were a grep artifact of class redundancy, not a rendering signal; the redundancy itself is tracked as a UI/UX-domain cleanup finding, not a performance item.
-
-**Wave B checked clean (don't re-audit):** single ShaderAurora instance for app lifetime (AppLayout mounted once outside `<Routes>`, App.tsx:181, no per-route remount/context churn) · no GL context re-creation on theme change (MutationObserver color refresh only, ShaderAurora.tsx:152-153) · context attrs otherwise sane (`preserveDrawingBuffer` default false, `antialias:false`, `depth/stencil:false`, cleanup calls `WEBGL_lose_context.loseContext()` + cancels rAF + removes listeners) · DPR deliberately ignored in canvas sizing (0.25×/640px blurry-noise cap makes DPR moot; window `resize` catches cross-monitor moves) · no `backgroundThrottling:false`, no `appendSwitch`, no `disableHardwareAcceleration`, no `powerSaveBlocker`, single BrowserWindow, sandbox/contextIsolation on (main.js:1485-1510) — Electron default throttling does stop rAF+CSS animation when hidden/minimized/fully-occluded (so the always-running auroras are saved there, just not on blur-while-visible) · no other `<canvas>`/`getContext`/`OffscreenCanvas` anywhere in apps/frontend/src · no canvas-based chart/animation libs (Recharts is SVG; no confetti/three/pixi) · VirtualDataTable.tsx:409-411 rAF is a bounded 5-attempt focus retry, not a loop · RollingNumber.tsx:32 is a single settle rAF · no `<video>`/GIF/`image-rendering` usage · RemoteNewsImage.tsx:51 already has `decoding="async"` · useLargeDisplay 5s poll is 4 property reads (negligible) · full-screen occlusion survey: the aurora is never opaquely occluded — the only `fixed inset-0` surfaces in the app are the three Radix overlays (`dialog.tsx:23` bg-background/40, `sheet.tsx:22` /40, `alert-dialog.tsx:20` /50, all + backdrop-blur-md), so opacity-triggered draw-pausing has no trigger surface beyond the already-filed "freeze aurora while a modal overlay is up" variant · Electron boot splash (`packaging/electron/main.js:1373-1416`) read in full: data:-URL page, one 26px border-spinner (compositor-friendly `transform: rotate`), one static radial-gradient painted once, reduced-motion hides the spinner, `setSplashStatus` guards on `getURL().startsWith('data:')` so it is strictly boot-only · `packaging/electron/preload.js` read in full: pure contextBridge IPC surface, no eager listeners (subscription helpers register on renderer call and return unsubscribers), no polling, no DOM/render footprint · Recharts-layer animation gating is moot: Recharts is only consumed by `ToolResultCard.tsx`, and every series there sets `isAnimationActive={false}`, so no Recharts entrance animation exists anywhere — the visx/framer charts' missing in-view gating is the separately-filed chart mount-stagger finding.
-
-**Wave C checked clean (don't re-audit):** AppLayout window-scroll topbar effect (`AppLayout.tsx:82-90` — passive, boolean setState with React same-value bailout, `children` element reference stable so page subtree doesn't re-render on threshold crossings) · VirtualDataTable infinite-scroll handler (`VirtualDataTable.tsx:414-449` — passive, ref-guarded, no per-scroll setState) and its single-instance document mousedown/keydown listeners (198-213) · ShaderAurora (rAF capped 30fps, 0.25× res, resize handler only sets canvas dims, getComputedStyle only on mount/theme MutationObserver, full cleanup) · useLargeDisplay/useVisualEffectsTier (resize listener + 5s poll, boolean bailout) · PageTransition (animates opacity/y/scale = transform-only, no AnimatePresence, no layout props, reduced-motion bypass) · tabs.tsx active pill and AppSidebar ActiveRail (layoutId FLIP on discrete tab/route change only, transform-based) · dialogGenie (one module-level passive pointerdown listener + single GBCR at dialog mount) · ElectronBridge window dragover/drop (guarded, no state) · CommandPalette forceMount (bounded: ≤5 recipient hits + single result items, palette mounted only while open) and its single ⌘K document listener · sidebar/ShortcutsOverlay/useGoToShortcuts/AppLayout keydown — all single-instance app-shell listeners, no per-row listeners anywhere · DonutChart hover (event-driven enter/leave, AnimatePresence center swap is one small node) · ResizeObserver usage (only visx ParentSize per chart, one element each, library-managed disconnect) · themeTokens getComputedStyle (report-export one-shot only) · no window `resize` setState storms found · no framer `layout` prop usage on motion components · no Radix tooltips/hover-cards on table rows (HoverCard imported nowhere; TooltipTrigger only in sidebar/ExclusionToggle/TaxOverviewPage at low counts) · CsvDropzone dragover (boolean state, import page only) · no measurement→state→layout feedback loops beyond the ChartTooltip one reported above · SankeyChart (`SankeyChart.tsx:64-96`): the in-place d3-sankey mutation does not defeat memoization — nodes/links are shallow-cloned inside the layout `useMemo` keyed on `[data, innerWidth, innerHeight]`, so layout only re-runs on data/resize; hover re-renders only regenerate a small number of link `d` strings via `pathGen`, negligible · VirtualDataTable inline edit: no Radix portal churn — exactly one row is editable at a time (`editingRow`, `VirtualDataTable.tsx:131,685`), edit cells are plain `Input`/`DatePicker`, and TransactionsTable's `CategoryCombobox`/`RecipientCombobox` mount Radix Popover content only on open (portal lazy) — ≤2 combobox instances exist while editing, zero in display mode · `use-mobile`/matchMedia hygiene: `use-mobile.tsx` pairs `addEventListener`/`removeEventListener` on the MQL, `ThemeContext.tsx:160-166` likewise, `useCountUp.ts:29-32` and theme-transition checks are one-shot `.matches` reads — no leaks, no per-render listener registration.
-
-**UI/GPU perf research 2026-07-05 · Wave G1 checked clean (don't re-audit):**
-`will-change` inventory dimension COMPLETE — exactly 3 sites, all correctly scoped (index.css:568-573 aurora blobs always-animating so promotion justified; :725-728 `.micro-lift:hover` only; :936-942 `.ticker-track` only under `[data-active="true"]`); zero inline `willChange` in TSX, zero `translateZ(0)` hacks; only one `position: fixed` element in index.css (:555 liquid-canvas) besides the surveyed Radix overlays — no layer explosion beyond the filed backdrop-filter story · infinite-animation sweep COMPLETE — index.css keyframes are only aurora-drift-a/b (excluded), finite animate-in/icon-success-bounce, and IntersectionObserver-gated ticker-scroll; tailwind.config.ts:71-92 custom keyframes only finite accordion-down/up; no framer `repeat: Infinity` in src; all animate-spin/pulse are loading-transient except two motion-safe-gated opacity-only 6px dots (AppSidebar.tsx:403, ChatConversationList.tsx:127 — negligible, not filed) · event-listener hygiene COMPLETE — no non-passive wheel/touch listeners anywhere; scroll listeners only AppLayout.tsx:88 + VirtualDataTable.tsx:445, both passive (previously verified); resize only ShaderAurora.tsx:164 + useVisualEffectsTier.ts:17 · layout-thrash sweep COMPLETE — every GBCR/offset*/scrollHeight/getComputedStyle hit is previously filed/excluded or the new chart-hover finding; no ResizeObserver writes styles (only visx ParentSize, library-managed) · React 19 scheduling — VirtualDataTable.tsx:341 already uses `useDeferredValue`; no useTransition anywhere; market/research search surfaces (SymbolSearchBox consumers, MarketLookupPage, ResearchComparePage, ChartBuilderPage, ResearchHomePage, AddToWatchlistDialog) all debounce into bounded server queries — no expensive un-deferred client subtree besides the filed combobox family · load-path polish COMPLETE — RemoteNewsImage.tsx:44-54 already lazy+async+sized; only inline base64 asset is the ~300-byte noise SVG (index.css:651); route hover-prefetch exists (lib/routePreload.ts); index.html minimal · StatisticsPage.tsx:159-283 Radix Tabs without forceMount — inactive tabs' charts unmounted, not hidden-but-rendering.
-
-**UI/GPU perf research 2026-07-05 · Wave G2 runtime verdicts (demo app, first measured pass — don't re-measure at this scale):**
-Aurora idle cost DEFLATED at both tiers — Standard tier doesn't even mount the WebGL canvas (`AppLayout.tsx:106` gates `<ShaderAurora/>` behind `effectsTier === 'enhanced'`; Standard "aurora" = 2 CSS keyframe pseudo-elements), and paused-vs-running showed zero main-thread delta; Enhanced with shader mounted still 60fps/0 long tasks, 0.25×-res claim real (360×225 backing for 1430×900 element) · glass/backdrop-filter steady state — no main-thread cost measurable over 14 (Dashboard) / 9 (Statistics) / 3 (Transactions) surfaces through idle/scroll/hover (GPU raster cost invisible to the instrument; nothing backs up into frame drops) · Transactions virtualized scroll clean (jank 1.3%, worst 33.4ms, 0 long tasks under forced 120px/frame scroll during page loads) · page load clean (FCP 104ms, 0 long tasks ≥50ms) · Statistics mount produced 0 long tasks even mid-stagger · the filed hover-path-rebuild/GBCR stack: no measurable cost at 31-month density (one 216.7ms first-run gap did not reproduce — harness/GC artifact, recorded for honesty, no action). **Full measurement table + caveats (DPR 1, main-thread-only instrument, Electron not exercised, demo = ¼ of real month span) in §Research context → UI/GPU performance research 2026-07-05.**
-
-**UI/GPU perf research 2026-07-05 · Wave G3 checked clean (don't re-audit):**
-Build graph (prod build ran clean, vite 8.0.16/rolldown): all 6 @fontsource woff2 land hashed in `dist/assets/` (Fraunces 400/600/700 ~20 kB, Inter 400/500/600 ~24 kB each); entry _static_-graph modulepreloading itself is correct/complete (12 chunks); manualChunks isolation verified in output — recharts (114 kB gz) absent from shared `charts` chunk, contained in `AIChatPage` (vite.config.ts:71-76 comment true). Top chunks (raw│gz): index 429│119 kB · AIChatPage 373│105 · nl 202│55 · en 189│50 · react-vendor 179│57 · radix-ui 164│50 · charts 111│34 · **Fraunces weight synthesis CLEAN** — Fraunces = h1-h3 + `.font-display` (index.css:39-46); all 13 `.font-display` sites pair with `font-semibold` (600, loaded), all explicit-weight h1-h3 use `font-bold` (700, loaded); zero `font-medium`/`italic` on any Fraunces surface (the only weight issues are the Inter ones filed in §🎨) · **remaining combobox cardinality CLEAN at realistic sizes** — TagFilterCombobox → `GET /api/tags` unbounded but hand-created tags (dozens ceiling); BankAccountMultiCombobox → distinct labels (~10); InvestmentCombobox → `useInvestmentsQuery` `limit: 500` incl. sold, single consumer PortfolioImportReviewPage, realistic cardinality tens (if holdings ever near the 500 cap it inherits the RecipientCombobox fix family — not filed) · **static-asset cache headers near-optimal** — main.js:359 hashed assets `max-age=1y, immutable`; :360-366 SPA shell from memory with `no-cache`; gzip at main.js:146; Electron loads the same backend (packaging/electron/main.js:213,1078). Only defects: the `/index.html`-literal-path edge (filed §🐛) and non-hashed public files sharing the 1y header (same finding).
-
-**DB performance research 2026-07-06 · Wave D1 (Postgres server & container config — first-ever audit) checked clean (don't re-audit):**
-**Live-verified on demo DB (`visiondemoapp-db-1`, PG 18.4, 18 MB total, largest relation 2.1 MB).** Stock defaults assessed and genuinely fine at this scale (thresholds noted so they can be re-checked against a real install): `shared_buffers` 128 MB (entire DB fits ~7× over) · `work_mem` 4 MB (every sort/hash fits; revisit past ~100 MB tables) · `effective_cache_size` 4 GB (planner hint, roughly right for Docker Desktop VM) · `jit=on` (jit_above_cost 100k never reached at this size) · `maintenance_work_mem` 64 MB, autovacuum defaults, `max_wal_size` 1 GB, `checkpoint_completion_target` 0.9 (fine for this write volume) · `max_connections` 100 vs pool max 10 (huge headroom) · `synchronous_commit=on` (CORRECT for financial data — do not trade durability for import speed) · `effective_io_concurrency` 16 (PG18's new default is already SSD-appropriate — the old classic finding is fixed upstream) · `huge_pages=try` (meaningless in the VM at this shared_buffers). **Image/volume posture:** all shipping composes pin `postgres:18-alpine`, no major-version skew (16→18 switch in commit `806415dc` predates the release workflow — no released install stranded on a PG16 volume; stray local `postgres:16` image referenced by nothing) · volume mount `postgres_data:/var/lib/postgresql` matches PG18 official-image PGDATA layout (future in-place pg_upgrade feasible); named volume = VM-native ext4, not slow gRPC-FUSE bind · data checksums ON (PG18 initdb default, live-verified) · no db memory/cpu limit — correct (app capped 4g/4cpu, db intentionally uncapped) · `docker-compose.dev.yml`/`docker-compose.clean.yml` have no db config drift; `dist/` compose copies are build artifacts. **Pool fresh angles (beyond filed statement_timeout/max=10):** single shared `pg.Pool` (`apps/node-backend/src/database/connection.js:22-28`) is the only pool; no `min` (default 0 fine — worst case one ~5ms reconnect after 60s idle); `connectionTimeoutMillis` 5s sane; no per-connection SET round-trips; `queryPrepared` per-connection cache correct; poisoned-client destruction on failed ROLLBACK correct; missing `application_name` = observability nit, not filed. **Backup path:** zero `pg_dump` in the backend — dump/restore runs from the Electron shell against the container directly, no competition for the app pool or its statement_timeout. _Uncertainty: whether 18.4 is the newest 18.x minor was not web-verified (the never-pulls-db finding stands regardless); live checks are demo-DB only — threshold assessments should be re-checked against the real DB if it's orders of magnitude larger._
-
-**DB performance research 2026-07-06 · Wave D2 (first-ever live EXPLAIN pass, demo DB) checked clean + measured (don't re-derive):**
-All five filed structural planner claims got live verdicts (recorded as 📏 notes on the items themselves): search OR-chain, category COALESCE, recipient OR, ABS(amount) all CONFIRMED structural via `enable_seqscan=off` (predicate stays a post-join Filter, never an Index Cond); COUNT(*) OVER () plan-flip demonstrated. **Measurement technique worth reusing:** with seqscan disabled the planner fakes compliance via a _full bitmap scan of a small partial index_ (`Recheck Cond: is_active` only) — "an index appears in the plan" is NOT evidence the filter is indexed; only `Index Cond` containing the filter column counts. **Clean:** default list plan without the window count is excellent (pipelined Nested Loop + Memoize on all 5 joins, stops at LIMIT via `idx_transactions_active`) · tag EXISTS subquery planned as a hashed SubPlan executed once, not per-row — cheap even inside the OR chain · MV machinery healthy: all 4 unique indexes present, CONCURRENTLY works, refresh 3.7-22.4 ms at demo scale (mv_monthly_summary 236 rows/32 kB the biggest; consistent with the 33-38 ms boot-gate measurement; says nothing about statement_timeout risk at real scale) · table bloat negligible (max n_dead_tup 866, autovacuum current) · date-range aggregation predicates get real Index Conds on `idx_transaction_date_recipient` · signed amount filters correctly use `idx_transactions_amount_date` · `getAll`/`getCount`/`getAllWithCount` share one WHERE builder — no count-vs-page drift. _Caveats: 1,051-row warm-cache corpus — only plan-shape verdicts, catalog facts, and the never-analyzed behavior transfer to real installs; GIN-wins-at-scale for the UNION restructure is capability-proven, not benefit-proven; idx_scan counters are demo-lifetime only._
-
-### 🎨 UI/UX & Design
-
-**Design authenticity 2026-07-03**
-
-**Wave S1 checked clean (don't re-audit):** zero "Oops/Whoops/Uh oh/Awesome/Great!" anywhere (en.json, nl.json, and all of `apps/frontend/src` — only a code comment in `lib/undo.ts:4`) · no marketing-speak: 0× seamless/effortless/powerful/easily, and only 2 "Manage your"-type subtitles (filed above) · portfolio buy/sell flow verb-consistent (button "Record":174 → toast "{type} recorded for {name}":184) · "OK" exists only as unused `common.ok`:537, no "Submit" anywhere · placeholders are overwhelmingly the good "e.g. <real value>" pattern (~20 sites) with real examples, incl. `dbEditor.rawWherePlaceholder`:732 showing an actual WHERE clause · the 4 tooltip strings (`accounts.balanceTooltip`:6, `accounts.driftTooltip`:24, `portfolio.stalePriceTooltip`:1843, `tax.pit.tooltip`:3039) all add information, none restates a label · nl.json has no "Gelieve" (over-formal Flemish) and no meaningful untranslated-English leakage (the 103 identical en=nl values are legit shared terms: Type, Status, Dashboard, Crypto, MACD…) · destructive confirms mostly name the object and consequence (`accounts.mergeWarning`:58 is exemplary); the weak category/recipient ones are already filed by Wave U2 (TODO ~line 492) · Title Case vs sentence case drift already filed by Wave U5 — not re-measured · error strings largely interpolate real reasons via `{msg}` (28 sites) · onboarding restore-flow copy (`onboarding.restore.*`:1404-1412) is precise and consequence-stating. (2026-07-03) **Electron main-process dialogs are genuinely i18n'd** — own async `t()` loader (`main.js:12-56`) reading packaged en/nl.json, 55 call sites covering Docker prompts, updates, slow-boot, embedded-prep; the sole exception is the restore confirm (filed above) · `aria.*` (21 keys) are descriptive verb-object phrases; `shortcuts.*` are human (real tips, platform-aware, "Quick Look" untranslated deliberately); AI-chat microcopy is fully i18n'd and on-voice across all 5 components (nits filed above) — nl.json has no untranslated-English leakage beyond what's already filed · dead-key scan exclusions were derived, not assumed — all 25 template-literal `t()`-key families (`accounts.type/*`, `portfolio.assetClass/*`, `export.reportType/*`, `tax.profile.region/*`, `research.scorecard.*`, `rebalance.model/sleeve`, `performance.*`, `cashflow.window*`, …) + 12 `tc()` plural-suffix keys enumerated; zero string-concat key building exists in the codebase.
-
-**Wave S2 checked clean (don't re-audit):** zero raw indigo/purple/violet/fuchsia/pink/rose/teal/cyan classes anywhere in `apps/frontend/src` (the classic gradient-slop hues are simply absent); only one `bg-clip-text`/`text-transparent` in the whole app (filed above) and zero `from-blue→to-purple` gradients — all 68 `bg-gradient-to-*` sites except the corner-orb family and DbMaintenance orange use tokens (`primary/accent/gain/loss/chart-N`) · hardcoded hex in TS/TSX: only `charts/BarChart.tsx:360` (`var(--background, #fff)` fallback — fine) · `ShaderAurora.tsx:146-150` reads `--primary`/`--accent` live from the theme (WebGL is token-driven, one gradient language with the CSS aurora) · `TagInput.tsx:13-26` palette is a _designed_, named jewel-tone wheel with `color-mix` tinting — a model, not a violation · `components/charts/palette.ts` + `ChartTooltip`/`ChartLegend`/axis neutrals are fully token-routed; recharts defaults nowhere · gain/loss token discipline is genuinely good: `--gain/--loss` → 166 combined uses, sign-conditional `text-success:text-destructive` ternaries = 0 (ADR-104 colorblind toggle is respected on every money surface checked, incl. WatchlistChartDialog's inverted below-target=gain logic) · `--warning` correctly adopted in 74 places (the 6 stragglers filed above) · theme variants in `styles/themes.ts` define the full token surface incl. all 8 chart colors and glass tokens (no partial-variant gaps) · dialog/popover/dropdown/sheet uniformly `glass-thick` and sidebar `glass-chrome` — the chrome/overlay tiers ARE hierarchical · onboarding wizard section colors are token-based (`chart-3`/`primary`) · overlay scrims consistent (`bg-background/40 backdrop-blur-md` ×3). (2026-07-03) **`index.css` 400-1100 is token-routed** — aurora blobs compose `--primary`/`--accent` with `--aurora-*-alpha` tokens; film grain is colorless feTurbulence + `--grain-alpha`; the only `#000`s (`:960-968`) are mask alpha stops (not color); glass/hairline/fx-reduced blocks are all `hsl(var(--…))` — the raw-black dark shadows filed above are the sole literals · **Report/PDF palette is token-driven** — `apps/node-backend/src/services/reports/themeCss.js` receives the live frontend theme tokens, regex-sanitizes them (SSRF-hardened), and falls back to mode-aware defaults matching the house palette (158 62% 32% primary / 38 58% 52% accent) — no second color language on the export surface.
-
-**Wave S3 checked clean (don't re-audit):** the font system itself is real, not templated — three deliberate roles (`styles/tokens.css:120-124`): Fraunces Variable display for h1–h3 with `dlig` + −0.02em (`index.css:39-46`), Inter body with `ss01/ss02/cv11` + −0.005em, SF Mono for identifiers; self-hosted via @fontsource with weights matching usage (400/600/700 Fraunces, 400/500/600 Inter — `main.tsx:9-14`), no Google-Fonts CDN, no generic single-stack tell · `.tabular-nums` is _overridden_ to add −0.006em numeric tracking (`index.css:879-882`) — a real craft touch — with 234 uses; StocksPage holdings table (`pages/portfolio/StocksPage.tsx:306-380`) and NetWorthPage account rows/stat tiles are right-aligned + tabular throughout · `Money.tsx` and `RollingNumber.tsx` (odometer with reduced-motion + aria-label fallback) and `DeltaPill.tsx` are each genuinely designed components — the findings above are _adoption_ gaps, don't redesign the components · `components/charts/scrub.tsx:46-52` sign handling (true −/±, sign-stripped abs) is exemplary · PageHeader h1 (Fraunces 3xl + `canvas-text` legibility halo, `index.css:59-68`) is deliberate and consistent across pages · ticker symbols uniformly `font-mono font-bold` (SymbolSearchResultItem, PortfolioTicker, ChartBuilderPage) — a coherent identifier convention · no gradient text on any heading (S2 filed the sole `bg-clip-text`, a number) · dashboard recent-transactions amount column is right-aligned (`pages/DashboardPage.tsx:293`) · heading size ladder h1 3xl → CardTitle 2xl → overridden lg for chart cards is coherent _where the defaults are used_. (2026-07-03) **`ChartAxis.tsx` is one real shared axis spec across all 5 visx charts** (the tabular-nums gap on numeric ticks is filed above); `formatDateStringWithAppSettings` is adopted in 20+ files; all tax tables + ImportReviewPage amounts are right-aligned + tabular via shared `formatCurrency`; `text-xs` is ~75-80% legitimate dense-data dialect (triage note filed on the sprawl finding above).
-
-**Wave S4 checked clean (don't re-audit):** dialog sizing is NOT uniform — 6 deliberate width tiers across 24 sized DialogContents (sm→4xl; quick actions like OwesPage pay = `sm:max-w-sm`, editors = lg/2xl, review surfaces = 4xl) — genuinely task-scaled · Dashboard and PortfolioOverview both use real asymmetric bento compositions (featured 2×-span hero + secondary tiles, `DashboardPage.tsx:401-419`, `PortfolioOverviewPage.tsx:275-325`) — the app's two hubs are _not_ interchangeable scaffolds · `MetalsPage.tsx:1-13` re-exports a parameterized StocksPage — the correct anti-paste pattern exists in-repo (A4 tracks making Crypto/Savings/RealEstate follow it) · RealEstatePage's body (`:208-300+`) is truly content-specific: per-property cards with location, MapPin, cadastral income, municipality tax, appreciation/rent split — the best page-specific composition in the app · OwesPage composition is content-derived (outstanding-total hero card `:63-77` + per-person progress cards with paid/total meters, not stat tiles) · badge usage is broadly semantic, not soup — 123 total `<Badge` app-wide; worst page (ImportReviewPage, 10) uses them correctly as match-status chips (`:43-67`); only the TaxOverview key-value trio filed above misuses them · Separator count is low (19) — no divider-decoration habit · no numbered-step decoration outside the onboarding wizard, where order is real · `EmptyState` (16 consumers) has designed character (glass tile + aurora glow halo, `components/shared/EmptyState.tsx:12-18`) and its icons mostly match page identity (hand-rolled empty-state clones are S6's axis) · TransactionsPage's utilitarian [header → FilterBanner → dense table] is _right_ for its job — density variation between it and the dashboard is intentional and good. (2026-07-03) **Settings anatomy is a real system** — SettingsSection/SettingsGroup/SettingRow adopted 6/7 (7/7 of `sections/`); danger zone systematized (`AboutSection.tsx:256` SettingsGroup `border-destructive/30`); `DashboardSettingsDialog.tsx:91-112` has a proper sidebar-nav anatomy · TableDataEditorPage is genuinely crafted (two-row header, PK markers, dirty-cell amber ring, staged-op commit preview) · MarketOverviewPage's body is well-composed (~870/1111 lines are curated symbol config); its heat-grid composition is designed (the one color literal is filed above) · WatchlistPage/ResearchComparePage tables are house-language (chart-color dots, deliberate border-spacing heat matrix) · tax sub-widgets (MultiYearTrendStrip, YearComparisonCard) are content-derived.
-
-**Wave S5 checked clean (don't re-audit):** the motion _system_ is real, not aspirational — token durations/easings in `tokens.css:112-117` are mapped into Tailwind (`tailwind.config.ts:127-136`) and consumed by every `index.css` interaction utility · all 8 chart components are framer-driven off `lib/motion.ts` `durations`/`easings` with `useReducedMotion` (12 files) — zero recharts default entrances, and `ToolResultCard` explicitly sets `isAnimationActive={false}` ×3 · tabs active pill (`ui/tabs.tsx:78-81`) and sidebar rail (`AppSidebar.tsx:68-72`) magic-move via layoutId + `springs.snappy` with reduced-motion zero-duration — shared physics, genuinely crafted · dialog genie exit toward the opening pointer with keyboard fallback (`lib/dialogGenie.ts`) is signature-quality and shared by alert-dialog · Button has full press choreography (hover lift → active settle + `press-feedback` scale, enumerated transition properties, token timing) · sonner success toasts get the SF-Symbols icon bounce globally (`index.css:859-861`) and `TransactionImportCard.tsx:437` reuses it · `animate-pulse` restraint: 8 sites, mostly `motion-safe:`-gated micro-dots, no pulsing content cards · `hover:scale` restraint: 8 sites, all small icon-tile/knob scales (1.04-1.10), zero card-level zoom slop; arrow-nudge `group-hover:translate-x` only 6 · `animate-bounce` is only the chat typing ellipsis with designed 900ms/300ms-offset timing (`ChatMessageList.tsx:107-109`) · ticker tape: constant pixel speed via `--ticker-duration`, hover-to-read pause, offscreen freeze, reduced-motion none (`index.css:928-953`) · the reduced-motion story overall: broad CSS block (`:977-1010`) + `useReducedMotion` in PageTransition/charts/tabs/sidebar + `ShaderAurora.tsx:176-182` renders a static frame + `fx-static-atmosphere` freezes CSS blobs · focus rings are largely one pattern (`ring-2 ring-ring/70 ring-offset-2`; only 4 stray `ring-primary/50`). (2026-07-03) **`animate-stagger`'s 12-child delay cap is unreachable in practice** — its 3 consumers max out at 4 direct children (`SummaryCards.tsx:59` = 4, `DashboardPage.tsx:401` = 3, `NetWorthPage.tsx:237` ≤ 4), resolving the open question of whether any grid exceeds 12 · CommandPalette rides `CommandDialog` → house DialogContent (genie exit included); popover/select/dropdown share one open language (fade + zoom-95 + directional slide-2); sheet slide is token-driven, pure directional, and the slow-open/normal-close asymmetry is deliberate.
-
-**Wave S6 checked clean (don't re-audit):** `ShortcutsOverlay.tsx` is a genuinely crafted shortcuts sheet — real inventory (not aspirational), platform-aware ⌘/Ctrl + ⇧/⌃, explicitly mirrors the Electron menu accelerators, styled `<kbd>` keys, bound to `?` with typing-target guard · Electron chrome is deeply considered: `hiddenInset` traffic lights + vibrancy + fullscreen inset handoff (`main.js:1497-1517`), persisted+clamped window bounds, macOS dock menu (New transaction / Dashboard, `:2983-2994`), ⌘1-9 route accelerators with a documented `before-input-event` reliability fix, notifications titled APP_NAME · splash _mechanics_ (as opposed to character, filed above): `readSplashTheme`/`deriveSplashPalette` persist the user's palette so boot matches their theme, spinner hidden under reduced-motion, tabular-nums status line · `theme-flash.ts` applies theme _and_ palette variant pre-mount (no FOUC) · the loading system is a coherent three-tier hierarchy, not spinner soup: `App.tsx:105-112` hairline top-edge shimmer for route chunks (designed, motion-reduce fallback) → `SectionLoader` shimmer stack (`role="status"`) for sections → `Loader2` reserved for inline button-busy (all 32 files checked; zero full-page centered spinners) · `TransactionsTable.tsx:384-393` empty state is the house exemplar (contextual icon, search-aware copy, Import CTA) · boot-error page bones: strict CSP, en/nl i18n, retry + view-logs actions, light/dark (`packaging/electron/assets/`) · onboarding offers restore-from-backup on the welcome step AND the backup step — genuinely considerate for migrating users · `SUGGESTED_CATEGORIES` per-category emoji (`OnboardingWizard.tsx:81-97`) is a warm human touch worth keeping · sidebar footer's glowing accent dot (`AppSidebar.tsx:403`) is charming — keep it, just fix the version string beside it. (2026-07-03) `build/icon.svg` is a designed on-token mark (obsidian body, emerald→champagne gradients, comments name the app's glass tokens) — the Vision Demo icon-parity gap is filed above, not the mark's own quality.
-
-**UI/UX review 2026-07-10**
-
-**Wave R4 checked clean (don't re-audit):** PlannedPaymentForm today-default (6d66491) is edit-safe — `initial?.due_date` is always truthy for real payments (`usePlannedPayments.ts:20/78/90` normalizes required `planned_date`), the `new Date()` branch only runs for new payments, and `key={editing?.id ?? "new"}` remounting (`PlannedPaymentsPage.tsx:513`) prevents stale-today carryover · VirtualDataTable empty-state a11y fix (95a25ba/80a5d66) yields a valid tree (rowgroup → row → cell → status, matching the data path's `role="cell"`:743 under `role="table"`:573) and keeps full-width centering (block-level cell, `text-center py-12`, no colspan in the div/flex layout) · UpdateNotification/AboutSection d975084 diff changed only the href expression — labels, ExternalLink icon, `t('update.releaseNotes')`, target/rel all intact · i18n strings unchanged since 2026-07-01 (`git log -- i18n/source` empty) — the 2026-07-03 string audits still describe the current state; all keys referenced by the post-audit commits already exist.
-
-**Wave R3 checked clean (don't re-audit):** full side-by-side en/nl read of all 22 previously-uneyeballed namespaces (tax ×437 keys in full, research, portfolio, statsPage, customChart, addInv, rebalance, performance, export, admin, cashflow, insights, owesPage, aiChat, dbEditor, recipients/recipientsPage/recipientPatterns, invDetail, market, networth, exchangeRates) — issues confined to the R3 findings above · `tax`'s core Belgian fiscal vocabulary is largely excellent and correctly Belgian: TOB/beurstaks, Reynders-taks, roerende voorheffing (on the dividend keys), meerwaardebelasting, gemeentelijke opcentiemen, kadastraal inkomen, personenbelasting, aanslagbiljet, dienstencheques, woonbonus, chèque habitat, ten laste, WIB-92/CIR-92 citations; NO financial-direction inversions found in the previously-untested keys; nl number formatting correct (16.320 / €10.000 / 1,32%) · aiChat natural and idiomatic ("Aan het denken") · dbEditor clean ("wegschrijven" for commit is a sound consistent choice) · admin health metaphor consistent · recipientPatterns/recipientsPage consistent ("ontvanger", "matchpatroon", "hoofdlettergevoelig") · invDetail uses "koers" consistently · minor unfixed nits deliberately not filed: `cashflow.rollingDesc` drops the Past/next qualifiers; `market.forwardPE` "Forward K/W" vs `research.metric.forwardPE` "Verwachte K/W".
-
-**Wave R2 checked clean (don't re-audit):** Go-menu terminology matches the sidebar — `GO_MENU_ROUTES` (`main.js:2833-2843`) labels every destination via the same `nav.*` keys the sidebar uses; no menu item points at a renamed route or coins a divergent noun (File → "Import CSV…" is intentionally action-scoped, distinct from the Go entry) · native menu Title Case is _correct_ for the macOS surface (HIG convention) — the divergence from in-app sentence case is deliberate, not drift · TableDataEditorPage i18n complete: every user-facing string routes through `t('dbEditor.*')`, 35 keys at full en/nl parity; only untranslated literals are technical sentinels (NULL/true/false `:59-61`, PK marker `:376`, server op names `:523`) · the editor's ~15-icon import list has NO dead icons — all used with consistent icon-per-action semantics (Eye=preview, KeyRound=PK, Ban=set-null; RotateCcw doubles as discard+undo-delete, both read as "revert") · diff-before-commit exists: preview dialog renders exact generated SQL per op with INSERT/UPDATE/DELETE labels + destructive-op warning (`:504-529`) · TableDataEditorPage building on base `ui/table` primitives instead of DataTable/VirtualDataTable is defensible, not a rogue third dialect (editable cells, filter header row, PK locking, staged dirty-state — needs the shared components don't serve; noted in case an editable shared-table variant is ever extracted) · native notification identity consistent — `notify()` always titles `APP_NAME` and localizes bodies via `t()` (`main.js:538-542`; the 3 raw-English rebuild notifications at `:3387-3399` are dev-only) · no `Tray` usage exists (nothing to audit); app icons need no dark variants.
-
-**Wave R1 checked clean (don't re-audit):** BulkActionsBar delete confirm quality — `tc(...)` with proper `.one/.other` pluralization, fully translated en+nl, `destructive` variant, count-aware "permanently removes … cannot be undone" body (`BulkActionsBar.tsx:92-103`) · MarkAsFiledDialog copy/i18n fully `t()`-driven with real Dutch for every key; `Label htmlFor="filing-reference"` correctly associates the input (`MarkAsFiledDialog.tsx:62-70`); "e.g. Tax-on-Web 2024-12345" placeholder is the house exemplar pattern · BulkExportDialog radio options correctly `htmlFor`/`id`-paired (`:44-51`), format defaults to csv, filename extension follows format (`useTransactions.ts:289-291`) · 0-selected edge safe — `BulkActionsBar` returns `null` at `idCount === 0` (`:78`) so the dialogs are unreachable empty; filter-mode tagging short-circuit is intentional and commented (`:154-165`) · BulkRecipientDialog disables Apply while `recipientId == null` and guards `handleApply` (`:33/55`); pending-disable across all four re-confirmed.
-
-**UI/UX research 2026-07-03**
-
-**Wave U1 checked clean (don't re-audit):** dialog/sheet/alert-dialog focus return — Radix defaults intact, zero `onOpenAutoFocus`/`onCloseAutoFocus` overrides repo-wide (grep) · dialogGenie is animation-only (transform-origin CSS vars, no focus impact) · no positive `tabIndex` anywhere (only 0/−1) · CommandPalette: ⌘K toggle, labeled input, cmdk arrow nav, recents, forceMount only on groups · ShortcutsOverlay discoverability good (`?` key, palette action, topbar ⌘K hint, list generated from real `GO_TO_ROUTES` so it can't drift) · `g`-sequence/`[`/`]`/⌘Z/⌘B all correctly inert while typing or with modifiers (modal gap filed above) · VirtualDataTable rows: ↑/↓/Enter/Space nav, `aria-sort`, sort headers are real `<button>`s, inline-edit Enter/Escape · OwesPage:86-94, CategoriesPage:195-210, WatchlistPage:160-171 clickable cards done right (`role="button"` + `tabIndex` + shared `onActivateKeyDown`) · charts ship localized SR summaries via `chartAria.ts` · `<header>`/`<main>` landmarks present · Escape closes search-suggestion dropdown + inline edit consistently. (2026-07-03) **Electron accelerators vs in-page keys: no collisions** — menu ⌘,/⌘N/⇧⌘I/⌃⌘S/⌘1-9 (`main.js:2836-2978`) vs page ⌘,/⌘Z/⌘K/`?`/g-seq/`[`/`]`; no key is dual-bound, and in-page ⌘Z only preventDefaults when it consumes an undo so native field-undo survives · cmdk combobox family keyboard is solid (arrow nav, Escape-returns-focus, multi-select stays open; minor: `BankAccountMultiCombobox:37-40` re-sorts selected-to-top on toggle, jumping the active highlight) · VirtualDataTable Space quick-look is end-to-end clean (preventDefault + typing guard + wired via `TransactionsTable.tsx:381`) · ContextMenuTrigger wraps the focusable row so Shift+F10 works · Calendar `autoFocus` moves into the day grid · no onClick-on-div anywhere in admin/settings.
-
-**Wave U2 checked clean (don't re-audit):** AddTransactionDialog amount pattern (`type="text" inputMode="decimal"` + pattern + `parseLocaleNumber`) and TransactionInfoDialog inline amount edit (`:68` parseLocaleNumber) · `parseFloat` centralized (only `utils/currency.ts:55`, `utils/sanitize.ts:77` — no raw locale-string parseFloat) · `parseLocaleNumber`/`parseDecimal` comma/thousands heuristics solid · date defaults to today via `todayYmd` in `createAddTransactionFormState` · footer buttons in all 9 `<form>` dialogs correctly `type="button"`/`type="submit"` (no accidental default-submit; Radix Select/cmdk swallow Enter) · zero `window.confirm` · confirm coverage good on TransactionsPage:217, CategoriesPage:262, RecipientsPage:295, PlannedPaymentsPage:345, OwesPage:283, BulkActionsBar:93,107, ChatConversationList, InvestmentDetailDialog, BackupSection restore AlertDialog:350, TableDataEditorPage (staged deletes + op-count commit summary :208-219) · RecipientCombobox/CategoryCombobox have search + explicit "none" clear item · required fields marked "*" in PlannedPaymentForm labels (en.json:1594,1636) · API keys `type="password" autoComplete="off"` (ResearchKeysSection:104-109) · AddTransactionDialog/SplitTransactionDialog/AddRecipientDialog/AddCategoryDialog submit buttons disable on `isPending` · AddTransactionDialog + PlannedPaymentForm(new) keep typed state across accidental close (stay mounted, `key={editing?.id ?? "new"}` at PlannedPaymentsPage:512). (2026-07-03) **The stale-label bug is unique to RecipientCombobox** (Category/BankAccountMulti/TagFilter comboboxes load full lists client-side) · free-text-creation parity is equal (neither combobox creates inline — creation lives outside) · dialog close ✕ is last in DOM (`ui/dialog.tsx:48`) so Radix autofocus lands on the first real field · AdminOverviewPage's token field is exemplary · ExportDialog/MarkAsFiledDialog/bulk dialogs are solid (disabled-when-invalid, reset-on-close, pending-disable) · autocomplete sweep: only 2 `autoComplete="off"` sites, both secret fields; no name/address/email fields exist in the app · TransactionImportCard parser-config labels are `htmlFor`-linked · ExchangeRatesPage has NO manual-rate form (read-only + refresh — the residue premise there was wrong).
-
-**Wave U3 checked clean (don't re-audit):** catch-all 404 route exists, localized, logs the path, offers a home link (`App.tsx:231`, `pages/NotFound.tsx`) · legacy-route redirects preserve query strings and use `replace` (`RedirectWithQuery`/`RedirectSymbolToMarket`, `App.tsx:148-162`; `/portfolio/market`, `/portfolio/watchlist`, `/research/symbol/:symbol`, `/portfolio/exchange-rates`) · `StartupRedirect` uses `replace` (`:64`) · sidebar active-state prefix matching is correct for nested routes incl. exact-match workspace roots and the `/admin` special case (`AppSidebar.tsx:85-91,374-376`), so `/import/:batchId/review` and `/admin/db/:table` highlight the right item · `?new=1` deep-link is consumed with `replace` so back/refresh don't re-open the dialog (`AddTransactionDialog.tsx:33-43`) · AI-chat `?conversation` and forecast `forecastMode`/`rollingDays` params replace-synced (`AIChatPage.tsx:28-46`, `CashFlowForecastChart.tsx:86-107`) · transactions filter changes push history entries (back steps through filter states — sensible) and quick-filters merge params additively (`TransactionsPage.tsx:262-271`) · bad/missing `:batchId` → disabled query → error panel with back-to-import buttons (`ImportReviewPage.tsx:96-99,256-273`); `TableDataEditorPage` has a back button (`:288`) + `query.error` panel (`:349`) · ScrollToTop keys on `pathname` only, so same-page query-param filtering doesn't yank scroll · Electron deep-link payloads validated (`ElectronBridge.tsx:52` `startsWith('/')`) · planned payment → matched transaction link exists (`ExecutionHistoryDialog.tsx:161`), portfolio holding → Market Lookup exists (`StocksPage.tsx:84`, `CryptoPage.tsx:53`, `InvestmentDetailDialog.tsx:141`). (2026-07-03) **CommandPalette recents store bare routes — internally consistent** · Electron window title is static and never diverges · sidebar workspaces genuinely separate the two importers (the `/import` vs `/portfolio/import` IA note above is cosmetic only) · ChartBuilder does persist its config (single localStorage slot — the shareability gap is filed above).
-
-**Wave U4 checked clean (don't re-audit):** all domain mutation hooks carry onError toasts with `error.message` (useTransactions/useAccounts/useCategories/useRecipients/useTags/useSplits/useInvestments/useSavedCharts/useAIChat/useCustomParserConfigs/usePortfolioParserConfigs/RecipientPatternsDialog/MoveHoldingDialog/CloseAccountDialog/PortfolioTicker/ProviderHealthPage/DbMaintenancePage/TableDataEditorPage/ExchangeRatesPage/PortfolioImportReviewPage) · transactions CRUD fully optimistic with snapshot rollback + delete Undo toast + ⌘Z one-slot undo (`lib/undo.ts`, AppLayout.tsx:60) + broad invalidation fan-out (useTransactions.ts:110-123) · ImportReviewPage overrides use mutateAsync + try/catch + state rollback, commit toast reports imported/duplicates/errors and button is isPending-guarded · TransactionImportCard has phase progress + cancel + complete/error panels; SimpleImportCard/ExportCard toast success/fail and disable while running · refreshPrices reports partial failure (stale-source count) via warning toast with stable id (no stacking), buttons disabled while pending and offline-aware (useOnlineStatus) · backup restore has schema-mismatch/passphrase-specific errors + submitting-disabled dialogs (useRestoreBackup.tsx) · ErrorBoundary per-route keyed (App.tsx:140-143) + shell-level, fallback offers Retry + Reload · API errors normalized into ApiClientError (envelope/legacy/422-field-list/429-retry-after, client.ts:112-184) with requestId correlation · app-settings persist failures toasted via save-error nonce (AppSettingsContext.tsx:84-120) · placeholderData keeps old data on transactions/accounts/categories/recipients/bankAccounts/aiChat plain lists + PerformancePage keepPreviousData · empty states with guidance on StatisticsPage (noData), PortfolioOverview (isEmpty), accounts/networth/performance (title+desc), dashboard recent-transactions (CTA); first run gated by OnboardingWizard (AppLayout.tsx:233) · planned-payments CRUD/execute call sites all catch + toast (PlannedPaymentsPage, LinkTransactionDialog) · RebalancePage compute renders its error inline (:347-348). (2026-07-03) **Reports/ExportDialog feedback is complete** (busy + disabled + success/error toasts, browser download) · OnboardingWizard's async steps are all try/catch→toast with pending-disabled buttons · FxStatusBanner's trigger + staleness-date logic is correct · self-querying dashboard widgets render error text (`BankBalancesWidget:82-95`, `CashFlowForecastChart:343-347`) and the page has an error subtitle (`DashboardPage.tsx:348`) · parser-config create/update/delete all toast (`useCustomParserConfigs.ts`).
-
-**Wave U5 checked clean (don't re-audit):** lucide icon semantics — Trash2=delete (20 files), X=close/clear-chip only, Pencil=edit (8, no `Edit` icon), Plus=create; zero raw `text-gray/bg-white/text-black` classes repo-wide · gain/loss color always routes through `--gain`/`--loss` tokens (`text-gain` 25 files + `.amount-gain` 26 files, tailwind.config.ts:75 + index.css:900 — colorblind toggle covers all) with no sign-conditional `text-success` misuse (only non-money verdict at ResearchAnalystTab:62) · currency formatting centralized (`utils/currency.ts` configured from AppSettings at App.tsx:121; Money/useCurrencyFormatter/useChartCurrencyFormatter all app-locale-aware) · ~35 Intl.NumberFormat/DateTimeFormat call sites verified passing the app locale · datetime formatters (`formatDateTimeStringWithAppSettings`, `formatMonthYearWithAppSettings`, `formatDistanceToNow`) all receive locale at their call sites · JSX hardcoded-string sweeps (bare text, placeholder=, label:/title: props, toast messages) found nothing user-facing outside the tax items above — devtools panels (`components/devtools/*`) are English-only by design (developer surface) · confirm dialogs uniform (18× useConfirmDialog + 2 bespoke AlertDialogs share the same primitives/variants; destructive variant used at all destructive call sites) · search inputs centralized in DataTable/VirtualDataTable (icon + clear + focus styling) · en.json ellipsis style consistent (131× "...", 0× "…") · "Bank Account" naming consistent across forms/import/planned. (2026-07-03) **nl securities terminology (effecten/Effectenrekening) is correct Belgian usage; no rogue "aandeel"** · combobox triggers + MarketOverviewPage names truncate correctly (the RecipientsPage/WatchlistPage/CategoriesPage truncation gaps are filed above) · portfolio sibling pages are uniformly `space-y-6` · onboarding titles + settings descriptions are tonally consistent.
-
-**Wave U6 checked clean (don't re-audit):** viewport meta correct — `width=device-width, initial-scale=1.0`, no `user-scalable=no`/`maximum-scale` so pinch-zoom stays available (`index.html:6`) · mobile sidebar done right — `useIsMobile()` at 768px (`hooks/use-mobile.tsx:3`) swaps to a Sheet drawer (18rem, `ui/sidebar.tsx:146-162`) and `SidebarTrigger` is always in the topbar (`AppLayout.tsx:114`) · Sheet panels `w-3/4 sm:max-w-sm` — viewport-safe (`ui/sheet.tsx:39-41`) · dashboard grids fully breakpointed (`DashboardPage.tsx:306,401,414,426`; BankBalances cards `sm:grid-cols-2 lg:grid-cols-3`) · wide-content overflow handled: `ui/table.tsx` wraps in `overflow-auto`, StocksPage:300/CryptoPage:210 `overflow-x-auto`, CategoryPivotTable `min-w-[800px]` inside ScrollArea WITH `<ScrollBar orientation="horizontal"/>` (:388) · no fixed widths ≥400px outside that contained pivot (grep) · Button default h-10 / `size="icon"` 40px, and the 40px `icon-touch-target` utility is adopted in 21 files incl. transaction-row Info/Delete (always visible → transactions DO have a touch path to details) · NetSummaryCard sparkline scrub is touch-correct (`touchAction: "pan-y"` + pointer events, :132) · charts are visx with pointer-event handlers, so tap shows tooltips (BarChart per-bar `onPointerEnter`, no touch-action lock) · DialogContent width overrides all `max-w-sm…4xl` over `w-full` — no fixed-px dialog widths · DialogFooter stacks buttons column-reverse below `sm` (`ui/dialog.tsx:65`) · sonner toasts default bottom placement (full-width bottom on small screens — thumb-reachable) · `overscroll-behavior-y: none` on body kills the pull-to-refresh seam (`index.css:36`) · no PWA manifest/apple-touch-icon, so iOS safe-area-inset handling is currently N/A. (2026-07-03) **U6 statics confirmed:** portal content widths all ≤300px (widest `CustomChartBuilderModal` `w-[300px]`; comboboxes 260-280px — nothing overflows 375px) · Electron min 800×600 (`main.js:1434-1435,1489-1490`) keeps desktop layout above the 768px breakpoint, with restore-bounds clamping · no text-bearing fixed `h-[Npx]` containers (VirtualDataTable `min-h-[40px]` grows; ChatComposer `max-h` scrolls) · all sampled `whitespace-nowrap` cells sit inside verified `overflow-auto` wrappers · 15 dialogs verified with proper cap+scroll (DashboardSettingsDialog `h-[82vh]`+ScrollArea, ExportDialog `max-h-[90vh]`, TaxProfileDialog is a Sheet with `overflow-y-auto`, PlannedPaymentForm, MergeRecipientsDialog, AddAccountDialog, InvestmentDetailDialog, …).
-
-**UI clutter review 2026-07-01**
-
-- **Clean pages** (single top notification, well-aligned cards/tables): Dashboard, Transactions, Statistics, Categories, Accounts, Owes, Performance, Rebalance, Stocks/Crypto (shared asset-page template), Research › Markets (heat-map grid), Research › Compare (empty-state tool), Tax (dense but organized).
-- **Blank chart bodies in full-page screenshots are a lazy-render artifact, NOT a bug** — charts draw on scroll-into-view (verified on Dashboard _and_ Statistics: chart rendered ~90 SVG elements once in viewport). Use in-viewport captures to judge charts.
-- **Banner spacing is fine where it fires** — banners use `mb-4` + parent `space-y-*` and `return null` when idle; the only multi-banner case that actually triggered on demo data (`/tax` viewing a past year → `HistoricalYearBanner`) spaced cleanly under the global notification. Honest caveat: `FxStatusBanner` and `StalePricesBanner` never triggered on synthetic data, so their stacking is **inferred from code**, not visually observed — the only observed pile-up is `/planned`'s advisory _cards_.
-- **`/import` faint top-overlap** seen in one full-page shot was a full-page compositing artifact (no overlap in the in-viewport capture) — not a real z-index bug.
-
----
-
-### 🏛️ Architecture & API
-
-**Code/architecture 2026-07-03**
-
-**Wave A1 checked clean (don't re-audit):**
-
-- Route mounting: all 23 top-level routers are imported and mounted (main.js:300-332, ai gated); routes/info/* sub-routers composed via the routes/info.js barrel; **no dead/unmounted route files**.
-- Middleware composition order (main.js:80-298): requestId → requestMetrics → CORS → json(1mb) → security headers → gzip → request log → `wrapResponse` envelope → globalRateLimiter on /api → routers → 404 → createErrorHandler; admin stack gets rateLimiter+CSRF+auth (main.js:307). All 8 middleware/ files have consumers — no dead middleware.
-- Error handling is genuinely centralized: Express-5 async-throw (no asyncHandler needed), typed AppError subclasses, headersSent guard, non-Error normalization, prod message suppression (middleware/errorHandler.js:85-137). Sampled try/catch in importRoutes.js (:81-86, :204-226, :292-297, :392-394) all translate to typed errors, rethrow, or log with context — **no silent empty catches found**; bare `catch {` sites sampled carry intent comments per convention.
-- ESLint boundary rule IS enforced in CI (`bun run lint:backend`, .github/workflows/ci.yml:136 and release.yml:113) — not a dead rule, just narrow (see finding 1).
-- lib/: all 17 modules have ≥1 external consumer (money 41, timezone 16, pagination 9 …); shared-utils shims lib/money.js & lib/slugify.js are live and intended (ADR-069).
-- startup/warmup.js (344 lines, tri-state status feeding /health/detailed) and jobs/refreshCashflowForecastMc.js (wired from warmup.js:309) — clean separation.
-- services/routeManifest.js `mountRouter` introspection for /api/admin/endpoints — reasonable, routes-agnostic.
-- No `res.status(500)` hand-rolling anywhere in routes/; only the single aggregations.js:135 4xx (finding above).
-
-**Wave A2 checked clean (don't re-audit):**
-
-- Recurrence _step_ math centralized: `calculateNextDate` is the single advance implementation, reused by plannedExecutionService, cashflowForecast, aiChat planned tool, and routes.
-- `crossWorkspaceAnalytics.js` (pure) vs `crossWorkspaceDataService.js` (IO) split is deliberate and well-documented in both headers — good cohesion, not duplication.
-- No true god modules: the biggest files are cohesive — `aiChat/tools/expenses.js` (710) is 11 same-domain tool defs; `reports/sectionHelpers.js` (615) is report HTML/SVG formatting; `quoteBackfillService.js` (693) is one backfill domain.
-- `aggregationRefresh.js` vs `materializedViewService.js` is orchestrator-over-manager, not overlap (headers explain the split).
-- `priceProviderService.js` is a documented thin orchestrator over `prices/` (header lines 1-6); pattern itself is fine — only its file placement is flagged above.
-- Core repo verb set (getAll/getById/getCount/create/update) is consistent where the object pattern is used; parameterization is uniformly positional `$n` — no string-concatenation SQL found in either layer.
-- Pagination clamping exists once (`services/dbEditor.js:162`) — no duplication.
-- Subdirs with clear cohesion stories: `portfolio/`, `currency/`, `prices/`, `importPipeline/`, `portfolioImportPipeline/`, `reports/`, `research/`, `aiChat/`, `calculations/`.
-
-**Wave A3 checked clean (don't re-audit):**
-
-- API transport layer (`lib/api/client.ts`): single wrapper — **zero ad-hoc `fetch(` outside lib/api/** in hooks/contexts/lib/utils/stores/components/pages/features; base URL centralized (client.ts:30-34, same-origin prod / proxy dev); envelope normalization complete with legacy `{detail}/{message}` fallbacks and typed `ApiClientError` carrying code/status/requestId (client.ts:72-184); timeout/retry/correlation-id/abort-all uniform (client.ts:219-363).
-- `lib/api/` domain split: 26 domain modules composed into a documented back-compat barrel (`lib/api.ts`) — coherent design (aside from the dual-path finding above).
-- `types/`: well-organized — `types/generated.ts` is openapi-typescript output (CI drift-checked), `types/api.ts:1-13` hand-written ergonomic mirror, `types/contract-guard.ts:1-22` compile-time assertions making generated.ts load-bearing. No god-file problem (generated.ts's 9.4k lines are machine output). **For A5:** generation pipeline exists and is guarded; assess only the shared `@vision/types` package boundary.
-- `stores/settingsStore.ts`: no overlap with contexts — store owns state, contexts own hydration/persistence/DOM side-effects, exactly as documented (code-patterns.md:2800-2873); slice selectors + useShallow used correctly.
-- Provider nesting: 8 levels in `App.tsx:166-245` but each layer justified (preload → theme → settings×2 → tax → language bridge → tooltip); no context provides >4 unrelated values except BelgianTax (reported above).
-- hooks/: every non-test hook imports React/react-query/router — none are misfiled lib functions; single-consumer hooks sampled (useRecipientPivot, useTagPivot) are page-scoped extraction, acceptable.
-- `PageTitleContext`, `SettingsPreloadContext` (single startup fetch feeding hydration — deliberate, documented), `utils/currency.ts` internals, `lib/utils.ts` (cn only).
-
-**Wave A4 checked clean (don't re-audit):**
-
-- No cross-feature imports between `features/*` subdirs — all `features/` internal imports stay within their own feature (grep of alias + relative paths).
-- `components/ui/` primitives are modified in place via cva variants (e.g. badge/alert `success` at components/ui/badge.tsx:20, alert.tsx:17) consistently with the documented token convention — no wrap-vs-modify drift found.
-- Zero-importer sweep of `components/` (non-ui) and `features/` found no dead components outside the 7 ui primitives above.
-- Chart primitives AreaChart/LineChart top out at 5 optional booleans each — below variant-smell threshold; format hooks are function props, appropriate.
-- pages/TransactionsPage.tsx correctly delegates data to features/transactions/hooks/useTransactionListData.ts (the model other pages should copy).
-- InvestmentDetailDialog.tsx (643) is cohesive for its size: one Dialog+Tabs with injectable sub-dialog callbacks (:37-41); decomposition optional, not urgent.
-- MetalsPage.tsx confirmed as the correct thin-wrapper pattern.
-
-**Wave A5 checked clean (don't re-audit):**
-
-- Envelope adoption: 0 direct `res.json(` in routes/ + controllers/ (all via `res.ok` from middleware/envelope.js:29); the only non-envelope endpoints are deliberate infra contracts in main.js:236/267/284 (/health, /ready, /api/) with documented backward-compat shapes.
-- Error codes genuinely shared: `ApiErrorCode` lives once in packages/types/src/errors.js:8, consumed by BE envelope.js/errorHandler.js and FE lib/api/client.ts — no FE re-declaration found.
-- money/slugify/downsample duplication resolved: FE lib/money.ts, lib/slugify.ts, utils/downsample.ts and BE lib/money.js, lib/slugify.js, utils/downsample.js are all thin `export * from '@vision/shared-utils/...'` shims (though both downsample shims are consumer-less — flagged in A1/A3).
-- Circular imports: madge clean on backend (284 files from src/main.js) and frontend (584 files, --ts-config alias-resolved).
-- Deep relative imports: zero `../../` or deeper in apps/frontend/src — `@/*` alias fully adopted.
-- Env centralization: apps/node-backend/src/config/env.js is a Zod schema (ADR-030), "all env reads flow through this module"; only 6 files touch process.env outside it (main.js, database/migrate.js, config/loadDotenv.js, config/logger.js — documented exceptions — plus services/research/providerKeys.js, services/reports/puppeteerRenderer.js).
-- i18n pipeline: single source of truth i18n/source/{en,nl}.json (flat but dot-namespaced: 3529 keys, 98 namespaces, `tax` largest at 437) → generated FE locales + packaging/electron/i18n; validate-locales.js checks en↔nl key parity both directions, placeholder-token parity, and generated-output consistency across both targets.
-- Workspace topology: root package.json workspaces = apps/frontend, apps/node-backend, packages/* (exactly @vision/types + @vision/shared-utils, both private, subpath-exported JS+.d.ts, 31 import sites).
-
-**Code/architecture 2026-07-03 — residue follow-up (backend, A1+A2):** backup/ is a single 89-line `coverage.js` registry (BACKUP_COVERED_TABLES + documented exclusions) with live consumers and no dead files · routes/research.js and ai.js are exemplary/thin (SSE protocol well-documented); no direct repository imports and no inline SQL found in any of the six route files read (importRoutes, portfolioImportRoutes, ai, marketLookup, research, crossWorkspace) · middleware/rateLimiter.js (all 10 limiter singletons consumed, trusted-proxy XFF + fail-safe dev-bypass) and requestMetrics.js (reservoir sampling, capped, single consumer) are clean; config/ is sound (env.js Zod fail-fast single source, config.js deep-frozen, loadDotenv precedence documented, kinesisConfig.js NOT dead — 4 consumers) · forecast method contract is consistent across point/MC methods; research adapters share one normalized shape/error contract; categoryPivot/recipientPivot/tagPivot and recipient vs recipientByYear are genuinely not duplicates; aggregation/cashflowForecast.js has no overlap with the forecast/ engine · reports: all 20 sections are registered in the three registries with no dead sections; puppeteerRenderer has a clean boundary (singleton browser, finally-closed pages); escapeHtml discipline is consistent; themeCss's HSL-pinning posture is deliberate · repositories: rawTransactionRepository is cohesive, aiChatRepository's PG-FK→typed-domain-error seam, accountRepository's WRITABLE allowlist + accountBalanceSql extraction, plannedTransactionRepository/splitRepository atomics are the sanctioned pattern, categoryRepository's enrichCategory is presentational mapping, and small repos (attachment/savedCharts/tag/watchlist/settings/provider*/cashflowForecastAccuracy/importBatch) all conform; no hand-rolled HTTP status codes anywhere in the repository layer; `sanitizeUpdateFields` middleware imports remain the known 2 files (no new violators found) · ADR-067 seams: all 13 seam files are pure re-exports; no service imports routes/ or middleware/; bankAdapters.js is a pure 4-symbol shim; the attachmentService/attachmentRecordService split is genuinely clean; dataImportService cohesion is good · dead-export scan: every export in services/, repositories/, lib/, utils/ besides the ones filed above has ≥1 live src consumer (portfolioMath's live core = toYmd, sanitizeIsolatedValueSpikes, calendarDaysBetween, computeMetrics, computeHeatmap, sanitizeSnapshotSpikes).
-
-**Code/architecture 2026-07-03 — residue follow-up (frontend, A3–A5):** `lib/belgianTax/` is an exemplary pure-logic module (pit.ts = 9 focused pure helpers + one linear orchestrator; constants.ts data-only; zero React/store imports; 1200+ lines of tests) · `aiChatStreamStore` is a deliberate, sound hand-rolled store (documented non-zustand rationale, leak-safe Set+unsubscribe, `useSyncExternalStore`-driven; only the per-token cache-dirtying is filed as a Finding) · lib/ dead-file sweep: 0 dead of 64 (scripted alias+relative+barrel resolver with fixpoint alive-propagation) — lib/research/, lib/tax/, lib/devtools/ are all cohesive and consumed (the sweep did not extend to features/, stores/, or hooks/ — noted under Still-to-research) · the 7-primitive shadcn ui deadlist is CONFIRMED (all lazy loading is route-path-keyed; no barrel, no storybook) · components/ui/sidebar.tsx confirmed stock shadcn (styling-only divergence) · settings sections are 7/7 on the SettingsPrimitives scaffold aside from the two straggler headers already filed elsewhere; statistics chart architecture is correct; admin pages are structurally distinct (no shared scaffold warranted, no polling); research-page table/chart internals differ structurally (no shared scaffold warranted) · prop drilling: DashboardPage is clean (all children 1-level leaves); portfolio-overview's second hop is intra-file and justified by PerformancePage reuse — no bypassed context on either tree · useStatistics has no duplication with lib/api/aggregations (server aggregates, hook reshapes) · watchlist types are clean end-to-end (FE type ↔ route ↔ repository); remaining lib/api/*.ts modules have no further structural twins vs types/ beyond the ones filed; owed summary/detail + AI-chat turn/SSE/conversation transport contracts checked; locale generation is genuinely single-source (scripts/generate-locales.js writes both FE TS and electron JSON); gitleaks live in CI + pre-commit; ADR-105 token values verified.
-
-**ADR re-run verdicts (2026-07-03, promoted from Still-to-research):** ADR-092 (liabilities-as-negative-accounts) vs. ADR-089 (account-typed-model): no contradiction — type-based cash-widget exclusion (infoRepositoryBanks.js:42,56) is exactly ADR-092's prescription; ADR-089 only bars schema branching on type (nuance: the net-worth "liquid" bucket is type≠liability, ignoring `liquidity_class`, so an illiquid pension counts as liquid headline — a naming nuance, not a conflict) · ADR-093 (net-worth/liquid-assets): code matches ADR — netWorth = liquid + liabilities + investments (infoRepositoryNetWorth.js:224-226); bank side Σ over `in_net_worth=true` accounts (:94); liabilities split as a negative-type bucket (:92,:197); investments from snapshots with forward-fill + live-summary overlay on the latest point (:207-244); consistent with ADR-093 incl. its ADR-100 follow-on note · ADR-099/104/105 (sidebar/visual redesign): ADRs match reality — 099 is IA-only (rail styling never specified; the post-ADR flush 2px active-rail at AppSidebar.tsx:65-74 is documented, not drift); 104's three 2026-06-24 addenda match code exactly (`colorblindGainLoss` default `false` at settingsStore.ts:107, UI at AppearanceSection.tsx:205-227); 105 unconditional as stated (tokens.css:58, card.tsx:9), only cosmetic line-citation drift in its text (099's stale "Proposed" status filed separately under Stale docs) · ADR-102 (unified-tax): fully removed functionally — zero remnants in code, i18n keys, openapi, or migrations; ADR-098 correctly bannered "Superseded in part" (two stale file-header comments filed separately under Stale docs) · ADR-103 (per-account holdings flag): default OFF on every surface — `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is frontend-only by design (ADR-103:52-53), `booleanEnv(false)` at lib/env.ts:65, absent from settings store/UI, .env.example, compose files, and packaging; no Dockerfile pass-through ARG so image builds are hard-OFF.
-
-**Architecture & code design research 2026-07-06**
-
-**Wave W1 checked clean (don't re-audit):** Mount-level resource naming is uniformly plural kebab-case with no camel path segments anywhere (`main.js:310-342`: `/api/planned-transactions`, `/api/saved-charts`, `/api/cross-workspace`, `/api/recipient…/bank-accounts`, `/net-worth/by-account`, `/transfer-suggestions`). PUT-vs-PATCH semantics are sound and consistent: PATCH is used for partial updates on every entity (transactions, recipients, categories, tags, accounts, planned, watchlist, investments, parsers, charts, conversations), PUT only for genuinely idempotent upserts (`routes/settings.js:209,222`, `routes/research.js:258` provider-keys) — no drift found. 404-on-missing via thrown `NotFoundError` (never 200-empty) is universal across all getById/update/delete handlers. 201-on-create is applied at every unconditional-create site (12+ handlers) and 202-for-review-required is used identically by both import pipelines (`routes/importRoutes.js:60,139`, `routes/portfolioImportRoutes.js:155`). `parsePagination` itself is sound (NaN-safe, floor/clamp, per-resource `maxLimit`, `lib/pagination.js:17-33`) and every adopter passes a maxLimit. The free-text `search` filter convention is uniform where it exists — same param name, same 200-char slice — across transactions/recipients/categories/planned (`routes/transactions.js:94`, `routes/recipients.js:41`, `routes/categories.js:21`, `routes/plannedTransactions.js:162`); `q` is reserved for market/research symbol search, a reasonable domain split. `sort_by`/`sort_dir` with an asc/desc whitelist is consistent across the domain listers that sort (`routes/transactions.js:96-97`, `routes/recipients.js:44-45`); the only camel sort params are the admin dbEditor's (covered in the casing finding). SSE plumbing (shared `createSseWriter`, identical headers incl. `X-Accel-Buffering: no`, `progress` events via shared `progressToPercent`, guarded `writer.closed` checks, `writer.end()` termination) is structurally consistent across all three streams. Envelope adoption and netWorth pagination shape were excluded per brief and not re-examined.
-
-**Wave W2 checked clean (don't re-audit):** Money/quantity column types — NUMERIC everywhere for monetary values; the only float usages are non-monetary statistics (`DOUBLE PRECISION` mae/rmse/mape `0012:28-30`, `REAL match_similarity` `0015:87`, `0040:90`) — sound. Business dates are consistently `DATE` and event timestamps consistently `TIMESTAMPTZ` on all core tables; the two naive-TIMESTAMP incidents (0002 feature_flags — since dropped in 0011; 0030 user_settings) were remediated by `0032_user_settings_timestamptz.py`, and no naive TIMESTAMP remains in the active chain. FK ON DELETE policy is coherent, not ad-hoc: CASCADE for owned children (attachments 0004, splits/payments 0019, tags junctions 0031, staging rows 0040), SET NULL for soft references (category refs made explicit in 0048, transfer peer 0044:51, pattern refs 0015), RESTRICT for history-protecting account ownership per ADR-087 (0050:112-120, 0052:76) — each choice justified in the migration docstring. Currency integrity chain is exemplary: backfill → NOT NULL + DEFAULT + `NOT VALID` ISO CHECK (0046) → `VALIDATE CONSTRAINT` (0049:63) → same convention on accounts at birth (0050:102); the 0028 split-amount CHECKs were validated in the same revision (0028:30,38) — no orphaned NOT VALID constraints exist. `0022_updated_at_not_null_defaults.py` systematically fixed nullable `updated_at` across 9 tables with per-table backfill sources. `price_provider` enum values agree exactly with the app list (`priceProviderService.js:43-47`, frontend `types/api.ts:349`); saved-chart type/variant/bucket values are app-validated (`routes/savedCharts.js:12-16`); `user_settings.value` JSONB gets per-key server-side validation for the risky keys (`routes/settings.js:190-207`). JSONB usage overall is confined to caches, audit payloads, tool args, and parser configs — no domain data hides in JSONB, and `custom_parser_configs.config_json`'s per-kind shape is documented (`data-model.md:811`). The 4 live matviews follow one naming convention (`mv_<subject>`, unique index `mv_*_idx`, `materializedViewService.js:14-17,53-118`) and their column contracts are documented in `docs/performance/materialized-views.md:30-90`. Raw bank tables share a consistent skeleton (id, `deduplication_hash` UNIQUE, `created_at` NOT NULL, `raw_csv_line`, NUMERIC(15,2) amounts). Table naming is consistently plural snake_case for entity tables (singular only for audit/infra: watchlist, split_audit, db_editor_audit, provider_health, provider_quota); `*_id`/`*_at` column conventions hold throughout; index naming is 134× `idx_*` with only 2 stray non-legacy outliers (filed above).
-
-**Wave W3 checked clean (don't re-audit):** The **bank-adapter code seam** itself is the repo's best extension story — 2 touchpoints (new `adapters/<bank>.js` + one array entry in adapters/index.js:19), with detection, staging, hashing, dedup, and the UI picker all derived (adapters/index.js:41 `listAdapters` → routes/info/statistics.js:35 → useAdapters.ts:20; shared parsing skeleton in adapters/_shared.js keeps per-adapter files ~90-135 lines of genuinely bank-specific logic) — only its docs/legacy residue is dirty (filed above). The **AI-chat tool seam** is equally good: a tool is one colocated `{name, description, parameters, run}` object (e.g. insights.js:23-58) plus one `TOOLS` entry (tools/index.js:56-87); schemas ship to the LLM via `getToolSchemas()` (:92), the system prompt derives tool names (integrations/ollama/prompts.js:61-63), and the frontend ToolResultCard is fully generic via `meta.renderAs` (ToolResultCard.tsx:96-125) — zero frontend/i18n edits per tool. The **dashboard-widget seam** is clean: page-local `WidgetDefinition[]` (DashboardPage.tsx:42) + `isVisible()` guards, generic WidgetVisibilityDialog and a single backend settings key (useWidgetVisibility.ts:4) — one file plus an i18n label per widget, no cross-file registry. The **i18n seam** (light check) is documented (docs/i18n/, `i18n` skill) and mechanically enforced: `validate-locales` runs in CI (.github/workflows/ci.yml:233) and builds regenerate locales (package.json:17-22). The **research-provider cluster** (distinct from price providers) is well-factored: adapter map (research/providerRegistry.js:32-40), quota limits (quotaGovernor.js:26-30), env-key gating (providerKeys.js:18-24), and capability chains (capabilityMap.js) are four small colocated maps, and the Settings keys UI is fully API-driven (ResearchKeysSection.tsx:55 maps `data.providers`).
-
-**Wave W4 checked clean (don't re-audit):** Suite topology is deliberate and consistent — backend: 159 files / ~2,405 cases in `apps/node-backend/tests/` (flat + `routes/ services/ property/ golden/ setup/` subdirs, zero colocated in `src/`); frontend: 134 files / ~1,839 cases colocated in `__tests__/` dirs next to source; e2e isolated in `apps/frontend/e2e/` — three clearly separated layers with the pyramid weighted correctly at the base (the hole is the integration middle, filed above). The golden + property layer is genuinely well-designed: `tests/golden/INVENTORY.md` is a per-function coverage lock table ("any new calc must append a row before merge") over `src/services/calculations/`, with `runGolden.js` fixtures + `UPDATE_GOLDENS=1` re-baselining and 7 fast-check property suites (`tests/property/`) covering money round-trips, loan schedules, splits invariants, recurrence — money math and dedup hashing are exercised for real, not threshold-padded. The frontend test stack is coherent and single-patterned: RTL + userEvent + shared `src/test/renderWithApp.tsx` (used with `QueryClientProvider` plumbing across 59 files) + MSW at the HTTP boundary with `onUnhandledRequest: "error"` (`src/test-setup.ts:36`), per-test `server.use()` overrides, a chaos layer (`src/test/msw/chaos.ts`), and `src/test/msw/contracts.test.ts` explicitly guarding fixture shapes against the backend contract — plus `src/types/contract-guard.ts`, a smart type-level device making the OpenAPI-generated types load-bearing. The frontend coverage config is honest by design (explicit include + documented ratchet, `vite.config.ts:136-146`). No module-scope `setInterval`/singleton side effects were found in backend `src/services|config` that force test gymnastics; the 34 files using the `vi.mock`-then-`await import()` dance are standard vitest hoisting, not a seam defect. `playwright.config.ts` is sane (CI retries, trace-on-retry, local `webServer` boot, global-setup onboarding flag — known).
-
-**Wave W5 checked clean (don't re-audit):** Backend logger _adoption_ is total and disciplined — 0 raw `console.*` in `apps/node-backend/src/` (excluding logger.js itself) vs 286 `logger.*` calls across 69 files, with consistent level semantics including the deliberate warn-for-4xx / error-for-5xx split in `errorHandler.js:102-103`, and the convention is documented (`docs/guides/backend-configuration.md:70-103`); logger.js's direct `process.env` read is a documented bootstrap exception (`env.js:8-9`). Routes' typed-error discipline is excellent: 236 typed throws vs 1 raw `throw new Error` in `src/routes/`, and the errorHandler normalizes non-Error throws and headersSent correctly (`errorHandler.js:90-96`). Frontend env is a genuine registry: `lib/env.ts` mirrors the backend Zod pattern with fail-fast aggregation, and the only stray `import.meta.env` reads outside it are justified (`lib/logger.ts` bootstrap exception documented in env.ts:6-8; `import.meta.env.DEV` guards in App.tsx:73, ErrorBoundary.tsx:29, skin.ts:50); frontend console hygiene is clean (5 sites). `providerKeys.js` reading `process.env` is justified by design (injectable `env` param default, dynamic provider→var map unfit for a static Zod schema, precedence documented in its header). Zero `@ts-ignore`/`@ts-expect-error` in backend src. Locking where it matters exists: FOR UPDATE in splits, both merges, transfer reconciliation, dbEditor, account rename (`accountRepository.js:118`). Timezone/clock: ADR-009 + `src/lib/timezone.js:1-9` state the convention ("no raw `new Date()` + offset arithmetic in calc modules"), APP_TIMEZONE is validated at boot (timezone.js:14-25), and the testing seam is coherently fake-clock-over-DI — 76 `vi.setSystemTime`/fake-timer sites pin the 167 `new Date()` + 66 `Date.now()` direct calls, so no injection seam is needed; this is architectural, not ad-hoc. `dbEditor.js` manual BEGIN/COMMIT/ROLLBACK with READ ONLY reads and xmin optimistic checks is correct. Planned-transaction execute is idempotent by unique index with a shared single-source service (`plannedExecutionService.js:1-13`).
-
-**Wave W6 checked clean (don't re-audit):** aiChat module decomposition — orchestration (`aiChatService.js` runChatTurn/runChatTurnInner, ~180 cohesive lines with persistence + loop + streaming switch), prompt assembly (pure, I/O-free `integrations/ollama/prompts.js`), transport (`integrations/ollama/client.js`), and tool registry (`services/aiChat/tools/index.js`) are cleanly separated with one-directional dependencies; no god function found. The tool-execution pipeline is coherent end-to-end: shared validators (`tools/_validate.js`) throw a stable `ToolValidationError`, the dispatcher never throws and shapes all failures into `{ok:false, error:{code}}` (index.js:125–170), and — notably good — the system prompt documents exactly the error codes the dispatcher produces, forming a written model-facing retry contract (prompts.js:35–38 ↔ index.js VALIDATION_ERROR/UNKNOWN_TOOL/TOOL_ERROR); all 29 tools return the uniform `{ok, data, meta}` envelope with `meta.renderAs` (31 sites verified). Prompt management is a single template constant with one placeholder, not concatenation soup; pure and unit-tested (`tests/prompts.test.js`); English-only and unversioned are explicit v1 decisions (prompts.js:9, 23). The SSE protocol _is_ written down — route header (ai.js:16–27), full event table with payload shapes in `docs/api/ai.md` (~183–225), and a typed discriminated union on the frontend (types/aiChat.ts:82–86) — the W6 finding is about single-sourcing, not absence. Message persistence shape is sound (ai_messages role/content/tool_name/tool_args/tool_result/status, camelCase-aliased at the repo boundary, aiChatRepository.js:6–21) with mid-stream conversation deletion mapped to a clean 410 (aiChatService.js:165–182). `toolCache.js`/`_portfolioFetch.js` memoization is a well-documented, promise-sharing seam. Electron: preload.js is a coherent, fully JSDoc'd four-namespace surface (electronUpdater/electronBackup/electronAPI/electronRecovery) with consistent unsubscribe-returning subscription helpers (preload.js:143–168); IPC naming is uniformly `namespace:verb` across all 20 handlers and all 6 main→renderer channels, all request/response via `invoke` (zero `ipcMain.on`); the demo app does **not** fork main.js — one shared file, 4 `__IS_DEMO` branches; the renderer's optional-member typing in electron.ts is a deliberate old-shell compatibility strategy that works.
-
-### 🏗️ DevOps / CI-CD / Packaging
-
-**DevOps research 2026-07-03**
-
-**Wave D1 checked clean (don't re-audit):** All actions in all five workflows are SHA-pinned with version comments, and dependabot's `github-actions` ecosystem keeps them updated (grouped, weekly). Every workflow has top-level `permissions: {}` deny-all with per-job least-privilege opt-ins (`security-events: write` only for SARIF uploads, `packages: write` only for the GHCR push, `contents: write` only for release creation); no `pull_request_target` anywhere; auto-merge's dependabot token-elevation pattern matches GitHub's documented recipe and `github.actor` gating is safe. Every job has `timeout-minutes`; ci/e2e/release have sane concurrency groups (release correctly uses `cancel-in-progress: false`). Bun cache (`~/.bun/install/cache` keyed on `bun.lock`) present in all bun jobs; docker builds in ci/release use `type=gha` layer cache. CI genuinely runs all the quality gates that exist as scripts: frontend+backend lint, frontend `tsc` typecheck, backend JSDoc `tsc --checkJs`, frontend tests+coverage gate, backend vitest+coverage thresholds (85/75/85/88 in `apps/node-backend/vitest.config.js`), frontend prod build, `validate-locales`, OpenAPI-type drift, endpoint-matrix count, compose-volume sync (the v1.0.2 guard), gitleaks, bun audit, pip-audit, Trivy. Backend vitest is unit-level (no PG service container) but real-Postgres coverage exists: `docker-verify` boots the real compose stack (migrations run to head on boot), round-trips `alembic downgrade -1 && upgrade head`, and `test-live-api-contracts` runs MSW fixture schemas against the live backend. Playwright config has CI retries (2) and trace-on-first-retry; e2e report artifact retention 14 days is reasonable. Root `Dockerfile` base images are digest-pinned. Release verifies tag == root `package.json` == electron `package.json` (per packaging rules) and stages sha256 checksums. Draft-PR skip logic evaluates correctly on push events. Deliberate-by-design (per known context, not re-reported): CodeQL JS/TS-only/security-extended/build-mode-none, artifact-quota reds on Build Docker Image, patch/minor-only auto-merge, commitlint enforced only via a local git hook (not CI-required), stryker mutation testing wired into no workflow. (2026-07-03 residue additions:) branch protection is now live-verified — ruleset "Protect main" fully enumerated (deletion/creation/update, linear history, required signatures, PR-required with 0 approvals + all merge methods, `code_quality: errors`, `code_scanning` CodeQL+Trivy, non-FF, required check `CI Complete` strict; bypass = admin `always`; `allow_auto_merge: true`; repo public) — closing the "not codified or verified anywhere" gap named in the Findings above; `vitest-coverage-report-action` (pinned SHA v2.12.0) verdict is benign/no-defect — on push events it skips PR comments and writes only the step summary, and a missing coverage-summary.json calls `setFailed` but the job is already red under `if: always()` from the failed test step (nit: `success() || failure()` would be cleaner than `always()`, which also fires on `cancelled`); fast-uri tree resolves only to the patched `3.1.2` (both ignored GHSAs are moot in-tree — see the Findings verification note).
-
-**Wave D2 checked clean (don't re-audit):** Dockerfile multi-stage layer ordering (manifests-before-`bun install`, sources after — dependency layer not busted by source edits; both stages `--frozen-lockfile`, stage 2 `--production`); non-root runtime end-to-end (`USER bun` + `chown` + compose `user: 1000:1000`, `read_only: true` with explicit tmpfs/volumes, `cap_drop: ALL`, `no-new-privileges`, ports bound to `127.0.0.1`); entrypoint hygiene (`set -e`, `exec bun` so signals reach the app; `main.js:548-549` handles SIGTERM/SIGINT with re-entrancy-guarded drain); DB wait + migration-at-boot design (checkConnection retry loop, skip-at-head cache in `migrate.js` with fingerprint invalidation, legacy-revision normalization); Puppeteer setup (system Chromium, `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`, `--disable-dev-shm-usage`); postgres 18 volume path `/var/lib/postgresql` (correct for the v18 image layout); app HEALTHCHECK endpoint/params sane (`/health`, start_period 20s); root↔packaged compose volume lists in sync (postgres_data/attachments_data/vision_cache_data — no drift beyond the `name:` finding above); `docker-compose.clean.yml` properly isolates via named `vision_postgres_data_clean`; `.env.example` ships placeholders, no default credentials; `install.sh` overall (bash strict mode, refuses blind curl|bash with checksum/confirm path, Docker daemon wait loop, idempotent re-run). (2026-07-03 residue additions:) `alembic/env.py` + `alembic.ini` — fail-fast `DATABASE_URL`-only construction (no fallback credentials), atomic multi-revision upgrades (whole `upgrade` wrapped in one `context.begin_transaction()`, so a mid-migration failure rolls everything back cleanly and a retry starts from a consistent state), WARNING-level engine logging (no URL/password echo), harmless SQLite `render_as_batch` path; Electron orchestrator failure surfacing confirmed good — boot `pollReady` timeout falls through to a localized `error.html` with Retry, and a post-boot health watchdog emits `backend:lost`/`backend:restored` to the renderer (detection is HTTP `/health`-only, no Docker restart-count reads — see the Findings note); bun-as-PID-1 static verdict clean (`exec bun run <file>` — file-path form runs in-process, no npm-script shell interposed — empirical in-container verification still open, see Still-to-research); GHCR publish (multi-arch amd64+arm64, semver-tagged, Trivy re-scans the pushed image by digest) is solid — the only gap is the packaged app pulling by mutable tag (already filed); `docker:dev` ↔ packaged-app volume sharing via a shared project name is confirmed intentional design (`docker-compose.dev.yml:1-10`, "single source of truth") — the dirname-fragility itself is still a filed finding.
-
-**Wave D3 checked clean (don't re-audit):** release.yml verify job's tag==root==electron package.json version guard (lines 75-90) and compose-volume sync gate at release time; CI migration reversibility check (`ci.yml:559-567`, downgrade -1 → upgrade head); git-hook machinery (`scripts/setup-git-hooks.js` idempotent/CI-safe; `.githooks/commit-msg` commitlint, `.githooks/pre-push` typecheck×2 + endpoint-matrix + locales + backend tests with sane skip/bypass semantics); `scripts/check-endpoint-matrix.js` and `scripts/validate-locales.js` (sound, wired into CI + pre-push); `packaging/release/vision-setup.command` (robust: strict mode, arch detection, Docker wait, graceful pull failure) and `packaging/release/README.md` accuracy vs the embedded compose (`name: vision` project + volume names all match); update-ZIP handling security (mandatory sha256 verify, zipinfo path-traversal check, rsync rollback in the generated installer); `packaging/electron/demo-db/regenerate.sh` design (throwaway DB, wide alembic_version workaround, reload-validate + sanity checks); `electron-builder-demo.json` isolation (separate appId/output/resources-demo); all `bun run`/`node scripts/` targets referenced by workflows exist (no missing scripts); embedded vs root compose volume parity is currently green. (2026-07-03 residue additions:) the "never audited" claim on `packaging/electron/backup/bundle.js` was stale — it was fully reviewed (correctness axis) in Wave 2b; re-audited here for build wiring only and clean (globbed in both builder configs, require path resolves, prod-dep bundling correct); `preload.js` + `assets/error.{html,css,js}` fully wired, CSP-clean, no XSS, localized correctly, `electronRecovery` exposed (`preload.js:175-188`), preload security posture good (contextIsolation/sandbox on); `.githooks/pre-commit` read in full (132 lines) — staged/unstaged split correct, `SKIP_HOOKS`/`ALLOW_BIG_FILES` semantics sound (aside from the two nits filed); `index-stats.js` + `check-precision-drift.js` (the other two `apps/node-backend/scripts/` files) are read-only and clean; `generate-locales.js` determinism + escaping clean; demo `generate.mjs` determinism clean (mulberry32 seeded, no `Math.random`, no real PII, escaping + sequence resets — aside from the `TODAY`/`alembic_version` staleness filed as a Finding); `sync-nl-with-en.js` correctly never overwrites a non-empty NL value (aside from the unsorted/no-prune/raw-throw nits filed); all other `docs/reference/scripts.md` rows verified verbatim-accurate; update-UI mode handling inside Electron itself is clean (the bug is the backend/web-facing `update_mode` gate, filed as a Finding); `electron-builder` demo-vs-real glob consistency clean; release.yml's GHCR job fully verified (multi-arch, semver tags, digest-scanned by Trivy); e2e wiring statically checks out — browser install matches pinned Playwright 1.60.0 (`bun.lock:434`), `PLAYWRIGHT_BASE_URL`/CI env (`e2e.yml:86-88`) matches `playwright.config.ts:3-5` (`webServer` omitted under CI), `global-setup`'s onboarding PUT passes `csrfGuard.js:42` (origin-less clients admitted), stub `.env` byte-identical to `docker-verify`'s, all 6 specs exist (no `.only`, no hardcoded ports), artifact paths correct; coverage reporters/paths verified sane in both workspaces.
-
-**Wave D4 checked clean (don't re-audit):** `.devcontainer/init-firewall.sh` (fail-closed default-deny before flush, proxy-UID-only OUTPUT, 3-invariant verification + sentinel), `squid.conf` (peek/splice SNI allowlist, HTTPS-only, metadata-IP deny, no MITM), `entrypoint.sh` (firewall-before-network ordering, squid supervision + log rotation, graceful SIGTERM, empty-volume Postgres adoption), `perms-fix.sh`, `launcher-common.sh` (staging strips `.credentials.json`/`.oauthAccount`/`.projects`/hooks; token forwarded name-only, never in argv), `bin/claude` (RO `.devcontainer`/`.git` mounts, mandatory verify-pins gate, opt-in autosync, RO memory seed + interactive-only pushback), `bin/doctor`, `bin/verify-pins`, `.devcontainer/.dockerignore`; version parity is GOOD — bun 1.3.14 = CI, PostgreSQL 18 = prod, both SHA-pinned; full dev loop (dev server, backend tests, alembic migrations) works in-container. No generated dirs tracked (`coverage/`, `dist/`, `venv/`, `node_modules/`, `.playwright-mcp/` all 0 tracked files); `.env`/`.env.local`/`.env.production` ignored, `.env.example` placeholder-only; secrets grep over tracked files clean; no `*.sha256`/`.DS_Store`/`__pycache__` tracked; `*.csv` global ignore is a deliberate PII guard (no CSV fixtures exist — adapter tests use inline strings); repo pack 17 MiB / .git 24 MB, largest blobs are the demo SQL + icon.icns (acceptable). (2026-07-03 residue additions:) the upstream `devcontainer-egress/` sync source repo is **LockBox** (`/Users/computer/Code/LockBox`, remote `EraPartner/Lockbox`), vendoring direction LockBox→project with cmp verification — read-only `sync.sh --check` shows all 6 vendored copies + allowlists IN SYNC, zero drift; host sync push-path guards (snapshot-abort, hooks/mcpServers/plugins sanitized on push), `vision-claude.fish`, `guard.mjs` rule compilation + fail-open behavior (all 14 regexes compile; malformed payloads correctly fail open into the normal permission flow), electron `main.js` env handling (0600 modes, no-overwrite key merge, subprocess allowlist) all clean; no `.vscode/` + no `devcontainer.json` is coherent, not a gap — the sandbox runs on apple/container, which VS Code/Codespaces can't attach to (and Codespaces would sidestep the egress lock anyway).
-
-## Refuted — do NOT re-add
-
-Investigated and disproven; kept for transparency.
-
-**Codebase audit 2026-06-30**
-
-- **"'Failed to load' copy shown for legitimately empty data, not just real errors" (`RecipientInsightsPage.tsx:145-151`)** — **REFUTED.** The guard `if (isError || !filteredData)` was claimed to fire on legitimate emptiness, but the backend (`infoRepositoryRecipients.js:161`) always returns a defined object (`{topMerchants: [], monthOverMonth: []}`) even with zero recipients — never `undefined`/`null` — and React Query only returns `data === undefined` when the query is actually in an error state. So `!filteredData` never fires independently of `isError` given the current API shape; a fresh install with zero recipients renders the real (mostly-empty) page, not a false "failed to load." The `!filteredData` check is redundant dead code worth removing for clarity, but it is not causing the user-facing bug originally described.
-
----
-
-**Performance research 2026-07-02**
-
-- **"Manual transaction edits never reach the MV-refresh scheduler; `scheduleAggregationRefresh` has zero transaction-route callers, so MVs go stale until the next import/restart"** — **REFUTED** by direct grep: `routes/transactions.js` calls `scheduleReconcile()` at 9 sites (lines 225-645), and `transferReconciliationService.js:233-235` chains `reconcileTransfers().finally(() => scheduleRefresh())`. The real situation is the _opposite_ problem — every edit triggers a full reconcile + 4-view refresh (filed as the ⏫ infra finding above). The narrower, still-true gap (single-transaction mutations never clear the _Monte Carlo_ cashflow cache) was already filed in the 2026-06-30 audit and stands unchanged.
-
-**Performance research 2026-07-05**
-
-- **"First navigation should stop waiting for the materialized-view refresh"** — **CLOSED AS WONTFIX 2026-08-01.** Three warm Demo runs measured only 33–38 ms between the first HTTP response and `caches.materializedViews:true`, with backend refresh logs at 31 ms. This is below the Electron poll quantum and buys a guaranteed populated first dashboard. Reopen only if an instrumented real-data boot measures more than about 200 ms.
-- **"The singular bank-account filter should use exact matching"** — **REFUTED 2026-07-14.** The singular `bank_account` parameter is an intentional free-text substring escape hatch. The account dropdown already uses the exact, indexed multi-value `bank_accounts IN (...)` path, so the claimed ordinary-list over-match does not occur.
-
-## Stale docs — KB updates (not code bugs)
-
-- [x] Three KB pages link `apps/node-backend/src/services/filterBuilder.js`; the file actually lives at `apps/node-backend/src/lib/filterBuilder.js`, so the wikilinks are dead. ⏬ (↪ _from: Orchestration session 2026-08-11 · noticed while closing the recipientGroupId residue_) — note this finding's own evidence lines carry the same wrong path, so fix them in step.
-- [x] `docs/reference/repository-layer.md`'s transactionRepository section describes a `hidden` boolean soft-delete column; the actual column is `is_active`. ⏬ (↪ _from: Orchestration session 2026-08-11_)
-
-**Orchestration session 2026-08-10 (noticed during the id-validator docs sync)**
-
-- [x] `docs/api/recipients.md` documents the pattern sub-routes' success responses swapped: the `PATCH /api/recipients/:id/patterns/:patternId` section says `204 No Content` while the `DELETE` section says `200 OK` with `{ "patternId": 1 }`. The code is the other way round — `routes/recipients.js` PATCH calls `res.ok({ patternId })` (200) and DELETE sends `res.status(204)`. Swap the two.
-- [x] `docs/api/recipients.md:109,308` still show `"code": "APP_ERROR"` for `Recipient not found` and `Missing required field: pattern`. Neither is what the error handler emits — `NotFoundError` and `ValidationError` set `NOT_FOUND` and `VALIDATION_ERROR` respectively (`middleware/errorHandler.js`). The two `patternId` snippets in the same file were corrected on 2026-08-10; these were left because they were outside that task's scope.
-
-**Orchestration session 2026-07-27 (noticed during migration-guard work)**
-
-- [x] `alembic/versions/0011_drop_feature_flags.py` docstring cites ADR-034 (admin-environment) but the feature-flag removal is ADR-035 — apparent off-by-one; correct the reference.
-- [x] `docs/guides/cicd-pipelines.md` "Trigger" snippet still shows a top-level `paths-ignore: [docs/**, *.md]` that ci.yml explicitly removed (its header says never to reintroduce it — it strands the required "CI Complete" check). Update the snippet.
-- [x] `docs/guides/migrations.md` "Migration Inventory" table stops at 0024 while the chain is at 0082 — either extend it or replace with a pointer to `alembic/versions/`.
-
-**Codebase audit 2026-06-30**
-
-- [x] `docs/reference/code-patterns.md` still warns about old shim duplication (`loanRepaymentService.js`/`recurrenceService.js` vs. their `calculations/` replacements) that was fully removed in the Phase 9 cutover (commit `65d3dac0`) — doc is stale, code is clean. Update the doc. ⬬ 🔎 verified-present 2026-07-11 _(re-confirmed during verification: code is clean, doc is the only thing stale)_ ✅ 2026-07-14 · 55d9364 (#93) (stale Phase-9 shim paragraph removed)
-- [x] `docs/adr/101-db-data-editor.md:45-47` makes a false security claim ("a hostile WHERE clause can therefore neither mutate nor hang the database") — see the SQL-injection finding at the top of this document. Correct the ADR text alongside the code fix. ⏫ ✅ 2026-07-11 · 8555ede (#82) _(found during verification)_
-
-**Code/architecture 2026-07-03 (ADR re-run nits)**
-
-- [x] ADR-099 (sidebar/IA redesign) still lists its status as "Proposed" even though the post-ADR sidebar (flush 2px active-rail, `AppSidebar.tsx:65-74`) has shipped and matches reality — update the status field. ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 55d9364 (#93) (ADR-099 status → Accepted)
-- [x] Two stale file-header comments still describe the removed unified-tax feature (ADR-102, confirmed fully removed functionally): `apps/frontend/src/lib/api/crossWorkspace.ts:2-3` and `apps/node-backend/src/services/crossWorkspaceAnalytics.js:4`. ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 55d9364 (#93) (crossWorkspaceAnalytics header unified-tax note removed (ADR-102)) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — apps/frontend/src/lib/api/crossWorkspace.ts:2-3 still describes the removed unified-tax view as a current feature; the item named this file explicitly and it was never touched.) ✅ 2026-08-11 · 2d24be67 (#163) (frontend half done — `crossWorkspace.ts:2-3` no longer describes the unified tax view as a current feature; it now names what the module does today (cash-aware rebalancing composing Budgeting + Portfolio) and points at ADR-102 as what removed the rest, matching how the already-fixed backend counterpart words it. Comment-only; lint + typecheck clean)
-
-## Research context & coverage notes
-
-_Scope, method, sub-topic labels, and caveats from the original research passes. Archive — safe to trim once findings are triaged._
-
-### Performance research 2026-07-09 (fresh-ground waves, sequential single agents)
-
-Method: sequential Explore agents (no fan-out, per user's credit constraint), findings written to this file between waves so any later agent can resume mid-pass (see the "Performance research 2026-07-09" resume-point block for the wave plan and where it stopped). Dedupe basis: full title extraction of the ⚡ Performance findings section + Checked-clean §⚡ + Refuted before each wave. **Wave F1 (migration-at-upgrade boot cost)** — first-ever audit of the pending-migration boot path (all prior startup passes measured only the skip-at-head fast path). Static sweep of `alembic/versions/0001-0064`, `alembic/env.py`, `migrate.js`, backend `main.js` pre-listen ordering, and the Electron poll budget. Key structural facts established: the whole pending chain runs as ONE Postgres transaction (`env.py:128`, no `transaction_per_migration`); migrate.js kills alembic at 120s; packaged updates poll with the 60s (not 3-min) budget. 3 findings filed 🔺/⏫ + 3 grouped 🔼; checked-clean and residue recorded in their sections. No live timing — demo DB too small to exercise any of it. **Wave F2 (backend residues)** — closed the four explicitly-open backend residues from prior passes: `transactionExport.js` streamer perf internals, the three "judged small by domain" repository methods (`getOwedSummary`/`attachmentRepository.listByTransaction`/`savedChartsRepository.getAll` — all clean), perf-lens read of `controllers/`/`jobs/`/`startup/`/`integrations/` internals (clean beyond already-filed items), and dbEditor/admin route paging + audit growth. 5 findings filed, all 🔽/⏬ (admin-only or scaling wrinkles) — the backend residue space is essentially clean. **Wave F3 (frontend residues)** — closed the five explicitly-open frontend residues: search-box debounce path (cadence fine; missing abort + min-length gate filed ⏫), `PlannedPaymentForm` keystrokes (clean), `useUpcomingPlannedPayments` snapshot (clean), AI-chat components (ToolResultCard re-reconcile filed 🔼; no markdown-parser-per-token, conversation switching cached), and the Electron vibrancy-tier × glass interaction (double-blur stacking filed 🔽; Wave A residue closed). 4 findings filed. **Wave F4 (adversarial fresh-ground sweep)** — exclusion-map-driven hunt across Dockerfile/update-pull, middleware chain, workspace/cluster/backfill/planned services, shared-utils hot paths, Electron IPC chatter, and unfiled pages. 1 finding (⏬ FIFO/LIFO O(B²) lot tracking); everything else cleared with evidence. Conclusion recorded in the resume-points block: static fresh ground is essentially exhausted — next value is implementation + the live-measurement residues.
-
-### UI/UX review 2026-07-10 (closing the static resume points)
-
-**Method:** sequential single agents (no fan-out), findings written to TODO.md §🎨 UI/UX & Design after each wave with a `Wave Rn` label; performance explicitly out of scope (already covered by the ⚡ passes). Targets = the "Remaining static gaps" resume points left by the 2026-07-03 audits, plus a sweep of frontend surfaces changed after 2026-07-03 (safeHref consumers, PlannedPaymentForm, UpdateNotification).
-
-- **Wave R1 (done):** MarkAsFiledDialog + BulkRecategorize/BulkRecipient/BulkExport field-level audit; raw network-error copy → toast sweep (`lib/api/client.ts` message inventory traced to ~50 `onError` sites). 5 findings filed (2 ⏫: raw error strings verbatim in toasts / 49 `[NL]` stub strings shipping to Dutch users), checked-clean block added. Residue: BulkTagDialog depth; backend requested/skipped counts for bulk ops.
-- **Wave R2 (done):** Electron native surfaces (menu language source, context menu, backgroundColor, badge, About panel) + TableDataEditorPage composition. 7 findings filed (2 🔼: native chrome language tracks OS locale not the in-app setting / no editable-field context menu), checked-clean block added. Residue: none new (backgroundColor flash finding carries a confirm-live caveat).
-- **Wave R3 (done):** full en/nl side-by-side read of all 22 never-eyeballed namespaces. 12 findings filed (1 ⏫: four outright mistranslations incl. "Openstaande verordeningen" as the Owes page title; 4 🔼: NL-vs-Belgian tax terms, "afhankelijken" calque, bronbelasting flip, splitsen-as-noun), checked-clean block added. Coverage: complete — this closes the last static resume point.
-- **Wave R4 (done):** post-2026-07-03 diff sweep (utils/safeHref.ts + its 5 consumers, PlannedPaymentForm default-date change, VirtualDataTable + NetSummaryCard a11y fixes). 2 findings filed (1 🔼: safeHref-rejected links render as dead-but-hoverable anchors, and protocol-relative feed URLs are wrongly rejected), checked-clean block added.
-
-**Status after this pass:** every static UI/UX resume point from the 2026-07-03 audits is now closed. What remains for UI/UX research is exclusively the **eyes-on Demo-app pass** and the **live-device verification** lists above (need a running app / real devices — grep can't judge them).
-
-### DB performance research 2026-07-06 (fresh-ground waves + first live EXPLAIN pass)
-
-**Method:** sequential single agents (no fan-out), findings written to TODO.md §⚡ Performance
-(DB items) / §🏛️ Architecture & API (Supabase/ORM assessment) immediately after each wave so
-progress survives interruption. Targets ONLY dimensions no prior pass covered. Already covered
-elsewhere — do NOT refile: FK-index sweep 0001→0064 (clean, §Checked clean ⚡ 2026-07-02 "DB"),
-filterBuilder predicate shapes vs indexes (search OR-chain ⏫, COUNT(*) OVER, COALESCE category
-filter, recipient OR, ABS(amount), bank-account ILIKE, sort expressions — all filed), MV refresh
-scheduling/debounce/statement_timeout (filed), import-pipeline per-row round trips (filed ×4),
-trigram index coverage (clean), pool sizing/withTransaction hygiene (clean), settings routes
-(clean), staging-table growth (filed), 6 unindexed FKs on delete paths (filed 🔽),
-planned/portfolio single-column indexes (filed ⬇), `agg_recipient_totals` trigger overhead
-(filed 🔽), `sync_account_id_from_bank_account` trigger SELECT-first (filed 🔽).
-
-**Live-measurement environment:** demo DB (`visiondemoapp-db-1`, PG 18.4, synthetic data,
-~1,051 transactions). CAVEAT: corpus is tiny — EXPLAIN validates plan _shape_ (seq scan vs index),
-not real-world latency; the user's real DB is larger. `docker start visiondemoapp-db-1`, then
-`docker exec visiondemoapp-db-1 psql -U ftm_user -d financial_transactions`.
-
-**Wave status (resume here if interrupted):**
-
-- Wave D1 — Postgres server & container config (postgres image tag/config in both composes +
-  demo compose, shared_buffers/work_mem/effective_cache_size defaults, autovacuum posture,
-  WAL/fsync settings, container memory limits, pool config vs server max_connections,
-  Alpine-vs-debian image implications): ✅ done 2026-07-06 — 7 findings filed in §⚡ (db image
-  never re-pulled by updater 🔼; random_page_cost 4.0 on SSD, no idle_in_transaction timeout,
-  no shm_size 🔽; unrotated db logs, musl collation image-swap hazard ⬇; 3s pg_isready forever ⏬)
-  - checked-clean block in §Checked clean ⚡ (stock defaults assessed against actual data size —
-    most genuinely don't matter; pool fresh angles clean; image/volume posture clean)
-- Wave D2 — live EXPLAIN + index-usage pass on demo DB (EXPLAIN ANALYZE the filed planner claims:
-  search OR-chain, COUNT(*) OVER, category COALESCE, ABS(amount); pg_stat_user_indexes for
-  never-used indexes = write amplification; MV REFRESH timings; table/index bloat check;
-  missing-stats check): ✅ done 2026-07-06 — all 5 structural planner claims CONFIRMED via
-  `enable_seqscan=off` (📏 verdict notes added to each filed item); 3 new findings filed in §⚡
-  (24-index write amplification incl. 2 exact duplicates 🔽; never-ANALYZEd small tables 🔽;
-  pg_stat_statements not installed 🔽) + checked-clean/measured block in §Checked clean ⚡
-- Wave D3 — schema fresh ground (MV _definitions_ themselves — the SELECTs behind the 4 MVs;
-  NUMERIC/date type choices vs query patterns; partial-index opportunities; trigger
-  aggregate-table design vs MV design coherence; index redundancy REMOVED from scope — Wave D2
-  covered it catalog-structurally): PLANNED
-- Wave D4 — Supabase + ORM switch assessment (local-first Electron architecture vs Supabase
-  hosted/self-hosted stack; raw-SQL corpus size vs ORM migration cost/benefit; alembic-in-a-Bun-repo
-  status quo; incremental alternatives e.g. typed query builder): PLANNED
-
-### Architecture & code design research 2026-07-06 (fresh-ground waves)
-
-**Scope:** architecture/code-design improvements on dimensions NO prior pass audited. The
-2026-07-03 Code/architecture pass (waves A1–A5) + its residue closure already covered:
-layering/boundaries, module cohesion/god files, dead code, FE API layer/types/stores/providers,
-features-vs-components org, envelope/error-code/shared-utils patterns, circular imports, env
-centralization, i18n pipeline, workspace topology — **do NOT re-report anything filed under
-§🏛️ Architecture & API with a 2026-07-03 or 2026-06-30 `from:` line, nor anything in
-§Checked clean → 🏛️.** Findings are single-pass research, not adversarially verified.
-
-**Method note for the next agent:** run waves SEQUENTIALLY (one subagent at a time, NOT fanned
-out — rate-limit conservation). After each wave returns, IMMEDIATELY append its findings to
-§Findings → 🏛️ Architecture & API (with `↪ from: Architecture & code design 2026-07-06 · Wave
-Wn` lines), its clean list to §Checked clean → 🏛️, its residue to §Still to research → 🏛️,
-and tick the wave checkbox here — so progress survives a context/session loss. If a box is
-ticked but no findings with that wave's `from:` line exist, the wave was lost mid-write; re-run it.
-
-- [x] **W1 — REST API design consistency**: resource modeling, naming (plural/singular, verb
-      actions), pagination/filter/sort param conventions, bulk-op shapes, status-code + query-vs-body
-      conventions, SSE endpoint patterns across all route files. Design quality, NOT openapi drift
-      (2026-06-30 covered drift) and NOT envelope adoption (A5 covered it). ✅ done 2026-07-06 —
-      17 findings filed (worst: 6 DELETE shapes, list-key drift, per-router casing split, bulk
-      partial-failure disagreement), clean + residue filed.
-- [x] **W2 — DB schema & data-model design**: table/column naming consistency, constraint/CHECK
-      discipline, enum-as-text patterns, jsonb usage, timestamps/audit-column consistency, the legacy
-      `investments` inheritance debt + side-table pattern as an architecture (not the crash gotcha),
-      matview design coherence. NOT migration downgrade fidelity (2026-07-02/05 covered it). ✅ done
-      2026-07-06 — 11 findings filed (worst: bank_account↔account_id dual-write has no tracked exit,
-      inheritance fork has no documented path out + data-model.md documents the legacy shape as
-      canonical, hard data-model.md drift incl. a fictional table), clean + residue filed.
-- [x] **W3 — Extensibility seams**: steps/touchpoints to add a bank adapter, price provider,
-      report section, AI-chat tool, i18n namespace; registration-pattern consistency; duplicated glue
-      per extension; whether docs match the real recipe. ✅ done 2026-07-06 — 6 findings filed
-      (worst: bank-adapter + api-endpoint doc recipes actively misdirect; price-provider seam = ~11
-      touchpoints; report-section IDs silently dropped on mismatch); adapter/AI-tool/widget seams
-      themselves verified clean.
-- [x] **W4 — Test architecture & testability**: backend suite organization, DI/mocking seams,
-      fixture strategy, unit-vs-integration split, frontend test story, coverage-shape honesty
-      (thresholds vs what's actually exercised). NOT CI wiring (DevOps D1 covered it). ✅ done
-      2026-07-06 — 9 findings filed (worst: real-DB harness exists but TEST_DATABASE_URL set nowhere
-      so it always skips; route tests execute only the last handler, no supertest; backend coverage
-      gate counts only reached files); golden/property layer + frontend RTL/MSW stack verified clean.
-- [x] **W5 — Cross-cutting concerns architecture**: logging/observability design (levels,
-      structure, correlation-id flow), config/feature-flag layering, backend JSDoc `checkJs`
-      type-safety architecture (where typing is load-bearing vs decorative), transactionality/
-      idempotency boundary discipline (beyond the filed repo-client finding). ✅ done 2026-07-06 —
-      7 findings filed (worst: checkJs gate is loose exactly where SQL-row shapes flow (strict:false,
-      repos untyped); requestId reaches 3 of ~286 log sites; no 502/504 error classes; toggle layers
-      re-accumulated post-ADR-035 with no rule); logger adoption, route error discipline, FE env
-      registry, locking coverage, clock convention verified clean.
-- [x] **W6 — Under-audited subsystems (design lens)**: `services/aiChat/` internals (tool
-      registry, streaming, prompt assembly) + `packaging/electron/main.js` monolith decomposition /
-      IPC channel-surface design (naming, validation discipline). ✅ done 2026-07-06 — 10 findings
-      filed (worst: main.js 3.5k-line monolith with backup ≈1,050 lines across 3 regions; IPC sender
-      validation opt-in 5/20; SSE event contract hand-synced ×3 with wire-rename layer; count-only
-      context truncation with no num_ctx); aiChat decomposition + tool pipeline + preload surface
-      verified clean. **ALL 6 WAVES COMPLETE — pass finished 2026-07-06.**
-
-### Startup/Electron performance research 2026-07-05 (goal: app feels + starts instant)
-
-**Method:** sequential (not fanned-out) single agents, one wave at a time, findings written to
-TODO.md §⚡ Performance **immediately after each wave returns** so progress survives interruption
-(rate-limit-safe by design). Targets ONLY ground the 2026-07-05 Performance pass Wave P4
-(startup/boot static analysis) and the UI/GPU G-waves did NOT cover — their findings and the
-§Checked clean ⚡ blocks were fed to each agent as exclusions. The three named residues this pass
-exists to close: (1) live instrumented boot measurement (`VISION_BOOT_TRACE` marks exist in both
-shells, never once run), (2) Electron main-process cold-start static sweep (process spawn → splash
-visible — everything _before_ the already-audited parallel_init), (3) renderer first-paint handoff
-
-- perceived-instant architecture options (splash→SPA transition, keep-alive/hide-on-close,
-  login-item prelaunch). Findings are single-pass research, NOT adversarially verified — confirm
-  citations against current code before fixing.
-
-**Wave status (resume here if interrupted — each wave = one sequential agent):**
-
-- Wave S1 — live instrumented boot measurement on the Vision Demo app (`/Applications/Vision
-Demo.app`, compose project `visiondemoapp`; port = `appPort` in `~/Library/Application
-Support/Vision Demo/settings.json`): ✅ done 2026-07-05 — 5 new findings filed in §⚡ Performance
-  (demo db-healthcheck missing `start_interval` = 5.9s of a 6.8s warm boot ⏫; serial 2s-timeout
-  Docker-socket probing on daemon wake 🔼; `pre_pull_image` CLI spawn dominates hot boot 🔽;
-  splash-visible 337–653ms 🔽; boot-trace double-emit/never-closed marks ⏬) + 2 measured
-  re-pricings appended to existing P4 items (MV gate = 33–38ms, recommend closing; backend
-  pre-listen import graph = ~490ms untraced, 5× the traced backend boot) + measured-fine block in
-  §Checked clean ⚡. Key numbers: demo warm boot 6.8s / hot 0.6–1.1s / backend-in-container 92ms.
-  Residue: instrumented boot of the REAL Vision.app on real data (projected ~2–2.5s warm; trace
-  always-on, just capture stdout) · SPA-side post-loadURL phases (→ Wave S3 territory) · cold boot
-  with image pull · Docker-not-running dialog path
-- Wave S2 — Electron main-process cold-start static sweep (fresh ground _before_ parallel_init,
-  which P4 already verified): ✅ done 2026-07-05 — verdict: main process is TIGHT; 4 findings filed
-  in §⚡ Performance (backup `archiver`/`yauzl` chain at module eval ~56ms+ 🔼; missing
-  BrowserWindow `backgroundColor` → pre-splash flash 🔽; single-instance lock at END of module
-  eval ⏬; asar ships 2128 node_modules files for backup alone + 4 redundant direct deps ⏬) +
-  extensive checked-clean block in §Checked clean ⚡ (no updater at boot, packaging tight,
-  preload clean, show-immediately correct). Residue: spawn→module-eval window split needs the
-  instrumented Electron pass; vibrancy create-cost unmeasured
-- Wave S3 — renderer first-paint handoff + perceived-instant architecture options: ✅ done
-  2026-07-05 — 8 findings filed in §⚡ Performance (blank "second splash" — empty `#root` between
-  navigation and React mount 🔼; locale chunk discovered late → raw-key flash every cold boot 🔼;
-  Dutch triple text flash keys→en→nl behind the settings RTT 🔼; hide-on-close option 💡🔼
-  RECOMMENDED FIRST — close already keeps backend warm, only the renderer is thrown away;
-  keep-services-on-quit toggle 💡🔼; splash status frozen through the dominant phase 🔽;
-  dock-reactivate reopen path no splash/no poll 🔽; login-item prelaunch 💡🔽 recommend skipping)
-  - checked-clean block in §Checked clean ⚡ (splash color continuity correct; pre-navigating the
-    SPA during compose wait assessed and PARKED). Residue: SPA-phase runtime durations
-    (magnitude-estimated); RAM cost of hidden renderer / idle containers before the user decides
-    the options
-
-**PASS COMPLETE 2026-07-05.** All three waves done; 17 new findings filed + 2 measured
-re-pricings of P4 items + 3 measured-fine/checked-clean blocks. The "instant feel" shortlist by
-value-for-effort: (1) demo healthcheck `start_interval` ⏫ (one line, −4.8s demo warm boot),
-(2) hide-on-close 💡🔼 (reopen ≈ 0ms, user decision), (3) keep-services-on-quit toggle 💡🔼
-(next launch 0.6-1.1s, user decision), (4) the three renderer flash fixes 🔼 (inline #root
-placeholder + module-scope locale fetch + localStorage language mirror — all visually free),
-(5) archiver lazy-require 🔼 (−56ms pre-splash). Remaining residue for a future pass:
-instrumented boot of the REAL Vision.app on real data · SPA-side phase durations (devtools/
-Playwright pass) · RAM measurements for the keep-alive options · spawn→module-eval window split ·
-cold-boot-with-image-pull path.
-
-### Performance research 2026-07-05 (fresh-ground pass)
-
-**Method:** sequential (not fanned-out) single agents, one wave at a time, findings written to
-TODO.md §⚡ Performance immediately after each wave returns so progress survives interruption.
-Targets ONLY dimensions the 2026-06-30 / 2026-07-02 performance passes and the 2026-07-02 UI/GPU
-waves never covered (their findings + checked-clean lists were fed to each agent as exclusions).
-Findings are single-pass static analysis, NOT adversarially verified — check citations against
-current code before fixing.
-
-**Wave status (resume here if interrupted):**
-
-- Wave P1 — backend search/filter/query paths (transaction text search ILIKE/trigram, filterBuilder
-  predicate shapes vs indexes, COUNT paths, sort columns, settings routes): ✅ done 2026-07-05 —
-  6 findings filed in §⚡ Performance (search OR-chain ⏫; COUNT(\*) OVER, COALESCE category filter,
-  recipient OR-across-tables 🔼; bank-account ILIKE, sort expressions 🔽) + checked-clean block in
-  §Checked clean ⚡ Performance (incl. settings routes, first-ever audit — clean)
-- Wave P2 — backend in-process memory & cache boundedness (module-level Maps/TTL caches, SSE client
-  registries, interval/listener accumulation over weeks-long Electron uptime): ✅ done 2026-07-05 —
-  verdict: unusually well-bounded, only 3 minor findings filed (marketLookup quote-cache no sweeper 🔽;
-  ECB full-history cache retained for process life ⬇; quotaGovernor dayMirror never pruned ⏬) +
-  extensive checked-clean block in §Checked clean ⚡ Performance (incl. requestMetrics.js internals,
-  first-ever read — clean)
-- Wave P3 — frontend state/context/i18n runtime (LanguageContext `t()` lookup cost + language-switch
-  fan-out, zustand store selector granularity, `lib/aiChatStreamStore.ts` internals (275 lines,
-  never read by any pass), remaining contexts' value stability, unvirtualized long lists beyond the
-  filed import-review/watchlist ones, form/dialog keystroke re-render hotspots, settings-persistence
-  stringify cost): ✅ done 2026-07-05 (retry after a rate-limit kill) — 4 findings filed
-  (LanguageBridge unstable `setLanguage` re-renders every useLanguage consumer on any settings
-  change 🔼; tax-wizard per-keystroke ×N-year PIT recompute — merged as perf addendum into the
-  existing BelgianTaxProfileContext architecture item; InvestmentDetailDialog unvirtualized txn
-  list 🔽; ChatConversationList unpaginated ⏬) + checked-clean block in §Checked clean ⚡
-  Performance (i18n flat-map lookup clean, zustand useShallow everywhere, aiChatStreamStore
-  snapshots reference-stable)
-- Wave P4 — startup/boot latency end-to-end (Electron time-to-usable: compose up ordering, health
-  poll cadence, splash handoff; backend boot ordering before listen; frontend first-paint sequence):
-  ✅ done 2026-07-05 — 5 findings filed (MV-refresh readiness gate serializes every boot 🔼;
-  Docker-not-running quits instead of waiting 🔼; dashboard 3-serial-round-trip data chain 🔼;
-  StartupRedirect waits on settings despite localStorage target 🔽; yahoo-finance2 static in
-  pre-listen graph 🔽) + checked-clean block in §Checked clean ⚡ Performance
-
-**PASS COMPLETE 2026-07-05.** All four waves done; 18 findings filed total (see per-wave notes
-above). Remaining residue for a future pass: live runtime profiling (no wave measured anything —
-`VISION_BOOT_TRACE` marks exist in both shells and one instrumented boot would turn the P4
-estimates into numbers; EXPLAIN on a live DB would confirm the P1 planner claims) · lib/devtools/*
-hand-rolled stores (dev-gated, unread) · useUpcomingPlannedPayments dismissed-keys snapshot ·
-PlannedPaymentForm keystroke behavior · Docker stdout log rotation (infra) · multer/express.json
-buffer limits (request-size/DoS pass territory) · Demo-app boot path.
-
-### UI/GPU performance research 2026-07-05 (runtime + fresh static)
-
-**Method:** sequential single agents (no fan-out, per user instruction), one wave at a time;
-findings written to TODO.md **immediately after each wave returns** (into §⚡ Performance /
-§🎨 UI/UX & Design with `↪ from:` lines) so progress survives interruption. Targets ONLY ground
-the 2026-07-02 UI/GPU Waves A/B/C (+ their residue closure 2026-07-03) and the
-2026-06-30 / 2026-07-02 / 2026-07-05 performance passes never covered — each agent gets the prior
-findings + checked-clean lists as exclusions. Single-pass research, NOT adversarially verified —
-confirm citations against current code before fixing. Design constraint applies: fixes must be
-visually free or explicitly labeled look-changing (see ⚠️ Binding constraints at top).
-
-**Wave status (resume here if interrupted):**
-
-- Wave G1 — static fresh ground: compositor/layer hygiene (`will-change` inventory, CSS
-  `contain`/`content-visibility` opportunities, layer-promotion pressure), font-loading strategy
-  (Fraunces/Inter FOIT/FOUT/preload), passive-listener + scroll/wheel/resize handler sweep,
-  layout-thrash sites (getBoundingClientRect/ResizeObserver beyond the filed ones), React 19
-  scheduling opportunities (useTransition/useDeferredValue on hot inputs): ✅ done 2026-07-05 —
-  4 findings filed in §⚡ Performance (zero-CSS-containment / `content-visibility: auto`
-  opportunity 🔼; RecipientCombobox 1000-item double-filter 🔼; font FOUT no-preload 🔽;
-  chart-hover per-pointermove GBCR 🔽) + dimension-complete checked-clean block in §Checked clean
-  ⚡. Residue → G2/G3: `content-visibility` × visx ParentSize runtime check (demo app) ·
-  built dist/index.html modulepreload graph (needs a build) · TagFilter/BankAccountMulti/
-  InvestmentCombobox cardinality assumed low, not read · Fraunces weight-synthesis (500/italic)
-  unaudited · Electron static-server cache headers for hashed font assets unswept
-- Wave G2 — live runtime profiling on the Vision Demo app (the top residue named by every prior
-  pass — first measured numbers ever): long-task/frame profiling of Dashboard, Transactions
-  scroll, Statistics all-time mount (verify the ~260 motion.rect stagger estimate), aurora frame
-  cost, glass-blur paint cost: ✅ done 2026-07-05 — no new defect found; main outcomes were
-  _verdicts on prior static claims_, annotated in place: chart mount-stagger ⏫→🔼 (mechanism +
-  ~3.9s decade extrapolation confirmed, but 60fps/0 long tasks throughout — settle-latency issue,
-  not jank); `content-visibility`×ParentSize experiment PASS (annotated into the G1 finding);
-  chart-hover GBCR no measurable cost at demo density (runtime note added). Measurements table
-  below; checked-clean/deflation block in §Checked clean ⚡.
-- Wave G3 — follow-ups surfaced by G1/G2 (build modulepreload graph, Fraunces weight synthesis,
-  remaining combobox cardinality, Electron static-server cache headers for hashed font/asset
-  files): ✅ done 2026-07-05 — 3 findings filed (default-route modulepreload gap 🔽 in §⚡ — its
-  fix plugin also closes the G1 font-preload half; Inter-700-never-loaded weight-hierarchy
-  collapse ×108 sites 🔽 in §🎨; `/index.html` immutable-cached stale-shell edge 🔽 in §🐛) +
-  checked-clean block in §Checked clean ⚡ (Fraunces synthesis clean, combobox cardinality clean,
-  cache headers otherwise near-optimal, chunk-size table).
-
-**PASS COMPLETE 2026-07-05.** G1 (static fresh ground) + G2 (first-ever runtime profiling, demo
-app) + G3 (build/residue) all done; 8 findings filed total (7 new + 1 non-repro record), 2 prior
-findings re-verdicted in place (stagger ⏫→🔼 settle-latency; content-visibility caveat → PASS).
-Big picture for the next agent: **runtime measurements found NO main-thread jank anywhere on demo
-data at DPR 1** — the app's ambient GPU aesthetic is much cheaper than the static findings
-implied (Standard tier doesn't even mount WebGL). The remaining value is in: the
-`content-visibility: auto` rollout (verified viable), the RecipientCombobox/cmdk double-filter,
-stagger clamp, and the small load-path items (modulepreload+font-preload plugin, index.html
-cache header). Remaining residue: brotli/precompressed assets (runtime gzip only — noted, not
-filed) · fontaine-style metric-override fallback (G1 finding's second half, still open) ·
-locale-chunk preload needs a server-side hint (logged, disproportionate — not recommended) ·
-Electron-shell instrumented pass (translucency/vibrancy compositing — user previously skipped
-eyes-on .app pass by choice) · hover/tooltip cost at real 120-month density + DPR 2 unmeasured ·
-per-frame GPU wattage/thermals invisible to the rAF instrument.
-
-**Wave G2 measurement record (Playwright Chromium 1440×900 DPR 1, demo data = 31 months
-Jan 24–Jul 26; "jank" = frames >20ms; long tasks ≥50ms via PerformanceObserver). Caveats: main
-thread only — backdrop-filter raster + WebGL run on GPU/compositor threads invisible to a rAF
-loop; Electron shell (translucency, vibrancy) not exercised; real data is ~4× the month span and
-runs at DPR 2 (≈4× raster pixels; >6MP displays already auto-cap to Reduced per ADR-075).**
-
-| Scenario                                                                                  | Result                                                                                                                                                                 |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard idle, Standard tier (CSS aurora)                                                | 300 frames/5s, mean 16.66ms, p95 17.8ms, 0 dropped, 0 long tasks                                                                                                       |
-| Dashboard idle, all animations paused                                                     | identical (mean 16.67ms) — **ambient animation delta ≈ 0**                                                                                                             |
-| Dashboard idle, Enhanced tier (WebGL ShaderAurora, 360×225 backing = 0.25× res confirmed) | 60fps, 0 long tasks                                                                                                                                                    |
-| Dashboard load                                                                            | DCL 48ms, load 50ms, FCP 104ms, 0 long tasks; 1311 DOM nodes; 14 backdrop-filter surfaces                                                                              |
-| Statistics page                                                                           | 670 DOM nodes, 9 backdrop-filter surfaces, 73 svg rects                                                                                                                |
-| Transactions page                                                                         | 1512 DOM nodes, 3 backdrop-filter surfaces                                                                                                                             |
-| Statistics mount stagger                                                                  | 62 bars (31mo×2 series); attr animation 705→1868ms = **1.16s tail**, 1054 mutations, 0 jank frames, 0 long tasks                                                       |
-| Transactions scripted scroll (120px/frame×4s while pages loaded)                          | mean 16.88ms, max 33.4ms, jank 1.3%, 0 long tasks                                                                                                                      |
-| Chart hover sweep ~60Hz×3s                                                                | steady-state 60fps, 0 jank; one 216.7ms gap in the very first run did NOT reproduce on fresh-reload retest (no long task, no network — harness/GC artifact, no action) |
-| content-visibility experiment                                                             | PASS (both post-mount and insert-time application; chart renders on unskip)                                                                                            |
-
-Side effect (restored + verified): demo visual-effects setting was flipped Standard→Enhanced for
-the shader measurement and restored to Standard (`<html>` carries no `fx-*` class). Screenshots
-under `.playwright-mcp/` (gitignored).
-
-### Design authenticity 2026-07-03
-
-**Scope:** make the app look and feel _human-crafted_ rather than AI-generated/templated —
-"slop tells" in copy voice, color/token choices, typography, layout tropes, motion character,
-and moments-of-truth (empty/error/onboarding) polish. This is about _design taste and
-authenticity_, NOT accessibility/interaction mechanics (2026-07-03 UI/UX waves), NOT rendering
-performance (2026-07-02 UI/GPU research), NOT locale/number formatting correctness (Wave U5).
-Findings are single-pass research, not adversarially verified — confirm against current code
-before acting.
-
-**Prior coverage — do NOT re-report (already filed elsewhere in this file):**
-
-- _2026-07-03 §UI/UX Wave U5:_ locale formatting (percent/month/decimal), hardcoded-English tax
-  strings, terminology drift en/nl, tax `sky-600/700` missing dark variants.
-- _2026-07-03 §UI/UX Wave U4:_ empty-state CTA _consistency_ and mutation feedback mechanics
-  (this section may still file empty-state _copy/character_ quality — different axis).
-- _2026-07-01 §UI Clutter/Layout Review:_ PageHeader clipping, stacked advisories, NetWorth hero
-  void, duplicate titles/status, uncapped news feed.
-- _2026-07-02 §UI/GPU Rendering:_ all blur/aurora/shadow _performance_ items.
-- _2026-06-30 §UI/UX & Accessibility:_ skeleton/error-UI mechanics, ad-hoc status badges.
-
-**Method note for the next agent:** run waves SEQUENTIALLY (one subagent at a time, not fanned
-out — rate-limit conservation). Each wave-agent writes its findings, checked-clean list, and
-unchecked residue directly under "### Findings" below and ticks its checkbox _before_ returning,
-so progress survives a context/session loss. Resume from the first unchecked wave.
-
-_(appended per wave as each completes — if a wave's checkbox is ticked but findings are missing here, the wave was lost mid-write; re-run it)_
-
-### Code/architecture 2026-07-03
-
-**Scope:** code design and architecture improvements — layering/boundaries, module cohesion,
-duplication, dead code, error-handling patterns, state-management architecture, API-contract
-_patterns_ (envelope/pagination consistency), dependency structure. NOT correctness bugs
-(2026-07-02 correctness waves), NOT performance (2026-07-02 performance research), NOT UI/UX
-(2026-07-03 UI/UX research), NOT openapi.yaml field-level drift (2026-06-30 §Architecture & API
-Contract). Findings are single-pass research, not adversarially verified — confirm against
-current code before acting.
-
-**Prior coverage — do NOT re-report (already filed elsewhere in this file):**
-
-- _2026-06-30 §Architecture & API Contract:_ openapi.yaml schema-accuracy drift (5×DELETE 204,
-  market/quote param, transactions params, show_in_ticker, move strategy), endpoint-matrix
-  self-contradictions, ADR contradiction re-run list.
-- _2026-06-30 §Other open audit gaps:_ the route→service boundary full sweep / dead-shim sweep /
-  empty-catch check was open there — **Wave A1 below closes it** (mark it done when A1 lands).
-- _2026-06-30 §Stale docs:_ code-patterns.md stale shim warning, ADR-101 false security claim.
-
-**Method note for the next agent:** run waves SEQUENTIALLY (one subagent at a time, not fanned
-out — rate-limit conservation). After each wave completes, immediately append its findings under
-"### Findings" below and tick the checkbox, so progress survives a context/session loss.
-
-_(appended per wave as each completes — if a wave's checkbox is ticked but findings are missing here, the wave was lost mid-write; re-run it)_
-
-### UI/UX research 2026-07-03
-
-**Scope:** UI/UX improvements — interaction design, accessibility, forms, navigation, feedback,
-consistency, responsiveness. NOT rendering performance (see "UI/GPU Rendering Research —
-2026-07-02") and NOT correctness bugs (see the 2026-07-02 correctness waves). Findings are
-single-pass research, not adversarially verified — confirm against current code before acting.
-
-**Prior coverage — do NOT re-report (already filed elsewhere in this file):**
-
-- _2026-06-30 §UI/UX & Accessibility:_ TaxOverview loading-conflated-with-empty · VirtualDataTable
-  header/body horizontal-scroll desync · portfolio buy/sell/dividend dialogs double-submit ·
-  attachment delete without confirm · toast-only validation errors / dead `form.tsx` primitives ·
-  bare `Skeleton` with no SR announcement (36 files) · bespoke per-page error UI vs `PageError` ·
-  icon-only buttons missing accessible names (AccountsPage menu, RecipientPatternsDialog delete) ·
-  shared `DialogContent` lacking max-h/scroll · ad-hoc status badges + TagInput focus-ring gap ·
-  hardcoded English `aria-label`s (pagination/SectionLoader/sidebar toggle) · TaxOverview heading
-  hierarchy · search-suggestions combobox ARIA.
-- _2026-07-01 §UI Clutter/Layout Review:_ PageHeader no-wrap clipping actions · /planned
-  four-stacked-advisories · PortfolioNewsFeed 25 uncapped articles · NetWorth hero void ·
-  /recipients duplicate title · /ai-chat duplicate Ollama status · /import narrow column ·
-  global UpcomingPaymentsNotification on every page (no arbiter).
-- _2026-07-02 §UI/GPU Rendering:_ all blur/aurora/reflow perf items; ChatMessageList
-  unconditional scroll-pinning during streaming was already noted there as a UX side effect.
-
-_(all 6 waves complete — per-wave 'unchecked residue' lists below are the resume points for any follow-up pass)_
-
-_(static code research only — findings marked "needs live viewport check" were not verified on a device)_
-
-### DevOps research 2026-07-03
-
-**Scope:** DevOps improvements only — CI/CD workflows, Docker images/compose, release &
-packaging ops, dev environment, repo hygiene. NOT app correctness (see the 2026-07-02 waves).
-Findings are single-pass research, not adversarially verified — confirm against current files
-before acting.
-
-**Known context (don't re-report as findings):** CodeQL config is deliberately JS/TS-only,
-security-extended, build-mode none, GHAS default setup OFF · "Build Docker Image" CI red =
-artifact quota, not a defect · dependabot auto-merges patch/minor only; bun.lock conflicts
-need manual `bun install` regen · local git SSH is broken — push goes via gh-HTTPS with
-`--no-gpg-sign`.
-
-### Correctness research 2026-07-02
-
-**Scope:** areas UNDER-covered by the 2026-06-30 audit (below). Six research agents audited the
-areas in the checklist; every wave's findings are recorded in full, each with a "checked clean"
-list (don't re-audit) and an "unchecked residue" list (precise resume points for a follow-up
-pass). Skip anything already listed in the 2026-06-30 audit or marked audited-clean there / in
-memory (cost-basis math, loan formulas, splits, money lib core, PIT/TOB estimators, backup crypto,
-adapter _detection_, AI-chat SQL usage).
-
-**Caveat:** unlike the 2026-06-30 section, these findings are single-pass research and NOT
-adversarially re-verified. Two of the worst were hand-verified during the session (marked inline):
-the Vision-CSV-export negative-amount corruption and the brokerage-rollback cross-table delete.
-Verify each finding against current code before fixing.
-
-_(single-pass research, NOT yet adversarially verified like the 2026-06-30 section — spot-checks noted inline)_
-
-_(The agent empirically verified the core mechanism before reporting: with no `setTypeParser` override anywhere in `apps/node-backend` — grep-confirmed — pg parses a `DATE` as local-midnight JS Date, and under `TZ=Europe/Brussels`, `.toISOString()` on `'2026-06-01'` yields `'2026-05-31…'`. `transactions.date`, `planned_date`, `month_date`, `mv_monthly_summary.month_start` are all DATE columns.)_
-
-_(Baseline: `scripts/validate-locales.js` already catches en/nl key parity, `{var}` placeholder parity, generated-file drift, static `t()` key existence — findings below are what it CANNOT catch.)_
-
-**Transfer reconciliation (ADR-083)**
-
-**Materialized views / aggregations**
-
-**Attachments**
-
-**Electron shell (`packaging/electron/main.js`)**
-
-**Migrations (only 0061 + 0062 verified this pass)**
-
-### Codebase audit 2026-06-30
-
-Eight parallel research agents (several spawned their own sub-agent forks) audited `apps/frontend` and
-`apps/node-backend` for correctness, performance, UI/UX, architecture, code design, security, and DevOps.
-
-**A second fleet of 8 independent agents then adversarially re-verified every finding** — re-reading the
-cited code from scratch trying to refute each claim, with one agent doing live web research against
-authoritative external sources (FOD Financiën/SPF Finances official guidance, PwC Worldwide Tax Summaries,
-curvo.eu) for the Belgian-tax-specific claims. Verification tags below: **✅** = re-confirmed as written,
-
-**🔧** = real finding, description/fix corrected after verification (corrected text is already applied below,
-not left as a diff), **❌** = refuted, moved to the appendix at the end with reasoning. Of ~100 findings,
-the large majority were confirmed outright; ~16 needed a correction (mostly wrong file/line citations, an
-undercounted scope, or a wrong fix direction — not false claims); 1 was refuted outright (appendix below).
-
-This is a **backlog**, not a sprint: triage before batch-fixing, and re-run `vision-kb-updater` after any fix
-that touches a documented feature/ADR.
-
-🔺 items below have direct financial-data-correctness or security impact in a finance app and should be
-looked at first.
-
-_(Context: Vision is intentionally single-user/local-first with no login — `docs/security/data-protection.md` lists auth as a "Planned" roadmap item. That's a documented design choice, not a gap. CORS, rate limiting, CSV/file-upload handling, SSRF guards on price-provider URLs, HTML/CSV escaping, and SQL parameterization everywhere *except* the dbEditor path above were all checked and found solid.)_
-
-Overall this pipeline is unusually mature for a self-hosted project (deny-all default permissions, SHA-pinned
-actions, Trivy + gitleaks + dependency audit, digest-pinned base images, migration round-trip testing in CI,
-a backup-coverage test that currently passes 6/6). Real gaps below.
-
-_(macOS distribution being unsigned/ad-hoc/non-notarized is a known, documented trade-off — restated for completeness, not a new finding.)_
-
-**Portfolio / investments**
-
-**Belgian tax** _(verified 2026-06-30 against FOD Financiën/SPF Finances official guidance, curvo.eu, and PwC Worldwide Tax Summaries — see citations below)_
-
-**Categorization**
-
-**Planned / recurring transactions**
-
-**Architecture / route-service boundary / dead code (backend)**
-
-**Sequencing note (found during a clarity audit, 2026-07-01):** the three items above all target the
-same code (`transactions.js:153-206`, `plannedTransactions.js:38-75`) with two uncoordinated
-destination modules — the boundary-bypass fix says move these queries into
-`transactionService`/`plannedTransactionService`; the duplication fix says extract the resolver into
-`recipientService.js`/`categoryService.js`. Do the duplication fix first (resolver →
-`recipientService`/`categoryService`), then scope the boundary-bypass fix to exclude that
-already-extracted resolver logic, then apply the delete-pattern rewrite inside the resolver's new
-home — its `plannedTransactions.js:40,53,74` citations go stale once either refactor lands, since the
-code moves out of the route files entirely.
-
-**Data export**
-
-_(KBC bank-CSV import adapter — previously flagged as collapsing every row onto `bank_account='KBC'` — was re-verified and is **already fixed in code** (`importPipeline/adapters/kbc.js:70`, commit `277628a0`, with a regression test asserting multi-account IBAN parsing). No action needed; won't recur.)_
-
-_(Lower-priority items, verified 2026-06-30: optimistic-insert-ignoring-filters, currency-formatting-via-raw-Intl, SSE-double-casts, TransactionsTable-unused-props, and ExecutionHistoryDialog-mount-guard all **✅ confirmed** as described — currency formatting was actually undercounted, 24 files use raw `Intl.NumberFormat` not "10+". One correction: the "silent `onError`-less delete mutations" claim is **🔧 narrower than stated** — `AttachmentPanel.tsx` does have an `onError` handler, it just shows no toast (silent-to-the-user, but not literally onError-less); `WatchlistPage.tsx` and `ResearchMappingDialog.tsx` are genuinely onError-less as claimed.)_
-
-_(Extensively verified as already well-optimized — don't re-audit: main transaction-list pagination/tag-batching, the 19+ transaction indexes, MV refresh parallelization, portfolio-summary's fixed query shape, balance recompute via single LATERAL join, daily snapshot batched upserts, Yahoo/Binance batching, CSV/NDJSON export's keyset streaming, FX/price caches' TTL bounds, `cashflowForecast.js`'s query shape, report data-fetchers operating on pre-batched results, the `exchange_rates` composite index found during verification.)_
-
-All 9 findings in this section were independently re-verified 2026-06-30 against current code with **zero refutations and zero corrections** — every cited file:line, behavior, and contrast held up exactly as described.
-
-_(Verified already optimized — don't re-audit: `TransactionsTable`/`VirtualDataTable` virtualization + server pagination; full route-level code-splitting; `recharts` confined to one lazy component; `lucide-react` tree-shaken everywhere; the `ShaderAurora` WebGL background (0.25× res, 640px cap, ~30fps throttle, static under reduced-motion); most context providers already memoized; `AppSettingsContext`/`ThemeContext` bypass the re-render problem via Zustand + `useShallow`.)_
-
-_(Minor items, verified 2026-06-30: heading hierarchy skipping h2 on TaxOverviewPage and the search-suggestions-panel missing combobox ARIA on VirtualDataTable are both **✅ confirmed**. Duplicate-transaction stacked toasts, icon-button sizing drift in AppSidebar, and raw Tailwind palette colors bypassing theme tokens were not independently re-checked this pass — not refuted, just unverified. Glass-panel text contrast against the aurora background remains honestly flagged as "needs a manual browser check," not asserted as a finding — no issue with how that one is written.)_
-
-**API ↔ openapi.yaml drift** _(no fully undocumented or stale-removed routes found across the 211-operation surface — these are schema-accuracy gaps)_
-
-### UI clutter review 2026-07-01
-
-Visual pass over every major page/card for "clutter, banners piling up, weird/ugly layouts."
-
-**Method:** drove the **Vision Demo app** (synthetic data, isolated) with Playwright at desktop
-(1440×900) plus a tablet (768×1024) reflow pass, cross-referenced against a code map of every
-banner/notification that can mount per route. 22 views captured spanning every section
-(shots under `.playwright-mcp/audit/`, gitignored). Findings are ordered real → minor/cosmetic;
-transparency notes (what was checked-and-cleared, and honest caveats) follow at the end.
-
-**Caveats:** findings reflect the demo's `vision-app:latest` image (committed `main`; recent commits aren't layout-structural → low drift risk). Not individually screenshotted (templated or interactive-empty, lower priority): Watchlist, Market Lookup, Chart Builder, Portfolio Forecast, Metals/Real Estate/Savings, Import Review, Portfolio Tax, admin/*.
-
-### Performance research 2026-07-02
-
-Six parallel research agents swept the codebase for performance improvements **not already filed in
-the 2026-06-30 audit above** — each agent was given that audit's findings and its "verified
-optimized — don't re-audit" lists and instructed to skip them, so nothing below duplicates the
-Performance sections above. Scope: the two performance gaps the prior audit explicitly left open
-(React Query per-hook config; `services/reports/sections/*` + `aggregations.js` index cross-check —
-both now closed and checked off above), plus four areas the prior audit never covered at all
-(HTTP/middleware/pool infrastructure, bundle/build/loading, runtime chart-and-render hot paths, and
-the DB layer: FK indexes, matview mechanics, triggers, retention). Every finding cites file:line
-evidence read from current code; the production build was actually run for the bundle numbers
-(Vite 8/rolldown, `dist/` total 3.8 MB, cold-load ≈ 372 KB gz measured). One agent claim failed
-cross-verification against the code and is recorded in the refuted appendix at the end of this
-section. Priorities follow the file's emoji scheme; nothing here is financial-data-incorrect —
-the closest are the two ⏫ items whose _displayed numbers_ can be wrong (nondeterministic LIMIT
-truncation; stale-parameter forecast cache hits).
-
-### UI/GPU research 2026-07-02
-
-**Scope:** UI/GPU rendering performance NOT covered by the two performance sections above. The
-2026-06-30 audit already filed: Card glass-blur default + Watchlist glass grid, framer-motion in
-the app shell, accordion reduced-motion gap, unvirtualized import-review pages, column-resize
-mousemove, SettingsPreloadContext memo, attachment thumbnails. The 2026-07-02 Performance Research
-already filed: chart hover path rebuilds + ChartSyncContext broadcast, VirtualDataTable search
-re-render, per-call Intl formatters, LTTB unused / NetWorth full-res, CategoryPivotTable DOM size,
-BankBalancesWidget unmemoized data, all bundle/loading items. Checked clean (don't re-report):
-ShaderAurora _internals_ (0.25× res, 640px cap, ~30fps throttle, reduced-motion static), useCountUp,
-RollingNumber, route-level lazy loading, transactions-table virtualization.
-
-**This section covers the remaining ground** — findings below are single-pass research, NOT
-adversarially verified; check against current code before fixing.
-
-- **Look-changing fixes (do NOT apply without user approval):** dialog/sheet overlay → plain
-  `bg-background/60` dim (loses the frosted-modal backdrop — most noticeable change in the set) ·
-  chart tooltip → opaque `bg-popover` (loses glass on a constantly-watched surface; `glass-thin`
-  is the middle ground) · making `fx-static-atmosphere` the default at the standard tier (stops
-  the signature aurora drift for most users) · CategoryPivotTable sticky column → opaque
-  `hsl(var(--card))` fallback · rescoping/reducing the dark-mode text halo (subtle glow change on
-  all titles) · `failIfMajorPerformanceCaveat: true` (software-GL machines get CSS blobs instead
-  of the WebGL aurora — arguably correct, still a look change on those machines).
-- **Visually-free fixes (safe for the aesthetic):** all "pause when nobody can see it" variants —
-  freeze aurora/WebGL on window blur / `document.hidden` / while a modal overlay is up (blurred
-  background is static-looking anyway; resumes on focus) · Card hover shadow pre-rendered on a
-  `::after` and crossfaded via opacity (visually identical) · shimmer via `transform` instead of
-  `background-position` (identical) · dropping the redundant nested blurs (sidebar tab strip, chat
-  thead/composer — invisible blur-on-blur) · single-container sticky-column blur (same look,
-  one region) · `transition-all` → explicit property lists · not running CSS blobs under an active
-  WebGL aurora (WebGL draws on top; freeze only on confirmed GL init) · everything in Wave B
-  (context-restore, low-power hint, resize redraw, vibrancy teardown below enhanced tier) and all
-  of Wave C (memoization/rect-caching/rAF — behavior-preserving).
-
----
-
-## 🏦 Accounts feature research 2026-07-10 (budgeting → portfolio)
-
-**Charter (from the user):** the accounts epic (ADR-088–101, gated by ADR-103) is complicated —
-heuristics and UI/UX included — and the user is _not content_ with it. Originally built for both
-budgeting **and** portfolio; scaled back to budgeting-only (ADR-103, per-account holdings UI off).
-Goal of this research: (1) improve the **budgeting** side — correctness, performance, and **most
-importantly UI/UX**; (2) design how to extend accounts to **portfolio** with a genuinely great,
-easy UX — the current (flag-hidden) portfolio-accounts UX does not deliver that. Note: the
-2026-06-20 "minimal adoption" decision (net worth/total only, lots global) reflected the _then_
-state; the user is now explicitly re-opening the portfolio branch-out — but the new design must
-be dramatically easier than the hidden ADR-091/100 surface, not just un-hiding it.
-
-**Method:** sequential single-agent passes (correctness → performance → UI/UX → portfolio
-design), each appending here immediately so progress survives interruption. Findings are
-single-pass research — confirm against current code before acting. **Dedupe rule:** accounts
-findings already filed in the main Findings sections above (e.g. moveHoldingService units,
-PATCH-to-clear no-op, net-worth invalidation, FX-blind cash sleeve, per-account snapshot splits,
-statement-balance-without-date) are NOT repeated here — check there too before implementing.
-
-### 1️⃣ Budgeting correctness (accounts entity/balances/reconciliation)
-
-- [x] **Net-worth headline still uses the naive latest-stamped-balance figure the ADR-094 fix deprecated — manual rows, trade cash legs, liability ledgers, and manual-only accounts are invisible in the aggregate, and it contradicts the by-account table on the same page** 🔺 ✅ 2026-07-22 · 0c40430 (#121) (WP-A1 — current point overridden with Σ per-account COMPUTED_BALANCE_LATERAL split by liability, no population gate; netWorth.js:66 comment corrected; history series stays stamp-based by design)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting correctness_
-  - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:108-118` (bank side = latest `t.balance IS NOT NULL` stamp ≤ day, per account) vs `apps/node-backend/src/repositories/accountBalanceSql.js:26-46` (the anchor+delta fix, whose own header says the naive figure "poisoned … per-account net worth") · `routes/info/netWorth.js:66-67` (comment claims "Σ accounts == the aggregate by construction" — false) · `infoRepositoryNetWorth.js:239-244` (only `liveInvestments` is overlaid; liquid/liabilities never are) · same mechanism in the dashboard widget: `infoRepositoryBanks.js:28-44`
-  - Only the CSV import pipeline stamps `transactions.balance` (ADR-094 addendum), so on `GET /api/info/net-worth`: (a) a manual €500 expense entered today moves the accounts-hub balance (anchor+delta) but leaves the Net Worth "Liquid" tile and chart unchanged until the next import; (b) ADR-090 trade cash legs and brokerage fan-out rows (balance NULL) never reach the headline — a cash sleeve with zero stamped rows contributes _nothing_, breaking ADR-093's "cash sleeves contribute their ledger balance"; (c) a liability account whose debt is recorded via manual ledger rows contributes 0 to the `liabilities` bucket (ADR-092's "net worth reflects debt" only works for CSV-imported liabilities), even though the same page's "By Account" table (anchor+delta via `getNetWorthByAccount` → `computed_balance`) shows it; (d) when NO stamped row exists anywhere, the fallback (`infoRepositoryNetWorth.js:134-189`) cumulates ALL active transactions with no account join — `in_net_worth=false` accounts and liability rows all land in "Liquid".
-  - Fix: overlay the latest snapshot's `liquid`/`liabilities` with Σ per-account computed balances (Σ `COMPUTED_BALANCE_LATERAL`, split by `type='liability'`) — the same overlay pattern already used for `liveInvestments`; keep the stamped LATERAL for the historical series. Also correct the `netWorth.js:66` comment and give the fallback the same `in_net_worth`/liability discipline.
-
-- [x] **Merging two concurrently-imported accounts corrupts the survivor's computed balance — interleaved `balance` stamps make the anchor discard one account's entire history** ⏫ ✅ 2026-07-22 · 0c40430 (#121) (BACKEND per WP-A3 (0993700): `mergeAccounts` detects overlap, clears the survivor's invalidated statement anchor, returns `stampsInterleaved`; the merge-preview endpoint surfaces the projected union balance. FRONTEND per WP-B5 (0c40430 (#121)): MergeAccountDialog now shows the projected post-merge balance + row counts and the "merging two stamped accounts — the statement anchor will be cleared" warning before confirming. Demo visual pass pending.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (source and tests are present; the required Demo merge-preview and interleaved-stamp visual/behavior pass could not run because the Demo backend was unreachable)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting correctness_
-  - `apps/node-backend/src/services/accountMergeService.js:39-46` (repoints `account_id`/`bank_account`, keeps each row's `balance` stamp) + `accountBalanceSql.js:28-44` (anchor = single latest stamped row across the merged set) + `infoRepositoryBanks.js:29-43` (widget = latest stamped row, same failure)
-  - Per-row `balance` values are per-source-bank running balances; after a merge they interleave into one partition. KBC (last stamp Jul 1, €1,000) merged with Belfius (last stamp Jul 5, €150): anchor becomes the Belfius €150 stamp → computed balance = €150 + rows after Jul 5 — the €1,000 of KBC value vanishes from the hub, by-account net worth, rebalance available-cash, and the bank widget. Merging _sequential_ accounts (old account closed before new one opened) is fine, which is exactly why the phantom-dedup use case never showed this. The UI (`MergeAccountDialog.tsx:14-17`) advertises merge as generic consolidation with only a type-mismatch warning; the survivor's own `statement_balance` also keeps anchoring drift against the now-shifted computed balance. `tests/accountMergeService.test.js:50` asserts repoint counts only — no balance-semantics test exists.
-  - Fix: detect overlapping stamped-date ranges between survivor and sources and warn/block in the dialog (or clear `balance` stamps on moved rows and document merge as same-account label dedup); at minimum surface the post-merge computed balance for confirmation, and clear the survivor's stale `statement_balance` anchor.
-
-- [ ] **Close/archive has no aggregate semantics: an archived account keeps counting in net worth, the by-account table, and the bank-balances widget forever, while rebalance excludes it — and the close flow never handles residual cash** ⏫ ✅ 2026-07-22 · 0c40430 (#121) (BACKEND per WP-A3 (0993700): closing sets in_net_worth=false + the widget gained the in_net_worth filter, so net worth/by-account/widget/rebalance all agree the moment an account is closed. FRONTEND per WP-B5 (0c40430 (#121)): ONE "Close account…" verb (Archive folded in), and the close dialog now surfaces a residual-balance heads-up when computed_balance≠0. PARTIAL-LEFT (flagged, follow-up): a full final-transfer/zero-out flow inside close — surfaced as a warning rather than a built transfer step. Demo visual pass pending.)
-  - Tracking: 🔎 partial-audit 2026-08-28 (aggregate exclusion is fixed, but closing still only sets `is_active:false` after a warning; the item’s final-transfer/zero-out step for residual cash is absent)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting correctness_
-  - `apps/frontend/src/features/accounts/CloseAccountDialog.tsx:91` (close = `is_active:false` only) · `infoRepositoryNetWorth.js:93-98` (aggregate filters `in_net_worth` only, never `is_active`) · `infoRepositoryNetWorth.js:293,311` (by-account: `getAll({active:null})`, `in_net_worth` only) · `infoRepositoryBanks.js:28-44,53-60` (widget: no `is_active` filter at all) · vs `crossWorkspaceDataService.js:58-63` (rebalance cash DOES filter `is_active=true`)
-  - Close an account whose last stamped balance is €500 (user emptied it in real life but never imported the final statement): the hub hides it (default `active=true` filter), yet Net Worth "Liquid", the By-Account table, and the dashboard widget carry the €500 forward daily, forever — the visible hub sum disagrees with every total and nothing explains why. Meanwhile rebalance's available cash drops the €500, so the surfaces are mutually inconsistent. Neither the close dialog nor archive warns about a nonzero computed balance or offers to flip `in_net_worth`/zero the cash.
-  - Fix: define the semantics once — either closing also sets `in_net_worth=false` (with a dialog step showing residual computed balance and prompting a final transfer/adjustment), or all aggregate readers gain a consistent `is_active` policy; make rebalance and net worth agree either way.
-
-- [x] **`funding_account_id` accepts nonexistent ids as a 500, plus self-reference and cycles** 🔽 ✅ 2026-07-14 · 55d9364 (#93) (accountService validates funding_account_id existence + non-self; FK 23503 → 400) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — Multi-hop funding cycles (A funds B, B funds A, or longer chains) are still accepted silently — assertFundingAccountValid only compares against the single selfId with no ancestor walk. The item's own text explicitly names 'A→B→A c…) ✅ 2026-08-10 · 94130e40 (#161) (LEFT clause delivered: `assertFundingAccountValid` now walks the funding chain upward from the proposed parent and rejects the edit when the walk reaches the account being edited, so A→B→A and longer chains are refused. The existence check, self-reference check and 23503→400 mapping were confirmed still present and left untouched. Two hazards drove the shape, both worth knowing: (a) the stored graph **may already contain a cycle** precisely because this guard did not exist, so a naive walk would hang the request — visited ids are tracked and the walk stops on first repeat rather than using a depth bound, which also means a genuinely deep chain is never falsely rejected and a pre-existing loop not involving the edited account is left for its own edit; (b) on create there is no self id, so the walk is skipped entirely rather than run against `undefined`. One `getById` per hop rather than a recursive CTE — chains are a few hops, it is already a write path, and it avoids new SQL surface. **Contract change:** a PATCH that would close a cycle now 400s where it previously succeeded and wrote bad data; no operation added/removed/re-pathed. 5 tests added (two-hop, four-hop, clean-terminating chain, pre-existing-cycle termination, create-skips-walk); the last two assert getById call counts so they fail if the walk stops being bounded. Backend suite 3373 passed, up from 3368 by exactly the five added; typecheck clean)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting correctness_
-  - `apps/node-backend/src/services/accountService.js:70-78` (only "positive integer" checked), `:115-136` (catch maps 23505 only — FK 23503 falls through to a 500)
-  - `POST/PATCH /api/accounts` with `funding_account_id: 999999` → Postgres 23503 → generic 500 instead of a 400/422; `funding_account_id` = the account's own id, or A→B→A chains, are accepted silently. Latent today (grep: no backend/frontend consumer walks funding chains yet — only CRUD + merge repointing), but the first consumer inherits the cycles; the 500 is user-visible now.
-  - Fix: verify the referenced account exists (and ≠ self) in `sanitize`/service, map 23503 to a ValidationError, and reject cycles with a simple ancestor walk when funding chains gain a consumer.
-
-- [ ] **Account merge repoints `funding_account_id` in bulk with no cycle check — it can mint the very cycles the service guard now rejects** 🔼 🔎 verified-present 2026-08-10
-  - ↪ _from: Orchestration session 2026-08-10 · surfaced by the implementer while adding the funding-cycle guard (8d0fdfe5); the merge path itself was not exercised, so the concrete repro below is reasoned from the code, not observed_
-  - `apps/node-backend/src/repositories/accountRepository.js:321` (`repointFundingAccount`) rewrites `funding_account_id` across rows during a merge, driven from `accountMergeService`. It does not go through `accountService.assertFundingAccountValid`, so none of that function's guards apply — not existence, not self-reference, and not the new ancestor walk.
-  - Concretely: merging A into B when B is funded by A repoints A's dependants onto B and can leave B funding itself, or close a longer loop — straight past the service-level guard. This is the remaining hole in the "funding_account_id … plus self-reference and cycles" item that 8d0fdfe5 otherwise closed.
-  - Fix: run the same validation after repointing (or fold the check into the merge transaction), and decide the semantics explicitly — a merge that would create a self-reference should probably null the funding link rather than fail the whole merge, since the user's intent is the merge, not the funding edge.
-
-- [ ] **Funding cycles already present in the data are not repaired by the new guard** 🔽 🔎 verified-present 2026-08-10
-  - ↪ _from: Orchestration session 2026-08-10 · noted while adding the funding-cycle guard (8d0fdfe5)_
-  - 8d0fdfe5 prevents _new_ cycles but deliberately leaves existing ones alone: the ancestor walk stops on a repeated id, and an upstream loop that does not involve the account being edited returns cleanly rather than throwing (400-ing there would make an unrelated PATCH un-savable). So any loop already stored persists until someone happens to edit an account on it.
-  - Latent in the same way the original finding was — nothing walks funding chains yet — but the first consumer inherits whatever is already in the table.
-  - Fix: a one-off detection query to find out whether any cycles actually exist (likely none, since nothing has ever written a chain deliberately), and only then decide between a data migration and leaving it. Do not write a migration before confirming there is something to migrate.
-
-**Checked clean (this pass):** `routes/accounts.js` (envelope, `validateIdParam`, 409 mapping on delete-RESTRICT and duplicate names) · `accountService.sanitize` enum/boolean/currency/date validation beyond the already-filed PATCH-to-clear no-op · `accountRepository` WRITABLE allowlist, create/update SET builders, and the rename path (FOR UPDATE + atomic `bank_account` string propagation to both tables; verified the 0062 trigger re-resolves the new name correctly inside the same transaction) · merge locking (FOR UPDATE on survivor + sources), portfolio base-vs-flat repointing, funding repointing, and trigger interplay (setting `bank_account = target.name` keeps the dual-write trigger at the target) — the _stamp-interleaving_ finding above is the only merge defect found · 0062 trigger INSERT-path override semantics are consistent with every production writer (transaction create requires `bank_account`; trade cash legs insert `account_id` with empty label → trigger no-ops → preserved) · list running-balance partition `PARTITION BY t.account_id ORDER BY t.date, t.id` (`transactionRepository.js:122,439`) consistent with the anchor tuple ordering · `plannedExecutionService` links existing transactions only (no materialization, no account copy needed) · `lib/api/accounts.ts` `normalizeAccount` NUMERIC-string coercion at the list/get boundary (so the AccountsPage `drift !== 0` badge guard works; create/update responses are un-normalized but their results are never consumed) · `getNetWorthByAccount` per-account cash conversion + unassigned-lots bucket · drift arithmetic/sign for liability (negative) statements · AccountsPage archive toggle/edit/merge wiring. Minor, deliberately not filed: `has_transactions` ignores `planned_transactions` (affects only the "view transactions" affordance and the 409 wording); anchor+delta ignores manual rows _backdated before the anchor_ — a semantic consequence of the stamped-anchor design (Wave 1b already declared the lateral sound; hand to the UI/UX pass as a balance-provenance disclosure item); `mv_bank_balances` has zero consumers (dead MV refreshed 4× per edit — hand to the performance pass).
-
-**Resume points (pass 1):**
-
-- Import-pipeline commit dual-write path (stage→commit account resolution + balance stamping order) not re-read — heavily covered by prior import audits, but its interplay with the merge finding (re-import into a merged account) is unexamined.
-- Migration 0050 not fully re-read beyond the already-filed items (backfill verified clean in earlier waves).
-- No live/demo-app verification run this pass (net-worth divergence, merge scenario, close-flow totals) — all findings are static code analysis with concrete mechanisms; a 10-minute demo-app session could confirm findings 1–3 empirically.
-- `docs/api/accounts.md` + openapi accounts schemas not checked against current behavior.
-- Transfer-reconciliation interplay with merge (auto-paired transfers whose two legs land in one account post-merge stay marked as transfers) — believed harmless, not exhaustively verified.
-
-### 2️⃣ Budgeting performance
-
-- [x] **No backend cache is ever busted by an account mutation — after merge/close/rename/flag edits the frontend's blanket `invalidateQueries()` refetches the whole app yet repaints pre-mutation net-worth for up to 5 minutes** ⏫ ✅ 2026-07-14 · 55d9364 (#93) (account mutations bust the net-worth response cache (invalidatePortfolioCaches))
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
-  - `apps/node-backend/src/services/accountMergeService.js:28-80`, `repositories/accountRepository.js:117-131` (rename rewrites `bank_account` on every row), `routes/accounts.js` (grep: zero `invalidatePortfolioCaches`/`scheduleRefresh` calls in the whole accounts path) vs `routes/info/_cache.js:7,22-26` (`netWorthResponseCache`, 5-min TTL; `invalidatePortfolioCaches()` exists but is called only from `controllers/investmentController.js:52-56` + `portfolioImportPipeline/index.js:76`) · frontend: `hooks/useAccounts.ts:55-58` (merge → blanket `queryClient.invalidateQueries()`), `features/accounts/CloseAccountDialog.tsx:93-94` (same)
-  - A merge repoints every transaction, a rename rewrites every row's label, an `in_net_worth`/`is_active` toggle changes which accounts the aggregate counts — all of it invisible to `/api/info/net-worth`, whose 5-min response cache (boot-warmed, `keepPreviousData`) keeps serving the pre-mutation series. The frontend compensates with the most expensive gesture available — invalidate _everything_, refetching every mounted query and marking the rest stale — and the flagship number it was trying to refresh still comes back stale. Net effect per merge/close: a full-app refetch fan-out whose most important response is wasted, plus a user staring at pre-merge net worth "after" the app told them the merge succeeded. (Same hole for bank-transaction writes and bank-CSV import: `refreshAggregations()`/`scheduleReconcile()` never touch `netWorthResponseCache` — grep: only `routes/info*` reference it — so an import also leaves net-worth ≤5 min stale; noted here because the fix is the same seam. The already-filed frontend-invalidation item (`useAccounts.ts:23,40,74`, ~line 149) covers the _missing keys on CRUD_; this is the backend half that makes even perfect frontend invalidation refetch stale data.)
-  - Fix: call `invalidatePortfolioCaches()` (pattern: `investmentController.js:52-56`) from account merge/update(rename, `in_net_worth`, `is_active`, `statement_balance`)/delete and from the bank-import commit + transaction-mutation reconcile chain; then narrow the two blanket `invalidateQueries()` calls to the touched key families (`accounts`, `transactions`, `net-worth*`, `bankBalances`, portfolio keys) so a close/merge doesn't refetch unrelated surfaces.
-
-- [x] **`mv_bank_balances` is a dead materialized view: zero readers anywhere, yet it is rebuilt as an all-time aggregate after every transaction mutation, import, and boot — drop it** 🔼 ✅ 2026-07-19 (removed from `MATERIALIZED_VIEWS`, `createMaterializedViews`, and `ensureMaterializedViewIndexes`; migration 0082 drops the view (index cascades) with a WITH-NO-DATA downgrade; the per-mutation refresh set is now 3 views, halving the all-time-scan work per edit. Housekeeping done: demo-db `01-demo.sql` view+index blocks removed (they were stale bank_account-grained anyway), `contract_drop_bank_account/{up,down}.sql`+README updated to drop-not-redefine, `accounts.js`/`accountBalanceSql.js` stale comments corrected, MV service test regrained to 3 views + a "no longer creates it" assertion. The `source:'mv'` label was already `'live'` (fixed in 55d9364 (#93)).)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_ (pass-1 lead, confirmed)
-  - `apps/node-backend/src/services/materializedViewService.js:13-18` (in the managed set), `:104-118` (definition: all-time `SUM(amount) GROUP BY bank_account, currency` over `transactions`), `:231-240` (`scheduleRefresh` debounce → all 4 views) — refreshed by every transaction create/PATCH/DELETE (via `scheduleReconcile().finally(scheduleRefresh)`), both import paths' `refreshAggregations()`, dbEditor, maintenance refresh-views, and boot warmup
-  - Readers: none. Grep across `apps/` finds only the creator/refresher, its own test, migrations, and _comments_ — the two candidate consumers read live SQL instead (`repositories/infoRepositoryBanks.js:21-92` for the widget, `COMPUTED_BALANCE_LATERAL` for account balances; `services/calculations/aggregation/bankBalances.js:5,17` even labels its envelope `source: 'mv'` while calling the live query — stale comment). Its grain is also the deprecated `bank_account` string (filed architecture item ~line 3411), and ADR-094 explicitly rejected its Σ(amount) semantics as wrong (drops opening balance — `accountBalanceSql.js:12-15`). So every edit pays one of the two all-time table scans flagged in the ⏫ "every edit refreshes 4 MVs" item (~line 985) for a view nothing can correctly use.
-  - Fix: remove it from `MATERIALIZED_VIEWS` + `createMaterializedViews` and ship a migration dropping the view — the exact precedent already exists for `mv_recipient_monthly` (`aggregationRefresh.js:9-15` rationale + migration `0038`). Halves the all-time refresh work per mutation with zero behavior change. Housekeeping: update `alembic/manual/contract_drop_bank_account/{up,down}.sql` + README (they redefine it), regenerate `packaging/electron/demo-db/01-demo.sql`, fix the `source: 'mv'` label, and drop the stale test assertion (`tests/materializedViewService.test.js:104`).
-
-- [x] **`GET /api/aggregations/bank-balances` recomputes ~365×N-account LATERAL history + full stamped-row scan + per-row FX conversion on every dashboard paint — the only heavy accounts endpoint with no server cache** 🔼 ✅ 2026-07-14 · 55d9364 (#93) (bank-balances gains a 60s cache off the shared invalidation seam; source label corrected to live)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
-  - `apps/node-backend/src/routes/aggregations.js:93-98` → `services/calculations/aggregation/bankBalances.js:12-18` (no caching layer) → `repositories/infoRepositoryBanks.js:27-93` (query 1: `DISTINCT ON` + three window functions over _all_ stamped active rows; query 2: `generate_series` 12 months × non-liability accounts, one LATERAL probe per (account, day)) then `batchConvertGroupsWithHistoricalRateFallback` over ~5.5k rows + JS grouping/summing `:127-149` · consumer: `components/dashboard/BankBalancesWidget.tsx:56-60` (`staleTime: 60_000`) + `services/reports/dataFetcher.js:65`
-  - Contrast: `/api/info/net-worth` runs the _same shape_ of probe query over a longer window but sits behind a 5-min TTL + inflight-dedup + boot-warm cache (`routes/info/netWorth.js:28-36`); bank-balances re-runs everything per request. At ~15 accounts that is ~5,500 index probes + a full pass over every stamped row (≈ all ~10k imported rows for the window functions) + ~5.5k-row JS conversion, every time the dashboard mounts more than 60s after the last visit — the widget is on the default landing page, so this is the most-hit heavy accounts query in the app. Worsens linearly with accounts × years (and degenerately with stamp-less accounts — see the index item below).
-  - Fix: wrap it in the existing `resolveCacheWithInflight` pattern (a dedicated map in `routes/info/_cache.js`, ~60s TTL matches the widget's staleTime) and bust it from the same seam as the net-worth cache; optionally warm it at boot alongside `warmInfoCaches`.
-
-- [x] **No index supports the "latest stamped balance" probes — every anchor/history LATERAL filters `balance IS NOT NULL` through an index that doesn't know about it, degenerating to full per-account scans for stamp-less accounts (manual cash, ADR-090 trade-cash sleeves)** 🔼 ✅ 2026-07-14 · 55d9364 (#93) (migration 0079 adds the partial (account_id,date DESC,id DESC) stamped-balance index)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
-  - Probes: `apps/node-backend/src/repositories/accountBalanceSql.js:28-33` (anchor, per account listed), `infoRepositoryBanks.js:80-89` (~365/account per widget request), `infoRepositoryNetWorth.js:108-117` (days-since-first-transaction × in-net-worth accounts per 5-min cache miss + boot warm). Index: `alembic/versions/0050_add_accounts_entity.py:126-127` — `(account_id, date DESC) WHERE is_active = true`, no `balance IS NOT NULL` predicate, no `id` in the key.
-  - CSV-imported accounts stamp nearly every row, so probes stop after 1–3 heap visits — which is why the 2026-06-30 pass verified the LATERAL as "already well-optimized" (~line 4978; this is the delta, not a re-audit). But the accounts epic added a class of accounts with _zero or sparse_ stamps (only the import pipeline stamps `balance` — ADR-094): manual/cash accounts, trade-cash sleeves, brokerage fan-out. For those, every probe walks the account's entire `(account_id, date)` index range ≤ day, finds nothing, and returns NULL — O(rows) per probe. A 500-row cash sleeve costs ~90k wasted row visits per bank-balances request (365 probes × ~250 avg) and ~750k per net-worth recompute over a 3,000-day history; each additional stamp-less account multiplies it. The same degenerate walk hits the anchor probe in `accountRepository.getAll` (accounts hub, rebalance, by-account net worth) — bounded by one probe per account, but still O(account rows) each.
-  - Fix: one migration — `CREATE INDEX idx_transactions_account_stamped ON transactions (account_id, date DESC, id DESC) WHERE is_active = true AND balance IS NOT NULL`. Every probe becomes a pure index descent (stamp-less accounts return instantly from an empty index range), and the `id DESC` tie-break stops the incremental sort on same-date rows. Secondary (only if the days×accounts shape itself ever measures hot after the index): replace the per-day probes with one `DISTINCT ON (account_id, date)` pass over stamped rows + forward-fill, O(stamped rows + days) instead of O(days × probes).
-
-- [x] **AccountsPage eagerly runs the full portfolio pipeline — investments fetch → dependent bulk portfolio-transactions fetch (waterfall) → cost-basis summary math — solely to feed a `summaries` prop that CloseAccountDialog, under ADR-103, never reads** 🔼 ✅ 2026-07-14 · fab7a77 (#99)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
-  - `apps/frontend/src/pages/AccountsPage.tsx:46` (`usePortfolio()` at page level), `:262` (only consumer: `summaries` → CloseAccountDialog) · `hooks/usePortfolio.ts:23-31` (investments query, then `usePortfolioTransactionsQuery(investmentIds)` — `enabled` only after investments resolve = request waterfall; bulk fetch `per_investment_limit: 1000`, `hooks/portfolio/useInvestments.ts:31-53`) + `usePortfolioSummaries` cost-basis math over every investment × its transactions · `features/accounts/CloseAccountDialog.tsx:60-61` — with `isPerAccountHoldingsEnabled` false, `holdings` short-circuits to `[]` and `summaries` is dead weight
-  - Painting the budgeting accounts hub costs 1 (accounts) + 2 (investments, bulk portfolio-transactions) requests, the second pair serialized, plus the heaviest client-side portfolio computation — on a page whose portfolio UI is switched off and for a dialog the user opens rarely (and which currently ignores the data). With years of trade history the bulk transactions payload is the largest routine fetch in the app. Cache warmth (2-min staleTime) only hides it on quick revisits.
-  - Fix: move `usePortfolio()` into `CloseAccountDialog` itself (it mounts only when `closing` is set) and gate it on `isPerAccountHoldingsEnabled`; AccountsPage then costs exactly one request. Re-evaluate when pass 4 redesigns the close-with-holdings flow.
-
-- [x] ~~**`/api/info/net-worth/by-account` rebuilds the entire multi-year snapshot walk from scratch on every cache miss (7 bulk queries + day-by-day JS walk) because the per-account split is never persisted — latent while ADR-103 keeps the flag off, but it is the first perf wall of the pass-4 portfolio re-opening** ⏬~~ 🗑️ moot per ADR-108 (WP-C1, 2026-07-22 · 0c40430 (#121)) — the endpoint, `getNetWorthByAccount`, and the whole snapshot per-account split were deleted. (If per-broker history returns, WP-C7 rebuilds it forward-only on a persisted side table — no live day-walk.)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
-  - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:289-294` (`computeDailySnapshots(target)` live per request) vs `:66-71` (the aggregate endpoint reads the _stored_ `portfolio_performance_snapshots` table) · `services/portfolio/snapshotBuilder.js:573-577` — `value_by_account` is computed by the very same boot-time walk that persists the aggregate, then thrown away ("In-memory only — not persisted") · currently unreachable from the UI: `pages/portfolio/net-worth/NetWorthPage.tsx:50-55` (`enabled: isPerAccountHoldingsEnabled` = false) — also does per-account sequential `await convertToCurrency` in a loop (`:314-317`), a minor N+1 on the same path
-  - Cost when enabled: all portfolio transactions + full `asset_price_history` + FX history loaded and walked day-by-day (`snapshotBuilder.js:57-120`), per 5-min TTL miss, per currency — hundreds of ms today, growing with years × instruments, and duplicated against the identical walk warmup already runs at boot.
-  - Fix (for the pass-4 design): persist the per-account split next to the aggregate (JSONB column or a `portfolio_performance_snapshots_by_account` side table written by `computeAndStoreSnapshots`) and make the endpoint a plain read like its aggregate sibling; batch the cash conversions.
-
-**Checked clean (this pass):** `currencyConversionService.convertRowsToEur` — batched, one historical-index query per call, in-memory lookups, no per-row DB N+1 (`currencyConversionService.js:244-261`) · 0062 dual-write trigger per-row overhead on bulk import — two SPI statements (`INSERT..ON CONFLICT DO NOTHING` + PK-style name lookup) against the tiny `accounts` table per inserted row, µs-scale, invisible inside an import that already runs reconcile+MV refresh (`0062:54-81`); UPDATE path fires the lookup only when `bank_account` changed or `account_id` is NULL; the split-guard trigger no-ops unless `amount` changes · merge/rename transaction scope — single tx, repoint UPDATEs are indexed (`idx_transactions_account_id`), triggers cheap per row, no MV refresh or snapshot rebuild _inside_ the tx, lock footprint = moved rows + the locked account rows; fine for a single-user DB even at 10k rows · `accountRepository.getAll` shape — one query, N≈10–20 lateral probes + `has_transactions` EXISTS, bounded (only the stamp-less-account degenerate case above is real) · `GET /api/info/banks` reads `accounts` + EXISTS, not a DISTINCT scan of transactions (`infoRepositoryStatistics.js:65-79`) · `/api/info/net-worth` caching posture — 5-min TTL + inflight dedup + `keepPreviousData` + boot warm (`routes/info/netWorth.js`, `routes/info.js:91-97`) is the right pattern (only the _busting_ gap above is wrong) · `useAccounts`/`useBankAccounts` — 2-min staleTime + `placeholderData` reasonable for change frequency; not duplicate data (accounts entity vs. label list for the filter combobox); no accounts data double-fetched under different keys between dashboard and accounts page (widget uses `bankBalances`, a different endpoint, correctly) · AccountsPage render granularity — ≤20 flat cards, dialogs conditionally mounted, drift computed in SQL not per render; archive toggle invalidates only `['accounts']` · NetWorthPage by-account query correctly disabled under ADR-103 · transactions running-balance window (`transactionRepository.js:121-123,438-440`) — evaluated over the filtered set pre-LIMIT but shares that cost with the pre-existing `COUNT(*) OVER ()`; per-account drill-down at 10k rows is ms-scale, no accounts-specific regression.
-
-**Resume points (pass 2):**
-
-- No live EXPLAIN/measurement run — all costs are complexity reasoning. A 10-minute demo-app session (`EXPLAIN ANALYZE` on the two LATERAL history queries + `accountRepository.getAll`, before/after the partial index) would turn the F2/F3 estimates into numbers; the demo DB has fewer accounts/rows than the real one, so scale results accordingly.
-- `services/reports/dataFetcher.js` also calls `computeBankBalances` (report generation) — frequency/impact of the uncached path there unexamined.
-- `crossWorkspaceDataService` rebalance available-cash query shape not re-read this pass (it reuses the computed-balance lateral; covered indirectly by the index item).
-- Import-commit request-path timing (synchronous `refreshAggregations()` position) covered by earlier audits; its interplay with the never-busted `netWorthResponseCache` is folded into the ⏫ item but not re-measured end-to-end.
-- `usePortfolioPrefetch` boot fan-out already filed (~line 1380) — not re-examined here.
-
-### 3️⃣ Budgeting UI/UX (the priority)
-
-**Diagnosis:** The accounts feature was built model-first: the UI is a faithful projection of the data model (entity + 8 orthogonal flags + balance stamps + drift arithmetic) rather than of the three questions a budgeting user brings — _what do I have, is it right, and how do I fix it when it isn't_. The ADR-094 heuristic is sound but entirely illegible in the UI: no balance carries an "as of / from where" provenance line, so anchor+delta behavior is experienced as unexplained number movement (or non-movement, for backdated entries), and reconciliation exists only as a permanently-red badge whose remedy is buried behind Edit → Advanced. Each surface then computes _and labels_ balances differently — dashboard = naive latest stamp under an IBAN tail, hub = anchor+delta under a display name, net worth = a third computation (pass-1 F1) — so the surfaces visibly disagree and the user can't tell which one to believe. On top of that, implementation concepts leak everywhere: `name` vs `display_name`, four overlapping removal verbs (two of which are literally the same operation under ADR-103), dormant portfolio flags, and brokerage shell-cards showing a misleading €0,00. There is no account detail view: every question dead-ends in a bare filtered transaction list without a running balance. Fixing provenance + a real reconcile flow + one balance definition would resolve most of the dissatisfaction without touching the visual language. _(Live demo-app pass done this session — hub + dashboard verified; demo may lag current code, but every screenshot-derived claim below was re-confirmed in source.)_
-
-- [x] **Reconciliation is a passive red badge, not a flow — recording a statement balance means Edit → Advanced → two raw fields, and the drift badge's only advice is "edit the account"** 🔺 ✅ 2026-07-27 · 1cb2cc7 (#131) (dialog + resolutions landed with 0c40430/#121 (the 0c40430 (#121) partial); 1cb2cc7 (#131) completes the spec: fresh statement-reading input + as-of date (default today) with live entered−computed drift preview (cent-rounded half-away-from-zero to match NUMERIC(15,2)); "Show transactions since {date}" exit deep-linking /accounts/:id?since=; badge shows the statement date and renders warning-amber instead of destructive when the reading is >45 days old, via a shared useDriftBadge across hub/detail/dashboard; statement fields removed from the create dialog (edit-Advanced keeps them). Adversarially verified pre-commit; hardening added for the backdated-reading double-count hazard (amber warning + emphasized ledger exit), typo-parse rejection, and half-applied PATCH+reconcile cache invalidation. Demo visual pass pending, as with the other WP stamps)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (source and component tests support the flow; its required Demo interaction and visual acceptance could not be repeated)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `apps/frontend/src/pages/AccountsPage.tsx:150-158` (badge: `variant="destructive"`, title-only tooltip) · `apps/frontend/src/features/accounts/AddAccountDialog.tsx:266-275` (statement fields inside the collapsed Advanced group, `type="number"`) · `i18n/source/en.json` `accounts.driftTooltip` ("…Edit the account to update it.") · ADR-094 ("show `statement_balance_date` alongside so the user knows how fresh it is" — never implemented; the date is invisible outside the edit dialog)
-  - The epic's flagship heuristic surfaces as an error-red badge with no date, no explanation of which side is stale, and no next step. A stale statement renders as permanent alarm (ADR-094's own named risk); an actionable drift (missing/duplicate transaction) offers no path to the transactions in question. And the _input_ to the whole loop — "I just read €X off my bank app" — is a hidden pair of raw fields three interactions deep, in a dialog that mostly edits identity fields. The loop never closes, so the user stops feeding it and the badge becomes noise.
-  - Fix: a per-card **Reconcile** action (dropdown + clicking the drift badge) opening a focused dialog: current computed balance with its as-of date, statement-balance input + date (default today), live drift preview, and two exits — "Looks right, re-anchor" (sets statement = computed, drift → 0) and "Show transactions since {date}" (deep-link to the filtered ledger). Show `statement_balance_date` on the badge itself ("Drift +€15,50 · statement 3 Jun"); render _stale-statement_ drift (date > ~45 days) in warning tone, not destructive. Remove the statement fields from the create dialog (they only mint instant drift — see the opening-balance item). Cross-refs: statement-balance-without-date backend validation already filed (main Findings); title-only-tooltip mechanics already filed (~line 2243).
-
-- [x] **Balances have zero provenance — the anchor date is computed in SQL and thrown away, so "as of when, from what" is unanswerable and backdated manual entries silently fail to move the balance** 🔺 ✅ 2026-07-22 · 0c40430 (#121) (BACKEND per WP-A1 (0c40430 (#121)): `COMPUTED_BALANCE_LATERAL` returns `anchor_date` + `post_anchor_count`, threaded into the accounts payload (0c40430 (#121)). FRONTEND per WP-B2 (0c40430 (#121)): `useBalanceProvenance` renders the muted "as of {date} bank statement + {n} entries since" / "sum of {n} entries" subline on hub cards, the reconcile dialog, and the dashboard widget; AddTransactionDialog fires the backdated-before-anchor note. Demo visual pass pending; WP-B4's ledger header will reuse the hook.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (the provenance source paths and tests are present; the required Demo rendering and backdated-entry acceptance remain unverified)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_ (pass-1 lead, confirmed)
-  - `apps/node-backend/src/repositories/accountBalanceSql.js:28-44` (anchor `date`/`id` selected, only `balance` returned) · `apps/frontend/src/pages/AccountsPage.tsx:160-167` (bare figure, generic tooltip) · `i18n/source/en.json` `accounts.balanceTooltip` ("computed from this account's transactions" — half-true: it's anchored on a bank stamp that _absorbs_ rows at/before it)
-  - The user sees one naked number per account. When they add a manual transaction dated before the account's last import stamp, nothing anywhere changes and nothing says why (the lateral only adds rows strictly _after_ the anchor — pass-1 declared this semantically sound and handed it here as a disclosure problem). When they see the number move, they can't tell if it was an import, a manual row, or a merge. Trust in a finance app is provenance; this UI has none.
-  - Fix: extend the lateral to also return `anchor_date` and `post_anchor_count` (both already inside the CTE, near-free), surface on the card as a muted subline — "as of {5 Jul} bank statement + {3} entries since" (stamp-less accounts: "sum of {n} entries") — and reuse the same line in the reconcile dialog. In AddTransactionDialog, when the chosen account+date falls at/before that account's anchor, show an inline note: "Dated before the {date} bank statement — the statement already includes this period, so the account balance won't change." (Free-text bank field itself already filed ~line 2400.)
-
-- [x] **The dashboard and the hub disagree on the number, the name, and the population of the same accounts — the user's two most-visited account surfaces describe two different worlds** 🔺 ✅ 2026-07-27 · 1cb2cc7 (#131) (backend was done per WP-A1 and display_name rendering per WP-B2/B3, all in 0c40430/#121 — the widget's balance cards read the account entity, so labels match the hub; 1cb2cc7 (#131) closes the LEFT clause: widget cards carry the same drift chip as the hub (shared useDriftBadge — identical text, date, and stale tone), and "Across N account(s)" now counts the population actually summed into total_net_position (the payload accounts array, verified one loop over the same rows at infoRepositoryBanks.js:154-173) instead of the differently-gated card list — pinned by a test fixturing a payload population larger than the card population. Demo visual pass pending)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (shared balance/name/population source and tests are present; current dashboard-versus-hub Demo agreement was not visually repeated)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - Number: `apps/node-backend/src/repositories/infoRepositoryBanks.js:28-44` (widget = naive latest stamp; freezes at last import, ignores manual rows) vs `accountBalanceSql.js` anchor+delta on the hub — the exact divergence pass-1 F1 filed for the net-worth headline, replayed on the default landing page. Name: `BankBalancesWidget.tsx:30-36,195-197` renders the raw `bank_account` string as a mono IBAN tail ("···234 5678") while the hub shows `display_name` ("KBC Zichtrekening") — verified live in the demo; the user must join IBAN tails to friendly names in their head. Population: `infoRepositoryBanks.js:41` (`balance IS NOT NULL`) means stamp-less accounts (manual cash, any hand-created account) **never appear on the dashboard at all**, and `BankBalancesWidget.tsx:170` says "Across 2 account(s)" while the hub shows 6 cards. Drift exists only on the hub.
-  - Every pairwise comparison a user can make between dashboard and hub fails: different balance after any manual activity, different labels, different account count, different warning states. User-visible disagreement between surfaces is the single fastest way to make a finance app feel untrustworthy — this, more than any one screen, is likely the root of "not content".
-  - Fix: one balance definition everywhere — make `getBankBalances` current balances use `COMPUTED_BALANCE_LATERAL` (keep stamps for the history series), include `display_name` in the payload and render it (IBAN tail can demote to the subline), drop the `balance IS NOT NULL` gate on the card list so manual accounts exist on the dashboard, and show the drift badge in both places. Backend overlay work shares a seam with pass-1 F1 — fix them together.
-
-- [x] **A manual account cannot be given an opening balance — the only balance-ish field offered (statement balance) instead mints a permanent red drift badge** ⏫ ✅ 2026-07-27 · 0c40430 (#121 squash of WP-B5; verified in-tree 2026-07-27: create-mode "Opening balance (as of {date})" field → POST /accounts/:id/opening-balance mints a visible opening ledger row (openingBalanceService.js) whose stamp anchors COMPUTED_BALANCE_LATERAL; liability relabel via accounts.openingBalance.createDebtLabel; ReconcileDialog "set as opening balance" backfill when no anchor exists; en+nl strings present)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - ADR-094 addendum (balance write-protected; workflow = "import a statement… or rely on the drift badge") · `AddAccountDialog.tsx:266-275` (statement fields are the create dialog's only balance input) · `accountBalanceSql.js:20-21` (no stamps → Σ(amount) fallback, starts at 0)
-  - First task with any hand-created account (cash, a savings account at a bank with no CSV export, a liability with a known outstanding debt): "it holds €5.000". There is no way to say that. The account shows €0,00 on the hub, is absent from the dashboard (stamp gate above), and if the user fills the statement-balance field — the obvious move — they get €0,00 + red "Drift: +€5.000,00" forever: the system alarming about its own missing feature. For ADR-092 liabilities this also means hand-tracked debt contributes nothing anywhere (pass-1 F1c is the aggregate side; this is the input side).
-  - Fix: an "Opening balance (as of {date})" field in the create dialog that mints a real, visible ledger row (category e.g. `SYSTEM:OPENING_BALANCE`, or an allowed one-time `balance` stamp on a zero-amount row — keeps ADR-094's write-protection since it's account-creation-only). Liability type relabels it "Outstanding debt (negative)". Backfill path for existing accounts via the reconcile dialog: "set as opening balance" when no stamp exists.
-
-- [x] **Four overlapping removal verbs in one menu — and under ADR-103 "Close account" and "Archive" are byte-identical operations with different names, icons, and ceremony** ⏫ ✅ 2026-07-27 · 0c40430 (#121 squash of WP-B4/B5; verified in-tree 2026-07-27: hub card menu carries zero removal verbs (AccountsPage.tsx:194-208); lifecycle is ONE Close/Reopen verb on the /accounts/:id header menu with Archive folded in (AccountDetailPage.tsx:297-307); Delete only when has_transactions===false, else disabled row + accounts.delete.hasTransactions explanation; close dialog surfaces residual computed balance in warning tone; close flips in_net_worth server-side (accountService.js:222-231). Deviation, deliberate: the final-transfer/zero-out step is a heads-up warning, not a built transfer flow — scoped out with the ADR-108 holdings deletion, same PARTIAL-LEFT already flagged on the §1 close-semantics item)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `AccountsPage.tsx:196-211` (Close account / Archive / Delete / Merge into… stacked in one dropdown) · `CloseAccountDialog.tsx:60-61,91` (flag off → holdings `[]` → the whole flow reduces to `is_active:false`, same as the Archive item) · close-dialog copy still narrates the gated flow (`accounts.close.description` "Transfer any holdings to another account…", `accounts.close.noHoldings`) · `AccountsPage.tsx:33-41` (Delete always offered; confirm dialog says "permanently deletes" and only _then_ the RESTRICT 409 arrives for any account with history)
-  - The user must choose between four end-of-life verbs with no explanation of the differences — and for two of them there _is_ no difference today. Delete is a trap: the scary confirm is shown, accepted, and then fails for essentially every real account. This is conceptual clutter at the most anxiety-laden moment of account management.
-  - Fix: collapse to **one** "Close account…" action (Archive menu item and dialog title/copy unify; keep DoorClosed verb), whose dialog becomes the home for pass-1 F3's residual-balance step (show computed balance, offer final transfer/zero-out, flip `in_net_worth` per the semantics decided there) and regains the holdings step only when ADR-103 re-enables. Show Delete only when `has_transactions === false` (the only case it can succeed), else a disabled row with "accounts with history are closed, not deleted".
-
-- [x] **There is no account detail view — drill-down lands on a bare filtered transaction list with no running balance, even though the backend already computes one that no frontend caller ever requests** ⏫ ✅ 2026-07-27 · 0c40430 (#121 squash of WP-B4; verified in-tree 2026-07-27: resolved via the superseding /accounts/:id route per the addendum — running-balance ledger is the first frontend consumer of include_balance=true (AccountDetailPage.tsx:117-129, column at :464,:494-496), header with balance/provenance/drift/sparkline, hub card click navigates there (AccountsPage.tsx:102); TransactionsPage gained the Account filter (AccountFilterCombobox at TransactionsPage.tsx:504). The interim running-balance-column-on-TransactionsPage was deliberately not built, as the addendum directed)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `AccountsPage.tsx:81-87` → `/transactions?bank_account={name}` · `FilterBanner.tsx:76-95` (context = one line of text + an X) · `transactionRepository.js:97,121-123` (`include_balance` running-balance window, correctly per-account partitioned) + `routes/transactions.js:52,98` — grep: zero frontend consumers; the ledger column exists only in CSV export · `TransactionsPage.tsx:46` (account filter is URL-param-only; no picker exists on the page — `BankAccountMultiCombobox` is used solely by ExportCard)
-  - "Is this balance right?" requires reading a transaction list in which no row shows the balance after it — the one column that makes a ledger a ledger, and the exact tool the drift badge needs the user to have. The filtered view also has no account context (no balance, no drift, no reconcile entry) and can't even be _reached_ from within the transactions page; only via double-click/menu from hub or dashboard.
-  - Fix: when the `bank_account` filter is active and sort is default-by-date, request `include_balance=true` and render a running-balance column; top the filtered view with a compact account header (display name, computed balance + as-of line, drift chip → reconcile dialog). That is ~80% of an account-detail page for the cost of a column and a banner upgrade — a full `/accounts/:id` route can wait for the pass-4 portfolio design. Add "Account" to the transactions filter UI. `(look-changing — needs user sign-off)` for the column/header.
-
-- [x] **Import silently mints and fills accounts — the entire import flow has zero account UI, so users discover new (or wrongly-collapsed) accounts only by noticing hub cards they never created** 🔼 ✅ 2026-07-27 · 0c40430 (#121 squash of WP-B6; verified in-tree 2026-07-27: ImportReviewPage renders the per-account "{n} transactions → {account}" disclosure (ImportReviewPage.tsx:389-414) with "(new account will be created)" badge resolved against useAccounts({active:'all'}) with a load-guard; post-commit nudge toast with a hub link + invalidateAccountDerived (:194-203))
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `pages/ImportPage.tsx` + `pages/ImportReviewPage.tsx` — grep: no account/bank_account reference in either; assignment happens invisibly via the adapter's parsed label + the 0062 trigger INSERT path (`alembic/versions/0062_trigger_lookup_only_on_update.py`), defaults `type='checking'`, no institution · cf. the KBC account-collapse incident (memory 2026-06-25): every KBC row labeled 'KBC' → all cards fused, and no UI moment existed where that was visible
-  - ADR-088 promised the import mapper an "account combobox with create new"; what shipped is fully implicit. The user is never told "this file will land in account X / will create account Y", so mis-parses (KBC collapse), first-time imports, and typo-minted accounts (pre-0062) all surface _later_ as mystery hub cards named after raw adapter strings, typed "Checking" regardless of reality.
-  - Fix: an account line on the import review/summary — "{n} transactions → **KBC Zichtrekening**" with a "(new account will be created)" badge when unresolved, and a post-commit toast/nudge linking to the hub to classify newly-minted accounts (set type/display name). Read-only disclosure is enough; a full override picker can wait.
-
-- [x] **The add/edit dialog is a schema dump: `name` vs `display_name` unexplained, plus five advanced controls whose consumers are dormant or deleted** 🔼 ✅ 2026-07-27 · 0c40430 (#121 squash of WP-B5; verified in-tree 2026-07-27: name helper text (accounts.field.nameHint under AddAccountDialog.tsx:261), display_name auto-suggest mirrored from name until hand-edited (:146-157, latched in edit mode), has_cash_sleeve/multi_currency_cash/tax_wrapper inputs removed (only spendable + in_net_worth switch rows remain, :384-389), one-line hints on owner/liquidity/spendable)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `AddAccountDialog.tsx:162-181` (two name fields; placeholder "e.g. KBC Checking or an IBAN"; nothing says `name` is the ledger/import join key that rename-propagates onto every transaction row — ADR-088 addendum) · `:260-265` (`has_cash_sleeve`, `multi_currency_cash`: consumers gated off by ADR-103; `tax_wrapper` `:249-259`: consumer removed by ADR-102; `owner`: awaiting marital-quotient consumer; only `in_net_worth`, `spendable`/`liquidity_class` (rebalance cash) and `type` do anything a budgeting user can observe)
-  - The user is asked eight questions, five of which change nothing they can see, and the two questions that _matter most_ (which field matches my bank's CSV label? what happens if I change it?) are unexplained. This is the flags-as-decoration risk ADR-089 named, realized in UI form.
-  - Fix: helper text under `name` ("Must match the label your bank import uses — shown as-is on transactions") and auto-suggest `display_name`; hide `has_cash_sleeve`/`multi_currency_cash`/`tax_wrapper` while their consumers are off (they return with ADR-103/pass-4 — one `isPerAccountHoldingsEnabled` condition), keep owner/liquidity/spendable with one-line "used by rebalancing / tax" hints. Dialog silent-revert + currency-field items already filed — not repeated.
-
-- [x] **The hub grid is ordered by the hidden `name` key and flattens cash, €0,00 portfolio shells, liabilities, and (when shown) archived accounts into one undifferentiated grid with no total** 🔼 `(look-changing — signed off)` ✅ 2026-07-22 · 0c40430 (#121) (WP-B3: grouped by Cash&Savings/Portfolio/Liabilities/Archived, sorted by display label, per-group subtotals + grand Net-cash total, portfolio shells no longer show a misleading €0,00. Demo visual pass pending.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (grouping and subtotal source/tests are present; the required Demo visual acceptance of group chrome and totals remains pending)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `apps/node-backend/src/repositories/accountRepository.js:50` (`ORDER BY a.name`) — with IBAN names + friendly display names the visible order is effectively random (demo verifies: cards sort by invisible IBANs) · `AccountsPage.tsx:122-135` (single flat grid) · demo: Bitvavo/DEGIRO/IBKR all show "0,00 €" (cash sleeve) while their real value lives in Portfolio — reads as "empty account", actively misleading under ADR-103 · no sum anywhere on the page, so the hub can't be sanity-checked against the dashboard net position or net-worth Liquid tile (which pass-1 F1/F3 show may _actually_ differ — the missing total currently hides a real bug class) · `in_net_worth=false` / `spendable=false` are invisible on cards, so an excluded account looks identical to a counted one
-  - Fix: group the grid — Cash / Savings · Portfolio accounts · Liabilities · Archived (collapsed) — sorted by display label, with a converted subtotal per group and a grand "Net cash" line; portfolio-type cards under ADR-103 replace the misleading €0,00 with "Tracked in Portfolio →" (or show sleeve cash only when non-zero); a muted "not in net worth" chip when excluded. Keeps the existing card design and glass; adds only structure. Ties directly into the pass-4 portfolio redesign — group headers are where per-account holdings totals will land.
-
-- [x] **Merge has no preview and no receipt: the backend counts everything it moves, the UI shows none of it, and the candidate list silently depends on the hub's "Show archived" toggle** 🔼 ✅ 2026-07-27 · 0c40430 (#121 squash of WP-A3+B5; verified in-tree 2026-07-27: MergeAccountDialog consumes GET /accounts/:id/merge-preview (MergeAccountDialog.tsx:49-54) rendering row counts + projected post-merge balance (:105-114) + stampsInterleaved amber warning (:115-120); receipt toast uses the returned reassigned counts (useAccounts.ts:61-67, accounts.mergedReceipt); candidates from useAccounts({active:'all'}) with archived labeled, independent of any page toggle (:44,:88))
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX_
-  - `MergeAccountDialog.tsx:30` (`candidates = accounts.filter(...)` — the prop is the _currently filtered_ hub list, so archived accounts are mergeable only while the toggle is on) · `accountMergeService.js:70-79` (returns `reassigned: {transactions, planned, portfolio, funding}`) vs `hooks/useAccounts.ts:48-58` + `en.json` `accounts.merged` (toast: "Accounts merged" — counts discarded) · no pre-merge summary of what moves or the resulting balance, despite pass-1 F2 (interleaved-stamp corruption) making exactly that number the thing to check
-  - An irreversible, whole-history operation is confirmed on faith: the user acknowledges a generic warning, never sees "1.002 transactions + 3 planned will move; resulting balance €X", and gets a receipt that says nothing. Pass-1's corruption case would be _caught by the user's own eyes_ if the post-merge balance were previewed.
-  - Fix: preview step in the dialog (row counts per source — cheap dedicated endpoint or extend GET /accounts with counts; projected post-merge computed balance via the same lateral over the union, which is also where pass-1 F2's overlapping-stamp warning belongs); success toast uses the counts already returned ("Merged 'KBC' into 'KBC Zichtrekening' — 1.002 transactions moved"); candidates come from a full `useAccounts({active:'all'})` list with archived entries labeled, independent of the page toggle.
-
-**Filed 2026-07-27 (noticed during the reconcile-flow implementation/verification passes — small, not fixed to preserve scope):**
-
-- [x] **BankBalancesWidget chart legend still IBAN-tails while the cards above show display_name** 🔽 ✅ 2026-08-22 · 2c4742e0
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
-  - `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx:36-42` (`shortAccountName`) is now used only for chart series labels (`label: shortAccountName(acct.bank_account)`), so the legend reads "···12345678" under cards that say "KBC Zichtrekening". Map series labels through the same display-name resolution the cards use.
-
-- [x] **BankBalancesWidget transaction-count join silently drops the "N transactions" line on name divergence** 🔽 ✅ 2026-08-23 · cead0bf0
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
-  - The per-card count joins the aggregation payload to the entity list via `a.name === acct.bank_account`; any divergence (rename mid-flight, whitespace) hides the line with no signal. Low stakes; consider joining on account id once the payload exposes it.
-
-- [x] **`getAggregationBankBalances` client type omits fields the backend has sent since WP-A1** 🔽 ✅ 2026-08-23 · f8f494b6
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
-  - `apps/frontend/src/lib/api/aggregations.ts:69-84` lacks `display_name`, `drift`, `anchor_date`, `post_anchor_count` that `infoRepositoryBanks.js:156-172` serializes. Nothing breaks (the widget reads them off the account entity), but the contract type is stale and invites a consumer reading `undefined`.
-
-- [x] **ReconcileDialog's opening-balance backfill ignores a freshly entered reading** 🔽 ✅ 2026-08-26 (an unanchored account now posts a valid fresh amount/date pair to the opening-balance endpoint, while the stored statement remains the fallback only when the reading draft is empty. Invalid money or a valid amount with a missing date suppresses the action instead of silently backfilling a different stored figure; the description and payload use the same rounded amount and native reconciliation currency. Integration tests discriminate fresh, stored, invalid, and date-less paths, and the Accounts feature documentation matches. Independent money-path review approved closure; the focused 47-test suite, frontend lint/typecheck, and diff checks passed.)
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
-  - The "set as opening balance" path posts the STORED `statement_balance`/date even when the user has just typed a fresh reading above it. Left alone deliberately (out of the LEFT-clause scope); decide whether backfill should prefer the entered figure.
-
-- [x] **`accountFormMapping.ts:52` comment falsely claims the API serialises `statement_balance_date` as a full ISO timestamp** ⏬ ✅ 2026-08-26 (the comment now states the actual bare `YYYY-MM-DD` wire contract and retains `.slice(0, 10)` only as defensive compatibility for older cached ISO payloads. Independent review confirmed the comment matches the backend and nearby tests; no behavior or user documentation changed.)
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
-  - `accountRepository.js:19` sends `to_char(statement_balance_date,'YYYY-MM-DD')` — a bare calendar day. The same false premise was corrected in `driftBadge.ts` (kept as defense-in-depth); this comment still spreads it.
-
-- [ ] **App-wide money-input ambiguity: `parseLocaleNumber` reads "1000,005" as one million five, "1.234" as €1,23** ⏬
-  - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow adversarial verification_
-  - `utils/currency.ts:50-77` treats comma+3-digits as a thousands separator and a single dot as decimal; the shared `pattern` (`^-?[0-9]+([.,][0-9]+)?$`) accepts both shapes. Consistent across AddTransactionDialog/AddAccountDialog/ReconcileDialog/PlannedPaymentForm, so filed as one app-wide decision (e.g. locale-aware parsing or an echo-back of the parsed figure), not per-dialog fixes.
-
-**Checked clean (this pass):** Sidebar IA (ADR-099) — Accounts in the agnostic top zone is one click from anywhere, correctly `isAgnostic` in `WorkspaceContext.tsx:40`, and reads fine for a budgeting user (the /ai-chat workspace-overwrite quirk is already filed; Landmark icon collision with Tax already filed) · zero-accounts empty state (crafted EmptyState + Add CTA; only nit: `accounts.emptyDescription` mentions "holdings" while ADR-103 gates them — fold into any copy sweep) · type-driven flag suggestions on type change (ADR-089 pattern, works as designed) · edit-dialog prefill incl. the DATE→YYYY-MM-DD slice at `AccountsPage.tsx:243` · negative-balance rendering on liability cards (signed, correct; hub card shows plain foreground vs widget's `text-loss` — cosmetic, below filing threshold given the grouping fix above) · close-dialog destination list correctly limited to other _active_ accounts · merge menu item correctly hidden with a single account · dropdown menu provides the keyboard/touch path for open-transactions (touch/a11y angles of dblclick + icon-only trigger already filed) · demo-app visual pass of hub + dashboard this session: glass cards, badges, and layout render cleanly; no new cosmetic findings beyond the 2026-06-21 audit's 8 filed minors.
-
-**Resume points (pass 3):**
-
-- PlannedPaymentsPage's account surface not walked beyond the already-filed free-text field; whether planned rows should appear in the account drill-down ledger (they don't) is an open design question for the reconcile flow.
-- Rebalance page's presentation of per-account available cash (`crossWorkspaceDataService`) not reviewed from the UX side — it consumes `spendable`/`liquidity_class`, so the add-dialog hint copy proposed above should be validated against what that page actually shows.
-- Demo-app verification was hub + dashboard only; the merge/close dialog flows were reviewed in code, not driven live. The demo stack may lag current code — re-verify the sort-order observation (`ORDER BY a.name`) after any hub change.
-- The "one balance definition" fix (F3 here + pass-1 F1) needs a decision on whether the _history_ series also moves to anchor+delta-per-day or stays stamped — deliberately left to implementation; flag to the user if the historical chart would visibly shift.
-- Settings surface: no accounts-related settings exist today (nothing checked); if the reconcile flow adds a stale-statement threshold, Settings → Appearance/Behavior placement needs a look.
-
-#### Addendum 2026-07-10 — north-star shape (answering the user's "is this the best we can do?")
-
-**Verdict:** the findings above, fully applied, produce a _trustworthy version of the current
-shape_ — but the current shape itself (summary-card grid + a dropdown of dialogs) is a settings
-page wearing a dashboard costume, and no amount of patching gives the user's three questions a
-_place_ to live. The best version of this feature centers on a surface that doesn't exist yet:
-
-- [x] **Account detail route `/accounts/:id` — the ledger view — as the feature's center of gravity** 🔺 `(look-changing — signed off; ~L)` ✅ 2026-07-22 · 0c40430 (#121) (WP-B4: the /accounts/:id route with header + running-balance ledger + provenance + reconcile + moved lifecycle verbs is built and documented. Demo visual pass pending.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (route, ledger, and component coverage are present; the required end-to-end Demo walk and visual acceptance remain pending)
-  - ↪ _from: Accounts research 2026-07-10 · budgeting UI/UX addendum (main-agent assessment)_
-  - Three-level architecture: **Glance** (dashboard widget, same numbers/names as hub — F3) → **Overview** (hub, grouped + subtotals — F8) → **Ledger** (new route). Detail header: display name · computed balance · provenance line (F2) · drift chip → Reconcile (F1) · balance sparkline (reuse the 12-month series `infoRepositoryBanks` already produces). Body: running-balance ledger — the backend's per-account-partitioned `include_balance` window (`transactionRepository.js:121-123`) has **zero frontend consumers today**; the centerpiece is already half-built server-side. Account actions (edit/merge/close/reconcile) move here, where their context is; the hub card keeps only open + reconcile.
-  - **Supersedes F6's interim approach** (running-balance column bolted onto the filtered TransactionsPage): skip the banner hack, build the real route once. F6's "add Account to transactions-page filters" sub-item stands on its own.
-  - **This is where §4️⃣'s portfolio surfaces land naturally:** a broker account's detail = holdings section (Level-1 tagged positions + value, provenance "priced {date}") above the cash ledger — §4 surface 1's card then just _links_ here instead of carrying the whole story. Builds after the number-unification prerequisites (§1 F1 + §3 F3), never before.
-  - Explicitly NOT proposed: a from-scratch remake of the feature or a paradigm shift (envelopes etc.) — the dissatisfaction is trust/legibility/place, not layout aesthetics; dialogs, design system, and all backend plumbing are reused. Scope ends at: new route + hub restructure (F8) + action relocation.
-
-### 4️⃣ Portfolio extension — design & plan
-
-> **⚠️ Partially superseded 2026-07-10 (same day, user decisions):** the Level-1 "tags only, no per-broker P&L" ceiling below was **overridden** — the user wants per-broker P&L built (via whole-lot tagging partitions, NOT by fixing ADR-091 machinery), the brokerage cash-row import path is **kept and fixed** (user imports broker cash statements), the per-broker history chart will be **rebuilt later** on a persisted side table, and wallets are **visually distinguished**. The decision record is [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]]; the operative plan is §5️⃣ below. Read this section for background/rationale only — where it conflicts with §5️⃣, §5️⃣ wins (notably: parts of the disposition table's "DELETE" column for the brokerage cash path, the "sell validation stays investment-wide by design" spec, and Phase 5's "deliberately unscheduled" status).
-
-**Recommendation (one paragraph):** Adopt **Level 1 — broker accounts as _tags on trades_, cash as ordinary budgeting ledger** — and stop there. In the portfolio world an account should mean exactly one thing to this user: _where a holding is kept_ (Degiro, IBKR, Bolero, Bitvavo) — a grouping label that answers "what do I have at each broker", never a math boundary. Belgian tax gives per-custodian cost basis zero justification: TOB is per-transaction, Reynders 30% and Arizona CGT 10% are per-year across all brokers, dividend WHT is per-payment (verified against `docs/features/portfolio-tax.md` + `belgian-tax.md`) — so the whole ADR-091 per-account cost-basis apparatus (per-account FIFO walks, in-specie move math, account-scoped sell validation, per-account snapshot weights) serves no decision this user ever makes, and it is precisely where the filed bugs cluster. Level 1 keeps `account_id` on `portfolio_transactions` (migration 0052, already applied) purely for grouping/value attribution, keeps `getPortfolioSummary.byAccount` (live, parity-locked) as the one decomposition source, and **deletes** the leg-posting, move, and per-account-history machinery rather than fixing it — 10 already-filed bugs become moot by deletion. Broker cash needs no synthesized trade legs: the sleeve is a normal budgeting account fed by real transfers (KBC → Degiro deposit pairs via ADR-083) and anchored by pass 3's reconcile flow, so its balance always carries the "as of {date} from {you/statement}" provenance line instead of pretending to be live. `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is retired, not flipped: the surfaces it hides are partly deleted (Level-2 machinery) and partly re-shipped ungated in redesigned Level-1 form.
-
-**User-concept model:** three levels; **Level 1 is the target** — stop there.
-
-- **Level 0 — today (flag off).** Data: lots global (`account_id` ignored), cash per account. Math: one global cost basis, one holdings aggregate. UI: zero per-account portfolio surface; brokerage hub cards show a misleading €0,00 (pass-3 finding). Delivers nothing the user asked for.
-- **Level 1 — broker tags + reconciled cash (TARGET).** Data: `account_id` on `portfolio_transactions` only — no new columns, no new tables, nothing on `investments`, no `account_id` semantics on lots beyond the label. Math: **unchanged** — cost basis, sell validation, gain/loss, tax estimators, net-worth headline all stay global; per-account numbers are _display decompositions_ of the global truth (`byAccount` partition, Σ == totals by construction). Cash: the sleeve is the account's ordinary ledger + reconcile anchor; **trades never write to the ledger** (no ADR-090 legs). UI: broker grouping/filtering, per-broker value + cash cards with provenance lines, file-level import routing. Re-tagging a lot is a label edit (`UPDATE … SET account_id`), so an in-specie broker transfer — the thing `moveHoldingService` corrupts today — becomes one bulk re-tag with **no cost-basis math at all**.
-- **Level 2 — per-account cost basis (NOT built; likely never).** Data: same column, but lots become account-scoped positions. Math: per-(investment, account) FIFO/avg walks, account-scoped sell validation, per-account invested/realized, per-account snapshot history. UI: mandatory account pickers, move flows with lot math, close-account liquidation previews. This is the ADR-091/100 surface the user rejected. Re-enter only if a real per-custodian consumer appears (per-broker rebalancing or non-Belgian tax-lot rules) — none exists.
-
-**Surfaces** (the deliberate few — everything else stays account-free):
-
-1. **Accounts-hub broker card** (slots into pass-3's grouped hub, "Portfolio accounts" group) `(look-changing — needs user sign-off)`. Shows: display name · **holdings value** (Σ tagged lots at market, from `byAccount`) · **cash** (computed ledger balance) · one provenance line each, in pass-3's language: "holdings: 12 positions, priced {date}" / "cash: as of {5 Jul} reconcile + {2} entries since". Replaces the misleading €0,00. Actions: Reconcile cash (pass-3 dialog, unchanged) · View holdings (→ portfolio overview pre-filtered to this account) · View transactions (ledger drill-down).
-2. **Net-worth "By Account" table — current-point only.** Cash + holdings + total per account, one "Unassigned" row for `account_id NULL` lots (with an "assign…" affordance), footer noting it decomposes the same headline. Powered by live `getPortfolioSummary.byAccount` + computed balances — **not** by the snapshot walk. The historical `NetWorthByAccountChart` + `GET /api/info/net-worth/by-account` are deleted, not un-hidden (see disposition).
-3. **Portfolio overview broker filter.** An account filter (All / Degiro / IBKR / … / Unassigned) on `PortfolioOverviewPage` holdings tables + a per-broker subtotal line when filtered. Client-side over data `usePortfolio` already fetches. This is the grouping payoff; it must _not_ re-label filtered gain/loss as "Degiro P&L" — header stays "holdings at Degiro" (value), since basis is global.
-4. **Import routing confirmation (file-level, ADR-095's batch grain).** Portfolio import keeps one account per file: picker pre-filled from the saved parser config's remembered account ("Degiro" parser → Degiro account), review header states "**128 trades → Degiro** (from your saved parser)", commit stamps `portfolio_import_batches.account_id` → lots inherit (existing 0057 path). No per-row routing UI, ever.
-5. **Trade dialogs — a subtle default, not a picker.** `AddPortfolioTxnDialog` shows a muted one-liner "→ Degiro · change" resolved by defaulting rules (below); `EditPortfolioTxnDialog` keeps its account field, relabeled "Broker", in the details section.
-
-**Complexity firewall** — where per-account must NOT leak:
-
-- **Trade entry:** never a mandatory picker, never blocks submit. Defaulting: (1) instrument → account of that instrument's most recent tagged lot; (2) else the account of the user's last manual trade; (3) else unassigned. Wrong default = harmless label, fixed by re-tag.
-- **Sell validation:** stays investment-wide **by design** — at Level 1 positions are global, so investment-wide is _correct_, not a gap; the memory-tracked "sell validation is investment-wide" item is reclassified as spec. (The split-blindness in `getNetUnitsOnOrBeforeDate` — filed above — is a global-math bug and must still be fixed.)
-- **Net-worth math:** headline and snapshots stay global; per-account is a read-time decomposition, parity-locked; nothing ever sums per-account figures to _form_ an aggregate.
-- **Import:** account is a batch attribute only; row-level routing/classification UI never returns.
-- **Cost basis & tax:** always global. `PortfolioTaxPage`, Reynders/TOB/CGT estimators, `portfolioTax.ts` — untouched at every level.
-- **Ledger:** the portfolio side never writes `transactions` rows (no legs); the ledger side never affects cost basis. The only coupling is read-only composition on the two display surfaces above.
-
-**Existing machinery disposition** (deletion is the headline; every filed portfolio-accounts bug mapped):
-
-| Machinery                                                                                                                                                                                  | Disposition                                                                                                                                 | Filed bugs affected                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `moveHoldingService` + `MoveHoldingDialog` + `POST /api/investments/:id/move`                                                                                                              | **DELETE** — replaced by a trivial bulk re-tag endpoint (`PATCH account_id` on a lot set)                                                   | 🔺 "moveHoldingService wrong units/cost basis" (~line 114) → **moot**                                                                                                                                                                                                                                                                         |
-| `tradeCashLegService` / `createTradeCashLeg` + ADR-090 legs (`transfer_source='trade'`)                                                                                                    | **DELETE** — sleeve cash = ledger + reconcile; incl. one-time cleanup of any existing `'trade'` legs in live/demo DBs                       | ⏫ "trade + cash leg not atomic" (~160) → **moot** · 🔺 "orphaned trade-linked cash legs" (~121) → **moot** · 🔽 "FX-blind foreign-currency legs" (~518) → **moot** (leg path; the general `accountBalanceSql` FX note stays with budgeting) · ⏫ "ADR-090 vs ADR-083 reconciler releases trade legs" (~2850) → **moot**                      |
-| Brokerage fan-out: `is_brokerage`/`route` (migration 0060), `classifyBrokerageRow`, cash path in `portfolioImportPipeline/commit.js`, dormant `brokerageFanout.js` + `brokerageRouting.js` | **DELETE** (pending open question 5) — portfolio import imports trades only; broker cash arrives via budgeting (transfers + reconcile)      | 🔺 "brokerage cash rows lose their sign" (~82) → **moot** · 🔺 "rollback deletes wrong-table ids" (~88) → **moot** (verify no committed brokerage batches exist before dropping the repair) · 🔽 "instrument-less dividend/fee rows can never commit" (~530) → **moot** · 🔽 "brokerageFanout `{...created,...row}` spread" (~525) → **moot** |
-| `snapshotBuilder` per-account weights: `splitByAccount`, `value_by_account`, `accountSnapshotParity` test                                                                                  | **DELETE** — by-account is current-point only, from the live summary                                                                        | 🔼 "splits never rescale per-account weights" (~293) → **moot** · 🔽 "sanitizeSnapshotSpikes breaks Σ value_by_account" (~663) → **moot** · ⏬ pass-2 "persist value_by_account or rebuild per miss" (~5139) → **resolved by deletion**, not persistence                                                                                      |
-| `GET /api/info/net-worth/by-account` (historical walk) + `NetWorthByAccountChart`                                                                                                          | **DELETE** — the table reads live `byAccount` + computed balances                                                                           | (same pass-2 item as above)                                                                                                                                                                                                                                                                                                                   |
-| `useAccountPositions` / `useAccountNetWorth` / `CloseAccountDialog` holdings block                                                                                                         | **DELETE / rewrite value-only** — close flow gains a "re-tag {n} lots to…" step (one UPDATE), no cost-basis preview                         | 🔼 "triple `as unknown as` cast + `today: ''` NaN" (~477) → **moot**                                                                                                                                                                                                                                                                          |
-| Account-scoped sell validation (never built)                                                                                                                                               | **never build** — investment-wide is the Level-1 spec                                                                                       | memory item "sell-validation investment-wide" → **reclassified: not a bug**                                                                                                                                                                                                                                                                   |
-| `getPortfolioSummary.byAccount` + parity tests                                                                                                                                             | **KEEP** — the single decomposition source for both surfaces                                                                                | —                                                                                                                                                                                                                                                                                                                                             |
-| `portfolio_import_batches.account_id` (0057) + commit inheritance                                                                                                                          | **KEEP** — file-level routing is the right grain                                                                                            | —                                                                                                                                                                                                                                                                                                                                             |
-| `EditPortfolioTxnDialog` account field; `account_id` on trade POST/PATCH                                                                                                                   | **KEEP** (relabel "Broker"; add the defaulting rules)                                                                                       | —                                                                                                                                                                                                                                                                                                                                             |
-| Portfolio-import dedup predicates                                                                                                                                                          | **MUST FIX (prerequisite)** — add `account_id` + currency to `isFieldDuplicate` before tags matter                                          | 🔼 "dedup ignores account_id" (~281) stays open, scheduled Phase 2                                                                                                                                                                                                                                                                            |
-| Sell-availability split-blindness; "commit errors strand rows"; ticker collision                                                                                                           | **MUST FIX — independent of this design** (global-math / import robustness; filed above)                                                    | ~166, ~287, ~154 stay open                                                                                                                                                                                                                                                                                                                    |
-| `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` / `isPerAccountHoldingsEnabled`                                                                                                                         | **REMOVE the flag** in Phase 1: Level-2 surfaces it gates are deleted; Level-1 surfaces ship ungated later. ADR-103 gets a superseding note | —                                                                                                                                                                                                                                                                                                                                             |
-| `has_cash_sleeve` / `multi_currency_cash` flags                                                                                                                                            | consumer-less at Level 1 → hide per pass-3's dialog fix; column drop deferred to a later contraction migration                              | —                                                                                                                                                                                                                                                                                                                                             |
-
-**Open questions for the user** (each decidable; recommended answer marked):
-
-- [x] **Q1 — Broker cash freshness.** Accepted in ADR-108: broker cash is reconcile-anchored ledger cash with a visible freshness date; no synthesized trade cash legs. ✅ 2026-08-31
-- [x] **Q2 — Per-broker cost basis / P&L, ever?** Accepted in ADR-108: per-broker P&L remains in scope, rebuilt as partitions of the global lot engine rather than by restoring the deleted inheritance machinery. ✅ 2026-08-31
-- [x] **Q3 — Historical per-broker net-worth chart:** accepted in ADR-108: delete the old snapshot walk and schedule any later history on a persisted side table. ✅ 2026-08-31
-- [x] **Q4 — Backfill existing lots?** Accepted in ADR-108: offer bulk assignment per instrument through the one-time nudge; leaving lots unassigned remains valid. ✅ 2026-08-31
-- [x] **Q5 — Brokerage cash statements:** accepted in ADR-108: keep and repair the brokerage cash-statement import path; only synthesized trade cash legs are deleted. ✅ 2026-08-31
-- [x] **Q6 — Wallets/exchanges:** accepted in ADR-108: use the same broker-tag model while visually distinguishing holdings-only accounts with no cash line. ✅ 2026-08-31
-
-**Resume points (pass 4):**
-
-- Real Degiro/IBKR/Bolero/Bitvavo CSV shapes not sampled this pass — Q5's recommendation assumes trade-only imports; confirm against the user's actual files before Phase 1 deletes the cash-row path.
-- Bank-side deposit legs ("wire KBC → Degiro") pair with a broker-side ledger entry only if the user records one; otherwise they count as spending (pre-existing, ADR-083). A recipient-rule or reconcile-dialog affordance ("record matching deposit on {account}") is a candidate Phase-4 nicety — not designed here.
-- Rebalance page (`crossWorkspaceDataService`) reads per-account _cash_ only — unaffected by this design, but not re-read this pass.
-- Exhaustive removed-endpoint inventory for openapi/endpoint-matrix (Phase 1) not compiled — known: `POST /api/investments/:id/move`, `GET /api/info/net-worth/by-account`, brokerage batch params; sweep `docs/api/` before committing.
-- Demo app (`install-demo.sh` + baked `01-demo.sql`) contains account-tagged lots and brokerage fixtures — regenerate after Phase 1 and re-run the visual pass.
-- Contraction migration for dormant columns (`route`, `is_brokerage`, `transfer_source='trade'` check value, sleeve flags) deliberately deferred — file it only after Phases 1–4 have soaked.
-
-### 5️⃣ Implementation plan (SIGNED OFF 2026-07-10 — the operative document)
-
-**Status:** the user signed off on the look-changing budgeting remake (grouped hub + `/accounts/:id` ledger route + reconcile flow) and answered all §4️⃣ open questions. Decision records: `docs/adr/107-accounts-budgeting-ux-remake.md` (budgeting) + `docs/adr/108-portfolio-accounts-v2-broker-tags.md` (portfolio). **Phase 0 is done — implementation may start at WP-A1.**
-
-**Decisions recorded (verbatim, 2026-07-10):**
-
-- **Q1** Broker cash = reconcile-anchored ledger cash with a dated provenance line; **no synthesized trade cash legs** (ADR-090 leg machinery deleted).
-- **Q2** Per-broker P&L **will be built** — via whole-lot broker tagging + partitioned math (ADR-108), NOT by fixing ADR-091's FIFO/move machinery.
-- **Q3** Historical per-broker chart: buggy snapshot `value_by_account` walk **deleted now**; per-broker history **rebuilt later** (WP-C7) on a persisted side table written forward-only.
-- **Q4** Existing global lots get **bulk-assigned** to brokers via a one-time nudge (WP-C3); per-broker P&L surfaces gate on an instrument having no unassigned lots.
-- **Q5** Brokerage **cash-statement imports are KEPT and fixed** (user imports them) — overrides §4️⃣'s delete recommendation for that path.
-- **Q6** Wallets/exchanges (Bitvavo, self-custody) are **visually distinguished**: holdings-only cards, no cash line/reconcile; exact treatment in WP-C5.
-
-#### Guardrails for implementing agents (read before every WP)
-
-1. **Verify before building.** Findings in §§1–3 are single-pass research — confirm each claim against current code (file:line refs may have drifted). If a finding doesn't reproduce, don't "fix" it: strike it here with a dated note.
-2. **Sequential WPs, one commit-set each.** Do WPs in dependency order (graph below), one WP per session/branch of work; commit to main (repo convention — no feature branches) with descriptive messages, no self-co-author credit. Each WP must leave the app shippable.
-3. **Design language is binding:** rich aesthetic (aurora/glass/jewel per ADR-105) untouched. The sign-off covers _structure_ (grouping, new route, relocated actions, provenance sublines, badge tones) — not flattening, not new visual systems. Reuse `Card`/`Badge`/glass classes as AccountsPage does today.
-4. **Conventions:** backend never `null` → use `undefined` · frontend strict TS, Zod for new form validation, `@/*` alias · React Query for server state; new query keys follow existing patterns and EVERY new mutation lists exactly which keys it invalidates (this feature's history is invalidation bugs — see §2 F1) · i18n: every new string in `i18n/source/` for **en + nl**, then `bun run validate-locales`.
-5. **Migrations:** create via `bun run db:revision -- "msg"`, ship a working `downgrade()`, note blast radius. The app auto-applies on boot (2026-06-25 change) — still let the user review the migration before it lands. NEVER `ALTER TABLE investments` (it's a VIEW on legacy installs — side-table pattern only, register in `BACKUP_COVERED_TABLES`).
-6. **Docs duty (mandatory per WP):** run the `vision-kb-updater` agent after code changes; endpoint add/remove/change → `docs/reference/api-endpoint-matrix.md` + `openapi.yaml` + the route's `docs/api/` page; behavior changes → feature doc (`docs/features/net-worth.md`, `portfolio.md`, `transfers.md`, `import.md`, `portfolio-import.md`; **create `docs/features/accounts.md`** in WP-B4 — the feature has no doc today). ADRs are append-only — never edit 088–106; supersede via 107/108 notes only.
-7. **TODO housekeeping (mandatory per WP):** tick items this file lists when a WP resolves them (they live in §§1–3 AND in the main Findings sections above — the WP briefs name them); strike bugs mooted by deletion as `~~…~~ moot per ADR-108 (WP-C1, YYYY-MM-DD)`, never silently delete.
-8. **Verification scale (from CLAUDE.md):** backend/migration/deletion WPs = tests + lint + build + focused checks; UI WPs = targeted tests + workspace lint + a visual pass on the **Vision Demo app** (never the real stack; rebuild via `./install-demo.sh` after code changes; port = `appPort` in `~/Library/Application Support/Vision Demo/settings.json`, currently 36962; charts lazy-render — scroll into view before screenshotting). Parity/invariant tests named in a WP are acceptance criteria, not suggestions.
-9. **Money math:** Decimal/`NUMERIC` handling is per-call-site — coerce pg NUMERIC strings at the boundary as neighboring code does; currency formatting via `useCurrencyFormatter`; dates via the `todayAppDateString`/YYYY-MM-DD conventions (watch the DATE-serialized-as-ISO-timestamp trap, cf. `AccountsPage.tsx:243`).
-10. **When a WP brief conflicts with reality** (code moved, a dependency WP was skipped, a decision looks wrong in practice): stop, log the conflict under §🔁 below, and ask the user — don't improvise around a signed-off decision.
-
-#### Dependency graph
-
-```
-WP-A1 ─→ WP-A2 ─→ (A done) ─→ WP-B1 ─→ WP-B2 ─→ WP-B3 ─→ WP-B4 ─→ WP-B5 ─→ WP-B6
-                                                            │
-WP-C1 (independent, any time after ADRs) ─→ WP-C2 ─→ WP-C3 ─→ WP-C4 ─→ WP-C5 ─→ WP-C6 ─→ WP-C7
-                                                            (WP-C5 also needs WP-B3+B4)
-WP-A3 after WP-A1; before or with WP-B5 (merge preview UI consumes its endpoint)
-```
-
-Track A = backend truth (do first — no UI is trustworthy on disagreeing numbers). Track B = budgeting UX remake. Track C = portfolio v2. A and C1 can interleave; B before C5.
-
-#### Track A — one balance definition (backend truth)
-
-- [x] **WP-A1 — Unify the balance computation + expose provenance** (M) ⏫ ✅ 2026-07-22 · 0c40430 (#121)
-  - Fix §1 F1 (net-worth headline, `infoRepositoryNetWorth.js:108-118` + no-stamps fallback + `in_net_worth`/liability handling) and the backend half of §3 F3 (`infoRepositoryBanks.js:28-44` naive stamp; drop the `balance IS NOT NULL` population gate) by making **every current-balance read** use `COMPUTED_BALANCE_LATERAL` (`accountBalanceSql.js`). Extend the lateral to also return `anchor_date` + `post_anchor_count` (§3 F2 — both already inside the CTE) and include `display_name` + `drift` in the bank-balances payload.
-  - Decide-and-flag: the widget's 12-month **history** series stays stamp-based for now (per §3 resume note) — if implementation shows a visible chart shift, screenshot demo before/after and tell the user.
-  - Acceptance: one SQL definition of "current balance" project-wide (grep proves no other current-balance source); API returns provenance fields; hub/widget/net-worth agree on number + population for a demo fixture with (a) manual-only account, (b) stamped+manual-rows account, (c) liability; targeted vitest for the three cases; net-worth route comment ("Σ by construction") corrected.
-  - Resolves: §1 F1 · §3 F3 backend · unblocks §3 F2. Also tick main-Findings "Net worth is never invalidated…" only in WP-A2.
-- [x] **WP-A2 — Cache/invalidation + dead weight + index** (S/M) ⏫ ✅ 2026-07-22 (verified already complete in the current tree — all four sub-items landed by prior backlog rounds: §2 F1 backend cache-bust 55d9364 (#93) + frontend named-key invalidation in `invalidateAccountDerived`/`invalidateAccountRepoint`/`invalidateInvestmentData` (net-worth keys, merge narrowed off the blanket call); §2 F2 dead `mv_bank_balances` dropped in migration 0082; §2 F3 `bank-balances` 60s server cache 55d9364 (#93) busted off the shared seam; §2 F4 partial index `idx_transactions_account_stamped (account_id, date DESC, id DESC) WHERE is_active AND balance IS NOT NULL` in migration 0079/55d9364 (#93). NOT verifiable headlessly: the live EXPLAIN before/after for the stamped-balance probe (needs a live DB — see §2 resume point))
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (source and focused tests support all four sub-items; the required live migration up/down and stamped-balance `EXPLAIN` comparison were not run without PostgreSQL)
-  - §2 F1: account mutations (CRUD/merge/close/import commit) bust `netWorthResponseCache` (call `invalidatePortfolioCaches()` or equivalent); narrow the blanket `queryClient.invalidateQueries()` in merge/close to named keys, and add `['net-worth']`/`['net-worth-by-account']` to account CRUD + `useInvestmentMutations.invalidateAll` (main-Findings item ~line 147). §2 F2: drop dead `mv_bank_balances` (migration + code, follow the `mv_recipient_monthly` removal precedent; fix the misleading `source: 'mv'` label). §2 F4: partial index migration `(account_id, date DESC) WHERE balance IS NOT NULL` (verify predicate shape against the actual probe SQL first). §2 F3: add the missing server-side cache for `/api/aggregations/bank-balances` mirroring the net-worth cache TTL + the new invalidation.
-  - Acceptance: mutation → immediate fresh numbers on dashboard/hub/net-worth (demo-verifiable); migration up+down clean on demo DB; EXPLAIN before/after for the stamped-balance probe recorded in the commit message (closes §2's "no live EXPLAIN" resume point).
-
-#### Track B — budgeting UX remake (ADR-107; look-changing, signed off)
-
-- [x] **WP-B1 — Reconcile flow** (M) 🔺 ✅ 2026-07-27 · 1cb2cc7 (#131) (the LEFT items below are all landed: fresh-reading input + live cent-rounded drift preview, statement-date-on-badge + stale>45d warning tone via shared useDriftBadge, statement fields mode-gated out of the create dialog, and the "show transactions since {date}" exit wired to /accounts/:id?since=. Adversarial pre-commit verification added money hardening: backdated-reading double-count warning, raw-input shape validation, error-path cache invalidation. en+nl + validate-locales green; full frontend suite green. Demo visual pass pending.) — earlier state: 🔎 partial-0c40430 (#121) 2026-07-22 (SUBSTANTIALLY PRESENT: `ReconcileDialog` exists and is wired to the drift badge (click) + card/detail actions, with two explicit resolutions (accept = re-anchor to computed; adjustment = stamp a balancing row) — the ADR-094 Phase C realization of the flow, functionally equivalent to the spec's two exits. WP-B5 added the "set as opening balance" backfill path for unstamped accounts, and WP-A1/B2 give it computed balance + as-of provenance. LEFT (deferred, flagged): the spec's literal "enter a fresh statement reading" input + live drift preview, the statement-date-on-badge + stale>45d warning-tone, removing statement fields from the create dialog, and wiring the "show transactions since {date}" exit to deep-link `/accounts/:id?since=` (the route ALREADY accepts `?since=` from WP-B4 — only the dialog exit is unwired). These are additive polish on a working flow; a follow-up session with the demo app should finish + visually verify them rather than rebuild the resolution model.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (the complete source path and tests are present; the acceptance’s ≤3-interaction Demo walk, both exits, and visual state were not repeated)
-  - §3 F1 fix as specced: Reconcile dialog (from card action, drift-badge click, later detail header) — current computed balance + as-of, statement input + date (default today), live drift preview, exits "re-anchor" and "show transactions since {date}" (deep-link to the account-filtered ledger). Badge: show statement date ("Drift +€15,50 · statement 3 Jun"); stale (> ~45 days) = warning tone not destructive; remove statement fields from the **create** dialog (they move to Reconcile; keep in edit-Advanced for now). Backend: also fix the main-Findings "statement_balance storable without date" validation (~line 840) here.
-  - Acceptance: the loop closes in ≤3 interactions from the hub; both exits work; en+nl strings; validate-locales green; demo visual pass.
-- [x] **WP-B2 — Provenance surfaces** (S) 🔺 ✅ 2026-07-22 · 0c40430 (#121) (threaded WP-A1's anchor_date + post_anchor_count into the accounts payload + Account type/openapi/generated.ts; new `useBalanceProvenance` hook renders "as of {date} bank statement + {n} entries since" / "sum of {n} entries" muted sublines on hub cards, the reconcile dialog's computed row, and the dashboard widget; AddTransactionDialog shows the backdated-before-anchor note. en+nl; backend 189/2933 + frontend typecheck/build/135 test files green. VISUAL PASS on the demo app still pending — approximated by an integration test. WP-B4's ledger header will reuse the same hook when it lands.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (source and integration coverage are present; the Demo visual pass and backdated-entry behavior remain unverified on a running app)
-  - §3 F2 frontend: muted subline on hub cards (and WP-B4's header later) — "as of {date} bank statement + {n} entries since" / "sum of {n} entries" from WP-A1's fields; reuse in the Reconcile dialog. AddTransactionDialog: inline note when chosen account+date ≤ that account's anchor ("Dated before the {date} statement — balance won't change"). Same line in the dashboard widget (its backend fields arrive in WP-A1).
-  - Acceptance: every rendered current balance in the app carries provenance or is a computed sum labeled as such; backdated-entry note fires on the demo fixture.
-- [x] **WP-B3 — Grouped hub** (M) 🔺 `(look-changing — signed off)` ✅ 2026-07-22 · 0c40430 (#121) (flat grid + show-archived toggle → four ordered groups Cash&Savings/Portfolio/Liabilities/Archived(collapsed) via pure tested `groupAccounts`, per-group converted subtotals + grand "Net cash" line (= Σ in_net_worth non-portfolio computed balances, WP-A1 population), "not in net worth" chip, portfolio cards show "Tracked in Portfolio →" vs €0. Existing glass card reused unchanged. +35 tests; frontend 136 files/1887 green. **DEMO VISUAL PASS PENDING** — new group-header/Net-cash chrome needs the user's eyeball on the aurora/glass look; portfolio-group subtotal renders €0,00 (one-line swap to placeholder if it reads wrong).)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (grouping/subtotal code and tests are present; the signed-off Demo visual acceptance remains pending)
-  - §3 F8: group grid into Cash & Savings · Portfolio accounts · Liabilities · Archived (collapsed), sort by display label within groups, converted per-group subtotal + grand "Net cash" line; "not in net worth" chip; portfolio-type cards drop the misleading €0,00 → "Tracked in Portfolio →" placeholder until WP-C5 replaces it with real holdings value. Keep existing card design/glass; structure only.
-  - Acceptance: demo shows deterministic grouping/order; group subtotals reconcile with the net-worth Liquid tile (they now share WP-A1's definition — assert in a test); archived collapsed by default (replaces the Show-archived toggle).
-- [x] **WP-B4 — `/accounts/:id` ledger route (the centerpiece)** (L) 🔺 `(look-changing — signed off)` ✅ 2026-07-22 · 0c40430 (#121) (new lazy /accounts/:id route promoting AccountDetailSheet → full page: header (name·balance+provenance·drift→Reconcile·sparkline), running-balance ledger (backend now serializes running_balance for include_balance=true; date-desc, Load-more; ?since= client filter = the WP-B5 reconcile-exit target), Holdings placeholder for portfolio types. Edit/Merge/Close moved to the header menu; hub card single-click navigates here, dropdown kept for a11y; widget cards deep-link too; AccountDetailSheet deleted. TransactionsPage gains the §3 F6 Account filter. docs/features/accounts.md created. typecheck/build/lint 0; frontend 137/1897 + backend 189/2935 green; matrix 212. **DEMO VISUAL PASS PENDING** — new route/header/ledger chrome needs the user's eyeball.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (route and ledger source/tests are present; the full Demo “is this right?” walk, deep-link, and visual acceptance were unavailable)
-  - §3-addendum: new route — header (display name · balance + provenance · drift chip → Reconcile · sparkline reusing the existing 12-month series) over a **running-balance ledger**: fetch the account's transactions with `include_balance=true` (`transactionRepository.js:121-123` — first frontend consumer; default date-desc sort; verify the window's sort interaction). Move Edit/Merge/Close into the detail header menu; hub cards keep open + reconcile. Card click (single, not double) navigates here; keep dropdown for a11y. Transactions page: add "Account" to the filter UI (§3 F6's surviving sub-item — the running-balance-on-TransactionsPage interim is superseded, do NOT build it).
-  - Portfolio-type accounts: render a "Holdings" placeholder section above the ledger (fed in WP-C5); wallets per Q6 defer to WP-C5.
-  - Acceptance: is-this-right workflow (notice odd balance → open account → scan ledger with running balance → reconcile) demo-walkable end-to-end; deep-links from Reconcile "show transactions since" land filtered here; **create `docs/features/accounts.md`** documenting the whole surface; route lazy-loaded like other pages.
-- [x] **WP-B5 — Dialog & lifecycle cleanup** (M) ⏫ ✅ 2026-07-22 · 0c40430 (#121) (§3 F4 opening-balance on create + liability relabel + reconcile "set as opening balance" backfill; §3 F5 one "Close account…" verb (Archive folded in, on WP-A3 semantics) + Delete gated on has_transactions===false + rewritten copy w/ residual-balance heads-up; §3 F7 name helper + display_name auto-suggest + hidden consumer-less flags + field hints; §3 F9 MergeAccountDialog consumes the WP-A3 /merge-preview endpoint (counts + projected balance + interleaved warning) + real-count receipt toast + active:'all' candidates. PATCH-to-clear was already done. typecheck/build/lint 0; frontend 139/1909 green. **DEMO VISUAL PASS PENDING.** Deferred (out of §3 F4/F5/F7/F9 scope): the reconcile "show transactions since" deep-link exit (route already accepts ?since=) and a full residual-cash transfer flow in close (surfaced as a warning instead) — both flagged for a follow-up.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (the scoped F4/F5/F7/F9 source and tests are present; their required Demo visual/interaction acceptance was unavailable; the residual-cash transfer remains tracked separately as an open partial)
-  - §3 F4: opening-balance field on create ("Opening balance (as of {date})" → visible ledger row, `SYSTEM:OPENING_BALANCE`-style category; liability relabel "Outstanding debt"; reconcile-dialog backfill path "set as opening balance" when no stamp). §3 F5: ONE "Close account…" verb (fold Archive; fix copy narrating the gated holdings flow; Delete only when `has_transactions === false`, else disabled row with explanation) — build on WP-A3's semantics. §3 F7: `name` helper text ("must match your bank import label…"), auto-suggest display_name, hide `has_cash_sleeve`/`multi_currency_cash`/`tax_wrapper` (consumer-less), one-line hints on owner/liquidity/spendable. §3 F9: merge preview (consume WP-A3's endpoint: "1.002 transactions + 3 planned will move; resulting balance €X" + interleaved-stamp warning), receipt toast with real counts, candidates from `active:'all'` independent of hub toggle. Also fix the main-Findings PATCH-to-clear pair (backend sanitize + frontend explicit-null, ~line 209) here — it's the same dialog surface.
-  - Acceptance: all four §3 items + PATCH-to-clear demo-verified; en+nl; the "four verbs" menu is two (Open/Edit… + Close) plus conditional Delete.
-- [x] **WP-B6 — Import disclosure** (S) 🔼 ✅ 2026-07-22 · 0c40430 (#121) (ImportReviewPage: read-only per-account "{n} transactions → {account}" disclosure with "(new account will be created)" badge (grouped from staged rows' bank_account, D1-normalized new-account detection vs useAccounts(all)); post-commit "Review accounts" nudge toast when a new account was created. Backend: preview endpoint now projects the already-stored bank_account. docs/features/import.md updated. en+nl; backend 189 + frontend 139/1913 green. Demo visual pass pending.)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (source and tests are present; fixture-import disclosure and post-commit nudge were not repeated in the Demo)
-  - §3 F7(import): review/summary line "{n} transactions → **{account}**" with "(new account will be created)" badge; post-commit toast linking to the hub to classify new accounts. Read-only — no override picker.
-  - Acceptance: demo import of a fixture CSV shows the disclosure; a new-account import produces the nudge; `docs/features/import.md` updated.
-
-#### Track C — portfolio accounts v2 (ADR-108)
-
-- [ ] **WP-C1 — Deletions + flag retirement** (M) ⏫ ✅ 2026-07-22 · 0c40430 (#121) _(revised from §4 Phase 1 per Q5 — the brokerage cash-row IMPORT path is NOT deleted)_ — deleted tradeCashLegService + all ADR-090 leg synthesis, moveHoldingService + POST /investments/:id/move + MoveHoldingDialog, snapshot value_by_account/splitByAccount + parity tests, GET /info/net-worth/by-account + NetWorthByAccountChart, the VITE_ENABLE_PER_ACCOUNT_HOLDINGS flag + every isPerAccountHoldingsEnabled branch (incl. useAccountPositions/useAccountNetWorth), and brokerageFanout.js (dead ADR-095 leg synthesis). KEPT per Q5: brokerage import classification + cash path, getPortfolioSummary.byAccount, batch account_id inheritance, Edit-dialog account plumbing, dormant columns + the portfolio_snapshot_accounts table. Docs/openapi/matrix/generated.ts/locales updated (−2 ops → 212). Verified: backend 189 files/2931 green, frontend typecheck+build+134 test files green, grep-clean. **DEFERRED (runtime, user-gated):** deleting existing `transfer_source='trade'` rows + demo-DB regen — count first with `SELECT count(*) FROM transactions WHERE transfer_source='trade';`
-  - Tracking: 🔎 partial-audit 2026-08-28 (the source deletions are complete, but the record’s user-gated live/Demo legacy-row cleanup and Demo regeneration were never performed)
-  - Delete: `tradeCashLegService`/`createTradeCashLeg` + all ADR-090 leg synthesis (+ one-time data audit/cleanup of `transfer_source='trade'` legs in live + demo DBs — count first, show the user before deleting rows) · `moveHoldingService` + `POST /api/investments/:id/move` + `MoveHoldingDialog` · snapshot `splitByAccount`/`value_by_account` + `accountSnapshotParity` test · `GET /api/info/net-worth/by-account` + `NetWorthByAccountChart` · the `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` flag and every `isPerAccountHoldingsEnabled` branch (delete gated JSX; `useAccountPositions`/`useAccountNetWorth`/CloseAccountDialog holdings block go too — close-flow re-tag arrives in WP-C6). Keep dormant columns (contraction later). KEEP: brokerage row classification + cash path in `portfolioImportPipeline` (WP-C2 fixes it), `getPortfolioSummary.byAccount`, batch `account_id` inheritance, Edit-dialog account field.
-  - Housekeeping: strike the ~7 mooted bugs (main Findings ~lines 114, 121, 160, 477, 518-leg-part, 663, 2850) as `moot per ADR-108`; endpoint matrix/openapi/docs/api for the two removed endpoints; demo DB regenerate + boot check.
-  - Acceptance: app behavior identical except dormant hazards gone; full backend suite + frontend suite green; grep proves no `isPerAccountHoldingsEnabled` references remain.
-- [ ] **WP-C2 — Brokerage cash-statement import: fix + route to ledger** (M) ⏫ _(Q5)_ 🔎 partial-74b33ae8 (#157) 2026-08-10 (ALL code-side scope DONE: the four filed bugs are closed — sign loss ce5b5b6 (#82), wrong-table rollback ffb13d7 (#82), stranded rows 2026-07-19 (`complete_with_errors` + repair), and instrument-less rows via D6 this pass (see the ticked finding above); the double-count rule is defined, code-verified (snapshotBuilder skips income kinds for invested capital; net-worth cash reads only `transactions` — no existing double-count) and documented in docs/features/portfolio-import.md; the FX-blind SUM was verified closed by #142's per-currency layer (ticked above); cash field-dedup hardened to occurrence-matching after the adversarial verifier PROVED a silent same-kind/same-day/same-amount drop by execution — two identical custody fees now both commit while statement re-import stays a no-op, and the legacy |amount| leg is gated to untyped deposit/withdrawal rows. Bonus: WP-C3's dedup sub-item (`account_id`+currency in isFieldDuplicate) was found ALREADY LANDED (commit.js trade+cash predicates) — C3 should verify-and-strike it rather than re-implement. LEFT: the acceptance's real-export sampling — Degiro/IBKR/Bolero/Bitvavo file shapes are USER-GATED (ask the user for one export each); fixtures are realistic synthetics, so adapter-level column names/locale decimals remain unpinned, and a broker that puts noise ("—") in the symbol column would keep instrument-less rows on the blocking portfolio route. Residues filed in the grouped finding below the D6 tick)
-  - Fix the kept path's filed bugs: cash-row **sign loss** (~line 82) · rollback deleting wrong-table ids (~88) · instrument-less dividend/interest/fee rows can never commit (~530) · commit errors stranding rows with no repair path (~287, the account-unset case). Cash rows land as ordinary ledger transactions on the broker account (real rows — this is what replaces ADR-090 legs per Q1). Define the double-count rule and document it: imported cash dividends are ledger income; portfolio-side `dividend` rows remain the tax/stats source; they never both enter net worth (ledger cash is the only cash truth). Then WP-B6's disclosure line also covers portfolio imports.
-  - **First step (resume point from §4):** sample the user's real Degiro/IBKR/Bolero/Bitvavo files (ask the user for one of each) and write adapter-level fixtures from them — the research never sampled real shapes.
-  - Acceptance: a real Account.csv-style fixture imports with correct signs, commits instrument-less rows, and its rollback restores exactly; dedup fix comes in WP-C3.
-- [ ] **WP-C3 — Tag rails + backfill** (M) 🔼
-  - §4 Phase 2, unchanged: trade-dialog defaulting (instrument → last-used account → last manual trade → unassigned) with muted "→ {broker} · change" line; Edit dialog relabel "Broker"; bulk re-tag endpoint (set-based `UPDATE` on lot sets) + "assign broker…" on `InvestmentDetailDialog`; parser-config ↔ account memory + review "{n} trades → {account}"; **dedup fix**: `account_id` + currency into `isFieldDuplicate` (both trade + cash predicates, main-Findings ~line 281). Q4 backfill: one-time "assign your lots" nudge on the Unassigned row (per-instrument single click).
-  - Acceptance: tags accumulate with zero new mandatory inputs; re-tag is idempotent + audited (returns counts); backfill nudge assigns a whole instrument in one action; dedup regression test (same-shaped trade, two accounts → both kept).
-- [x] **WP-C4 — Partitioned per-broker positions & P&L engine** (L) ⏫ _(Q2 — the new math; highest-care WP)_ ✅ 2026-08-10 · 74b33ae8 (#157) (delivered in full and adversarially verified: partitioned engine in shared-utils portfolio.js (additions-only — flat calculators byte-untouched), sells consume same-account lots under resolveCostBasisMethod's method (no third resolution path), splits rewrite per partition with exact-sum remainder (zero-holders excluded), RoC proportional to units held, re-tags re-partition from CURRENT account_id; byAccount extended to {value, invested, realized, unrealized, gainLoss} + summaries.fullyAssigned; account-scoped sell validation with the transition rule, broker named in the rejection, update path validates the effective post-patch account, import commit inherits via repository.create. The acceptance's parity suite (real Postgres, all 3 methods, hand-computed asymmetric fixtures incl. re-tag via raw SQL) is mutation-tested — verifier's independent sabotages bite (5 and 7 failures) and the EXPECTED table was re-derived by hand. Verifier verdict SHIP-WITH-FOLLOW-UPS; both semantic edges it refuted on the "attribution-only" claim (weighted_avg RoC per-partition floor; partition oversell clamping) are now documented in docs/api/portfolio-summary.md + docs/features/portfolio.md, remaining follow-ups filed in the grouped residues below. The split-blind getNetUnitsOnOrBeforeDate sub-item was already fixed by 9f4f0ca (#82) — confirmed sound and mirrored by the per-account replay)
-  - Tracking: 🔎 runtime-unverified 2026-08-28 (pure engine coverage is present, but the four real-PostgreSQL parity cases and account-scoped sell suite self-skipped without `TEST_DATABASE_URL`)
-  - Per ADR-108: run the existing lot engine per (investment, account) partition — buys create lots in their account; sells consume **same-account** lots (user's configured method within the partition); corporate actions apply across partitions; re-tags move whole lots with basis. Extend `getPortfolioSummary.byAccount` from value-only to invested/realized/unrealized per account. Sell validation becomes account-scoped; **transition rule:** while an instrument has unassigned lots, validation stays global and per-broker P&L for that instrument renders as "assign lots to see per-broker figures" (never wrong partitions). Fix the split-blind `getNetUnitsOnOrBeforeDate` (~line 166) as part of this — it's the same availability math.
-  - Acceptance: **parity invariant test** Σ per-account (invested/realized/unrealized/value) ≡ global engine outputs on fixtures covering: multi-account same instrument, split-then-sell, re-tag-then-sell, RoC, unassigned remainder — this test is the WP's definition of done; sell exceeding broker-local units rejected with a clear message naming the broker; method consistency (respects FIFO/LIFO/weighted-avg setting — cf. main-Findings ~line 856 server-side weighted_avg pin: per-broker figures must not add a THIRD method inconsistency; compute partitions with the same method the summary uses, and note the existing global inconsistency in the commit if unresolved).
-- [ ] **WP-C5 — Read surfaces** (M/L) 🔼 `(look-changing — signed off)` _(needs WP-B3+B4+C4)_
-  - Broker cards in the hub's "Portfolio accounts" group: holdings value (from C4 partitions) + cash (ledger) + two provenance lines ("12 positions · priced {date}" / cash as-of); replaces WP-B3's placeholder. `/accounts/:id` for broker accounts: Holdings section (positions, value, per-broker P&L once C4 says the instrument is fully assigned) above the cash ledger. Net-worth "By Account" **current-point** table (cash + holdings + total per account, Unassigned row with assign-affordance, footer noting it decomposes the headline) — live partitions + computed balances, batch FX. Portfolio-overview broker filter + per-broker subtotal AND P&L (labeling now legitimate per Q2). **Q6 wallets:** accounts of crypto/wallet type render holdings-only — no cash line, no Reconcile action, a distinct "Wallet" badge; grouped with Portfolio accounts (don't invent a fourth group without asking).
-  - Acceptance: by-account table Σ == headline on demo data (test); wallet card shows no cash affordances; demo visual pass of hub + detail + net-worth.
-- [ ] **WP-C6 — Lifecycle flows** (S) 🔼
-  - Close broker account = "re-tag {n} lots to {account} / leave unassigned" step in WP-B5's unified close dialog; "Broker transfer" action on the account card/detail menu = same bulk re-tag; both print receipts with counts. Residual sleeve cash handled by the WP-A3 close semantics.
-  - Acceptance: close + transfer demo-walkable; re-tag receipts show counts; no cost-basis change from either (assert via C4 parity test rerun).
-- [ ] **WP-C7 — Per-broker history, rebuilt properly** (L) 🔽 _(Q3 — scheduled LAST; do not start before C5 has soaked)_
-  - Persisted side table (e.g. `account_snapshot_values`, keyed snapshot-date × account) written **forward-only** by `computeAndStoreSnapshots` from C4 partitions (no retro backfill; chart starts at deploy). New endpoint + a by-account area chart on the net-worth page. Register the table in `BACKUP_COVERED_TABLES`; never touch the `investments` view.
-  - Acceptance: Σ rows per date == that date's snapshot value (invariant test); chart renders from accumulated data; endpoint matrix/docs updated.
-
-#### Post-plan follow-ups (not scheduled)
-
-- Contraction migration for dormant columns (`route`, `is_brokerage`, `transfer_source='trade'` check value, sleeve flags) — only after Tracks B+C have soaked.
-- §2 resume leftovers: reports dataFetcher's uncached bank-balances call · rebalance cash query review.
-- §1 resume leftover: import-commit interplay with merged accounts · accounts API docs/openapi full sync sweep.
-- §3 resume leftovers: planned rows in the account ledger (design question for the reconcile flow) · rebalance page's use of `spendable`/`liquidity_class` copy check · stale-statement threshold setting placement.
-
-### 🔁 Resume points (accounts research)
-
-Research phase CLOSED 2026-07-10: all four passes ran, the user signed off, decisions are in
-ADR-107/108, and **§5️⃣ above is the operative plan — next agent starts at WP-A1** (or the first
-unchecked WP in dependency order). Log WP-level conflicts/surprises here per Guardrail 10.
-
----
-
-## 🔽 Deferred: July 2026 code-simplification audit (SIMP) — LOWEST PRIORITY, do last
-
-Source: `docs/audits/2026-07-code-simplification-audit.md`. The bulk of the audit
-(SIMP-01…58) was remediated in PR #92; the ledger in that doc records per-finding
-status. The items below were **deliberately deferred** — each has a verification
-gap that could not be closed in the remediation environment (no browser for visual
-e2e, no electron runtime, no live DB for SQL-diffing, or an observable behavior
-change). Pick these up **last**, each in its own PR, only when the stated gate can
-actually be exercised.
-
-- [ ] **SIMP-05 / SIMP-12 — dateUtils → date-fns** 🔽 — rewriting `formatDate` to
-      date-fns changes the `default` branch (Intl `dateStyle:"long"` ≠ date-fns `PPP`),
-      an app-wide rendered-date change. SIMP-12 (ImportReviewPage local `formatDate`) is
-      gated on it. Land only with a before/after visual diff of every date surface.
-- [ ] **SIMP-13 — visx chart-frame extraction** 🔽 — one `useCartesianChartFrame`
-      hook + `<ChartFrame>` shared by AreaChart/LineChart/ComposedChart. Must land with
-      the visual-regression e2e suite green (scrub/hover/sync behavior). Needs a browser.
-- [x] **SIMP-14 — inheritance-table CRUD factory** 🔽 ✅ 2026-08-31 — moot after ADR-109/migration 0087 converted every supported install to flat tables. The duplicated inheritance error classifiers, sequence-resync helpers, and through-inheritance CRUD paths no longer exist; adding a factory would recreate dead support code.
-- [x] **SIMP-18 — Belgian tax page dedup** 🔽 — `<TaxProfileInputsCard>`, config-array
-      estimate cards, `bucketTxnCosts`, shared income-sources empty state, `NumberField` +
-      `<RegionSelect>` in the profile steps (~180 lines).
-- [x] **SIMP-22 — validate-locales lexer → TS AST** 🔽 — replace the hand-rolled
-      tokenizer with a `ts.createSourceFile` + `CallExpression` visitor. Load-bearing CI
-      tooling; do with a before/after diff of extracted keys.
-- [x] **SIMP-32 — investment spike sanitizer wrapper** 🔽 ✅ 2026-08-26 — the original Decimal-wire premise had become partly stale because the interim local rounder already returned a number, but the duplication was still live. `sanitizeIsolatedValueSpikes` now has one layer-correct owner in `lib/calculations/valueSpikeSanitizer.js`; portfolio math keeps a compatibility re-export and its decomposition-aware wrapper, while `netWorthSanitizer.js` is a thin wrapper that recomputes only corrected rows with `liquid + negative liabilities + rounded investments`. Regression assertions pin both corrected `investments` and `netWorth` as plain numbers, exact values, unchanged neighbors, immutability, and sustained-move behavior. Verified: 150 focused listener-free tests passed; backend typecheck passed; lint had 0 errors and 2 unrelated existing warnings. Full backend run was attempted but is not valid in this sandbox: 1,110 Supertest cases hit `listen EPERM` and 395 DB-backed cases skipped without `TEST_DATABASE_URL`.
-- [x] **SIMP-34 — quoteBackfill SELECT + row-mapper dedup** 🔽 ✅ 2026-07-19 — the
-      all-investments and single-investment holding-window loaders shared a verbatim
-      13-column SELECT, asset-class filter, and row→investment/row→transaction
-      mappers. Extracted `HOLDING_WINDOW_SELECT` + `HOLDING_ASSET_CLASS_FILTER`
-      constants and `mapRowToInvestment`/`mapRowToHoldingTx` helpers; each loader now
-      only supplies its own WHERE/ORDER BY. Pure refactor, no behavior change
-      (named-field mappers, identical column aliases); 34 existing tests green.
-- [ ] **SIMP-44 — App.tsx route/lazy list generation** 🔽 — derive the 37 `lazy(...)`
-      lines + `<RequireAdmin>` wraps from the `routeLoaders` map; hoist the repeated
-      `staleTime` magic numbers. Touches routing — verify navigation + admin gating.
-- [x] **SIMP-48 — finish the filterBuilder migration** 🔽 ✅ 2026-08-31 — every named production site now calls the canonical `buildExclusionClauses`; the later half-done audit note was stale and is corrected.
-- [ ] **SIMP-50 (snapshotBuilder part only)** 🔽 — the sleeve-dispatch `if/else if`
-      chains need the Decimal accumulator vars restructured into a keyed map. (The
-      transfer-leg + forecast parts of SIMP-50 shipped in PR #92.)
-- [ ] **SIMP-52 / SIMP-53 — electron backup crypto + restore plumbing** 🔽 — share
-      the AES-256 KDF/scheme (`crypto.js` parameterized by magic bytes) and the
-      pg_dump/restore/`.env`-cred plumbing. **Data-loss risk**: must verify old backups
-      still decrypt on both the v1 and v2 paths — needs a real electron run + legacy
-      backup fixtures.
-
-**Decided (keep — no action):** SIMP-45 (keep `recharts`; visx port is visual-regression
-risk for a bundle-weight-only gain), SIMP-46 (keep the checked-in demo `pg_dump`; it is a
-required offline build input).
+### 🔒 Security and access control
+
+- [ ] **Move existing Electron installations from the bootstrap PostgreSQL superuser to a least-privilege runtime role** 🔼
+  - Tracking: 🔎 partial 2026-09-05 (new and opt-in installations split migration and runtime roles; existing Electron installations retain the bootstrap-superuser URL)
+  - ↪ _from: Codebase audit 2026-06-30 · backend security_
+  - Keep schema migration credentials separate. Prove upgrade, rollback, startup, backup, restore,
+    and admin-editor behavior on a disposable existing-install fixture.
+
+### 💶 Financial and data correctness
+
+- [ ] **Define how income-only unassigned portfolio rows affect `fullyAssigned` and the By Account display** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (a null-account dividend can create an Unassigned income-only row while the instrument reports `fullyAssigned: true`)
+  - ↪ _from: WP-C4 partitioned-engine adversarial review 2026-08-10_
+  - Choose whether income attribution participates in assignment completeness or is displayed as a
+    separate non-position row. Pin totals and the UI contract with tests.
+
+- [ ] **Expose missing historical-FX fallback metadata in recipient pivot results** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (choose the API field and user-visible warning shape)
+  - ↪ _from: System-recipient and merge-preview adversarial review 2026-08-02_
+  - The current identity fallback can add an unrated amount as if it already used the target
+    currency. Preserve totals compatibility while making incomplete conversion visible.
+
+- [ ] **Compute cash-forecast P10 and P90 from cumulative simulated paths** ⏫
+  - Tracking: 🔎 verified-present 2026-09-05 (the insight sums per-day marginal quantiles, which are not quantiles of the cumulative path)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Treat this as a financial-correctness change. Add deterministic fixtures for both Monte Carlo
+    methods and verify the final cumulative distribution directly.
+
+- [ ] **Decide and fix ambiguous locale money parsing across all input surfaces** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05 (`1000,005` currently becomes 1,000,005 and `1.234` becomes 1.23)
+  - ↪ _from: Accounts rewrite audit 2026-07-10_
+  - Choose locale-aware parsing or explicit parsed-value confirmation, then update the shared parser
+    and app-wide tests. Do not fix isolated forms independently.
+
+- [ ] **Warn before year-to-date deduction candidates overwrite annual Belgian tax-profile fields** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (the current-year total is stored with no incomplete-period warning)
+  - ↪ _from: Belgian tax pre-fill audit 2026-08-28_
+  - Either require explicit acknowledgement for the current year or disable confirmation until the
+    period is complete. Keep completed tax years unchanged.
+
+- [ ] **Refactor snapshot sleeve accumulation to a keyed map without changing financial results** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (the repeated sleeve dispatch remains in `snapshotBuilder`)
+  - ↪ _from: July 2026 simplification audit · SIMP-50_
+  - This is an internal refactor with financial risk. Require parity tests for every sleeve, mixed
+    events, and the aggregate snapshot before and after the change.
+
+- [ ] **Preserve pending portfolio-import broker routing when accounts merge** ⏫
+  - Tracking: 🔎 verified-present 2026-09-05 (`portfolio_import_batches.account_id` is set null when its selected source account is merged away)
+  - ↪ _from: Accounts rewrite post-plan follow-up · import-commit interplay_
+  - Choose repoint-to-survivor or block merges with reviewable batches. Pin the merge and later commit
+    lifecycle so a reviewed broker batch cannot silently commit as Unassigned.
+
+### ⚡ Performance and scale
+
+- [ ] **Choose a bounded default date window for cold statistics pivot requests** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05 (the cache is complete; changing the all-time default is user-visible)
+  - ↪ _from: Performance research 2026-07-02 · reports and aggregations_
+  - Preserve exact per-date foreign-exchange conversion. Show the active window in the UI and keep
+    an explicit All time option.
+
+- [ ] **Give the `Card` primitive a cheaper default glass tier** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (`card.tsx` still defaults every card to the expensive blur tier)
+  - ↪ _from: Frontend performance audit 2026-07-02_
+  - Inventory intentional premium cards first. The change needs a Demo before/after visual pass and
+    must preserve ADR-105's rich design.
+
+- [ ] **Virtualize or window CategoryPivotTable period columns** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (multi-year data renders every period column eagerly)
+  - ↪ _from: Frontend performance audit 2026-07-02_
+  - Preserve keyboard navigation, sticky labels, totals, and export behavior. Requires browser
+    verification with a long synthetic history.
+
+- [ ] **Measure transaction expression sorts at realistic scale** 🔽
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (memo, recipient, category, and currency sorts compute expression keys over the candidate set)
+  - ↪ _from: Backend performance audit 2026-07-02_
+  - Capture `EXPLAIN (ANALYZE, BUFFERS)` and decide whether indexing is justified. File exact index
+    work only if the evidence supports it. Keep this separate from pagination or UI sorting.
+
+- [ ] **Replace DB-editor per-page unbounded COUNT plus OFFSET pagination** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (admin-only table browsing still counts the full filtered relation and uses OFFSET)
+  - ↪ _from: Backend performance audit 2026-07-02_
+  - Define total-count semantics and a keyset cursor contract before changing the UI.
+
+- [ ] **Serve the Insights navigation badge from a cheap persisted undismissed count** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (the badge calls the full insights digest)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Keep the Statistics panel on the full digest. Specify how dismissals and transaction mutations
+    update the count.
+
+- [ ] **Apply subscription dismissals before selecting the top five findings** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (server-side capping precedes client-only dismissal filtering)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Depends on the server-visible dismissal contract. The result should refill from lower-ranked
+    findings instead of showing fewer than five.
+
+### 🧠 Insights and product semantics
+
+- [ ] **Invalidate the insights digest after transaction mutations** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (`invalidateTransactionData` omits `insightsKeys.digest`)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Pin create, update, bulk update, and delete invalidation behavior without coupling it to the
+    persisted badge-count implementation.
+
+- [ ] **Make insight dismissals visible to AI narration** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (server-side digest construction receives no dismissal records)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Filter before tool or pre-call injection so dismissed findings cannot be narrated. Define a
+    server-visible persistence boundary rather than trusting client-only state.
+
+- [ ] **Use the immediately preceding charge for subscription price-change comparisons** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (`previousAmount` is currently the all-history median)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Either change the detector to previous-charge semantics or rename the field and copy to say
+    historical typical amount. Tests must pin the selected meaning.
+
+- [ ] **Calibrate category-outlier thresholds against representative real histories** 🔽
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (modified-z 3.5 and the EUR 50 near-zero-MAD floor only have synthetic proof)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Use sanitized representative histories and record false-positive and false-negative tradeoffs.
+    Do not tune from one user's data silently.
+
+- [ ] **Label partial-month category comparisons as day 1 through N comparisons** ⏬
+  - Tracking: 🔎 verified-present 2026-09-05 (the UI says generic “this month” and “typical”)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Update English and Dutch copy through the i18n workflow. No detector change belongs here.
+
+- [ ] **Define whether the cash insight is a balance forecast or a zero-based net-cashflow forecast** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05 (the service starts at zero while the UI claims projected balance and overdraft risk)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - If it remains a balance forecast, supply the actual cash anchor. Otherwise relabel it and remove
+    overdraft claims. Keep the quantile correction in its separate item.
+
+- [ ] **Persist the prior month-end projection used by significant-move detection** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (production always supplies the default null prior projection)
+  - ↪ _from: AI insight feature audit 2026-08-28_
+  - Define retention and invalidation ownership, then prove that a meaningful forecast change can
+    trigger and that ordinary recalculation noise does not.
+
+### 🎨 User interface and accessibility
+
+- [ ] **Run browser accessibility and keyboard-order acceptance for the completed accessibility sweep** ⏬
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (source and automated checks are complete; browser interaction was not repeated)
+  - ↪ _from: Accessibility audit completion review 2026-08-28_
+  - Cover dialogs, menus, tables, skip links, focus return, and reduced motion in the Demo app.
+
+- [ ] **Move all gain/loss card-wash variants behind `TrendHue`** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (four gradient dialects remain outside the declared source of truth)
+  - ↪ _from: Visual consistency audit 2026-07-02_
+  - Preserve each semantic state while consolidating tokens. Requires a light/dark Demo comparison.
+
+- [ ] **Choose and implement a useful wide-screen layout for `/import`** ⏬
+  - Tracking: 🔎 decision-needed 2026-09-05 (the page remains one narrow centered column with large desktop margins)
+  - ↪ _from: UI layout audit 2026-07-02_
+  - Treat this as look-changing. Specify the secondary content or wider workflow before editing.
+
+- [ ] **Replace raw English AI tool-state errors with localized user-facing messages** ⏬
+  - Tracking: 🔎 verified-present 2026-09-05 (tool sub-state errors still expose raw English text)
+  - ↪ _from: Copy and loading-state audit 2026-08-28_
+  - Keep diagnostic detail in logs. Add English and Dutch keys and error-state tests.
+
+- [ ] **Correct the remaining Dutch AI shortcut verb form** ⏬
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: Copy and loading-state audit 2026-08-28_
+  - Use the i18n workflow and limit this item to the one confirmed string.
+
+- [ ] **Provide full-name disclosure for truncated Watchlist entities** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (the remaining truncation gap is Watchlist-specific)
+  - ↪ _from: UI truncation audit 2026-08-28_
+  - Add an accessible tooltip or equivalent disclosure that works with pointer and keyboard.
+
+### 🏛️ API and architecture
+
+- [ ] **Remove the orphan investment controller-to-repository bypass** 🔼
+  - Tracking: 🔎 partial 2026-09-05 (`controllers/` contains one remaining handler that imports repositories directly)
+  - ↪ _from: ADR-067 route-boundary audit 2026-08-28_
+  - Move orchestration into a service or remove the controller layer. Keep route contracts unchanged.
+
+- [ ] **Canonicalize recurrence wire vocabulary to one `biweekly` spelling** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05 (the wire values include both `bi-weekly` and `biweekly` and the frontend duplicates the enum)
+  - ↪ _from: API contract audit 2026-08-28_
+  - Define compatibility and migration handling first. Update OpenAPI, generated types, stored data,
+    server validation, frontend options, and rollback behavior together.
+
+- [ ] **Standardize body-versus-query precedence for non-GET request parameters** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05 (routes use inconsistent precedence)
+  - ↪ _from: API consistency audit 2026-08-28_
+  - Inventory affected endpoints, choose one rule, document it, and add conflict-case contract tests.
+
+- [ ] **Stop `validateIdParam` from mutating Express path parameters into numbers** ⏬
+  - Tracking: 🔎 decision-needed 2026-09-05 (requires a compatible parsed-id handoff convention)
+  - ↪ _from: Middleware consistency audit 2026-08-28_
+  - Keep the strict numeric validation. Introduce a typed request-local value or explicit return path
+    and migrate consumers in one change.
+
+- [ ] **Generate lazy route declarations and admin wrappers from one route metadata manifest** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (`App.tsx` still duplicates roughly forty lazy declarations and admin wrappers)
+  - ↪ _from: July 2026 simplification audit · SIMP-44_
+  - Preserve chunk boundaries, route paths, suspense behavior, and admin gating. Verify navigation and
+    direct deep links.
+
+- [ ] **Replace duplicated route-query stale times with named cache-policy constants** ⏬
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: July 2026 simplification audit · SIMP-44_
+  - This is independent of generating the route manifest. Pin only intentional cache-policy groups.
+
+- [ ] **Extract one shared Visx Cartesian chart frame** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (AreaChart, LineChart, and ComposedChart still duplicate frame behavior)
+  - ↪ _from: July 2026 simplification audit · SIMP-13_
+  - Preserve scrub, hover, synchronization, responsive bounds, and accessibility. The browser visual
+    regression suite is a completion gate.
+
+### 🏦 Accounts and portfolio features
+
+- [ ] **Add Archive and Restore controls for investments with an inactive discovery view** 🔼
+  - Tracking: 🔎 partial 2026-09-05 (backend `is_active` rails exist; frontend lifecycle controls and discovery do not)
+  - ↪ _from: Feature work · investment lifecycle 2026-07-01_
+  - Keep history visible, exclude inactive holdings from current totals, mark inactive records, and
+    pin deactivation, filtering, history, reactivation, and query invalidation.
+
+- [ ] **Add a final-transfer or zero-out step before closing an account with residual cash** ⏫
+  - Tracking: 🔎 partial 2026-09-05 (aggregate close semantics are complete; the dialog only warns about residual cash)
+  - ↪ _from: Accounts rewrite · WP-A3 follow-up_
+  - Define transfer versus adjustment semantics and integrate it into the existing close flow.
+
+- [ ] **Default manual trades to a broker without making broker selection mandatory** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: ADR-108 implementation plan · WP-C3_
+  - Apply instrument's last broker, then last manual-trade broker, then Unassigned. Show a muted
+    change affordance and relabel the edit field to Broker.
+
+- [ ] **Add an audited idempotent bulk broker re-tag endpoint** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: ADR-108 implementation plan · WP-C3_
+  - Use a set-based update over selected lots, return changed counts, preserve cost basis, and add
+    authorization, validation, audit, and idempotency tests.
+
+- [ ] **Remember portfolio parser configurations' broker account and disclose routing on review** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: ADR-108 implementation plan · WP-C3_
+  - Persist one account per file-level parser configuration and show “N trades to Broker” before
+    commit. Do not add row-level routing.
+
+- [ ] **Add a one-click per-instrument nudge for Unassigned portfolio lots** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on the bulk re-tag endpoint)
+  - ↪ _from: ADR-108 implementation plan · WP-C3_
+  - The nudge assigns the whole instrument in one reviewed action and reports the changed count.
+
+- [ ] **Show holdings and broker profit/loss on portfolio account cards** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on accepted C4 parity and assignment UX)
+  - ↪ _from: ADR-108 implementation plan · WP-C5_
+  - Compose partitioned holdings with ledger cash and provenance on the Accounts hub. Do not
+    recompute aggregate truth from per-broker values.
+
+- [ ] **Show holdings and broker profit/loss on portfolio account detail pages** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on accepted C4 parity and assignment UX)
+  - ↪ _from: ADR-108 implementation plan · WP-C5_
+  - Add the holdings section above the cash ledger on `/accounts/:id` and keep its provenance and
+    totals consistent with the hub card.
+
+- [ ] **Add a current-point Net Worth By Account table with a parity footer** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on accepted C4 parity and assignment UX)
+  - ↪ _from: ADR-108 implementation plan · WP-C5_
+  - Include cash, holdings, total, and Unassigned. Assert that displayed rows sum to the same headline.
+
+- [ ] **Add a Portfolio Overview broker filter with broker subtotals** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on accepted C4 parity and assignment UX)
+  - ↪ _from: ADR-108 implementation plan · WP-C5_
+  - Filter existing partitioned data client-side and label holdings value and profit/loss accurately.
+
+- [ ] **Render wallet and crypto accounts as holdings-only portfolio accounts** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05
+  - ↪ _from: ADR-108 implementation plan · WP-C5_
+  - Use a distinct Wallet badge and omit cash and Reconcile affordances. Keep them in the Portfolio
+    accounts group.
+
+- [ ] **Add portfolio-lot re-tag choices to the account close flow** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on bulk re-tag and current-point read surfaces)
+  - ↪ _from: ADR-108 implementation plan · WP-C6_
+  - Offer another account or Unassigned, print counts, and prove no cost-basis change. Coordinate
+    with the separate residual-cash step in the same dialog.
+
+- [ ] **Add a broker-transfer action that re-tags lots and prints a receipt** 🔼
+  - Tracking: 🔎 verified-present 2026-09-05 (depends on the bulk re-tag endpoint)
+  - ↪ _from: ADR-108 implementation plan · WP-C6_
+  - Reuse the close-flow choice component but keep this as a non-closing action. Assert unchanged
+    units, invested capital, and realized profit/loss.
+
+- [ ] **Build forward-only persisted per-broker history after current-point surfaces have soaked** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (implementation is intentionally sequenced after WP-C5 acceptance and soak)
+  - ↪ _from: ADR-108 implementation plan · WP-C7_
+  - Add a dedicated snapshot-by-account table, writer, endpoint, chart, backup coverage, downgrade,
+    and per-date sum invariant. Do not retroactively synthesize history.
+
+- [ ] **Decide whether planned transactions appear in the account ledger and reconcile flow** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (the account detail route currently shows posted transaction rows only)
+  - ↪ _from: Accounts rewrite post-plan follow-up · planned account rows_
+  - Planned rows must never change the current balance before execution. Define whether they appear as
+    a separate forecast section, a filter, or remain outside this surface.
+
+- [ ] **Decide whether the 45-day stale-statement threshold is fixed policy or a user setting** ⏬
+  - Tracking: 🔎 decision-needed 2026-09-05 (`driftBadge.ts` exports a fixed 45-day threshold)
+  - ↪ _from: Accounts rewrite post-plan follow-up · settings placement_
+  - If fixed, record the accepted policy and remove the item. If configurable, define scope and
+    placement before adding settings and migrations.
+
+### 🧪 Runtime and external acceptance
+
+- [ ] **Detect pre-existing funding-account cycles in the live database** 🔽
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (the source guard prevents new API cycles but does not inspect existing data)
+  - ↪ _from: Accounts rewrite audit 2026-08-10_
+  - Run a read-only recursive query first. If the count is nonzero, open a separate repair decision;
+    do not create a migration spec before seeing the actual rows.
+
+- [ ] **Run account-balance migration upgrade and downgrade on disposable PostgreSQL** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Verify data preservation and schema parity in both directions. Never use the live database.
+
+- [ ] **Verify an account mutation refreshes the displayed Demo balance immediately** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Drive the mutation through the Demo UI and confirm hub, dashboard, and detail cache updates.
+
+- [ ] **Capture before-and-after EXPLAIN for the stamped-balance probe** 🔽
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Use representative synthetic scale and retain plans with buffers. This is measurement, not an
+    authorization to add an index.
+
+- [ ] **Run the Accounts Demo reconciliation-exit acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Exercise save, cancel, stale statement, correction, and error exits without mutating real data.
+
+- [ ] **Run the Accounts Demo balance-provenance acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Compare hub, dashboard, and detail provenance and values after a reconciliation.
+
+- [ ] **Run the Accounts Demo grouping and subtotal acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Verify group order, account order, subtotal arithmetic, empty groups, and closed-account handling.
+
+- [ ] **Run the Accounts Demo ledger and deep-link acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Exercise `/accounts/:id`, transaction drill-down links, browser back/forward, and missing accounts.
+
+- [ ] **Run the Accounts Demo merge-dialog acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Preview and complete a safe merge, then verify the survivor and reassigned transaction links.
+
+- [ ] **Run the Accounts Demo close-dialog acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Verify residual-cash warning, archive and reactivate behavior, and net-worth exclusion.
+
+- [ ] **Run the Accounts Demo import-disclosure acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Verify account routing disclosure from upload through review and commit.
+
+- [ ] **Run the Accounts Demo new-account-nudge acceptance** 🔺
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: Accounts rewrite acceptance ledger_
+  - Verify when the nudge appears, its dismissal behavior, and that it does not recur incorrectly.
+
+- [ ] **Run real-PostgreSQL parity for partitioned broker positions and profit/loss** ⏫
+  - Tracking: 🔎 runtime-unverified 2026-09-05
+  - ↪ _from: ADR-108 · WP-C4 acceptance_
+  - Run every cost-basis method, account-scoped sells, and the re-tag mutation-sensitivity fixture
+    with `TEST_DATABASE_URL`.
+
+- [ ] **Run the account funding-graph concurrency suite on real PostgreSQL** ⏫
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (two-client PATCH-versus-PATCH and PATCH-versus-merge tests are implemented; local PostgreSQL bootstrap is blocked by sandbox `shmget` policy)
+  - ↪ _from: Funding-cycle fix independent review 2026-09-05_
+  - Run `bun run test:db tests/services/accountFundingGraphConcurrency.db.test.js` in CI or an
+    unrestricted local environment. Remove this item only after both cases execute, not skip.
+
+- [ ] **Verify the deployed `vision-claude-sync` pull function fails closed** 🔽
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (installed bytes match the canonical function; a forced real pull failure was not run against the user's Claude state)
+  - ↪ _from: Host tooling audit 2026-08-28_
+  - Use a safe isolated harness or an approved maintenance window. Confirm the failed pull does not
+    overwrite deployed state.
+
+- [ ] **Read the current GitHub nightly E2E and accessibility workflow state and restore it if red** ⏫
+  - Tracking: 🔎 needs-GitHub-check 2026-09-05 (the earlier month-long failure claim is stale until current Actions state is read)
+  - ↪ _from: CI reliability audit 2026-08-28_
+  - Failure alerting already exists. This item closes when the current required run is verified, or
+    when a concrete current failure is filed with evidence.
+
+- [ ] **Add or explicitly waive an end-to-end backup and restore journey** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-05
+  - ↪ _from: Test topology audit 2026-08-28_
+  - Define the supported platforms, fixture age, encryption versions, and destructive-test isolation
+    before adding the journey.
+
+- [ ] **Run the ADR-088 manual `bank_account` contract drop in an approved maintenance window** ⏫
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (code readers are migrated; the live lockstep drop remains user-controlled)
+  - ↪ _from: ADR-088 contract-drop runbook_
+  - Stop writers, take a fresh backup, prove parity zero, apply the documented write-side and schema
+    removal together, run the focused regression set, and retain tested rollback. Requires explicit
+    approval for the exact target.
+
+- [ ] **Audit and remove legacy ADR-090 `transfer_source='trade'` rows from the approved live database** ⏫
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (source, flag, and endpoint deletions are complete)
+  - ↪ _from: ADR-108 · WP-C1 cleanup gate_
+  - Count rows and show the count before any deletion. After explicit approval for the exact live
+    target, remove only those legacy rows and verify ledger integrity.
+
+- [ ] **Audit and remove legacy ADR-090 trade rows from the Demo database** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (source, flag, and endpoint deletions are complete)
+  - ↪ _from: ADR-108 · WP-C1 cleanup gate_
+  - Count the synthetic rows first. If cleanup is needed, regenerate the Demo database and boot-check
+    it. This never authorizes changes to the live database.
+
+- [ ] **Validate the portfolio import adapter against a real Degiro export** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (requires a user-provided sanitized Degiro export)
+  - ↪ _from: ADR-108 · WP-C2 acceptance_
+  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
+
+- [ ] **Validate the portfolio import adapter against a real IBKR export** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (requires a user-provided sanitized IBKR export)
+  - ↪ _from: ADR-108 · WP-C2 acceptance_
+  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
+
+- [ ] **Validate the portfolio import adapter against a real Bolero export** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (requires a user-provided sanitized Bolero export)
+  - ↪ _from: ADR-108 · WP-C2 acceptance_
+  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
+
+- [ ] **Validate the portfolio import adapter against a real Bitvavo export** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (requires a user-provided sanitized Bitvavo export)
+  - ↪ _from: ADR-108 · WP-C2 acceptance_
+  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
+
+- [ ] **Exercise ADR-109 conversion migration 0087 on PostgreSQL 18** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-05 (local proof used PostgreSQL 16; CI is the intended PostgreSQL 18 environment)
+  - ↪ _from: ADR-109 conversion adversarial review 2026-08-02_
+  - Run upgrade, data parity, and downgrade against a disposable legacy fixture.
+
+### 🧹 Maintenance and documentation
+
+- [ ] **Decide when to drop ADR-109 legacy rollback relations and helper views** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (`legacy_inh_*`, `*_investments_full`, and pre-0013 snapshots are intentionally retained)
+  - ↪ _from: ADR-109 conversion adversarial review 2026-08-02_
+  - Define the retention window and backup-coverage note before creating the contraction migration.
+
+- [ ] **Retire ADR-090 transaction schema after live and Demo cleanup** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (`transactions.portfolio_transaction_id`, its partial index, and the `trade` transfer-source value remain)
+  - ↪ _from: ADR-108 post-plan contraction follow-up_
+  - Start only after both legacy trade-row cleanup items. Remove the retired column and index and
+    narrow the transfer-source check. Include backup, downgrade, and disposable-database proof.
+
+- [ ] **Decide whether to contract consumer-less account metadata after portfolio UI soak** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-05 (`has_cash_sleeve` remains writable and public after its UI control was removed)
+  - ↪ _from: ADR-108 post-plan contraction follow-up_
+  - Inventory current consumers and contracts after the portfolio account surfaces soak. `route`,
+    `is_brokerage`, and `portfolio_snapshot_accounts` are explicitly out of scope.
+
+- [ ] **Update the close-account flow visualizer to the current archive behavior** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (`docs/flow-visualizer.html` still shows removed ADR-091 move-holding endpoints and services)
+  - ↪ _from: Accounts TODO independent audit 2026-09-05_
+  - Replace only the stale embedded close-account flow with residual-balance warning, account PATCH,
+    server archive and net-worth semantics, and cache invalidation.
+
+- [ ] **Replace the hand-rolled calendar-day difference helper with date-fns** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (ImportReview already uses shared formatting; locale-sensitive formatting and `Intl.RelativeTimeFormat` remain intentional)
+  - ↪ _from: July 2026 simplification audit · revised SIMP-05_
+  - Replace only `differenceInDays` with the output-equivalent `differenceInCalendarDays` path and
+    preserve its pinned local-calendar semantics. Do not migrate the non-equivalent display helpers.
+
+- [ ] **Share the v1 and v2 backup encryption scheme through one parameterized crypto implementation** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (crypto duplication remains across backup bundle and crypto modules)
+  - ↪ _from: July 2026 simplification audit · SIMP-52_
+  - Data-loss-risk change: require known legacy v1 and v2 fixtures, wrong-passphrase behavior, and
+    byte-compatible decrypt proof. Keep restore-process plumbing out of this item.
+
+- [ ] **Consolidate duplicated Docker SQL restore orchestration** 🔽
+  - Tracking: 🔎 verified-present 2026-09-05 (`runBundleRestore` and `runRestore` repeat the SQL restore process)
+  - ↪ _from: July 2026 simplification audit · SIMP-53_
+  - Preserve the current crypto interface, rollback, and temporary-file cleanup. Verify both restore
+    entry points in a disposable Electron environment.
+
+- [ ] **Centralize Electron restore credential and environment resolution** ⏬
+  - Tracking: 🔎 verified-present 2026-09-05 (restore entry points repeat environment reads and default credential setup)
+  - ↪ _from: July 2026 simplification audit · SIMP-53_
+  - Keep credential values out of logs and temporary paths. Pin Docker and native resolution without
+    changing the existing backup format or restore orchestration.
