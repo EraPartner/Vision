@@ -149,7 +149,7 @@ export function clearMemoryCache() {
 }
 
 /** Drop the cached historical-rate index (rebuilt on next demand). */
-export function clearHistoricalIndexCache() {
+function clearHistoricalIndexCache() {
   historicalIndexCache = null;
 }
 
@@ -751,3 +751,5 @@ export default {
   backfillPortfolioHistoricalRates,
   FALLBACK_RATES,
 };
+
+export { clearHistoricalIndexCache as __clearHistoricalIndexCache };

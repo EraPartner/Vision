@@ -225,7 +225,7 @@ function computeOutliers(rows, today) {
  * @param {Date} [now] Injectable clock for tests; defaults to the current time.
  * @returns {any[]} the findings that remain visible
  */
-export function filterDismissedFindings(findings, dismissRecords = [], now = new Date()) {
+ function filterDismissedFindings(findings, dismissRecords = [], now = new Date()) {
   if (!Array.isArray(findings) || findings.length === 0) return [];
   if (!Array.isArray(dismissRecords) || dismissRecords.length === 0) return [...findings];
 
@@ -309,3 +309,5 @@ export async function detectCategoryOutliers({ dismissRecords = [] } = {}) {
   const raw = await getRawFindings();
   return filterDismissedFindings(raw, dismissRecords);
 }
+
+export { filterDismissedFindings as __filterDismissedFindings };

@@ -132,7 +132,7 @@ export function normalizeForMatching(name) {
  * @param {string|null|undefined} amountStr
  * @returns {number|null}
  */
-export function formatAmountString(amountStr) {
+ function formatAmountString(amountStr) {
   if (!amountStr) return null;
   amountStr = amountStr.trim();
   const commaPos = amountStr.lastIndexOf(',');
@@ -150,7 +150,7 @@ export function formatAmountString(amountStr) {
  * @param {string|null|undefined} currencyStr
  * @returns {string|null}
  */
-export function extractCurrencyCode(currencyStr) {
+ function extractCurrencyCode(currencyStr) {
   if (!currencyStr) return null;
   const parts = currencyStr.split(/\s+/);
   for (let i = parts.length - 1; i >= 0; i--) {
@@ -159,3 +159,5 @@ export function extractCurrencyCode(currencyStr) {
   if (/^[A-Za-z]{3}$/.test(currencyStr)) return currencyStr.toUpperCase();
   return null;
 }
+
+export { formatAmountString as __formatAmountString, extractCurrencyCode as __extractCurrencyCode };

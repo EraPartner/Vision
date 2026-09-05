@@ -114,7 +114,7 @@ function quoteLiteral(value) {
  * @param {{ appRole: string, ownerRole: string, dbName: string }} names
  * @returns {string[]}
  */
-export function renderGrantStatements({ appRole, ownerRole, dbName }) {
+ function renderGrantStatements({ appRole, ownerRole, dbName }) {
   const template = readFileSync(GRANTS_TEMPLATE_PATH, "utf8");
   const substituted = template
     .split(':"app_role"')
@@ -428,3 +428,5 @@ export async function ensureAppRole({
     return { status: "error", reason: "unexpected" };
   }
 }
+
+export { renderGrantStatements as __renderGrantStatements };

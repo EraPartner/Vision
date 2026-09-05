@@ -12,7 +12,10 @@ vi.mock("../src/config/logger.js", () => ({
 vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
 
 vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
-  default: { create: vi.fn(), hardDelete: vi.fn() },
+  default: { hardDelete: vi.fn() },
+}));
+vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
+  default: { create: vi.fn(), update: vi.fn() },
 }));
 
 vi.mock("../src/repositories/recipientRepository.js", () => ({
@@ -20,7 +23,11 @@ vi.mock("../src/repositories/recipientRepository.js", () => ({
 }));
 
 vi.mock("../src/repositories/categoryRepository.js", () => ({
-  default: { createOrGet: vi.fn() },
+  default: { getActiveByIds: vi.fn() },
+}));
+
+vi.mock("../src/repositories/settingsRepository.js", () => ({
+  default: { get: vi.fn() },
 }));
 
 vi.mock("../src/services/portfolio/fxResolve.js", () => ({
@@ -28,11 +35,18 @@ vi.mock("../src/services/portfolio/fxResolve.js", () => ({
 }));
 
 import { query, poolQuery } from "../src/database/connection.js";
-import portfolioTransactionRepository from "../src/repositories/portfolioTransactionRepository.js";
+import portfolioTransactionPersistence from "../src/repositories/portfolioTransactionRepository.js";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
 import recipientRepository from "../src/repositories/recipientRepository.js";
 import categoryRepository from "../src/repositories/categoryRepository.js";
+import settingsRepository from "../src/repositories/settingsRepository.js";
 import { autoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.js";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
+
+const portfolioTransactionRepository = {
+  ...portfolioTransactionPersistence,
+  ...portfolioTransactionService,
+};
 
 let matchedRows;
 let fieldDuplicate;
@@ -121,11 +135,10 @@ beforeEach(() => {
   });
   recipientRepository.getOrCreateSystemId.mockReset();
   recipientRepository.getOrCreateSystemId.mockResolvedValue(99);
-  categoryRepository.createOrGet.mockReset();
-  categoryRepository.createOrGet.mockResolvedValue({
-    category: { id: 314, is_active: true },
-    created: false,
-  });
+  categoryRepository.getActiveByIds.mockReset();
+  categoryRepository.getActiveByIds.mockResolvedValue([]);
+  settingsRepository.get.mockReset();
+  settingsRepository.get.mockResolvedValue(null);
   autoResolveFxRateToEur.mockReset();
   autoResolveFxRateToEur.mockResolvedValue(undefined);
 });
@@ -249,6 +262,19 @@ describe("commitBatch (portfolio)", () => {
     matchedRows = [
       row({ id: 1, status: "committed" }),
       row({ id: 2, status: "matched" }),
+    ];
+
+    const res = await commitBatch({ batchId: 5 });
+
+    expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
+    expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("recommits a repaired earlier fill when its identical later twin already committed", async () => {
+    fieldDuplicate = 1;
+    matchedRows = [
+      row({ id: 1, status: "matched" }),
+      row({ id: 2, status: "committed" }),
     ];
 
     const res = await commitBatch({ batchId: 5 });
@@ -396,10 +422,19 @@ describe("commitBatch (portfolio)", () => {
   // ── D6 (ADR-095 addendum): an instrument-less dividend/interest/fee/tax row
   // reaches commit with route='cash' AND its canonical type — the sign comes
   // from the type (type_raw may be a broker synonym the classifier's kind sets
-  // don't know) and the category from the kind map. ──
-  it("D6 cash row: fee lands NEGATIVE with the INVESTMENTS:FEES category resolved via createOrGet", async () => {
+  // don't know) and the category from the configured active ID. ──
+  it("D6 cash row: fee lands NEGATIVE with its configured active category", async () => {
     isBrokerage = true;
     batchAccountId = 7;
+    settingsRepository.get.mockResolvedValue({
+      dividend: null,
+      interest: null,
+      fee: 314,
+      tax: null,
+    });
+    categoryRepository.getActiveByIds.mockResolvedValue([
+      { id: 314, is_active: true },
+    ]);
     matchedRows = [
       row({
         id: 9,
@@ -415,10 +450,10 @@ describe("commitBatch (portfolio)", () => {
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 0 });
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
-    expect(categoryRepository.createOrGet).toHaveBeenCalledWith({
-      general: "INVESTMENTS",
-      detail: "FEES",
-    });
+    expect(settingsRepository.get).toHaveBeenCalledWith(
+      "brokerage_cash_category_ids",
+    );
+    expect(categoryRepository.getActiveByIds).toHaveBeenCalledWith([314]);
     const [, params] = query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
     );
@@ -438,6 +473,15 @@ describe("commitBatch (portfolio)", () => {
   it("D6 cash row: dividend lands POSITIVE with INCOME:DIVIDENDS", async () => {
     isBrokerage = true;
     batchAccountId = 7;
+    settingsRepository.get.mockResolvedValue({
+      dividend: 314,
+      interest: null,
+      fee: null,
+      tax: null,
+    });
+    categoryRepository.getActiveByIds.mockResolvedValue([
+      { id: 314, is_active: true },
+    ]);
     matchedRows = [
       row({
         id: 9,
@@ -452,10 +496,6 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 0 });
-    expect(categoryRepository.createOrGet).toHaveBeenCalledWith({
-      general: "INCOME",
-      detail: "DIVIDENDS",
-    });
     const [, params] = query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
     );
@@ -470,16 +510,16 @@ describe("commitBatch (portfolio)", () => {
     ]);
   });
 
-  it("D6 cash row: a soft-deleted category is NOT stamped — the row commits uncategorized", async () => {
-    // createOrGet's ON CONFLICT DO NOTHING returns the user's soft-deleted row
-    // as-is and nothing reactivates it, so auto-categorization must skip it
-    // rather than file fresh ledger rows under a category no picker shows.
+  it("D6 cash row: a configured inactive category is NOT stamped", async () => {
     isBrokerage = true;
     batchAccountId = 7;
-    categoryRepository.createOrGet.mockResolvedValue({
-      category: { id: 314, is_active: false },
-      created: false,
+    settingsRepository.get.mockResolvedValue({
+      dividend: 314,
+      interest: null,
+      fee: null,
+      tax: null,
     });
+    categoryRepository.getActiveByIds.mockResolvedValue([]);
     matchedRows = [
       row({
         id: 9,
@@ -846,6 +886,39 @@ describe("commitBatch (portfolio)", () => {
       row({
         id: 10,
         status: "matched",
+        route: "cash",
+        type: "fee",
+        type_raw: "fee",
+        investment_id: null,
+        amount: 10,
+      }),
+    ];
+
+    const res = await commitBatch({ batchId: 5 });
+
+    expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
+    expect(
+      query.mock.calls.filter(([sql]) => /INSERT INTO transactions/.test(sql)),
+    ).toHaveLength(1);
+  });
+
+  it("recommits a repaired earlier cash row when its identical later twin already committed", async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    cashDuplicate = 1;
+    matchedRows = [
+      row({
+        id: 9,
+        status: "matched",
+        route: "cash",
+        type: "fee",
+        type_raw: "fee",
+        investment_id: null,
+        amount: 10,
+      }),
+      row({
+        id: 10,
+        status: "committed",
         route: "cash",
         type: "fee",
         type_raw: "fee",

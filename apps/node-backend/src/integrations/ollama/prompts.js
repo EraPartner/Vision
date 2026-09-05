@@ -244,7 +244,7 @@ function truncateMessageToBudget(message, remainingChars) {
  * @param {string[]} toolNames
  * @returns {string}
  */
-export function buildSystemPrompt(toolNames) {
+function buildSystemPrompt(toolNames) {
   const names =
     Array.isArray(toolNames) && toolNames.length > 0
       ? toolNames.join(", ")
@@ -273,7 +273,7 @@ export function buildSystemPrompt(toolNames) {
  * @param {{maxToolResultChars?: number}} [options]
  * @returns {OllamaMessage|null}
  */
-export function toOllamaMessage(
+function toOllamaMessage(
   row,
   { maxToolResultChars = DEFAULT_TOOL_RESULT_CHARS } = {},
 ) {
@@ -362,3 +362,5 @@ export function buildChatMessages({
     ...(userMessage ? [userMessage] : []),
   ];
 }
+
+export { buildSystemPrompt as __buildSystemPrompt, toOllamaMessage };

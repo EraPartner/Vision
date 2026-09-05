@@ -3,8 +3,8 @@
  *
  */
 
-import { query } from '../database/connection.js';
-import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from "../database/connection.js";
+import { buildLimitOffset, buildSetClauses } from "../lib/sqlClauses.js";
 
 /** @typedef {import('../types/rows.js').EnrichedCategoryRow} EnrichedCategoryRow */
 
@@ -27,7 +27,14 @@ export const categoryRepository = {
    * @param {CategoryFilters} [filters]
    * @returns {Promise<EnrichedCategoryRow[]>}
    */
-  async getAll({ limit = null, offset = 0, general = null, detail = null, search = null, active = true } = {}) {
+  async getAll({
+    limit = null,
+    offset = 0,
+    general = null,
+    detail = null,
+    search = null,
+    active = true,
+  } = {}) {
     let sql = `SELECT * FROM categories WHERE 1=1`;
     const params = [];
     let paramIdx = 1;
@@ -60,14 +67,25 @@ export const categoryRepository = {
    * @param {CategoryFilters} [filters]
    * @returns {Promise<number>}
    */
-  async getCount({ general = null, detail = null, search = null, active = true } = {}) {
+  async getCount({
+    general = null,
+    detail = null,
+    search = null,
+    active = true,
+  } = {}) {
     let sql = `SELECT count(*) FROM categories WHERE 1=1`;
     const params = [];
     let paramIdx = 1;
 
     if (active) sql += ` AND is_active = true`;
-    if (general) { sql += ` AND general ILIKE $${paramIdx++}`; params.push(`%${general}%`); }
-    if (detail) { sql += ` AND detail ILIKE $${paramIdx++}`; params.push(`%${detail}%`); }
+    if (general) {
+      sql += ` AND general ILIKE $${paramIdx++}`;
+      params.push(`%${general}%`);
+    }
+    if (detail) {
+      sql += ` AND detail ILIKE $${paramIdx++}`;
+      params.push(`%${detail}%`);
+    }
     if (search) {
       const sp = `%${search}%`;
       sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
@@ -83,8 +101,25 @@ export const categoryRepository = {
    * @returns {Promise<EnrichedCategoryRow|null>}
    */
   async getById(id) {
-    const result = await query('SELECT * FROM categories WHERE id = $1', [id]);
+    const result = await query("SELECT * FROM categories WHERE id = $1", [id]);
     return result.rows[0] ? enrichCategory(result.rows[0]) : null;
+  },
+
+  /**
+   * Resolve only active categories from a reviewed set of IDs.
+   * @param {number[]} ids
+   * @returns {Promise<EnrichedCategoryRow[]>}
+   */
+  async getActiveByIds(ids) {
+    const uniqueIds = [...new Set(ids.filter(Number.isInteger))];
+    if (uniqueIds.length === 0) return [];
+    const result = await query(
+      `SELECT * FROM categories
+       WHERE id = ANY($1::int[]) AND is_active = true
+       ORDER BY id`,
+      [uniqueIds],
+    );
+    return result.rows.map(enrichCategory);
   },
 
   /**
@@ -94,8 +129,8 @@ export const categoryRepository = {
    */
   async getByGeneralDetail(general, detail) {
     const result = await query(
-      'SELECT * FROM categories WHERE general = $1 AND detail = $2',
-      [general.toUpperCase(), detail.toUpperCase()]
+      "SELECT * FROM categories WHERE general = $1 AND detail = $2",
+      [general.toUpperCase(), detail.toUpperCase()],
     );
     return result.rows[0] ? enrichCategory(result.rows[0]) : null;
   },
@@ -113,7 +148,7 @@ export const categoryRepository = {
        VALUES ($1, $2, $3, true)
        ON CONFLICT (general, detail) DO NOTHING
        RETURNING *`,
-      [g, d, description]
+      [g, d, description],
     );
 
     if (insertResult.rows.length > 0) {
@@ -133,7 +168,11 @@ export const categoryRepository = {
     // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
     // null general/detail/is_active mean "leave unchanged" (pre-mapped to
     // undefined); description accepts an explicit null write.
-    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses({
+    const {
+      clauses: setClauses,
+      params,
+      nextIdx: paramIdx,
+    } = buildSetClauses({
       general: general != null ? general.toUpperCase().trim() : undefined,
       detail: detail != null ? detail.toUpperCase().trim() : undefined,
       description,
@@ -144,7 +183,7 @@ export const categoryRepository = {
 
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
-    const sql = `UPDATE categories SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
+    const sql = `UPDATE categories SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING *`;
     const result = await query(sql, params);
     return result.rows[0] ? enrichCategory(result.rows[0]) : null;
   },
@@ -154,7 +193,7 @@ export const categoryRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    const result = await query('DELETE FROM categories WHERE id = $1', [id]);
+    const result = await query("DELETE FROM categories WHERE id = $1", [id]);
     return result.rowCount > 0;
   },
 

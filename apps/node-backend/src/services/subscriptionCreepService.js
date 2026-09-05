@@ -81,7 +81,7 @@ function topByConfidence(findings) {
  * @param {Array<{ recipientId: number, findingType: 'new'|'priceChange' }>} [dismissRecords]
  * @returns {{ new: any[], priceChanges: any[] }}
  */
-export function buildSubscriptionCreep(recurringResult, dismissRecords = []) {
+ function buildSubscriptionCreep(recurringResult, dismissRecords = []) {
   const patterns = Array.isArray(recurringResult?.patterns)
     ? recurringResult.patterns
     : [];
@@ -155,3 +155,5 @@ export async function detectSubscriptionCreep({ dismissRecords = [] } = {}) {
   const recurringResult = await detectRecurringPatterns();
   return buildSubscriptionCreep(recurringResult, dismissRecords);
 }
+
+export { buildSubscriptionCreep as __buildSubscriptionCreep };

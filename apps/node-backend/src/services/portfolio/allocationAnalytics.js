@@ -14,7 +14,7 @@
  * @param {number|string} currentPrice
  * @returns {number|null}
  */
-export function backtestReturn(priceAtAdd, currentPrice) {
+ function backtestReturn(priceAtAdd, currentPrice) {
   const p0 = Number(priceAtAdd);
   const p1 = Number(currentPrice);
   if (!Number.isFinite(p0) || p0 <= 0 || !Number.isFinite(p1)) return null;
@@ -29,7 +29,7 @@ export function backtestReturn(priceAtAdd, currentPrice) {
  * @param {Record<string, number>} target
  * @returns {Record<string, number>}
  */
-export function allocationDrift(actual, target) {
+ function allocationDrift(actual, target) {
   const keys = new Set([...Object.keys(actual ?? {}), ...Object.keys(target ?? {})]);
   const out = /** @type {Record<string, number>} */ ({});
   for (const k of keys) out[k] = (Number(actual?.[k]) || 0) - (Number(target?.[k]) || 0);
@@ -85,3 +85,5 @@ export function foldTargetSleeves(weights) {
   }
   return out;
 }
+
+export { backtestReturn as __backtestReturn, allocationDrift as __allocationDrift };

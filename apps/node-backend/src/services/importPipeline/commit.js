@@ -61,6 +61,7 @@ import {
 import { logger } from "../../config/logger.js";
 import { formatDateToYmd } from "../../lib/dateFormat.js";
 import { autoLinkTransactions } from "../plannedMatchService.js";
+import { getAdapter } from "./adapters/index.js";
 
 /**
  * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
@@ -465,9 +466,10 @@ class ChunkPlanInvalid extends Error {}
  * (the trigger leaves account_id NULL for those rows too).
  *
  * @param {any[]} rows staging rows (mutated: `resolved_account_id` added)
+ * @param {{ multiCurrencyCash?: boolean }} [capabilities]
  * @returns {Promise<void>}
  */
-async function resolveChunkAccounts(rows) {
+async function resolveChunkAccounts(rows, capabilities = {}) {
   // Cache key = the btrimmed label VERBATIM (no JS lowercasing): Postgres
   // lower() is the case authority for the identity, and JS toLowerCase() can
   // disagree with it on edge-case code points. Case variants of one label
@@ -485,7 +487,8 @@ async function resolveChunkAccounts(rows) {
     if (!idByLabel.has(key)) {
       idByLabel.set(
         key,
-        (await accountRepository.resolveOrCreateByName(label)) ?? null,
+        (await accountRepository.resolveOrCreateByName(label, capabilities)) ??
+          null,
       );
     }
     row.resolved_account_id = idByLabel.get(key);
@@ -577,7 +580,7 @@ async function loadExistingHashes(hashes) {
  * Plan a chunk: decide every row's verdict in JS from two pre-load SELECTs,
  * reproducing the per-row loop's decisions and its ordering effects.
  *
- * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
+ * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string>, capabilities?: { multiCurrencyCash?: boolean } }} args
  * @returns {Promise<{
  *   toInsert: ReturnType<typeof deriveRow>[],
  *   committedIds: string[],
@@ -814,11 +817,11 @@ async function bulkInsertPlanned(toInsert, batchId) {
  * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
  * @returns {Promise<ChunkResult>}
  */
-async function commitChunk({ chunk, batchId, committedHashes }) {
+async function commitChunk({ chunk, batchId, committedHashes, capabilities }) {
   // Inside the chunk transaction, before the SAVEPOINT: minted accounts roll
   // back with a failed chunk but survive the savepoint rollback that hands a
   // chunk to the per-row replay (see resolveChunkAccounts).
-  await resolveChunkAccounts(chunk);
+  await resolveChunkAccounts(chunk, capabilities);
   const plan = await planChunk({ chunk, batchId, committedHashes });
 
   /** @type {InsertedRow[]} */
@@ -880,9 +883,15 @@ async function commitChunk({ chunk, batchId, committedHashes }) {
  * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitBatch({ batchId, onProgress }) {
-  await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [
-    batchId,
-  ]);
+  const statusResult = await query(
+    `UPDATE import_batches SET status = 'committing' WHERE id = $1
+     RETURNING adapter_name`,
+    [batchId],
+  );
+  const adapter = getAdapter(statusResult.rows[0]?.adapter_name);
+  const capabilities = {
+    multiCurrencyCash: adapter?.multiCurrencyCash === true,
+  };
 
   const { rows: reviewed } = await query(
     `SELECT isr.id,
@@ -983,7 +992,12 @@ export async function commitBatch({ batchId, onProgress }) {
     const hashesBefore = new Set(committedHashes);
     try {
       await withTransaction(async () => {
-        const res = await commitChunk({ chunk, batchId, committedHashes });
+        const res = await commitChunk({
+          chunk,
+          batchId,
+          committedHashes,
+          capabilities,
+        });
         chunkImported = res.imported;
         chunkDuplicates = res.duplicates;
         chunkErrors = res.errors;

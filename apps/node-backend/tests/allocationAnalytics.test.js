@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  backtestReturn, allocationDrift, normalizeWeights, CLASSIC_PORTFOLIOS, foldTargetSleeves,
+  __backtestReturn as backtestReturn, __allocationDrift as allocationDrift, normalizeWeights, CLASSIC_PORTFOLIOS, foldTargetSleeves,
 } from '../src/services/portfolio/allocationAnalytics.js';
 
 describe('backtestReturn (ADR-097)', () => {

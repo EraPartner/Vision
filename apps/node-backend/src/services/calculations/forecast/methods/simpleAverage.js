@@ -5,10 +5,10 @@
  * window and filters are identical (regression-check target).
  */
 
-import { dayOfMonth } from '../seasonality.js';
+import { dayOfMonth } from "../seasonality.js";
 
-export const id = 'simple_avg';
-export const label = 'Simple average';
+export const id = "simple_avg";
+const label = "Simple average";
 
 /**
  * @param {{history: Array<{date:string, net:number}>, forecastDates: string[]}} ctx
@@ -34,3 +34,5 @@ export function forecast({ history, forecastDates }) {
     return { date, value: v };
   });
 }
+
+export { label };

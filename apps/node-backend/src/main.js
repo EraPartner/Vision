@@ -567,7 +567,7 @@ async function start() {
       });
 
       try {
-        const intervals = await runWarmupTasks({ warmupStatus });
+        const intervals = await runWarmupTasks({ warmupStatus, bootMark });
         exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
         quotesRefreshInterval = intervals.quotesRefreshInterval;
         cashflowForecastRefreshInterval =

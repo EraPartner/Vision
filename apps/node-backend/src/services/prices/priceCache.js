@@ -27,7 +27,7 @@ import { validateInt4Ids } from "../../lib/filterBuilder.js";
  * @typedef {{ timestampMs?: any, price?: any }} RawPricePoint
  */
 
-export const PRICE_CACHE_TTL_MS = 5 * 60_000;
+const PRICE_CACHE_TTL_MS = 5 * 60_000;
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 
 // Key: `${provider}:${providerId}` — Value: { data, expiresAt }
@@ -65,7 +65,7 @@ export function isValidPrice(value) {
  * @param {number} timestampMs
  * @returns {string|undefined} the UTC calendar day as 'YYYY-MM-DD'
  */
-export function toDateOnly(timestampMs) {
+function toDateOnly(timestampMs) {
   if (!Number.isFinite(timestampMs)) return undefined;
   return epochMsToUtcYmd(timestampMs);
 }
@@ -74,7 +74,7 @@ export function toDateOnly(timestampMs) {
  * @param {string|Date|null|undefined} dateOnly a 'YYYY-MM-DD' string or a pg DATE (local-midnight `Date`)
  * @returns {number} epoch ms at UTC noon of that day, or NaN when unparseable
  */
-export function dateOnlyToTimestampMs(dateOnly) {
+function dateOnlyToTimestampMs(dateOnly) {
   const ymd = normalizeDateLikeToYmd(dateOnly);
   if (!ymd) return Number.NaN;
   try {
@@ -202,7 +202,7 @@ export function resetPriceCache() {
 
 const CACHE_SWEEP_INTERVAL_MS = 5 * 60_000;
 
-export function sweepExpiredCacheEntries(now = Date.now()) {
+function sweepExpiredCacheEntries(now = Date.now()) {
   let removed = 0;
   for (const [key, entry] of _cache) {
     if (now > entry.expiresAt) {
@@ -388,3 +388,10 @@ export async function saveHistoricalPointsToDatabase(
     throw error;
   }
 }
+
+export {
+  PRICE_CACHE_TTL_MS as __PRICE_CACHE_TTL_MS,
+  toDateOnly as __toDateOnly,
+  dateOnlyToTimestampMs,
+  sweepExpiredCacheEntries as __sweepExpiredCacheEntries,
+};

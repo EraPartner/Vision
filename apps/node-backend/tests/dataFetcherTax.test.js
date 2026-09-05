@@ -15,7 +15,7 @@ vi.mock(
 import { query } from "../src/database/connection.js";
 import {
   loadCurrentRates,
-  clearHistoricalIndexCache,
+  __clearHistoricalIndexCache as clearHistoricalIndexCache,
 } from "../src/services/currency/currencyConversionService.js";
 import { fetchTaxData } from "../src/services/reports/dataFetcherTax.js";
 
@@ -26,6 +26,7 @@ const dividendRow = (over = {}) => ({
   symbol: "ACME",
   asset_class: "stock",
   type: "dividend",
+  dividend_amount_convention: "net",
   amount: 1000,
   taxes: 150,
   fees: 0,
@@ -137,6 +138,50 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
       fees: 0.3,
       total: 0.6,
     });
+  });
+
+  it("computes gross and net dividend totals from each row's explicit convention", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        dividendRow({
+          id: 21,
+          amount: 100,
+          taxes: 30,
+          currency: "EUR",
+          dividend_amount_convention: "gross",
+        }),
+        dividendRow({
+          id: 22,
+          amount: 70,
+          taxes: 30,
+          currency: "EUR",
+          dividend_amount_convention: "net",
+        }),
+      ],
+    });
+
+    const data = await fetchTaxData("EUR", { kind: "year", year: 2024 }, {});
+
+    expect(data.dividendsReceived).toBe(170);
+    expect(data.grossDividendBase).toBe(200);
+    expect(data.netDividendResult).toBe(140);
+    expect(data.unknownDividendConventionCount).toBe(0);
+  });
+
+  it("marks convention-dependent dividend totals incomplete when any row is unknown", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        dividendRow({ currency: "EUR", dividend_amount_convention: "unknown" }),
+      ],
+    });
+
+    const data = await fetchTaxData("EUR", { kind: "year", year: 2024 }, {});
+
+    expect(data.dividendsReceived).toBe(1000);
+    expect(data.dividendWHTTotal).toBe(150);
+    expect(data.grossDividendBase).toBeNull();
+    expect(data.netDividendResult).toBeNull();
+    expect(data.unknownDividendConventionCount).toBe(1);
   });
 
   it("flags currencies summed 1:1 when no rate (historical or current) is available", async () => {

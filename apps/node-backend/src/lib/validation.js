@@ -6,7 +6,7 @@
  * module instead of the Express middleware layer.
  */
 
-import { ValidationError } from '../middleware/errorHandler.js';
+import { ValidationError } from "../middleware/errorHandler.js";
 
 /**
  * @typedef {object} FieldValidationResult
@@ -18,28 +18,75 @@ import { ValidationError } from '../middleware/errorHandler.js';
 /** @type {Record<string, Set<string>>} */
 const ALLOWED_COLUMNS = {
   transactions: new Set([
-    'date', 'transaction_date', 'bank_account', 'recipient_id', 'amount',
-    'memo', 'currency', 'category_id', 'comment', 'is_active',
+    "date",
+    "transaction_date",
+    "bank_account",
+    "recipient_id",
+    "amount",
+    "memo",
+    "currency",
+    "category_id",
+    "comment",
+    "is_active",
   ]),
-  categories: new Set(['general', 'detail', 'description', 'is_active']),
-  recipients: new Set(['name', 'default_category_id', 'notes', 'is_active']),
+  categories: new Set(["general", "detail", "description", "is_active"]),
+  recipients: new Set(["name", "default_category_id", "notes", "is_active"]),
   planned_transactions: new Set([
-    'planned_date', 'bank_account', 'recipient_id', 'amount', 'memo',
-    'currency', 'category_id', 'comment', 'url', 'is_recurring',
-    'recurrence_pattern', 'recurrence_end_date', 'max_occurrences',
-    'reminder_days_before', 'is_executed', 'is_active', 'last_executed_date',
-    'is_loan', 'loan_type', 'loan_principal', 'loan_annual_interest_rate',
-    'loan_term_months', 'loan_start_date', 'loan_payment_day',
-    'loan_regular_payment_amount', 'loan_first_payment_date',
+    "planned_date",
+    "bank_account",
+    "recipient_id",
+    "amount",
+    "memo",
+    "currency",
+    "category_id",
+    "comment",
+    "url",
+    "is_recurring",
+    "recurrence_pattern",
+    "recurrence_end_date",
+    "max_occurrences",
+    "reminder_days_before",
+    "is_executed",
+    "is_active",
+    "last_executed_date",
+    "is_loan",
+    "loan_type",
+    "loan_principal",
+    "loan_annual_interest_rate",
+    "loan_term_months",
+    "loan_start_date",
+    "loan_payment_day",
+    "loan_regular_payment_amount",
+    "loan_first_payment_date",
   ]),
   investments: new Set([
-    'name', 'symbol', 'asset_class', 'currency', 'current_price',
-    'interest_rate', 'maturity_date', 'location', 'municipality',
-    'cadastral_income', 'municipality_tax_rate', 'notes', 'is_active',
+    "name",
+    "symbol",
+    "asset_class",
+    "currency",
+    "current_price",
+    "interest_rate",
+    "maturity_date",
+    "location",
+    "municipality",
+    "cadastral_income",
+    "municipality_tax_rate",
+    "notes",
+    "is_active",
   ]),
   portfolio_transactions: new Set([
-    'type', 'date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes',
-    'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date',
+    "type",
+    "date",
+    "amount",
+    "units",
+    "price_per_unit",
+    "fees",
+    "taxes",
+    "currency",
+    "note",
+    "is_recurring",
+    "recurrence_interval",
+    "recurrence_end_date",
   ]),
 };
 
@@ -70,11 +117,12 @@ export const MAX_SAFE_ID = Number.MAX_SAFE_INTEGER;
  * @param {number} [max]
  * @returns {FieldValidationResult}
  */
-export function validateId(value, fieldName = 'id', max = MAX_INT32_ID) {
+export function validateId(value, fieldName = "id", max = MAX_INT32_ID) {
   /** @type {number} */
   let num = NaN;
-  if (typeof value === 'number') num = value;
-  else if (typeof value === 'string' && /^\d+$/.test(value)) num = Number(value);
+  if (typeof value === "number") num = value;
+  else if (typeof value === "string" && /^\d+$/.test(value))
+    num = Number(value);
   if (!Number.isInteger(num) || num < 1 || num > max) {
     return { valid: false, error: `${fieldName} must be a positive integer` };
   }
@@ -84,10 +132,10 @@ export function validateId(value, fieldName = 'id', max = MAX_INT32_ID) {
 /**
  * @param {unknown} value
  * @param {string} [fieldName]
- * @returns {number|null}
+ * @returns {number|undefined}
  */
-export function assertOptionalId(value, fieldName = 'id') {
-  if (value == null || value === '') return null;
+export function assertOptionalId(value, fieldName = "id") {
+  if (value == null || value === "") return undefined;
   const result = validateId(value, fieldName);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
@@ -100,13 +148,19 @@ export const MAX_MONEY_VALUE = 1e12;
  * @param {{ min?: number, max?: number, fieldName?: string }} [opts]
  * @returns {FieldValidationResult}
  */
-export function validateNumber(value, { min = -Infinity, max = MAX_MONEY_VALUE, fieldName = 'value' } = {}) {
+export function validateNumber(
+  value,
+  { min = -Infinity, max = MAX_MONEY_VALUE, fieldName = "value" } = {},
+) {
   const num = Number(value);
   if (!Number.isFinite(num)) {
     return { valid: false, error: `${fieldName} must be a finite number` };
   }
   if (num < min || num > max) {
-    return { valid: false, error: `${fieldName} must be between ${min} and ${max}` };
+    return {
+      valid: false,
+      error: `${fieldName} must be between ${min} and ${max}`,
+    };
   }
   return { valid: true, value: num };
 }
@@ -117,11 +171,13 @@ export function validateNumber(value, { min = -Infinity, max = MAX_MONEY_VALUE, 
  * @param {string} [fieldName]
  * @returns {unknown}
  */
-export function assertMaxLength(value, maxLength, fieldName = 'value') {
+export function assertMaxLength(value, maxLength, fieldName = "value") {
   if (value == null) return value;
   const str = String(value);
   if (str.length > maxLength) {
-    throw new ValidationError(`${fieldName} must be at most ${maxLength} characters`);
+    throw new ValidationError(
+      `${fieldName} must be at most ${maxLength} characters`,
+    );
   }
   return value;
 }
@@ -131,8 +187,8 @@ export function assertMaxLength(value, maxLength, fieldName = 'value') {
  * @param {string} [fieldName]
  * @returns {string|undefined}
  */
-export function assertCurrency(value, fieldName = 'currency') {
-  if (value == null || value === '') return undefined;
+export function assertCurrency(value, fieldName = "currency") {
+  if (value == null || value === "") return undefined;
   const currency = String(value).toUpperCase().trim();
   if (!/^[A-Z]{3}$/.test(currency)) {
     throw new ValidationError(`${fieldName} must be a 3-letter ISO code`);
@@ -145,7 +201,7 @@ export function assertCurrency(value, fieldName = 'currency') {
  * @param {string} [fieldName]
  * @returns {{ valid: boolean, value?: string|null, error?: string }}
  */
-export function validateDateString(value, fieldName = 'date') {
+export function validateDateString(value, fieldName = "date") {
   if (!value) return { valid: true, value: null };
   const str = /** @type {string} */ (value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) {
@@ -161,12 +217,12 @@ export function validateDateString(value, fieldName = 'date') {
 /**
  * @param {unknown} value
  * @param {string} [fieldName]
- * @returns {string|null}
+ * @returns {string|undefined}
  */
-export function assertYmd(value, fieldName = 'date') {
+export function assertYmd(value, fieldName = "date") {
   const result = validateDateString(value, fieldName);
   if (!result.valid) throw new ValidationError(result.error);
-  return result.value;
+  return result.value ?? undefined;
 }
 
 /**
@@ -174,7 +230,7 @@ export function assertYmd(value, fieldName = 'date') {
  * @param {string} [fieldName]
  * @returns {FieldValidationResult}
  */
-export function validateIntArray(values, fieldName = 'ids') {
+export function validateIntArray(values, fieldName = "ids") {
   /** @type {unknown[]} */
   const list = Array.isArray(values) ? values : [values];
   /** @type {number[]} */
@@ -182,7 +238,10 @@ export function validateIntArray(values, fieldName = 'ids') {
   for (const value of list) {
     const element = validateId(value, fieldName);
     if (!element.valid) {
-      return { valid: false, error: `${fieldName} contains invalid value: ${value}` };
+      return {
+        valid: false,
+        error: `${fieldName} contains invalid value: ${value}`,
+      };
     }
     result.push(element.value);
   }
@@ -195,5 +254,7 @@ export function validateIntArray(values, fieldName = 'ids') {
  */
 export function filterValidatedIdNumbers(values) {
   if (!Array.isArray(values)) return [];
-  return values.filter((value) => typeof value === 'number' && validateId(value).valid);
+  return values.filter(
+    (value) => typeof value === "number" && validateId(value).valid,
+  );
 }

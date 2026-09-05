@@ -365,6 +365,10 @@ describe("getPortfolioSummary", () => {
     // Partially assigned → per-broker figures unavailable: everything on the
     // unassigned row; the summary flags it so the UI can render the nudge.
     expect(result.byAccount.map((a) => a.account_id)).toEqual([null]);
+    expect(result.byAccount[0]).toMatchObject({
+      assignment: "unassigned",
+      oversold: false,
+    });
     expect(result.summaries[0].fullyAssigned).toBe(false);
     // Global figures stay the exact flat-replay values.
     expect(result.byAccount[0].currentValue).toBeCloseTo(
@@ -426,12 +430,14 @@ describe("getPortfolioSummary", () => {
     const result = await getPortfolioSummary("EUR");
 
     expect(result.summaries[0].fullyAssigned).toBe(true);
+    expect(result.summaries[0].oversold).toBe(false);
     expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20]);
 
     // Account 20's sell consumes account 20's own 20/unit lot — NOT account
     // 10's older 10/unit lot that flat global FIFO would pick.
     const acc20 = result.byAccount.find((a) => a.account_id === 20);
     expect(acc20.realizedGain).toBe(100); // 600 − 25×20
+    expect(acc20).toMatchObject({ assignment: "account", oversold: false });
     expect(acc20.unrealizedGain).toBe(-200); // 25×12 − 25×20
     expect(acc20.currentValue).toBe(300);
     const acc10 = result.byAccount.find((a) => a.account_id === 10);
@@ -458,6 +464,47 @@ describe("getPortfolioSummary", () => {
     expect(sumReal).toBeCloseTo(result.totals.totalRealizedGain, 2);
     expect(sumUnreal).toBeCloseTo(result.totals.totalUnrealizedGain, 2);
     expect(sumGL).toBeCloseTo(result.totals.totalGainLoss, 2);
+  });
+
+  it("surfaces a legacy oversold broker partition through both response levels", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ id: 1, currency: "EUR", current_price: 12 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            id: 1,
+            investment_id: 1,
+            type: "buy",
+            amount: 100,
+            units: 10,
+            currency: "EUR",
+            account_id: 10,
+          }),
+          txnRow({
+            id: 2,
+            investment_id: 1,
+            type: "sell",
+            amount: 180,
+            units: 15,
+            currency: "EUR",
+            account_id: 10,
+          }),
+        ],
+      });
+
+    const result = await getPortfolioSummary("EUR");
+
+    expect(result.summaries[0]).toMatchObject({
+      fullyAssigned: true,
+      oversold: true,
+    });
+    expect(result.byAccount[0]).toMatchObject({
+      account_id: 10,
+      assignment: "account",
+      oversold: true,
+    });
   });
 });
 

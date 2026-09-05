@@ -226,4 +226,4 @@ function enrichRow(key, def, row) {
   };
 }
 
-export { PROVIDER_DEFINITIONS };
+export { PROVIDER_DEFINITIONS as __PROVIDER_DEFINITIONS };

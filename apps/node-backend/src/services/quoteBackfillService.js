@@ -106,7 +106,7 @@ const GAP_THRESHOLD_DAYS = 9;
  * @returns {Array<{ fromDate: string, toDate: string | null }>}
  *   Holding windows. toDate = null means position is still open.
  */
-export function computeHoldingWindows(transactions) {
+function computeHoldingWindows(transactions) {
   if (!Array.isArray(transactions) || transactions.length === 0) return [];
 
   const sorted = [...transactions].sort((a, b) => {
@@ -166,7 +166,7 @@ export function computeHoldingWindows(transactions) {
  * @param {Array<{ timestampMs: number, price: number }>} points - Sorted price points
  * @returns {Array<{ timestampMs: number, price: number }>} - Cleaned copy (immutable)
  */
-export function sanitizeIsolatedSpikes(points) {
+function sanitizeIsolatedSpikes(points) {
   if (!Array.isArray(points) || points.length < 3)
     return points ? [...points] : [];
 
@@ -401,7 +401,7 @@ async function getStoredPriceDates(investmentId) {
  * @param {{ thresholdDays?: number, todayUtc?: string }} [opts]
  * @returns {boolean}
  */
-export function holdingWindowsNeedBackfill(
+function holdingWindowsNeedBackfill(
   holdingWindows,
   storedDates,
   { thresholdDays = GAP_THRESHOLD_DAYS, todayUtc } = {},
@@ -725,7 +725,7 @@ export async function refreshQuotesForInvestment(investmentId) {
  * @param {Map<number, { investment: HoldingWindowInvestment, holdingWindows: HoldingWindow[] }>} investmentWindows
  * @returns {Promise<number>} Total rows deleted
  */
-export async function cleanupStaleQuotes(investmentWindows) {
+async function cleanupStaleQuotes(investmentWindows) {
   // Flatten all windows into parallel arrays so the cleanup is ONE statement
   // (was one DELETE per investment — N round-trips on every maintenance pass).
   const invIds = [];
@@ -783,3 +783,10 @@ export async function cleanupStaleQuotes(investmentWindows) {
 function _isPositive(value) {
   return Number.isFinite(value) && value > 0;
 }
+
+export {
+  computeHoldingWindows as __computeHoldingWindows,
+  sanitizeIsolatedSpikes as __sanitizeIsolatedSpikes,
+  holdingWindowsNeedBackfill as __holdingWindowsNeedBackfill,
+  cleanupStaleQuotes,
+};

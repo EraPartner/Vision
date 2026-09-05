@@ -400,7 +400,7 @@ export async function streamNdjsonExport(res, args) {
  * @param {number[]} ids
  * @returns {{ whereSql: string, params: [number[]], nextParamIdx: number }}
  */
-export function buildIdListWhere(ids) {
+ function buildIdListWhere(ids) {
   return {
     whereSql: "t.id = ANY($1::int[])",
     params: [ids],
@@ -459,3 +459,5 @@ export async function streamBulkTransactionExport(
     client.release();
   }
 }
+
+export { buildIdListWhere as __buildIdListWhere };

@@ -105,7 +105,7 @@ export class UpstreamError extends AppError {
  * An upstream call exceeded its deadline. 504 variant of UpstreamError —
  * same production masking rationale.
  */
-export class UpstreamTimeoutError extends AppError {
+ class UpstreamTimeoutError extends AppError {
   constructor(message = 'Upstream request timed out', opts = {}) {
     super(message, { status: 504, code: ApiErrorCode.GATEWAY_TIMEOUT, ...opts });
   }
@@ -293,3 +293,5 @@ export function createErrorHandler(isProduction) {
     res.status(status).json(body);
   };
 }
+
+export { UpstreamTimeoutError as __UpstreamTimeoutError };

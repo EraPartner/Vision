@@ -54,7 +54,8 @@ describe("aggregationRefresh", () => {
   });
 
   it("exposes the trigger-maintained tables as a frozen array", async () => {
-    const { TRIGGER_MAINTAINED_TABLES } = await loadAggregationRefresh();
+    const { __TRIGGER_MAINTAINED_TABLES: TRIGGER_MAINTAINED_TABLES } =
+      await loadAggregationRefresh();
     expect(TRIGGER_MAINTAINED_TABLES).toEqual(["agg_split_outstanding"]);
     expect(Object.isFrozen(TRIGGER_MAINTAINED_TABLES)).toBe(true);
   });

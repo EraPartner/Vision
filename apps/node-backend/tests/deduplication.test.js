@@ -9,10 +9,10 @@ import { mockConnection } from "./helpers/repoMocks.js";
 vi.mock("../src/database/connection.js", () => mockConnection());
 
 import {
-  createTransactionHash,
-  createManualTransactionHash,
+  __createTransactionHash as createTransactionHash,
+  __createManualTransactionHash as createManualTransactionHash,
   isDuplicate,
-  isDuplicateByFields,
+  __isDuplicateByFields as isDuplicateByFields,
   isManualDuplicate,
   recordManualRawTransaction,
 } from "../src/services/deduplication.js";

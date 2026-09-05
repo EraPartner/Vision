@@ -2,7 +2,7 @@
  * Materialized View Manager
  *
  * Creates and refreshes materialized views that pre-compute expensive
- * dashboard aggregations (monthly summaries, category totals, cashflow).
+ * dashboard aggregations (monthly summaries and category totals).
  * Views are refreshed CONCURRENTLY so reads remain unblocked.
  *
  * The whole lifecycle runs post-`listen` from startup/warmup.js — none of it is
@@ -47,11 +47,7 @@ async function runMaintenanceStatement(sql) {
 }
 
 /** All managed materialized view names */
-const MATERIALIZED_VIEWS = [
-  "mv_monthly_summary",
-  "mv_category_totals",
-  "mv_cashflow_daily",
-];
+const MATERIALIZED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
 /**
  * Create all materialized views (idempotent).
@@ -99,20 +95,18 @@ export async function createMaterializedViews() {
 
   // Unique index on plain columns — no expressions, so CONCURRENT refresh works
   await runMaintenanceStatement(`
-    CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_summary
     ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
+  await runMaintenanceStatement(`DROP INDEX IF EXISTS mv_monthly_summary_idx`);
 
-  // 2-3. Category totals and daily cashflow are fully independent of each other —
-  //      create them in parallel.
-  await Promise.all([
-    // 2. Category totals (all-time). Effective category resolves 3 levels
-    //    (own → recipient default → PRIMARY recipient's default) so the MV
-    //    fast path agrees with getCategoryBreakdown's live fallback and the
-    //    transactions surfaces. Changing this definition requires a migration
-    //    that DROPs the MV (see 0084): IF NOT EXISTS never redefines an
-    //    existing view, so already-migrated installs keep the old SQL otherwise.
-    runMaintenanceStatement(`
+  // 2. Category totals (all-time). Effective category resolves 3 levels
+  //    (own → recipient default → PRIMARY recipient's default) so the MV
+  //    fast path agrees with getCategoryBreakdown's live fallback and the
+  //    transactions surfaces. Changing this definition requires a migration
+  //    that DROPs the MV (see 0084): IF NOT EXISTS never redefines an
+  //    existing view, so already-migrated installs keep the old SQL otherwise.
+  await runMaintenanceStatement(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
       SELECT
         COALESCE(c.id, -1) AS category_id,
@@ -130,34 +124,12 @@ export async function createMaterializedViews() {
         COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
         t.currency
       ORDER BY count DESC
-    `).then(() =>
-      runMaintenanceStatement(`
-      CREATE UNIQUE INDEX IF NOT EXISTS mv_category_totals_idx
+    `);
+  await runMaintenanceStatement(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_category_totals
       ON mv_category_totals (category_id, currency)
-    `),
-    ),
-
-    // 3. Daily cashflow (last 7 months – 6 complete + current)
-    runMaintenanceStatement(`
-      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily AS
-      SELECT
-        t.date,
-        EXTRACT(DAY FROM t.date)::int AS day_of_month,
-        date_trunc('month', t.date)::date AS month_start,
-        t.currency,
-        SUM(t.amount) AS net
-      FROM transactions t
-      WHERE t.is_active = true AND t.is_transfer = false
-        AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
-      GROUP BY t.date, day_of_month, month_start, t.currency
-      ORDER BY t.date
-    `).then(() =>
-      runMaintenanceStatement(`
-      CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
-      ON mv_cashflow_daily (date, currency)
-    `),
-    ),
-  ]);
+    `);
+  await runMaintenanceStatement(`DROP INDEX IF EXISTS mv_category_totals_idx`);
 
   // The boot-wide `ANALYZE` in main.js runs pre-listen and so no longer covers
   // views created after it; without this a freshly created view carries no
@@ -183,37 +155,38 @@ export async function createMaterializedViews() {
 export async function ensureMaterializedViewIndexes() {
   const indexes = [
     {
-      name: "mv_monthly_summary_idx",
+      name: "idx_mv_monthly_summary",
+      legacyName: "mv_monthly_summary_idx",
       view: "mv_monthly_summary",
       columns: `(month_start, currency, category_id_key)`,
     },
     {
-      name: "mv_category_totals_idx",
+      name: "idx_mv_category_totals",
+      legacyName: "mv_category_totals_idx",
       view: "mv_category_totals",
       columns: `(category_id, currency)`,
-    },
-    {
-      name: "mv_cashflow_daily_idx",
-      view: "mv_cashflow_daily",
-      columns: `(date, currency)`,
     },
   ];
 
   // All indexes are on independent views — create them in parallel
   await Promise.all(
-    indexes.map(({ name, view, columns }) =>
+    indexes.map(async ({ name, legacyName, view, columns }) =>
       runMaintenanceStatement(
         `CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`,
-      ).catch((err) => {
-        logger.warn(`Could not create index ${name} on ${view}`, {
-          error: err.message,
-        });
-      }),
+      )
+        .then(() =>
+          runMaintenanceStatement(`DROP INDEX IF EXISTS ${legacyName}`),
+        )
+        .catch((err) => {
+          logger.warn(`Could not create index ${name} on ${view}`, {
+            error: err.message,
+          });
+        }),
     ),
   );
 }
 
-let refreshInFlight = false;
+let refreshInFlight = null;
 let refreshQueued = false;
 
 /**
@@ -226,13 +199,11 @@ export async function refreshMaterializedViews() {
   invalidateStatisticsCaches();
   if (refreshInFlight) {
     refreshQueued = true;
-    return;
+    return refreshInFlight;
   }
 
-  refreshInFlight = true;
   const start = Date.now();
-
-  try {
+  const refresh = (async () => {
     // CONCURRENTLY requires unique indexes (created above) and allows
     // reads to continue during refresh.
     await Promise.all(
@@ -268,10 +239,16 @@ export async function refreshMaterializedViews() {
     // switched to the new snapshot so that race cannot outlive the refresh.
     invalidateStatisticsCaches();
     logger.info(`Materialized views refreshed in ${Date.now() - start}ms`);
+  })();
+  refreshInFlight = refresh;
+
+  try {
+    await refresh;
   } catch (err) {
     logger.error("Materialized view refresh failed", { error: err.message });
+    throw err;
   } finally {
-    refreshInFlight = false;
+    if (refreshInFlight === refresh) refreshInFlight = null;
     if (refreshQueued) {
       refreshQueued = false;
       // Schedule deferred refresh; swallow rejection so unhandled promises do not crash the process.

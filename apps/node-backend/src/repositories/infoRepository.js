@@ -27,22 +27,22 @@
  * entry to add.
  */
 
-export { clearMvCache } from './infoRepositoryHelpers.js';
+export { clearMvCache } from "./infoRepositoryHelpers.js";
 
-import { getIncludeTransfers } from './infoRepositoryHelpers.js';
-import { statisticsRepository } from './infoRepositoryStatistics.js';
-import { getMonthlyFinancialSummary } from './infoRepositoryMonthly.js';
-import { getAverageVsCurrentSpending } from './infoRepositoryAverageVsCurrent.js';
+import { getIncludeTransfers } from "./infoRepositoryHelpers.js";
+import { statisticsRepository } from "./infoRepositoryStatistics.js";
+import { getMonthlyFinancialSummary } from "./infoRepositoryMonthly.js";
+import { getAverageVsCurrentSpending } from "./infoRepositoryAverageVsCurrent.js";
 import {
   getCashflowComparison,
   getCashflowForecastData,
   getCashflowForecastDataByCategory,
   getCashflowForecastDataRolling,
-} from './infoRepositoryForecast.js';
-import { banksRepository } from './infoRepositoryBanks.js';
-import { netWorthRepository } from './infoRepositoryNetWorth.js';
-import { plannedRepository } from './infoRepositoryPlanned.js';
-import { recipientInsightsRepository } from './infoRepositoryRecipients.js';
+} from "./infoRepositoryForecast.js";
+import { banksRepository } from "./infoRepositoryBanks.js";
+import { netWorthRepository } from "./infoRepositoryNetWorth.js";
+import { plannedRepository } from "./infoRepositoryPlanned.js";
+import { recipientInsightsRepository } from "./infoRepositoryRecipients.js";
 
 export const infoRepository = {
   ...statisticsRepository,

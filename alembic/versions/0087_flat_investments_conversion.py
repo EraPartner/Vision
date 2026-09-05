@@ -765,6 +765,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    cleanup_completed = bool(
+        bind.execute(
+            sa.text(
+                "SELECT to_regclass('public.adr109_legacy_cleanup_marker') IS NOT NULL"
+            )
+        ).scalar()
+    )
+    if cleanup_completed:
+        raise RuntimeError(
+            "ADR-109 legacy rollback relations were permanently removed by the operator-gated "
+            "cleanup. Refusing to downgrade 0087; restore the verified pre-cleanup logical "
+            "backup instead."
+        )
     converted = bool(
         bind.execute(
             sa.text(

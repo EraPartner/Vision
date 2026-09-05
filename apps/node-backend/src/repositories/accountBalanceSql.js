@@ -1,4 +1,4 @@
-import { roundToCents } from '../lib/money.js';
+import { roundToCents } from "../lib/money.js";
 
 /**
  * Shared SQL for an account's computed balance (ADR-094).
@@ -7,7 +7,7 @@ import { roundToCents } from '../lib/money.js';
  * definition; `computedBalanceByCurrencyLateral` and `computedBalanceSeriesCtes`
  * below are the two forms that emit a figure from it (per-currency, and the same
  * figure as a daily series) and that the balance-history charts need in order to
- * agree with each other. `COMPUTED_BALANCE_LATERAL` carries the provenance half
+ * agree with each other. `BALANCE_PROVENANCE_LATERAL` carries the provenance half
  * of the same rule.
  *
  * The naive "latest active transaction with a non-null balance" lateral froze
@@ -47,12 +47,15 @@ import { roundToCents } from '../lib/money.js';
  * column — and the anchor/Σ terms that existed solely to produce it — are
  * stripped rather than left dangling, so no future consumer can pick it up.
  */
-export const COMPUTED_BALANCE_LATERAL = `
+export function balanceProvenanceLateral({ asOfDate = "CURRENT_DATE" } = {}) {
+  return `
   LEFT JOIN LATERAL (
     WITH anchor AS (
       SELECT t.date, t.id
       FROM transactions t
-      WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
+      WHERE t.account_id = a.id AND t.is_active = true
+        AND t.date <= ${asOfDate}
+        AND t.balance IS NOT NULL
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1
     ),
@@ -60,6 +63,7 @@ export const COMPUTED_BALANCE_LATERAL = `
       SELECT COUNT(*) AS post_anchor_count
       FROM transactions t2
       WHERE t2.account_id = a.id AND t2.is_active = true
+        AND t2.date <= ${asOfDate}
         AND (
           NOT EXISTS (SELECT 1 FROM anchor)
           OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
@@ -69,9 +73,12 @@ export const COMPUTED_BALANCE_LATERAL = `
            (SELECT post_anchor_count FROM delta) AS post_anchor_count
   ) lb ON true
 `;
+}
+
+const BALANCE_PROVENANCE_LATERAL = balanceProvenanceLateral();
 
 /**
- * Same anchor+delta definition as {@link COMPUTED_BALANCE_LATERAL}, but emitted
+ * Same anchor+delta definition as {@link BALANCE_PROVENANCE_LATERAL}, but emitted
  * **per currency**: one row per currency the account holds.
  *
  * Why it exists: `SUM(t2.amount)` in the unpartitioned lateral adds a EUR
@@ -94,7 +101,7 @@ export const COMPUTED_BALANCE_LATERAL = `
  * For a single-currency account (the overwhelmingly common case) there is
  * exactly one partition, its anchor is the account's latest stamped row and its
  * delta is every active row after that anchor — i.e. byte-identical to
- * {@link COMPUTED_BALANCE_LATERAL}.
+ * {@link BALANCE_PROVENANCE_LATERAL}.
  *
  * Emits ZERO rows for an account with no active rows at all (rather than a
  * synthetic 0); every caller already excludes those accounts.
@@ -105,12 +112,17 @@ export const COMPUTED_BALANCE_LATERAL = `
  *                  *current* balance, so callers convert it at today's rate,
  *                  not at the partition's last-activity date.
  *
- * @param {{ account: string, alias?: string }} opts
+ * @param {{ account: string, alias?: string, asOfDate?: string }} opts
  *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
- *   site (`a.id`), never user input.
+ *   site (`a.id`), never user input. `asOfDate` is likewise a literal SQL date
+ *   expression; it defaults to `CURRENT_DATE` for current-balance callers.
  * @returns {string}
  */
-export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
+export function computedBalanceByCurrencyLateral({
+  account,
+  alias = "bal",
+  asOfDate = "CURRENT_DATE",
+}) {
   return `
   JOIN LATERAL (
     SELECT ccy.currency,
@@ -119,12 +131,14 @@ export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
       SELECT COALESCE(t.currency, 'EUR') AS currency
       FROM transactions t
       WHERE t.account_id = ${account} AND t.is_active = true
+        AND t.date <= ${asOfDate}
       GROUP BY COALESCE(t.currency, 'EUR')
     ) ccy
     LEFT JOIN LATERAL (
       SELECT t.balance, t.date, t.id
       FROM transactions t
       WHERE t.account_id = ${account} AND t.is_active = true
+        AND t.date <= ${asOfDate}
         AND t.balance IS NOT NULL
         AND COALESCE(t.currency, 'EUR') = ccy.currency
       ORDER BY t.date DESC, t.id DESC
@@ -134,6 +148,7 @@ export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
       SELECT COALESCE(SUM(t2.amount), 0) AS amount
       FROM transactions t2
       WHERE t2.account_id = ${account} AND t2.is_active = true
+        AND t2.date <= ${asOfDate}
         AND COALESCE(t2.currency, 'EUR') = ccy.currency
         AND (anch.date IS NULL OR (t2.date, t2.id) > (anch.date, anch.id))
     ) dlt ON true
@@ -168,16 +183,27 @@ export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
  * rate (these are *current* balances) — see
  * {@link computedBalanceByCurrencyLateral} for why summing first is wrong.
  *
- * @param {{ account: string, alias?: string, column?: string }} opts
+ * @param {{ account: string, alias?: string, column?: string, asOfDate?: string }} opts
  *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
  *   site (`a.id`), never user input.
  * @returns {string}
  */
 export function computedBalanceByCurrencyAggLateral({
   account,
-  alias = 'bp',
-  column = 'balance_parts',
+  alias = "bp",
+  column = "balance_parts",
+  asOfDate = "CURRENT_DATE",
 }) {
+  if (
+    /[\r\n]/.test(account) ||
+    !/^(?:[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|ANY\(\$\d+::int\[\]\))$/i.test(
+      account,
+    )
+  ) {
+    throw new TypeError(
+      "account must be a literal qualified column or ANY($n::int[]) expression",
+    );
+  }
   return `
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(
@@ -188,7 +214,7 @@ export function computedBalanceByCurrencyAggLateral({
     -- a JOIN onto a preceding FROM item) can be spliced in unchanged; the
     -- correlation to ${account} reaches through both nesting levels.
     FROM (SELECT 1) ${alias}_drv
-    ${computedBalanceByCurrencyLateral({ account, alias: 'bal' })}
+    ${computedBalanceByCurrencyLateral({ account, alias: "bal", asOfDate })}
   ) ${alias} ON true
 `;
 }
@@ -242,9 +268,9 @@ export function computedBalanceByCurrencyAggLateral({
  *   string (pass it through `toDecimal`, like a NUMERIC column).
  */
 export function statementPartition(parts, accountCurrency) {
-  const want = (accountCurrency || 'EUR').toUpperCase();
+  const want = (accountCurrency || "EUR").toUpperCase();
   const list = (parts ?? []).map((p) => ({
-    currency: (p.currency || 'EUR').toUpperCase(),
+    currency: (p.currency || "EUR").toUpperCase(),
     balance: String(p.balance),
   }));
 
@@ -263,7 +289,7 @@ export function statementPartition(parts, accountCurrency) {
   const funded = list.filter((p) => !roundToCents(p.balance).isZero());
   if (funded.length === 1) return funded[0];
 
-  return { currency: want, balance: '0' };
+  return { currency: want, balance: "0" };
 }
 
 /**
@@ -310,22 +336,24 @@ export function statementPartition(parts, accountCurrency) {
  *   (each partition anchored by its own stamps — see
  *   {@link computedBalanceByCurrencyLateral} for why that is the only
  *   consistent reading). With it false the sum is cross-currency, matching
- *   {@link COMPUTED_BALANCE_LATERAL}, and `currency` is a constant the caller
+ *   {@link BALANCE_PROVENANCE_LATERAL}, and `currency` is a constant the caller
  *   should ignore. Names are interpolated raw: pass LITERAL CTE names.
  * @returns {string}
  */
 export function computedBalanceSeriesCtes({
   byCurrency = false,
-  accountList = 'account_list',
-  days = 'days',
+  accountList = "account_list",
+  days = "days",
 } = {}) {
   const currencyExpr = byCurrency ? `COALESCE(t.currency, 'EUR')` : `''::text`;
   // Only the per-currency form confines a partition to one currency; the
   // cross-currency form has a single partition per account.
-  const samePartition = byCurrency ? `AND COALESCE(t.currency, 'EUR') = p.currency` : '';
+  const samePartition = byCurrency
+    ? `AND COALESCE(t.currency, 'EUR') = p.currency`
+    : "";
   // The window partition drops the currency column entirely in cross-currency
   // mode: carrying a constant in the PARTITION BY only lengthens every sort key.
-  const partitionBy = byCurrency ? 'account_id, currency' : 'account_id';
+  const partitionBy = byCurrency ? "account_id, currency" : "account_id";
   return `
   bs_span AS (
     SELECT MIN(day) AS first_day, MAX(day) AS last_day FROM ${days}
@@ -342,7 +370,7 @@ export function computedBalanceSeriesCtes({
     -- the net-worth case.
     SELECT p.account_id,
            p.currency,
-           ${byCurrency ? 'p.currency' : 'rc.row_currency'} AS row_currency,
+           ${byCurrency ? "p.currency" : "rc.row_currency"} AS row_currency,
            (SELECT first_day FROM bs_span) - 1 AS date,
            -1 AS id,
            COALESCE(anch.balance, 0) + dlt.amount AS balance,
@@ -371,14 +399,18 @@ export function computedBalanceSeriesCtes({
         ${samePartition}
         AND (anch.date IS NULL OR (t.date, t.id) > (anch.date, anch.id))
     ) dlt ON true
-    ${byCurrency ? '' : `LEFT JOIN LATERAL (
+    ${
+      byCurrency
+        ? ""
+        : `LEFT JOIN LATERAL (
       SELECT COALESCE(t.currency, 'EUR') AS row_currency
       FROM transactions t
       WHERE t.account_id = p.account_id AND t.is_active = true
         AND t.date < (SELECT first_day FROM bs_span)
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1
-    ) rc ON true`}
+    ) rc ON true`
+    }
   ),
   bs_src AS (
     SELECT account_id, currency, row_currency, date, id, balance, amount
@@ -461,7 +493,7 @@ export function computedBalanceSeriesCtes({
 }
 
 export default {
-  COMPUTED_BALANCE_LATERAL,
+  BALANCE_PROVENANCE_LATERAL,
   computedBalanceByCurrencyLateral,
   computedBalanceByCurrencyAggLateral,
   statementPartition,

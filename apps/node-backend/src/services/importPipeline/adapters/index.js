@@ -6,15 +6,15 @@
  * Each adapter module must default-export `{ name, bankName, detect, parse }`.
  */
 
-import belfius from './belfius.js';
-import revolut from './revolut.js';
-import ing from './ing.js';
-import bnp from './bnp.js';
-import kbc from './kbc.js';
-import vision from './vision.js';
-import sabb from './sabb.js';
-import wise from './wise.js';
-import generic from './generic.js';
+import belfius from "./belfius.js";
+import revolut from "./revolut.js";
+import ing from "./ing.js";
+import bnp from "./bnp.js";
+import kbc from "./kbc.js";
+import vision from "./vision.js";
+import sabb from "./sabb.js";
+import wise from "./wise.js";
+import generic from "./generic.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
@@ -34,6 +34,7 @@ import generic from './generic.js';
  * @property {(csvSample?: string|null) => boolean} detect
  * @property {(filePath: string, config?: any) => Promise<ParsedBankTransactions>} parse
  * @property {(filePath: string, config: any) => Promise<ParsedBankTransactions>} [parseWithConfig]
+ * @property {boolean} [multiCurrencyCash] whether imported accounts retain native currency partitions
  */
 
 /** @type {BankCsvAdapter[]} */
@@ -49,7 +50,7 @@ const REGISTRY = new Map(ADAPTERS.map((adapter) => [adapter.name, adapter]));
  */
 export function getAdapter(name) {
   if (!name) return null;
-  const key = String(name).toLowerCase().replace(/\s+/g, '_');
+  const key = String(name).toLowerCase().replace(/\s+/g, "_");
   return REGISTRY.get(key) || null;
 }
 
@@ -58,9 +59,9 @@ export function getAdapter(name) {
  */
 export function getSupportedBanks() {
   // Mirrors legacy order for UI selects. Exclude generic (internal fallback).
-  return ADAPTERS
-    .filter((adapter) => adapter.name !== 'generic')
-    .map((adapter) => adapter.name);
+  return ADAPTERS.filter((adapter) => adapter.name !== "generic").map(
+    (adapter) => adapter.name,
+  );
 }
 
 /**
@@ -72,9 +73,9 @@ export function getSupportedBanks() {
  * @returns {Array<{ key: string, name: string }>}
  */
 export function listAdapters() {
-  return ADAPTERS
-    .filter((adapter) => adapter.name !== 'generic')
-    .map((adapter) => ({ key: adapter.name, name: adapter.bankName }));
+  return ADAPTERS.filter((adapter) => adapter.name !== "generic").map(
+    (adapter) => ({ key: adapter.name, name: adapter.bankName }),
+  );
 }
 
 /**
@@ -84,7 +85,7 @@ export function listAdapters() {
 export function detectBank(csvSample) {
   if (!csvSample) return null;
   for (const adapter of ADAPTERS) {
-    if (adapter.name === 'generic') continue;
+    if (adapter.name === "generic") continue;
     try {
       if (adapter.detect(csvSample)) return adapter.name;
     } catch {
@@ -105,7 +106,8 @@ export function detectBank(csvSample) {
  */
 export function createAdapter(bankName, customConfig = null) {
   if (customConfig) {
-    return (/** @type {string} */ filePath) => generic.parseWithConfig(filePath, customConfig);
+    return (/** @type {string} */ filePath) =>
+      generic.parseWithConfig(filePath, customConfig);
   }
   const adapter = getAdapter(bankName);
   if (!adapter) {

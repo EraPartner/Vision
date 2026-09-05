@@ -6,7 +6,7 @@
  * query helper — no raw pool references.
  */
 
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
   default_asset_class, default_type, status, account_id,
@@ -15,7 +15,9 @@ const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
 
 /**
  * Set the batch-level brokerage account (ADR-095). Lots committed from this batch
- * inherit it as their account_id (ADR-091). Pass null to clear.
+ * inherit it as their account_id (ADR-091). Pass null to clear. A present
+ * account also repairs cash rows whose exact commit error says the batch
+ * account was missing, so review can recommit them; unrelated errors remain.
  *
  * @param {number|string} batchId
  * @param {number|null|undefined} accountId
@@ -23,7 +25,23 @@ const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
  */
 export async function setBatchAccount(batchId, accountId) {
   await query(
-    `UPDATE portfolio_import_batches SET account_id = $2 WHERE id = $1`,
+    `WITH repaired AS (
+       UPDATE portfolio_import_staging_rows
+          SET status = 'matched', error_message = NULL
+        WHERE batch_id = $1
+          AND $2::integer IS NOT NULL
+          AND route = 'cash'
+          AND status = 'error'
+          AND error_message = 'brokerage cash row requires a batch account'
+       RETURNING id
+     )
+     UPDATE portfolio_import_batches
+        SET account_id = $2,
+            rows_error = GREATEST(
+              COALESCE(rows_error, 0) - (SELECT COUNT(*) FROM repaired),
+              0
+            )
+      WHERE id = $1`,
     [batchId, accountId ?? null],
   );
 }
@@ -38,7 +56,9 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
       ORDER BY started_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
-  const countResult = await query(`SELECT COUNT(*)::int AS total FROM portfolio_import_batches`);
+  const countResult = await query(
+    `SELECT COUNT(*)::int AS total FROM portfolio_import_batches`,
+  );
   return { batches: rows, total: countResult.rows[0]?.total ?? 0 };
 }
 
@@ -47,7 +67,10 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
  * @returns {Promise<Record<string, any>|undefined>}
  */
 export async function getBatch(id) {
-  const { rows } = await query(`SELECT ${BATCH_COLUMNS} FROM portfolio_import_batches WHERE id = $1`, [id]);
+  const { rows } = await query(
+    `SELECT ${BATCH_COLUMNS} FROM portfolio_import_batches WHERE id = $1`,
+    [id],
+  );
   return rows[0];
 }
 
@@ -134,7 +157,9 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
     `WITH prev AS (
         SELECT id, status AS old_status
           FROM portfolio_import_staging_rows
-         WHERE batch_id = $1 AND id = $2 AND status IN ('matched', 'error')
+         WHERE batch_id = $1 AND id = $2
+           AND status IN ('matched', 'error')
+           AND route IS DISTINCT FROM 'cash'
          FOR UPDATE
      ),
      upd AS (
@@ -158,7 +183,11 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
 
   // If we flipped an error row back to matched, the batch's cumulative
   // rows_error over-counts it — decrement so total counts don't exceed rows_total.
-  if (result.rowCount > 0 && investmentId != null && result.rows[0]?.old_status === 'error') {
+  if (
+    result.rowCount > 0 &&
+    investmentId != null &&
+    result.rows[0]?.old_status === "error"
+  ) {
     await query(
       `UPDATE portfolio_import_batches
           SET rows_error = GREATEST(COALESCE(rows_error, 0) - 1, 0)
@@ -177,7 +206,7 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
  * overrides.
  *
  * @param {{ batchId: number, rowIds: number[] }} args
- * @returns {Promise<{ batchStatus: string|undefined, rows: Array<{ id: number, status: string, user_override_investment_id: number|null }> }>}
+ * @returns {Promise<{ batchStatus: string|undefined, rows: Array<{ id: number, status: string, route: string|null, user_override_investment_id: number|null }> }>}
  */
 export async function lockInvestmentResolutionRows({ batchId, rowIds }) {
   const batch = await lockBatchForUpdate(batchId);
@@ -186,7 +215,7 @@ export async function lockInvestmentResolutionRows({ batchId, rowIds }) {
   }
 
   const { rows } = await query(
-    `SELECT id, status, user_override_investment_id
+    `SELECT id, status, route, user_override_investment_id
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND id = ANY($2::bigint[])
       ORDER BY id
@@ -214,7 +243,7 @@ export async function overrideInvestments({ batchId, rowIds, investmentId }) {
         SELECT DISTINCT unnest($2::bigint[]) AS id
      ),
      locked AS (
-        SELECT r.id, r.status AS old_status
+        SELECT r.id, r.status AS old_status, r.route
           FROM portfolio_import_staging_rows r
           JOIN requested req ON req.id = r.id
          WHERE r.batch_id = $1
@@ -225,6 +254,7 @@ export async function overrideInvestments({ batchId, rowIds, investmentId }) {
         SELECT id, old_status
           FROM locked
          WHERE old_status IN ('matched', 'error')
+           AND route IS DISTINCT FROM 'cash'
      ),
      counts AS (
         SELECT (SELECT COUNT(*)::int FROM requested) AS requested_count,
@@ -302,12 +332,15 @@ export async function getRowForInvestmentCreation({ batchId, rowId }) {
  * happened to share the number.
  *
  * @param {number} batchId
- * @returns {Promise<Array<{id:number, route:string|null}>>}
+ * @returns {Promise<Array<{id:number, route:string|null, investment_id:number|null}>>}
  */
 export async function getCommittedRows(batchId) {
   const { rows } = await query(
-    `SELECT committed_txn_id AS id, route FROM portfolio_import_staging_rows
-      WHERE batch_id = $1 AND committed_txn_id IS NOT NULL`,
+    `SELECT isr.committed_txn_id AS id, isr.route, pt.investment_id
+       FROM portfolio_import_staging_rows isr
+       LEFT JOIN portfolio_transactions pt
+         ON pt.id = isr.committed_txn_id
+      WHERE isr.batch_id = $1 AND isr.committed_txn_id IS NOT NULL`,
     [batchId],
   );
   return rows;
@@ -344,5 +377,8 @@ export async function resetCommittedRowsToMatched(batchId) {
  * @returns {Promise<void>}
  */
 export async function markBatchAborted(batchId) {
-  await query(`UPDATE portfolio_import_batches SET status = 'aborted' WHERE id = $1`, [batchId]);
+  await query(
+    `UPDATE portfolio_import_batches SET status = 'aborted' WHERE id = $1`,
+    [batchId],
+  );
 }

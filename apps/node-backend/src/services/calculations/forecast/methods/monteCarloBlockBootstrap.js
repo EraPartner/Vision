@@ -6,12 +6,12 @@
  * Robust when IID assumption fails. Seeded for determinism.
  */
 
-import { buildSeasonalityBuckets, lookupBucket } from '../seasonality.js';
-import { makeRng } from '../prng.js';
-import { quantile } from '../_statistics.js';
+import { buildSeasonalityBuckets, lookupBucket } from "../seasonality.js";
+import { makeRng } from "../prng.js";
+import { quantile } from "../_statistics.js";
 
-export const id = 'monte_carlo_block_bootstrap';
-export const label = 'Monte Carlo (block bootstrap)';
+export const id = "monte_carlo_block_bootstrap";
+export const label = "Monte Carlo (block bootstrap)";
 
 const DEFAULT_PATHS = 1000;
 const DEFAULT_PERCENTILES = [10, 50, 90];
@@ -38,12 +38,12 @@ function computeResiduals(history, buckets) {
  * }} ctx
  * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>> }}
  */
-export function forecast({
+function forecast({
   history,
   forecastDates,
   paths = DEFAULT_PATHS,
   percentiles = DEFAULT_PERCENTILES,
-  seed = 'default',
+  seed = "default",
 }) {
   const H = forecastDates.length;
   if (H === 0) return { series: [], bands: {} };
@@ -56,7 +56,8 @@ export function forecast({
     const series = forecastDates.map((date) => ({ date, value: 0 }));
     /** @type {Record<string, Array<{date: string, value: number}>>} */
     const bands = {};
-    for (const q of percentiles) bands[`p${q}`] = forecastDates.map((date) => ({ date, value: 0 }));
+    for (const q of percentiles)
+      bands[`p${q}`] = forecastDates.map((date) => ({ date, value: 0 }));
     return { series, bands };
   }
 
@@ -91,8 +92,13 @@ export function forecast({
   /** @type {Record<string, Array<{date: string, value: number}>>} */
   const bandsByDate = {};
   for (const q of percentiles) {
-    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({ date, value: bands[`p${q}`][h] }));
+    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({
+      date,
+      value: bands[`p${q}`][h],
+    }));
   }
 
   return { series, bands: bandsByDate };
 }
+
+export { forecast };

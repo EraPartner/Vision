@@ -1,118 +1,177 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockTxConnection } from './helpers/repoMocks.js';
+import { mockTxConnection } from "./helpers/repoMocks.js";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 // Transaction shim: runs the callback directly; a throw propagates (= rollback).
-vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
-vi.mock('../src/repositories/accountRepository.js', () => ({
+vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
+vi.mock("../src/repositories/accountRepository.js", () => ({
   default: { getById: vi.fn() },
 }));
 
-import { query, withTransaction } from '../src/database/connection.js';
-import accountRepository from '../src/repositories/accountRepository.js';
+import { query, withTransaction } from "../src/database/connection.js";
+import accountRepository from "../src/repositories/accountRepository.js";
 import {
-  normalizeOpeningBalance,
+  __normalizeOpeningBalance as normalizeOpeningBalance,
   setOpeningBalance,
-} from '../src/services/openingBalanceService.js';
+} from "../src/services/openingBalanceService.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockClient.query.mockReset();
 });
 
-describe('normalizeOpeningBalance (ADR-094 D4)', () => {
-  const account = { currency: 'EUR' };
+describe("normalizeOpeningBalance (ADR-094 D4)", () => {
+  const account = { currency: "EUR" };
 
-  it('accepts a numeric balance + ISO date and defaults currency to the account', () => {
-    expect(normalizeOpeningBalance({ balance: 1234.56, date: '2024-01-01' }, account)).toEqual({
+  it("accepts a numeric balance + ISO date and defaults currency to the account", () => {
+    expect(
+      normalizeOpeningBalance(
+        { balance: 1234.56, date: "2024-01-01" },
+        account,
+      ),
+    ).toEqual({
       balance: 1234.56,
-      date: '2024-01-01',
-      currency: 'EUR',
+      date: "2024-01-01",
+      currency: "EUR",
     });
   });
 
-  it('coerces string-typed numerics and uppercases an explicit currency', () => {
-    expect(normalizeOpeningBalance({ balance: '10', date: '2024-01-01', currency: 'usd' }, account)).toEqual({
+  it("coerces string-typed numerics and uppercases an explicit currency", () => {
+    expect(
+      normalizeOpeningBalance(
+        { balance: "10", date: "2024-01-01", currency: "usd" },
+        account,
+      ),
+    ).toEqual({
       balance: 10,
-      date: '2024-01-01',
-      currency: 'USD',
+      date: "2024-01-01",
+      currency: "USD",
     });
   });
 
-  it('allows a zero opening balance (anchor is legitimately zero-amount)', () => {
-    expect(normalizeOpeningBalance({ balance: 0, date: '2024-01-01' }, account).balance).toBe(0);
+  it("allows a zero opening balance (anchor is legitimately zero-amount)", () => {
+    expect(
+      normalizeOpeningBalance({ balance: 0, date: "2024-01-01" }, account)
+        .balance,
+    ).toBe(0);
   });
 
-  it('rejects a missing/non-numeric balance', () => {
-    expect(() => normalizeOpeningBalance({ date: '2024-01-01' }, account)).toThrow(/balance/);
-    expect(() => normalizeOpeningBalance({ balance: 'abc', date: '2024-01-01' }, account)).toThrow(/balance/);
+  it("rejects a missing/non-numeric balance", () => {
+    expect(() =>
+      normalizeOpeningBalance({ date: "2024-01-01" }, account),
+    ).toThrow(/balance/);
+    expect(() =>
+      normalizeOpeningBalance({ balance: "abc", date: "2024-01-01" }, account),
+    ).toThrow(/balance/);
   });
 
-  it('rejects a non-ISO date', () => {
-    expect(() => normalizeOpeningBalance({ balance: 1, date: '01/01/2024' }, account)).toThrow(/date/);
+  it("rejects a non-ISO date", () => {
+    expect(() =>
+      normalizeOpeningBalance({ balance: 1, date: "01/01/2024" }, account),
+    ).toThrow(/date/);
   });
 
-  it('rejects an impossible calendar date the bare regex would pass', () => {
+  it("rejects an impossible calendar date the bare regex would pass", () => {
     // 2026-13-40 matches /^\d{4}-\d{2}-\d{2}$/ but is not a real date; without
     // the calendar parse-check it reaches Postgres and 500s on the DATE cast.
-    expect(() => normalizeOpeningBalance({ balance: 1, date: '2026-13-40' }, account)).toThrow(/date/);
+    expect(() =>
+      normalizeOpeningBalance({ balance: 1, date: "2026-13-40" }, account),
+    ).toThrow(/date/);
   });
 
-  it('rejects a malformed currency', () => {
-    expect(() => normalizeOpeningBalance({ balance: 1, date: '2024-01-01', currency: 'EURO' }, account)).toThrow(/currency/);
+  it("rejects a malformed currency", () => {
+    expect(() =>
+      normalizeOpeningBalance(
+        { balance: 1, date: "2024-01-01", currency: "EURO" },
+        account,
+      ),
+    ).toThrow(/currency/);
   });
 
   // Pins for the zod swap (ZOD-09): exact boundary/fallback semantics.
-  it('rejects an empty-string or null balance', () => {
-    expect(() => normalizeOpeningBalance({ balance: '', date: '2024-01-01' }, account)).toThrow(/balance/);
-    expect(() => normalizeOpeningBalance({ balance: null, date: '2024-01-01' }, account)).toThrow(/balance/);
+  it("rejects an empty-string or null balance", () => {
+    expect(() =>
+      normalizeOpeningBalance({ balance: "", date: "2024-01-01" }, account),
+    ).toThrow(/balance/);
+    expect(() =>
+      normalizeOpeningBalance({ balance: null, date: "2024-01-01" }, account),
+    ).toThrow(/balance/);
   });
 
-  it('rejects a missing or null date', () => {
-    expect(() => normalizeOpeningBalance({ balance: 1 }, account)).toThrow(/date/);
-    expect(() => normalizeOpeningBalance({ balance: 1, date: null }, account)).toThrow(/date/);
+  it("rejects a missing or null date", () => {
+    expect(() => normalizeOpeningBalance({ balance: 1 }, account)).toThrow(
+      /date/,
+    );
+    expect(() =>
+      normalizeOpeningBalance({ balance: 1, date: null }, account),
+    ).toThrow(/date/);
   });
 
-  it('tolerates an absent body and account (throws balance ValidationError, no crash)', () => {
-    expect(() => normalizeOpeningBalance(undefined, account)).toThrow(/balance/);
+  it("tolerates an absent body and account (throws balance ValidationError, no crash)", () => {
+    expect(() => normalizeOpeningBalance(undefined, account)).toThrow(
+      /balance/,
+    );
   });
 
-  it('falls back to EUR when neither body nor account carry a currency', () => {
-    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01' }, {}).currency).toBe('EUR');
-    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01', currency: '' }, {}).currency).toBe('EUR');
+  it("falls back to EUR when neither body nor account carry a currency", () => {
+    expect(
+      normalizeOpeningBalance({ balance: 1, date: "2024-01-01" }, {}).currency,
+    ).toBe("EUR");
+    expect(
+      normalizeOpeningBalance(
+        { balance: 1, date: "2024-01-01", currency: "" },
+        {},
+      ).currency,
+    ).toBe("EUR");
   });
 
-  it('lowercase account currency is uppercased in the fallback', () => {
-    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01' }, { currency: 'usd' }).currency).toBe('USD');
+  it("lowercase account currency is uppercased in the fallback", () => {
+    expect(
+      normalizeOpeningBalance(
+        { balance: 1, date: "2024-01-01" },
+        { currency: "usd" },
+      ).currency,
+    ).toBe("USD");
   });
 });
 
-describe('setOpeningBalance (ADR-094 D4)', () => {
+describe("setOpeningBalance (ADR-094 D4)", () => {
   beforeEach(() => {
-    accountRepository.getById.mockResolvedValue({ id: 5, currency: 'EUR' });
+    accountRepository.getById.mockResolvedValue({ id: 5, currency: "EUR" });
   });
 
-  it('404s when the account does not exist', async () => {
+  it("404s when the account does not exist", async () => {
     accountRepository.getById.mockResolvedValueOnce(null);
-    await expect(setOpeningBalance(99, { balance: 1, date: '2024-01-01' })).rejects.toThrow(/not found/i);
+    await expect(
+      setOpeningBalance(99, { balance: 1, date: "2024-01-01" }),
+    ).rejects.toThrow(/not found/i);
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('stamps a system anchor row (amount 0, transfer_source opening, server balance)', async () => {
+  it("stamps a system anchor row (amount 0, transfer_source opening, server balance)", async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // account row lock (FOR UPDATE)
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
-      .mockResolvedValueOnce({ rows: [{ id: 42, amount: 0, balance: 1000, transfer_source: 'opening' }] });
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 42, amount: 0, balance: 1000, transfer_source: "opening" },
+        ],
+      });
 
-    const result = await setOpeningBalance(5, { balance: 1000, date: '2024-01-01' });
+    const result = await setOpeningBalance(5, {
+      balance: 1000,
+      date: "2024-01-01",
+    });
 
     expect(result.warning).toBeNull();
     expect(result.transaction.id).toBe(42);
 
     // Whole upsert runs in a transaction; the first query locks the account row.
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toMatch(/SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/);
+    expect(query.mock.calls[0][0]).toMatch(
+      /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/,
+    );
     expect(query.mock.calls[0][1]).toEqual([5]);
 
     // Fourth query is the upsert (lock, earliest-activity probe, system-recipient
@@ -120,27 +179,41 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     const [sql, params] = query.mock.calls[3];
     expect(sql).toMatch(/transfer_source = 'opening'/);
     expect(sql).toMatch(/is_transfer, transfer_source, is_active/);
-    expect(params).toEqual([5, 1000, 'EUR', '2024-01-01', 'OPENING BALANCE', 900]);
+    expect(params).toEqual([
+      5,
+      1000,
+      "EUR",
+      "2024-01-01",
+      "OPENING BALANCE",
+      900,
+    ]);
     // recipient_id is NOT NULL: the INSERT branch must name the column and bind
     // the system recipient (omitting it raised 23502 live). The UPDATE branch
     // must NOT touch it — re-running the action keeps the anchor's recipient.
     expect(sql).toMatch(/recipient_id,/);
-    expect(sql.slice(sql.indexOf('updated AS'), sql.indexOf('inserted AS'))).not.toMatch(/recipient_id/);
-    expect(query.mock.calls[2][0]).toMatch(/SELECT id FROM recipients WHERE normalized_name/);
+    expect(
+      sql.slice(sql.indexOf("updated AS"), sql.indexOf("inserted AS")),
+    ).not.toMatch(/recipient_id/);
+    expect(query.mock.calls[2][0]).toMatch(
+      /SELECT id FROM recipients WHERE normalized_name/,
+    );
   });
 
-  it('warns when the anchor date does not precede existing activity', async () => {
+  it("warns when the anchor date does not precede existing activity", async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ earliest: '2023-06-01' }] }) // activity predates the anchor
+      .mockResolvedValueOnce({ rows: [{ earliest: "2023-06-01" }] }) // activity predates the anchor
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 7 }] });
 
-    const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });
+    const result = await setOpeningBalance(5, {
+      balance: 500,
+      date: "2024-01-01",
+    });
     expect(result.warning).toMatch(/does not precede/i);
   });
 
-  it('warns even when pg returns MIN(date) as a Date object (real driver shape)', async () => {
+  it("warns even when pg returns MIN(date) as a Date object (real driver shape)", async () => {
     // pg reads a DATE column as a local-midnight JS Date, not an ISO string.
     // String(Date) is "Sat Jun 01 2023 …", which is never lexically <= an ISO
     // "YYYY-MM-DD" — so the pre-fix String(earliest).slice(0,10) compare made
@@ -151,18 +224,24 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 8 }] });
 
-    const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });
+    const result = await setOpeningBalance(5, {
+      balance: 500,
+      date: "2024-01-01",
+    });
     expect(result.warning).toMatch(/does not precede/i);
   });
 
-  it('does not warn when a Date-typed earliest is after the anchor', async () => {
+  it("does not warn when a Date-typed earliest is after the anchor", async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 9 }] });
 
-    const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });
+    const result = await setOpeningBalance(5, {
+      balance: 500,
+      date: "2024-01-01",
+    });
     expect(result.warning).toBeNull();
   });
 });

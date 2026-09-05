@@ -27,7 +27,7 @@ vi.mock("../src/config/logger.js", () => ({
 }));
 
 import {
-  matchesTolerance,
+  __matchesTolerance as matchesTolerance,
   autoLinkTransactions,
   getMatchSuggestions,
 } from "../src/services/plannedMatchService.js";

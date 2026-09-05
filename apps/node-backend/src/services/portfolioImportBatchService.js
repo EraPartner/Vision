@@ -7,9 +7,10 @@
  * creating a holding from a row and rollback — live here.
  */
 
-import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
-import investmentRepository from '../repositories/investmentRepository.js';
-import { query, withTransaction } from '../database/connection.js';
+import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
+import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
+import investmentRepository from "../repositories/investmentRepository.js";
+import { query, withTransaction } from "../database/connection.js";
 import {
   getRowForInvestmentCreation,
   getPreviewRows,
@@ -20,14 +21,14 @@ import {
   getCommittedRows,
   markBatchAborted,
   resetCommittedRowsToMatched,
-} from '../repositories/portfolioImportBatchRepository.js';
+} from "../repositories/portfolioImportBatchRepository.js";
 
 export {
   listBatches,
   getBatch,
   overrideInvestment,
   setBatchAccount,
-} from '../repositories/portfolioImportBatchRepository.js';
+} from "../repositories/portfolioImportBatchRepository.js";
 
 /**
  * Build the portfolio-import preview consumed by the review page.
@@ -37,20 +38,21 @@ function buildPortfolioImportBatchPreview(rows) {
   /** @type {Map<string, any>} */
   const groupMap = new Map();
   for (const row of rows) {
-    const key = row.route === 'cash'
-      ? 'cash'
-      : (row.effective_investment_id != null
-        ? `inv:${row.effective_investment_id}`
-        : `raw:${(row.symbol_raw || row.name_raw || '?').toLowerCase()}`);
+    const key =
+      row.route === "cash"
+        ? "cash"
+        : row.effective_investment_id != null
+          ? `inv:${row.effective_investment_id}`
+          : `raw:${(row.symbol_raw || row.name_raw || "?").toLowerCase()}`;
     if (!groupMap.has(key)) {
       groupMap.set(key, {
-        is_cash: row.route === 'cash',
+        is_cash: row.route === "cash",
         investment_id: row.effective_investment_id,
         investment_name: row.investment_name,
         investment_symbol: row.investment_symbol,
         investment_asset_class: row.investment_asset_class,
-        raw_symbol: row.route === 'cash' ? null : row.symbol_raw,
-        raw_name: row.route === 'cash' ? null : row.name_raw,
+        raw_symbol: row.route === "cash" ? null : row.symbol_raw,
+        raw_name: row.route === "cash" ? null : row.name_raw,
         rows: [],
       });
     }
@@ -85,11 +87,11 @@ function buildPortfolioImportBatchPreview(rows) {
   /** @type {Record<string, number>} */
   const totals = { symbol: 0, name_exact: 0, unresolved: 0, error: 0 };
   for (const row of rows) {
-    if (row.status === 'error') {
+    if (row.status === "error") {
       totals.error += 1;
       continue;
     }
-    const source = row.match_source ?? 'unresolved';
+    const source = row.match_source ?? "unresolved";
     totals[source] = (totals[source] || 0) + 1;
   }
   return { groups, totals };
@@ -133,31 +135,50 @@ export async function createInvestmentForRow({ batchId, rowId }) {
  *
  * @param {{ batchId: number, rowIds: number[], rejectExistingOverride?: boolean }} args
  */
-async function validateInvestmentResolutionRows({ batchId, rowIds, rejectExistingOverride = false }) {
+async function validateInvestmentResolutionRows({
+  batchId,
+  rowIds,
+  rejectExistingOverride = false,
+}) {
   const locked = await lockInvestmentResolutionRows({ batchId, rowIds });
   if (!locked.batchStatus) return undefined;
 
-  if (!['awaiting_review', 'complete_with_errors'].includes(locked.batchStatus)) {
+  if (
+    !["awaiting_review", "complete_with_errors"].includes(locked.batchStatus)
+  ) {
     const err = /** @type {Error & { code?: string }} */ (
-      new Error(`Batch ${batchId} is not in a reviewable state (status: ${locked.batchStatus})`)
+      new Error(
+        `Batch ${batchId} is not in a reviewable state (status: ${locked.batchStatus})`,
+      )
     );
-    err.code = 'VALIDATION_ERROR';
+    err.code = "VALIDATION_ERROR";
     throw err;
   }
 
-  if (locked.rows.length !== rowIds.length || locked.rows.some((row) => !['matched', 'error'].includes(row.status))) {
+  if (
+    locked.rows.length !== rowIds.length ||
+    locked.rows.some(
+      (row) =>
+        row.route === "cash" || !["matched", "error"].includes(row.status),
+    )
+  ) {
     const err = /** @type {Error & { code?: string }} */ (
-      new Error('One or more rows were not found in this batch or are no longer reviewable')
+      new Error(
+        "One or more rows were not found in this batch or are no longer reviewable",
+      )
     );
-    err.code = 'NOT_FOUND';
+    err.code = "NOT_FOUND";
     throw err;
   }
 
-  if (rejectExistingOverride && locked.rows.some((row) => row.user_override_investment_id != null)) {
+  if (
+    rejectExistingOverride &&
+    locked.rows.some((row) => row.user_override_investment_id != null)
+  ) {
     const err = /** @type {Error & { code?: string }} */ (
-      new Error('One or more rows already have a user-selected investment')
+      new Error("One or more rows already have a user-selected investment")
     );
-    err.code = 'VALIDATION_ERROR';
+    err.code = "VALIDATION_ERROR";
     throw err;
   }
 
@@ -175,19 +196,23 @@ async function createInvestmentFromRow({ batchId, rowId }) {
     const err = /** @type {Error & { code?: string }} */ (
       new Error(`Row ${rowId} not found in batch ${batchId}`)
     );
-    err.code = 'NOT_FOUND';
+    err.code = "NOT_FOUND";
     throw err;
   }
   if (!row.default_asset_class) {
-    const err = /** @type {Error & { code?: string }} */ (new Error('batch has no default asset class for new holdings'));
-    err.code = 'VALIDATION_ERROR';
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error("batch has no default asset class for new holdings")
+    );
+    err.code = "VALIDATION_ERROR";
     throw err;
   }
 
-  const name = (row.name_raw || row.symbol_raw || '').trim();
+  const name = (row.name_raw || row.symbol_raw || "").trim();
   if (!name) {
-    const err = /** @type {Error & { code?: string }} */ (new Error('row has no symbol or name to create a holding from'));
-    err.code = 'VALIDATION_ERROR';
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error("row has no symbol or name to create a holding from")
+    );
+    err.code = "VALIDATION_ERROR";
     throw err;
   }
 
@@ -195,14 +220,18 @@ async function createInvestmentFromRow({ batchId, rowId }) {
   // (uppercased). investments.currency is VARCHAR(10) with no CHECK, so a
   // malformed CSV cell either stored garbage or (>10 chars) 500'd the insert —
   // fallback (not reject) matches the pipeline's existing `|| 'EUR'` coalescing.
-  const rawCurrency = String(row.currency || '').trim().toUpperCase();
-  const investment = await investmentRepository.create(/** @type {any} */ ({
-    name,
-    symbol: (row.symbol_raw || '').trim() || undefined,
-    asset_class: row.default_asset_class,
-    currency: /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'EUR',
-    price_provider: 'manual',
-  }));
+  const rawCurrency = String(row.currency || "")
+    .trim()
+    .toUpperCase();
+  const investment = await investmentRepository.create(
+    /** @type {any} */ ({
+      name,
+      symbol: (row.symbol_raw || "").trim() || undefined,
+      asset_class: row.default_asset_class,
+      currency: /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "EUR",
+      price_provider: "manual",
+    }),
+  );
 
   return investment;
 }
@@ -216,7 +245,12 @@ async function createInvestmentFromRow({ batchId, rowId }) {
  * @param {{ batchId: number, rowIds: number[], investmentId?: number, createNew?: boolean }} args
  * @returns {Promise<{ investmentId: number, created: boolean, resolved: number, investment?: import('../types/rows.js').InvestmentRow }>}
  */
-export async function resolveInvestmentRows({ batchId, rowIds, investmentId, createNew = false }) {
+export async function resolveInvestmentRows({
+  batchId,
+  rowIds,
+  investmentId,
+  createNew = false,
+}) {
   return withTransaction(async () => {
     const locked = await validateInvestmentResolutionRows({
       batchId,
@@ -224,8 +258,10 @@ export async function resolveInvestmentRows({ batchId, rowIds, investmentId, cre
       rejectExistingOverride: createNew,
     });
     if (!locked) {
-      const err = /** @type {Error & { code?: string }} */ (new Error(`Batch ${batchId} not found`));
-      err.code = 'NOT_FOUND';
+      const err = /** @type {Error & { code?: string }} */ (
+        new Error(`Batch ${batchId} not found`)
+      );
+      err.code = "NOT_FOUND";
       throw err;
     }
 
@@ -241,7 +277,7 @@ export async function resolveInvestmentRows({ batchId, rowIds, investmentId, cre
         const err = /** @type {Error & { code?: string }} */ (
           new Error(`Investment ${effectiveId} not found`)
         );
-        err.code = 'NOT_FOUND';
+        err.code = "NOT_FOUND";
         throw err;
       }
     }
@@ -253,9 +289,11 @@ export async function resolveInvestmentRows({ batchId, rowIds, investmentId, cre
     });
     if (result.updatedCount !== result.requestedCount) {
       const err = /** @type {Error & { code?: string }} */ (
-        new Error('One or more rows were not found in this batch or are no longer reviewable')
+        new Error(
+          "One or more rows were not found in this batch or are no longer reviewable",
+        )
       );
-      err.code = 'NOT_FOUND';
+      err.code = "NOT_FOUND";
       throw err;
     }
 
@@ -331,15 +369,24 @@ export async function rollbackBatch(batchId) {
     // rollback already owns staging rows (the opposite order could deadlock).
     const lockedBatch = await lockBatchForUpdate(batchId);
     if (!lockedBatch) {
-      const err = /** @type {Error & { code?: string }} */ (new Error(`Batch ${batchId} not found`));
-      err.code = 'NOT_FOUND';
+      const err = /** @type {Error & { code?: string }} */ (
+        new Error(`Batch ${batchId} not found`)
+      );
+      err.code = "NOT_FOUND";
       throw err;
     }
-    if (lockedBatch.status === 'aborted' || ['pending', 'staging', 'validating', 'matching', 'committing'].includes(lockedBatch.status)) {
+    if (
+      lockedBatch.status === "aborted" ||
+      ["pending", "staging", "validating", "matching", "committing"].includes(
+        lockedBatch.status,
+      )
+    ) {
       const err = /** @type {Error & { code?: string }} */ (
-        new Error(`Batch ${batchId} cannot be rolled back from status ${lockedBatch.status}`)
+        new Error(
+          `Batch ${batchId} cannot be rolled back from status ${lockedBatch.status}`,
+        )
       );
-      err.code = 'VALIDATION_ERROR';
+      err.code = "VALIDATION_ERROR";
       throw err;
     }
 
@@ -351,8 +398,20 @@ export async function rollbackBatch(batchId) {
     // staging row from crossing the transactions/portfolio id line.
     const isBrokerage = lockedBatch.is_brokerage === true;
 
+    const portfolioRows = rows.filter(
+      (r) => (!isBrokerage || r.route !== "cash") && r.id != null,
+    );
+    // Approve the complete stamped + legacy removal set before deleting any
+    // row. Per-row validation would reject a batch's buy before its dependent
+    // sell even though removing both restores the pre-import history.
+    await portfolioTransactionService.validateImportBatchRemoval(
+      batchId,
+      portfolioRows,
+    );
+
     // 1. Trades stamped with this batch — one statement.
-    const bulkDeletedIds = await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
+    const bulkDeletedIds =
+      await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
     let deleted = bulkDeletedIds.length;
     // committed_txn_id is INTEGER while portfolio ids can arrive as BIGINT strings
     // from pg; compare as strings so the "already covered" test can't miss.
@@ -360,17 +419,25 @@ export async function rollbackBatch(batchId) {
 
     // 2. Cash rows → the ledger, never the portfolio table (brokerage only).
     const cashIds = isBrokerage
-      ? rows.filter((r) => r.route === 'cash' && r.id != null).map((r) => r.id)
+      ? rows.filter((r) => r.route === "cash" && r.id != null).map((r) => r.id)
       : [];
     if (cashIds.length > 0) {
-      const r = await query('DELETE FROM transactions WHERE id = ANY($1::int[])', [cashIds]);
+      const r = await query(
+        "DELETE FROM transactions WHERE id = ANY($1::int[])",
+        [cashIds],
+      );
       deleted += r.rowCount ?? 0;
     }
 
     // 3. Pre-0086 trades the stamp cannot reach. On a non-brokerage batch this
     // includes route='cash' rows — they were committed as trades (see guard).
     const unstampedTradeIds = rows
-      .filter((r) => (!isBrokerage || r.route !== 'cash') && r.id != null && !bulkDeleted.has(String(r.id)))
+      .filter(
+        (r) =>
+          (!isBrokerage || r.route !== "cash") &&
+          r.id != null &&
+          !bulkDeleted.has(String(r.id)),
+      )
       .map((r) => r.id);
     for (const id of unstampedTradeIds) {
       const ok = await portfolioTransactionRepository.hardDelete(id);

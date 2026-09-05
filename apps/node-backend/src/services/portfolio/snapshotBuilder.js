@@ -18,6 +18,7 @@ import {
 import { toDecimal, roundMoney } from "../../lib/money.js";
 import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
 import { todayAppDateString } from "../../lib/timezone.js";
+import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
 
 /** @typedef {import('decimal.js').default} Decimal */
 
@@ -117,6 +118,7 @@ import { todayAppDateString } from "../../lib/timezone.js";
  * @property {string} type
  * @property {number} amount
  * @property {number} units
+ * @property {number|null} accountId
  * @property {string} currency
  * @property {number|undefined} fxRateToEur
  */
@@ -368,6 +370,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       type: row.type,
       amount: Number(row.amount) || 0,
       units: Number(row.units) || 0,
+      accountId: row.account_id == null ? null : Number(row.account_id),
       currency: row.currency,
       fxRateToEur:
         row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
@@ -379,6 +382,28 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       (a, b) => (a.type === "sell" ? 1 : 0) - (b.type === "sell" ? 1 : 0),
     );
   }
+
+  const txnsByInvestment = new Map();
+  for (const rows of Object.values(txByDay)) {
+    for (const tx of rows) {
+      const bucket = txnsByInvestment.get(tx.investmentId);
+      const assignmentRow = {
+        type: tx.type,
+        date: "",
+        account_id: tx.accountId,
+      };
+      if (bucket) bucket.push(assignmentRow);
+      else txnsByInvestment.set(tx.investmentId, [assignmentRow]);
+    }
+  }
+  const fullyAssignedUnitInvestments = new Set(
+    [...txnsByInvestment.entries()]
+      .filter(
+        ([investmentId, rows]) =>
+          investmentsById.has(investmentId) && areLotsFullyAssigned(rows),
+      )
+      .map(([investmentId]) => investmentId),
+  );
 
   // --- Day walk helpers ---
 
@@ -522,14 +547,40 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
 
   /** @type {Record<number, number>} */
   const unitsByInvestment = {};
+  /** @type {Map<number, Map<number|null, number>>} */
+  const unitsByInvestmentPartition = new Map();
   // Cost-weighted average purchase-date FX multiplier per unit investment:
   // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
   // conversion to the target currency. Valuing units×price at m̄ instead of
   // the day's rate yields the FX-neutral series — `value − value_fx_neutral`
   // is the cumulative currency effect on current holdings. Sells reduce both
   // sums proportionally (m̄ of the remaining position is unchanged).
-  /** @type {Map<number, FxNeutralAccumulator>} */
+  /** @type {Map<number, Map<number|null, FxNeutralAccumulator>>} */
   const fxNeutralState = new Map();
+
+  const partitionKey = (tx) =>
+    fullyAssignedUnitInvestments.has(tx.investmentId) ? tx.accountId : null;
+  const partitionUnits = (investmentId) => {
+    let partitions = unitsByInvestmentPartition.get(investmentId);
+    if (!partitions) {
+      partitions = new Map();
+      unitsByInvestmentPartition.set(investmentId, partitions);
+    }
+    return partitions;
+  };
+  const refreshTotalUnits = (investmentId) => {
+    unitsByInvestment[investmentId] = [
+      ...partitionUnits(investmentId).values(),
+    ].reduce((heldUnits, units) => heldUnits + units, 0);
+  };
+  const neutralPartitions = (investmentId) => {
+    let partitions = fxNeutralState.get(investmentId);
+    if (!partitions) {
+      partitions = new Map();
+      fxNeutralState.set(investmentId, partitions);
+    }
+    return partitions;
+  };
   // Money accumulators stay Decimal — float drift compounds across a multi-year
   // day walk and is persisted into portfolio_performance_snapshots.
   let cumulativeInvested = toDecimal(0);
@@ -582,8 +633,10 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           cryptoInvested = cryptoInvested.plus(converted);
         else if (inv?.assetClass === "metals")
           metalsInvested = metalsInvested.plus(converted);
-        unitsByInvestment[tx.investmentId] =
-          (unitsByInvestment[tx.investmentId] || 0) + tx.units;
+        const key = partitionKey(tx);
+        const partitionState = partitionUnits(tx.investmentId);
+        partitionState.set(key, (partitionState.get(key) || 0) + tx.units);
+        refreshTotalUnits(tx.investmentId);
         if (tx.units > 0 && tx.amount > 0)
           lastKnownPrice[tx.investmentId] = txFallbackPrice(
             tx,
@@ -592,13 +645,14 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           );
 
         if (inv && tx.amount > 0) {
-          const fxs = fxNeutralState.get(tx.investmentId) ?? {
+          const states = neutralPartitions(tx.investmentId);
+          const fxs = states.get(key) ?? {
             weight: toDecimal(0),
             weightedRate: toDecimal(0),
           };
           fxs.weight = fxs.weight.plus(tx.amount);
           fxs.weightedRate = fxs.weightedRate.plus(converted); // amount × m_i
-          fxNeutralState.set(tx.investmentId, fxs);
+          states.set(key, fxs);
         }
 
         if (nonUnitS) {
@@ -612,18 +666,27 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
             nonUnitS.firstBuyDate = day;
         }
       } else if (tx.type === "sell") {
-        cumulativeInvested = cumulativeInvested.minus(converted);
-        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
-          stocksEtfsInvested = stocksEtfsInvested.minus(converted);
-        else if (inv?.assetClass === "crypto")
-          cryptoInvested = cryptoInvested.minus(converted);
-        else if (inv?.assetClass === "metals")
-          metalsInvested = metalsInvested.minus(converted);
         // Clamp oversells to held units (mirrors calculateCostBasis's
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
-        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
-        unitsByInvestment[tx.investmentId] =
-          heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
+        // The live calculators also scale proceeds by consumed/requested units;
+        // apply that ratio to invested cash flow so snapshot gain stays aligned.
+        const key = partitionKey(tx);
+        const partitionState = partitionUnits(tx.investmentId);
+        const heldUnits = partitionState.get(key) || 0;
+        const consumedUnits = Math.min(heldUnits, tx.units);
+        const effectiveConverted =
+          inv && tx.units > 0
+            ? converted.times(toDecimal(consumedUnits).div(tx.units))
+            : converted;
+        cumulativeInvested = cumulativeInvested.minus(effectiveConverted);
+        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
+          stocksEtfsInvested = stocksEtfsInvested.minus(effectiveConverted);
+        else if (inv?.assetClass === "crypto")
+          cryptoInvested = cryptoInvested.minus(effectiveConverted);
+        else if (inv?.assetClass === "metals")
+          metalsInvested = metalsInvested.minus(effectiveConverted);
+        partitionState.set(key, Math.max(0, heldUnits - tx.units));
+        refreshTotalUnits(tx.investmentId);
         if (tx.units > 0 && tx.amount > 0)
           lastKnownPrice[tx.investmentId] = txFallbackPrice(
             tx,
@@ -631,11 +694,9 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
             day,
           );
 
-        const fxs = fxNeutralState.get(tx.investmentId);
+        const fxs = fxNeutralState.get(tx.investmentId)?.get(key);
         if (fxs && heldUnits > 0 && tx.units > 0) {
-          const factor = toDecimal(Math.max(0, heldUnits - tx.units)).div(
-            heldUnits,
-          );
+          const factor = toDecimal(heldUnits - consumedUnits).div(heldUnits);
           fxs.weight = fxs.weight.times(factor);
           fxs.weightedRate = fxs.weightedRate.times(factor);
         }
@@ -647,7 +708,20 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         // (mirrors calculateCostBasis). Only applies once units are held.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0 && tx.units > 0) {
-          unitsByInvestment[tx.investmentId] = tx.units;
+          const partitions = partitionUnits(tx.investmentId);
+          const entries = [...partitions.entries()].filter(
+            ([, units]) => units > 0,
+          );
+          let allocated = 0;
+          entries.forEach(([key, units], index) => {
+            const nextUnits =
+              index === entries.length - 1
+                ? tx.units - allocated
+                : (units / heldUnits) * tx.units;
+            allocated += nextUnits;
+            partitions.set(key, nextUnits);
+          });
+          refreshTotalUnits(tx.investmentId);
         }
       } else if (tx.type === "return_of_capital") {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
@@ -727,10 +801,22 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       // rate. Positions with no recorded buy amounts (e.g. price-only seeds)
       // have no purchase rate to lock — they contribute at the day's rate.
       const fxs = fxNeutralState.get(inv.id);
-      const invValueNeutral =
-        fxs && fxs.weight.gt(0)
-          ? invValueNative.times(fxs.weightedRate).div(fxs.weight)
-          : invValue;
+      let invValueNeutral = toDecimal(0);
+      if (fxs) {
+        const heldPartitions = partitionUnits(inv.id);
+        for (const [key, held] of heldPartitions) {
+          if (held <= 0) continue;
+          const state = fxs.get(key);
+          const nativePartValue = toDecimal(held).times(price);
+          invValueNeutral = invValueNeutral.plus(
+            state?.weight.gt(0)
+              ? nativePartValue.times(state.weightedRate).div(state.weight)
+              : convertAmount(nativePartValue, inv.currency, undefined, day),
+          );
+        }
+      } else {
+        invValueNeutral = invValue;
+      }
       totalValueFxNeutral = totalValueFxNeutral.plus(invValueNeutral);
     }
 

@@ -85,6 +85,68 @@ components:
           properties:
             data: { $ref: "#/components/schemas/UpdateCheck" }
 
+    PortfolioSummaryItem:
+      type: object
+      required: [id, fullyAssigned, oversold]
+      additionalProperties: true
+      properties:
+        id: { type: integer, format: int32 }
+        fullyAssigned:
+          type: boolean
+          description: False while any unit transaction remains unassigned to a broker account.
+        oversold:
+          type: boolean
+          description: True when at least one assigned broker partition sold more units than its lots provide.
+
+    PortfolioSummaryByAccountItem:
+      type: object
+      required:
+        [
+          account_id,
+          assignment,
+          oversold,
+          currentValue,
+          totalInvested,
+          realizedGain,
+          unrealizedGain,
+          gainLoss,
+        ]
+      properties:
+        account_id: { type: integer, format: int32, nullable: true }
+        assignment:
+          type: string
+          enum: [account, unassigned]
+          description: Stable machine-readable identity for accountless contributions.
+        oversold: { type: boolean }
+        currentValue: { type: number }
+        totalInvested: { type: number }
+        realizedGain: { type: number }
+        unrealizedGain: { type: number }
+        gainLoss: { type: number }
+
+    PortfolioSummaryData:
+      type: object
+      required: [currency, computed_at, totals, summaries, byAccount]
+      properties:
+        currency: { type: string }
+        computed_at: { type: string, format: date-time }
+        totals:
+          type: object
+          additionalProperties: { type: number }
+        summaries:
+          type: array
+          items: { $ref: "#/components/schemas/PortfolioSummaryItem" }
+        byAccount:
+          type: array
+          items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+
+    PortfolioSummaryEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PortfolioSummaryData" }
+
     # Research wire contracts. These are named even where most provider fields
     # are optional so generated clients and the hand-written UI adapters cannot
     # silently drift apart.
@@ -917,6 +979,21 @@ components:
           type: string
           format: date
           nullable: true
+        statement_balances:
+          type: array
+          description: Authoritative statement readings per native currency (ADR-089 D2).
+          items:
+            type: object
+            required: [currency, balance, balance_date]
+            properties:
+              currency:
+                type: string
+                pattern: "^[A-Z]{3}$"
+              balance:
+                type: number
+              balance_date:
+                type: string
+                format: date
         computed_balance:
           type: number
           nullable: true
@@ -924,7 +1001,26 @@ components:
             The account's anchor+delta computed balance (ADR-094), denominated in
             `currency`. On a multi-currency account each currency partition is
             computed separately and converted into `currency` at today's rate, so
-            this figure moves with exchange rates.
+            this figure moves with exchange rates. A partition with no usable
+            source or target rate is excluded rather than treated as 1:1; when
+            that happens `balance_incomplete` is true and the native amount is
+            available in `balance_parts`.
+        balance_parts:
+          type: array
+          description: Native per-currency ledger balances; only returned by the list endpoint.
+          items:
+            type: object
+            required: [currency, balance]
+            properties:
+              currency: { type: string }
+              balance: { type: number }
+        balance_incomplete:
+          type: boolean
+          description: Whether computed_balance excludes at least one partition because a conversion rate is unavailable; only returned by the list endpoint.
+        unconverted_currencies:
+          type: array
+          description: Currency codes excluded from computed_balance because a conversion rate is unavailable; only returned by the list endpoint.
+          items: { type: string }
         reconcilable_balance:
           type: number
           nullable: true
@@ -1291,7 +1387,7 @@ components:
         running_balance:
           type: number
           format: double
-          description: Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
+          description: Per-account, per-currency running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true. Rows with no currency are treated as EUR.
         category_id:
           type: integer
         category_name:
@@ -1783,6 +1879,7 @@ components:
           date,
           amount,
           currency,
+          dividend_amount_convention,
           is_recurring,
           created_at,
           updated_at,
@@ -1807,6 +1904,13 @@ components:
           type: number
         taxes:
           type: number
+        dividend_amount_convention:
+          type: string
+          enum: [gross, net, unknown]
+          description: >-
+            Whether a dividend transaction's amount is before or after
+            withholding tax. Unknown for legacy or unclassified rows and
+            ignored for non-dividend transactions.
         currency:
           type: string
         fx_rate_to_eur:
@@ -3014,6 +3118,22 @@ paths:
                           projectedBalanceCurrency:
                             type: string
                             description: The survivor's native currency (ISO-4217)
+                          balanceParts:
+                            type: array
+                            description: Native per-currency balances in the projected merged ledger
+                            items:
+                              type: object
+                              required: [currency, balance]
+                              properties:
+                                currency: { type: string }
+                                balance: { type: number }
+                          projectedBalanceIncomplete:
+                            type: boolean
+                            description: Whether projectedBalance excludes at least one partition because a conversion rate is unavailable
+                          unconvertedCurrencies:
+                            type: array
+                            description: Currency codes excluded from projectedBalance because a conversion rate is unavailable
+                            items: { type: string }
                           stampsInterleaved:
                             type: boolean
                             description: Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor)
@@ -3112,6 +3232,10 @@ paths:
                   type: string
                   enum: [accept, adjustment]
                   description: How to resolve the drift
+                currency:
+                  type: string
+                  pattern: "^[A-Z]{3}$"
+                  description: Native currency partition to reconcile; defaults to the account currency.
       responses:
         "200":
           description: The reconciled figures plus any created adjustment transaction
@@ -3123,6 +3247,51 @@ paths:
           description: No drift to resolve, no statement balance, or an invalid mode
         "404":
           description: Account not found
+
+  /api/accounts/{id}/statement-balances/{currency}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer, format: int32, minimum: 1 }
+      - in: path
+        name: currency
+        required: true
+        schema: { type: string, pattern: "^[A-Z]{3}$" }
+    put:
+      summary: Set a per-currency statement reading
+      operationId: setAccountStatementBalance
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [balance, date]
+              properties:
+                balance: { type: number }
+                date: { type: string, format: date }
+      responses:
+        "200":
+          description: Stored statement reading
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid balance, date, or currency }
+        "404": { description: Account not found }
+    delete:
+      summary: Delete a per-currency statement reading
+      operationId: deleteAccountStatementBalance
+      tags: [Accounts]
+      responses:
+        "200":
+          description: Deleted statement reading identity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid currency }
+        "404": { description: Account or statement reading not found }
 
   # ─── Transactions ────────────────────────────────────────────────────────────
 
@@ -5340,7 +5509,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/PortfolioSummaryEnvelope"
 
   /api/info/refresh-views:
     post:
@@ -5521,6 +5690,7 @@ paths:
   /api/aggregations/cashflow-forecast-methods:
     get:
       summary: List available cashflow forecast methods
+      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
       operationId: getCashflowForecastMethods
       tags: [Aggregations]
       responses:
@@ -5534,6 +5704,7 @@ paths:
   /api/aggregations/cashflow-forecast-rolling:
     get:
       summary: Rolling-window cashflow forecast
+      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
       operationId: getCashflowForecastRolling
       tags: [Aggregations]
       parameters:
@@ -5915,6 +6086,10 @@ paths:
                   type: number
                 taxes:
                   type: number
+                dividend_amount_convention:
+                  type: string
+                  enum: [gross, net, unknown]
+                  description: Only meaningful for dividend transactions
                 currency:
                   type: string
                 fx_rate_to_eur:
@@ -6132,6 +6307,11 @@ paths:
                   type: number
                 taxes:
                   type: number
+                dividend_amount_convention:
+                  type: string
+                  enum: [gross, net, unknown]
+                  default: unknown
+                  description: Only meaningful for dividend transactions
                 currency:
                   type: string
                 note:
@@ -8297,7 +8477,7 @@ paths:
           minimum: 1
           maximum: 9007199254740991
     post:
-      summary: Resolve an unmatched portfolio import row to an existing investment or request a new one be created
+      summary: Resolve an unmatched non-cash portfolio import row to an existing investment or request a new one be created
       operationId: portfolioImportRowInvestmentOverride
       tags: [PortfolioImport]
       requestBody:
@@ -8331,7 +8511,7 @@ paths:
         "400":
           description: Malformed batch id, row id or investment_id, or create_new validation failed
         "404":
-          description: Batch or staging row not found
+          description: Batch or staging row not found, or the row is cash and cannot accept an investment override
 
   /api/portfolio/import/batches/{id}/rows/investment-override:
     parameters:
@@ -8388,7 +8568,7 @@ paths:
         "400":
           description: Malformed input, mutually ambiguous resolution request, non-reviewable batch, or create-new row set already overridden
         "404":
-          description: Investment or requested row not found, belongs to another batch, or is no longer reviewable; no rows are changed
+          description: Investment or requested row not found, belongs to another batch, is a cash row, or is no longer reviewable; no rows are changed
 
   /api/portfolio/import/batches/{id}/commit:
     parameters:
@@ -8423,7 +8603,9 @@ paths:
                     be a positive integer naming an existing account; a
                     malformed one is rejected rather than coerced, since a
                     coerced id names a different account and passes the
-                    existence check.
+                    existence check. On recommit, a present account also resets
+                    cash rows that failed solely because the batch account was
+                    missing.
       responses:
         "200":
           description: Commit result with row counts

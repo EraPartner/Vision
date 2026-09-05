@@ -60,6 +60,13 @@ function safeMoneyInput(value) {
     : 0;
 }
 
+/** @param {Record<string, any>} row */
+function rowIsoDate(row) {
+  return row.date instanceof Date
+    ? formatDateToYmd(row.date)
+    : String(row.date).slice(0, 10);
+}
+
 /** @param {...(number|string)} values */
 const addMoney = (...values) => toNumber(addAll(values));
 
@@ -72,10 +79,7 @@ function aggregateByDate(rows) {
   /** @type {Map<string, number>} */
   const map = new Map();
   for (const r of rows) {
-    const iso =
-      r.date instanceof Date
-        ? formatDateToYmd(r.date)
-        : String(r.date).slice(0, 10);
+    const iso = rowIsoDate(r);
     map.set(iso, addMoney(map.get(iso) ?? 0, safeMoneyInput(r.amount_eur)));
   }
   return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) =>
@@ -215,7 +219,7 @@ export async function getCashflowComparison(
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= ${anchor}
+      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
@@ -329,9 +333,13 @@ export async function getCashflowComparison(
 
   /** @type {Record<string, number>} */
   const currentDayNet = {};
+  /** @type {Record<string, number>} */
+  const scheduledCurrentByDay = {};
   for (const row of currentCashflowConverted) {
-    currentDayNet[row.day_of_month] = addMoney(
-      currentDayNet[row.day_of_month] || 0,
+    const target =
+      row.day_of_month <= currentDay ? currentDayNet : scheduledCurrentByDay;
+    target[row.day_of_month] = addMoney(
+      target[row.day_of_month] || 0,
       safeMoneyInput(row.amount_eur),
     );
   }
@@ -392,6 +400,7 @@ export async function getCashflowComparison(
   const withoutPlanned = [];
   const withPlanned = [];
   let plannedCum = 0;
+  let scheduledCum = 0;
 
   for (let day = 1; day <= daysInMonth; day++) {
     const avg =
@@ -411,8 +420,11 @@ export async function getCashflowComparison(
         ? avgPlannedCumByDay[day]
         : avgPlannedCumByDay[day - 1] || 0;
     plannedCum = addMoney(plannedCum, plannedCurrentByDay[day] || 0);
+    scheduledCum = addMoney(scheduledCum, scheduledCurrentByDay[day] || 0);
     const currentWithPlanned =
-      current !== null ? addMoney(current, plannedCum) : null;
+      day <= currentDay
+        ? addMoney(current ?? 0, plannedCum)
+        : addMoney(currentCum, plannedCum, scheduledCum);
 
     withPlanned.push({
       day,
@@ -495,7 +507,7 @@ export async function getCashflowForecastData(
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= ${anchor}
+      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
@@ -543,7 +555,12 @@ export async function getCashflowForecastData(
 
   return {
     history: aggregateByDate(histConv),
-    currentActual: aggregateByDate(currentConv),
+    currentActual: aggregateByDate(
+      currentConv.filter((row) => rowIsoDate(row) <= todayYmd),
+    ),
+    scheduledActual: aggregateByDate(
+      currentConv.filter((row) => rowIsoDate(row) > todayYmd),
+    ),
     plannedCurrent: aggregateByDate(plannedCurConv),
     plannedHist: aggregateByDate(plannedHistConv),
     historyMonths,
@@ -597,6 +614,7 @@ export async function getCashflowForecastDataRolling(
   const pDate = excl.nextParamIdx;
   const pDaysBack = pDate + 1;
   const pMonths = pDate + 2;
+  const pDaysForward = pDate + 2;
   const anchor = `$${pDate}::date`;
   const rollingStart = `(${anchor} - make_interval(days => $${pDaysBack}::int))`;
 
@@ -624,7 +642,7 @@ export async function getCashflowForecastDataRolling(
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= ${rollingStart}
-      AND t.date <= ${anchor}
+      AND t.date <= (${anchor} + make_interval(days => $${pDaysForward}::int))
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
@@ -643,7 +661,7 @@ export async function getCashflowForecastDataRolling(
 
   const [histRes, currentRes, plannedRes] = await Promise.all([
     query(sqlHistory, [...excludeParams, todayYmd, daysBack, historyMonths]),
-    query(sqlCurrent, [...excludeParams, todayYmd, daysBack]),
+    query(sqlCurrent, [...excludeParams, todayYmd, daysBack, daysForward]),
     query(sqlPlannedFuture, [todayYmd, daysForward]),
   ]);
 
@@ -660,7 +678,12 @@ export async function getCashflowForecastDataRolling(
 
   return {
     history: aggregateByDate(histConv),
-    currentActual: aggregateByDate(currentConv),
+    currentActual: aggregateByDate(
+      currentConv.filter((row) => rowIsoDate(row) <= todayYmd),
+    ),
+    scheduledActual: aggregateByDate(
+      currentConv.filter((row) => rowIsoDate(row) > todayYmd),
+    ),
     plannedCurrent: aggregateByDate(plannedConv),
     historyMonths,
   };
@@ -750,7 +773,7 @@ export async function getCashflowForecastDataByCategory(
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= ${anchor}
+      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
       ${exclusionWhere}
     ${groupByCols}
   `;
@@ -804,6 +827,11 @@ export async function getCashflowForecastDataByCategory(
 
   return {
     historyByCategory: aggregateByDateAndCategory(histConv),
-    currentActualByCategory: aggregateByDateAndCategory(currentConv),
+    currentActualByCategory: aggregateByDateAndCategory(
+      currentConv.filter((row) => rowIsoDate(row) <= todayYmd),
+    ),
+    scheduledActualByCategory: aggregateByDateAndCategory(
+      currentConv.filter((row) => rowIsoDate(row) > todayYmd),
+    ),
   };
 }

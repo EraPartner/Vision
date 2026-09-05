@@ -1,17 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockConnection } from './helpers/repoMocks.js';
-vi.mock('../src/database/connection.js', () => mockConnection());
+import { mockConnection } from "./helpers/repoMocks.js";
+vi.mock("../src/database/connection.js", () => mockConnection());
 
-import { query } from '../src/database/connection.js';
+import { query } from "../src/database/connection.js";
 import {
   hasPortfolioTransactionImportBatchIdColumn,
   __resetPortfolioTransactionSchemaCache,
-  UNIT_BASED_ASSET_CLASSES,
   buildListWhereClause,
+} from "../src/repositories/portfolioTxRepo.common.js";
+import {
+  UNIT_BASED_ASSET_CLASSES,
   normalizeTransactionPayload,
-  validateSellUnitsAvailability,
-} from '../src/repositories/portfolioTxRepo.common.js';
+  __validateSellUnitsAvailability as validateSellUnitsAvailability,
+  validatePortfolioUnitMutation,
+} from "../src/services/portfolio/portfolioTransactionRules.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -20,26 +23,28 @@ beforeEach(() => {
 
 afterEach(() => __resetPortfolioTransactionSchemaCache());
 
-describe('import_batch_id column probe (0086)', () => {
-  it('queries Postgres on first probe and caches result', async () => {
+describe("import_batch_id column probe (0086)", () => {
+  it("queries Postgres on first probe and caches result", async () => {
     query.mockResolvedValueOnce({ rows: [{ present: true }] });
     expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toContain("to_regclass('public.portfolio_transactions')");
+    expect(query.mock.calls[0][0]).toContain(
+      "to_regclass('public.portfolio_transactions')",
+    );
 
     // Second call should not re-query.
     expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('caches absence on an un-migrated database', async () => {
+  it("caches absence on an un-migrated database", async () => {
     query.mockResolvedValueOnce({ rows: [{ present: false }] });
     expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
     expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('reset clears the cache', async () => {
+  it("reset clears the cache", async () => {
     query.mockResolvedValueOnce({ rows: [{ present: true }] });
     await hasPortfolioTransactionImportBatchIdColumn();
     __resetPortfolioTransactionSchemaCache();
@@ -49,168 +54,198 @@ describe('import_batch_id column probe (0086)', () => {
   });
 });
 
-describe('asset class maps', () => {
-  it('UNIT_BASED_ASSET_CLASSES includes the unit-based classes only', () => {
-    for (const c of ['stock', 'etf', 'crypto', 'metals']) {
+describe("asset class maps", () => {
+  it("UNIT_BASED_ASSET_CLASSES includes the unit-based classes only", () => {
+    for (const c of ["stock", "etf", "crypto", "metals"]) {
       expect(UNIT_BASED_ASSET_CLASSES.has(c)).toBe(true);
     }
-    for (const c of ['real_estate', 'savings', 'bond']) {
+    for (const c of ["real_estate", "savings", "bond"]) {
       expect(UNIT_BASED_ASSET_CLASSES.has(c)).toBe(false);
     }
   });
 });
 
-describe('buildListWhereClause', () => {
-  it('returns the trivial WHERE 1=1 with empty filters', () => {
-    expect(buildListWhereClause()).toEqual({ where: 'WHERE 1=1', params: [], nextParam: 1 });
+describe("buildListWhereClause", () => {
+  it("returns the trivial WHERE 1=1 with empty filters", () => {
+    expect(buildListWhereClause()).toEqual({
+      where: "WHERE 1=1",
+      params: [],
+      nextParam: 1,
+    });
   });
 
-  it('appends investment_id filter', () => {
+  it("appends investment_id filter", () => {
     const r = buildListWhereClause({ investmentId: 7 });
-    expect(r.where).toBe('WHERE 1=1 AND investment_id = $1');
+    expect(r.where).toBe("WHERE 1=1 AND investment_id = $1");
     expect(r.params).toEqual([7]);
     expect(r.nextParam).toBe(2);
   });
 
-  it('appends type filter', () => {
-    const r = buildListWhereClause({ type: 'buy' });
-    expect(r.where).toBe('WHERE 1=1 AND type = $1');
-    expect(r.params).toEqual(['buy']);
+  it("appends type filter", () => {
+    const r = buildListWhereClause({ type: "buy" });
+    expect(r.where).toBe("WHERE 1=1 AND type = $1");
+    expect(r.params).toEqual(["buy"]);
   });
 
-  it('appends both with sequential parameters', () => {
-    const r = buildListWhereClause({ investmentId: 7, type: 'sell' });
-    expect(r.where).toBe('WHERE 1=1 AND investment_id = $1 AND type = $2');
-    expect(r.params).toEqual([7, 'sell']);
+  it("appends both with sequential parameters", () => {
+    const r = buildListWhereClause({ investmentId: 7, type: "sell" });
+    expect(r.where).toBe("WHERE 1=1 AND investment_id = $1 AND type = $2");
+    expect(r.params).toEqual([7, "sell"]);
     expect(r.nextParam).toBe(3);
   });
 });
 
-describe('normalizeTransactionPayload — buy/sell on unit-based assets', () => {
-  it('derives amount from units * price', () => {
+describe("normalizeTransactionPayload — buy/sell on unit-based assets", () => {
+  it("derives amount from units * price", () => {
     const r = normalizeTransactionPayload(
-      { type: 'buy', units: 5, price_per_unit: 100 },
-      { assetClass: 'stock' },
+      { type: "buy", units: 5, price_per_unit: 100 },
+      { assetClass: "stock" },
     );
     expect(r).toMatchObject({ amount: 500, units: 5, price_per_unit: 100 });
   });
 
-  it('derives units from amount / price', () => {
+  it("derives units from amount / price", () => {
     const r = normalizeTransactionPayload(
-      { type: 'sell', amount: 250, price_per_unit: 50 },
-      { assetClass: 'etf' },
+      { type: "sell", amount: 250, price_per_unit: 50 },
+      { assetClass: "etf" },
     );
     expect(r.units).toBe(5);
   });
 
-  it('derives price from amount / units', () => {
+  it("derives price from amount / units", () => {
     const r = normalizeTransactionPayload(
-      { type: 'buy', amount: 200, units: 4 },
-      { assetClass: 'crypto' },
+      { type: "buy", amount: 200, units: 4 },
+      { assetClass: "crypto" },
     );
     expect(r.price_per_unit).toBe(50);
   });
 
-  it('rejects when fewer than two of (amount, units, price) provided', () => {
-    expect(() => normalizeTransactionPayload({ type: 'buy', amount: 100 }, { assetClass: 'stock' })).toThrow(/at least two/);
+  it("rejects when fewer than two of (amount, units, price) provided", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "buy", amount: 100 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/at least two/);
   });
 
-  it('rejects when amount inconsistent with units * price', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'buy', amount: 100, units: 5, price_per_unit: 50 },
-      { assetClass: 'stock' },
-    )).toThrow(/amount must equal/);
+  it("rejects when amount inconsistent with units * price", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "buy", amount: 100, units: 5, price_per_unit: 50 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/amount must equal/);
   });
 
-  it('accepts the exactly-one-cent tolerance boundary (Decimal compare, not float subtraction)', () => {
+  it("accepts the exactly-one-cent tolerance boundary (Decimal compare, not float subtraction)", () => {
     // 3 × 33.33 = 99.99 vs amount 100.00: |diff| is exactly 0.01, which the
     // tolerance intends to accept — float subtraction produced 0.010000000000005116.
     const r = normalizeTransactionPayload(
-      { type: 'buy', amount: 100.0, units: 3, price_per_unit: 33.33 },
-      { assetClass: 'stock' },
+      { type: "buy", amount: 100.0, units: 3, price_per_unit: 33.33 },
+      { assetClass: "stock" },
     );
     expect(r.amount).toBe(100);
   });
 
-  it('rejects negative or zero values', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'buy', amount: 0, units: 1, price_per_unit: 1 },
-      { assetClass: 'stock' },
-    )).toThrow(/positive/);
-    expect(() => normalizeTransactionPayload(
-      { type: 'buy', amount: 1, units: -1, price_per_unit: 1 },
-      { assetClass: 'stock' },
-    )).toThrow(/positive/);
+  it("rejects negative or zero values", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "buy", amount: 0, units: 1, price_per_unit: 1 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/positive/);
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "buy", amount: 1, units: -1, price_per_unit: 1 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/positive/);
   });
 
-  it('rejects negative fx_rate_to_eur', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'buy', amount: 1, units: 1, price_per_unit: 1, fx_rate_to_eur: -1 },
-      { assetClass: 'stock' },
-    )).toThrow(/fx_rate_to_eur/);
+  it("rejects negative fx_rate_to_eur", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        {
+          type: "buy",
+          amount: 1,
+          units: 1,
+          price_per_unit: 1,
+          fx_rate_to_eur: -1,
+        },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/fx_rate_to_eur/);
   });
 
-  it('defaults fees and taxes to 0', () => {
+  it("defaults fees and taxes to 0", () => {
     const r = normalizeTransactionPayload(
-      { type: 'buy', units: 5, price_per_unit: 100 },
-      { assetClass: 'stock' },
+      { type: "buy", units: 5, price_per_unit: 100 },
+      { assetClass: "stock" },
     );
     expect(r.fees).toBe(0);
     expect(r.taxes).toBe(0);
   });
 });
 
-describe('normalizeTransactionPayload — buy/sell on non-unit assets', () => {
-  it('requires amount and skips unit math for savings/bond/real_estate', () => {
+describe("normalizeTransactionPayload — buy/sell on non-unit assets", () => {
+  it("requires amount and skips unit math for savings/bond/real_estate", () => {
     const r = normalizeTransactionPayload(
-      { type: 'buy', amount: 1000 },
-      { assetClass: 'savings' },
+      { type: "buy", amount: 1000 },
+      { assetClass: "savings" },
     );
     expect(r.amount).toBe(1000);
     expect(r.units).toBeUndefined();
   });
 
-  it('rejects missing amount on non-unit buy', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'buy' },
-      { assetClass: 'savings' },
-    )).toThrow(/amount is required/);
+  it("rejects missing amount on non-unit buy", () => {
+    expect(() =>
+      normalizeTransactionPayload({ type: "buy" }, { assetClass: "savings" }),
+    ).toThrow(/amount is required/);
   });
 });
 
-describe('normalizeTransactionPayload — gift', () => {
-  it('rejects gifts on non-unit-based asset classes', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'gift', units: 5 },
-      { assetClass: 'savings' },
-    )).toThrow(/unit-based/);
+describe("normalizeTransactionPayload — gift", () => {
+  it("rejects gifts on non-unit-based asset classes", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "gift", units: 5 },
+        { assetClass: "savings" },
+      ),
+    ).toThrow(/unit-based/);
   });
 
-  it('requires positive units', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'gift', units: 0 },
-      { assetClass: 'stock' },
-    )).toThrow(/units > 0/);
+  it("requires positive units", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "gift", units: 0 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/units > 0/);
   });
 
-  it('rejects non-zero fees or taxes', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'gift', units: 5, fees: 1 },
-      { assetClass: 'stock' },
-    )).toThrow(/0 fees/);
+  it("rejects non-zero fees or taxes", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "gift", units: 5, fees: 1 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/0 fees/);
   });
 
-  it('rejects negative amount', () => {
-    expect(() => normalizeTransactionPayload(
-      { type: 'gift', units: 5, amount: -1 },
-      { assetClass: 'stock' },
-    )).toThrow(/cannot be negative/);
+  it("rejects negative amount", () => {
+    expect(() =>
+      normalizeTransactionPayload(
+        { type: "gift", units: 5, amount: -1 },
+        { assetClass: "stock" },
+      ),
+    ).toThrow(/cannot be negative/);
   });
 
-  it('defaults amount to 0 when omitted', () => {
+  it("defaults amount to 0 when omitted", () => {
     const r = normalizeTransactionPayload(
-      { type: 'gift', units: 5 },
-      { assetClass: 'stock' },
+      { type: "gift", units: 5 },
+      { assetClass: "stock" },
     );
     expect(r.amount).toBe(0);
     expect(r.fees).toBe(0);
@@ -218,111 +253,334 @@ describe('normalizeTransactionPayload — gift', () => {
   });
 });
 
-describe('normalizeTransactionPayload — other types (dividend/fee/tax/etc)', () => {
-  it('requires amount for non-buy/sell/gift types', () => {
-    expect(() => normalizeTransactionPayload({ type: 'dividend' })).toThrow(/amount is required/);
+describe("normalizeTransactionPayload — other types (dividend/fee/tax/etc)", () => {
+  it("requires amount for non-buy/sell/gift types", () => {
+    expect(() => normalizeTransactionPayload({ type: "dividend" })).toThrow(
+      /amount is required/,
+    );
   });
 
-  it('preserves payload values for non-buy/sell types', () => {
-    const r = normalizeTransactionPayload({ type: 'dividend', amount: 100, fees: 1 });
+  it("preserves payload values for non-buy/sell types", () => {
+    const r = normalizeTransactionPayload({
+      type: "dividend",
+      amount: 100,
+      fees: 1,
+    });
     expect(r.amount).toBe(100);
     expect(r.fees).toBe(1);
     expect(r.taxes).toBe(0);
+    expect(r.dividend_amount_convention).toBe("unknown");
   });
 
-  it('rejects non-numeric input', () => {
-    expect(() => normalizeTransactionPayload({ type: 'dividend', amount: 'free' })).toThrow(/amount must be a valid number/);
+  it("accepts dividend conventions and rejects them on other transaction types", () => {
+    expect(
+      normalizeTransactionPayload({
+        type: "dividend",
+        amount: 100,
+        dividend_amount_convention: "gross",
+      }).dividend_amount_convention,
+    ).toBe("gross");
+    expect(() =>
+      normalizeTransactionPayload({
+        type: "fee",
+        amount: 5,
+        dividend_amount_convention: "net",
+      }),
+    ).toThrow(/only valid for dividend/);
   });
 
-  it('rejects an unknown transaction type (was invisible-to-replay / DB 500)', () => {
-    expect(() => normalizeTransactionPayload({ type: 'banana', amount: 100 })).toThrow(/Invalid transaction type/);
+  it("rejects non-numeric input", () => {
+    expect(() =>
+      normalizeTransactionPayload({ type: "dividend", amount: "free" }),
+    ).toThrow(/amount must be a valid number/);
   });
 
-  it('rejects an out-of-enum recurrence_interval', () => {
-    expect(() => normalizeTransactionPayload({ type: 'dividend', amount: 100, recurrence_interval: 'fortnightly' }))
-      .toThrow(/Invalid recurrence_interval/);
+  it("rejects an unknown transaction type (was invisible-to-replay / DB 500)", () => {
+    expect(() =>
+      normalizeTransactionPayload({ type: "banana", amount: 100 }),
+    ).toThrow(/Invalid transaction type/);
   });
 
-  it('accepts a valid recurrence_interval', () => {
-    const r = normalizeTransactionPayload({ type: 'dividend', amount: 100, recurrence_interval: 'monthly' });
-    expect(r.recurrence_interval).toBe('monthly');
+  it("rejects an out-of-enum recurrence_interval", () => {
+    expect(() =>
+      normalizeTransactionPayload({
+        type: "dividend",
+        amount: 100,
+        recurrence_interval: "fortnightly",
+      }),
+    ).toThrow(/Invalid recurrence_interval/);
+  });
+
+  it("accepts a valid recurrence_interval", () => {
+    const r = normalizeTransactionPayload({
+      type: "dividend",
+      amount: 100,
+      recurrence_interval: "monthly",
+    });
+    expect(r.recurrence_interval).toBe("monthly");
   });
 });
 
-describe('validateSellUnitsAvailability', () => {
-  it('is a no-op for non-sell types', async () => {
-    await expect(validateSellUnitsAvailability({ type: 'buy', assetClass: 'stock', units: 100 })).resolves.toBeUndefined();
+describe("validateSellUnitsAvailability", () => {
+  it("is a no-op for non-sell types", async () => {
+    await expect(
+      validateSellUnitsAvailability({
+        type: "buy",
+        assetClass: "stock",
+        units: 100,
+      }),
+    ).resolves.toBeUndefined();
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('is a no-op for non-unit asset classes', async () => {
-    await expect(validateSellUnitsAvailability({ type: 'sell', assetClass: 'savings', units: 100 })).resolves.toBeUndefined();
+  it("is a no-op for non-unit asset classes", async () => {
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "savings",
+        units: 100,
+      }),
+    ).resolves.toBeUndefined();
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('is a no-op when units is zero or negative', async () => {
-    await expect(validateSellUnitsAvailability({ type: 'sell', assetClass: 'stock', units: 0 })).resolves.toBeUndefined();
+  it("is a no-op when units is zero or negative", async () => {
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        units: 0,
+      }),
+    ).resolves.toBeUndefined();
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('passes when sell units fit available holdings', async () => {
-    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '10' }] });
-    await expect(validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 10,
-    })).resolves.toBeUndefined();
+  it("passes when sell units fit available holdings", async () => {
+    query.mockResolvedValueOnce({ rows: [{ type: "buy", units: "10" }] });
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        investmentId: 1,
+        date: "2025-04-01",
+        units: 10,
+      }),
+    ).resolves.toBeUndefined();
   });
 
-  it('throws VALIDATION_ERROR when exceeds available holdings', async () => {
-    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '5' }] });
-    await expect(validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 10,
-    })).rejects.toMatchObject({
-      code: 'VALIDATION_ERROR',
-      message: expect.stringContaining('sell units exceed'),
+  it("throws VALIDATION_ERROR when exceeds available holdings", async () => {
+    query.mockResolvedValueOnce({ rows: [{ type: "buy", units: "5" }] });
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        investmentId: 1,
+        date: "2025-04-01",
+        units: 10,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message: expect.stringContaining("sell units exceed"),
     });
   });
 
-  it('accepts a post-split sell (split sets the new absolute total)', async () => {
+  it("accepts a post-split sell (split sets the new absolute total)", async () => {
     // Buy 10 → 2:1 split (row units = 20 new total). Held = 20, so selling 20 is
     // valid. The old flat SUM ignored the split and saw only 10 → wrong reject.
-    query.mockResolvedValueOnce({ rows: [
-      { type: 'buy', units: '10' },
-      { type: 'split', units: '20' },
-    ] });
-    await expect(validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 20,
-    })).resolves.toBeUndefined();
+    query.mockResolvedValueOnce({
+      rows: [
+        { type: "buy", units: "10" },
+        { type: "split", units: "20" },
+      ],
+    });
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        investmentId: 1,
+        date: "2025-04-01",
+        units: 20,
+      }),
+    ).resolves.toBeUndefined();
   });
 
-  it('does not grant phantom units from a split with no prior holdings', async () => {
+  it("does not grant phantom units from a split with no prior holdings", async () => {
     // A stray/imported split row with no prior buys must NOT set the running
     // total (matches the canonical core, which requires units already held).
     // Held = 0, so any sell is an oversell and must be rejected.
-    query.mockResolvedValueOnce({ rows: [
-      { type: 'split', units: '20' },
-    ] });
-    await expect(validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 1,
-    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    query.mockResolvedValueOnce({ rows: [{ type: "split", units: "20" }] });
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        investmentId: 1,
+        date: "2025-04-01",
+        units: 1,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
-  it('subtracts prior sells and ignores return_of_capital for units', async () => {
-    query.mockResolvedValueOnce({ rows: [
-      { type: 'buy', units: '10' },
-      { type: 'sell', units: '4' },
-      { type: 'return_of_capital', units: '0' },
-    ] });
-    // Held = 6; selling 7 must fail.
-    await expect(validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 7,
-    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-  });
-
-  it('binds excludeTransactionId when provided', async () => {
-    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '50' }] });
-    await validateSellUnitsAvailability({
-      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 5, excludeTransactionId: 99,
+  it("subtracts prior sells and ignores return_of_capital for units", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { type: "buy", units: "10" },
+        { type: "sell", units: "4" },
+        { type: "return_of_capital", units: "0" },
+      ],
     });
-    expect(query.mock.calls[0][1]).toEqual([1, '2025-04-01', 99]);
+    // Held = 6; selling 7 must fail.
+    await expect(
+      validateSellUnitsAvailability({
+        type: "sell",
+        assetClass: "stock",
+        investmentId: 1,
+        date: "2025-04-01",
+        units: 7,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("loads the full ordered history once and excludes the edited row in memory", async () => {
+    query.mockResolvedValueOnce({ rows: [{ type: "buy", units: "50" }] });
+    await validateSellUnitsAvailability({
+      type: "sell",
+      assetClass: "stock",
+      investmentId: 1,
+      date: "2025-04-01",
+      units: 5,
+      excludeTransactionId: 99,
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain(
+      "to_char(date, 'YYYY-MM-DD') AS date",
+    );
+    expect(query.mock.calls[0][1]).toEqual([1]);
+    expect(query.mock.calls[0][0]).not.toContain("SELECT EXISTS");
+  });
+
+  it("rejects reassigning a buy when that newly oversells a later broker partition", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 1, type: "buy", units: "5", date: "2025-01-01", account_id: 1 },
+          { id: 3, type: "buy", units: "5", date: "2025-01-02", account_id: 2 },
+          {
+            id: 2,
+            type: "sell",
+            units: "5",
+            date: "2025-02-01",
+            account_id: 1,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ display_name: "Broker A" }] });
+
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: 1,
+        assetClass: "stock",
+        type: "buy",
+        date: "2025-01-01",
+        units: 5,
+        accountId: 2,
+        excludeTransactionId: 1,
+        checkProjectedHistory: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        "change would create or worsen an oversold partition at Broker A",
+    });
+  });
+
+  it("allows an unchanged edit when legacy data is already oversold", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { id: 1, type: "buy", units: "5", date: "2025-01-01", account_id: 1 },
+        { id: 2, type: "sell", units: "7", date: "2025-02-01", account_id: 1 },
+      ],
+    });
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: 1,
+        assetClass: "stock",
+        type: "buy",
+        date: "2025-01-01",
+        units: 5,
+        accountId: 1,
+        excludeTransactionId: 1,
+        checkProjectedHistory: true,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects creating a reverse split that oversells a later broker sale", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 1,
+            type: "buy",
+            units: "10",
+            date: "2025-01-01",
+            account_id: 1,
+          },
+          {
+            id: 2,
+            type: "sell",
+            units: "8",
+            date: "2025-03-01",
+            account_id: 1,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ display_name: "Broker A" }] });
+
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: 1,
+        assetClass: "stock",
+        type: "split",
+        date: "2025-02-01",
+        units: 5,
+        checkProjectedHistory: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        "change would create or worsen an oversold partition at Broker A",
+    });
+  });
+
+  it("rejects deleting a buy that a later broker sale depends on", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 1, type: "buy", units: "5", date: "2025-01-01", account_id: 1 },
+          { id: 2, type: "buy", units: "5", date: "2025-01-02", account_id: 1 },
+          {
+            id: 3,
+            type: "sell",
+            units: "7",
+            date: "2025-03-01",
+            account_id: 1,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ display_name: "Broker A" }] });
+
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: 1,
+        assetClass: "stock",
+        excludeTransactionId: 1,
+        omitCandidate: true,
+        checkProjectedHistory: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        "change would create or worsen an oversold partition at Broker A",
+    });
   });
 });

@@ -123,7 +123,7 @@ function gaussianElimination(A, b) {
  * @param {{history: Array<{date: string, net: number}>, forecastDates: string[]}} ctx
  * @returns {Array<{date: string, value: number}>}
  */
-export function forecast({ history, forecastDates }) {
+function forecast({ history, forecastDates }) {
   const dense = densifyDailyHistory(history);
   if (dense.length < 60 || forecastDates.length === 0) {
     return forecastDates.map((date) => ({ date, value: 0 }));
@@ -151,3 +151,5 @@ export function forecast({ history, forecastDates }) {
     return { date, value };
   });
 }
+
+export { forecast };

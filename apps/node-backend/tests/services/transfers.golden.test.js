@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { findTransferMatches } from '../../src/services/calculations/transfers.js';
+import { __findTransferMatches as findTransferMatches } from '../../src/services/calculations/transfers.js';
 
 /**
  * Golden-fixture regression suite for internal-transfer matching (ADR-083).

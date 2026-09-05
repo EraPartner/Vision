@@ -24,8 +24,8 @@
  * callers can append further predicates.
  */
 
-import { validateIntArray } from './validation.js';
-import { ValidationError } from '../middleware/errorHandler.js';
+import { validateIntArray } from "./validation.js";
+import { ValidationError } from "../middleware/errorHandler.js";
 
 const MAX_LIST_SIZE = 50;
 // Free-text search terms shorter than this (after trimming) are ignored: a
@@ -57,7 +57,7 @@ export const MIN_SEARCH_LENGTH = 2;
  * @returns {number[]}
  * @throws {ValidationError} when any element is not a valid int4 id
  */
-export function validateInt4Ids(ids, fieldName = 'ids') {
+export function validateInt4Ids(ids, fieldName = "ids") {
   if (ids === undefined || ids === null) return [];
   const result = validateIntArray(ids, fieldName);
   if (!result.valid) throw new ValidationError(result.error);
@@ -68,18 +68,18 @@ export function validateInt4Ids(ids, fieldName = 'ids') {
  * Coerce one amount-filter value to a comparable number. Compares on magnitude
  * (|amount|) by default — income/expense sign belongs to transaction_type — or
  * on the signed amount when `signed` is true, so +50 and -50 are distinct.
- * Returns null for missing or unparseable input (the clause is skipped).
+ * Returns undefined for missing or unparseable input (the clause is skipped).
  *
  * Single source of truth for the list endpoint (routes/transactions.js) and
  * bulk selection (services/bulkSelection.js), which must stay in lockstep.
  * @param {unknown} value
  * @param {boolean} [signed]
- * @returns {number|null}
+ * @returns {number|undefined}
  */
 export function parseAmountFilter(value, signed = false) {
-  if (value === undefined || value === null || value === '') return null;
+  if (value === undefined || value === null || value === "") return undefined;
   const n = Number(value);
-  if (!Number.isFinite(n)) return null;
+  if (!Number.isFinite(n)) return undefined;
   return signed ? n : Math.abs(n);
 }
 
@@ -158,11 +158,11 @@ export function buildTransactionWhere(opts = {}) {
     startParamIdx = 1,
   } = opts;
 
-  const clauses = ['1=1'];
+  const clauses = ["1=1"];
   const params = [];
   let p = startParamIdx;
 
-  if (active) clauses.push('t.is_active = true');
+  if (active) clauses.push("t.is_active = true");
 
   if (transactionId != null) {
     clauses.push(`t.id = $${p++}`);
@@ -180,9 +180,9 @@ export function buildTransactionWhere(opts = {}) {
     clauses.push(`t.account_id = $${p++}`);
     params.push(accountId);
   } else if (Array.isArray(accountIds) && accountIds.length > 0) {
-    const safe = validateInt4Ids(accountIds, 'accountIds');
+    const safe = validateInt4Ids(accountIds, "accountIds");
     if (safe.length > 0) {
-      const placeholders = safe.map(() => `$${p++}`).join(', ');
+      const placeholders = safe.map(() => `$${p++}`).join(", ");
       clauses.push(`t.account_id IN (${placeholders})`);
       params.push(...safe);
     }
@@ -193,13 +193,20 @@ export function buildTransactionWhere(opts = {}) {
   // invariant (trigger 0051/0083 + rename propagation) the observable matches
   // are identical to the old string predicates.
   if (bankAccount) {
-    clauses.push(`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${p++})`);
+    clauses.push(
+      `t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${p++})`,
+    );
     params.push(`%${bankAccount}%`);
   } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
-    const safe = bankAccounts.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);
+    const safe = bankAccounts
+      .slice(0, MAX_LIST_SIZE)
+      .map((s) => String(s).trim())
+      .filter(Boolean);
     if (safe.length > 0) {
-      const placeholders = safe.map(() => `$${p++}`).join(', ');
-      clauses.push(`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN (${placeholders}))`);
+      const placeholders = safe.map(() => `$${p++}`).join(", ");
+      clauses.push(
+        `t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN (${placeholders}))`,
+      );
       params.push(...safe);
     }
   }
@@ -223,14 +230,14 @@ export function buildTransactionWhere(opts = {}) {
     )`);
     params.push(categoryId);
   } else if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-    const safe = validateInt4Ids(categoryIds, 'categoryIds');
+    const safe = validateInt4Ids(categoryIds, "categoryIds");
     if (safe.length > 0) {
       // Same effective-category expansion as the single-value branch above,
       // with each leaf comparing against the id list. The placeholder slots are
       // allocated once and reused across the three leaves (Postgres allows a
       // $N to appear multiple times), so the param count/order is unchanged.
       const startIdx = p;
-      const placeholders = safe.map((_, i) => `$${startIdx + i}`).join(', ');
+      const placeholders = safe.map((_, i) => `$${startIdx + i}`).join(", ");
       p += safe.length;
       clauses.push(`(
         t.category_id IN (${placeholders})
@@ -244,12 +251,12 @@ export function buildTransactionWhere(opts = {}) {
       params.push(...safe);
     }
   }
-  if (transactionType === 'income') {
-    clauses.push('t.amount > 0');
-  } else if (transactionType === 'expense') {
-    clauses.push('t.amount < 0');
+  if (transactionType === "income") {
+    clauses.push("t.amount > 0");
+  } else if (transactionType === "expense") {
+    clauses.push("t.amount < 0");
   }
-  const amountCol = amountSigned ? 't.amount' : 'ABS(t.amount)';
+  const amountCol = amountSigned ? "t.amount" : "ABS(t.amount)";
   if (amountMin != null && Number.isFinite(Number(amountMin))) {
     clauses.push(`${amountCol} >= $${p++}`);
     params.push(Number(amountMin));
@@ -263,7 +270,9 @@ export function buildTransactionWhere(opts = {}) {
     // OR spanning t and the joined recipients r. Equivalent to
     // (t.recipient_id = $ OR r.primary_recipient_id = $): the subquery returns
     // the recipient itself plus every alias whose primary is it.
-    clauses.push(`t.recipient_id IN (SELECT id FROM recipients WHERE id = $${p} OR primary_recipient_id = $${p})`);
+    clauses.push(
+      `t.recipient_id IN (SELECT id FROM recipients WHERE id = $${p} OR primary_recipient_id = $${p})`,
+    );
     p++;
     params.push(recipientId);
   }
@@ -295,7 +304,7 @@ export function buildTransactionWhere(opts = {}) {
     clauses.push(`r.name ILIKE $${p++}`);
     params.push(`%${recipientName}%`);
   }
-  const searchText = search == null ? '' : String(search);
+  const searchText = search == null ? "" : String(search);
   if (searchText.trim().length >= MIN_SEARCH_LENGTH) {
     // Free-text search spans every user-visible facet of a transaction: notes,
     // bank/currency, amount, recipients, categories, the date (as ISO text so
@@ -318,10 +327,14 @@ export function buildTransactionWhere(opts = {}) {
       `SELECT st.id FROM transactions st WHERE st.currency ILIKE $${p}`,
     ];
     if (/^[0-9.-]+$/.test(searchText)) {
-      branches.push(`SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE $${p}`);
+      branches.push(
+        `SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE $${p}`,
+      );
     }
     if (/^[0-9-]+$/.test(searchText)) {
-      branches.push(`SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE $${p}`);
+      branches.push(
+        `SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE $${p}`,
+      );
     }
     branches.push(
       // Recipient name — the transaction's own recipient (r.name) or the
@@ -348,12 +361,17 @@ export function buildTransactionWhere(opts = {}) {
         JOIN tags tg ON tg.id = tt.tag_id
         WHERE tg.is_active = true AND tg.slug ILIKE $${p}`,
     );
-    clauses.push(`t.id IN (\n      ${branches.join('\n      UNION\n      ')}\n    )`);
+    clauses.push(
+      `t.id IN (\n      ${branches.join("\n      UNION\n      ")}\n    )`,
+    );
     p++;
     params.push(`%${searchText}%`);
   }
   if (Array.isArray(tagSlugs) && tagSlugs.length > 0) {
-    const safe = tagSlugs.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);
+    const safe = tagSlugs
+      .slice(0, MAX_LIST_SIZE)
+      .map((s) => String(s).trim())
+      .filter(Boolean);
     if (safe.length > 0) {
       clauses.push(`EXISTS (
         SELECT 1 FROM transaction_tags tt
@@ -367,7 +385,7 @@ export function buildTransactionWhere(opts = {}) {
   }
 
   return {
-    sql: clauses.join(' AND '),
+    sql: clauses.join(" AND "),
     params,
     nextParamIdx: p,
   };
@@ -392,26 +410,33 @@ export function buildTransactionWhere(opts = {}) {
  *          `whereSql` is '' when no valid exclusions were supplied.
  */
 export function buildExclusionClauses(opts = {}) {
-  const { excludedCategoryIds = [], excludedRecipientIds = [], startParamIdx = 1 } = opts;
+  const {
+    excludedCategoryIds = [],
+    excludedRecipientIds = [],
+    startParamIdx = 1,
+  } = opts;
 
-  const safeCats = validateInt4Ids(excludedCategoryIds, 'excludedCategoryIds');
-  const safeRecs = validateInt4Ids(excludedRecipientIds, 'excludedRecipientIds');
+  const safeCats = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");
+  const safeRecs = validateInt4Ids(
+    excludedRecipientIds,
+    "excludedRecipientIds",
+  );
 
   const clauses = [];
   const params = [];
   let p = startParamIdx;
 
   const joinSql = [
-    'LEFT JOIN recipients r ON t.recipient_id = r.id',
-    'LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id',
-  ].join('\n');
+    "LEFT JOIN recipients r ON t.recipient_id = r.id",
+    "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
+  ].join("\n");
 
   // The trailing -1 keeps rows whose effective category/recipient is NULL: a bare
   // `NULL NOT IN (...)` evaluates to NULL (not true), which silently dropped every
   // uncategorized / recipient-less row whenever any exclusion was applied. -1 can
   // never be an excluded id (validateInt4Ids requires id > 0), so those rows pass.
   if (safeCats.length > 0) {
-    const placeholders = safeCats.map(() => `$${p++}`).join(', ');
+    const placeholders = safeCats.map(() => `$${p++}`).join(", ");
     clauses.push(
       `COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`,
     );
@@ -419,14 +444,16 @@ export function buildExclusionClauses(opts = {}) {
   }
 
   if (safeRecs.length > 0) {
-    const placeholders = safeRecs.map(() => `$${p++}`).join(', ');
-    clauses.push(`COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`);
+    const placeholders = safeRecs.map(() => `$${p++}`).join(", ");
+    clauses.push(
+      `COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`,
+    );
     params.push(...safeRecs);
   }
 
   return {
     joinSql,
-    whereSql: clauses.join(' AND '),
+    whereSql: clauses.join(" AND "),
     params,
     nextParamIdx: p,
   };
@@ -440,9 +467,15 @@ export function buildExclusionClauses(opts = {}) {
  *   Union of buildTransactionWhere and buildExclusionClauses options.
  * @returns {{ joinSql: string, whereSql: string, params: any[], nextParamIdx: number }}
  */
-export function buildAggregationFilter(opts = {}) {
-  const base = buildTransactionWhere({ ...opts, startParamIdx: opts.startParamIdx ?? 1 });
-  const excl = buildExclusionClauses({ ...opts, startParamIdx: base.nextParamIdx });
+ function buildAggregationFilter(opts = {}) {
+  const base = buildTransactionWhere({
+    ...opts,
+    startParamIdx: opts.startParamIdx ?? 1,
+  });
+  const excl = buildExclusionClauses({
+    ...opts,
+    startParamIdx: base.nextParamIdx,
+  });
 
   const combinedWhere = excl.whereSql
     ? `${base.sql} AND ${excl.whereSql}`
@@ -455,3 +488,5 @@ export function buildAggregationFilter(opts = {}) {
     nextParamIdx: excl.nextParamIdx,
   };
 }
+
+export { buildAggregationFilter as __buildAggregationFilter };

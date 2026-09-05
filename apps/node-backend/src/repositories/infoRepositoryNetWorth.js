@@ -2,21 +2,25 @@
  * Info sub-repository: net worth from portfolio snapshots + bank balances.
  */
 
-import { query } from '../database/connection.js';
-import { logger } from '../config/logger.js';
+import { query } from "../database/connection.js";
+import { logger } from "../config/logger.js";
 import {
   computedBalanceByCurrencyAggLateral,
   computedBalanceSeriesCtes,
-} from './accountBalanceSql.js';
-import { toNumber, toDecimal, roundMoney as roundToCents } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
-import { extractYearMonth, addDaysUtc, getDayKeyUtc } from '../lib/dateKeys.js';
-import { todayAppDateString } from '../lib/timezone.js';
-import { sanitizeIsolatedDailyInvestmentSpikes } from '../lib/calculations/netWorthSanitizer.js';
+} from "./accountBalanceSql.js";
+import {
+  toNumber,
+  toDecimal,
+  roundMoney as roundToCents,
+} from "../lib/money.js";
+import { formatDateToYmd } from "../lib/dateFormat.js";
+import { extractYearMonth, addDaysUtc, getDayKeyUtc } from "../lib/dateKeys.js";
+import { todayAppDateString } from "../lib/timezone.js";
+import { sanitizeIsolatedDailyInvestmentSpikes } from "../lib/calculations/netWorthSanitizer.js";
 import {
   mapRowsForAmountConversion,
   convertRowsWithHistoricalRateFallback,
-} from './infoRepositoryHelpers.js';
+} from "./infoRepositoryHelpers.js";
 
 // ── Shared row-level resolution ────────────────────────────────────────────
 // Both of these read `transactions.account_id` and nothing else, exactly like
@@ -152,7 +156,10 @@ export const netWorthRepository = {
    * @param {string} [targetCurrency]
    * @param {{ liveInvestments?: number }} [opts]
    */
-  async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
+  async getNetWorthFromSnapshots(
+    targetCurrency = "EUR",
+    { liveInvestments } = {},
+  ) {
     // App-timezone today (ADR-009), threaded into the SQL bounds as well so
     // the generated day series and the JS walk below agree on the last day —
     // Postgres CURRENT_DATE follows the server timezone, not the app's. It is
@@ -160,10 +167,9 @@ export const netWorthRepository = {
     // predicate needs the same end bound the walk will run with.
     const todayYmd = todayAppDateString();
 
-    // First data date over active transactions + snapshots, falling back to any
-    // transaction when there are no active ones — folded into one round-trip via
-    // COALESCE (LEAST ignores NULLs, so it only falls through when both the
-    // snapshot and active-txn minima are NULL) (SIMP-51).
+    // First data date over active transactions + snapshots. Inactive rows do
+    // not create history: the downstream walk and fallback both require active
+    // transactions, so an inactive-only span can contain only zeroes.
     //
     // Both transaction arms carry NOT_TRACKING_ONLY, the same exclusion the walk
     // and the fallback apply: this date is the series START BOUND, so without it
@@ -174,39 +180,34 @@ export const netWorthRepository = {
     // opened this month reported its whole balance as this month's gain
     // (measured: monthlyChange 1050 where 50 is the real movement).
     //
-    // The third arm needs it just as much as the second: it has no is_active
-    // filter, so leaving it bare let an all-tracking ledger fall straight
-    // through to it and restore the very span the second arm had just dropped.
-    //
     // `ATTRIBUTED_WHEN_WALK_ANSWERS` closes the same hole for the OTHER kind of
     // row the answering path cannot value — the unattributed (NULL account_id)
     // one — which is conditional rather than absolute because the fallback
     // deliberately counts those rows. See that constant and WALK_ANSWERS_CTE.
-    // Both transaction arms carry it, on the same reasoning as above: the third
-    // arm is unreachable while the walk answers (a walk-triggering row is itself
-    // active, so the second arm is non-NULL and the COALESCE never falls
-    // through), and the two arms must not disagree about the row population.
-    const firstDateResult = await query(`
+    // The active transaction arm carries it so an unattributed row cannot move
+    // the start bound when the account walk is the answering path.
+    const firstDateResult = await query(
+      `
       WITH ${WALK_ANSWERS_CTE}
-      SELECT COALESCE(
-        LEAST(
-          (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
-          (SELECT MIN(t.date)::date FROM transactions t
-            WHERE t.is_active = true ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
-        ),
+      SELECT LEAST(
+        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
         (SELECT MIN(t.date)::date FROM transactions t
-          WHERE true ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
+          WHERE t.is_active = true AND t.date <= $2::date ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
       )::date AS first_data_date
-    `, [targetCurrency, todayYmd]);
+    `,
+      [targetCurrency, todayYmd],
+    );
 
     const firstDataDate = firstDateResult.rows[0]?.first_data_date;
 
     const firstDataDateYmd = firstDataDate
-      ? (firstDataDate instanceof Date ? formatDateToYmd(firstDataDate) : String(firstDataDate).split('T')[0])
+      ? firstDataDate instanceof Date
+        ? formatDateToYmd(firstDataDate)
+        : String(firstDataDate).split("T")[0]
       : null;
 
     if (!firstDataDateYmd) {
-      logger.info('Net worth has no source records', { targetCurrency });
+      logger.info("Net worth has no source records", { targetCurrency });
       return {
         current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
         monthlyChange: 0,
@@ -215,12 +216,15 @@ export const netWorthRepository = {
       };
     }
 
-    const snapshotResult = await query(`
+    const snapshotResult = await query(
+      `
       SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, value AS investments
       FROM portfolio_performance_snapshots
       WHERE currency = $1
       ORDER BY snapshot_date ASC
-    `, [targetCurrency]);
+    `,
+      [targetCurrency],
+    );
 
     /** @type {Record<string, number>} */
     const investmentsByDay = {};
@@ -229,9 +233,10 @@ export const netWorthRepository = {
     }
 
     // History walk and the unified current-point balances (the same
-    // anchor+delta definition, unbounded) are independent — run in parallel.
+    // anchor+delta definition bounded at app-timezone today) are independent.
     const [bankHistoryResult, currentBalancesResult] = await Promise.all([
-      query(`
+      query(
+        `
       WITH bounds AS (
         SELECT $1::date AS start_date, $2::date AS end_date
       ),
@@ -280,59 +285,78 @@ export const netWorthRepository = {
       FROM balance_series s
       JOIN account_list a ON a.account_id = s.account_id
       ORDER BY s.day, s.account_id
-    `, [firstDataDateYmd, todayYmd]),
+    `,
+        [firstDataDateYmd, todayYmd],
+      ),
       // Unified current balance per in-net-worth account (WP-A1): the shared
       // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
       // a manual-only account (nothing stamped) falls back to Σ(amount) inside
-      // the lateral instead of vanishing from the headline. An account with no
-      // active rows contributes a harmless 0.
+      // the lateral instead of vanishing from the headline. The SQL retains an
+      // account with no active rows as a NULL-parts row; the conversion step
+      // deliberately drops that empty partition so it cannot erase a fallback.
       //
       // Partitioned by currency, like the walk above: each partition carries its
       // OWN currency and is converted separately below. The single-partition
       // form this replaced emitted one cross-currency Σ of bare amounts tagged
       // with the most recent active row's currency, so a 100 EUR + 100 USD
       // account entered net worth as 200 × the USD rate. The aggregated (one row
-      // per account) form is used so this result set still has exactly one row
-      // per in-net-worth account — what the `.length > 0` guard below tests.
-      query(`
+      // per account) form keeps SQL output at one row per account. After empty
+      // partitions are removed, the `.length > 0` guard below means at least
+      // one account has an as-of balance that can safely replace the fallback.
+      query(
+        `
       SELECT a.name AS bank_account,
              (a.type = 'liability') AS is_liability,
              COALESCE(a.currency, 'EUR') AS account_currency,
              bp.balance_parts
       FROM accounts a
-      ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
+      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
       WHERE a.in_net_worth = true
-    `),
+    `,
+        [todayYmd],
+      ),
     ]);
 
     // Convert the current-point balances at today's date so the historical-rate
     // lookup keys on the same day the headline represents.
-    const [bankHistoryConvertedInitial, currentBalancesConverted] = await Promise.all([
-      convertRowsWithHistoricalRateFallback(
-        mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
-        targetCurrency,
-        'day'
-      ),
-      convertRowsWithHistoricalRateFallback(
-        mapRowsForAmountConversion(
-          // One conversion row per (account, currency partition). An account
-          // with no active rows has no partition at all and still contributes
-          // its one 0 row, so the population (and the `.length > 0` guard) is
-          // unchanged from the pre-partition query.
-          currentBalancesResult.rows.flatMap(
-            (/** @type {{ bank_account: string, is_liability: boolean, account_currency: string, balance_parts: Array<{ currency: string, balance: string }>|null }} */ r) => {
-              const base = { bank_account: r.bank_account, is_liability: r.is_liability, day: todayYmd };
-              const parts = r.balance_parts ?? [];
-              if (parts.length === 0) return [{ ...base, balance: '0', currency: r.account_currency }];
-              return parts.map((p) => ({ ...base, balance: p.balance, currency: p.currency || 'EUR' }));
-            },
-          ),
-          'balance'
+    const [bankHistoryConvertedInitial, currentBalancesConverted] =
+      await Promise.all([
+        convertRowsWithHistoricalRateFallback(
+          mapRowsForAmountConversion(bankHistoryResult.rows, "balance"),
+          targetCurrency,
+          "day",
         ),
-        targetCurrency,
-        'day'
-      ),
-    ]);
+        convertRowsWithHistoricalRateFallback(
+          mapRowsForAmountConversion(
+            // One conversion row per (account, currency partition). An account
+            // with no active rows has no partition at all. It must not emit a
+            // synthetic zero here: in an unattributed ledger that zero would
+            // make the current-point override erase the transaction-flow
+            // fallback that supplied the real balance.
+            currentBalancesResult.rows.flatMap(
+              (
+                /** @type {{ bank_account: string, is_liability: boolean, account_currency: string, balance_parts: Array<{ currency: string, balance: string }>|null }} */ r,
+              ) => {
+                const base = {
+                  bank_account: r.bank_account,
+                  is_liability: r.is_liability,
+                  day: todayYmd,
+                };
+                const parts = r.balance_parts ?? [];
+                if (parts.length === 0) return [];
+                return parts.map((p) => ({
+                  ...base,
+                  balance: p.balance,
+                  currency: p.currency || "EUR",
+                }));
+              },
+            ),
+            "balance",
+          ),
+          targetCurrency,
+          "day",
+        ),
+      ]);
     let bankHistoryConverted = bankHistoryConvertedInitial;
 
     // Reached whenever the walk produced no rows at all: no in-net-worth
@@ -356,12 +380,16 @@ export const netWorthRepository = {
     // fell into depended on which of the two paths answered. See that constant
     // for where an un-attributable row lands and why.
     if (bankHistoryConverted.length === 0) {
-      logger.debug('Net worth account balance history empty; using transaction flow fallback', {
-        targetCurrency,
-        firstDataDate: firstDataDateYmd,
-      });
+      logger.debug(
+        "Net worth account balance history empty; using transaction flow fallback",
+        {
+          targetCurrency,
+          firstDataDate: firstDataDateYmd,
+        },
+      );
 
-      const liquidFlowResult = await query(`
+      const liquidFlowResult = await query(
+        `
         WITH bounds AS (
           SELECT $1::date AS start_date, $2::date AS end_date
         ),
@@ -429,12 +457,14 @@ export const netWorthRepository = {
           value
         FROM tx_cumulative
         ORDER BY day, currency, is_liability
-      `, [firstDataDateYmd, todayYmd]);
+      `,
+        [firstDataDateYmd, todayYmd],
+      );
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
-        mapRowsForAmountConversion(liquidFlowResult.rows, 'value'),
+        mapRowsForAmountConversion(liquidFlowResult.rows, "value"),
         targetCurrency,
-        'day'
+        "day",
       );
     }
 
@@ -450,7 +480,9 @@ export const netWorthRepository = {
       if (!bucket[row.day]) bucket[row.day] = 0;
       // Decimal accumulation (money-hygiene): per-day EUR balances summed with
       // native `+=` drift sub-cent before the roundToCents below.
-      bucket[row.day] = toNumber(toDecimal(bucket[row.day]).plus(toDecimal(row.amount_eur)));
+      bucket[row.day] = toNumber(
+        toDecimal(bucket[row.day]).plus(toDecimal(row.amount_eur)),
+      );
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
@@ -487,23 +519,24 @@ export const netWorthRepository = {
     // unified computed-balance definition (see the method doc). Now that the
     // walk resolves every earlier day with that same definition this is
     // continuous with the point before it, so no step is introduced; it still
-    // matters because the walk is bounded at each day (a future-dated row
-    // counts here first) and because the population is every in-net-worth
-    // account, including ones with no active rows at all. Skipped when the
-    // accounts query returned nothing (no in-net-worth accounts, e.g. an
-    // unattributed ledger running on the transaction-flow fallback), keeping the
-    // walk/fallback-derived point instead.
+    // matters because the population includes every in-net-worth account with
+    // at least one current balance partition. Skipped when no such partition
+    // exists (for example, an unattributed ledger plus a future-only account),
+    // keeping the walk/fallback-derived point instead.
     if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
       let liquidNow = toDecimal(0);
       let liabilitiesNow = toDecimal(0);
       for (const row of currentBalancesConverted) {
-        if (row.is_liability) liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
+        if (row.is_liability)
+          liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
         else liquidNow = liquidNow.plus(toDecimal(row.amount_eur));
       }
       const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
       last.liquid = roundToCents(toNumber(liquidNow));
       last.liabilities = roundToCents(toNumber(liabilitiesNow));
-      last.netWorth = roundToCents(last.liquid + last.liabilities + last.investments);
+      last.netWorth = roundToCents(
+        last.liquid + last.liabilities + last.investments,
+      );
     }
 
     // Reconcile the most-recent point with the live portfolio summary. The
@@ -518,24 +551,38 @@ export const netWorthRepository = {
       const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
       const investments = roundToCents(liveInvestments);
       last.investments = investments;
-      last.netWorth = roundToCents(last.liquid + (last.liabilities || 0) + investments);
+      last.netWorth = roundToCents(
+        last.liquid + (last.liabilities || 0) + investments,
+      );
     }
 
-    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1]
-      || /** @type {{ date?: string, liquid: number, liabilities: number, investments: number, netWorth: number }} */ ({ liquid: 0, liabilities: 0, investments: 0, netWorth: 0 });
-    const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;
+    const latest =
+      sanitizedSnapshots[sanitizedSnapshots.length - 1] ||
+      /** @type {{ date?: string, liquid: number, liabilities: number, investments: number, netWorth: number }} */ ({
+        liquid: 0,
+        liabilities: 0,
+        investments: 0,
+        netWorth: 0,
+      });
+    const currentMonthPrefix = latest.date
+      ? extractYearMonth(latest.date)
+      : null;
     const firstCurrentMonthIdx = currentMonthPrefix
-      ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
+      ? sanitizedSnapshots.findIndex((s) =>
+          s.date.startsWith(currentMonthPrefix),
+        )
       : -1;
-    const baseline = firstCurrentMonthIdx > 0
-      ? sanitizedSnapshots[firstCurrentMonthIdx - 1]
-      : sanitizedSnapshots[0];
+    const baseline =
+      firstCurrentMonthIdx > 0
+        ? sanitizedSnapshots[firstCurrentMonthIdx - 1]
+        : sanitizedSnapshots[0];
     const monthlyChange = baseline ? latest.netWorth - baseline.netWorth : 0;
-    const monthlyChangePercent = baseline && baseline.netWorth !== 0
-      ? (monthlyChange / Math.abs(baseline.netWorth)) * 100
-      : 0;
+    const monthlyChangePercent =
+      baseline && baseline.netWorth !== 0
+        ? (monthlyChange / Math.abs(baseline.netWorth)) * 100
+        : 0;
 
-    logger.debug('Net worth computed from snapshots', {
+    logger.debug("Net worth computed from snapshots", {
       targetCurrency,
       firstDataDate: firstDataDateYmd,
       snapshots: sanitizedSnapshots.length,

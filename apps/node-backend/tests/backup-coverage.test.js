@@ -13,8 +13,8 @@ import { readFileSync, readdirSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import {
-  BACKUP_COVERED_TABLES,
-  BACKUP_EXCLUDED_TABLES,
+  __BACKUP_COVERED_TABLES as BACKUP_COVERED_TABLES,
+  __BACKUP_EXCLUDED_TABLES as BACKUP_EXCLUDED_TABLES,
 } from "../src/backup/coverage.js";
 
 const __filename = fileURLToPath(import.meta.url);

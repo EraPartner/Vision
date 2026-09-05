@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Linter } from "eslint";
 import backendEslintConfig, {
+  noNullRouteFilter,
   noRepoDirectFromRoute,
 } from "../eslint.config.js";
 
@@ -79,6 +80,51 @@ describe("no-repo-direct-from-route", () => {
           severity,
         }),
       );
+    },
+  );
+});
+
+describe("no-null-route-filter", () => {
+  it.each([
+    "const opts = { search: query.search || null };",
+    "const opts = { categoryId: raw ? Number(raw) : null };",
+    "const activeFilter = active === 'all' ? null : true;",
+  ])("rejects a null optional filter: %s", (code) => {
+    const messages = linter.verify(
+      code,
+      [
+        {
+          files: ["**/*.js"],
+          languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+          plugins: {
+            local: { rules: { "no-null-route-filter": noNullRouteFilter } },
+          },
+          rules: { "local/no-null-route-filter": "error" },
+        },
+      ],
+      { filename },
+    );
+    expect(messages).toEqual([
+      expect.objectContaining({
+        ruleId: "local/no-null-route-filter",
+        messageId: "useUndefined",
+      }),
+    ]);
+  });
+
+  it.each([
+    "const opts = { search: query.search || undefined };",
+    "const response = { provider: result.provider ?? null };",
+    "const payload = { note: body.note || null };",
+  ])(
+    "allows undefined filters and explicit wire/persistence nulls: %s",
+    (code) => {
+      const messages = linter.verify(code, backendEslintConfig, { filename });
+      expect(
+        messages.filter((message) =>
+          message.ruleId?.includes("no-null-route-filter"),
+        ),
+      ).toEqual([]);
     },
   );
 });

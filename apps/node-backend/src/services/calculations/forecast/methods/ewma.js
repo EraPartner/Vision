@@ -5,18 +5,18 @@
  * the end of history is the forecast for that DOM.
  */
 
-import { dayOfMonth } from '../seasonality.js';
-import { monthKey, orderedMonthKeys } from '../months.js';
+import { dayOfMonth } from "../seasonality.js";
+import { monthKey, orderedMonthKeys } from "../months.js";
 
-export const id = 'ewma';
-export const label = 'EWMA';
+export const id = "ewma";
+export const label = "EWMA";
 const DEFAULT_ALPHA = 0.15;
 
 /**
  * @param {{history: Array<{date:string, net:number}>, forecastDates: string[], alpha?: number}} ctx
  * @returns {Array<{date:string, value:number}>}
  */
-export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
+function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
   const monthOrder = orderedMonthKeys(history);
 
   const series = new Map();
@@ -34,7 +34,10 @@ export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
     for (const mk of monthOrder) {
       const x = byMonth.get(mk);
       if (x === undefined) continue;
-      level = level === null ? x : alpha * x + (1 - alpha) * /** @type {number} */ (level);
+      level =
+        level === null
+          ? x
+          : alpha * x + (1 - alpha) * /** @type {number} */ (level);
     }
     levels.set(d, level ?? 0);
   }
@@ -44,3 +47,5 @@ export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
     return { date, value: levels.get(d) ?? 0 };
   });
 }
+
+export { forecast };

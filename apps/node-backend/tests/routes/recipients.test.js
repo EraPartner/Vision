@@ -125,7 +125,7 @@ describe("Recipient Routes", () => {
         await api.get(`${BASE}${query}`).expect(200);
       }
       for (const call of recipientRepository.getAll.mock.calls) {
-        expect(call[0]).toMatchObject({ defaultCategoryId: null });
+        expect(call[0]).toMatchObject({ defaultCategoryId: undefined });
       }
     });
 

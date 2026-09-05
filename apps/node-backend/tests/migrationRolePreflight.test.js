@@ -43,7 +43,7 @@ vi.mock("../src/config/logger.js", () => ({
 const previousDatabaseUrl = process.env.DATABASE_URL;
 const previousMigrationsUrl = process.env.DATABASE_URL_MIGRATIONS;
 
-const { runDatabaseAnalyze, stampBaselineIfLegacy } =
+const { runDatabaseAnalyze, __stampBaselineIfLegacy: stampBaselineIfLegacy } =
   await import("../src/database/migrate.js");
 
 describe("migration role preflight", () => {

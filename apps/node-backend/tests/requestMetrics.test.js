@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { requestMetrics, getMetrics, resetMetrics } from '../src/middleware/requestMetrics.js';
+import { requestMetrics, getMetrics, __resetMetrics as resetMetrics } from '../src/middleware/requestMetrics.js';
 
 function makeReqRes({ method = 'GET', baseUrl = '', routePath = '/items', statusCode = 200, hasRoute = true } = {}) {
   const listeners = {};

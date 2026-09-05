@@ -6,12 +6,15 @@
  *   - prices/priceProviderRegistry.js — provider strategies (Binance, Yahoo, custom, Kinesis)
  */
 
-import { logger } from '../config/logger.js';
-import { UpstreamError } from '../middleware/errorHandler.js';
-import { assertPublicHttpUrl } from '../lib/urlSafety.js';
-import { epochMsToUtcYmd } from '../lib/dateFormat.js';
-import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
-import { convertRowsToEur } from './currency/currencyConversionService.js';
+import { logger } from "../config/logger.js";
+import { UpstreamError } from "../middleware/errorHandler.js";
+import { assertPublicHttpUrl } from "../lib/urlSafety.js";
+import { epochMsToUtcYmd } from "../lib/dateFormat.js";
+import {
+  recordSuccess as recordProviderSuccess,
+  recordError as recordProviderError,
+} from "./providerHealthService.js";
+import { convertRowsToEur } from "./currency/currencyConversionService.js";
 import {
   cacheGet,
   cacheSet,
@@ -23,7 +26,7 @@ import {
   countChangedPointPrices,
   toNumber,
   isValidPrice,
-} from './prices/priceCache.js';
+} from "./prices/priceCache.js";
 import {
   PROVIDERS,
   resolveYahooSymbol,
@@ -31,8 +34,8 @@ import {
   resolveKinesisConfig,
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
-} from './prices/priceProviderRegistry.js';
-import { getYahooClient } from './prices/yahooClient.js';
+} from "./prices/priceProviderRegistry.js";
+import { getYahooClient } from "./prices/yahooClient.js";
 
 /** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
 /** @typedef {import('../types/rows.js').PricePoint} PricePoint */
@@ -53,16 +56,35 @@ import { getYahooClient } from './prices/yahooClient.js';
 export {
   saveHistoricalPointsToDatabase,
   resetPriceCache as __resetPriceCache,
-} from './prices/priceCache.js';
+} from "./prices/priceCache.js";
 
-export { getHistoricalPriceAt } from './prices/priceProviderRegistry.js';
+export { getHistoricalPriceAt } from "./prices/priceProviderRegistry.js";
 
 export const SUPPORTED_PROVIDERS = [
-  { key: 'manual', name: 'Manual', description: 'Set price manually' },
-  { key: 'binance', name: 'Binance', description: 'Free crypto prices (use symbol, e.g. "BTCUSDT", "ETHUSDT", "BNBEUR")' },
-  { key: 'yahoo', name: 'Yahoo Finance', description: 'Stocks, ETFs & metals (use ticker, e.g. "AAPL", "VWCE.DE", "GC=F")' },
-  { key: 'custom', name: 'Custom JSON', description: 'Any JSON endpoint with a configurable price path' },
-  { key: 'kinesis', name: 'Kinesis', description: 'Precious metals & commodities (use symbol, e.g. "KAU_USD", "XAU_USD", "XAG_USD")' },
+  { key: "manual", name: "Manual", description: "Set price manually" },
+  {
+    key: "binance",
+    name: "Binance",
+    description:
+      'Free crypto prices (use symbol, e.g. "BTCUSDT", "ETHUSDT", "BNBEUR")',
+  },
+  {
+    key: "yahoo",
+    name: "Yahoo Finance",
+    description:
+      'Stocks, ETFs & metals (use ticker, e.g. "AAPL", "VWCE.DE", "GC=F")',
+  },
+  {
+    key: "custom",
+    name: "Custom JSON",
+    description: "Any JSON endpoint with a configurable price path",
+  },
+  {
+    key: "kinesis",
+    name: "Kinesis",
+    description:
+      'Precious metals & commodities (use symbol, e.g. "KAU_USD", "XAU_USD", "XAG_USD")',
+  },
 ];
 
 // ─── Live price fetching ──────────────────────────────────────────────────────
@@ -71,10 +93,10 @@ export const SUPPORTED_PROVIDERS = [
  * @param {InvestmentRow[]} investments
  * @returns {Promise<Record<number, number>>}
  */
-export async function fetchLivePrices(investments) {
+async function fetchLivePrices(investments) {
   const detailed = await fetchLivePricesDetailed(investments);
   return Object.fromEntries(
-    Object.entries(detailed).map(([id, data]) => [id, data.price])
+    Object.entries(detailed).map(([id, data]) => [id, data.price]),
   );
 }
 
@@ -83,29 +105,38 @@ export async function fetchLivePrices(investments) {
  * @param {{ cachedPricesByInvestmentId?: Record<number, any> }} [opts]
  * @returns {Promise<Record<number, ResolvedPrice>>}
  */
-export async function fetchLivePricesDetailed(investments, { cachedPricesByInvestmentId = {} } = {}) {
+export async function fetchLivePricesDetailed(
+  investments,
+  { cachedPricesByInvestmentId = {} } = {},
+) {
   /** @type {Record<number, ResolvedPrice>} */
   const results = {};
   /** @type {Record<string, InvestmentRow[]>} */
   const stale = { binance: [], yahoo: [], custom: [], kinesis: [] };
 
   for (const inv of investments) {
-    const provider = inv.price_provider || 'manual';
-    if (provider === 'manual') continue;
+    const provider = inv.price_provider || "manual";
+    if (provider === "manual") continue;
 
-    const providerKey = provider === 'yahoo'
-      ? resolveYahooSymbol(inv)
-      : (inv.price_provider_id || '');
-    if (!providerKey && provider !== 'custom' && provider !== 'kinesis') continue;
+    const providerKey =
+      provider === "yahoo"
+        ? resolveYahooSymbol(inv)
+        : inv.price_provider_id || "";
+    if (!providerKey && provider !== "custom" && provider !== "kinesis")
+      continue;
 
-    const cacheKey = (provider === 'custom' || provider === 'kinesis')
-      ? `${provider}:${inv.id}`
-      : `${provider}:${providerKey}`;
+    const cacheKey =
+      provider === "custom" || provider === "kinesis"
+        ? `${provider}:${inv.id}`
+        : `${provider}:${providerKey}`;
 
     const cached = cacheGet(cacheKey);
     const cachedPrice = toNumber(cached?.price ?? cached);
     if (isValidPrice(cachedPrice)) {
-      results[inv.id] = { price: cachedPrice, source: cached?.source || 'live' };
+      results[inv.id] = {
+        price: cachedPrice,
+        source: cached?.source || "live",
+      };
     } else if (stale[provider]) {
       stale[provider].push(inv);
     }
@@ -133,45 +164,69 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   // { key, resolveId, batchFn, label }
   /** @type {Array<{ key: string, resolveId: (inv: InvestmentRow) => string, batchFn: (ids: string[]) => Promise<Record<string, LivePriceQuote>>, label: string }>} */
   const idBasedProviders = [
-    { key: 'binance', resolveId: (inv) => (inv.price_provider_id || '').toUpperCase(), batchFn: PROVIDERS.binance, label: 'Binance batch fetch' },
-    { key: 'yahoo', resolveId: resolveYahooSymbol, batchFn: PROVIDERS.yahoo, label: 'Yahoo Finance batch fetch' },
+    {
+      key: "binance",
+      resolveId: (inv) => (inv.price_provider_id || "").toUpperCase(),
+      batchFn: PROVIDERS.binance,
+      label: "Binance batch fetch",
+    },
+    {
+      key: "yahoo",
+      resolveId: resolveYahooSymbol,
+      batchFn: PROVIDERS.yahoo,
+      label: "Yahoo Finance batch fetch",
+    },
   ];
   // { key, batchFn, label } — kinesis already converts EUR-symbol prices out of USD.
   /** @type {Array<{ key: string, batchFn: (investments: InvestmentRow[]) => Promise<Record<string, LivePriceQuote>>, label: string }>} */
   const investmentBasedProviders = [
-    { key: 'custom', batchFn: PROVIDERS.custom, label: 'Custom price fetch' },
-    { key: 'kinesis', batchFn: PROVIDERS.kinesis, label: 'Kinesis price fetch' },
+    { key: "custom", batchFn: PROVIDERS.custom, label: "Custom price fetch" },
+    {
+      key: "kinesis",
+      batchFn: PROVIDERS.kinesis,
+      label: "Kinesis price fetch",
+    },
   ];
 
   const providerTasks = [];
 
   for (const { key, resolveId, batchFn, label } of idBasedProviders) {
     if (!stale[key].length) continue;
-    providerTasks.push(runProviderTask(key, label, async () => {
-      const ids = [...new Set(stale[key].map(resolveId).filter(Boolean))];
-      const prices = await batchFn(ids);
-      for (const inv of stale[key]) {
-        const pid = resolveId(inv);
-        if (prices[pid]) {
-          results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
-          cacheSet(`${key}:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
+    providerTasks.push(
+      runProviderTask(key, label, async () => {
+        const ids = [...new Set(stale[key].map(resolveId).filter(Boolean))];
+        const prices = await batchFn(ids);
+        for (const inv of stale[key]) {
+          const pid = resolveId(inv);
+          if (prices[pid]) {
+            results[inv.id] = {
+              price: prices[pid].price,
+              source: prices[pid].source || "live",
+            };
+            cacheSet(`${key}:${pid}`, {
+              price: prices[pid].price,
+              source: prices[pid].source || "live",
+            });
+          }
         }
-      }
-    }));
+      }),
+    );
   }
 
   for (const { key, batchFn, label } of investmentBasedProviders) {
     if (!stale[key].length) continue;
-    providerTasks.push(runProviderTask(key, label, async () => {
-      const prices = await batchFn(stale[key]);
-      for (const inv of stale[key]) {
-        const data = prices[inv.id];
-        if (data !== undefined && isValidPrice(data.price)) {
-          results[inv.id] = { price: data.price, source: 'live' };
-          cacheSet(`${key}:${inv.id}`, { price: data.price, source: 'live' });
+    providerTasks.push(
+      runProviderTask(key, label, async () => {
+        const prices = await batchFn(stale[key]);
+        for (const inv of stale[key]) {
+          const data = prices[inv.id];
+          if (data !== undefined && isValidPrice(data.price)) {
+            results[inv.id] = { price: data.price, source: "live" };
+            cacheSet(`${key}:${inv.id}`, { price: data.price, source: "live" });
+          }
         }
-      }
-    }));
+      }),
+    );
   }
 
   if (providerTasks.length > 0) {
@@ -182,7 +237,7 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
     if (results[inv.id] !== undefined) continue;
     const cachedPrice = toNumber(cachedPricesByInvestmentId[inv.id]);
     if (isValidPrice(cachedPrice)) {
-      results[inv.id] = { price: cachedPrice, source: 'cached' };
+      results[inv.id] = { price: cachedPrice, source: "cached" };
     }
   }
 
@@ -191,12 +246,17 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   // silently dropping investments when both the live provider and the
   // in-memory/DB-warm caches are unavailable (e.g. machine offline).
   const fallbackIds = investments
-    .filter((inv) => results[inv.id] === undefined && (inv.price_provider || 'manual') !== 'manual')
+    .filter(
+      (inv) =>
+        results[inv.id] === undefined &&
+        (inv.price_provider || "manual") !== "manual",
+    )
     .map((inv) => inv.id);
 
   if (fallbackIds.length > 0) {
     try {
-      const latestByInvestment = await loadLatestHistoricalPointByInvestmentIds(fallbackIds);
+      const latestByInvestment =
+        await loadLatestHistoricalPointByInvestmentIds(fallbackIds);
       for (const invId of fallbackIds) {
         const last = latestByInvestment.get(invId);
         if (!last) continue;
@@ -204,13 +264,15 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
         if (isValidPrice(price)) {
           results[invId] = {
             price,
-            source: 'historical_fallback',
-            stale_as_of_ms: Number.isFinite(last.timestampMs) ? last.timestampMs : null,
+            source: "historical_fallback",
+            stale_as_of_ms: Number.isFinite(last.timestampMs)
+              ? last.timestampMs
+              : null,
           };
         }
       }
     } catch (err) {
-      logger.warn('Historical price fallback failed', { error: err.message });
+      logger.warn("Historical price fallback failed", { error: err.message });
     }
   }
 
@@ -246,10 +308,11 @@ async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
   const end = Number(endMs);
 
   for (let page = 0; page < BINANCE_MAX_PAGES; page += 1) {
-    const url = 'https://data-api.binance.vision/api/v3/klines'
-      + `?symbol=${encodeURIComponent(binanceSymbol)}`
-      + `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const url =
+      "https://data-api.binance.vision/api/v3/klines" +
+      `?symbol=${encodeURIComponent(binanceSymbol)}` +
+      `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return collected;
@@ -264,7 +327,9 @@ async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
     cursor = next;
   }
 
-  logger.warn(`Binance history pagination hit page cap (${BINANCE_MAX_PAGES}) for ${binanceSymbol}; series may be truncated`);
+  logger.warn(
+    `Binance history pagination hit page cap (${BINANCE_MAX_PAGES}) for ${binanceSymbol}; series may be truncated`,
+  );
   return collected;
 }
 
@@ -285,17 +350,31 @@ function _filterHistoricalPoints(points, fromMs, toMs) {
  * @param {Array<{ timestampMs: number, price: number }>} cachedDbPoints
  * @param {{ fromMs?: number, toMs?: number }} [range]
  */
-async function _persistAndResolve(investmentId, points, source, cachedDbPoints, { fromMs, toMs } = {}) {
-  const { saveHistoricalPointsToDatabase } = await import('./prices/priceCache.js');
+async function _persistAndResolve(
+  investmentId,
+  points,
+  source,
+  cachedDbPoints,
+  { fromMs, toMs } = {},
+) {
+  const { saveHistoricalPointsToDatabase } =
+    await import("./prices/priceCache.js");
   // Only persist points within the requested range — providers (Yahoo, Binance, Kinesis)
   // return data beyond the window bounds, which would otherwise accumulate and be deleted
   // by cleanupStaleQuotes on every restart.
   const pointsInRange = _filterHistoricalPoints(points, fromMs, toMs);
   await saveHistoricalPointsToDatabase(investmentId, pointsInRange, source);
-  const persisted = await loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs });
-  const resolved = persisted.length > 0
-    ? persisted
-    : normalizeHistoryPoints([...(cachedDbPoints || []), ...(pointsInRange || [])]);
+  const persisted = await loadHistoricalPointsFromDatabase(investmentId, {
+    fromMs,
+    toMs,
+  });
+  const resolved =
+    persisted.length > 0
+      ? persisted
+      : normalizeHistoryPoints([
+          ...(cachedDbPoints || []),
+          ...(pointsInRange || []),
+        ]);
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
 
@@ -307,36 +386,55 @@ async function _persistAndResolve(investmentId, points, source, cachedDbPoints, 
  *   sparse-but-endpoint-spanning series would otherwise never be re-fetched. The gap-fill /
  *   densify paths set force to repopulate interior gaps.
  */
-export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly = false, force = false } = {}) {
+export async function fetchHistoricalPrices(
+  investment,
+  { fromMs, toMs, dbOnly = false, force = false } = {},
+) {
   if (!investment) return [];
-  const provider = investment.price_provider || 'manual';
+  const provider = investment.price_provider || "manual";
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : undefined;
   const to = Number.isFinite(Number(toMs)) ? Number(toMs) : undefined;
-  const dbOnlyMode = dbOnly === true || dbOnly === 'true' || dbOnly === 1 || dbOnly === '1';
+  const dbOnlyMode =
+    dbOnly === true || dbOnly === "true" || dbOnly === 1 || dbOnly === "1";
 
-  const cachedDbPoints = await loadHistoricalPointsFromDatabase(investment.id, { fromMs: from, toMs: to });
+  const cachedDbPoints = await loadHistoricalPointsFromDatabase(investment.id, {
+    fromMs: from,
+    toMs: to,
+  });
 
   if (dbOnlyMode) {
-    if (provider === 'kinesis') {
-      return _filterHistoricalPoints(sanitizeKinesisIsolatedSpikes(cachedDbPoints), from, to);
+    if (provider === "kinesis") {
+      return _filterHistoricalPoints(
+        sanitizeKinesisIsolatedSpikes(cachedDbPoints),
+        from,
+        to,
+      );
     }
     return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
-  if (!force && !needsHistoryRefresh(cachedDbPoints, { fromMs: from, toMs: to })) {
-    if (provider === 'kinesis') {
+  if (
+    !force &&
+    !needsHistoryRefresh(cachedDbPoints, { fromMs: from, toMs: to })
+  ) {
+    if (provider === "kinesis") {
       const sanitized = sanitizeKinesisIsolatedSpikes(cachedDbPoints);
       const changed = countChangedPointPrices(cachedDbPoints, sanitized);
       if (changed > 0) {
-        const { saveHistoricalPointsToDatabase } = await import('./prices/priceCache.js');
-        await saveHistoricalPointsToDatabase(investment.id, sanitized, 'kinesis');
+        const { saveHistoricalPointsToDatabase } =
+          await import("./prices/priceCache.js");
+        await saveHistoricalPointsToDatabase(
+          investment.id,
+          sanitized,
+          "kinesis",
+        );
       }
       return _filterHistoricalPoints(sanitized, from, to);
     }
     return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
-  if (provider === 'yahoo') {
+  if (provider === "yahoo") {
     const symbol = resolveYahooSymbol(investment);
     if (!symbol) return [];
 
@@ -348,40 +446,50 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       try {
         const yahooFinance = await getYahooClient();
         const chart = await yahooFinance.chart(symbol, {
-          period1: new Date(from || (Date.now() - 5 * 365 * 24 * 60 * 60 * 1000)),
-          interval: '1d',
+          period1: new Date(from || Date.now() - 5 * 365 * 24 * 60 * 60 * 1000),
+          interval: "1d",
           includePrePost: false,
         });
 
-        points = normalizeHistoryPoints((/** @type {any[]} */ (chart?.quotes) || [])
-          .map((/** @type {any} */ q) => ({
-            timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
-            price: toNumber(q?.close),
-          }))
-          .filter((p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price)));
+        points = normalizeHistoryPoints(
+          /** @type {any[]} */ ((chart?.quotes) || [])
+            .map((/** @type {any} */ q) => ({
+              timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
+              price: toNumber(q?.close),
+            }))
+            .filter(
+              (p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price),
+            ),
+        );
 
-        cacheSet(cacheKey, { points, source: 'live' });
+        cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(`Yahoo history fetch error for ${symbol}: ${err.message}`);
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
-    return _persistAndResolve(investment.id, points, 'yahoo', cachedDbPoints, { fromMs: from, toMs: to });
+    return _persistAndResolve(investment.id, points, "yahoo", cachedDbPoints, {
+      fromMs: from,
+      toMs: to,
+    });
   }
 
-  if (provider === 'binance') {
-    const symbol = (investment.price_provider_id || '').trim().toUpperCase();
+  if (provider === "binance") {
+    const symbol = (investment.price_provider_id || "").trim().toUpperCase();
     if (!symbol) return [];
 
-    const KNOWN_QUOTE_SUFFIXES = ['EUR', 'USDT', 'USDC', 'BUSD', 'BTC', 'ETH'];
-    const hasKnownQuote = KNOWN_QUOTE_SUFFIXES.some((suffix) => symbol.endsWith(suffix));
+    const KNOWN_QUOTE_SUFFIXES = ["EUR", "USDT", "USDC", "BUSD", "BTC", "ETH"];
+    const hasKnownQuote = KNOWN_QUOTE_SUFFIXES.some((suffix) =>
+      symbol.endsWith(suffix),
+    );
     const binanceSymbol = hasKnownQuote ? symbol : `${symbol}USDT`;
 
     // Walk the full window in daily candles. Binance klines return at most 1000 rows per
     // request, so paginate via startTime/endTime instead of the old limit=min(days,365) cap,
     // which silently dropped every point older than a year.
-    const startMs = from !== undefined ? from : Date.now() - 365 * BINANCE_DAY_MS;
+    const startMs =
+      from !== undefined ? from : Date.now() - 365 * BINANCE_DAY_MS;
     const endMs = to !== undefined ? to : Date.now();
     const cacheKey = `binance-history:${symbol}:${_dayKey(startMs)}:${_dayKey(endMs)}`;
     const cached = cacheGet(cacheKey);
@@ -390,28 +498,43 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
     if (!points) {
       try {
         const klines = await _fetchBinanceKlines(binanceSymbol, startMs, endMs);
-        points = normalizeHistoryPoints(klines
-          .map((kline) => ({
-            timestampMs: Number(kline[0]),
-            price: toNumber(kline[4]),
-          }))
-          .filter((p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price)));
+        points = normalizeHistoryPoints(
+          klines
+            .map((kline) => ({
+              timestampMs: Number(kline[0]),
+              price: toNumber(kline[4]),
+            }))
+            .filter(
+              (p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price),
+            ),
+        );
 
-        cacheSet(cacheKey, { points, source: 'live' });
+        cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
-        logger.warn(`Binance history fetch error for ${symbol}: ${err.message}`);
+        logger.warn(
+          `Binance history fetch error for ${symbol}: ${err.message}`,
+        );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
-    return _persistAndResolve(investment.id, points, 'binance', cachedDbPoints, { fromMs: from, toMs: to });
+    return _persistAndResolve(
+      investment.id,
+      points,
+      "binance",
+      cachedDbPoints,
+      { fromMs: from, toMs: to },
+    );
   }
 
-  if (provider === 'kinesis') {
-    const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(investment);
+  if (provider === "kinesis") {
+    const { symbol, timeframe, fromDate, needsUsdToEur } =
+      resolveKinesisConfig(investment);
 
     if (!symbol) {
-      logger.warn(`Kinesis history: no symbol configured for investment ${investment.id}`);
+      logger.warn(
+        `Kinesis history: no symbol configured for investment ${investment.id}`,
+      );
       return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
 
@@ -421,9 +544,9 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
     if (!points) {
       try {
-        const url = `${(await import('../config/kinesisConfig.js')).KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
+        const url = `${(await import("../config/kinesisConfig.js")).KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
         const res = await fetch(url, {
-          headers: { Accept: 'application/json' },
+          headers: { Accept: "application/json" },
           signal: AbortSignal.timeout(15_000),
         });
 
@@ -439,11 +562,14 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
           return _filterHistoricalPoints(cachedDbPoints, from, to);
         }
 
-        const { _parseKinesisTrendlinePoints } = await import('./prices/priceProviderRegistry.js');
+        const { _parseKinesisTrendlinePoints } =
+          await import("./prices/priceProviderRegistry.js");
         points = _parseKinesisTrendlinePoints(rawPoints);
-        cacheSet(cacheKey, { points, source: 'live' });
+        cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
-        logger.warn(`Kinesis history fetch error for ${symbol}: ${err.message}`);
+        logger.warn(
+          `Kinesis history fetch error for ${symbol}: ${err.message}`,
+        );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
@@ -454,24 +580,35 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
     // bulk-loads the rate index in one query — no per-date round-trips.
     // Applied outside the cache block so a shared USD cache entry is converted
     // per-investment.
-    const invCurrency = (investment.currency || 'EUR').toUpperCase();
-    if (needsUsdToEur && invCurrency !== 'USD' && Array.isArray(points) && points.length > 0) {
+    const invCurrency = (investment.currency || "EUR").toUpperCase();
+    if (
+      needsUsdToEur &&
+      invCurrency !== "USD" &&
+      Array.isArray(points) &&
+      points.length > 0
+    ) {
       const rows = points.map((p) => ({
         amount: p.price,
-        currency: 'USD',
+        currency: "USD",
         date: epochMsToUtcYmd(p.timestampMs),
       }));
       const converted = await convertRowsToEur(rows, invCurrency, {
         useHistoricalRatesByDate: true,
-        dateField: 'date',
+        dateField: "date",
       });
       points = points.map((p, i) => ({ ...p, price: converted[i].amount_eur }));
     }
 
-    return _persistAndResolve(investment.id, points, 'kinesis', cachedDbPoints, { fromMs: from, toMs: to });
+    return _persistAndResolve(
+      investment.id,
+      points,
+      "kinesis",
+      cachedDbPoints,
+      { fromMs: from, toMs: to },
+    );
   }
 
-  if (provider !== 'custom') {
+  if (provider !== "custom") {
     return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
@@ -494,43 +631,51 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       for (let hop = 0; ; hop += 1) {
         await assertPublicHttpUrl(url);
         res = await fetch(url, {
-          headers: { Accept: 'application/json' },
-          redirect: 'manual',
+          headers: { Accept: "application/json" },
+          redirect: "manual",
           signal: AbortSignal.timeout(10_000),
         });
-        const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
+        const location =
+          res.status >= 300 && res.status < 400
+            ? res.headers.get("location")
+            : undefined;
         if (!location) break;
-        if (hop >= 3) throw new UpstreamError('too many redirects');
+        if (hop >= 3) throw new UpstreamError("too many redirects");
         url = new URL(location, url).toString();
       }
       if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`);
       const data = await res.json();
       points = normalizeHistoryPoints(parseCustomHistoryPoints(data, config));
-      cacheSet(cacheKey, { points, source: 'live' });
+      cacheSet(cacheKey, { points, source: "live" });
     } catch (err) {
-      logger.warn(`Custom history fetch error for investment ${investment.id}: ${err.message}`);
+      logger.warn(
+        `Custom history fetch error for investment ${investment.id}: ${err.message}`,
+      );
       return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
   }
 
-  return _persistAndResolve(investment.id, points, 'custom', cachedDbPoints, { fromMs: from, toMs: to });
+  return _persistAndResolve(investment.id, points, "custom", cachedDbPoints, {
+    fromMs: from,
+    toMs: to,
+  });
 }
 
 // ─── Kinesis DB sanitization ──────────────────────────────────────────────────
 
 export async function sanitizePersistedKinesisHistory() {
-  const investmentsResult = await (await import('../database/connection.js')).query(
-    `SELECT id FROM investments WHERE price_provider = 'kinesis'`,
-    []
-  );
+  const investmentsResult = await (
+    await import("../database/connection.js")
+  ).query(`SELECT id FROM investments WHERE price_provider = 'kinesis'`, []);
 
   const investments = investmentsResult.rows || [];
   if (investments.length === 0) {
-    logger.info('Kinesis history sanitization skipped: no kinesis investments');
+    logger.info("Kinesis history sanitization skipped: no kinesis investments");
     return { processed: 0, updated: 0, correctedPoints: 0, failed: 0 };
   }
 
-  const { saveHistoricalPointsToDatabase } = await import('./prices/priceCache.js');
+  const { saveHistoricalPointsToDatabase } =
+    await import("./prices/priceCache.js");
   let updated = 0;
   let correctedPoints = 0;
   let failed = 0;
@@ -543,25 +688,36 @@ export async function sanitizePersistedKinesisHistory() {
       const sanitized = sanitizeKinesisIsolatedSpikes(points);
       const changed = countChangedPointPrices(points, sanitized);
       if (changed > 0) {
-        await saveHistoricalPointsToDatabase(investment.id, sanitized, 'kinesis');
+        await saveHistoricalPointsToDatabase(
+          investment.id,
+          sanitized,
+          "kinesis",
+        );
         updated += 1;
         correctedPoints += changed;
       }
     } catch (error) {
       failed += 1;
-      logger.warn('Kinesis history sanitization failed for investment', {
+      logger.warn("Kinesis history sanitization failed for investment", {
         investmentId: investment.id,
         error: error?.message,
       });
     }
   }
 
-  const sanitizationStats = { processed: investments.length, updated, correctedPoints, failed };
+  const sanitizationStats = {
+    processed: investments.length,
+    updated,
+    correctedPoints,
+    failed,
+  };
   if (correctedPoints > 0 || failed > 0) {
-    logger.info('Kinesis history sanitization complete', sanitizationStats);
+    logger.info("Kinesis history sanitization complete", sanitizationStats);
   } else {
-    logger.debug('Kinesis history sanitization complete', sanitizationStats);
+    logger.debug("Kinesis history sanitization complete", sanitizationStats);
   }
 
   return { processed: investments.length, updated, correctedPoints, failed };
 }
+
+export { fetchLivePrices as __fetchLivePrices };

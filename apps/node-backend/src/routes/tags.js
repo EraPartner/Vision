@@ -36,7 +36,7 @@ router.get(
     // `all` is the explicit tags/accounts compatibility mode; it is not an
     // API-wide third boolean spelling.
     const activeFilter =
-      active === "all" ? null : parseBooleanQueryParam(active, true);
+      active === "all" ? undefined : parseBooleanQueryParam(active, true);
     const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
     const { items, total } = await tagService.list({
       active: activeFilter,

@@ -21,42 +21,67 @@
  * The assertions below are re-derived from the schema the chain actually builds.
  */
 
-import { afterAll, describe, expect, it } from 'vitest';
-import { closeTestPool, getTestPool, hasTestDatabase } from '../setup/db.js';
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  TRIGGER_MAINTAINED_TABLES,
+  acquireDbSuiteLock,
+  closeTestPool,
+  getTestPool,
+  hasTestDatabase,
+  releaseDbSuiteLock,
+} from "../setup/db.js";
+import {
+  __TRIGGER_MAINTAINED_TABLES as TRIGGER_MAINTAINED_TABLES,
   default as aggregationRefresh,
-} from '../../src/services/aggregationRefresh.js';
+} from "../../src/services/aggregationRefresh.js";
+import { createMaterializedViews } from "../../src/services/materializedViewService.js";
 
 afterAll(async () => {
   await closeTestPool();
 });
 
-describe('services/aggregationRefresh — module surface', () => {
-  it('exports refreshAggregations and scheduleAggregationRefresh', () => {
-    expect(typeof aggregationRefresh.refreshAggregations).toBe('function');
-    expect(typeof aggregationRefresh.scheduleAggregationRefresh).toBe('function');
+describe("services/aggregationRefresh — module surface", () => {
+  it("exports refreshAggregations and scheduleAggregationRefresh", () => {
+    expect(typeof aggregationRefresh.refreshAggregations).toBe("function");
+    expect(typeof aggregationRefresh.scheduleAggregationRefresh).toBe(
+      "function",
+    );
   });
 
-  it('documents the trigger-maintained tables as frozen', () => {
+  it("documents the trigger-maintained tables as frozen", () => {
     expect(Object.isFrozen(TRIGGER_MAINTAINED_TABLES)).toBe(true);
-    expect(TRIGGER_MAINTAINED_TABLES).toEqual([
-      'agg_split_outstanding',
-    ]);
+    expect(TRIGGER_MAINTAINED_TABLES).toEqual(["agg_split_outstanding"]);
   });
 });
 
 describe.skipIf(!hasTestDatabase())(
-  'services/aggregationRefresh — aggregation-layer schema artifacts',
+  "services/aggregationRefresh — aggregation-layer schema artifacts",
   () => {
-    it('leaves no materialized view behind for the app to refresh', async () => {
+    beforeAll(async () => {
+      await acquireDbSuiteLock();
+    }, 180_000);
+
+    afterAll(async () => {
+      const pool = getTestPool();
+      try {
+        await pool.query(
+          "DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE",
+        );
+        await pool.query(
+          "DROP MATERIALIZED VIEW IF EXISTS mv_category_totals CASCADE",
+        );
+      } finally {
+        await releaseDbSuiteLock();
+      }
+    });
+
+    it("leaves no materialized view behind for the app to refresh", async () => {
       // 0038 dropped mv_recipient_monthly and 0082 dropped mv_bank_balances,
       // both as unread views whose per-mutation refresh was pure write
       // amplification. The refresh set is now empty by design; a new MV
       // appearing here means someone reintroduced that cost without wiring a
       // reader, which is the exact regression those migrations exist to prevent.
       const pool = getTestPool();
-      const mvs = await pool.query('SELECT matviewname FROM pg_matviews');
+      const mvs = await pool.query("SELECT matviewname FROM pg_matviews");
       expect(mvs.rows.map((r) => r.matviewname)).toEqual([]);
     });
 
@@ -64,7 +89,7 @@ describe.skipIf(!hasTestDatabase())(
     // sole reader (recipientRepository existence probe) now hits transactions
     // directly, so there is no table/trigger to assert here anymore.
 
-    it('creates agg_split_outstanding with triggers on splits and payments', async () => {
+    it("creates agg_split_outstanding with triggers on splits and payments", async () => {
       const pool = getTestPool();
       const table = await pool.query(
         `SELECT 1 FROM information_schema.tables
@@ -84,12 +109,18 @@ describe.skipIf(!hasTestDatabase())(
           ORDER BY t.tgname`,
       );
       expect(triggers.rows).toEqual([
-        { table_name: 'transaction_splits', tgname: 'trg_split_outstanding_sync' },
-        { table_name: 'split_payments', tgname: 'trg_split_payment_outstanding_sync' },
+        {
+          table_name: "transaction_splits",
+          tgname: "trg_split_outstanding_sync",
+        },
+        {
+          table_name: "split_payments",
+          tgname: "trg_split_payment_outstanding_sync",
+        },
       ]);
     });
 
-    it('creates a pg_trgm GIN index on recipients.name', async () => {
+    it("creates a pg_trgm GIN index on recipients.name", async () => {
       const pool = getTestPool();
       const idx = await pool.query(
         `SELECT indexdef FROM pg_indexes
@@ -100,10 +131,14 @@ describe.skipIf(!hasTestDatabase())(
       expect(idx.rows[0].indexdef).toMatch(/USING gin \(name gin_trgm_ops\)/);
     });
 
-    it('refreshAggregations completes without error against a migrated DB', async () => {
+    it("refreshAggregations completes without error against a migrated DB", async () => {
       // Only meaningful when the app connection points at the same DB —
-      // guarded by hasTestDatabase and kept fast with concurrency.
-      await expect(aggregationRefresh.refreshAggregations()).resolves.not.toThrow();
+      // guarded by hasTestDatabase and kept fast with concurrency. Migrations
+      // intentionally leave redefined views absent for post-listen creation.
+      await createMaterializedViews();
+      await expect(
+        aggregationRefresh.refreshAggregations(),
+      ).resolves.not.toThrow();
     });
   },
 );

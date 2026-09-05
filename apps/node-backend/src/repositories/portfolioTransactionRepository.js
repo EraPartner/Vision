@@ -1,11 +1,13 @@
 /**
- * Portfolio Transaction Repository — thin barrel composing three split modules:
- *   - portfolioTxRepo.common.js  → shared helpers (column probe, validation)
- *   - portfolioTxRepo.reads.js   → read ops (list/count/getById/summary)
- *   - portfolioTxRepo.writes.js  → write ops (create/update/hardDelete)
+ * Portfolio transaction persistence barrel:
+ *   - portfolioTxRepo.common.js → schema/list SQL helpers
+ *   - portfolioTxRepo.reads.js  → parameterized reads
+ *   - portfolioTxRepo.writes.js → parameterized writes
+ *
+ * Write orchestration and domain policy live in services/portfolio/.
  */
 
-export { __resetPortfolioTransactionSchemaCache } from './portfolioTxRepo.common.js';
+export { __resetPortfolioTransactionSchemaCache } from "./portfolioTxRepo.common.js";
 
 import {
   getAll,
@@ -15,14 +17,14 @@ import {
   getById,
   getRowsForPortfolioMath,
   getSummary,
-} from './portfolioTxRepo.reads.js';
+} from "./portfolioTxRepo.reads.js";
 import {
-  create,
-  update,
+  insert,
+  updateFields,
   hardDelete,
   hardDeleteByImportBatch,
   repointAccount,
-} from './portfolioTxRepo.writes.js';
+} from "./portfolioTxRepo.writes.js";
 
 export const portfolioTransactionRepository = {
   getAll,
@@ -31,8 +33,8 @@ export const portfolioTransactionRepository = {
   getCount,
   getById,
   getRowsForPortfolioMath,
-  create,
-  update,
+  insert,
+  updateFields,
   hardDelete,
   hardDeleteByImportBatch,
   repointAccount,

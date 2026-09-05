@@ -5,7 +5,7 @@
  * (user_id, method_id, as_of_month).
  */
 
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 /**
  * @typedef {Object} AccuracyRow
@@ -24,11 +24,19 @@ import { query } from '../database/connection.js';
  * @param {{ userId: string, methodId: string, asOfMonth: string,
  *            mae: number, rmse: number, mape: number, sampleDays: number }} params
  */
-async function upsert({ userId, methodId, asOfMonth, mae, rmse, mape, sampleDays }) {
+async function upsert({
+  userId,
+  methodId,
+  asOfMonth,
+  mae,
+  rmse,
+  mape,
+  sampleDays,
+}) {
   await query(
     `INSERT INTO cashflow_forecast_accuracy
             (user_id, method_id, as_of_month, mae, rmse, mape, sample_days, recorded_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          VALUES ($1, $2, ($3 || '-01')::date, $4, $5, $6, $7, NOW())
      ON CONFLICT (user_id, method_id, as_of_month) DO UPDATE
         SET mae         = EXCLUDED.mae,
             rmse        = EXCLUDED.rmse,
@@ -46,7 +54,8 @@ async function upsert({ userId, methodId, asOfMonth, mae, rmse, mape, sampleDays
  */
 async function getHistory({ userId, methodId, limitMonths = 24 }) {
   const result = await query(
-    `SELECT user_id, method_id, as_of_month, mae, rmse, mape, sample_days, recorded_at
+    `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
+            mae, rmse, mape, sample_days, recorded_at
        FROM cashflow_forecast_accuracy
       WHERE user_id = $1 AND method_id = $2
       ORDER BY as_of_month DESC
@@ -64,7 +73,8 @@ async function getHistory({ userId, methodId, limitMonths = 24 }) {
 async function getLatestByMethod({ userId }) {
   const result = await query(
     `SELECT DISTINCT ON (method_id)
-            user_id, method_id, as_of_month, mae, rmse, mape, sample_days, recorded_at
+            user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
+            mae, rmse, mape, sample_days, recorded_at
        FROM cashflow_forecast_accuracy
       WHERE user_id = $1
       ORDER BY method_id, as_of_month DESC`,
@@ -81,13 +91,12 @@ async function getLatestByMethod({ userId }) {
  */
 async function getAllHistory({ userId, limitMonths = 24 }) {
   const result = await query(
-    `SELECT user_id, method_id, as_of_month, mae, rmse, mape, sample_days, recorded_at
+    `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
+            mae, rmse, mape, sample_days, recorded_at
        FROM cashflow_forecast_accuracy
       WHERE user_id = $1
-        AND as_of_month >= to_char(
-              NOW() - make_interval(months => $2),
-              'YYYY-MM'
-            )
+        AND as_of_month >=
+            (date_trunc('month', CURRENT_DATE) - make_interval(months => $2))::date
       ORDER BY method_id, as_of_month ASC`,
     [userId, limitMonths],
   );

@@ -6,13 +6,13 @@
  * side; validatePaymentAmount prevents overpayment.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
-  computeSplitRemaining,
+  __computeSplitRemaining as computeSplitRemaining,
   computeOwedSummary,
   validatePaymentAmount,
   roundToCents,
-} from '../../src/lib/calculations/splits.js';
+} from "../../src/lib/calculations/splits.js";
 
 const CENT = 0.01;
 
@@ -42,9 +42,9 @@ function buildSplitWithPayments(rng) {
   return { amount, amount_paid, payments };
 }
 
-describe('property: split conservation law', () => {
-  it('split.amount == sum(payments) + remaining across 500 random splits', () => {
-    const rng = seeded(0xC0DE600D);
+describe("property: split conservation law", () => {
+  it("split.amount == sum(payments) + remaining across 500 random splits", () => {
+    const rng = seeded(0xc0de600d);
     for (let i = 0; i < 500; i++) {
       const split = buildSplitWithPayments(rng);
       const remaining = computeSplitRemaining(split);
@@ -54,8 +54,8 @@ describe('property: split conservation law', () => {
     }
   });
 
-  it('validatePaymentAmount blocks any payment that would exceed split', () => {
-    const rng = seeded(0xBEEFCAFE);
+  it("validatePaymentAmount blocks any payment that would exceed split", () => {
+    const rng = seeded(0xbeefcafe);
     for (let i = 0; i < 200; i++) {
       const splitAmount = roundToCents(10 + rng() * 990);
       const alreadyPaid = roundToCents(rng() * splitAmount);
@@ -70,8 +70,8 @@ describe('property: split conservation law', () => {
     }
   });
 
-  it('validatePaymentAmount permits payment up to exact headroom', () => {
-    const rng = seeded(0x1BADB002);
+  it("validatePaymentAmount permits payment up to exact headroom", () => {
+    const rng = seeded(0x1badb002);
     for (let i = 0; i < 200; i++) {
       const splitAmount = roundToCents(10 + rng() * 990);
       const alreadyPaid = roundToCents(rng() * splitAmount);
@@ -88,11 +88,29 @@ describe('property: split conservation law', () => {
     }
   });
 
-  it('computeOwedSummary: total_owed - total_paid == remaining for every row', () => {
+  it("computeOwedSummary: total_owed - total_paid == remaining for every row", () => {
     const rows = [
-      { recipient_id: 1, recipient_name: 'A', total_owed: '100.00', total_paid: '25.50', split_count: '3' },
-      { recipient_id: 2, recipient_name: 'B', total_owed: '500.00', total_paid: '500.00', split_count: '5' },
-      { recipient_id: 3, recipient_name: 'C', total_owed: '42.42', total_paid: '0.00', split_count: '1' },
+      {
+        recipient_id: 1,
+        recipient_name: "A",
+        total_owed: "100.00",
+        total_paid: "25.50",
+        split_count: "3",
+      },
+      {
+        recipient_id: 2,
+        recipient_name: "B",
+        total_owed: "500.00",
+        total_paid: "500.00",
+        split_count: "5",
+      },
+      {
+        recipient_id: 3,
+        recipient_name: "C",
+        total_owed: "42.42",
+        total_paid: "0.00",
+        split_count: "1",
+      },
     ];
     const summary = computeOwedSummary(rows);
     for (const row of summary) {

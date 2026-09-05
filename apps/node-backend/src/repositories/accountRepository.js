@@ -10,18 +10,20 @@
  * semantics are activated in ADR-089.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query, withTransaction } from "../database/connection.js";
 import {
-  COMPUTED_BALANCE_LATERAL,
+  balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
-  statementPartition,
-} from './accountBalanceSql.js';
-import { buildInsert, buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
-import { loadCurrentRates, convertWithRates } from '../services/currency/currencyConversionService.js';
-import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
+} from "./accountBalanceSql.js";
+import {
+  buildInsert,
+  buildSetClauses,
+  buildLimitOffset,
+} from "../lib/sqlClauses.js";
+import { todayAppDateString } from "../lib/timezone.js";
 
 /** @typedef {import('../types/rows.js').AccountRow} AccountRow */
-/** @typedef {import('../types/rows.js').AccountWithBalanceRow} AccountWithBalanceRow */
+/** @typedef {import('../types/rows.js').AccountBalanceQueryRow} AccountBalanceQueryRow */
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -33,10 +35,23 @@ const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_
 // `closed_at` is server-stamped by the service's lifecycle logic (D5) — it is
 // writable here but never accepted from a request body.
 const WRITABLE = new Set([
-  'name', 'display_name', 'institution', 'currency', 'type', 'liquidity_class',
-  'spendable', 'in_net_worth', 'tax_wrapper', 'owner', 'multi_currency_cash',
-  'has_cash_sleeve', 'funding_account_id', 'statement_balance', 'statement_balance_date',
-  'is_active', 'closed_at',
+  "name",
+  "display_name",
+  "institution",
+  "currency",
+  "type",
+  "liquidity_class",
+  "spendable",
+  "in_net_worth",
+  "tax_wrapper",
+  "owner",
+  "multi_currency_cash",
+  "has_cash_sleeve",
+  "funding_account_id",
+  "statement_balance",
+  "statement_balance_date",
+  "is_active",
+  "closed_at",
 ]);
 
 /**
@@ -51,29 +66,29 @@ const WRITABLE = new Set([
  * @returns {string}
  */
 function sqlBtrim(s) {
-  return String(s).replace(/^ +| +$/g, '');
+  return String(s).replace(/^ +| +$/g, "");
 }
 
 export const accountRepository = {
   /**
-   * List accounts (optionally filtered by active status), each with its computed
-   * balance (the anchored running balance — see COMPUTED_BALANCE_LATERAL), drift
-   * vs the stored statement balance (ADR-094, null when no statement balance),
-   * balance provenance (`anchor_date` + `post_anchor_count`, WP-B2 — the
-   * "as of {date} statement · {n} entries since" / "sum of {n} entries" fields),
-   * and has_transactions — whether the account has any active ledger rows
-   * (portfolio accounts whose activity lives in portfolio_transactions have none).
+   * List raw account rows (optionally filtered by active status) with native
+   * balance partitions, per-currency statement readings, provenance columns,
+   * and `has_transactions`. Currency conversion, drift, and the public numeric
+   * response shape belong to `accountService.list`.
    *
    * Multi-currency accounts: the anchor+delta computation is partitioned by
    * `transactions.currency` (`computedBalanceByCurrencyAggLateral`) and each
-   * partition is converted into the account's OWN currency, at today's rate,
-   * before the per-account total is summed — `computed_balance` stays a figure
+   * partition with an available rate is converted into the account's OWN
+   * currency, at today's rate, before the per-account total is summed —
+   * `computed_balance` stays a figure
    * denominated in `accounts.currency`, which is what every consumer (the hub
    * cards, the dashboard cards, `groupAccounts.sumConvertedBalances`, the
    * reconcile dialog) already assumes when it re-converts for display. The
    * single-partition form this replaced added a EUR amount to a USD amount as
    * bare numbers (100 EUR + 100 USD at 0.5 → 100 instead of 150). A
-   * single-currency account has exactly one partition and is unaffected.
+   * single-currency account has exactly one partition and is unaffected. A
+   * partition without a usable rate is exposed in native units and excluded
+   * from the explicitly incomplete converted total (ADR-127).
    *
    * `drift` is the statement figure minus the RECONCILIATION BASE — the balance
    * of the partition the statement figure is a statement for (`statementPartition`)
@@ -90,9 +105,8 @@ export const accountRepository = {
    * satisfy `drift = statement_balance − reconcilable_balance` by construction,
    * all denominated in `reconcilable_currency`.
    *
-   * `computed_balance` / `drift` / `reconcilable_balance` are therefore computed
-   * in JS and emitted as NUMBERS (previously raw pg NUMERIC strings — the
-   * OpenAPI schema and the frontend `Account` type have always declared `number`).
+   * The repository returns the raw SQL rows, including `balance_parts`; the
+   * service owns currency conversion and API shaping.
    *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
@@ -101,14 +115,16 @@ export const accountRepository = {
    * accounts rather than currency partitions.
    *
    * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
-   * @returns {Promise<AccountWithBalanceRow[]>}
+   * @returns {Promise<AccountBalanceQueryRow[]>}
    */
   async getAll({ active = null, limit = null, offset = 0 } = {}) {
+    const asOfDate = todayAppDateString();
     let sql = `
       SELECT ${COLUMNS},
              lb.anchor_date,
              lb.post_anchor_count,
              bp.balance_parts,
+             COALESCE(sb.statement_balances, '[]'::json) AS statement_balances,
              EXISTS (
                SELECT 1 FROM transactions t2
                WHERE t2.account_id = a.id AND t2.is_active = true
@@ -118,62 +134,28 @@ export const accountRepository = {
       -- fields only: "as of {date} statement + {n} entries since" describes the
       -- account's stamping history, not a currency's. The balance and drift
       -- below come from the per-currency partitions.
-      ${COMPUTED_BALANCE_LATERAL}
-      ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
+      ${balanceProvenanceLateral({ asOfDate: "$1::date" })}
+      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+      LEFT JOIN LATERAL (
+        SELECT json_agg(
+                 json_build_object(
+                   'currency', s.currency,
+                   'balance', s.balance,
+                   'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
+                 ) ORDER BY s.currency
+               ) AS statement_balances
+          FROM account_statement_balances s
+         WHERE s.account_id = a.id
+      ) sb ON TRUE
       WHERE 1=1`;
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
     sql += ` ORDER BY a.name`;
     /** @type {any[]} */
-    const params = [];
+    const params = [asOfDate];
     sql += buildLimitOffset(params, { limit, offset });
     const result = await query(sql, params);
-    // One rate table for the whole page (memory-cached in the conversion
-    // service); converting per partition inside the loop would await it N times.
-    const rates = await loadCurrentRates();
-    // Provenance shaping (WP-B2, mirrors infoRepositoryBanks): anchor_date is
-    // already a 'YYYY-MM-DD' string via to_char in the lateral — SQL NULL
-    // (nothing stamped) becomes undefined, never null (convention: the backend
-    // never returns null). COUNT(*) arrives as a bigint string; emit a number.
-    return result.rows.map((/** @type {any} */ row) => {
-      const { balance_parts: parts, ...rest } = row;
-      /** @type {Array<{ currency: string, balance: string }>} */
-      const partitions = parts ?? [];
-      const accountCurrency = (row.currency || 'EUR').toUpperCase();
-      let total = toDecimal(0);
-      for (const part of partitions) {
-        total = total.plus(toDecimal(convertWithRates(
-          toNumber(toDecimal(part.balance)),
-          (part.currency || 'EUR').toUpperCase(),
-          accountCurrency,
-          rates,
-        )));
-      }
-      // The reconciliation base: what the statement figure is measured against
-      // and what `reconcileService` will stamp. Emitted so the dialog previews
-      // `typed reading − base` rather than `typed reading − computed_balance`
-      // (those differ on every multi-currency account).
-      const base = statementPartition(partitions, row.currency);
-      const baseBalance = toNumber(roundToCents(toDecimal(base.balance)));
-      return {
-        ...rest,
-        computed_balance: toNumber(roundToCents(total)),
-        reconcilable_balance: baseBalance,
-        reconcilable_currency: base.currency,
-        // Subtract the ROUNDED base: `drift = statement − reconcilable_balance`
-        // must hold exactly on the wire, and a 4-dp partition tail would
-        // otherwise skew the identity by up to a cent.
-        drift: row.statement_balance == null
-          ? null
-          : toNumber(roundToCents(
-            toDecimal(row.statement_balance).minus(toDecimal(baseBalance)),
-          )),
-        anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
-        post_anchor_count: row.post_anchor_count == null
-          ? undefined
-          : parseInt(row.post_anchor_count, 10),
-      };
-    });
+    return result.rows;
   },
 
   /**
@@ -196,7 +178,10 @@ export const accountRepository = {
    * @returns {Promise<AccountRow|undefined>}
    */
   async getById(id) {
-    const result = await query(`SELECT ${COLUMNS} FROM accounts WHERE id = $1`, [id]);
+    const result = await query(
+      `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
+      [id],
+    );
     return result.rows[0] ?? undefined;
   },
 
@@ -222,14 +207,37 @@ export const accountRepository = {
    * @returns {Promise<AccountRow>}
    */
   async create(fields) {
-    const { columns: cols, placeholders, params } = buildInsert(fields, { allowed: WRITABLE, quote: true });
-    const result = await query(
-      `INSERT INTO accounts (${cols.join(', ')})
-       VALUES (${placeholders.join(', ')})
-       RETURNING ${COLUMNS}`,
+    const {
+      columns: cols,
+      placeholders,
       params,
-    );
-    return result.rows[0];
+    } = buildInsert(fields, { allowed: WRITABLE, quote: true });
+    return withTransaction(async () => {
+      const result = await query(
+        `INSERT INTO accounts (${cols.join(", ")})
+         VALUES (${placeholders.join(", ")})
+         RETURNING ${COLUMNS}`,
+        params,
+      );
+      const created = result.rows[0];
+      if (
+        created.statement_balance != null &&
+        created.statement_balance_date != null
+      ) {
+        await query(
+          `INSERT INTO account_statement_balances
+             (account_id, currency, balance, balance_date)
+           VALUES ($1, $2, $3, $4)`,
+          [
+            created.id,
+            created.currency,
+            created.statement_balance,
+            created.statement_balance_date,
+          ],
+        );
+      }
+      return created;
+    });
   },
 
   /**
@@ -240,39 +248,122 @@ export const accountRepository = {
    * @returns {Promise<AccountRow|undefined>}
    */
   async update(id, fields) {
-    const { clauses: setClauses, params, nextIdx: i } = buildSetClauses(fields, { allowed: WRITABLE, quote: true });
+    const {
+      clauses: setClauses,
+      params,
+      nextIdx: i,
+    } = buildSetClauses(fields, { allowed: WRITABLE, quote: true });
     if (setClauses.length === 0) return this.getById(id);
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const renaming = Object.prototype.hasOwnProperty.call(fields, 'name') && fields.name !== undefined;
-    if (!renaming) {
+    const renaming =
+      Object.prototype.hasOwnProperty.call(fields, "name") &&
+      fields.name !== undefined;
+    const touchesStatement =
+      Object.prototype.hasOwnProperty.call(fields, "statement_balance") ||
+      Object.prototype.hasOwnProperty.call(fields, "statement_balance_date");
+    const touchesCurrency =
+      Object.prototype.hasOwnProperty.call(fields, "currency") &&
+      fields.currency !== undefined;
+    if (!renaming && !touchesStatement && !touchesCurrency) {
       const result = await query(
-        `UPDATE accounts SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
+        `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
         params,
       );
       return result.rows[0] ?? undefined;
     }
 
-    // Rename: propagate the new name to the denormalized `bank_account` string on
-    // this account's transactions / planned_transactions, so the label stays in
-    // sync with accounts.name (the sync trigger keys account_id off that string).
-    // Without this the old name lingered and a later edit could resurrect it as a
-    // stray account. Atomic so a half-rename can't leave the two out of sync.
+    // Rename and legacy statement compatibility both need the pre-update row
+    // and must commit atomically with the account mutation.
     return withTransaction(async (client) => {
-      const prev = await client.query('SELECT name FROM accounts WHERE id = $1 FOR UPDATE', [id]);
+      const prev = await client.query(
+        `SELECT name, currency, statement_balance,
+                to_char(statement_balance_date, 'YYYY-MM-DD') AS statement_balance_date
+           FROM accounts WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
       if (!prev.rows[0]) return undefined;
       const result = await client.query(
-        `UPDATE accounts SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
+        `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
         params,
       );
       const updated = result.rows[0];
       if (!updated) return undefined;
       if (updated.name !== prev.rows[0].name) {
-        await client.query('UPDATE transactions SET bank_account = $1 WHERE account_id = $2', [updated.name, id]);
-        await client.query('UPDATE planned_transactions SET bank_account = $1 WHERE account_id = $2', [updated.name, id]);
+        await client.query(
+          "UPDATE transactions SET bank_account = $1 WHERE account_id = $2",
+          [updated.name, id],
+        );
+        await client.query(
+          "UPDATE planned_transactions SET bank_account = $1 WHERE account_id = $2",
+          [updated.name, id],
+        );
       }
-      return updated;
+
+      const accountCurrency = updated.currency;
+      if (touchesStatement) {
+        const balance = Object.prototype.hasOwnProperty.call(
+          fields,
+          "statement_balance",
+        )
+          ? fields.statement_balance
+          : prev.rows[0].statement_balance;
+        const balanceDate = Object.prototype.hasOwnProperty.call(
+          fields,
+          "statement_balance_date",
+        )
+          ? fields.statement_balance_date
+          : prev.rows[0].statement_balance_date;
+        if (balance == null || balanceDate == null) {
+          await client.query(
+            `DELETE FROM account_statement_balances
+              WHERE account_id = $1 AND currency = $2`,
+            [id, accountCurrency],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO account_statement_balances
+               (account_id, currency, balance, balance_date)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (account_id, currency) DO UPDATE
+               SET balance = EXCLUDED.balance,
+                   balance_date = EXCLUDED.balance_date`,
+            [id, accountCurrency, balance, balanceDate],
+          );
+        }
+      } else if (touchesCurrency && accountCurrency !== prev.rows[0].currency) {
+        // A currency-only PATCH changes which side-table row the legacy scalar
+        // projects. Never leave the previous currency's reading mislabeled.
+        await client.query(
+          `UPDATE accounts a
+              SET statement_balance = s.balance,
+                  statement_balance_date = s.balance_date,
+                  updated_at = NOW()
+             FROM (SELECT balance, balance_date
+                     FROM account_statement_balances
+                    WHERE account_id = $1 AND currency = $2) s
+            WHERE a.id = $1`,
+          [id, accountCurrency],
+        );
+        await client.query(
+          `UPDATE accounts
+              SET statement_balance = NULL,
+                  statement_balance_date = NULL,
+                  updated_at = NOW()
+            WHERE id = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM account_statement_balances
+                 WHERE account_id = $1 AND currency = $2
+              )`,
+          [id, accountCurrency],
+        );
+      }
+      const refreshed = await client.query(
+        `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
+        [id],
+      );
+      return refreshed.rows[0] ?? undefined;
     });
   },
 
@@ -285,7 +376,10 @@ export const accountRepository = {
    * @returns {Promise<number|undefined>}
    */
   async remove(id) {
-    const result = await query('DELETE FROM accounts WHERE id = $1 RETURNING id', [id]);
+    const result = await query(
+      "DELETE FROM accounts WHERE id = $1 RETURNING id",
+      [id],
+    );
     return result.rows[0]?.id ?? undefined;
   },
 
@@ -296,7 +390,10 @@ export const accountRepository = {
    * @returns {Promise<{id:number,name:string}|undefined>}
    */
   async lockByIdForMerge(id) {
-    const result = await query('SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE', [id]);
+    const result = await query(
+      "SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE",
+      [id],
+    );
     return result.rows[0] ?? undefined;
   },
 
@@ -307,7 +404,10 @@ export const accountRepository = {
    * @returns {Promise<{id:number}[]>}
    */
   async lockByIdsForMerge(ids) {
-    const result = await query('SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE', [ids]);
+    const result = await query(
+      "SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE",
+      [ids],
+    );
     return result.rows;
   },
 
@@ -334,12 +434,60 @@ export const accountRepository = {
    * @returns {Promise<number>} rows affected
    */
   async clearStatementAnchor(id) {
-    const result = await query(
-      `UPDATE accounts SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
-         WHERE id = $1`,
-      [id],
-    );
-    return result.rowCount ?? 0;
+    return withTransaction(async () => {
+      await query(
+        "DELETE FROM account_statement_balances WHERE account_id = $1",
+        [id],
+      );
+      const result = await query(
+        `UPDATE accounts SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
+           WHERE id = $1`,
+        [id],
+      );
+      return result.rowCount ?? 0;
+    });
+  },
+
+  /** Store one authoritative statement reading, mirroring the legacy scalar
+   * projection only when it is in the account's declared currency. */
+  async upsertStatementBalance(accountId, currency, balance, balanceDate) {
+    return withTransaction(async () => {
+      const result = await query(
+        `INSERT INTO account_statement_balances
+           (account_id, currency, balance, balance_date)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account_id, currency) DO UPDATE
+           SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
+         RETURNING account_id, currency, balance,
+                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
+        [accountId, currency, balance, balanceDate],
+      );
+      await query(
+        `UPDATE accounts
+            SET statement_balance = $3, statement_balance_date = $4, updated_at = NOW()
+          WHERE id = $1 AND currency = $2`,
+        [accountId, currency, balance, balanceDate],
+      );
+      return result.rows[0];
+    });
+  },
+
+  async deleteStatementBalance(accountId, currency) {
+    return withTransaction(async () => {
+      const result = await query(
+        `DELETE FROM account_statement_balances
+          WHERE account_id = $1 AND currency = $2
+        RETURNING account_id`,
+        [accountId, currency],
+      );
+      await query(
+        `UPDATE accounts
+            SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
+          WHERE id = $1 AND currency = $2`,
+        [accountId, currency],
+      );
+      return result.rowCount ?? 0;
+    });
   },
 
   /**
@@ -352,7 +500,7 @@ export const accountRepository = {
    */
   async deleteMergedSources(sourceIds, targetId) {
     const result = await query(
-      'DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2',
+      "DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2",
       [sourceIds, targetId],
     );
     return result.rowCount ?? 0;
@@ -368,18 +516,20 @@ export const accountRepository = {
    * casing (no-op update purely to RETURNING the id in one round-trip).
    *
    * @param {string|null|undefined} name
+   * @param {{ multiCurrencyCash?: boolean }} [capabilities]
    * @returns {Promise<number|undefined>} undefined when `name` is null or
    *   btrims to empty (the trigger's blank path — no account)
    */
-  async resolveOrCreateByName(name) {
+  async resolveOrCreateByName(name, { multiCurrencyCash = false } = {}) {
     if (name == null) return undefined;
     const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
     const result = await query(
-      `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
-       ON CONFLICT (lower(btrim(name))) DO UPDATE SET name = accounts.name
+      `INSERT INTO accounts (name, display_name, multi_currency_cash) VALUES ($1, $1, $2)
+       ON CONFLICT (lower(btrim(name))) DO UPDATE
+         SET multi_currency_cash = accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash
        RETURNING id`,
-      [trimmed],
+      [trimmed, multiCurrencyCash],
     );
     return result.rows[0]?.id;
   },

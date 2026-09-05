@@ -2,7 +2,7 @@
  * Portfolio import pipeline — COMMIT
  *
  * Drains 'matched' staging rows into portfolio_transactions via the existing
- * portfolioTransactionRepository.create (so 2-of-3 unit math, oversell
+ * portfolioTransactionService.create (so 2-of-3 unit math, oversell
  * prevention, and asset-class routing are reused). Creates run inside a chunk
  * transaction. A savepoint rolls back a failed row (oversell, unresolved
  * instrument) without aborting the chunk or discarding successful sibling rows.
@@ -15,10 +15,11 @@
 
 import { query, withTransaction } from "../../database/connection.js";
 import { logger } from "../../config/logger.js";
-import portfolioTransactionRepository from "../../repositories/portfolioTransactionRepository.js";
+import portfolioTransactionService from "../portfolio/portfolioTransactionService.js";
 import recipientRepository from "../../repositories/recipientRepository.js";
 import categoryRepository from "../../repositories/categoryRepository.js";
-import { normalizeTransactionPayload } from "../../repositories/portfolioTxRepo.common.js";
+import settingsRepository from "../../repositories/settingsRepository.js";
+import { normalizeTransactionPayload } from "../portfolio/portfolioTransactionRules.js";
 import { autoResolveFxRateToEur } from "../portfolio/fxResolve.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
 
@@ -74,17 +75,8 @@ function signedCashAmount(row) {
   return (direction ?? 1) * Math.abs(Number(row.amount));
 }
 
-// D6 auto-categorization (ADR-095 addendum: "interest income / investment
-// fees"): the ledger category for an instrument-less cash row, keyed by the
-// row's canonical type. External deposit/withdrawal cash rows stay
-// uncategorized (unchanged) — they are transfers, not income or expense.
-/** @type {Record<string, { general: string, detail: string }>} */
-const CASH_KIND_CATEGORIES = {
-  dividend: { general: "INCOME", detail: "DIVIDENDS" },
-  interest: { general: "INCOME", detail: "INTEREST" },
-  fee: { general: "INVESTMENTS", detail: "FEES" },
-  tax: { general: "INVESTMENTS", detail: "TAXES" },
-};
+const CASH_CATEGORY_SETTING_KEY = "brokerage_cash_category_ids";
+const CASH_CATEGORY_KINDS = ["dividend", "interest", "fee", "tax"];
 
 /**
  * Run the commit phase: drain 'matched' staging rows into
@@ -232,33 +224,30 @@ export async function commitBatch({ batchId, onProgress }) {
     }
   }
 
-  // ── D6 cash-row categories, hoisted like the recipient above ──
-  // Resolved once per (kind present in this batch), OUTSIDE the chunk
-  // transactions: categories are shared state with a (general, detail) unique
-  // key, so createOrGet is idempotent and a chunk rollback must not undo it.
+  // Resolve the configured IDs once per drain so all chunks use one coherent
+  // mapping. Missing, malformed, deleted, or inactive IDs deliberately leave
+  // the row uncategorized. Imports never create or reactivate categories.
   /** @type {Map<string, number>} */
   const cashCategoryIds = new Map();
   if (isBrokerage && batchAccountId) {
-    const cashKinds = new Set(
-      matched
-        .filter(
-          (/** @type {{route?: string, type?: string|null}} */ r) =>
-            r.route === "cash" && r.type != null,
-        )
-        .map((/** @type {{type?: string|null}} */ r) => String(r.type)),
+    const stored = await settingsRepository.get(CASH_CATEGORY_SETTING_KEY);
+    const configured =
+      stored && typeof stored === "object" && !Array.isArray(stored)
+        ? stored
+        : {};
+    const requestedIds = CASH_CATEGORY_KINDS.map(
+      (kind) => configured[kind],
+    ).filter((id) => Number.isInteger(id) && id > 0);
+    const activeIds = new Set(
+      (await categoryRepository.getActiveByIds(requestedIds)).map((row) =>
+        Number(row.id),
+      ),
     );
-    for (const kind of cashKinds) {
-      const spec = CASH_KIND_CATEGORIES[kind];
-      if (!spec) continue;
-      const { category } = await categoryRepository.createOrGet(spec);
-      // Skip a soft-deleted (is_active = false) category: createOrGet's
-      // ON CONFLICT DO NOTHING hands the user's hidden row straight back and
-      // nothing reactivates it, so stamping fresh ledger rows with it would
-      // file them under a category every picker and list filters out. Leaving
-      // the kind unmapped commits the row uncategorized instead — the state
-      // external deposit/withdrawal cash rows already land in.
-      if (category?.id != null && category.is_active)
-        cashCategoryIds.set(kind, category.id);
+    for (const kind of CASH_CATEGORY_KINDS) {
+      const id = configured[kind];
+      if (Number.isInteger(id) && activeIds.has(id)) {
+        cashCategoryIds.set(kind, id);
+      }
     }
   }
 
@@ -424,7 +413,7 @@ export async function commitBatch({ batchId, onProgress }) {
           if (fxRate === undefined)
             fxRate = await resolveFx(currency, row.tx_date);
 
-          const created = await portfolioTransactionRepository.create(
+          const created = await portfolioTransactionService.create(
             /** @type {any} */ ({
               investment_id: row.investment_id,
               type: row.type,

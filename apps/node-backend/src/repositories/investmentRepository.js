@@ -6,12 +6,12 @@
  * (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
-import { query } from '../database/connection.js';
-import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
-import { toWireDate } from '../lib/dateFormat.js';
-import { coerceNumericFields } from '../lib/money.js';
-import { makeValidationError } from '../lib/repositoryErrors.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from "../database/connection.js";
+import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
+import { toWireDate } from "../lib/dateFormat.js";
+import { coerceNumericFields } from "../lib/money.js";
+import { makeValidationError } from "../lib/repositoryErrors.js";
+import { buildSetClauses } from "../lib/sqlClauses.js";
 
 /** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
 
@@ -46,7 +46,12 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so rows match the `number` API/TS types.
-const INVESTMENT_NUMERIC_FIELDS = ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'];
+const INVESTMENT_NUMERIC_FIELDS = [
+  "current_price",
+  "interest_rate",
+  "cadastral_income",
+  "municipality_tax_rate",
+];
 /**
  * Coerce an `investments` row to its emitted shape: the four NUMERIC columns
  * become numbers and the DATE `maturity_date` a calendar-day string.
@@ -58,7 +63,8 @@ const mapInvestmentRow = (row) => {
   const mapped = coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
   // DATE column: calendar-day string, not a raw pg Date (previous-day ISO
   // timestamp east of UTC once JSON-serialized).
-  if (mapped && mapped.maturity_date instanceof Date) mapped.maturity_date = toWireDate(mapped.maturity_date);
+  if (mapped && mapped.maturity_date instanceof Date)
+    mapped.maturity_date = toWireDate(mapped.maturity_date);
   return mapped;
 };
 
@@ -67,34 +73,55 @@ const mapInvestmentRow = (row) => {
 // placeholder numbering.
 /** @type {Array<{ column: string, value: (f: any) => any }>} */
 const INVESTMENT_INSERT_FIELDS = [
-  { column: 'name', value: (f) => f.name },
-  { column: 'symbol', value: (f) => f.symbol || null },
-  { column: 'asset_class', value: (f) => f.asset_class },
-  { column: 'currency', value: (f) => f.currency },
-  { column: 'current_price', value: (f) => f.current_price || null },
-  { column: 'interest_rate', value: (f) => f.interest_rate || null },
-  { column: 'maturity_date', value: (f) => f.maturity_date || null },
-  { column: 'location', value: (f) => f.location || null },
-  { column: 'municipality', value: (f) => f.municipality || null },
-  { column: 'cadastral_income', value: (f) => f.cadastral_income ?? null },
-  { column: 'municipality_tax_rate', value: (f) => f.municipality_tax_rate ?? null },
-  { column: 'notes', value: (f) => f.notes || null },
-  { column: 'price_provider', value: (f) => f.price_provider || 'manual' },
-  { column: 'price_provider_id', value: (f) => f.price_provider_id || null },
-  { column: 'price_provider_url', value: (f) => f.price_provider_url || null },
-  { column: 'price_provider_latest_url', value: (f) => f.price_provider_latest_url || null },
-  { column: 'price_provider_latest_path', value: (f) => f.price_provider_latest_path || null },
-  { column: 'price_provider_history_url', value: (f) => f.price_provider_history_url || null },
-  { column: 'price_provider_history_path', value: (f) => f.price_provider_history_path || null },
-  { column: 'price_provider_history_ts_path', value: (f) => f.price_provider_history_ts_path || null },
-  { column: 'price_provider_history_price_path', value: (f) => f.price_provider_history_price_path || null },
+  { column: "name", value: (f) => f.name },
+  { column: "symbol", value: (f) => f.symbol || null },
+  { column: "asset_class", value: (f) => f.asset_class },
+  { column: "currency", value: (f) => f.currency },
+  { column: "current_price", value: (f) => f.current_price || null },
+  { column: "interest_rate", value: (f) => f.interest_rate || null },
+  { column: "maturity_date", value: (f) => f.maturity_date || null },
+  { column: "location", value: (f) => f.location || null },
+  { column: "municipality", value: (f) => f.municipality || null },
+  { column: "cadastral_income", value: (f) => f.cadastral_income ?? null },
+  {
+    column: "municipality_tax_rate",
+    value: (f) => f.municipality_tax_rate ?? null,
+  },
+  { column: "notes", value: (f) => f.notes || null },
+  { column: "price_provider", value: (f) => f.price_provider || "manual" },
+  { column: "price_provider_id", value: (f) => f.price_provider_id || null },
+  { column: "price_provider_url", value: (f) => f.price_provider_url || null },
+  {
+    column: "price_provider_latest_url",
+    value: (f) => f.price_provider_latest_url || null,
+  },
+  {
+    column: "price_provider_latest_path",
+    value: (f) => f.price_provider_latest_path || null,
+  },
+  {
+    column: "price_provider_history_url",
+    value: (f) => f.price_provider_history_url || null,
+  },
+  {
+    column: "price_provider_history_path",
+    value: (f) => f.price_provider_history_path || null,
+  },
+  {
+    column: "price_provider_history_ts_path",
+    value: (f) => f.price_provider_history_ts_path || null,
+  },
+  {
+    column: "price_provider_history_price_path",
+    value: (f) => f.price_provider_history_price_path || null,
+  },
 ];
 
 /** Column names for a create() payload — the caller-facing field set. */
 const INVESTMENT_CREATE_COLUMNS = INVESTMENT_INSERT_FIELDS.map((f) => f.column);
 
 // Widened to Set<string>: create() probes a raw payload value with .has()
-// (same idiom as UNIT_BASED_ASSET_CLASSES in portfolioTxRepo.common.js).
+// (same idiom as UNIT_BASED_ASSET_CLASSES in portfolioTransactionRules.js).
 /** @type {Set<string>} */
 const SUPPORTED_ASSET_CLASSES = new Set(VALID_ASSET_CLASSES);
 
@@ -103,7 +130,7 @@ const SUPPORTED_ASSET_CLASSES = new Set(VALID_ASSET_CLASSES);
  * @returns {string}
  */
 function investmentPlaceholders(count) {
-  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(', ');
+  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
 }
 
 /**
@@ -118,7 +145,8 @@ function investmentPlaceholders(count) {
 export function pickInvestmentCreateFields(body) {
   /** @type {Record<string, unknown>} */
   const picked = {};
-  for (const column of INVESTMENT_CREATE_COLUMNS) picked[column] = body?.[column];
+  for (const column of INVESTMENT_CREATE_COLUMNS)
+    picked[column] = body?.[column];
   return picked;
 }
 
@@ -127,7 +155,7 @@ export function pickInvestmentCreateFields(body) {
  * @returns {any} the trimmed/upper-cased string, or `value` unchanged when not a string
  */
 function normalizeSymbol(value) {
-  if (typeof value !== 'string') return value;
+  if (typeof value !== "string") return value;
   return value.trim().toUpperCase();
 }
 
@@ -138,20 +166,22 @@ function normalizeSymbol(value) {
  */
 async function ensureSymbolIsUnique(symbol, excludeId) {
   const result = await query(
-    'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
-    [symbol, excludeId]
+    "SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1",
+    [symbol, excludeId],
   );
 
   if (result.rows[0]) {
-    throw makeValidationError('symbol must be unique');
+    throw makeValidationError("symbol must be unique");
   }
 }
 
 // Per-investment ticker visibility lives in a side table (migration 0061).
 // Reads LEFT JOIN it (absent row = visible); the toggle UPSERTs it via
 // update() below.
-const TICKER_PREF_SELECT = 'COALESCE(tp.show_in_ticker, true) AS show_in_ticker';
-const TICKER_PREF_JOIN = 'LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id';
+const TICKER_PREF_SELECT =
+  "COALESCE(tp.show_in_ticker, true) AS show_in_ticker";
+const TICKER_PREF_JOIN =
+  "LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id";
 
 /**
  * @param {number} id
@@ -163,7 +193,7 @@ async function setTickerPreference(id, show) {
     `INSERT INTO investment_ticker_prefs (investment_id, show_in_ticker)
        VALUES ($1, $2)
        ON CONFLICT (investment_id) DO UPDATE SET show_in_ticker = EXCLUDED.show_in_ticker`,
-    [id, show]
+    [id, show],
   );
 }
 
@@ -172,7 +202,12 @@ export const investmentRepository = {
    * @param {{ limit?: number, offset?: number, assetClass?: string|null, active?: boolean }} [filters]
    * @returns {Promise<InvestmentRow[]>}
    */
-  async getAll({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
+  async getAll({
+    limit = 50,
+    offset = 0,
+    assetClass = null,
+    active = true,
+  } = {}) {
     let sql = `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE 1=1`;
     const params = [];
     let idx = 1;
@@ -200,7 +235,10 @@ export const investmentRepository = {
     let idx = 1;
 
     if (active) sql += ` AND is_active = true`;
-    if (assetClass) { sql += ` AND asset_class = $${idx}`; params.push(assetClass); }
+    if (assetClass) {
+      sql += ` AND asset_class = $${idx}`;
+      params.push(assetClass);
+    }
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);
@@ -210,7 +248,12 @@ export const investmentRepository = {
    * @param {{ limit?: number, offset?: number, assetClass?: string|null, active?: boolean }} [filters]
    * @returns {Promise<{ rows: InvestmentRow[], total: number }>}
    */
-  async getAllWithCount({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
+  async getAllWithCount({
+    limit = 50,
+    offset = 0,
+    assetClass = null,
+    active = true,
+  } = {}) {
     let sql = `
       SELECT i.*, ${TICKER_PREF_SELECT}, COUNT(*) OVER () AS total_count
       FROM investments i
@@ -230,8 +273,12 @@ export const investmentRepository = {
     params.push(limit, offset);
 
     const result = await query(sql, params);
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => mapInvestmentRow(row));
+    const total =
+      result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const rows = result.rows.map(
+      (/** @type {any} */ { total_count: _total_count, ...row }) =>
+        mapInvestmentRow(row),
+    );
     return { rows, total };
   },
 
@@ -242,7 +289,7 @@ export const investmentRepository = {
   async getById(id) {
     const result = await query(
       `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
-      [id]
+      [id],
     );
     return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
@@ -251,13 +298,35 @@ export const investmentRepository = {
    * @param {InvestmentCreateFields} fields
    * @returns {Promise<InvestmentRow|null>}
    */
-  async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path }) {
+  async create({
+    name,
+    symbol,
+    asset_class,
+    currency = "EUR",
+    current_price,
+    interest_rate,
+    maturity_date,
+    location,
+    municipality,
+    cadastral_income,
+    municipality_tax_rate,
+    notes,
+    price_provider,
+    price_provider_id,
+    price_provider_url,
+    price_provider_latest_url,
+    price_provider_latest_path,
+    price_provider_history_url,
+    price_provider_history_path,
+    price_provider_history_ts_path,
+    price_provider_history_price_path,
+  }) {
     // Apply the same input hygiene as update(): reject an empty name (the
     // backend previously accepted '' silently) and normalise the symbol
     // (trim/uppercase) so a lower-case symbol can't slip in only via create.
-    const trimmedName = typeof name === 'string' ? name.trim() : name;
+    const trimmedName = typeof name === "string" ? name.trim() : name;
     if (!trimmedName) {
-      throw makeValidationError('name is required');
+      throw makeValidationError("name is required");
     }
     name = trimmedName;
     // Same 400 the legacy inheritance path raised — without this, an unknown
@@ -269,7 +338,7 @@ export const investmentRepository = {
     // Same uniqueness rule as update() (there is no DB unique index on symbol,
     // so create was the one path that could still insert a duplicate — e.g. a
     // duplicate-on-retry). excludeId 0 matches no row: ids start at 1.
-    if (typeof symbol === 'string' && symbol !== '') {
+    if (typeof symbol === "string" && symbol !== "") {
       await ensureSymbolIsUnique(symbol, 0);
     }
     const payload = {
@@ -296,14 +365,16 @@ export const investmentRepository = {
       price_provider_history_price_path,
     };
 
-    const columns = INVESTMENT_CREATE_COLUMNS.join(', ');
-    const placeholders = investmentPlaceholders(INVESTMENT_INSERT_FIELDS.length);
+    const columns = INVESTMENT_CREATE_COLUMNS.join(", ");
+    const placeholders = investmentPlaceholders(
+      INVESTMENT_INSERT_FIELDS.length,
+    );
     const values = INVESTMENT_INSERT_FIELDS.map((f) => f.value(payload));
 
     const result = await query(
       `INSERT INTO investments (${columns})
        VALUES (${placeholders}) RETURNING *`,
-      values
+      values,
     );
     return mapInvestmentRow(result.rows[0]);
   },
@@ -314,12 +385,38 @@ export const investmentRepository = {
    * @returns {Promise<InvestmentRow|null>}
    */
   async update(id, fields) {
-    const allowed = ['name', 'symbol', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'municipality', 'cadastral_income', 'municipality_tax_rate', 'notes', 'is_active', 'price_provider', 'price_provider_id', 'price_provider_url', 'price_provider_latest_url', 'price_provider_latest_path', 'price_provider_history_url', 'price_provider_history_path', 'price_provider_history_ts_path', 'price_provider_history_price_path', 'price_updated_at'];
+    const allowed = [
+      "name",
+      "symbol",
+      "currency",
+      "current_price",
+      "interest_rate",
+      "maturity_date",
+      "location",
+      "municipality",
+      "cadastral_income",
+      "municipality_tax_rate",
+      "notes",
+      "is_active",
+      "price_provider",
+      "price_provider_id",
+      "price_provider_url",
+      "price_provider_latest_url",
+      "price_provider_latest_path",
+      "price_provider_history_url",
+      "price_provider_history_path",
+      "price_provider_history_ts_path",
+      "price_provider_history_price_path",
+      "price_updated_at",
+    ];
     const existing = await this.getById(id);
     if (!existing) return null;
 
-    if (Object.prototype.hasOwnProperty.call(fields, 'asset_class') && fields.asset_class !== existing.asset_class) {
-      throw makeValidationError('asset_class cannot be changed');
+    if (
+      Object.prototype.hasOwnProperty.call(fields, "asset_class") &&
+      fields.asset_class !== existing.asset_class
+    ) {
+      throw makeValidationError("asset_class cannot be changed");
     }
 
     // show_in_ticker is not an investments column — it's a side-table preference
@@ -328,10 +425,10 @@ export const investmentRepository = {
     const { show_in_ticker: showInTicker, ...rest } = fields;
 
     const normalizedFields = { ...rest };
-    if (Object.prototype.hasOwnProperty.call(normalizedFields, 'symbol')) {
+    if (Object.prototype.hasOwnProperty.call(normalizedFields, "symbol")) {
       const symbol = normalizeSymbol(normalizedFields.symbol);
       if (!symbol) {
-        throw makeValidationError('symbol is required');
+        throw makeValidationError("symbol is required");
       }
       await ensureSymbolIsUnique(symbol, id);
       normalizedFields.symbol = symbol;
@@ -341,7 +438,11 @@ export const investmentRepository = {
       await setTickerPreference(id, showInTicker);
     }
 
-    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(normalizedFields, { allowed });
+    const {
+      clauses: setClauses,
+      params,
+      nextIdx: idx,
+    } = buildSetClauses(normalizedFields, { allowed });
 
     // Nothing else changed — re-read only if the ticker pref moved (to reflect it).
     if (setClauses.length === 0) {
@@ -349,11 +450,13 @@ export const investmentRepository = {
     }
 
     params.push(id);
-    const sql = `UPDATE investments SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
+    const sql = `UPDATE investments SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`;
     const result = await query(sql, params);
     if (!result.rows[0]) return null;
     // Re-read when the ticker pref changed so the joined value is in the response.
-    return showInTicker !== undefined ? this.getById(id) : mapInvestmentRow(result.rows[0]);
+    return showInTicker !== undefined
+      ? this.getById(id)
+      : mapInvestmentRow(result.rows[0]);
   },
 
   /**
@@ -367,7 +470,7 @@ export const investmentRepository = {
           SET current_price = $1, price_updated_at = $2
         WHERE id = $3
       RETURNING *`,
-      [current_price, price_updated_at, id]
+      [current_price, price_updated_at, id],
     );
     return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
@@ -394,7 +497,7 @@ export const investmentRepository = {
         updates.map((u) => u.id),
         updates.map((u) => u.current_price),
         updates.map((u) => u.price_updated_at),
-      ]
+      ],
     );
     return result.rowCount ?? 0;
   },
@@ -406,7 +509,7 @@ export const investmentRepository = {
          FROM investments
         WHERE is_active = true
           AND price_provider IS NOT NULL
-          AND price_provider <> 'manual'`
+          AND price_provider <> 'manual'`,
     );
     return result.rows[0]?.latest ?? null;
   },
@@ -416,7 +519,7 @@ export const investmentRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    const result = await query('DELETE FROM investments WHERE id = $1', [id]);
+    const result = await query("DELETE FROM investments WHERE id = $1", [id]);
     return result.rowCount > 0;
   },
 };

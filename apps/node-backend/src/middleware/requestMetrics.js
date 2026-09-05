@@ -184,6 +184,8 @@ export function getMetrics() {
 }
 
 /** Clear all metrics (for testing). */
-export function resetMetrics() {
+ function resetMetrics() {
   stores.clear();
 }
+
+export { resetMetrics as __resetMetrics };

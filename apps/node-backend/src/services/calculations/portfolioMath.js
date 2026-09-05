@@ -6,11 +6,11 @@
  * implementations in frontend hooks.
  */
 
-import { toDecimal, toNumber } from '../../lib/money.js';
-import { sanitizeIsolatedValueSpikes } from '../../lib/calculations/valueSpikeSanitizer.js';
-import { appDateStringToUtc, toAppDateString } from '../../lib/timezone.js';
-import { toYmd } from '../../lib/dateFormat.js';
-import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vision/shared-utils/portfolio';
+import { toDecimal, toNumber } from "../../lib/money.js";
+import { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.js";
+import { appDateStringToUtc, toAppDateString } from "../../lib/timezone.js";
+import { toYmd } from "../../lib/dateFormat.js";
+import { calculateAccruedInterest as sharedCalculateAccruedInterest } from "@vision/shared-utils/portfolio";
 
 // Cost-basis accounting and interest accrual live in the shared workspace
 // package (@vision/shared-utils/portfolio) so the frontend hooks import the same
@@ -20,7 +20,7 @@ import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vis
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-export { sanitizeIsolatedValueSpikes } from '../../lib/calculations/valueSpikeSanitizer.js';
+export { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.js";
 
 export { toYmd };
 
@@ -48,8 +48,13 @@ export function calendarDaysBetween(from, to) {
  * @param {number} interestRate - Annual rate as a percentage (e.g. 3.5 for 3.5%)
  * @returns {number} Accrued interest amount
  */
-export function calculateAccruedInterest(txns, principal, interestRate) {
-  return sharedCalculateAccruedInterest(txns, principal, interestRate, toAppDateString(new Date()));
+function calculateAccruedInterest(txns, principal, interestRate) {
+  return sharedCalculateAccruedInterest(
+    txns,
+    principal,
+    interestRate,
+    toAppDateString(new Date()),
+  );
 }
 
 /**
@@ -60,7 +65,7 @@ export function calculateAccruedInterest(txns, principal, interestRate) {
  * @param {number} days - Holding period in days
  * @returns {number} Annualized return as a percentage
  */
-export function annualizedReturn(currentValue, totalInvested, days) {
+function annualizedReturn(currentValue, totalInvested, days) {
   if (totalInvested <= 0 || days <= 0 || currentValue <= 0) return 0;
   const years = days / 365.25;
   const result = (Math.pow(currentValue / totalInvested, 1 / years) - 1) * 100;
@@ -79,9 +84,14 @@ export function annualizedReturn(currentValue, totalInvested, days) {
  * @param {number} prevInvested
  * @returns {number|null} Monthly return percentage, or null when inputs are invalid
  */
-export function contributionAdjustedMonthlyReturn(currValue, currInvested, prevValue, prevInvested) {
+function contributionAdjustedMonthlyReturn(
+  currValue,
+  currInvested,
+  prevValue,
+  prevInvested,
+) {
   if (prevInvested <= 0 || currInvested <= 0 || prevValue <= 0) return null;
-  return ((currValue / currInvested) / (prevValue / prevInvested) - 1) * 100;
+  return (currValue / currInvested / (prevValue / prevInvested) - 1) * 100;
 }
 
 /**
@@ -97,26 +107,32 @@ export function computeMetrics(snapshots) {
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
 
-  const days = Math.max(1, calendarDaysBetween(first.snapshot_date, last.snapshot_date));
+  const days = Math.max(
+    1,
+    calendarDaysBetween(first.snapshot_date, last.snapshot_date),
+  );
 
   const totalInvested = toNumber(toDecimal(last.invested));
   const currentValue = toNumber(toDecimal(last.value));
   const totalGainLoss = toNumber(toDecimal(last.gain_loss));
-  const inflationAdjustedValue = toNumber(toDecimal(last.inflation_adjusted_value));
+  const inflationAdjustedValue = toNumber(
+    toDecimal(last.inflation_adjusted_value),
+  );
 
-  const totalReturnPct = totalInvested > 0
-    ? (totalGainLoss / totalInvested) * 100
-    : 0;
+  const totalReturnPct =
+    totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
   const cagr = annualizedReturn(currentValue, totalInvested, days);
 
-  const realReturnPct = totalInvested > 0
-    ? ((inflationAdjustedValue - totalInvested) / totalInvested) * 100
-    : 0;
+  const realReturnPct =
+    totalInvested > 0
+      ? ((inflationAdjustedValue - totalInvested) / totalInvested) * 100
+      : 0;
 
-  const cumulativeInflation = currentValue > 0 && inflationAdjustedValue > 0
-    ? ((currentValue / inflationAdjustedValue) - 1) * 100
-    : 0;
+  const cumulativeInflation =
+    currentValue > 0 && inflationAdjustedValue > 0
+      ? (currentValue / inflationAdjustedValue - 1) * 100
+      : 0;
 
   /** @param {number} v */
   const round2 = (v) => Math.round(v * 100) / 100;
@@ -164,7 +180,9 @@ export function computeHeatmap(snapshots) {
   }
 
   const monthKeys = [...byMonth.keys()].sort();
-  const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))].sort();
+  const years = [
+    ...new Set(monthKeys.map((k) => parseInt(k.slice(0, 4)))),
+  ].sort();
   /** @type {Record<number, (number|null)[]>} */
   const data = {};
   const monthlyReturns = [];
@@ -177,8 +195,8 @@ export function computeHeatmap(snapshots) {
     // Only compute a monthly return between *consecutive* calendar months.
     // monthKeys skips months with no snapshot, so a Jan→Mar pair would
     // otherwise be charted as March's one-month return when it spans two.
-    const [py, pm] = monthKeys[i - 1].split('-').map(Number);
-    const [cy, cm] = monthKeys[i].split('-').map(Number);
+    const [py, pm] = monthKeys[i - 1].split("-").map(Number);
+    const [cy, cm] = monthKeys[i].split("-").map(Number);
     if (cy * 12 + cm !== py * 12 + pm + 1) continue;
 
     const prev = byMonth.get(monthKeys[i - 1]);
@@ -193,7 +211,8 @@ export function computeHeatmap(snapshots) {
       toNumber(toDecimal(prev.invested)),
     );
 
-    const rounded = monthlyReturn !== null ? Math.round(monthlyReturn * 100) / 100 : null;
+    const rounded =
+      monthlyReturn !== null ? Math.round(monthlyReturn * 100) / 100 : null;
     data[year][monthIdx] = rounded;
     if (rounded !== null) {
       monthlyReturns.push(Math.abs(rounded));
@@ -246,9 +265,27 @@ export function computeHeatmap(snapshots) {
  *   caller-specific row type over the result, as they already do.
  */
 export function sanitizeSnapshotSpikes(snapshots) {
-  return sanitizeIsolatedValueSpikes(snapshots, 'value', {
-    extraFields: ['stocks_etfs_value', 'crypto_value', 'metals_value', 'value_fx_neutral'],
-    sumFields: ['stocks_etfs_value', 'crypto_value', 'metals_value', 'cash_value'],
-    parallelTotals: [{ field: 'value_fx_neutral', sharedFields: ['cash_value'] }],
+  return sanitizeIsolatedValueSpikes(snapshots, "value", {
+    extraFields: [
+      "stocks_etfs_value",
+      "crypto_value",
+      "metals_value",
+      "value_fx_neutral",
+    ],
+    sumFields: [
+      "stocks_etfs_value",
+      "crypto_value",
+      "metals_value",
+      "cash_value",
+    ],
+    parallelTotals: [
+      { field: "value_fx_neutral", sharedFields: ["cash_value"] },
+    ],
   });
 }
+
+export {
+  calculateAccruedInterest,
+  annualizedReturn,
+  contributionAdjustedMonthlyReturn as __contributionAdjustedMonthlyReturn,
+};

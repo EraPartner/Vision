@@ -5,10 +5,10 @@
  * vision-local/no-repo-direct-from-route); they go through this service, which
  * is where category name→id resolution and bulk operations belong.
  */
-import { query } from '../database/connection.js';
-import { ValidationError } from '../middleware/errorHandler.js';
+import { query } from "../database/connection.js";
+import { ValidationError } from "../middleware/errorHandler.js";
 
-export { default } from '../repositories/categoryRepository.js';
+export { default } from "../repositories/categoryRepository.js";
 
 /**
  * Resolve a 'General:Detail' category name to its id.
@@ -25,14 +25,16 @@ export { default } from '../repositories/categoryRepository.js';
  */
 export async function resolveCategoryIdByName(name) {
   const normalized = String(name).toUpperCase().trim();
-  if (!normalized.includes(':')) {
+  if (!normalized.includes(":")) {
     throw new ValidationError(
       `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
     );
   }
-  const [general, detail] = normalized.split(':', 2).map((s) => s.trim());
+  const [general, detail] = normalized.split(":", 2).map((s) => s.trim());
   const result = await query(
-    `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+    `SELECT id FROM categories
+      WHERE general = $1 AND detail = $2 AND is_active = true
+      LIMIT 1`,
     [general, detail],
   );
   if (result.rows.length === 0) {

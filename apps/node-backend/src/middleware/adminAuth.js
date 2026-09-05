@@ -56,7 +56,7 @@ export function isLoopbackHost(host) {
  * @param {unknown} authorizationHeader
  * @returns {string|undefined}
  */
-export function extractAdminBearerToken(authorizationHeader) {
+ function extractAdminBearerToken(authorizationHeader) {
   if (typeof authorizationHeader !== 'string') return undefined;
   const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : undefined;
@@ -86,3 +86,5 @@ export function createAdminAuthMiddleware(getConfiguredToken) {
     return next();
   };
 }
+
+export { extractAdminBearerToken as __extractAdminBearerToken };

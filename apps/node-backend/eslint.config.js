@@ -76,6 +76,92 @@ export const noRepoDirectFromRoute = {
   },
 };
 
+const ROUTE_FILTER_KEYS = new Set([
+  "accountId",
+  "accountIds",
+  "active",
+  "assetClass",
+  "bankAccount",
+  "bankAccounts",
+  "categoryId",
+  "categoryIds",
+  "detail",
+  "endDate",
+  "general",
+  "isExecuted",
+  "isRecurring",
+  "name",
+  "recipientGroupId",
+  "recipientId",
+  "recipientIds",
+  "recipientName",
+  "search",
+  "sortBy",
+  "sortDir",
+  "startDate",
+  "tagIds",
+  "tagSlugs",
+  "transactionId",
+  "transactionType",
+  "year",
+]);
+
+function containsNullFallback(node) {
+  if (!node) return false;
+  if (node.type === "Literal") return node.value === null;
+  if (node.type === "ConditionalExpression") {
+    return (
+      containsNullFallback(node.consequent) ||
+      containsNullFallback(node.alternate)
+    );
+  }
+  if (node.type === "LogicalExpression") {
+    return containsNullFallback(node.left) || containsNullFallback(node.right);
+  }
+  return false;
+}
+
+/** Prevent route-owned optional filter models from reintroducing null. */
+export const noNullRouteFilter = {
+  meta: {
+    type: "problem",
+    docs: {
+      description:
+        "Optional route filter values use undefined; reserve null for wire and persistence contracts.",
+      url: null,
+    },
+    messages: {
+      useUndefined:
+        "Optional route filter '{{name}}' uses null. Use undefined for an absent filter.",
+    },
+    schema: [],
+  },
+  create(context) {
+    return {
+      Property(node) {
+        const name = node.key?.name ?? node.key?.value;
+        if (!ROUTE_FILTER_KEYS.has(name) || !containsNullFallback(node.value))
+          return;
+        context.report({
+          node: node.value,
+          messageId: "useUndefined",
+          data: { name },
+        });
+      },
+      VariableDeclarator(node) {
+        if (node.id?.type !== "Identifier" || !/Filter$/.test(node.id.name))
+          return;
+        if (!containsNullFallback(node.init)) return;
+        context.report({
+          node: node.init,
+          messageId: "useUndefined",
+          data: { name: node.id.name },
+        });
+      },
+    };
+  },
+};
+
 /**
  * no-service-import-from-repo
  *
@@ -103,9 +189,6 @@ const SANCTIONED_REPO_SERVICE_IMPORTS = {
   "infoRepositoryRecipients.js": ["convertRowsToEur"],
   "infoRepositoryStatistics.js": ["convertRowsToEur"],
   "infoRepositoryTags.js": ["convertRowsToEur"],
-  // accountRepository.getAll folds an account's per-currency balance partitions
-  // into the account currency (ADR-094 / WP-A1) — the same read-service shape.
-  "accountRepository.js": ["loadCurrentRates", "convertWithRates"],
 };
 
 const SANCTIONED_SERVICE_MODULE =
@@ -261,12 +344,16 @@ export default [
     files: ["src/routes/**/*.js"],
     plugins: {
       "vision-local": {
-        rules: { "no-repo-direct-from-route": noRepoDirectFromRoute },
+        rules: {
+          "no-repo-direct-from-route": noRepoDirectFromRoute,
+          "no-null-route-filter": noNullRouteFilter,
+        },
       },
     },
     rules: {
       // All routes now go through the services layer; enforce the boundary.
       "vision-local/no-repo-direct-from-route": "error",
+      "vision-local/no-null-route-filter": "error",
     },
   },
 

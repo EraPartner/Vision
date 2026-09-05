@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyBrokerageRow, tradeDedupKey } from '../src/services/importPipeline/brokerageRouting.js';
+import { classifyBrokerageRow, __tradeDedupKey as tradeDedupKey } from '../src/services/importPipeline/brokerageRouting.js';
 
 describe('classifyBrokerageRow (ADR-095)', () => {
   it('routes deposits/withdrawals to a plain cash transaction, with the ledger direction', () => {

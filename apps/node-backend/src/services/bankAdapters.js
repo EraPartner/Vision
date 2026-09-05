@@ -8,4 +8,4 @@ export {
   getSupportedBanks,
   detectBank,
   getAdapter,
-} from './importPipeline/adapters/index.js';
+} from "./importPipeline/adapters/index.js";

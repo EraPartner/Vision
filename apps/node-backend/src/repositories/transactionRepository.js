@@ -368,15 +368,13 @@ export const transactionRepository = {
         ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
         : `t.date DESC, t.id DESC`;
 
-    // Partition by account_id (ADR-088): a running balance is a per-account ledger
-    // figure. Without the partition, a list spanning multiple accounts summed
-    // them into one meaningless cross-account total. account_id is the real
-    // account identity (the bank_account string is being retired); it is kept in
-    // sync on every write by the dual-write trigger (migration 0051). (The window
-    // is evaluated over the full filtered set, before LIMIT/OFFSET, so the value
-    // is still correct across pages.)
+    // Partition by account and currency: adding unlike currencies is never a
+    // meaningful ledger balance. The window is evaluated over the full filtered
+    // set, before LIMIT/OFFSET, so each currency balance stays correct across
+    // pages. Legacy NULL currency rows are treated as EUR consistently with the
+    // rest of the transaction API.
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : "";
 
     const sql = `
@@ -623,7 +621,7 @@ export const transactionRepository = {
         ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
         : "t.date DESC, t.id DESC";
     const runningBalanceCol = includeBalance
-      ? ", SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance"
+      ? ", SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance"
       : "";
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
@@ -845,10 +843,9 @@ export const transactionRepository = {
         ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
         : `t.date DESC, t.id DESC`;
 
-    // Partition by account_id (ADR-088) — see getAll for the rationale; account_id
-    // is kept in sync with bank_account by the dual-write trigger (migration 0051).
+    // Partition by account and currency — see getAll for the rationale.
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : "";
 
     // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window

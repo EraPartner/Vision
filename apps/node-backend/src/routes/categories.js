@@ -37,9 +37,9 @@ router.get(
     const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
     const opts = {
       ...(page ?? {}),
-      general: general || null,
-      detail: detail || null,
-      search: search ? String(search).slice(0, 200) : null,
+      general: general || undefined,
+      detail: detail || undefined,
+      search: search ? String(search).slice(0, 200) : undefined,
       active: parseBooleanQueryParam(active, true),
     };
 

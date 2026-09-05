@@ -41,7 +41,7 @@ const METHOD_BY_TYPE = Object.freeze({
  * @param {(provider: string) => unknown} [deps.recordSuccess]
  * @param {(provider: string, error: unknown) => unknown} [deps.recordError]
  */
-export function createResearchAggregator({
+ function createResearchAggregator({
   adapters = ADAPTERS,
   governor = defaultGovernor,
   cache = researchCache,
@@ -286,3 +286,5 @@ export function createResearchAggregator({
 
 /** Process-wide singleton used by the research routes. */
 export const researchAggregator = createResearchAggregator();
+
+export { createResearchAggregator as __createResearchAggregator };

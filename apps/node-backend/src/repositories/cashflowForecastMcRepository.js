@@ -1,4 +1,4 @@
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -10,7 +10,7 @@ export async function get({ userId, month, filterHash }) {
   const res = await query(
     `SELECT payload, computed_at
        FROM cashflow_forecast_mc
-      WHERE user_id = $1 AND month = $2 AND filter_hash = $3
+      WHERE user_id = $1 AND month = ($2 || '-01')::date AND filter_hash = $3
       LIMIT 1`,
     [userId, month, filterHash],
   );
@@ -32,7 +32,7 @@ export function isFresh(computedAt) {
 export async function upsert({ userId, month, filterHash, mcPaths, payload }) {
   await query(
     `INSERT INTO cashflow_forecast_mc (user_id, month, filter_hash, mc_paths, payload, computed_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+     VALUES ($1, ($2 || '-01')::date, $3, $4, $5::jsonb, NOW())
      ON CONFLICT (user_id, month, filter_hash)
      DO UPDATE SET
        mc_paths    = EXCLUDED.mc_paths,
@@ -49,7 +49,7 @@ export async function upsert({ userId, month, filterHash, mcPaths, payload }) {
  * clearing the whole (tiny) table is fine.
  */
 export async function clearAll() {
-  await query('DELETE FROM cashflow_forecast_mc');
+  await query("DELETE FROM cashflow_forecast_mc");
 }
 
 /**
@@ -62,10 +62,10 @@ export async function getActiveUserIds() {
       `SELECT DISTINCT user_id FROM cashflow_forecast_accuracy`,
     );
     const ids = res.rows.map((/** @type {any} */ r) => r.user_id);
-    if (!ids.includes('anonymous')) ids.push('anonymous');
+    if (!ids.includes("anonymous")) ids.push("anonymous");
     return ids;
   } catch {
-    return ['anonymous'];
+    return ["anonymous"];
   }
 }
 

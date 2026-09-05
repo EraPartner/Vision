@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
+const portfolioRemovalMocks = vi.hoisted(() => ({
+  remove: vi.fn().mockResolvedValue(true),
+  removeByImportBatch: vi.fn().mockResolvedValue([]),
+  validateImportBatchRemoval: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../src/database/connection.js", () =>
   mockTxConnection(undefined, {
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
@@ -9,8 +15,15 @@ vi.mock("../src/database/connection.js", () =>
 
 vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
   default: {
-    hardDelete: vi.fn().mockResolvedValue(true),
-    hardDeleteByImportBatch: vi.fn().mockResolvedValue([]),
+    hardDelete: portfolioRemovalMocks.remove,
+    hardDeleteByImportBatch: portfolioRemovalMocks.removeByImportBatch,
+  },
+}));
+
+vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
+  default: {
+    validateImportBatchRemoval:
+      portfolioRemovalMocks.validateImportBatchRemoval,
   },
 }));
 
@@ -51,6 +64,7 @@ import {
   getPreviewRows,
 } from "../src/repositories/portfolioImportBatchRepository.js";
 import {
+  createInvestmentForRow,
   getPortfolioImportBatchPreview,
   resolveInvestmentRows,
   rollbackBatch,
@@ -237,14 +251,30 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
   });
 
   it("runs inside one transaction and resets committed staging rows before aborting", async () => {
-    getCommittedRows.mockResolvedValue([{ id: 42, route: "portfolio" }]);
+    getCommittedRows.mockResolvedValue([
+      { id: 42, route: "portfolio", investment_id: 8 },
+      { id: 43, route: "portfolio", investment_id: 8 },
+    ]);
 
     await rollbackBatch(5);
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      portfolioRemovalMocks.validateImportBatchRemoval,
+    ).toHaveBeenCalledWith(5, [
+      { id: 42, route: "portfolio", investment_id: 8 },
+      { id: 43, route: "portfolio", investment_id: 8 },
+    ]);
     expect(resetCommittedRowsToMatched).toHaveBeenCalledWith(5);
     expect(markBatchAborted).toHaveBeenCalledWith(5);
     // Reset happens before the abort mark (both inside the transaction).
+    expect(
+      portfolioRemovalMocks.validateImportBatchRemoval.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      portfolioTransactionRepository.hardDeleteByImportBatch.mock
+        .invocationCallOrder[0],
+    );
     expect(
       resetCommittedRowsToMatched.mock.invocationCallOrder[0],
     ).toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]);
@@ -415,6 +445,27 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
     expect(withTransaction).toHaveBeenCalledTimes(1);
     expect(investmentRepository.getById).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
+  });
+
+  it("rejects a cash row before single-row create can orphan a holding", async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: "awaiting_review",
+      rows: [
+        {
+          id: 10,
+          status: "error",
+          route: "cash",
+          user_override_investment_id: null,
+        },
+      ],
+    });
+
+    await expect(
+      createInvestmentForRow({ batchId: 5, rowId: 10 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(overrideInvestment).not.toHaveBeenCalled();
   });
 
   it("rejects an aborted batch before any investment lookup, creation, or row write", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  parseWatchlistCreateBody,
-  parseWatchlistUpdateBody,
+  __parseWatchlistCreateBody as parseWatchlistCreateBody,
+  __parseWatchlistUpdateBody as parseWatchlistUpdateBody,
 } from "../src/routes/watchlist.js";
 
 const validCreate = {

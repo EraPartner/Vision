@@ -56,7 +56,7 @@ const SUGGESTION_LOOKBACK_DAYS = 45;
  * @param {TxLike} tx
  * @returns {boolean}
  */
-export function matchesTolerance(planned, tx) {
+function matchesTolerance(planned, tx) {
   if (planned?.recipient_cluster_id == null || tx?.recipient_cluster_id == null)
     return false;
   if (Number(planned.recipient_cluster_id) !== Number(tx.recipient_cluster_id))
@@ -83,6 +83,8 @@ export function matchesTolerance(planned, tx) {
 
   return true;
 }
+
+export { matchesTolerance as __matchesTolerance };
 
 // NOTE: a findAutoLinkTarget(tx, activePlanned) helper used to live here, but
 // it only checked single-direction uniqueness while the real rule inside

@@ -30,18 +30,19 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query, withTransaction } from "../database/connection.js";
 import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
-} from '../repositories/accountBalanceSql.js';
-import { recipientRepository } from '../repositories/recipientRepository.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { todayAppDateString } from '../lib/timezone.js';
-import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
+} from "../repositories/accountBalanceSql.js";
+import { recipientRepository } from "../repositories/recipientRepository.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { todayAppDateString } from "../lib/timezone.js";
+import { roundToCents, toDecimal, toNumber } from "../lib/money.js";
+import { assertCurrency } from "../lib/validation.js";
 
-const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
-const VALID_MODES = new Set(['accept', 'adjustment']);
+const ADJUSTMENT_MEMO = "BALANCE ADJUSTMENT";
+const VALID_MODES = new Set(["accept", "adjustment"]);
 
 // Drifts below this (in the account currency's minor units) are treated as
 // already reconciled — floating-point noise should never mint a 0.00 adjustment
@@ -52,26 +53,33 @@ const DRIFT_EPSILON = 0.005;
  * Validate the reconcile payload.
  * Pure (no I/O) so it can be unit-tested directly.
  *
- * @param {{ mode?:unknown }} body
- * @returns {{ mode:'accept'|'adjustment' }}
+ * @param {{ mode?:unknown, currency?:unknown }} body
+ * @returns {{ mode:'accept'|'adjustment', currency:string|undefined }}
  */
-export function normalizeReconcile(body) {
-  const mode = String(body?.mode ?? '');
+function normalizeReconcile(body) {
+  const mode = String(body?.mode ?? "");
   if (!VALID_MODES.has(mode)) {
-    throw new ValidationError("mode is required and must be 'accept' or 'adjustment'");
+    throw new ValidationError(
+      "mode is required and must be 'accept' or 'adjustment'",
+    );
   }
-  return { mode: /** @type {'accept'|'adjustment'} */ (mode) };
+  const currency =
+    body?.currency == null ? undefined : assertCurrency(body.currency);
+  return { mode: /** @type {'accept'|'adjustment'} */ (mode), currency };
 }
+
+export { normalizeReconcile as __normalizeReconcile };
 
 /**
  * Reconcile an account's drift.
  *
  * @param {number} accountId
- * @param {{ mode:'accept'|'adjustment' }} body
+ * @param {{ mode:'accept'|'adjustment', currency?:string }} body
  * @returns {Promise<{ mode:string, drift:number, statement_balance:number, computed_balance:number, transaction:(object|null) }>}
  */
 export async function reconcileAccount(accountId, body) {
-  const { mode } = normalizeReconcile(body);
+  const { mode, currency: requestedCurrency } = normalizeReconcile(body);
+  const today = todayAppDateString();
 
   // The drift read and the adjustment INSERT / accept UPDATE must be atomic:
   // two concurrent adjustment reconciles would otherwise both read the same
@@ -83,25 +91,36 @@ export async function reconcileAccount(accountId, body) {
       `SELECT id FROM accounts WHERE id = $1 FOR UPDATE`,
       [accountId],
     );
-    if (!lockRes.rows[0]) throw new NotFoundError(`Account ${accountId} not found`);
+    if (!lockRes.rows[0])
+      throw new NotFoundError(`Account ${accountId} not found`);
 
     // Statement figure + the live computed balance, per currency partition (the
     // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
     // SELECT — the lateral aggregates, so the lock is taken separately above.
     const res = await query(
-      `SELECT a.currency,
-              a.statement_balance,
+      `SELECT a.currency AS account_currency,
+              COALESCE($3::varchar(3), a.currency) AS reconcile_currency,
+              COALESCE(
+                s.balance,
+                CASE WHEN $3::varchar(3) IS NULL OR $3::varchar(3) = a.currency
+                     THEN a.statement_balance END
+              ) AS statement_balance,
               bp.balance_parts
          FROM accounts a
-         ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
+         ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
+         LEFT JOIN account_statement_balances s
+           ON s.account_id = a.id
+          AND s.currency = COALESCE($3::varchar(3), a.currency)
         WHERE a.id = $1`,
-      [accountId],
+      [accountId, today, requestedCurrency ?? null],
     );
     const row = res.rows[0];
     if (!row) throw new NotFoundError(`Account ${accountId} not found`);
 
     if (row.statement_balance == null) {
-      throw new ValidationError('Account has no statement balance to reconcile against');
+      throw new ValidationError(
+        "Account has no statement balance to reconcile against",
+      );
     }
 
     // Multi-currency: reconcile ONE partition — the reconciliation base, which
@@ -115,7 +134,19 @@ export async function reconcileAccount(accountId, body) {
     // single-currency account keeps its previous figure exactly (see
     // statementPartition). The other partitions are untouched: they have no
     // statement figure to reconcile against.
-    const base = statementPartition(row.balance_parts, row.currency);
+    const fallbackBase = statementPartition(
+      row.balance_parts,
+      row.account_currency ?? row.currency,
+    );
+    const reconcileCurrency = String(
+      requestedCurrency ?? fallbackBase.currency,
+    ).toUpperCase();
+    const exactPart = (row.balance_parts ?? []).find(
+      (part) => String(part.currency).toUpperCase() === reconcileCurrency,
+    );
+    const base = requestedCurrency
+      ? { currency: reconcileCurrency, balance: exactPart?.balance ?? 0 }
+      : fallbackBase;
     const statement = Number(row.statement_balance);
     // Round the base to cents BEFORE differencing, mirroring the hub's
     // `reconcilable_balance` — the drift resolved here must equal the drift
@@ -124,14 +155,15 @@ export async function reconcileAccount(accountId, body) {
     const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
 
     if (Math.abs(drift) < DRIFT_EPSILON) {
-      throw new ValidationError('Account is already reconciled (no drift to resolve)');
+      throw new ValidationError(
+        "Account is already reconciled (no drift to resolve)",
+      );
     }
 
     // APP_TIMEZONE calendar day (ADR-009), not UTC — otherwise a row created
     // between local midnight and ~02:00 east of UTC is stamped yesterday.
-    const today = todayAppDateString();
 
-    if (mode === 'accept') {
+    if (mode === "accept") {
       // Adopt the reconciliation base — exactly the figure the dialog displayed
       // — as the statement of record; drift → 0. On an account whose declared
       // currency holds nothing the base is 0, and writing 0 is the honest
@@ -139,16 +171,28 @@ export async function reconcileAccount(accountId, body) {
       // (The dialog shows that 0 as the base, so this is no longer a figure the
       // user never saw.)
       const upd = await query(
-        `UPDATE accounts
-            SET statement_balance = $2, statement_balance_date = $3, updated_at = NOW()
-          WHERE id = $1
-        RETURNING statement_balance`,
-        [accountId, computed, today],
+        `WITH stored AS (
+           INSERT INTO account_statement_balances
+             (account_id, currency, balance, balance_date)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (account_id, currency) DO UPDATE
+             SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
+           RETURNING balance
+         ), mirrored AS (
+           UPDATE accounts
+              SET statement_balance = $3, statement_balance_date = $4, updated_at = NOW()
+            WHERE id = $1 AND currency = $2
+         )
+         SELECT balance FROM stored`,
+        [accountId, reconcileCurrency, computed, today],
       );
       return {
         mode,
         drift: 0,
-        statement_balance: Number(upd.rows[0].statement_balance),
+        currency: reconcileCurrency,
+        statement_balance: Number(
+          upd.rows[0].balance ?? upd.rows[0].statement_balance,
+        ),
         computed_balance: computed,
         transaction: /** @type {object|null} */ (null),
       };
@@ -171,11 +215,19 @@ export async function reconcileAccount(accountId, body) {
          (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
        RETURNING id, amount, transfer_source`,
-      [today, drift, base.currency, ADJUSTMENT_MEMO, accountId, systemRecipientId],
+      [
+        today,
+        drift,
+        base.currency,
+        ADJUSTMENT_MEMO,
+        accountId,
+        systemRecipientId,
+      ],
     );
     return {
       mode,
       drift: 0,
+      currency: reconcileCurrency,
       statement_balance: statement,
       computed_balance: statement, // computed now equals statement after the delta
       transaction: ins.rows[0] || null,

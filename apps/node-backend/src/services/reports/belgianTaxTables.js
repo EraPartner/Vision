@@ -101,6 +101,8 @@ export function getTaxTable(year) {
  *
  * @returns {number[]}
  */
-export function getAvailableYears() {
+ function getAvailableYears() {
   return Object.keys(TABLES).map(Number).sort((a, b) => a - b);
 }
+
+export { getAvailableYears as __getAvailableYears };

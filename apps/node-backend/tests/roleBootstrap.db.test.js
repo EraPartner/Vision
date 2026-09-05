@@ -32,7 +32,7 @@ import {
 } from "./setup/db.js";
 import {
   ensureAppRole,
-  renderGrantStatements,
+  __renderGrantStatements as renderGrantStatements,
 } from "../src/database/roleBootstrap.js";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;

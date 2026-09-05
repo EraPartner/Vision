@@ -54,7 +54,7 @@ const txStorage = new AsyncLocalStorage();
  * catch-and-retry INSERT in a SAVEPOINT — see withSavepointIfInTransaction).
  * @returns {PgPoolClient|null}
  */
-export function getAmbientTransactionClient() {
+ function getAmbientTransactionClient() {
   return txStorage.getStore()?.client ?? null;
 }
 
@@ -365,3 +365,5 @@ export async function closePool() {
 }
 
 export default pool;
+
+export { getAmbientTransactionClient as __getAmbientTransactionClient };

@@ -5,28 +5,28 @@
  * Backtest runs on demand; accuracy persisted for future ensemble.
  */
 
-import { infoRepository } from '../../../repositories/infoRepository.js';
-import { buildEnvelope } from '../aggregation/_envelope.js';
-import { fnv1aHash } from './prng.js';
-import { densifyDailyHistory } from './_densify.js';
+import { infoRepository } from "../../../repositories/infoRepository.js";
+import { buildEnvelope } from "../aggregation/_envelope.js";
+import { fnv1aHash } from "./prng.js";
+import { densifyDailyHistory } from "./_densify.js";
 
-import * as simpleAverage from './methods/simpleAverage.js';
-import * as weightedAverage from './methods/weightedAverage.js';
-import * as ewma from './methods/ewma.js';
-import * as holtWinters from './methods/holtWinters.js';
-import * as prophetLite from './methods/prophetLite.js';
-import * as monteCarloParametric from './methods/monteCarloParametric.js';
-import * as monteCarloBlockBootstrap from './methods/monteCarloBlockBootstrap.js';
-import * as ensemble from './methods/ensemble.js';
+import * as simpleAverage from "./methods/simpleAverage.js";
+import * as weightedAverage from "./methods/weightedAverage.js";
+import * as ewma from "./methods/ewma.js";
+import * as holtWinters from "./methods/holtWinters.js";
+import * as prophetLite from "./methods/prophetLite.js";
+import * as monteCarloParametric from "./methods/monteCarloParametric.js";
+import * as monteCarloBlockBootstrap from "./methods/monteCarloBlockBootstrap.js";
+import * as ensemble from "./methods/ensemble.js";
 
-import { buildCategoryBreakdown } from './categoryBreakdown.js';
-import { walkForwardBacktest, walkForwardBacktestRolling } from './backtest.js';
-import { recordAccuracy, getLatestAccuracyByMethod } from './accuracyStore.js';
-import mcCacheRepo from '../../../repositories/cashflowForecastMcRepository.js';
-import mcRollingCacheRepo from '../../../repositories/cashflowForecastMcRollingRepository.js';
-import { logger } from '../../../config/logger.js';
-import { todayAppDateString } from '../../../lib/timezone.js';
-import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
+import { buildCategoryBreakdown } from "./categoryBreakdown.js";
+import { walkForwardBacktest, walkForwardBacktestRolling } from "./backtest.js";
+import { recordAccuracy, getLatestAccuracyByMethod } from "./accuracyStore.js";
+import mcCacheRepo from "../../../repositories/cashflowForecastMcRepository.js";
+import mcRollingCacheRepo from "../../../repositories/cashflowForecastMcRollingRepository.js";
+import { logger } from "../../../config/logger.js";
+import { todayAppDateString } from "../../../lib/timezone.js";
+import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
 
 const DEFAULT_HISTORY_MONTHS = 36;
 const DEFAULT_MC_PATHS = 1000;
@@ -105,6 +105,7 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  *   days_in_month: number,
  *   current_day: number,
  *   actual: ActualPoint[],
+ *   scheduled_actual: DailyNetPoint[],
  *   planned: DailyNetPoint[],
  *   methods: MethodResult[],
  *   diagnostics: DiagnosticsPayload | null,
@@ -115,7 +116,13 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  */
 
 /** @type {PointMethodModule[]} */
-const POINT_METHODS = [simpleAverage, weightedAverage, ewma, holtWinters, prophetLite];
+const POINT_METHODS = [
+  simpleAverage,
+  weightedAverage,
+  ewma,
+  holtWinters,
+  prophetLite,
+];
 /** @type {McMethodModule[]} */
 const MC_METHODS = [monteCarloParametric, monteCarloBlockBootstrap];
 
@@ -130,11 +137,17 @@ function currentMonthDates() {
   const all = [];
   const future = [];
   for (let d = 1; d <= daysInMonth; d++) {
-    const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const iso = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     all.push(iso);
     if (d > todayDay) future.push(iso);
   }
-  return { all, future, todayDay, daysInMonth, yyyymm: `${y}-${String(m + 1).padStart(2, '0')}` };
+  return {
+    all,
+    future,
+    todayDay,
+    daysInMonth,
+    yyyymm: `${y}-${String(m + 1).padStart(2, "0")}`,
+  };
 }
 
 /**
@@ -171,7 +184,7 @@ function rollingWindowDates(daysBack, daysForward) {
   // Builds a date list spanning [today - daysBack ... today + daysForward].
   // Anchored on the app-timezone today (ADR-009); pure calendar math after.
   const todayYmd = todayAppDateString();
-  const [ty, tm, td] = todayYmd.split('-').map(Number);
+  const [ty, tm, td] = todayYmd.split("-").map(Number);
   const todayMs = Date.UTC(ty, tm - 1, td);
   const all = [];
   for (let offset = -daysBack; offset <= daysForward; offset++) {
@@ -192,6 +205,7 @@ function rollingWindowDates(daysBack, daysForward) {
  * @param {{
  *   history: DailyNetPoint[],
  *   currentActual: DailyNetPoint[],
+ *   scheduledActual: DailyNetPoint[],
  *   plannedCurrent: DailyNetPoint[],
  *   all: string[],
  *   future: string[],
@@ -203,11 +217,12 @@ function rollingWindowDates(daysBack, daysForward) {
  *   seed: number|string,
  *   userId: string,
  * }} ctx
- * @returns {Promise<{ actualDaily: ActualPoint[], methods: MethodResult[], planned: DailyNetPoint[], trainHistory: DailyNetPoint[] }>}
+ * @returns {Promise<{ actualDaily: ActualPoint[], methods: MethodResult[], planned: DailyNetPoint[], scheduled: DailyNetPoint[], trainHistory: DailyNetPoint[] }>}
  */
 async function runForecastEngine({
   history,
   currentActual,
+  scheduledActual = [],
   plannedCurrent,
   all,
   future,
@@ -221,6 +236,7 @@ async function runForecastEngine({
 }) {
   const actualDaily = actualCumulativeDaily(currentActual, all, todayIndex);
   const plannedMap = plannedDailyMap(plannedCurrent);
+  const scheduledMap = plannedDailyMap(scheduledActual);
 
   // Methods see all confirmed actuals (history + currentActual on/before today),
   // zero-filled to a dense daily grid through today so per-DOM means divide by
@@ -234,18 +250,24 @@ async function runForecastEngine({
   const methodOutputs = [];
   for (const mod of POINT_METHODS) {
     try {
-      const series = mod.forecast({ history: trainHistory, forecastDates: future });
+      const series = mod.forecast({
+        history: trainHistory,
+        forecastDates: future,
+      });
       methodOutputs.push({
         id: mod.id,
         label: mod.label,
-        series: series.map((p) => ({ ...p, value: Number.isFinite(p.value) ? p.value : 0 })),
+        series: series.map((p) => ({
+          ...p,
+          value: Number.isFinite(p.value) ? p.value : 0,
+        })),
       });
     } catch {
       methodOutputs.push({
         id: mod.id,
         label: mod.label,
         series: future.map((date) => ({ date, value: 0 })),
-        error: 'forecast_failed',
+        error: "forecast_failed",
       });
     }
   }
@@ -268,13 +290,17 @@ async function runForecastEngine({
       methodOutputs: methodOutputs.filter((m) => !m.error),
       weights,
     });
-    methodOutputs.push({ id: ensemble.id, label: ensemble.label, series: ensembleSeries });
+    methodOutputs.push({
+      id: ensemble.id,
+      label: ensemble.label,
+      series: ensembleSeries,
+    });
   } catch {
     methodOutputs.push({
       id: ensemble.id,
       label: ensemble.label,
       series: future.map((date) => ({ date, value: 0 })),
-      error: 'forecast_failed',
+      error: "forecast_failed",
     });
   }
 
@@ -298,7 +324,7 @@ async function runForecastEngine({
         id: mod.id,
         label: mod.label,
         series: future.map((date) => ({ date, value: 0 })),
-        error: 'forecast_failed',
+        error: "forecast_failed",
       });
     }
   }
@@ -310,7 +336,8 @@ async function runForecastEngine({
       .filter((r) => r.cumulative !== null)
       .map((r) => [r.date, /** @type {number} */ (r.cumulative)]),
   );
-  const lastActualCum = todayIndex > 0 ? (actualCumByDate.get(all[todayIndex - 1]) ?? 0) : 0;
+  const lastActualCum =
+    todayIndex > 0 ? (actualCumByDate.get(all[todayIndex - 1]) ?? 0) : 0;
 
   /**
    * @param {ForecastPoint[]} dailySeries
@@ -328,8 +355,9 @@ async function runForecastEngine({
         continue;
       }
       const daily = byDate.get(date) ?? 0;
-      const plannedAdd = includePlanned ? plannedMap.get(date) ?? 0 : 0;
-      cum += daily + plannedAdd;
+      const plannedAdd = includePlanned ? (plannedMap.get(date) ?? 0) : 0;
+      const scheduledAdd = scheduledMap.get(date) ?? 0;
+      cum += daily + plannedAdd + scheduledAdd;
       out.push({ date, value: cum });
     }
     return out;
@@ -344,11 +372,16 @@ async function runForecastEngine({
     error: m.error ?? null,
   }));
 
-  const planned = Array.from(plannedMap, ([date, net]) => ({ date, net })).sort((a, b) =>
-    a.date.localeCompare(b.date),
+  const planned = Array.from(plannedMap, ([date, net]) => ({ date, net })).sort(
+    (a, b) => a.date.localeCompare(b.date),
   );
 
-  return { actualDaily, methods, planned, trainHistory };
+  const scheduled = Array.from(scheduledMap, ([date, net]) => ({
+    date,
+    net,
+  })).sort((a, b) => a.date.localeCompare(b.date));
+
+  return { actualDaily, methods, planned, scheduled, trainHistory };
 }
 
 /**
@@ -358,7 +391,8 @@ async function runForecastEngine({
 function plannedDailyMap(plannedCurrent) {
   /** @type {Map<string, number>} */
   const map = new Map();
-  for (const r of plannedCurrent) map.set(r.date, (map.get(r.date) ?? 0) + r.net);
+  for (const r of plannedCurrent)
+    map.set(r.date, (map.get(r.date) ?? 0) + r.net);
   return map;
 }
 
@@ -380,13 +414,23 @@ function buildSeed({ yyyymm, filterHash }) {
 /**
  * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[],
  *   currency: string, includePlanned: boolean, historyMonths: number,
- *   includeTransfers: boolean }} input
+ *   includeTransfers: boolean, effectiveDate: string }} input
  * @returns {string}
  */
-function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned, historyMonths, includeTransfers }) {
-  const cats = [...(excludedCategoryIds ?? [])].sort((a, b) => a - b).join(',');
-  const recs = [...(excludedRecipientIds ?? [])].sort((a, b) => a - b).join(',');
-  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|t${includeTransfers ? 1 : 0}`;
+function filterHash({
+  excludedCategoryIds,
+  excludedRecipientIds,
+  currency,
+  includePlanned,
+  historyMonths,
+  includeTransfers,
+  effectiveDate,
+}) {
+  const cats = [...(excludedCategoryIds ?? [])].sort((a, b) => a - b).join(",");
+  const recs = [...(excludedRecipientIds ?? [])]
+    .sort((a, b) => a - b)
+    .join(",");
+  return `effective-date-v1|${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|d${effectiveDate}|t${includeTransfers ? 1 : 0}`;
 }
 
 /**
@@ -405,7 +449,8 @@ function isDefaultMcParams(mcPaths, mcPercentiles) {
  */
 function isDefaultRollingMcParams(mcPaths, mcPercentiles) {
   if (mcPaths !== DEFAULT_ROLLING_MC_PATHS) return false;
-  if (mcPercentiles.length !== DEFAULT_ROLLING_MC_PERCENTILES.length) return false;
+  if (mcPercentiles.length !== DEFAULT_ROLLING_MC_PERCENTILES.length)
+    return false;
   return DEFAULT_ROLLING_MC_PERCENTILES.every((p, i) => p === mcPercentiles[i]);
 }
 
@@ -427,60 +472,93 @@ function isDefaultRollingMcParams(mcPaths, mcPercentiles) {
 export async function computeCashflowForecast({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
   includePlanned = false,
   historyMonths = DEFAULT_HISTORY_MONTHS,
   mcPaths = DEFAULT_MC_PATHS,
   mcPercentiles = DEFAULT_MC_PERCENTILES,
   includeBacktest = true,
   includeBreakdown = false,
-  userId = 'anonymous',
+  userId = "anonymous",
   // Internal flag used by nightly job to bypass cache read and force a cache write.
   _forceCache = false,
 } = {}) {
   const { all, future, todayDay, daysInMonth, yyyymm } = currentMonthDates();
   // Read before the cache probe: the setting is a cache-key input (ADR-083).
   const includeTransfers = await infoRepository.getIncludeTransfers();
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths, includeTransfers });
+  const hash = filterHash({
+    excludedCategoryIds,
+    excludedRecipientIds,
+    currency: targetCurrency,
+    includePlanned,
+    historyMonths,
+    includeTransfers,
+    effectiveDate: all[todayDay - 1],
+  });
 
   // Try cache when not forcing a refresh and using default MC params.
   if (!_forceCache && isDefaultMcParams(mcPaths, mcPercentiles)) {
     try {
-      const cachedRaw = await mcCacheRepo.get({ userId, month: yyyymm, filterHash: hash });
+      const cachedRaw = await mcCacheRepo.get({
+        userId,
+        month: yyyymm,
+        filterHash: hash,
+      });
       // mcCacheRepo types the stored column as bare `object` (repository.js is
       // out of this slice's scope); cast to the real payload shape it's always
       // written as (see basePayload below) rather than widen the repo's type.
-      const cached = /** @type {{ payload: ForecastPayload, computed_at: Date } | null} */ (cachedRaw);
+      const cached =
+        /** @type {{ payload: ForecastPayload, computed_at: Date } | null} */ (
+          cachedRaw
+        );
       // Don't serve a diagnostics-free cache entry when backtest is needed.
-      const diagnosticsOk = !includeBacktest || cached?.payload?.diagnostics != null;
+      const diagnosticsOk =
+        !includeBacktest || cached?.payload?.diagnostics != null;
       if (cached && mcCacheRepo.isFresh(cached.computed_at) && diagnosticsOk) {
         if (includeBreakdown) {
           // Reconstruct effective values from the cached payload's actual array.
-          const cachedActualCount = cached.payload.actual.filter((r) => r.cumulative !== null).length;
+          const cachedActualCount = cached.payload.actual.filter(
+            (r) => r.cumulative !== null,
+          ).length;
           const cachedEffectiveTodayDay = cachedActualCount > 0 ? todayDay : 0;
-          const cachedEffectiveFuture = cachedEffectiveTodayDay === 0 ? all : future;
+          const cachedEffectiveFuture =
+            cachedEffectiveTodayDay === 0 ? all : future;
           const payload = await augmentPayloadWithBreakdown(cached.payload, {
-            excludedCategoryIds, excludedRecipientIds, targetCurrency,
-            historyMonths, all, future: cachedEffectiveFuture, todayDay: cachedEffectiveTodayDay,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            targetCurrency,
+            historyMonths,
+            all,
+            future: cachedEffectiveFuture,
+            todayDay: cachedEffectiveTodayDay,
           });
-          return buildEnvelope(payload, { source: 'cache', computedAt: cached.computed_at });
+          return buildEnvelope(payload, {
+            source: "cache",
+            computedAt: cached.computed_at,
+          });
         }
-        return buildEnvelope(cached.payload, { source: 'cache', computedAt: cached.computed_at });
+        return buildEnvelope(cached.payload, {
+          source: "cache",
+          computedAt: cached.computed_at,
+        });
       }
     } catch (err) {
-      logger.warn('Cashflow forecast MC cache read failed, computing live', { error: err.message });
+      logger.warn("Cashflow forecast MC cache read failed, computing live", {
+        error: err.message,
+      });
     }
   }
 
   const {
     history,
     currentActual,
+    scheduledActual = [],
     plannedCurrent,
   } = await infoRepository.getCashflowForecastData(
     historyMonths,
     excludedCategoryIds,
     excludedRecipientIds,
-    targetCurrency
+    targetCurrency,
   );
 
   const seed = buildSeed({ yyyymm, filterHash: hash });
@@ -488,11 +566,18 @@ export async function computeCashflowForecast({
   // When no current-month data imported, forecast the full month instead of only remaining days.
   const effectiveTodayDay = currentActual.length > 0 ? todayDay : 0;
   const effectiveFuture = effectiveTodayDay === 0 ? all : future;
-  const todayIso = effectiveTodayDay > 0 ? all[effectiveTodayDay - 1] : '';
+  const todayIso = effectiveTodayDay > 0 ? all[effectiveTodayDay - 1] : "";
 
-  const { actualDaily, methods, planned: plannedArr, trainHistory } = await runForecastEngine({
+  const {
+    actualDaily,
+    methods,
+    planned: plannedArr,
+    scheduled,
+    trainHistory,
+  } = await runForecastEngine({
     history,
     currentActual,
+    scheduledActual,
     plannedCurrent,
     all,
     future: effectiveFuture,
@@ -533,7 +618,15 @@ export async function computeCashflowForecast({
         mape: b.aggregate.mape,
         months: b.aggregate.months,
         per_month: b.perMonth.map(
-          (/** @type {{ month: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ { month, mae, rmse, mape, sampleDays }) => ({
+          (
+            /** @type {{ month: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ {
+              month,
+              mae,
+              rmse,
+              mape,
+              sampleDays,
+            },
+          ) => ({
             month,
             mae,
             rmse,
@@ -543,15 +636,25 @@ export async function computeCashflowForecast({
         ),
       })),
     };
-    await Promise.all(backtest.map((b) => recordAccuracy({
-      userId,
-      methodId: b.id,
-      asOfMonth: yyyymm,
-      mae: b.aggregate.mae,
-      rmse: b.aggregate.rmse,
-      mape: b.aggregate.mape,
-      sampleDays: b.perMonth.reduce((/** @type {number} */ s, /** @type {{ sampleDays: number }} */ r) => s + r.sampleDays, 0),
-    })));
+    await Promise.all(
+      backtest.map((b) =>
+        recordAccuracy({
+          userId,
+          methodId: b.id,
+          asOfMonth: yyyymm,
+          mae: b.aggregate.mae,
+          rmse: b.aggregate.rmse,
+          mape: b.aggregate.mape,
+          sampleDays: b.perMonth.reduce(
+            (
+              /** @type {number} */ s,
+              /** @type {{ sampleDays: number }} */ r,
+            ) => s + r.sampleDays,
+            0,
+          ),
+        }),
+      ),
+    );
   }
 
   const basePayload = {
@@ -560,6 +663,7 @@ export async function computeCashflowForecast({
     days_in_month: daysInMonth,
     current_day: todayDay,
     actual: actualDaily,
+    scheduled_actual: scheduled,
     planned: plannedArr,
     methods,
     diagnostics,
@@ -570,20 +674,35 @@ export async function computeCashflowForecast({
   // Write to cache whenever default MC params used (nightly job + any live compute).
   // Cache stores the base payload without breakdown (breakdown is always computed on demand).
   if (isDefaultMcParams(mcPaths, mcPercentiles)) {
-    mcCacheRepo.upsert({ userId, month: yyyymm, filterHash: hash, mcPaths, payload: basePayload }).catch((err) => {
-      logger.warn('Cashflow forecast MC cache write failed', { error: err.message });
-    });
+    mcCacheRepo
+      .upsert({
+        userId,
+        month: yyyymm,
+        filterHash: hash,
+        mcPaths,
+        payload: basePayload,
+      })
+      .catch((err) => {
+        logger.warn("Cashflow forecast MC cache write failed", {
+          error: err.message,
+        });
+      });
   }
 
   let payload = basePayload;
   if (includeBreakdown) {
     payload = await augmentPayloadWithBreakdown(basePayload, {
-      excludedCategoryIds, excludedRecipientIds, targetCurrency,
-      historyMonths, all, future: effectiveFuture, todayDay: effectiveTodayDay,
+      excludedCategoryIds,
+      excludedRecipientIds,
+      targetCurrency,
+      historyMonths,
+      all,
+      future: effectiveFuture,
+      todayDay: effectiveTodayDay,
     });
   }
 
-  return buildEnvelope(payload, { source: 'live' });
+  return buildEnvelope(payload, { source: "live" });
 }
 
 /**
@@ -609,7 +728,7 @@ export async function computeCashflowForecast({
 export async function computeCashflowForecastRolling({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
   includePlanned = false,
   historyMonths = DEFAULT_HISTORY_MONTHS,
   daysBack = 90,
@@ -617,24 +736,42 @@ export async function computeCashflowForecastRolling({
   mcPaths = DEFAULT_ROLLING_MC_PATHS,
   mcPercentiles = DEFAULT_ROLLING_MC_PERCENTILES,
   includeBacktest = false,
-  userId = 'anonymous',
+  userId = "anonymous",
 } = {}) {
-  const { all, future, todayIndex, todayIso } = rollingWindowDates(daysBack, daysForward);
+  const { all, future, todayIndex, todayIso } = rollingWindowDates(
+    daysBack,
+    daysForward,
+  );
   // Read before the cache probe: the setting is a cache-key input (ADR-083).
   const includeTransfers = await infoRepository.getIncludeTransfers();
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths, includeTransfers });
+  const hash = filterHash({
+    excludedCategoryIds,
+    excludedRecipientIds,
+    currency: targetCurrency,
+    includePlanned,
+    historyMonths,
+    includeTransfers,
+    effectiveDate: todayIso,
+  });
 
   // Cache check: skip for non-default rolling MC params or when backtest is requested.
   if (isDefaultRollingMcParams(mcPaths, mcPercentiles) && !includeBacktest) {
-    const cached = await mcRollingCacheRepo.get({ userId, todayIso, daysBack, daysForward, filterHash: hash });
+    const cached = await mcRollingCacheRepo.get({
+      userId,
+      todayIso,
+      daysBack,
+      daysForward,
+      filterHash: hash,
+    });
     if (cached && mcRollingCacheRepo.isFresh(cached.computed_at)) {
-      return buildEnvelope(cached.payload, { source: 'cache' });
+      return buildEnvelope(cached.payload, { source: "cache" });
     }
   }
 
   const {
     history,
     currentActual,
+    scheduledActual = [],
     plannedCurrent,
   } = await infoRepository.getCashflowForecastDataRolling(
     historyMonths,
@@ -645,22 +782,26 @@ export async function computeCashflowForecastRolling({
     targetCurrency,
   );
 
-  const seed = fnv1aHash(`${userId}|${todayIso}|${daysBack}|${daysForward}|${hash}`);
+  const seed = fnv1aHash(
+    `${userId}|${todayIso}|${daysBack}|${daysForward}|${hash}`,
+  );
 
-  const { actualDaily, methods, planned, trainHistory } = await runForecastEngine({
-    history,
-    currentActual,
-    plannedCurrent,
-    all,
-    future,
-    todayIndex,
-    todayIso,
-    includePlanned,
-    mcPaths,
-    mcPercentiles,
-    seed,
-    userId,
-  });
+  const { actualDaily, methods, planned, scheduled, trainHistory } =
+    await runForecastEngine({
+      history,
+      currentActual,
+      scheduledActual,
+      plannedCurrent,
+      all,
+      future,
+      todayIndex,
+      todayIso,
+      includePlanned,
+      mcPaths,
+      mcPercentiles,
+      seed,
+      userId,
+    });
 
   let diagnostics = null;
   if (includeBacktest) {
@@ -691,7 +832,15 @@ export async function computeCashflowForecastRolling({
         mape: b.aggregate.mape,
         months: b.aggregate.windows,
         per_month: b.perWindow.map(
-          (/** @type {{ window_end: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ { window_end, mae, rmse, mape, sampleDays }) => ({
+          (
+            /** @type {{ window_end: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ {
+              window_end,
+              mae,
+              rmse,
+              mape,
+              sampleDays,
+            },
+          ) => ({
             month: window_end,
             mae,
             rmse,
@@ -711,6 +860,7 @@ export async function computeCashflowForecastRolling({
     days_back: daysBack,
     days_forward: daysForward,
     actual: actualDaily,
+    scheduled_actual: scheduled,
     methods,
     planned,
     diagnostics,
@@ -720,12 +870,24 @@ export async function computeCashflowForecastRolling({
 
   // Write to cache when default rolling MC params and backtest not requested.
   if (isDefaultRollingMcParams(mcPaths, mcPercentiles) && !includeBacktest) {
-    mcRollingCacheRepo.upsert({ userId, todayIso, daysBack, daysForward, filterHash: hash, mcPaths, payload }).catch((err) => {
-      logger.warn('Rolling forecast MC cache write failed', { error: err.message });
-    });
+    mcRollingCacheRepo
+      .upsert({
+        userId,
+        todayIso,
+        daysBack,
+        daysForward,
+        filterHash: hash,
+        mcPaths,
+        payload,
+      })
+      .catch((err) => {
+        logger.warn("Rolling forecast MC cache write failed", {
+          error: err.message,
+        });
+      });
   }
 
-  return buildEnvelope(payload, { source: 'live' });
+  return buildEnvelope(payload, { source: "live" });
 }
 
 /**
@@ -743,24 +905,39 @@ export async function computeCashflowForecastRolling({
  *   todayDay: number,
  * }} args
  */
-async function augmentPayloadWithBreakdown(payload, {
-  excludedCategoryIds, excludedRecipientIds, targetCurrency,
-  historyMonths, all, future, todayDay,
-}) {
-  const referenceMethod = payload.methods.find((m) => m.id === simpleAverage.id);
-  const referenceDaily = referenceMethod?.daily ?? future.map((date) => ({ date, value: 0 }));
+async function augmentPayloadWithBreakdown(
+  payload,
+  {
+    excludedCategoryIds,
+    excludedRecipientIds,
+    targetCurrency,
+    historyMonths,
+    all,
+    future,
+    todayDay,
+  },
+) {
+  const referenceMethod = payload.methods.find(
+    (m) => m.id === simpleAverage.id,
+  );
+  const referenceDaily =
+    referenceMethod?.daily ?? future.map((date) => ({ date, value: 0 }));
 
-  const { historyByCategory, currentActualByCategory } =
-    await infoRepository.getCashflowForecastDataByCategory(
-      historyMonths,
-      excludedCategoryIds,
-      excludedRecipientIds,
-      targetCurrency,
-    );
+  const {
+    historyByCategory,
+    currentActualByCategory,
+    scheduledActualByCategory = [],
+  } = await infoRepository.getCashflowForecastDataByCategory(
+    historyMonths,
+    excludedCategoryIds,
+    excludedRecipientIds,
+    targetCurrency,
+  );
 
   const categoryBreakdown = buildCategoryBreakdown({
     historyByCategory,
     currentActualByCategory,
+    scheduledActualByCategory,
     future,
     all,
     todayDay,
@@ -771,3 +948,5 @@ async function augmentPayloadWithBreakdown(payload, {
 }
 
 export default { computeCashflowForecast, computeCashflowForecastRolling };
+
+export { filterHash as __filterHash };

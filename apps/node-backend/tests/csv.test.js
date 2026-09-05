@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { neutralizeCsvFormula, escapeCsvValue } from '../src/lib/csv.js';
+import { __neutralizeCsvFormula as neutralizeCsvFormula, escapeCsvValue } from '../src/lib/csv.js';
 
 describe('neutralizeCsvFormula', () => {
   it('prefixes leading =, +, -, @', () => {

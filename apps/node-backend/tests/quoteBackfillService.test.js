@@ -18,13 +18,13 @@ vi.mock("../src/services/priceProviderService.js", () => ({
 }));
 
 import {
-  computeHoldingWindows,
-  sanitizeIsolatedSpikes,
+  __computeHoldingWindows as computeHoldingWindows,
+  __sanitizeIsolatedSpikes as sanitizeIsolatedSpikes,
   backfillHistoricalAssetQuotes,
   refreshActiveHoldingQuotes,
   refreshQuotesForInvestment,
   cleanupStaleQuotes,
-  holdingWindowsNeedBackfill,
+  __holdingWindowsNeedBackfill as holdingWindowsNeedBackfill,
   backfillHoldingGaps,
 } from "../src/services/quoteBackfillService.js";
 import { query } from "../src/database/connection.js";

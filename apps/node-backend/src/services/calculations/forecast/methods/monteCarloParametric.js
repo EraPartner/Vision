@@ -5,12 +5,12 @@
  * path, plus P10/P50/P90 bands. Seeded for determinism.
  */
 
-import { buildSeasonalityBuckets, lookupBucket } from '../seasonality.js';
-import { makeRng, gaussian } from '../prng.js';
-import { quantile } from '../_statistics.js';
+import { buildSeasonalityBuckets, lookupBucket } from "../seasonality.js";
+import { makeRng, gaussian } from "../prng.js";
+import { quantile } from "../_statistics.js";
 
-export const id = 'monte_carlo_parametric';
-export const label = 'Monte Carlo (parametric)';
+export const id = "monte_carlo_parametric";
+export const label = "Monte Carlo (parametric)";
 
 const DEFAULT_PATHS = 1000;
 const DEFAULT_PERCENTILES = [10, 50, 90];
@@ -25,12 +25,12 @@ const DEFAULT_PERCENTILES = [10, 50, 90];
  * }} ctx
  * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>> }}
  */
-export function forecast({
+function forecast({
   history,
   forecastDates,
   paths = DEFAULT_PATHS,
   percentiles = DEFAULT_PERCENTILES,
-  seed = 'default',
+  seed = "default",
 }) {
   const buckets = buildSeasonalityBuckets(history);
   const rng = makeRng(seed);
@@ -63,8 +63,13 @@ export function forecast({
   /** @type {Record<string, Array<{date: string, value: number}>>} */
   const bandsByDate = {};
   for (const q of percentiles) {
-    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({ date, value: bands[`p${q}`][h] }));
+    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({
+      date,
+      value: bands[`p${q}`][h],
+    }));
   }
 
   return { series, bands: bandsByDate };
 }
+
+export { forecast };

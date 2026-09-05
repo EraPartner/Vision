@@ -667,6 +667,7 @@ describe("Info Routes", () => {
                   // The response boundary deliberately derives this from value and
                   // invested instead of trusting a stale stored percentage.
                   return_pct: (234.06 / 1000.5) * 100,
+                  is_provisional: true,
                 },
               ],
             }),

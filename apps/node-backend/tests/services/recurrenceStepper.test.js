@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseRecurrenceStep,
+  __parseRecurrenceStep as parseRecurrenceStep,
   nextOccurrenceYmd,
   fastForwardYmd,
   calculateNextDate,

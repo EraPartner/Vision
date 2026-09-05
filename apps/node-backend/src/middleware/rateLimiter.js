@@ -33,7 +33,7 @@ function ipv4ToInt(ip) {
  * @param {string} rule
  * @returns {boolean}
  */
-export function ipMatchesRule(addr, rule) {
+ function ipMatchesRule(addr, rule) {
   if (!addr || !rule) return false;
   if (addr === rule) return true;
   const slash = rule.indexOf('/');
@@ -201,3 +201,5 @@ export const investmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests
  * CPU. Set high enough for rapid navigation, low enough to bound a fork-bomb.
  */
 export const aggregationRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'aggregations' });
+
+export { ipMatchesRule as __ipMatchesRule };

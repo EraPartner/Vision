@@ -177,4 +177,10 @@ export async function parse(filePath) {
   return transactions;
 }
 
-export default { name: NAME, bankName: BANK_LABEL, detect, parse };
+export default {
+  name: NAME,
+  bankName: BANK_LABEL,
+  detect,
+  parse,
+  multiCurrencyCash: true,
+};

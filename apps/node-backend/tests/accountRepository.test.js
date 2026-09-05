@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.js";
 
 const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockConvertWithRates: vi.fn((amount, from, to) => {
@@ -17,10 +17,10 @@ const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockLoadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
-// getAll folds the per-currency partitions into `accounts.currency` itself, so
-// it needs a rate table. Stub it: this suite is about SQL + row shaping, and the
-// real loader would otherwise reach for the DB (mocked away) and then the ECB.
+vi.mock("../src/database/connection.js", () => mockTxConnection());
+// accountService.list folds the repository's per-currency partitions into
+// `accounts.currency`. Stub its rate table so these SQL + shaping tests do not
+// reach the database or ECB.
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion({
     loadCurrentRates: mockLoadCurrentRates,
@@ -30,14 +30,29 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 
 import { query } from "../src/database/connection.js";
 import accountRepository from "../src/repositories/accountRepository.js";
+import { accountService } from "../src/services/accountService.js";
+
+const listAccounts = async (opts = {}) =>
+  (await accountService.list(opts)).items;
 
 describe("accountRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("getAll", () => {
+    it("returns database rows unchanged for service-layer shaping", async () => {
+      const raw = {
+        id: 1,
+        balance_parts: [{ currency: "USD", balance: "12.3400" }],
+        statement_balances: [],
+        anchor_date: null,
+      };
+      query.mockResolvedValueOnce({ rows: [raw] });
+      expect(await accountRepository.getAll()).toEqual([raw]);
+    });
+
     it("lists all accounts without an active filter", async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 1, name: "Checking" }] });
-      const rows = await accountRepository.getAll();
+      const rows = await listAccounts();
       // No partitions at all (an account with no active rows) → a 0 balance and
       // no drift, with the provenance fields absent rather than null.
       expect(rows).toEqual([
@@ -45,6 +60,9 @@ describe("accountRepository", () => {
           id: 1,
           name: "Checking",
           computed_balance: 0,
+          balance_parts: [],
+          balance_incomplete: false,
+          unconverted_currencies: [],
           reconcilable_balance: 0,
           reconcilable_currency: "EUR",
           drift: null,
@@ -60,19 +78,19 @@ describe("accountRepository", () => {
 
     it("filters to active accounts", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      await accountRepository.getAll({ active: true });
+      await listAccounts({ active: true });
       expect(query.mock.calls[0][0]).toContain("a.is_active = true");
     });
 
     it("filters to inactive accounts", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      await accountRepository.getAll({ active: false });
+      await listAccounts({ active: false });
       expect(query.mock.calls[0][0]).toContain("a.is_active = false");
     });
 
     it("selects the provenance columns from the shared lateral (WP-B2)", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      await accountRepository.getAll();
+      await listAccounts();
       const sql = query.mock.calls[0][0];
       expect(sql).toContain("lb.anchor_date");
       expect(sql).toContain("lb.post_anchor_count");
@@ -101,9 +119,14 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.computed_balance).toBe(150); // 100 EUR + 100 USD × 0.5
-      expect(row.balance_parts).toBeUndefined(); // internal, not part of the payload
+      expect(row.balance_parts).toEqual([
+        { currency: "EUR", balance: 100 },
+        { currency: "USD", balance: 100 },
+      ]);
+      expect(row.balance_incomplete).toBe(false);
+      expect(row.unconverted_currencies).toEqual([]);
     });
 
     // Drift is the statement figure against the partition it is a statement FOR
@@ -124,7 +147,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.computed_balance).toBe(150);
       expect(row.drift).toBe(20); // 120 − the EUR partition's 100, NOT 120 − 150
       // …and the base behind that subtraction is emitted, so the reconcile
@@ -134,6 +157,36 @@ describe("accountRepository", () => {
       expect(row.reconcilable_currency).toBe("EUR");
       expect(row.drift).toBe(
         (row.statement_balance ?? 0) - row.reconcilable_balance,
+      );
+    });
+
+    it("excludes a partition with no rate and exposes the native balance", async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 1,
+            name: "Unsupported currency",
+            currency: "EUR",
+            balance_parts: [
+              { currency: "EUR", balance: "100.0000" },
+              { currency: "ZZZ", balance: "40.0000" },
+            ],
+          },
+        ],
+      });
+      const [row] = await listAccounts();
+      expect(row.computed_balance).toBe(100);
+      expect(row.balance_incomplete).toBe(true);
+      expect(row.unconverted_currencies).toEqual(["ZZZ"]);
+      expect(row.balance_parts).toContainEqual({
+        currency: "ZZZ",
+        balance: 40,
+      });
+      expect(mockConvertWithRates).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "ZZZ",
+        expect.anything(),
+        expect.anything(),
       );
     });
 
@@ -155,7 +208,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.reconcilable_balance).toBe(100.02);
       expect(row.drift).toBe(-0.01);
       expect(row.drift).toBeCloseTo(
@@ -177,7 +230,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.computed_balance).toBe(100);
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
@@ -202,7 +255,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.reconcilable_balance).toBe(0);
       expect(row.reconcilable_currency).toBe("GBP");
       expect(row.drift).toBe(50);
@@ -222,7 +275,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.computed_balance).toBe(50); // 100 USD × 0.5, into the account's EUR
       expect(row.drift).toBe(-10); // native: 90 − the sole partition's 100
       // D3: the base carries the partition's OWN code, so the dialog can label
@@ -249,7 +302,7 @@ describe("accountRepository", () => {
           },
         ],
       });
-      const [row] = await accountRepository.getAll();
+      const [row] = await listAccounts();
       expect(row.reconcilable_balance).toBe(100); // the USD partition, as if the noise were absent
       expect(row.reconcilable_currency).toBe("USD");
       expect(row.drift).toBe(0); // was 100 — the whole balance — before the noise was dropped
@@ -269,7 +322,7 @@ describe("accountRepository", () => {
           { id: 2, name: "Cash", anchor_date: null, post_anchor_count: "3" },
         ],
       });
-      const rows = await accountRepository.getAll();
+      const rows = await listAccounts();
       expect(rows[0].anchor_date).toBe("2026-06-30");
       expect(rows[0].post_anchor_count).toBe(2);
       // Backend never returns null — SQL NULL maps to undefined at the boundary.
@@ -281,18 +334,24 @@ describe("accountRepository", () => {
     // "every account" behaviour is preserved byte for byte.
     it("emits no LIMIT/OFFSET when no limit is supplied", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      await accountRepository.getAll({ active: true });
+      await listAccounts({ active: true });
       // (the balance lateral has its own literal LIMIT — assert on the
       // parameterized tail this helper appends, not on the word)
       expect(query.mock.calls[0][0]).not.toContain("LIMIT $");
-      expect(query.mock.calls[0][1]).toEqual([]);
+      expect(query.mock.calls[0][1]).toEqual([
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      ]);
     });
 
     it("appends a parameterized LIMIT/OFFSET when a limit is supplied", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       await accountRepository.getAll({ active: true, limit: 25, offset: 50 });
-      expect(query.mock.calls[0][0]).toContain("LIMIT $1 OFFSET $2");
-      expect(query.mock.calls[0][1]).toEqual([25, 50]);
+      expect(query.mock.calls[0][0]).toContain("LIMIT $2 OFFSET $3");
+      expect(query.mock.calls[0][1]).toEqual([
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        25,
+        50,
+      ]);
     });
   });
 
@@ -403,13 +462,22 @@ describe("accountRepository", () => {
       expect(id).toBe(21);
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining("ON CONFLICT (lower(btrim(name)))"),
-        ["My Bank"],
+        ["My Bank", false],
       );
-      // The existing row keeps its stored casing — the conflict arm must not
-      // overwrite name with the incoming label.
+      // The conflict arm changes only the sticky capability flag; it never
+      // overwrites the existing account's display identity.
       expect(query.mock.calls[0][0]).toContain(
-        "DO UPDATE SET name = accounts.name",
+        "accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash",
       );
+      expect(query.mock.calls[0][0]).not.toContain("SET name =");
+    });
+
+    it("makes the multi-currency capability sticky when an adapter observes it", async () => {
+      query.mockResolvedValueOnce({ rows: [{ id: 21 }] });
+      await accountRepository.resolveOrCreateByName("Revolut", {
+        multiCurrencyCash: true,
+      });
+      expect(query.mock.calls[0][1]).toEqual(["Revolut", true]);
     });
 
     it("returns undefined for a blank name without touching the DB", async () => {

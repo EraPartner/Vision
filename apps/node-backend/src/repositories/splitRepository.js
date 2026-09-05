@@ -6,19 +6,10 @@
  * written via writeAudit; route/service layer owns when to emit them.
  */
 
-import { query, withTransaction } from '../database/connection.js';
-import { buildLimitOffset } from '../lib/sqlClauses.js';
-import { toWireDate } from '../lib/dateFormat.js';
-import {
-  computeOwedSummary,
-  validateSplitAllocation,
-  validateBatchSplitAllocation,
-  normalizeMoneyAmount,
-  roundToMoneyPrecision,
-} from '../lib/calculations/splits.js';
-import { toDecimal, subtract, toNumber } from '../lib/money.js';
-import { toAppDateString } from '../lib/timezone.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { query } from "../database/connection.js";
+import { buildLimitOffset } from "../lib/sqlClauses.js";
+import { toWireDate } from "../lib/dateFormat.js";
+import { toDecimal, toNumber } from "../lib/money.js";
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 /** @typedef {import('../types/rows.js').FormattedSplit} FormattedSplit */
@@ -78,20 +69,112 @@ function mapSplitTotals(row) {
  * Lock the transaction row (SELECT … FOR UPDATE) inside the caller's
  * transaction, then read its split-allocation totals. The lock serializes the
  * validate→insert window so concurrent split creation cannot over-allocate.
- * Throws NotFoundError if the transaction does not exist.
  *
  * @param {QueryRunner} client
  * @param {number} transactionId
  * @returns {Promise<SplitTotals>}
  */
-async function lockAndGetTotals(client, transactionId) {
+export async function lockAndGetTotals(client, transactionId) {
   const lockResult = await client.query(
     `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-    [transactionId]
+    [transactionId],
   );
-  if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+  if (lockResult.rows.length === 0) return null;
   const totalsResult = await client.query(SPLIT_TOTALS_SQL, [transactionId]);
   return mapSplitTotals(totalsResult.rows[0]);
+}
+
+/** @param {QueryRunner} client @param {{transaction_id:number, recipient_id:number, amount:number, note?:string|null}} input */
+export async function insertSplitInTransaction(
+  client,
+  { transaction_id, recipient_id, amount, note },
+) {
+  const result = await client.query(
+    `WITH created AS (
+       INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+       VALUES ($1, $2, $3, $4) RETURNING *
+     )
+     SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+     FROM created
+     LEFT JOIN recipients r ON r.id = created.recipient_id`,
+    [transaction_id, recipient_id, amount, note || null],
+  );
+  return formatSplit(result.rows[0]);
+}
+
+/** @param {QueryRunner} client @param {number} transactionId @param {Array<{recipient_id:number, amount:number, note?:string|null}>} splits */
+export async function insertSplitsBatchInTransaction(
+  client,
+  transactionId,
+  splits,
+) {
+  const recipientIds = splits.map((split) => split.recipient_id);
+  const amounts = splits.map((split) => split.amount);
+  const notes = splits.map((split) => split.note || null);
+  const result = await client.query(
+    `WITH created AS (
+       INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+       SELECT $1, s.recipient_id, s.amount, s.note
+       FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
+       RETURNING *
+     )
+     SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+     FROM created
+     LEFT JOIN recipients r ON r.id = created.recipient_id
+     ORDER BY created.id`,
+    [transactionId, recipientIds, amounts, notes],
+  );
+  return result.rows.map(formatSplit);
+}
+
+/** @param {QueryRunner} client @param {number} splitId */
+export async function lockSplitForPayment(client, splitId) {
+  const result = await client.query(
+    "SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE",
+    [splitId],
+  );
+  return result.rows[0] || null;
+}
+
+/** @param {QueryRunner} client @param {number} splitId */
+export async function getPaidAmountInTransaction(client, splitId) {
+  const result = await client.query(
+    "SELECT COALESCE(SUM(amount), 0) AS paid FROM split_payments WHERE split_id = $1",
+    [splitId],
+  );
+  return result.rows[0].paid;
+}
+
+/** @param {QueryRunner} client @param {{split_id:number, amount:number, note?:string|null, paid_at:string}} input */
+export async function insertPaymentInTransaction(
+  client,
+  { split_id, amount, note, paid_at },
+) {
+  const result = await client.query(
+    `INSERT INTO split_payments (split_id, amount, note, paid_at)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [split_id, amount, note || null, paid_at],
+  );
+  return formatPayment(result.rows[0]);
+}
+
+/** @param {QueryRunner} client @param {number} splitId */
+export async function markSettledIfCovered(client, splitId) {
+  const result = await client.query(
+    `UPDATE transaction_splits ts
+     SET is_settled = true
+     WHERE ts.id = $1
+       AND ts.is_settled = false
+       AND (
+         SELECT COALESCE(SUM(sp.amount), 0)
+         FROM split_payments sp
+         WHERE sp.split_id = ts.id
+       ) >= ts.amount
+     RETURNING id`,
+    [splitId],
+  );
+  return result.rowCount > 0;
 }
 
 export const splitRepository = {
@@ -107,99 +190,6 @@ export const splitRepository = {
     return mapSplitTotals(result.rows[0]);
   },
 
-  // NOTE: single-split creation goes through createSplitAtomic below — a
-  // plain unguarded INSERT here (the old createSplit) bypassed the row lock
-  // and over-allocation validation the atomic variants exist to enforce.
-
-  /**
-   * Atomically validate and create a single split.
-   * Locks the transaction row with SELECT FOR UPDATE to prevent
-   * concurrent over-allocation between check and insert.
-   *
-   * @param {{ transaction_id: number, recipient_id: number, amount: number|string, note?: string|null }} input
-   * @returns {Promise<FormattedSplit>}
-   */
-  async createSplitAtomic({ transaction_id, recipient_id, amount, note }) {
-    return withTransaction(async (client) => {
-      const totals = await lockAndGetTotals(client, transaction_id);
-      // Normalize to the NUMERIC(18,4) storage precision BEFORE validating, so
-      // the value checked against the cap is byte-for-byte the value stored —
-      // an un-normalized float here let the batch path and this path disagree.
-      const normalizedAmount = normalizeMoneyAmount(Number(amount));
-      const check = validateSplitAllocation({
-        newSplitAmount: normalizedAmount,
-        transactionTotal: totals.transaction_total,
-        currentSplitTotal: totals.current_split_total,
-      });
-      if (!check.ok) throw new ValidationError(check.error);
-      // The bare `RETURNING *` row is not the shape every other split-reading
-      // endpoint emits: `amount` comes back as a pg NUMERIC string and neither
-      // `recipient_name` nor `amount_paid` exists. Re-select the inserted row
-      // joined to recipients (a fresh split has no payments, hence the literal
-      // 0) so this returns the same formatSplit shape as
-      // getSplitsByTransaction / settleSplit / getOwedByRecipient.
-      const result = await client.query(
-        `WITH created AS (
-           INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-           VALUES ($1, $2, $3, $4) RETURNING *
-         )
-         SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
-         FROM created
-         LEFT JOIN recipients r ON r.id = created.recipient_id`,
-        [transaction_id, recipient_id, normalizedAmount, note || null]
-      );
-      return formatSplit(result.rows[0]);
-    });
-  },
-
-  /**
-   * Atomically validate and create multiple splits.
-   * Locks the transaction row with SELECT FOR UPDATE to prevent
-   * concurrent over-allocation between check and batch insert.
-   *
-   * @param {{ transaction_id: number, splits: Array<{ recipient_id: number, amount: number|string, note?: string|null }> }} input
-   * @returns {Promise<FormattedSplit[]>}
-   */
-  async createSplitsBatchAtomic({ transaction_id, splits }) {
-    if (!Array.isArray(splits) || splits.length === 0) return [];
-    return withTransaction(async (client) => {
-      const totals = await lockAndGetTotals(client, transaction_id);
-      const preparedSplits = splits.map((s) => ({
-        recipient_id: s.recipient_id,
-        // Domain precision (NUMERIC 18,4 — migration 0088), NOT cents: rounding
-        // stored splits to cents is what made a 4-dp parent unsplittable.
-        amount: normalizeMoneyAmount(Number(s.amount)),
-        note: s.note || null,
-      }));
-      const check = validateBatchSplitAllocation({
-        splits: preparedSplits,
-        transactionTotal: totals.transaction_total,
-        currentSplitTotal: totals.current_split_total,
-      });
-      if (!check.ok) throw new ValidationError(check.error);
-      const recipientIds = preparedSplits.map((s) => s.recipient_id);
-      const amounts = preparedSplits.map((s) => s.amount);
-      const notes = preparedSplits.map((s) => s.note);
-      // Same re-select as createSplitAtomic: `RETURNING *` alone would emit
-      // string amounts and no recipient_name/amount_paid, which is not the
-      // split shape the rest of the API returns.
-      const result = await client.query(
-        `WITH created AS (
-           INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-           SELECT $1, s.recipient_id, s.amount, s.note
-           FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
-           RETURNING *
-         )
-         SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
-         FROM created
-         LEFT JOIN recipients r ON r.id = created.recipient_id
-         ORDER BY created.id`,
-        [transaction_id, recipientIds, amounts, notes]
-      );
-      return result.rows.map(formatSplit);
-    });
-  },
-
   /**
    * Get the splits for a specific transaction. `limit` is optional and defaults
    * to unbounded — the split editor shows every row of the transaction it is
@@ -209,9 +199,13 @@ export const splitRepository = {
    * @param {{ limit?: number|null, offset?: number }} [page]
    * @returns {Promise<FormattedSplit[]>}
    */
-  async getSplitsByTransaction(transactionId, { limit = null, offset = 0 } = {}) {
+  async getSplitsByTransaction(
+    transactionId,
+    { limit = null, offset = 0 } = {},
+  ) {
     const params = [transactionId];
-    const sql = `
+    const sql =
+      `
       SELECT ts.*, r.name AS recipient_name,
              COALESCE(SUM(sp.amount), 0) AS amount_paid
       FROM transaction_splits ts
@@ -233,7 +227,7 @@ export const splitRepository = {
    */
   async countSplitsByTransaction(transactionId) {
     const result = await query(
-      'SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1',
+      "SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1",
       [transactionId],
     );
     return parseInt(result.rows[0].count, 10);
@@ -260,9 +254,9 @@ export const splitRepository = {
    * slices the computed array instead. Cardinality is one row per recipient
    * with outstanding splits, not per split.
    *
-   * @returns {Promise<ReturnType<typeof computeOwedSummary>>}
+   * @returns {Promise<Array<Record<string, any>>>}
    */
-  async getOwedSummary() {
+  async getOwedSummaryRows() {
     // Collapse alias recipients into their primary so linked recipients show
     // as a single row. recipient_id returned is the primary's id (or self
     // when not aliased) — the detail endpoint expands this back to the full
@@ -281,7 +275,7 @@ export const splitRepository = {
       GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name)
     `;
     const result = await query(sql, []);
-    return computeOwedSummary(result.rows);
+    return result.rows;
   },
 
   /**
@@ -293,9 +287,10 @@ export const splitRepository = {
    * @param {{ limit?: number|null, offset?: number }} [page]
    * @returns {Promise<OwedSplitDetailRow[]>}
    */
-  async getOwedByRecipient(recipientId, { limit = null, offset = 0 } = {}) {
+  async getOwedByRecipientRows(recipientId, { limit = null, offset = 0 } = {}) {
     const params = [recipientId];
-    const sql = `
+    const sql =
+      `
       ${RECIPIENT_GROUP_CTE}
       SELECT ts.*,
              t.date AS transaction_date,
@@ -317,17 +312,7 @@ export const splitRepository = {
       ORDER BY t.date DESC
     ` + buildLimitOffset(params, { limit, offset });
     const result = await query(sql, params);
-    return result.rows.map((/** @type {any} */ row) => ({
-      ...formatSplit(row),
-      transaction_date: row.transaction_date,
-      transaction_memo: row.transaction_memo,
-      transaction_amount: toNumber(toDecimal(row.transaction_amount)),
-      transaction_currency: row.transaction_currency,
-      bank_account: row.bank_account,
-      transaction_recipient_name: row.transaction_recipient_name,
-      amount_paid: toNumber(toDecimal(row.amount_paid)),
-      remaining: toNumber(subtract(row.amount, row.amount_paid)),
-    }));
+    return result.rows;
   },
 
   /**
@@ -420,126 +405,6 @@ export const splitRepository = {
   },
 
   /**
-   * Record a payment against a split.
-   *
-   * Atomicity: locks the split row with SELECT … FOR UPDATE, sums existing
-   * payments, validates against overpayment, then INSERTs / auto-settles /
-   * audits — all in one transaction. The lock serializes concurrent /pay
-   * requests so the validate→insert window cannot interleave (without it,
-   * five parallel payments could each pass the precheck and collectively
-   * overpay). There is no canonical DB-level overpayment trigger. Early
-   * pre-squash databases carried fn_split_payment_overpayment_guard, but
-   * migration 0088 removes that legacy-only, cent-scale object. This lock +
-   * storage-precision validation is the authoritative guard.
-   *
-   * Amount handling: the payment is normalized to the NUMERIC(18,4) storage
-   * precision and the cap is compared at that same scale (migration 0088);
-   * a cent-level cap with 4-dp storage admitted sub-cent over-payments.
-   *
-   * Throws NotFoundError if the split does not exist; ValidationError if
-   * the split is already settled or the payment would overpay.
-   *
-   * @param {{
-   *   split_id: number,
-   *   amount: number,
-   *   note?: string | null,
-   *   paid_at?: string | null,
-   *   actor?: string | null,
-   * }} input
-   * @returns {Promise<FormattedSplitPayment>}
-   */
-  async addPayment({ split_id, amount, note, paid_at, actor = null }) {
-    return withTransaction(async (client) => {
-      const lockResult = await client.query(
-        `SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE`,
-        [split_id]
-      );
-      if (lockResult.rows.length === 0) {
-        throw new NotFoundError('Split not found');
-      }
-      if (lockResult.rows[0].is_settled) {
-        // A settled split is closed — further payments would push it past its
-        // amount (or resurrect settled dust) with nothing left to settle.
-        throw new ValidationError('Split is already settled');
-      }
-      const splitAmount = lockResult.rows[0].amount;
-
-      const paidResult = await client.query(
-        `SELECT COALESCE(SUM(amount), 0) AS paid
-         FROM split_payments WHERE split_id = $1`,
-        [split_id]
-      );
-      const alreadyPaid = paidResult.rows[0].paid;
-
-      // Validate at the NUMERIC(18,4) storage precision with the normalized
-      // amount that will actually be inserted (see the method docstring).
-      const normalizedAmount = normalizeMoneyAmount(amount);
-      const projected = roundToMoneyPrecision(toDecimal(alreadyPaid).plus(normalizedAmount));
-      const limit = roundToMoneyPrecision(splitAmount);
-      if (projected.gt(limit)) {
-        throw new ValidationError('Payment would exceed split outstanding balance');
-      }
-
-      const insertSql = `
-        INSERT INTO split_payments (split_id, amount, note, paid_at)
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
-      `;
-      const result = await client.query(insertSql, [
-        split_id,
-        normalizedAmount,
-        note || null,
-        // Default to today's calendar date in APP_TIMEZONE — server-local
-        // getFullYear/getMonth/getDate logged the wrong day near midnight on
-        // a non-UTC server.
-        paid_at || toAppDateString(new Date()),
-      ]);
-
-      // Auto-settle only when the payments cover the split EXACTLY at storage
-      // precision (both sides NUMERIC(18,4) — migration 0088). The old
-      // ROUND(…, 2) comparison settled a 4-dp split at a cent-rounded match,
-      // freezing sub-cent residue as "settled". `>=` (not `=`) so pre-0088
-      // rows that were historically over-paid can still close out.
-      const settledResult = await client.query(
-        `UPDATE transaction_splits ts
-         SET is_settled = true
-         WHERE ts.id = $1
-           AND ts.is_settled = false
-           AND (
-             SELECT COALESCE(SUM(sp.amount), 0)
-             FROM split_payments sp
-             WHERE sp.split_id = ts.id
-           ) >= ts.amount
-         RETURNING id`,
-        [split_id]
-      );
-
-      await client.query(
-        `INSERT INTO split_audit (split_id, action, actor, payload)
-         VALUES ($1, $2, $3, $4)`,
-        [
-          split_id,
-          'payment',
-          actor,
-          JSON.stringify({
-            payment_id: result.rows[0].id,
-            amount: normalizedAmount,
-            paid_at: toWireDate(result.rows[0].paid_at),
-            note: note || null,
-            auto_settled: settledResult.rowCount > 0,
-          }),
-        ]
-      );
-
-      // formatPayment, not the raw row: `amount` is NUMERIC (pg hands it back
-      // as a string) and `paid_at` is a DATE. The POST /pay path used to
-      // return the row untouched while its sibling getPayments coerced, so the
-      // same payment had two different wire shapes.
-      return formatPayment(result.rows[0]);
-    });
-  },
-
-  /**
    * Get payments for a split. `limit` is optional and defaults to unbounded —
    * the payment history panel lists them all, so only an explicit limit/offset
    * narrows the result.
@@ -550,8 +415,9 @@ export const splitRepository = {
    */
   async getPayments(splitId, { limit = null, offset = 0 } = {}) {
     const params = [splitId];
-    const sql = `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC`
-      + buildLimitOffset(params, { limit, offset });
+    const sql =
+      `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC` +
+      buildLimitOffset(params, { limit, offset });
     const result = await query(sql, params);
     return result.rows.map(formatPayment);
   },
@@ -564,7 +430,7 @@ export const splitRepository = {
    */
   async countPayments(splitId) {
     const result = await query(
-      'SELECT COUNT(*) FROM split_payments WHERE split_id = $1',
+      "SELECT COUNT(*) FROM split_payments WHERE split_id = $1",
       [splitId],
     );
     return parseInt(result.rows[0].count, 10);
@@ -573,7 +439,7 @@ export const splitRepository = {
   /**
    * Settle a split manually (mark as fully paid regardless of payments).
    *
-   * Same re-select idiom as createSplitAtomic: a bare `RETURNING *` row has no
+   * Same re-select idiom as the service create path: a bare `RETURNING *` row has no
    * `recipient_name`/`amount_paid` columns, so the settle response used to
    * fabricate `recipient_name: null` and `amount_paid: 0` (`toDecimal(undefined)`
    * → 0) even on a fully-paid split. The CTE re-selects the updated row joined
@@ -583,7 +449,7 @@ export const splitRepository = {
    * @param {number} splitId
    * @returns {Promise<FormattedSplit|null>}
    */
-  async settleSplit(splitId) {
+  async settleSplit(splitId, client = null) {
     const sql = `
       WITH settled AS (
         UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *
@@ -596,7 +462,7 @@ export const splitRepository = {
         SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = settled.id
       ) sp_agg ON true
     `;
-    const result = await query(sql, [splitId]);
+    const result = await (client || { query }).query(sql, [splitId]);
     return result.rows[0] ? formatSplit(result.rows[0]) : null;
   },
 
@@ -604,14 +470,14 @@ export const splitRepository = {
    * @param {number} recipientId
    * @returns {Promise<{ settled_count: number }>}
    */
-  async settleAllByRecipient(recipientId) {
+  async settleAllByRecipient(recipientId, client = null) {
     const sql = `
       ${RECIPIENT_GROUP_CTE}
       UPDATE transaction_splits
       SET is_settled = true
       WHERE recipient_id IN (SELECT id FROM recipient_group) AND is_settled = false
     `;
-    const result = await query(sql, [recipientId]);
+    const result = await (client || { query }).query(sql, [recipientId]);
     return { settled_count: result.rowCount || 0 };
   },
 
@@ -621,14 +487,16 @@ export const splitRepository = {
    * @param {number} splitId
    * @returns {Promise<boolean>}
    */
-  async deleteSplit(splitId) {
-    const result = await query('DELETE FROM transaction_splits WHERE id = $1', [splitId]);
+  async deleteSplit(splitId, client = null) {
+    const result = await (client || { query }).query(
+      "DELETE FROM transaction_splits WHERE id = $1",
+      [splitId],
+    );
     return result.rowCount > 0;
   },
 
   /**
-   * Fetch a single split row. Used by route-layer validation before writes so
-   * we can pass split.amount into validatePaymentAmount.
+   * Fetch a single split row for reads and service orchestration.
    *
    * Joined to recipients and the per-split payment aggregate (same shape as
    * getSplitsByTransaction) so the row carries the real `recipient_name` /
@@ -637,7 +505,7 @@ export const splitRepository = {
    * @param {number} splitId
    * @returns {Promise<FormattedSplit|null>}
    */
-  async getSplitById(splitId) {
+  async getSplitById(splitId, client = null) {
     const sql = `
       SELECT ts.*, r.name AS recipient_name,
              COALESCE(sp_agg.paid, 0) AS amount_paid
@@ -648,14 +516,13 @@ export const splitRepository = {
       ) sp_agg ON true
       WHERE ts.id = $1
     `;
-    const result = await query(sql, [splitId]);
+    const result = await (client || { query }).query(sql, [splitId]);
     return result.rows[0] ? formatSplit(result.rows[0]) : null;
   },
 
   /**
-   * Sum of existing payments against a split. Used by route-layer
-   * overpayment validation before INSERT. The authoritative guard is
-   * addPayment's row lock + storage-precision validation. Migration 0088
+   * Sum existing payments against a split. The authoritative service guard
+   * uses a row lock plus storage-precision validation. Migration 0088
    * removes the legacy-only DB trigger so upgraded and fresh databases share
    * the same canonical enforcement path.
    *
@@ -685,13 +552,24 @@ export const splitRepository = {
    * }} input
    * @returns {Promise<{ id: string }>} `split_audit.id` is BIGSERIAL — a string
    */
-  async writeAudit({ split_id, action, actor = null, payload = null, client = null }) {
+  async writeAudit({
+    split_id,
+    action,
+    actor = null,
+    payload = null,
+    client = null,
+  }) {
     const sql = `
       INSERT INTO split_audit (split_id, action, actor, payload)
       VALUES ($1, $2, $3, $4)
       RETURNING id
     `;
-    const params = [split_id, action, actor, payload ? JSON.stringify(payload) : null];
+    const params = [
+      split_id,
+      action,
+      actor,
+      payload ? JSON.stringify(payload) : null,
+    ];
     const runner = client || { query };
     const result = await runner.query(sql, params);
     return result.rows[0];
@@ -739,7 +617,7 @@ function formatPayment(row) {
  * @param {any} row
  * @returns {FormattedSplit}
  */
-function formatSplit(row) {
+export function formatSplit(row) {
   return {
     id: row.id,
     transaction_id: row.transaction_id,

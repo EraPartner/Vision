@@ -3,11 +3,9 @@
  *
  */
 
-import { query, withTransaction } from '../database/connection.js';
-import { sanitizeUpdateFields } from '../lib/validation.js';
-import { todayAppDateString } from '../lib/timezone.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
-import { stampAccountIdForUpdate } from './transactionRepository.js';
+import { query } from "../database/connection.js";
+import { todayAppDateString } from "../lib/timezone.js";
+import { buildSetClauses } from "../lib/sqlClauses.js";
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 /** @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow */
@@ -57,7 +55,7 @@ const PLANNED_CATEGORY_NAME_SQL = `CASE
 // Display the recipient cluster root, matching transactionRepository. Keep
 // pt.recipient_id unchanged so edit/match behavior still targets the stored
 // recipient row; this expression is presentation-only.
-const PLANNED_RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
+const PLANNED_RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
 
 // `acct.name AS bank_account` is selected AFTER `pt.*` so the projected
 // `bank_account` key resolves to the canonical accounts.name over the FK
@@ -88,11 +86,14 @@ const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
 async function hydratePlannedRow(row, id) {
   const execResult = await query(
     `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
-    [id]
+    [id],
   );
   row.executions = execResult.rows;
   row.execution_count = execResult.rows.length;
-  row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
+  row.executed_transaction_id =
+    execResult.rows.length > 0
+      ? execResult.rows[0].executed_transaction_id
+      : null;
 
   if (row.is_loan) {
     const scheduleResult = await query(
@@ -100,7 +101,7 @@ async function hydratePlannedRow(row, id) {
            FROM planned_transaction_loan_schedule
           WHERE planned_transaction_id = $1
           ORDER BY installment_number ASC`,
-      [id]
+      [id],
     );
     row.loan_schedule = scheduleResult.rows;
   } else {
@@ -135,20 +136,41 @@ function buildPlannedTransactionWhereClause({
   search = null,
   active = true,
 } = {}) {
-  let whereClause = 'WHERE 1=1';
+  let whereClause = "WHERE 1=1";
   const params = [];
   let paramIdx = 1;
 
   if (active) whereClause += ` AND pt.is_active = true`;
-  if (startDate) { whereClause += ` AND pt.planned_date >= $${paramIdx++}`; params.push(startDate); }
-  if (endDate) { whereClause += ` AND pt.planned_date <= $${paramIdx++}`; params.push(endDate); }
+  if (startDate) {
+    whereClause += ` AND pt.planned_date >= $${paramIdx++}`;
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClause += ` AND pt.planned_date <= $${paramIdx++}`;
+    params.push(endDate);
+  }
   // Bank filter via the FK (ADR-088) — matches the account's canonical name,
   // never the retired bank_account string.
-  if (bankAccount) { whereClause += ` AND pt.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`; params.push(`%${bankAccount}%`); }
-  if (categoryId != null) { whereClause += ` AND pt.category_id = $${paramIdx++}`; params.push(categoryId); }
-  if (recipientId != null) { whereClause += ` AND pt.recipient_id = $${paramIdx++}`; params.push(recipientId); }
-  if (isRecurring != null) { whereClause += ` AND pt.is_recurring = $${paramIdx++}`; params.push(isRecurring); }
-  if (isExecuted != null) { whereClause += ` AND pt.is_executed = $${paramIdx++}`; params.push(isExecuted); }
+  if (bankAccount) {
+    whereClause += ` AND pt.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`;
+    params.push(`%${bankAccount}%`);
+  }
+  if (categoryId != null) {
+    whereClause += ` AND pt.category_id = $${paramIdx++}`;
+    params.push(categoryId);
+  }
+  if (recipientId != null) {
+    whereClause += ` AND pt.recipient_id = $${paramIdx++}`;
+    params.push(recipientId);
+  }
+  if (isRecurring != null) {
+    whereClause += ` AND pt.is_recurring = $${paramIdx++}`;
+    params.push(isRecurring);
+  }
+  if (isExecuted != null) {
+    whereClause += ` AND pt.is_executed = $${paramIdx++}`;
+    params.push(isExecuted);
+  }
   if (search) {
     const sp = `%${search}%`;
     whereClause += ` AND (
@@ -175,7 +197,11 @@ function buildPlannedTransactionWhereClause({
  * @param {LoanScheduleRow[]|Array<Record<string, any>>} [scheduleEntries]
  * @returns {Promise<void>}
  */
-async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries = []) {
+export async function insertLoanScheduleBatch(
+  client,
+  plannedTransactionId,
+  scheduleEntries = [],
+) {
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
 
   const values = [];
@@ -183,7 +209,9 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
   let paramIdx = 1;
 
   for (const installment of scheduleEntries) {
-    values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`);
+    values.push(
+      `($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`,
+    );
     params.push(
       plannedTransactionId,
       installment.installment_number,
@@ -191,7 +219,7 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
       installment.payment_amount,
       installment.principal_amount,
       installment.interest_amount,
-      installment.remaining_principal
+      installment.remaining_principal,
     );
   }
 
@@ -199,8 +227,8 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
     `INSERT INTO planned_transaction_loan_schedule (
        planned_transaction_id, installment_number, due_date,
        payment_amount, principal_amount, interest_amount, remaining_principal
-     ) VALUES ${values.join(', ')}`,
-    params
+     ) VALUES ${values.join(", ")}`,
+    params,
   );
 }
 
@@ -210,11 +238,18 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
  * @param {string[]|null|undefined} slugs
  * @returns {Promise<void>}
  */
-async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
-  await client.query('DELETE FROM planned_transaction_tags WHERE planned_transaction_id = $1', [plannedTransactionId]);
+export async function setPlannedTransactionTags(
+  client,
+  plannedTransactionId,
+  slugs,
+) {
+  await client.query(
+    "DELETE FROM planned_transaction_tags WHERE planned_transaction_id = $1",
+    [plannedTransactionId],
+  );
   if (!slugs || slugs.length === 0) return;
   const resolved = await client.query(
-    'SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+    "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
   );
   if (resolved.rows.length === 0) return;
@@ -230,27 +265,161 @@ async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
 /**
  * Apply the sanitized SET fields to a planned row inside the caller's
  * transaction — or, when no updatable fields remain, just verify the row
- * exists. Shared by update() and updateWithLoanSchedule() so the two
- * transaction bodies cannot drift.
+ * exists. The service uses this primitive when a parent update must be atomic
+ * with related tag and loan-schedule writes.
  *
  * @param {QueryRunner} client
  * @param {number} id
  * @param {Record<string, any>} sanitized  output of sanitizeUpdateFields()
  * @returns {Promise<boolean>} false when the row is gone
  */
-async function applyPlannedFieldUpdate(client, id, sanitized) {
-  const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
+export async function applyPlannedFieldUpdate(client, id, sanitized) {
+  const {
+    clauses: setClauses,
+    params,
+    nextIdx: paramIdx,
+  } = buildSetClauses(sanitized, { quote: true });
   if (setClauses.length === 0) {
-    const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
+    const r = await client.query(
+      "SELECT id FROM planned_transactions WHERE id = $1",
+      [id],
+    );
     return r.rowCount > 0;
   }
-  setClauses.push('updated_at = NOW()');
+  setClauses.push("updated_at = NOW()");
   params.push(id);
   const r = await client.query(
-    `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
+    `UPDATE planned_transactions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING id`,
     params,
   );
   return r.rowCount > 0;
+}
+
+/**
+ * Apply a parameterized field update and hydrate the resulting row.
+ * @param {number} id
+ * @param {Record<string, any>} sanitized
+ * @returns {Promise<HydratedPlannedTransactionRow|null>}
+ */
+export async function updatePlannedFields(id, sanitized) {
+  const {
+    clauses: setClauses,
+    params,
+    nextIdx: paramIdx,
+  } = buildSetClauses(sanitized, { quote: true });
+  if (setClauses.length === 0) return plannedTransactionRepository.getById(id);
+  setClauses.push("updated_at = NOW()");
+  params.push(id);
+  const result = await query(
+    `WITH updated AS (
+       UPDATE planned_transactions
+       SET ${setClauses.join(", ")}
+       WHERE id = $${paramIdx}
+       RETURNING *
+     )
+     SELECT ${PLANNED_SELECT_FIELDS}
+     FROM updated pt
+     ${PLANNED_JOINS}`,
+    params,
+  );
+  if (result.rows.length === 0) return null;
+  return hydratePlannedRow(result.rows[0], id);
+}
+
+/**
+ * Replace one planned transaction's amortization rows using the caller's
+ * transaction client.
+ *
+ * @param {QueryRunner} client
+ * @param {number} plannedTransactionId
+ * @param {Array<Record<string, any>>} [scheduleEntries]
+ */
+export async function replaceLoanScheduleInTransaction(
+  client,
+  plannedTransactionId,
+  scheduleEntries = [],
+) {
+  await client.query(
+    "DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1",
+    [plannedTransactionId],
+  );
+  await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
+}
+
+/** @param {QueryRunner} client @param {Record<string, any>} input */
+export async function insertPlannedTransactionInTransaction(client, input) {
+  const result = await client.query(
+    `INSERT INTO planned_transactions (
+       planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
+       is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
+       reminder_days_before, is_executed, is_active,
+       is_loan, loan_type, loan_principal, loan_annual_interest_rate,
+       loan_term_months, loan_start_date, loan_payment_day,
+       loan_regular_payment_amount, loan_first_payment_date
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9,
+       $10, $11, $12, $13, $14, false, true,
+       $15, $16, $17, $18, $19, $20, $21, $22, $23
+     ) RETURNING id`,
+    [
+      input.planned_date,
+      input.bank_account,
+      input.recipient_id,
+      input.amount,
+      input.memo,
+      input.currency,
+      input.category_id,
+      input.comment,
+      input.url,
+      input.is_recurring,
+      input.recurrence_pattern,
+      input.recurrence_end_date,
+      input.max_occurrences,
+      input.reminder_days_before,
+      input.is_loan,
+      input.loan_type,
+      input.loan_principal,
+      input.loan_annual_interest_rate,
+      input.loan_term_months,
+      input.loan_start_date,
+      input.loan_payment_day,
+      input.loan_regular_payment_amount,
+      input.loan_first_payment_date,
+    ],
+  );
+  return result.rows[0].id;
+}
+
+/** @param {QueryRunner} client @param {number} plannedTransactionId @param {number} executedTransactionId @param {string} executionDate */
+export async function insertExecutionInTransaction(
+  client,
+  plannedTransactionId,
+  executedTransactionId,
+  executionDate,
+) {
+  const result = await client.query(
+    `INSERT INTO planned_transaction_executions
+       (planned_transaction_id, executed_transaction_id, execution_date)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (planned_transaction_id, executed_transaction_id) DO NOTHING
+     RETURNING id`,
+    [plannedTransactionId, executedTransactionId, executionDate],
+  );
+  return result.rowCount > 0;
+}
+
+/** @param {QueryRunner} client @param {number} transactionId @param {number[]} tagIds */
+export async function inheritTransactionTagsInTransaction(
+  client,
+  transactionId,
+  tagIds,
+) {
+  await client.query(
+    `INSERT INTO transaction_tags (transaction_id, tag_id)
+     SELECT $1, unnest($2::int[])
+     ON CONFLICT DO NOTHING`,
+    [transactionId, tagIds],
+  );
 }
 
 export const plannedTransactionRepository = {
@@ -259,9 +428,17 @@ export const plannedTransactionRepository = {
    * @returns {Promise<{ items: HydratedPlannedTransactionRow[], total: number }>}
    */
   async getAll({
-    limit = 50, offset = 0, startDate = null, endDate = null,
-    bankAccount = null, categoryId = null, recipientId = null,
-    isRecurring = null, isExecuted = null, search = null, active = true,
+    limit = 50,
+    offset = 0,
+    startDate = null,
+    endDate = null,
+    bankAccount = null,
+    categoryId = null,
+    recipientId = null,
+    isRecurring = null,
+    isExecuted = null,
+    search = null,
+    active = true,
   } = {}) {
     const { whereClause, params } = buildPlannedTransactionWhereClause({
       startDate,
@@ -289,7 +466,8 @@ export const plannedTransactionRepository = {
     `;
 
     const result = await query(sql, [...params, limit, offset]);
-    let total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    let total =
+      result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     if (result.rows.length === 0) {
       const countSql = `
         SELECT count(*)
@@ -300,7 +478,9 @@ export const plannedTransactionRepository = {
       const countResult = await query(countSql, params);
       total = parseInt(countResult.rows[0]?.count, 10) || 0;
     }
-    const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => row);
+    const rows = result.rows.map(
+      (/** @type {any} */ { total_count: _total_count, ...row }) => row,
+    );
 
     const plannedTransactionIds = rows.map((/** @type {any} */ row) => row.id);
     const executionsByPlannedTransactionId = new Map();
@@ -310,14 +490,23 @@ export const plannedTransactionRepository = {
          FROM planned_transaction_executions
          WHERE planned_transaction_id = ANY($1::int[])
          ORDER BY planned_transaction_id ASC, execution_date DESC`,
-        [plannedTransactionIds]
+        [plannedTransactionIds],
       );
 
       for (const execution of executionResult.rows) {
-        if (!executionsByPlannedTransactionId.has(execution.planned_transaction_id)) {
-          executionsByPlannedTransactionId.set(execution.planned_transaction_id, []);
+        if (
+          !executionsByPlannedTransactionId.has(
+            execution.planned_transaction_id,
+          )
+        ) {
+          executionsByPlannedTransactionId.set(
+            execution.planned_transaction_id,
+            [],
+          );
         }
-        executionsByPlannedTransactionId.get(execution.planned_transaction_id).push(execution);
+        executionsByPlannedTransactionId
+          .get(execution.planned_transaction_id)
+          .push(execution);
       }
     }
 
@@ -332,15 +521,24 @@ export const plannedTransactionRepository = {
            FROM planned_transaction_loan_schedule
           WHERE planned_transaction_id = ANY($1::int[])
           ORDER BY planned_transaction_id ASC, installment_number ASC`,
-        [loanPlannedTransactionIds]
+        [loanPlannedTransactionIds],
       );
 
       for (const scheduleRow of scheduleResult.rows) {
-        if (!schedulesByPlannedTransactionId.has(scheduleRow.planned_transaction_id)) {
-          schedulesByPlannedTransactionId.set(scheduleRow.planned_transaction_id, []);
+        if (
+          !schedulesByPlannedTransactionId.has(
+            scheduleRow.planned_transaction_id,
+          )
+        ) {
+          schedulesByPlannedTransactionId.set(
+            scheduleRow.planned_transaction_id,
+            [],
+          );
         }
         const { planned_transaction_id, ...loanScheduleEntry } = scheduleRow;
-        schedulesByPlannedTransactionId.get(planned_transaction_id).push(loanScheduleEntry);
+        schedulesByPlannedTransactionId
+          .get(planned_transaction_id)
+          .push(loanScheduleEntry);
       }
     }
 
@@ -367,9 +565,10 @@ export const plannedTransactionRepository = {
       const executions = executionsByPlannedTransactionId.get(row.id) || [];
       row.executions = executions;
       row.execution_count = executions.length;
-      row.executed_transaction_id = executions.length > 0 ? executions[0].executed_transaction_id : null;
+      row.executed_transaction_id =
+        executions.length > 0 ? executions[0].executed_transaction_id : null;
       row.loan_schedule = row.is_loan
-        ? (schedulesByPlannedTransactionId.get(row.id) || [])
+        ? schedulesByPlannedTransactionId.get(row.id) || []
         : [];
       row.tags = tagsByPlannedTransactionId.get(row.id) || [];
     }
@@ -402,7 +601,7 @@ export const plannedTransactionRepository = {
         WHERE pt.is_active = true
           AND pt.is_executed = false
           AND pt.recipient_id IS NOT NULL
-          AND (pt.is_loan = false OR pt.is_loan IS NULL)`
+          AND (pt.is_loan = false OR pt.is_loan IS NULL)`,
     );
     return result.rows;
   },
@@ -422,200 +621,6 @@ export const plannedTransactionRepository = {
     if (result.rows.length === 0) return null;
 
     return hydratePlannedRow(result.rows[0], id);
-  },
-
-  /**
-   * @param {Record<string, any> & {
-   *   planned_date: string,
-   *   amount: number|string,
-   *   is_loan?: boolean,
-   *   loan_schedule?: Array<Record<string, any>>,
-   *   tags?: string[]|null,
-   * }} input
-   * @returns {Promise<HydratedPlannedTransactionRow|null>}
-   */
-  async create({
-    planned_date,
-    bank_account,
-    recipient_id,
-    amount,
-    memo,
-    currency,
-    category_id,
-    comment,
-    url,
-    is_recurring,
-    recurrence_pattern,
-    recurrence_end_date,
-    max_occurrences,
-    reminder_days_before,
-    is_loan,
-    loan_type,
-    loan_principal,
-    loan_annual_interest_rate,
-    loan_term_months,
-    loan_start_date,
-    loan_payment_day,
-    loan_regular_payment_amount,
-    loan_first_payment_date,
-    loan_schedule,
-    tags = null,
-  }) {
-    const sql = `
-      INSERT INTO planned_transactions (
-        planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
-        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
-        reminder_days_before, is_executed, is_active,
-        is_loan, loan_type, loan_principal, loan_annual_interest_rate,
-        loan_term_months, loan_start_date, loan_payment_day,
-        loan_regular_payment_amount, loan_first_payment_date
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, $12, $13,
-        $14, false, true,
-        $15, $16, $17, $18,
-        $19, $20, $21,
-        $22, $23
-      )
-      RETURNING *
-    `;
-    // Loans are monthly by construction (generateLoanSchedule walks months via
-    // addMonthsAtDay), so they advance like a monthly recurrence on /execute.
-    // Storing 'monthly' (not null) lets executeAndAdvance roll planned_date
-    // forward — a null left the loan row perpetually due and re-executable.
-    if (is_loan) {
-      recurrence_pattern = 'monthly';
-    }
-
-    const params = [
-      planned_date,
-      bank_account ? bank_account.toUpperCase() : null,
-      recipient_id, amount,
-      memo ? memo.toUpperCase() : null,
-      // Default to EUR rather than NULL (currency is NOT NULL at the DB level —
-      // migration 0046 — and reads already coalesce missing → EUR).
-      currency ? currency.toUpperCase() : 'EUR',
-      category_id, comment, url || null,
-      is_recurring || false,
-      recurrence_pattern || null,
-      recurrence_end_date || null,
-      max_occurrences != null ? Number(max_occurrences) : null,
-      reminder_days_before != null ? Number(reminder_days_before) : null,
-      is_loan || false,
-      loan_type || null,
-      loan_principal != null ? Number(loan_principal) : null,
-      loan_annual_interest_rate != null ? Number(loan_annual_interest_rate) : null,
-      loan_term_months != null ? Number(loan_term_months) : null,
-      loan_start_date || null,
-      loan_payment_day != null ? Number(loan_payment_day) : null,
-      loan_regular_payment_amount != null ? Number(loan_regular_payment_amount) : null,
-      loan_first_payment_date || null,
-    ];
-    const plannedId = await withTransaction(async (client) => {
-      const result = await client.query(sql, params);
-      const newId = result.rows[0].id;
-
-      if (is_loan && Array.isArray(loan_schedule) && loan_schedule.length > 0) {
-        await insertLoanScheduleBatch(client, newId, loan_schedule);
-      }
-
-      if (Array.isArray(tags) && tags.length > 0) {
-        await setPlannedTransactionTags(client, newId, tags);
-      }
-
-      return newId;
-    });
-    return this.getById(plannedId);
-  },
-
-  /**
-   * @param {number} id
-   * @param {Record<string, any> & { tags?: string[] }} fields
-   * @returns {Promise<HydratedPlannedTransactionRow|null>}
-   */
-  async update(id, fields) {
-    const { tags, ...txFields } = fields;
-    // Sanitize field names to prevent SQL injection via column names
-    const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
-    // A bank_account edit also writes the resolved FK (ADR-088): the 0062
-    // sync trigger is lookup-only on UPDATE, so without this a first-seen
-    // label would leave a ghost string with a stale/NULL account_id. See
-    // stampAccountIdForUpdate (transactionRepository) for the full contract.
-    await stampAccountIdForUpdate(sanitized);
-
-    if (tags !== undefined) {
-      const found = await withTransaction(async (client) => {
-        if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
-        await setPlannedTransactionTags(client, id, tags);
-        return true;
-      });
-      if (!found) return null;
-      return this.getById(id);
-    }
-
-    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
-    if (setClauses.length === 0) return this.getById(id);
-
-    setClauses.push(`updated_at = NOW()`);
-    params.push(id);
-    const sql = `
-      WITH updated AS (
-        UPDATE planned_transactions
-        SET ${setClauses.join(', ')}
-        WHERE id = $${paramIdx}
-        RETURNING *
-      )
-      SELECT ${PLANNED_SELECT_FIELDS}
-      FROM updated pt
-      ${PLANNED_JOINS}
-    `;
-
-    const result = await query(sql, params);
-    if (result.rows.length === 0) return null;
-
-    return hydratePlannedRow(result.rows[0], id);
-  },
-
-  /**
-   * Atomic counterpart to update(): applies the field update AND replaces the
-   * loan amortization schedule inside ONE transaction. The PATCH route uses this
-   * whenever a loan parameter changed (or a loan was turned off) so the planned
-   * row (loan_regular_payment_amount / loan_first_payment_date / is_loan) and the
-   * planned_transaction_loan_schedule rows can never disagree after a partial
-   * failure. `scheduleEntries` of [] clears the schedule.
-   *
-   * @param {number} id
-   * @param {Record<string, any> & { tags?: string[] }} fields  sanitized update fields (may include `tags`)
-   * @param {Array<Record<string, any>>} [scheduleEntries]  installments to write ([] clears)
-   * @returns {Promise<HydratedPlannedTransactionRow|null>} the hydrated row, or null if the row is gone
-   */
-  async updateWithLoanSchedule(id, fields, scheduleEntries = []) {
-    const { tags, ...txFields } = fields;
-    const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
-    // Same ADR-088 UPDATE-path resolution as update() — see stampAccountIdForUpdate.
-    await stampAccountIdForUpdate(sanitized);
-
-    const found = await withTransaction(async (client) => {
-      if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
-
-      if (tags !== undefined) {
-        await setPlannedTransactionTags(client, id, tags);
-      }
-
-      // Replace the amortization schedule in the SAME transaction as the field
-      // update so loan params and per-installment rows commit (or roll back) together.
-      await client.query(
-        'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
-        [id],
-      );
-      await insertLoanScheduleBatch(client, id, scheduleEntries);
-
-      return true;
-    });
-
-    if (!found) return null;
-    return this.getById(id);
   },
 
   /**
@@ -682,7 +687,10 @@ export const plannedTransactionRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    const result = await query('DELETE FROM planned_transactions WHERE id = $1', [id]);
+    const result = await query(
+      "DELETE FROM planned_transactions WHERE id = $1",
+      [id],
+    );
     return result.rowCount > 0;
   },
 
@@ -692,90 +700,22 @@ export const plannedTransactionRepository = {
    * @param {string|null} [executionDate] 'YYYY-MM-DD'; defaults to app-timezone today
    * @returns {Promise<void>}
    */
-  async addExecution(plannedTransactionId, executedTransactionId, executionDate) {
+  async addExecution(
+    plannedTransactionId,
+    executedTransactionId,
+    executionDate,
+  ) {
     await query(
       `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id, execution_date)
        VALUES ($1, $2, $3)`,
       // App-timezone today (ADR-009) — the UTC calendar day is yesterday
       // between local midnight and 01:00/02:00 Brussels.
-      [plannedTransactionId, executedTransactionId, executionDate || todayAppDateString()]
+      [
+        plannedTransactionId,
+        executedTransactionId,
+        executionDate || todayAppDateString(),
+      ],
     );
-  },
-
-  /**
-   * Atomically record an execution and advance the parent planned_transactions row.
-   *
-   * Phase 3 replacement for sequential `addExecution` + `update` calls. Runs
-   * both writes inside a single BEGIN/COMMIT so a mid-flight failure cannot
-   * leave an execution row without its matching state advance.
-   *
-   * Idempotent via the UNIQUE(planned_transaction_id, executed_transaction_id)
-   * index (alembic 0001 baseline). A retried request raises Postgres error
-   * 23505, which this method treats as success and returns `{ duplicate: true }`
-   * so the caller can respond without creating a new execution.
-   *
-   * @param {number} plannedTransactionId
-   * @param {number} executedTransactionId
-   * @param {string} executionDate - YYYY-MM-DD
-   * @param {Record<string, any>} [updateFields] - sanitized fields for planned_transactions update
-   * @param {number[]|null} [tagIdsToInherit] - tag ids copied onto the executed transaction
-   * @returns {Promise<{ duplicate: boolean }>}
-   */
-  async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null) {
-    return withTransaction(async (client) => {
-      // ON CONFLICT DO NOTHING → idempotent retry of the same execute call
-      // (unique_violation on (planned_transaction_id, executed_transaction_id)).
-      const insertResult = await client.query(
-        `INSERT INTO planned_transaction_executions
-           (planned_transaction_id, executed_transaction_id, execution_date)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (planned_transaction_id, executed_transaction_id) DO NOTHING
-         RETURNING id`,
-        [plannedTransactionId, executedTransactionId, executionDate]
-      );
-
-      if (insertResult.rowCount === 0) {
-        return { duplicate: true };
-      }
-
-      const sanitized = sanitizeUpdateFields('planned_transactions', updateFields);
-      const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
-
-      if (setClauses.length > 0) {
-        setClauses.push('updated_at = NOW()');
-        params.push(plannedTransactionId);
-        await client.query(
-          `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`,
-          params
-        );
-      }
-
-      if (Array.isArray(tagIdsToInherit) && tagIdsToInherit.length > 0) {
-        await client.query(
-          `INSERT INTO transaction_tags (transaction_id, tag_id)
-           SELECT $1, unnest($2::int[])
-           ON CONFLICT DO NOTHING`,
-          [executedTransactionId, tagIdsToInherit],
-        );
-      }
-
-      return { duplicate: false };
-    });
-  },
-
-  /**
-   * @param {number} plannedTransactionId
-   * @param {Array<Record<string, any>>} [scheduleEntries]
-   * @returns {Promise<void>}
-   */
-  async replaceLoanSchedule(plannedTransactionId, scheduleEntries = []) {
-    return withTransaction(async (client) => {
-      await client.query(
-        'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
-        [plannedTransactionId]
-      );
-      await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
-    });
   },
 
   /**

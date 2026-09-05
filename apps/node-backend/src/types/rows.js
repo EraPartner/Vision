@@ -370,8 +370,19 @@
  */
 
 /**
- * `AccountRow` plus the balance/provenance columns `getAll` adds via
- * `COMPUTED_BALANCE_LATERAL` + `computedBalanceByCurrencyAggLateral`.
+ * Raw account-list row returned by `accountRepository.getAll` before service
+ * conversion and API shaping.
+ *
+ * @typedef {AccountRow & {
+ *   balance_parts: Array<{currency:string, balance:string}>|null,
+ *   has_transactions: boolean,
+ *   anchor_date: string|null,
+ *   post_anchor_count: string|null,
+ * }} AccountBalanceQueryRow
+ */
+
+/**
+ * `AccountRow` plus the balance/provenance columns `accountService.list` adds.
  * `post_anchor_count` is re-emitted as a `number` (the raw `COUNT(*)` bigint
  * string is parsed) and both provenance fields become `undefined` rather than
  * `null` when nothing is stamped. `computed_balance` (Σ of the account's
@@ -384,6 +395,9 @@
  *
  * @typedef {AccountRow & {
  *   computed_balance: number,
+ *   balance_parts: Array<{currency:string, balance:number}>,
+ *   balance_incomplete: boolean,
+ *   unconverted_currencies: string[],
  *   reconcilable_balance: number,
  *   reconcilable_currency: string,
  *   drift: number|null,
@@ -536,6 +550,7 @@
  * @property {number|null} price_per_unit Coerced from NUMERIC(18,6).
  * @property {number|null} fees
  * @property {number|null} taxes
+ * @property {'gross'|'net'|'unknown'} dividend_amount_convention Whether a dividend amount is gross or net; unknown for legacy or unclassified rows.
  * @property {string} currency
  * @property {number|null} fx_rate_to_eur Coerced from NUMERIC(20,10).
  * @property {string|null} note

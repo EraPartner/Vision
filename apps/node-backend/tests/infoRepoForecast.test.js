@@ -82,7 +82,9 @@ describe("getCashflowComparison", () => {
       "date < date_trunc('month', $1::date)",
     );
     expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 24]);
-    expect(query.mock.calls[1][0]).toContain("date <= $1::date");
+    expect(query.mock.calls[1][0]).toContain(
+      "date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')",
+    );
     expect(query.mock.calls[1][1]).toEqual(["2025-04-15"]);
     expect(query.mock.calls[2][0]).toContain("FROM planned_transactions");
     expect(query.mock.calls[3][0]).toContain("month_key");
@@ -113,6 +115,24 @@ describe("getCashflowComparison", () => {
     expect(day20.current).toBeNull();
     const day10 = r.without_planned.find((d) => d.day === 10);
     expect(day10.current).toBe(0); // up to current day, value non-null
+  });
+
+  it("projects scheduled ledger rows without treating them as current", async () => {
+    stubQueries("2025-01-05");
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
+      [],
+      [
+        { day_of_month: 10, amount_eur: 50 },
+        { day_of_month: 20, amount_eur: -30 },
+      ],
+      [],
+      [],
+    ]);
+
+    const r = await getCashflowComparison([], [], "EUR");
+    expect(r.without_planned.find((d) => d.day === 20)?.current).toBeNull();
+    expect(r.with_planned.find((d) => d.day === 19)?.current).toBe(50);
+    expect(r.with_planned.find((d) => d.day === 20)?.current).toBe(20);
   });
 
   it("builds cumulative averages from past month data", async () => {
@@ -214,6 +234,23 @@ describe("getCashflowForecastData", () => {
     expect(r.currentActual).toEqual([]);
   });
 
+  it("separates future ledger rows from actual-to-date", async () => {
+    query.mockResolvedValue({ rows: [] });
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
+      [],
+      [
+        { date: "2025-04-15", amount_eur: 10 },
+        { date: "2025-04-20", amount_eur: -25 },
+      ],
+      [],
+      [],
+    ]);
+
+    const r = await getCashflowForecastData(3);
+    expect(r.currentActual).toEqual([{ date: "2025-04-15", net: 10 }]);
+    expect(r.scheduledActual).toEqual([{ date: "2025-04-20", net: -25 }]);
+  });
+
   it("aggregates same-day decimal amounts without binary float drift", async () => {
     query.mockResolvedValue({ rows: [] });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
@@ -309,7 +346,8 @@ describe("getCashflowForecastDataRolling", () => {
       "make_interval(months => $3::int)",
     );
     expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 30, 12]);
-    expect(query.mock.calls[1][1]).toEqual(["2025-04-15", 30]);
+    expect(query.mock.calls[1][0]).toContain("make_interval(days => $3::int)");
+    expect(query.mock.calls[1][1]).toEqual(["2025-04-15", 30, 60]);
     expect(query.mock.calls[2][0]).toContain("planned_date > $1::date");
     expect(query.mock.calls[2][0]).toContain("make_interval(days => $2::int)");
     expect(query.mock.calls[2][1]).toEqual(["2025-04-15", 60]);
@@ -322,12 +360,16 @@ describe("getCashflowForecastDataRolling", () => {
         { date: "2025-02-01", amount_eur: 10 },
         { date: "2025-01-15", amount_eur: 20 },
       ],
-      [{ date: "2025-04-01", amount_eur: 5 }],
+      [
+        { date: "2025-04-01", amount_eur: 5 },
+        { date: "2025-04-20", amount_eur: -15 },
+      ],
       [{ date: "2025-05-15", amount_eur: 100 }],
     ]);
     const r = await getCashflowForecastDataRolling(3, 30, 60);
     expect(r.history.map((d) => d.date)).toEqual(["2025-01-15", "2025-02-01"]);
     expect(r.currentActual).toEqual([{ date: "2025-04-01", net: 5 }]);
+    expect(r.scheduledActual).toEqual([{ date: "2025-04-20", net: -15 }]);
     expect(r.plannedCurrent).toEqual([{ date: "2025-05-15", net: 100 }]);
   });
 });
@@ -347,6 +389,9 @@ describe("getCashflowForecastDataByCategory", () => {
       "make_interval(months => $2::int)",
     );
     expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 6]);
+    expect(query.mock.calls[1][0]).toContain(
+      "date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')",
+    );
   });
 
   it("aggregates by date AND category, preserving labels", async () => {
@@ -393,6 +438,42 @@ describe("getCashflowForecastDataByCategory", () => {
         general: "Bills",
         detail: "Rent",
         net: -1000,
+      },
+    ]);
+  });
+
+  it("separates scheduled category rows from actual-to-date", async () => {
+    query.mockResolvedValue({ rows: [] });
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
+      [],
+      [
+        {
+          date: "2025-04-15",
+          category_id: 1,
+          general: "Bills",
+          detail: "Rent",
+          amount_eur: -10,
+        },
+        {
+          date: "2025-04-20",
+          category_id: 1,
+          general: "Bills",
+          detail: "Rent",
+          amount_eur: -25,
+        },
+      ],
+    ]);
+
+    const r = await getCashflowForecastDataByCategory(3);
+    expect(r.currentActualByCategory).toHaveLength(1);
+    expect(r.currentActualByCategory[0].date).toBe("2025-04-15");
+    expect(r.scheduledActualByCategory).toEqual([
+      {
+        date: "2025-04-20",
+        category_id: 1,
+        general: "Bills",
+        detail: "Rent",
+        net: -25,
       },
     ]);
   });

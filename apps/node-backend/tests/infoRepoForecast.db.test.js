@@ -249,11 +249,12 @@ describe.skipIf(!hasTestDatabase())(
         expect(byDay[r.days_in_month].average).toBe(65);
       });
 
-      it("accumulates the current month up to today and leaves later days null", async () => {
+      it("keeps future ledger rows out of current and includes them in the projection", async () => {
         await seedBase();
         await insertTxn({ dateExpr: monthDay(0, 1), amount: "50.00" });
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-10.00" });
-        // A future-dated row inside this month is invisible (t.date <= CURRENT_DATE).
+        // A future-dated row is scheduled: it is not actual-to-date, but it is
+        // part of the projected path once its effective day is reached.
         await insertTxn({
           dateExpr:
             "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
@@ -272,6 +273,7 @@ describe.skipIf(!hasTestDatabase())(
         if (r.current_day < r.days_in_month) {
           expect(byDay[r.current_day + 1].current).toBeNull();
           expect(byDay[r.days_in_month].current).toBeNull();
+          expect(r.with_planned[r.days_in_month - 1].current).toBe(-460);
         }
         expect(r.without_planned).toHaveLength(r.days_in_month);
         expect(r.with_planned).toHaveLength(r.days_in_month);
@@ -379,6 +381,11 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ dateExpr: monthDay(2, 5), amount: "10.00" });
         await insertTxn({ dateExpr: monthDay(4, 5), amount: "9999.00" }); // outside a 3-month history
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-7.00" });
+        await insertTxn({
+          dateExpr:
+            "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+          amount: "-11.00",
+        });
         await insertPlanned({ dateExpr: monthDay(0, 1), amount: "-20.00" });
         await insertPlanned({ dateExpr: monthDay(1, 5), amount: "-30.00" });
 
@@ -389,9 +396,23 @@ describe.skipIf(!hasTestDatabase())(
           { date: await ymd(monthDay(2, 5)), net: 10 },
           { date: await ymd(monthDay(1, 5)), net: 60 }, // 100 − 40, ascending by date
         ]);
+        const today = await ymd("CURRENT_DATE");
+        const lastDay = await ymd(
+          "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+        );
         expect(r.currentActual).toEqual([
-          { date: await ymd("CURRENT_DATE"), net: -7 },
+          { date: today, net: today === lastDay ? -18 : -7 },
         ]);
+        if (today !== lastDay) {
+          expect(r.scheduledActual).toEqual([
+            {
+              date: lastDay,
+              net: -11,
+            },
+          ]);
+        } else {
+          expect(r.scheduledActual).toEqual([]);
+        }
         expect(r.plannedCurrent).toEqual([
           { date: await ymd(monthDay(0, 1)), net: -20 },
         ]);
@@ -415,6 +436,10 @@ describe.skipIf(!hasTestDatabase())(
           amount: "5.00",
         });
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-3.00" });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE + interval '10 days'",
+          amount: "-12.00",
+        });
         await insertPlanned({ dateExpr: "CURRENT_DATE", amount: "-99.00" }); // not > CURRENT_DATE
         await insertPlanned({
           dateExpr: "CURRENT_DATE + interval '10 days'",
@@ -440,6 +465,9 @@ describe.skipIf(!hasTestDatabase())(
         expect(r.currentActual).toEqual([
           { date: await ymd("CURRENT_DATE - interval '30 days'"), net: 5 },
           { date: await ymd("CURRENT_DATE"), net: -3 },
+        ]);
+        expect(r.scheduledActual).toEqual([
+          { date: await ymd("CURRENT_DATE + interval '10 days'"), net: -12 },
         ]);
         expect(r.plannedCurrent).toEqual([
           { date: await ymd("CURRENT_DATE + interval '10 days'"), net: -50 },
@@ -483,6 +511,13 @@ describe.skipIf(!hasTestDatabase())(
           recipientId: rec.misc,
           categoryId: cat.Food,
         });
+        await insertTxn({
+          dateExpr:
+            "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+          amount: "-7.00",
+          recipientId: rec.misc,
+          categoryId: cat.Food,
+        });
 
         const r = await getCashflowForecastDataByCategory(3, [], [], "EUR");
         const day = await ymd(monthDay(1, 5));
@@ -513,15 +548,32 @@ describe.skipIf(!hasTestDatabase())(
           ]),
         );
         expect(r.historyByCategory).toHaveLength(3);
+        const today = await ymd("CURRENT_DATE");
+        const lastDay = await ymd(
+          "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+        );
         expect(r.currentActualByCategory).toEqual([
           {
-            date: await ymd("CURRENT_DATE"),
+            date: today,
             category_id: cat.Food,
             general: "Food",
             detail: "Groceries",
-            net: -5,
+            net: today === lastDay ? -12 : -5,
           },
         ]);
+        expect(r.scheduledActualByCategory).toEqual(
+          today === lastDay
+            ? []
+            : [
+                {
+                  date: lastDay,
+                  category_id: cat.Food,
+                  general: "Food",
+                  detail: "Groceries",
+                  net: -7,
+                },
+              ],
+        );
       });
     });
 

@@ -14,7 +14,7 @@ import {
   escapeCsvValue as sharedEscapeCsvValue,
 } from '@vision/shared-utils/csv';
 
-export { neutralizeCsvFormula };
+export { neutralizeCsvFormula as __neutralizeCsvFormula };
 
 /**
  * @param {unknown} value

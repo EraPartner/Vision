@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildSystemPrompt,
+  __buildSystemPrompt as buildSystemPrompt,
   toOllamaMessage,
   buildChatMessages,
   serializeToolResultForPrompt,

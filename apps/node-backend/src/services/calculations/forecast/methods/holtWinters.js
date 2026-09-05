@@ -12,14 +12,14 @@
  * minimizing in-sample SSE. Cheap; converges well enough for forecast display.
  */
 
-import { densifyDailyHistory } from '../_densify.js';
+import { densifyDailyHistory } from "../_densify.js";
 
 const M1 = 7;
 const M2 = 30;
 const GRID = [0.05, 0.2, 0.4];
 
-export const id = 'holt_winters';
-export const label = 'Holt-Winters';
+export const id = "holt_winters";
+export const label = "Holt-Winters";
 
 /**
  * @param {number[]} y
@@ -62,7 +62,8 @@ function fitRecurrence(y, alpha, beta, g1, g2) {
     const err = y[t] - forecast;
     sse += err * err;
 
-    const newLevel = alpha * (y[t] - s1Lag - s2Lag) + (1 - alpha) * (level + trend);
+    const newLevel =
+      alpha * (y[t] - s1Lag - s2Lag) + (1 - alpha) * (level + trend);
     const newTrend = beta * (newLevel - level) + (1 - beta) * trend;
     s1[t] = g1 * (y[t] - newLevel - s2Lag) + (1 - g1) * s1Lag;
     s2[t] = g2 * (y[t] - newLevel - s1Lag) + (1 - g2) * s2Lag;
@@ -77,7 +78,7 @@ function fitRecurrence(y, alpha, beta, g1, g2) {
  * @param {{history: Array<{date: string, net: number}>, forecastDates: string[]}} ctx
  * @returns {Array<{date: string, value: number}>}
  */
-export function forecast({ history, forecastDates }) {
+function forecast({ history, forecastDates }) {
   const y = densifyDailyHistory(history).map((r) => r.net);
   if (y.length < M2 * 2) {
     return forecastDates.map((date) => ({ date, value: 0 }));
@@ -109,3 +110,5 @@ export function forecast({ history, forecastDates }) {
     return { date, value };
   });
 }
+
+export { forecast };

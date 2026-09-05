@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   createAdminAuthMiddleware,
-  extractAdminBearerToken,
+  __extractAdminBearerToken as extractAdminBearerToken,
   isLoopbackHost,
 } from '../src/middleware/adminAuth.js';
 import { UnauthorizedError } from '../src/middleware/errorHandler.js';

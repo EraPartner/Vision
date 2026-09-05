@@ -24,7 +24,7 @@ const {
   UnauthorizedError,
   ForbiddenError,
   UpstreamError,
-  UpstreamTimeoutError,
+  __UpstreamTimeoutError: UpstreamTimeoutError,
   createErrorHandler,
 } = await import('../src/middleware/errorHandler.js');
 

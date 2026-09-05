@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   OllamaError,
-  createOllamaClient,
+  __createOllamaClient as createOllamaClient,
 } from "../src/integrations/ollama/client.js";
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {

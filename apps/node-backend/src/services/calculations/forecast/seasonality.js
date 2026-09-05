@@ -9,7 +9,7 @@
  * overlay a dummy adjustment.
  */
 
-import { isBelgianHoliday } from './holidays/be.js';
+import { isBelgianHoliday } from "./holidays/be.js";
 
 const MIN_BUCKET_SAMPLES = 3;
 
@@ -23,10 +23,12 @@ const MIN_BUCKET_SAMPLES = 3;
  */
 
 /** @param {string} isoDateStr */
-export function dayOfWeek(isoDateStr) {
-  const [y, m, d] = isoDateStr.split('-').map(Number);
+function dayOfWeek(isoDateStr) {
+  const [y, m, d] = isoDateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
+
+export { dayOfWeek as __dayOfWeek };
 
 /** @param {string} isoDateStr */
 export function dayOfMonth(isoDateStr) {
@@ -114,4 +116,10 @@ export function lookupBucket(buckets, isoDateStr) {
 
 export { isBelgianHoliday };
 
-export default { buildSeasonalityBuckets, lookupBucket, dayOfWeek, dayOfMonth, isBelgianHoliday };
+export default {
+  buildSeasonalityBuckets,
+  lookupBucket,
+  dayOfWeek,
+  dayOfMonth,
+  isBelgianHoliday,
+};

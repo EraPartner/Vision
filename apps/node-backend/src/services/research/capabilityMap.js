@@ -12,21 +12,22 @@
  */
 
 /** Canonical provider keys (match DB provider keys + adapter module names). */
-export const PROVIDERS = Object.freeze({
-  yahoo: 'yahoo',
-  twelveData: 'twelve_data',
-  finnhub: 'finnhub',
-  fmp: 'fmp',
-  alphaVantage: 'alpha_vantage',
-  binance: 'binance',
-  kinesis: 'kinesis',
+const PROVIDERS = Object.freeze({
+  yahoo: "yahoo",
+  twelveData: "twelve_data",
+  finnhub: "finnhub",
+  fmp: "fmp",
+  alphaVantage: "alpha_vantage",
+  binance: "binance",
+  kinesis: "kinesis",
   // Macro vertical (ADR-082): provider-pinned, not raced — no CAPABILITY entries.
-  fred: 'fred',
-  eurostat: 'eurostat',
-  dbnomics: 'dbnomics',
+  fred: "fred",
+  eurostat: "eurostat",
+  dbnomics: "dbnomics",
 });
 
-const { yahoo, twelveData, finnhub, fmp, alphaVantage, binance, kinesis } = PROVIDERS;
+const { yahoo, twelveData, finnhub, fmp, alphaVantage, binance, kinesis } =
+  PROVIDERS;
 
 /**
  * dataType -> assetClass -> ordered provider preference.
@@ -71,12 +72,13 @@ const CAPABILITY = Object.freeze({
  * @param {string} [assetClass]
  * @returns {string[]}
  */
-export function providerChain(dataType, assetClass) {
+function providerChain(dataType, assetClass) {
   const byClass = CAPABILITY[/** @type {keyof typeof CAPABILITY} */ (dataType)];
   if (!byClass) return [];
-  const chain = /** @type {Record<string, string[]>} */ (byClass)[assetClass ?? '']
-    ?? byClass.default
-    ?? [];
+  const chain =
+    /** @type {Record<string, string[]>} */ (byClass)[assetClass ?? ""] ??
+    byClass.default ??
+    [];
   return [...chain];
 }
 
@@ -89,6 +91,12 @@ export function providerChain(dataType, assetClass) {
  * @param {{ isUsable?: (provider: string) => boolean }} [opts]
  * @returns {string[]}
  */
-export function resolveProviderChain(dataType, assetClass, { isUsable = () => true } = {}) {
+export function resolveProviderChain(
+  dataType,
+  assetClass,
+  { isUsable = () => true } = {},
+) {
   return providerChain(dataType, assetClass).filter(isUsable);
 }
+
+export { PROVIDERS, providerChain as __providerChain };

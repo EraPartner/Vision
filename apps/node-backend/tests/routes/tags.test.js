@@ -51,7 +51,7 @@ describe("GET /api/tags", () => {
     );
   });
 
-  it("passes active=null when ?active=all", async () => {
+  it("passes the repository no-filter sentinel when ?active=all", async () => {
     tagRepository.getAll.mockResolvedValue([]);
     tagRepository.getCount.mockResolvedValue(0);
     await api.get(`${BASE}?active=all`).expect(200);

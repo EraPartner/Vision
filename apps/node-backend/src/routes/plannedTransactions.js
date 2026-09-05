@@ -503,9 +503,9 @@ router.get(
       offset,
       startDate: assertYmd(start_date, "start_date"),
       endDate: assertYmd(end_date, "end_date"),
-      bankAccount: bank_account || null,
+      bankAccount: bank_account || undefined,
       // Same strict id parse as the transactions list endpoint — absent/empty
-      // means "no filter" (null, 200), malformed is a 400. These were bare
+      // means "no filter" (undefined, 200), malformed is a 400. These were bare
       // `x ? parseInt(x) : null`, which takes the leading digits of anything, so
       // ?category_id=12abc listed the planned transactions of category 12 and
       // ?recipient_id=1e3 those of recipient 1, while a NaN passed the builder's
@@ -513,10 +513,10 @@ router.get(
       categoryId: assertOptionalId(category_id, "category_id"),
       recipientId: assertOptionalId(recipient_id, "recipient_id"),
       isRecurring:
-        is_recurring != null ? parseBooleanQueryParam(is_recurring) : null,
+        is_recurring != null ? parseBooleanQueryParam(is_recurring) : undefined,
       isExecuted:
-        is_executed != null ? parseBooleanQueryParam(is_executed) : null,
-      search: search ? String(search).slice(0, 200) : null,
+        is_executed != null ? parseBooleanQueryParam(is_executed) : undefined,
+      search: search ? String(search).slice(0, 200) : undefined,
       active: parseBooleanQueryParam(active, true),
     };
 

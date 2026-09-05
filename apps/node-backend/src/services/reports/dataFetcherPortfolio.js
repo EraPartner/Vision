@@ -111,25 +111,19 @@ function unwrap(result, label) {
 }
 
 /**
- * Normalize the historical snake_case breakdown aliases at one boundary.
+ * Normalize a portfolio breakdown row at the report boundary.
  *
- * @param {Partial<BreakdownRow> & {
- *   asset_class?: string,
- *   current_value?: number,
- *   total_invested?: number,
- *   gain_loss?: number,
- *   gain_loss_pct?: number,
- * }} row
+ * @param {Partial<BreakdownRow>} row
  * @returns {BreakdownRow}
  */
-export function normalizeBreakdownRow(row) {
+function normalizeBreakdownRow(row) {
   return /** @type {BreakdownRow} */ ({
     ...row,
-    assetClass: row.assetClass ?? row.asset_class ?? "other",
-    currentValue: row.currentValue ?? row.current_value ?? 0,
-    totalInvested: row.totalInvested ?? row.total_invested ?? 0,
-    gainLoss: row.gainLoss ?? row.gain_loss ?? 0,
-    gainLossPercent: row.gainLossPercent ?? row.gain_loss_pct ?? 0,
+    assetClass: row.assetClass ?? "other",
+    currentValue: row.currentValue ?? 0,
+    totalInvested: row.totalInvested ?? 0,
+    gainLoss: row.gainLoss ?? 0,
+    gainLossPercent: row.gainLossPercent ?? 0,
   });
 }
 
@@ -139,7 +133,7 @@ export function normalizeBreakdownRow(row) {
  * @param {SnapshotRow[] | null} snapshots
  * @returns {PerformanceTrendData | null}
  */
-export function buildPerformanceTrendData(snapshots) {
+function buildPerformanceTrendData(snapshots) {
   if (!snapshots?.length) return null;
 
   const byMonth = new Map();
@@ -179,11 +173,7 @@ export function buildPerformanceTrendData(snapshots) {
  * @param {DividendData | null} dividends
  * @returns {PortfolioExecutiveSummaryData | null}
  */
-export function buildPortfolioExecutiveSummaryData(
-  breakdown,
-  snapshots,
-  dividends,
-) {
+function buildPortfolioExecutiveSummaryData(breakdown, snapshots, dividends) {
   if (!breakdown?.length && !snapshots?.length) return null;
 
   const totalValue = toNumber(
@@ -372,3 +362,9 @@ export async function fetchPortfolioData(currency, period) {
     currency,
   };
 }
+
+export {
+  normalizeBreakdownRow as __normalizeBreakdownRow,
+  buildPerformanceTrendData as __buildPerformanceTrendData,
+  buildPortfolioExecutiveSummaryData as __buildPortfolioExecutiveSummaryData,
+};

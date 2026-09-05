@@ -6,8 +6,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
-  createResearchMappingService,
-  analyzeQuotes,
+  __createResearchMappingService as createResearchMappingService,
+  __analyzeQuotes as analyzeQuotes,
 } from '../../src/services/research/researchMappingService.js';
 
 const KEY = 'US0378331005';

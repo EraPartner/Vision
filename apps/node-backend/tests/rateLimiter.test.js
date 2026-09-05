@@ -9,7 +9,7 @@ import {
   adminRateLimiter,
   importRateLimiter,
   rateLimiter,
-  ipMatchesRule,
+  __ipMatchesRule as ipMatchesRule,
 } from '../src/middleware/rateLimiter.js';
 import { RateLimitedError } from '../src/middleware/errorHandler.js';
 

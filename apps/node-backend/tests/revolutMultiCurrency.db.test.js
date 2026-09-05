@@ -48,7 +48,7 @@ import {
   runImportPipeline,
   commitImport,
 } from "../src/services/importPipeline/index.js";
-import { accountRepository } from "../src/repositories/accountRepository.js";
+import { accountService } from "../src/services/accountService.js";
 import { closePool } from "../src/database/connection.js";
 
 // Neither the MV refresh (this database has no materialized views) nor the
@@ -173,7 +173,7 @@ async function ledger() {
 
 /** The one Revolut account as the accounts hub serves it. */
 async function hubAccount() {
-  const accounts = await accountRepository.getAll({});
+  const { items: accounts } = await accountService.list({});
   const revolut = accounts.filter((a) => a.name === "REVOLUT CURRENT");
   expect(revolut).toHaveLength(1); // D2: ONE account, not one per currency
   return revolut[0];

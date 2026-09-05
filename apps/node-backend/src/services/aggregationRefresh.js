@@ -24,9 +24,9 @@ import mcRollingCacheRepo from "../repositories/cashflowForecastMcRollingReposit
 import { logger } from "../config/logger.js";
 
 /** Trigger-maintained tables — documented here, never refreshed from app code. */
-export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
-  "agg_split_outstanding",
-]);
+const TRIGGER_MAINTAINED_TABLES = Object.freeze(["agg_split_outstanding"]);
+
+export { TRIGGER_MAINTAINED_TABLES as __TRIGGER_MAINTAINED_TABLES };
 
 /**
  * Refresh every managed aggregation source after a data change:

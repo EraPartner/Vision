@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTaxTable, getAvailableYears } from '../src/services/reports/belgianTaxTables.js';
+import { getTaxTable, __getAvailableYears as getAvailableYears } from '../src/services/reports/belgianTaxTables.js';
 
 describe('belgianTaxTables', () => {
   it('has a 2026 entry with the CGT regime (was missing → fell back to 2025)', () => {

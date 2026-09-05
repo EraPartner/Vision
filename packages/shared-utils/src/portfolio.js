@@ -12,18 +12,22 @@
  * response shaping.
  */
 
-import Decimal from 'decimal.js';
+import Decimal from "decimal.js";
 import {
   UNIT_BASED_ASSET_CLASSES,
   FIXED_INCOME_ASSET_CLASSES,
   REAL_ESTATE_ASSET_CLASS,
-} from '@vision/types/assetClasses';
-import { toDecimal, roundToCents, toNumber } from './money.js';
+} from "@vision/types/assetClasses";
+import { toDecimal, roundToCents, toNumber } from "./money.js";
 
 // Derived from the canonical subsets in @vision/types/assetClasses (widened to
 // Set<string>: .has() probes raw row values).
-const UNIT_BASED_CLASSES = new Set(/** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES));
-const FIXED_INCOME_CLASSES = new Set(/** @type {readonly string[]} */ (FIXED_INCOME_ASSET_CLASSES));
+const UNIT_BASED_CLASSES = new Set(
+  /** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES),
+);
+const FIXED_INCOME_CLASSES = new Set(
+  /** @type {readonly string[]} */ (FIXED_INCOME_ASSET_CLASSES),
+);
 const REAL_ESTATE_CLASS = REAL_ESTATE_ASSET_CLASS;
 
 /** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
@@ -56,7 +60,7 @@ const REAL_ESTATE_CLASS = REAL_ESTATE_ASSET_CLASS;
  */
 export function daysBetweenYmd(fromYmd, toYmd) {
   const parse = (s) => {
-    const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
+    const [y, m, d] = String(s).slice(0, 10).split("-").map(Number);
     return Date.UTC(y, m - 1, d);
   };
   return Math.round((parse(toYmd) - parse(fromYmd)) / 86_400_000);
@@ -76,7 +80,7 @@ export function daysBetweenYmd(fromYmd, toYmd) {
 function applyEventToLots(lots, type, units, amount, totalUnits) {
   const ZERO = toDecimal(0);
 
-  if (type === 'split' && totalUnits.gt(0) && units.gt(0)) {
+  if (type === "split" && totalUnits.gt(0) && units.gt(0)) {
     const ratio = units.dividedBy(totalUnits);
     return {
       totalUnits: units,
@@ -84,15 +88,20 @@ function applyEventToLots(lots, type, units, amount, totalUnits) {
     };
   }
 
-  if (type === 'return_of_capital' && totalUnits.gt(0)) {
+  if (type === "return_of_capital" && totalUnits.gt(0)) {
     const reductionPerUnit = amount.dividedBy(totalUnits);
     return {
       totalUnits,
       lots: lots.map((lot) => {
-        const reduced = Decimal.max(ZERO, lot.costBasis.minus(reductionPerUnit.times(lot.units)));
+        const reduced = Decimal.max(
+          ZERO,
+          lot.costBasis.minus(reductionPerUnit.times(lot.units)),
+        );
         // Reduce the converted track proportionally so it keeps reflecting the
         // lot's original purchase-date FX rather than the ROC payment's rate.
-        const factor = lot.costBasis.gt(0) ? reduced.dividedBy(lot.costBasis) : ZERO;
+        const factor = lot.costBasis.gt(0)
+          ? reduced.dividedBy(lot.costBasis)
+          : ZERO;
         return {
           ...lot,
           costBasis: reduced,
@@ -116,7 +125,11 @@ function applyEventToLots(lots, type, units, amount, totalUnits) {
  * @returns {CostBasisResult}
  */
 export function calculateCostBasis(txns, opts = {}) {
-  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...txns].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    if (byDate !== 0) return byDate;
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
 
   const ZERO = toDecimal(0);
   const defaultFx = toDecimal(opts.defaultFxMultiplier ?? 1);
@@ -136,36 +149,43 @@ export function calculateCostBasis(txns, opts = {}) {
     const amount = toDecimal(txn.amount || 0);
     const fees = toDecimal(txn.fees || 0);
     const taxes = toDecimal(txn.taxes || 0);
-    const fx = txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
+    const fx =
+      txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
 
-    if (txn.type === 'buy' || txn.type === 'gift') {
+    if (txn.type === "buy" || txn.type === "gift") {
       const buyCost = amount.plus(fees).plus(taxes);
       totalUnits = totalUnits.plus(units);
       totalCost = totalCost.plus(buyCost);
       totalCostConv = totalCostConv.plus(buyCost.times(fx));
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
-    } else if (txn.type === 'sell') {
+    } else if (txn.type === "sell") {
       if (units.gt(totalUnits)) oversold = true;
       if (totalUnits.gt(0) && units.gt(0)) {
         const sellUnits = Decimal.min(units, totalUnits);
         const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
         const avgCost = totalCost.dividedBy(totalUnits);
         const costOfSoldUnits = avgCost.times(sellUnits);
-        const costOfSoldConv = totalCostConv.times(sellUnits).dividedBy(totalUnits);
+        const costOfSoldConv = totalCostConv
+          .times(sellUnits)
+          .dividedBy(totalUnits);
         const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
         realizedGain = realizedGain.plus(netProceeds.minus(costOfSoldUnits));
-        realizedGainConv = realizedGainConv.plus(netProceeds.times(fx).minus(costOfSoldConv));
+        realizedGainConv = realizedGainConv.plus(
+          netProceeds.times(fx).minus(costOfSoldConv),
+        );
         totalUnits = totalUnits.minus(sellUnits);
         totalCost = totalCost.minus(costOfSoldUnits);
         totalCostConv = totalCostConv.minus(costOfSoldConv);
         totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
-        totalSellProceedsConv = totalSellProceedsConv.plus(amount.times(sellRatio).times(fx));
+        totalSellProceedsConv = totalSellProceedsConv.plus(
+          amount.times(sellRatio).times(fx),
+        );
       }
-    } else if (txn.type === 'split' && totalUnits.gt(0) && units.gt(0)) {
+    } else if (txn.type === "split" && totalUnits.gt(0) && units.gt(0)) {
       // units = new total post-split; cost basis is unchanged
       totalUnits = units;
-    } else if (txn.type === 'return_of_capital' && totalUnits.gt(0)) {
+    } else if (txn.type === "return_of_capital" && totalUnits.gt(0)) {
       const reduced = Decimal.max(ZERO, totalCost.minus(amount));
       // Proportional reduction keeps the converted track at purchase-date FX.
       const factor = totalCost.gt(0) ? reduced.dividedBy(totalCost) : ZERO;
@@ -177,7 +197,9 @@ export function calculateCostBasis(txns, opts = {}) {
   const finalUnits = Decimal.max(ZERO, totalUnits);
   const finalCost = Decimal.max(ZERO, totalCost);
   const finalCostConv = Decimal.max(ZERO, totalCostConv);
-  const avgCostBasis = finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO;
+  const avgCostBasis = finalUnits.gt(0)
+    ? finalCost.dividedBy(finalUnits)
+    : ZERO;
 
   return {
     ...(oversold ? { _oversold: true } : {}),
@@ -188,7 +210,9 @@ export function calculateCostBasis(txns, opts = {}) {
     totalBuyCost: toNumber(roundToCents(totalBuyCost)),
     totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
     totalCostConv: toNumber(roundToCents(finalCostConv)),
-    avgCostBasisConv: toNumber(finalUnits.gt(0) ? finalCostConv.dividedBy(finalUnits) : ZERO),
+    avgCostBasisConv: toNumber(
+      finalUnits.gt(0) ? finalCostConv.dividedBy(finalUnits) : ZERO,
+    ),
     realizedGainConv: toNumber(roundToCents(realizedGainConv)),
     totalBuyCostConv: toNumber(roundToCents(totalBuyCostConv)),
     totalSellProceedsConv: toNumber(roundToCents(totalSellProceedsConv)),
@@ -240,15 +264,20 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
     const amount = toDecimal(txn.amount || 0);
     const fees = toDecimal(txn.fees || 0);
     const taxes = toDecimal(txn.taxes || 0);
-    const fx = txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
+    const fx =
+      txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
 
-    if (txn.type === 'buy' || txn.type === 'gift') {
+    if (txn.type === "buy" || txn.type === "gift") {
       const buyCost = amount.plus(fees).plus(taxes);
-      lots.push({ units, costBasis: buyCost, costBasisConv: buyCost.times(fx) });
+      lots.push({
+        units,
+        costBasis: buyCost,
+        costBasisConv: buyCost.times(fx),
+      });
       totalUnits = totalUnits.plus(units);
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
-    } else if (txn.type === 'sell' && units.gt(0)) {
+    } else if (txn.type === "sell" && units.gt(0)) {
       if (units.gt(totalUnits)) oversold = true;
       const sellUnits = Decimal.min(units, totalUnits);
       const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
@@ -264,7 +293,8 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
           costOfSold = costOfSold.plus(lot.costBasis);
           costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
           unitsToSell = unitsToSell.minus(lot.units);
-          if (fromEnd) lots.pop(); else head += 1;
+          if (fromEnd) lots.pop();
+          else head += 1;
         } else {
           const fraction = unitsToSell.dividedBy(lot.units);
           const lotCostUsed = lot.costBasis.times(fraction);
@@ -282,13 +312,28 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
 
       totalUnits = totalUnits.minus(sellUnits);
       realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
-      realizedGainConv = realizedGainConv.plus(netProceeds.times(fx).minus(costOfSoldConv));
+      realizedGainConv = realizedGainConv.plus(
+        netProceeds.times(fx).minus(costOfSoldConv),
+      );
       totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
-      totalSellProceedsConv = totalSellProceedsConv.plus(amount.times(sellRatio).times(fx));
-    } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
+      totalSellProceedsConv = totalSellProceedsConv.plus(
+        amount.times(sellRatio).times(fx),
+      );
+    } else if (
+      txn.type === "split" ||
+      txn.type === "merger" ||
+      txn.type === "spinoff" ||
+      txn.type === "return_of_capital"
+    ) {
       // Events operate on the active lots only; rebase (head -> 0) with the fresh
       // array applyEventToLots returns.
-      const result = applyEventToLots(lots.slice(head), txn.type, units, amount, totalUnits);
+      const result = applyEventToLots(
+        lots.slice(head),
+        txn.type,
+        units,
+        amount,
+        totalUnits,
+      );
       totalUnits = result.totalUnits;
       lots = result.lots;
       head = 0;
@@ -296,8 +341,14 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   }
 
   const activeLots = head > 0 ? lots.slice(head) : lots;
-  const totalCost = activeLots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
-  const totalCostConv = activeLots.reduce((sum, lot) => sum.plus(lot.costBasisConv), ZERO);
+  const totalCost = activeLots.reduce(
+    (sum, lot) => sum.plus(lot.costBasis),
+    ZERO,
+  );
+  const totalCostConv = activeLots.reduce(
+    (sum, lot) => sum.plus(lot.costBasisConv),
+    ZERO,
+  );
   const finalUnits = Decimal.max(ZERO, totalUnits);
   const finalCost = Decimal.max(ZERO, totalCost);
   const finalCostConv = Decimal.max(ZERO, totalCostConv);
@@ -306,12 +357,16 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
     ...(oversold ? { _oversold: true } : {}),
     totalUnits: toNumber(finalUnits),
     totalCost: toNumber(roundToCents(finalCost)),
-    avgCostBasis: toNumber(finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO),
+    avgCostBasis: toNumber(
+      finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO,
+    ),
     realizedGain: toNumber(roundToCents(realizedGain)),
     totalBuyCost: toNumber(roundToCents(totalBuyCost)),
     totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
     totalCostConv: toNumber(roundToCents(finalCostConv)),
-    avgCostBasisConv: toNumber(finalUnits.gt(0) ? finalCostConv.dividedBy(finalUnits) : ZERO),
+    avgCostBasisConv: toNumber(
+      finalUnits.gt(0) ? finalCostConv.dividedBy(finalUnits) : ZERO,
+    ),
     realizedGainConv: toNumber(roundToCents(realizedGainConv)),
     totalBuyCostConv: toNumber(roundToCents(totalBuyCostConv)),
     totalSellProceedsConv: toNumber(roundToCents(totalSellProceedsConv)),
@@ -343,8 +398,8 @@ export function calculateCostBasisLIFO(txns, opts = {}) {
  * @returns {CostBasisResult}
  */
 export function calculateCostBasisByMethod(txns, method, opts = {}) {
-  if (method === 'fifo') return calculateCostBasisFIFO(txns, opts);
-  if (method === 'lifo') return calculateCostBasisLIFO(txns, opts);
+  if (method === "fifo") return calculateCostBasisFIFO(txns, opts);
+  if (method === "lifo") return calculateCostBasisLIFO(txns, opts);
   return calculateCostBasis(txns, opts); // default: weighted_avg
 }
 
@@ -358,13 +413,18 @@ export function calculateCostBasisByMethod(txns, method, opts = {}) {
  * @param {string} todayYmd - "today" as YYYY-MM-DD in the caller's business timezone
  * @returns {number} Accrued interest amount
  */
-export function calculateAccruedInterest(txns, principal, interestRate, todayYmd) {
+export function calculateAccruedInterest(
+  txns,
+  principal,
+  interestRate,
+  todayYmd,
+) {
   if (!interestRate || principal <= 0) return 0;
 
   const sortedDesc = [...txns].sort((a, b) => b.date.localeCompare(a.date));
-  const lastInterestTxn = sortedDesc.find((t) => t.type === 'interest');
+  const lastInterestTxn = sortedDesc.find((t) => t.type === "interest");
   const firstBuyTxn = [...txns]
-    .filter((t) => t.type === 'buy')
+    .filter((t) => t.type === "buy")
     .sort((a, b) => a.date.localeCompare(b.date))[0];
 
   const startDate = lastInterestTxn?.date || firstBuyTxn?.date;
@@ -375,7 +435,7 @@ export function calculateAccruedInterest(txns, principal, interestRate, todayYmd
   return toNumber(
     toDecimal(principal)
       .times(toDecimal(interestRate).div(100).div(365))
-      .times(daysSinceStart)
+      .times(daysSinceStart),
   );
 }
 
@@ -412,7 +472,11 @@ export function projectedAnnualInterest(principal, ratePercent) {
  * @param {{ costBasisMethod?: CostBasisMethod, todayYmd: string, fxMultiplierNow?: number|string }} opts
  * @returns {Record<string, Decimal> & { converted: Record<string, Decimal> }}
  */
-export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weighted_avg', todayYmd, fxMultiplierNow = 1 }) {
+export function buildInvestmentSummaryCore(
+  inv,
+  txns,
+  { costBasisMethod = "weighted_avg", todayYmd, fxMultiplierNow = 1 },
+) {
   const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
   const isFixedIncome = FIXED_INCOME_CLASSES.has(inv.asset_class);
   const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
@@ -421,7 +485,8 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
   const mNow = toDecimal(fxMultiplierNow ?? 1);
   // Unannotated transactions convert at today's rate — with no per-txn rates
   // the converted track degrades exactly to the pre-FX-attribution behavior.
-  const txnFx = (txn) => (txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : mNow);
+  const txnFx = (txn) =>
+    txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : mNow;
 
   // All running sums are kept as Decimal — IEEE-754 drift on money paths
   // compounds across many transactions before the caller's round-on-emit.
@@ -460,19 +525,50 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     taxesFieldAmountC = taxesFieldAmountC.plus(toDecimal(txn.taxes).times(fx));
 
     switch (txn.type) {
-      case 'buy':          totalBuyAmount = totalBuyAmount.plus(amount); totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); totalBuyAmountC = totalBuyAmountC.plus(amount.times(fx)); totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx)); break;
-      case 'gift':         totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx)); break;
-      case 'sell':         totalSellAmount = totalSellAmount.plus(amount); totalSellAmountC = totalSellAmountC.plus(amount.times(fx)); break;
-      case 'fee':          feeTxnAmount = feeTxnAmount.plus(amount); feeTxnAmountC = feeTxnAmountC.plus(amount.times(fx)); break;
-      case 'tax':          taxTxnAmount = taxTxnAmount.plus(amount); taxTxnAmountC = taxTxnAmountC.plus(amount.times(fx)); break;
-      case 'dividend':     totalDividends = totalDividends.plus(amount); totalDividendsC = totalDividendsC.plus(amount.times(fx)); break;
-      case 'interest':     totalInterestPaid = totalInterestPaid.plus(amount); totalInterestPaidC = totalInterestPaidC.plus(amount.times(fx)); break;
-      case 'rent_income':  totalRent = totalRent.plus(amount); totalRentC = totalRentC.plus(amount.times(fx)); break;
-      case 'appreciation': totalAppreciation = totalAppreciation.plus(amount); break;
+      case "buy":
+        totalBuyAmount = totalBuyAmount.plus(amount);
+        totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
+        totalBuyAmountC = totalBuyAmountC.plus(amount.times(fx));
+        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx));
+        break;
+      case "gift":
+        totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
+        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx));
+        break;
+      case "sell":
+        totalSellAmount = totalSellAmount.plus(amount);
+        totalSellAmountC = totalSellAmountC.plus(amount.times(fx));
+        break;
+      case "fee":
+        feeTxnAmount = feeTxnAmount.plus(amount);
+        feeTxnAmountC = feeTxnAmountC.plus(amount.times(fx));
+        break;
+      case "tax":
+        taxTxnAmount = taxTxnAmount.plus(amount);
+        taxTxnAmountC = taxTxnAmountC.plus(amount.times(fx));
+        break;
+      case "dividend":
+        totalDividends = totalDividends.plus(amount);
+        totalDividendsC = totalDividendsC.plus(amount.times(fx));
+        break;
+      case "interest":
+        totalInterestPaid = totalInterestPaid.plus(amount);
+        totalInterestPaidC = totalInterestPaidC.plus(amount.times(fx));
+        break;
+      case "rent_income":
+        totalRent = totalRent.plus(amount);
+        totalRentC = totalRentC.plus(amount.times(fx));
+        break;
+      case "appreciation":
+        totalAppreciation = totalAppreciation.plus(amount);
+        break;
       // Unit-based classes fold return_of_capital into cost basis via the
       // cost-basis calculator; non-unit classes (savings/bond/real_estate) have
       // no lot machinery, so accumulate it here and subtract from invested below.
-      case 'return_of_capital': totalReturnOfCapital = totalReturnOfCapital.plus(amount); totalReturnOfCapitalC = totalReturnOfCapitalC.plus(amount.times(fx)); break;
+      case "return_of_capital":
+        totalReturnOfCapital = totalReturnOfCapital.plus(amount);
+        totalReturnOfCapitalC = totalReturnOfCapitalC.plus(amount.times(fx));
+        break;
     }
   }
 
@@ -498,9 +594,13 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
   let totalSellProceedsC;
   let realizedGainC = ZERO;
   let totalInvestedC;
+  let oversold = false;
 
   if (isUnitBased) {
-    const cb = calculateCostBasisByMethod(txns, costBasisMethod, { defaultFxMultiplier: mNow });
+    const cb = calculateCostBasisByMethod(txns, costBasisMethod, {
+      defaultFxMultiplier: mNow,
+    });
+    oversold = cb._oversold === true;
     totalUnits = toDecimal(cb.totalUnits);
     avgCostBasis = toDecimal(cb.avgCostBasis);
     totalBuyCost = toDecimal(cb.totalBuyCost);
@@ -520,16 +620,29 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
       ? currentPrice.minus(avgCostBasis).times(totalUnits)
       : ZERO;
   } else if (isFixedIncome) {
-    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
+    totalInvested = totalBuyOrGiftAmount
+      .minus(totalSellAmount)
+      .minus(totalReturnOfCapital);
     totalBuyCost = totalBuyOrGiftAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyOrGiftAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
+    totalInvestedC = totalBuyOrGiftAmountC
+      .minus(totalSellAmountC)
+      .minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyOrGiftAmountC;
     totalSellProceedsC = totalSellAmountC;
 
     const interestRate = Number(inv.interest_rate) || 0;
-    accruedInterest = toDecimal(calculateAccruedInterest(txns, totalInvested.toNumber(), interestRate, todayYmd));
-    projectedInterest = toDecimal(projectedAnnualInterest(totalInvested.toNumber(), interestRate));
+    accruedInterest = toDecimal(
+      calculateAccruedInterest(
+        txns,
+        totalInvested.toNumber(),
+        interestRate,
+        todayYmd,
+      ),
+    );
+    projectedInterest = toDecimal(
+      projectedAnnualInterest(totalInvested.toNumber(), interestRate),
+    );
 
     currentValue = totalInvested.plus(accruedInterest);
     // Interest received is income (already in totalIncome below), exactly like
@@ -537,10 +650,14 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     realizedGain = ZERO;
     unrealizedGain = accruedInterest;
   } else if (isRealEstate) {
-    totalInvested = totalBuyAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
+    totalInvested = totalBuyAmount
+      .minus(totalSellAmount)
+      .minus(totalReturnOfCapital);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
+    totalInvestedC = totalBuyAmountC
+      .minus(totalSellAmountC)
+      .minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyAmountC;
     totalSellProceedsC = totalSellAmountC;
     currentValue = totalInvested.plus(totalAppreciation);
@@ -550,10 +667,14 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     // rent−fees−taxes into realizedGain here double-counted all three.
     realizedGain = ZERO;
   } else {
-    totalInvested = totalBuyAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
+    totalInvested = totalBuyAmount
+      .minus(totalSellAmount)
+      .minus(totalReturnOfCapital);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
+    totalInvestedC = totalBuyAmountC
+      .minus(totalSellAmountC)
+      .minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyAmountC;
     totalSellProceedsC = totalSellAmountC;
     currentValue = totalInvested;
@@ -585,7 +706,9 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
   // what was paid AT the time. Their difference therefore includes the FX
   // component; assetGain isolates native performance and fxGain the residual.
   const currentValueC = currentValue.times(mNow);
-  const totalIncomeC = totalDividendsC.plus(totalInterestPaidC).plus(totalRentC);
+  const totalIncomeC = totalDividendsC
+    .plus(totalInterestPaidC)
+    .plus(totalRentC);
   const unrealizedGainC = currentValueC.minus(totalInvestedC);
   const totalGainC = realizedGainC.plus(unrealizedGainC);
   const gainLossC = isUnitBased
@@ -621,6 +744,7 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     totalIncome,
     accruedInterest,
     projectedAnnualInterest: projectedInterest,
+    oversold,
     converted: {
       currentValue: currentValueC,
       totalInvested: clampedInvestedC,
@@ -645,7 +769,7 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
 // ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
 
 /** Transaction types that create or consume lots (whole-lot broker tagging). */
-export const LOT_TXN_TYPES = new Set(['buy', 'gift', 'sell']);
+export const LOT_TXN_TYPES = new Set(["buy", "gift", "sell"]);
 
 /**
  * Whether an investment's lots are fully broker-assigned (ADR-108 transition
@@ -664,7 +788,8 @@ export function areLotsFullyAssigned(txns) {
 }
 
 /** @param {{ account_id?: number|string|null }} txn @returns {number|null} */
-const partitionKeyOf = (txn) => (txn.account_id == null ? null : Number(txn.account_id));
+const partitionKeyOf = (txn) =>
+  txn.account_id == null ? null : Number(txn.account_id);
 
 /**
  * Split an investment's transactions into per-(investment, account) partition
@@ -700,7 +825,11 @@ const partitionKeyOf = (txn) => (txn.account_id == null ? null : Number(txn.acco
  */
 export function partitionTxnsByAccount(txns) {
   const ZERO = toDecimal(0);
-  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...txns].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    if (byDate !== 0) return byDate;
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
 
   /** @type {Map<number|null, Array<Record<string, any>>>} */
   const partitions = new Map();
@@ -716,7 +845,8 @@ export function partitionTxnsByAccount(txns) {
     }
     rows.push(row);
   };
-  const totalHeld = () => [...held.values()].reduce((sum, h) => sum.plus(h), ZERO);
+  const totalHeld = () =>
+    [...held.values()].reduce((sum, h) => sum.plus(h), ZERO);
   // The fee/tax-carrying residual of a rewritten corporate action; omitted when
   // there is nothing to carry, so rewriting cannot mint empty partitions.
   const carriesFeesOrTaxes = (txn) =>
@@ -725,14 +855,17 @@ export function partitionTxnsByAccount(txns) {
   for (const txn of sorted) {
     const key = partitionKeyOf(txn);
 
-    if (txn.type === 'buy' || txn.type === 'gift') {
+    if (txn.type === "buy" || txn.type === "gift") {
       push(key, txn);
       held.set(key, (held.get(key) ?? ZERO).plus(toDecimal(txn.units || 0)));
-    } else if (txn.type === 'sell') {
+    } else if (txn.type === "sell") {
       push(key, txn);
       const before = held.get(key) ?? ZERO;
-      held.set(key, before.minus(Decimal.min(toDecimal(txn.units || 0), before)));
-    } else if (txn.type === 'split') {
+      held.set(
+        key,
+        before.minus(Decimal.min(toDecimal(txn.units || 0), before)),
+      );
+    } else if (txn.type === "split") {
       const newGlobalUnits = toDecimal(txn.units || 0);
       const before = totalHeld();
       if (before.gt(0) && newGlobalUnits.gt(0)) {
@@ -740,25 +873,32 @@ export function partitionTxnsByAccount(txns) {
         const holders = [...held.entries()].filter(([, h]) => h.gt(0));
         let allocated = ZERO;
         holders.forEach(([holderKey, holderUnits], i) => {
-          const partitionNewTotal = i === holders.length - 1
-            ? newGlobalUnits.minus(allocated)
-            : holderUnits.times(ratio);
+          const partitionNewTotal =
+            i === holders.length - 1
+              ? newGlobalUnits.minus(allocated)
+              : holderUnits.times(ratio);
           allocated = allocated.plus(partitionNewTotal);
           held.set(holderKey, partitionNewTotal);
-          push(holderKey, { ...txn, units: partitionNewTotal, fees: 0, taxes: 0 });
+          push(holderKey, {
+            ...txn,
+            units: partitionNewTotal,
+            fees: 0,
+            taxes: 0,
+          });
         });
       }
       if (carriesFeesOrTaxes(txn)) push(key, { ...txn, units: 0 });
-    } else if (txn.type === 'return_of_capital') {
+    } else if (txn.type === "return_of_capital") {
       const amount = toDecimal(txn.amount || 0);
       const unitsNow = totalHeld();
       if (unitsNow.gt(0) && !amount.eq(0)) {
         const holders = [...held.entries()].filter(([, h]) => h.gt(0));
         let allocated = ZERO;
         holders.forEach(([holderKey, holderUnits], i) => {
-          const share = i === holders.length - 1
-            ? amount.minus(allocated)
-            : amount.times(holderUnits).dividedBy(unitsNow);
+          const share =
+            i === holders.length - 1
+              ? amount.minus(allocated)
+              : amount.times(holderUnits).dividedBy(unitsNow);
           allocated = allocated.plus(share);
           push(holderKey, { ...txn, amount: share, fees: 0, taxes: 0 });
         });
@@ -775,15 +915,42 @@ export function partitionTxnsByAccount(txns) {
 // Every additive InvestmentSummaryCore field. avgCostBasis / gainLossPercent
 // (both tracks) are ratios and re-derived after summation instead.
 const ADDITIVE_CORE_FIELDS = [
-  'totalUnits', 'totalInvested', 'totalBuyCost', 'totalSellProceeds', 'currentValue',
-  'realizedGain', 'unrealizedGain', 'totalGain', 'gainLoss', 'totalFees', 'totalTaxes',
-  'feeTxnAmount', 'taxTxnAmount', 'totalDividends', 'totalInterestPaid', 'totalRent',
-  'totalAppreciation', 'totalIncome', 'accruedInterest', 'projectedAnnualInterest',
+  "totalUnits",
+  "totalInvested",
+  "totalBuyCost",
+  "totalSellProceeds",
+  "currentValue",
+  "realizedGain",
+  "unrealizedGain",
+  "totalGain",
+  "gainLoss",
+  "totalFees",
+  "totalTaxes",
+  "feeTxnAmount",
+  "taxTxnAmount",
+  "totalDividends",
+  "totalInterestPaid",
+  "totalRent",
+  "totalAppreciation",
+  "totalIncome",
+  "accruedInterest",
+  "projectedAnnualInterest",
 ];
 const ADDITIVE_CONVERTED_FIELDS = [
-  'currentValue', 'totalInvested', 'totalBuyCost', 'totalSellProceeds', 'realizedGain',
-  'unrealizedGain', 'totalGain', 'gainLoss', 'assetGain', 'fxGain', 'totalFees',
-  'totalTaxes', 'totalDividends', 'totalIncome',
+  "currentValue",
+  "totalInvested",
+  "totalBuyCost",
+  "totalSellProceeds",
+  "realizedGain",
+  "unrealizedGain",
+  "totalGain",
+  "gainLoss",
+  "assetGain",
+  "fxGain",
+  "totalFees",
+  "totalTaxes",
+  "totalDividends",
+  "totalIncome",
 ];
 
 /**
@@ -802,17 +969,56 @@ function aggregatePartitionCores(cores) {
     agg[field] = cores.reduce((sum, c) => sum.plus(c[field]), ZERO);
   }
   for (const field of ADDITIVE_CONVERTED_FIELDS) {
-    agg.converted[field] = cores.reduce((sum, c) => sum.plus(c.converted[field]), ZERO);
+    agg.converted[field] = cores.reduce(
+      (sum, c) => sum.plus(c.converted[field]),
+      ZERO,
+    );
   }
-  agg.avgCostBasis = agg.totalUnits.gt(0) ? agg.totalInvested.dividedBy(agg.totalUnits) : ZERO;
-  agg.gainLossPercent = agg.totalBuyCost.gt(0) ? agg.gainLoss.div(agg.totalBuyCost).times(100) : ZERO;
+  agg.avgCostBasis = agg.totalUnits.gt(0)
+    ? agg.totalInvested.dividedBy(agg.totalUnits)
+    : ZERO;
+  agg.gainLossPercent = agg.totalBuyCost.gt(0)
+    ? agg.gainLoss.div(agg.totalBuyCost).times(100)
+    : ZERO;
   agg.converted.avgCostBasis = agg.totalUnits.gt(0)
     ? agg.converted.totalInvested.dividedBy(agg.totalUnits)
     : ZERO;
   agg.converted.gainLossPercent = agg.converted.totalBuyCost.gt(0)
     ? agg.converted.gainLoss.div(agg.converted.totalBuyCost).times(100)
     : ZERO;
+  agg.oversold = cores.some((core) => core.oversold === true);
   return /** @type {ReturnType<typeof buildInvestmentSummaryCore>} */ (agg);
+}
+
+/**
+ * Quantify account-local oversells without changing the clamped valuation
+ * behavior. Only fully assigned lot histories participate; transition-state
+ * histories continue to use the global replay.
+ *
+ * @param {Array<Record<string, any>>} txns
+ * @returns {Map<number, number>} excess units requested per account
+ */
+export function partitionOversellDeficits(txns) {
+  if (!areLotsFullyAssigned(txns)) return new Map();
+  const deficits = new Map();
+  const streams = partitionTxnsByAccount(txns);
+  for (const [accountId, rows] of streams) {
+    if (accountId == null) continue;
+    let held = toDecimal(0);
+    let deficit = toDecimal(0);
+    for (const row of rows) {
+      const units = toDecimal(row.units || 0);
+      if (row.type === "buy" || row.type === "gift") held = held.plus(units);
+      else if (row.type === "sell") {
+        if (units.gt(held)) deficit = deficit.plus(units.minus(held));
+        held = Decimal.max(0, held.minus(units));
+      } else if (row.type === "split" && held.gt(0) && units.gt(0)) {
+        held = units;
+      }
+    }
+    if (deficit.gt(0)) deficits.set(Number(accountId), deficit.toNumber());
+  }
+  return deficits;
 }
 
 /**
@@ -851,9 +1057,10 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
   if (!isUnitBased) {
     const core = buildInvestmentSummaryCore(inv, txns, opts);
     const accountKeys = new Set(txns.map(partitionKeyOf));
-    const fullyAssigned = txns.length === 0
-      || (accountKeys.size === 1 && !accountKeys.has(null));
-    const accountId = txns.length > 0 && fullyAssigned ? [...accountKeys][0] : null;
+    const fullyAssigned =
+      txns.length === 0 || (accountKeys.size === 1 && !accountKeys.has(null));
+    const accountId =
+      txns.length > 0 && fullyAssigned ? [...accountKeys][0] : null;
     return {
       core,
       partitions: txns.length > 0 ? [{ accountId, core }] : [],

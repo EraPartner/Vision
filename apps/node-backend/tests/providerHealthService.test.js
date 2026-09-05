@@ -21,7 +21,7 @@ import {
   recordError,
   listProviderHealth,
   probeProvider,
-  PROVIDER_DEFINITIONS,
+  __PROVIDER_DEFINITIONS as PROVIDER_DEFINITIONS,
 } from '../src/services/providerHealthService.js';
 
 beforeEach(() => {

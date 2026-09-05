@@ -27,6 +27,7 @@ import {
   lockInvestmentResolutionRows,
   overrideInvestment,
   overrideInvestments,
+  setBatchAccount,
 } from "../src/repositories/portfolioImportBatchRepository.js";
 
 beforeEach(() => {
@@ -116,6 +117,47 @@ describe("overrideInvestment — repair path for errored rows", () => {
     });
     expect(rowCount).toBe(0);
     expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("cash-row review guards and repair", () => {
+  it("does not let an investment override target a cash row", async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    await overrideInvestment({ batchId: 5, rowId: 2, investmentId: 88 });
+
+    expect(query.mock.calls[0][0]).toMatch(/route IS DISTINCT FROM 'cash'/);
+  });
+
+  it("repairs only the missing-account cash error when setting an account", async () => {
+    await setBatchAccount(5, 77);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("route = 'cash'");
+    expect(sql).toContain(
+      "error_message = 'brokerage cash row requires a batch account'",
+    );
+    expect(sql).toMatch(/SET status = 'matched', error_message = NULL/);
+    expect(sql).toMatch(/rows_error = GREATEST/);
+    expect(params).toEqual([5, 77]);
+  });
+
+  it("keeps bulk investment overrides away from cash rows", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          requested_count: 1,
+          eligible_count: 0,
+          updated_count: 0,
+          reset_error_count: 0,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    await overrideInvestments({ batchId: 5, rowIds: [2], investmentId: 88 });
+
+    expect(query.mock.calls[0][0]).toMatch(/route IS DISTINCT FROM 'cash'/);
   });
 });
 

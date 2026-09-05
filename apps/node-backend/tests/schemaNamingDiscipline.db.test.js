@@ -31,7 +31,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from './setup/db.js';
-import { getSupportedPatterns } from '../src/lib/calculations/recurrence.js';
+import { __getSupportedPatterns as getSupportedPatterns } from '../src/lib/calculations/recurrence.js';
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

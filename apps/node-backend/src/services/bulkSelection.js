@@ -232,7 +232,7 @@ function optionalTagSlugs(value, field) {
  * @returns {object}
  * @throws {ValidationError} on an unknown key or any malformed field
  */
-export function normalizeBulkFilter(filter) {
+ function normalizeBulkFilter(filter) {
   if (!filter || typeof filter !== "object") return {};
   if (Array.isArray(filter))
     throw new ValidationError("`filter` must be an object");
@@ -433,7 +433,9 @@ export async function resolveBulkSelection(selector = {}, opts = {}) {
   return idsResult.rows.map((/** @type {{ id: number }} */ row) => row.id);
 }
 
-export const BULK_SELECTION_DEFAULTS = Object.freeze({
+ const BULK_SELECTION_DEFAULTS = Object.freeze({
   idCap: DEFAULT_ID_CAP,
   filterCap: DEFAULT_FILTER_CAP,
 });
+
+export { normalizeBulkFilter as __normalizeBulkFilter, BULK_SELECTION_DEFAULTS as __BULK_SELECTION_DEFAULTS };

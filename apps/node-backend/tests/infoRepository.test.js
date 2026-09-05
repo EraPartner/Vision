@@ -230,6 +230,23 @@ describe("InfoRepository", () => {
       expect(result.monthlyChange).toBe(0);
     });
 
+    it("does not use inactive transactions as a history-span fallback", async () => {
+      let probeSql = "";
+      query.mockImplementation(async (sql) => {
+        if (sql.includes("first_data_date")) {
+          probeSql = sql;
+          return { rows: [{ first_data_date: null }] };
+        }
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorthFromSnapshots();
+
+      expect(probeSql.match(/MIN\(t\.date\)/g)).toHaveLength(1);
+      expect(probeSql).toContain("t.is_active = true");
+      expect(result.snapshots).toEqual([]);
+    });
+
     it("should return investments: 0 when snapshots table is empty", async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
@@ -410,6 +427,7 @@ describe("InfoRepository", () => {
       investmentsRows,
       walkRows,
       currentRows,
+      fallbackRows = [],
     }) => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("balance_parts")) return { rows: currentRows };
@@ -425,6 +443,7 @@ describe("InfoRepository", () => {
         if (sql.includes("balance_series")) {
           return { rows: walkRows };
         }
+        if (sql.includes("flow_rows AS")) return { rows: fallbackRows };
         return { rows: [] };
       });
     };
@@ -585,7 +604,10 @@ describe("InfoRepository", () => {
       // use — a multi-currency account is summed per partition, never as one
       // cross-currency Σ converted at a single rate.
       expect(currentSql).toContain(
-        computedBalanceByCurrencyAggLateral({ account: "a.id" }).trim(),
+        computedBalanceByCurrencyAggLateral({
+          account: "a.id",
+          asOfDate: "$1::date",
+        }).trim(),
       );
       // …respects the net-worth population rule…
       expect(currentSql).toContain("a.in_net_worth = true");
@@ -659,20 +681,19 @@ describe("InfoRepository", () => {
       expect(result.current.netWorth).toBe(150);
     });
 
-    // An in-net-worth account with no ledger rows at all still yields a row
-    // (NULL parts), so the `.length > 0` guard that decides whether to override
-    // the walk-derived point keeps its pre-partition meaning.
-    it("counts an account with no active rows as a zero contribution, not a missing row", async () => {
+    // An in-net-worth account with no ledger rows yields NULL parts. That is
+    // not evidence for replacing a walk/fallback-derived balance with zero.
+    it("does not let an account with no active rows erase the derived current point", async () => {
       const todayKey = todayAppDateString();
       mockUnifiedNetWorth({
         firstDataDate: todayKey,
         investmentsRows: [],
-        walkRows: [
+        walkRows: [],
+        fallbackRows: [
           {
             day: todayKey,
-            bank_account: "Ghost",
             is_liability: false,
-            balance: "5000",
+            value: "5000",
             currency: "EUR",
           },
         ],
@@ -688,7 +709,7 @@ describe("InfoRepository", () => {
 
       const result = await infoRepository.getNetWorthFromSnapshots();
 
-      expect(result.current.liquid).toBe(0);
+      expect(result.current.liquid).toBe(5000);
     });
 
     it("should emit debug log with summary metrics", async () => {

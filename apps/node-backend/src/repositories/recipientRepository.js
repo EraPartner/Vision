@@ -4,16 +4,16 @@
  *
  * Performance notes:
  * - textNormalization is imported at module level to avoid per-call dynamic import overhead.
- * - createOrGet uses INSERT ... ON CONFLICT (normalized_name) DO NOTHING to reduce
- *   the old getByName + getById (2-3 round-trips) to 1 round-trip for new recipients,
- *   and adds a fast SELECT path for existing ones (1 round-trip).
+ * - createOrGet reads established rows without writing, then uses a conflict-safe
+ *   upsert on a miss so concurrent creators both resolve the winning row.
  * - getAll + getCount share the same WHERE predicate but are kept separate for clarity.
  *   Callers that need both can call them concurrently via Promise.all.
  */
 
-import { query } from '../database/connection.js';
-import { normalizeForMatching } from '../lib/textNormalization.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from "../database/connection.js";
+import { normalizeForMatching } from "../lib/textNormalization.js";
+import { buildSetClauses } from "../lib/sqlClauses.js";
+import { makeValidationError } from "../lib/repositoryErrors.js";
 
 /**
  * Display name of the shared recipient that owns server-generated ledger rows
@@ -22,7 +22,7 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
  * those rows point here instead. Stable — the row is resolved by normalized
  * name, so renaming this constant would orphan the existing one.
  */
-export const SYSTEM_RECIPIENT_NAME = 'SYSTEM';
+const SYSTEM_RECIPIENT_NAME = "SYSTEM";
 
 /** @typedef {import('../types/rows.js').RecipientRow} RecipientRow */
 /** @typedef {import('../types/rows.js').EnrichedRecipientRow} EnrichedRecipientRow */
@@ -45,12 +45,12 @@ export const SYSTEM_RECIPIENT_NAME = 'SYSTEM';
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)
 /** @type {Record<string, string>} */
 const RECIPIENT_SORT_COLUMNS = {
-  name: 'r.name',
+  name: "r.name",
   default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END`,
-  primary_bank_account: 'primary_bank_account',
-  alias_count: 'alias_count',
-  notes: 'r.notes',
-  is_active: 'r.is_active',
+  primary_bank_account: "primary_bank_account",
+  alias_count: "alias_count",
+  notes: "r.notes",
+  is_active: "r.is_active",
 };
 
 /**
@@ -59,13 +59,22 @@ const RECIPIENT_SORT_COLUMNS = {
  * @param {RecipientFilters} filters
  * @returns {{ sql: string, params: any[], nextParam: number }}
  */
-function buildWhereClause({ name, defaultCategoryId, search, active, uncategorized }) {
+function buildWhereClause({
+  name,
+  defaultCategoryId,
+  search,
+  active,
+  uncategorized,
+}) {
   let sql = `WHERE 1=1`;
   const params = [];
   let p = 1;
 
   if (active) sql += ` AND r.is_active = true`;
-  if (name) { sql += ` AND r.name ILIKE $${p++}`; params.push(`%${name}%`); }
+  if (name) {
+    sql += ` AND r.name ILIKE $${p++}`;
+    params.push(`%${name}%`);
+  }
   if (uncategorized) {
     // Phase 6: only surface recipients that both lack a default category
     // *and* have recorded activity. This previously read the trigger-maintained
@@ -110,14 +119,35 @@ export const recipientRepository = {
    * @param {RecipientFilters} [filters]
    * @returns {Promise<EnrichedRecipientRow[]>}
    */
-  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false, sortBy = null, sortDir = null } = {}) {
-    const { sql: where, params, nextParam: p } = buildWhereClause({ name, defaultCategoryId, search, active, uncategorized });
+  async getAll({
+    limit = 50,
+    offset = 0,
+    name = null,
+    defaultCategoryId = null,
+    search = null,
+    active = true,
+    uncategorized = false,
+    sortBy = null,
+    sortDir = null,
+  } = {}) {
+    const {
+      sql: where,
+      params,
+      nextParam: p,
+    } = buildWhereClause({
+      name,
+      defaultCategoryId,
+      search,
+      active,
+      uncategorized,
+    });
 
-    const sortCol = RECIPIENT_SORT_COLUMNS[sortBy] || 'r.name';
-    const sortDirection = sortDir === 'desc' ? 'DESC' : 'ASC';
-    const orderBy = sortBy && RECIPIENT_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, r.name ASC`
-      : `r.name ASC`;
+    const sortCol = RECIPIENT_SORT_COLUMNS[sortBy] || "r.name";
+    const sortDirection = sortDir === "desc" ? "DESC" : "ASC";
+    const orderBy =
+      sortBy && RECIPIENT_SORT_COLUMNS[sortBy]
+        ? `${sortCol} ${sortDirection}, r.name ASC`
+        : `r.name ASC`;
 
     const sql = `
       SELECT r.*,
@@ -153,8 +183,20 @@ export const recipientRepository = {
    * @param {RecipientFilters} [filters]
    * @returns {Promise<number>}
    */
-  async getCount({ name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false } = {}) {
-    const { sql: where, params } = buildWhereClause({ name, defaultCategoryId, search, active, uncategorized });
+  async getCount({
+    name = null,
+    defaultCategoryId = null,
+    search = null,
+    active = true,
+    uncategorized = false,
+  } = {}) {
+    const { sql: where, params } = buildWhereClause({
+      name,
+      defaultCategoryId,
+      search,
+      active,
+      uncategorized,
+    });
 
     const sql = `
       SELECT count(*) FROM recipients r
@@ -255,20 +297,18 @@ export const recipientRepository = {
     const normalized = normalizeForMatching(name);
     const result = await query(
       `SELECT * FROM recipients WHERE normalized_name = $1`,
-      [normalized]
+      [normalized],
     );
     return result.rows[0] || null;
   },
 
   /**
-   * Get or create a recipient by name using a single upsert round-trip.
+   * Get or create a public recipient by name.
    *
-   * Strategy:
-   *  1. INSERT ... ON CONFLICT (normalized_name) DO NOTHING RETURNING id
-   *     - If the row is new, we get the id back immediately (1 round-trip total).
-   *     - If the row exists, RETURNING is empty (DO NOTHING path).
-   *  2. On conflict (empty result), fall back to a single SELECT to retrieve the
-   *     existing row's id — still only 2 round-trips max vs the old 3-4.
+   * SYSTEM is reserved for server-generated ledger rows and can only be
+   * resolved through getOrCreateSystemId(). The initial SELECT avoids touching
+   * an established recipient. The conflict-safe upsert handles the concurrent
+   * miss race and always returns the winning row's id.
    *
    * @param {{ name: string }} input
    * @returns {Promise<{ recipient: EnrichedRecipientRow|null, created: boolean }>}
@@ -277,33 +317,30 @@ export const recipientRepository = {
     const upperName = name.toUpperCase().trim();
     const normalizedName = normalizeForMatching(name);
 
-    // Attempt insert; silent on conflict (normalized_name has unique constraint)
-    const insertResult = await query(
-      `INSERT INTO recipients (name, normalized_name, is_active)
-       VALUES ($1, $2, true)
-       ON CONFLICT (normalized_name) DO NOTHING
-       RETURNING id`,
-      [upperName, normalizedName]
+    if (normalizedName === normalizeForMatching(SYSTEM_RECIPIENT_NAME)) {
+      throw makeValidationError(
+        `${SYSTEM_RECIPIENT_NAME} is reserved for server-generated transactions`,
+      );
+    }
+
+    const existingResult = await query(
+      `SELECT id FROM recipients WHERE normalized_name = $1`,
+      [normalizedName],
     );
 
-    let recipientId;
-    let created;
-
-    if (insertResult.rows.length > 0) {
-      // Newly inserted
-      recipientId = insertResult.rows[0].id;
-      created = true;
-    } else {
-      // Already existed
-      const existingResult = await query(
-        `SELECT id FROM recipients WHERE normalized_name = $1`,
-        [normalizedName]
+    let recipientId = existingResult.rows[0]?.id;
+    let created = false;
+    if (recipientId == null) {
+      const insertResult = await query(
+        `INSERT INTO recipients (name, normalized_name, is_active)
+       VALUES ($1, $2, true)
+       ON CONFLICT (normalized_name) DO UPDATE
+         SET normalized_name = EXCLUDED.normalized_name
+       RETURNING id, (xmax = 0) AS created`,
+        [upperName, normalizedName],
       );
-      if (!existingResult.rows.length) {
-        throw new Error(`Recipient not found after conflict: ${normalizedName}`);
-      }
-      recipientId = existingResult.rows[0].id;
-      created = false;
+      recipientId = insertResult.rows[0].id;
+      created = Boolean(insertResult.rows[0].created);
     }
 
     const full = await this.getById(recipientId);
@@ -320,7 +357,19 @@ export const recipientRepository = {
     // A name write always updates the derived normalized_name alongside it;
     // null name / is_active mean "leave unchanged" (pre-mapped to undefined).
     const hasName = name !== undefined && name !== null;
-    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses({
+    if (
+      hasName &&
+      normalizeForMatching(name) === normalizeForMatching(SYSTEM_RECIPIENT_NAME)
+    ) {
+      throw makeValidationError(
+        `${SYSTEM_RECIPIENT_NAME} is reserved for server-generated transactions`,
+      );
+    }
+    const {
+      clauses: setClauses,
+      params,
+      nextIdx: paramIdx,
+    } = buildSetClauses({
       name: hasName ? name.toUpperCase().trim() : undefined,
       normalized_name: hasName ? normalizeForMatching(name) : undefined,
       default_category_id,
@@ -335,7 +384,7 @@ export const recipientRepository = {
     const sql = `
       WITH updated AS (
         UPDATE recipients
-        SET ${setClauses.join(', ')}
+        SET ${setClauses.join(", ")}
         WHERE id = $${paramIdx}
         RETURNING *
       )
@@ -370,7 +419,7 @@ export const recipientRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    const result = await query('DELETE FROM recipients WHERE id = $1', [id]);
+    const result = await query("DELETE FROM recipients WHERE id = $1", [id]);
     return result.rowCount > 0;
   },
 
@@ -380,7 +429,10 @@ export const recipientRepository = {
    * @returns {Promise<{id:number}|undefined>}
    */
   async lockByIdForMerge(id) {
-    const result = await query(`SELECT id FROM recipients WHERE id = $1 FOR UPDATE`, [id]);
+    const result = await query(
+      `SELECT id FROM recipients WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
     return result.rows[0] ?? undefined;
   },
 
@@ -472,7 +524,7 @@ export const recipientRepository = {
       `SELECT id, COALESCE(primary_recipient_id, id) AS cluster_root
          FROM recipients
         WHERE id = ANY($1::int[])`,
-      [ids]
+      [ids],
     );
     const map = new Map();
     for (const row of result.rows) map.set(row.id, row.cluster_root);
@@ -481,3 +533,5 @@ export const recipientRepository = {
 };
 
 export default recipientRepository;
+
+export { SYSTEM_RECIPIENT_NAME as __SYSTEM_RECIPIENT_NAME };

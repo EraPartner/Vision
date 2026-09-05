@@ -74,7 +74,7 @@ const SUPPORTED_PATTERNS = PLANNED_RECURRENCE_PATTERNS;
  * @param {string|null|undefined} pattern
  * @returns {RecurrenceStep|undefined}
  */
-export function parseRecurrenceStep(pattern) {
+ function parseRecurrenceStep(pattern) {
   const p = String(pattern || "")
     .toLowerCase()
     .trim();
@@ -263,7 +263,7 @@ export function fastForwardYmd(ymd, pattern, targetYmd) {
   return addDaysYmd(ymd, hops * step.amount);
 }
 
-export function getSupportedPatterns() {
+ function getSupportedPatterns() {
   return [...SUPPORTED_PATTERNS];
 }
 
@@ -332,3 +332,5 @@ export function expandOccurrences(
   }
   return occurrences;
 }
+
+export { parseRecurrenceStep as __parseRecurrenceStep, getSupportedPatterns as __getSupportedPatterns };

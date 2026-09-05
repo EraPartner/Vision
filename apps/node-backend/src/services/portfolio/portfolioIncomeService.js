@@ -18,7 +18,7 @@ import { toDecimal, toNumber, roundToCents } from '../../lib/money.js';
  * @param {Array<{ totalIncome?: number|string, projectedAnnualInterest?: number|string }>} summaries
  * @returns {{ realizedIncome: number, projectedAnnualIncome: number }}
  */
-export function aggregateIncome(summaries) {
+ function aggregateIncome(summaries) {
   let realized = toDecimal(0);
   let projected = toDecimal(0);
   for (const s of summaries ?? []) {
@@ -39,8 +39,10 @@ export function aggregateIncome(summaries) {
  * @param {number} annualSpending
  * @returns {number|null}
  */
-export function coverageRatio(annualPassiveIncome, annualSpending) {
+ function coverageRatio(annualPassiveIncome, annualSpending) {
   const spend = toDecimal(annualSpending ?? 0);
   if (spend.lte(0)) return null;
   return toNumber(toDecimal(annualPassiveIncome ?? 0).dividedBy(spend));
 }
+
+export { aggregateIncome as __aggregateIncome, coverageRatio as __coverageRatio };

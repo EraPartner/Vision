@@ -66,7 +66,7 @@ export function resolveTransferMatches(candidatePairs) {
  * @param {Array<import('../../types/rows.js').TransactionRow>} transactions
  * @param {{windowDays?:number}} [opts]
  */
-export function findTransferMatches(transactions, { windowDays = 3 } = {}) {
+ function findTransferMatches(transactions, { windowDays = 3 } = {}) {
   const open = transactions.filter(
     (t) =>
       t.is_active !== false &&
@@ -91,3 +91,5 @@ export function findTransferMatches(transactions, { windowDays = 3 } = {}) {
   }
   return resolveTransferMatches(candidatePairs);
 }
+
+export { findTransferMatches as __findTransferMatches };

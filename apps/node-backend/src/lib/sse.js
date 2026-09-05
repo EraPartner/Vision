@@ -13,7 +13,7 @@
  * @param {import('http').ServerResponse} res
  * @returns {Promise<void>}
  */
-export function drainIfNeeded(res) {
+ function drainIfNeeded(res) {
   if (!res.writableNeedDrain) return Promise.resolve();
   return new Promise((resolve) => res.once('drain', resolve));
 }
@@ -114,3 +114,5 @@ export function createSseWriter(req, res) {
     },
   };
 }
+
+export { drainIfNeeded as __drainIfNeeded };

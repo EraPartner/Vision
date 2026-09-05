@@ -39,7 +39,7 @@ export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 // Idle window after which the full-history cache (~6 MB parsed) is dropped so a
 // single old-date lookup doesn't pin it in memory for the process lifetime. The
 // timer is reset on every access, so an actively-used cache is retained.
-export const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
+ const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
 
 // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
 /** @type {{ byDate: RatesByDate, timestamp: number } | null} */
@@ -237,7 +237,7 @@ export async function fetchFromErApi() {
  *
  * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
  */
-export async function fetchHistoricalFromEcb90d() {
+ async function fetchHistoricalFromEcb90d() {
   if (
     historicalEcb90dCache &&
     Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS
@@ -511,7 +511,7 @@ export async function getUnindexedRatesToEurForDates(
  * @param {string} dateStr 'YYYY-MM-DD'
  * @returns {Promise<number|undefined>} undefined when nothing is stored for the currency
  */
-export async function getNearestRateFromDatabase(currencyCode, dateStr) {
+ async function getNearestRateFromDatabase(currencyCode, dateStr) {
   const result = await query(
     `SELECT rate_to_eur
      FROM exchange_rates
@@ -729,3 +729,5 @@ export async function getRateToEurForDate(
   // Last resort (e.g. non-ECB currencies): nearest stored rate, any distance.
   return getNearestRateFromDatabase(currencyCode, dateStr);
 }
+
+export { HISTORICAL_FULL_CACHE_IDLE_MS as __HISTORICAL_FULL_CACHE_IDLE_MS, fetchHistoricalFromEcb90d as __fetchHistoricalFromEcb90d, getNearestRateFromDatabase as __getNearestRateFromDatabase };

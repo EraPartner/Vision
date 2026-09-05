@@ -14,7 +14,7 @@
  * Overlapping-stamp guard (§1 F2): per-row `balance` stamps are per-source-bank
  * running balances. When two accounts that were BOTH being stamped over the same
  * period merge, the stamps interleave in one partition and the anchor+delta
- * computation (COMPUTED_BALANCE_LATERAL) anchors on whichever source's latest
+ * provenance computation (BALANCE_PROVENANCE_LATERAL) anchors on whichever source's latest
  * stamp is most recent — silently dropping the other bank's balance — while the
  * survivor's stored `statement_balance` keeps anchoring drift against the shifted
  * figure. The merge detects this (overlapping stamped-date ranges across >1
@@ -32,16 +32,21 @@
  * collidingAnchorCurrencies.
  */
 
-import { query, withTransaction } from '../database/connection.js';
-import { filterValidatedIdNumbers } from '../lib/validation.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
-import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBalanceSql.js';
-import { convertWithRates, loadCurrentRates } from './currency/currencyConversionService.js';
-import { accountRepository } from '../repositories/accountRepository.js';
-import { transactionRepository } from '../repositories/transactionRepository.js';
-import { plannedTransactionRepository } from '../repositories/plannedTransactionRepository.js';
-import { portfolioTransactionRepository } from '../repositories/portfolioTransactionRepository.js';
+import { query, withTransaction } from "../database/connection.js";
+import { todayAppDateString } from "../lib/timezone.js";
+import { filterValidatedIdNumbers } from "../lib/validation.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { roundToCents, toDecimal, toNumber } from "../lib/money.js";
+import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
+import {
+  convertWithRates,
+  loadCurrentRates,
+} from "./currency/currencyConversionService.js";
+import { hasConversionRate } from "../lib/exchangeRates.js";
+import { accountRepository } from "../repositories/accountRepository.js";
+import { transactionRepository } from "../repositories/transactionRepository.js";
+import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";
+import { portfolioTransactionRepository } from "../repositories/portfolioTransactionRepository.js";
 
 export const MAX_ACCOUNT_MERGE_SOURCES = 500;
 
@@ -55,12 +60,15 @@ export const MAX_ACCOUNT_MERGE_SOURCES = 500;
  * @param {{ account_id:number, min_date:string, max_date:string }[]} ranges
  * @returns {boolean}
  */
-export function stampRangesOverlap(ranges) {
+function stampRangesOverlap(ranges) {
   for (let i = 0; i < ranges.length; i++) {
     for (let j = i + 1; j < ranges.length; j++) {
       // Two closed ranges [minA,maxA] and [minB,maxB] overlap iff each starts
       // on or before the other ends.
-      if (ranges[i].min_date <= ranges[j].max_date && ranges[j].min_date <= ranges[i].max_date) {
+      if (
+        ranges[i].min_date <= ranges[j].max_date &&
+        ranges[j].min_date <= ranges[i].max_date
+      ) {
         return true;
       }
     }
@@ -89,11 +97,11 @@ export function stampRangesOverlap(ranges) {
  * @param {{ account_id:number, currency:string }[]} anchors
  * @returns {string[]} colliding currency codes, ordered, no duplicates
  */
-export function collidingAnchorCurrencies(anchors) {
+function collidingAnchorCurrencies(anchors) {
   /** @type {Map<string, Set<number>>} */
   const accountsByCurrency = new Map();
   for (const { account_id: accountId, currency } of anchors || []) {
-    const code = (currency || 'EUR').toUpperCase();
+    const code = (currency || "EUR").toUpperCase();
     if (!accountsByCurrency.has(code)) accountsByCurrency.set(code, new Set());
     accountsByCurrency.get(code).add(accountId);
   }
@@ -102,6 +110,11 @@ export function collidingAnchorCurrencies(anchors) {
     .map(([code]) => code)
     .sort();
 }
+
+export {
+  stampRangesOverlap as __stampRangesOverlap,
+  collidingAnchorCurrencies as __collidingAnchorCurrencies,
+};
 
 /**
  * @param {number} targetId  the survivor
@@ -112,15 +125,26 @@ export function collidingAnchorCurrencies(anchors) {
  * @returns {Promise<{ into:number, merged:number[], reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, stampsInterleaved:boolean }>}
  */
 export async function mergeAccounts(targetId, sourceIds) {
-  if (!Number.isInteger(targetId)) throw new ValidationError('target account id must be an integer');
-  if (!Array.isArray(sourceIds) || sourceIds.length > MAX_ACCOUNT_MERGE_SOURCES) {
-    throw new ValidationError(`source_ids must contain at most ${MAX_ACCOUNT_MERGE_SOURCES} accounts`);
+  if (!Number.isInteger(targetId))
+    throw new ValidationError("target account id must be an integer");
+  if (
+    !Array.isArray(sourceIds) ||
+    sourceIds.length > MAX_ACCOUNT_MERGE_SOURCES
+  ) {
+    throw new ValidationError(
+      `source_ids must contain at most ${MAX_ACCOUNT_MERGE_SOURCES} accounts`,
+    );
   }
   if (sourceIds.includes(targetId)) {
-    throw new ValidationError('source_ids must not include the survivor account');
+    throw new ValidationError(
+      "source_ids must not include the survivor account",
+    );
   }
   const ids = [...new Set(filterValidatedIdNumbers(sourceIds))];
-  if (!ids.length) throw new ValidationError('Provide at least one distinct source account to merge');
+  if (!ids.length)
+    throw new ValidationError(
+      "Provide at least one distinct source account to merge",
+    );
 
   // Composed from repository methods: the ambient transaction context routes
   // each repo call onto this transaction's client, so every statement below
@@ -134,36 +158,58 @@ export async function mergeAccounts(targetId, sourceIds) {
     const srcRows = await accountRepository.lockByIdsForMerge(ids);
     const found = new Set(srcRows.map((r) => r.id));
     const missing = ids.filter((id) => !found.has(id));
-    if (missing.length) throw new NotFoundError(`Account(s) not found: ${missing.join(', ')}`);
+    if (missing.length)
+      throw new NotFoundError(`Account(s) not found: ${missing.join(", ")}`);
 
     // Overlapping-stamp guard (§1 F2, module header): capture per-original-
     // account stamped ranges before the repoint erases the provenance.
-    const stampRanges = await transactionRepository.getStampedDateRangesByAccount([targetId, ...ids]);
+    const stampRanges =
+      await transactionRepository.getStampedDateRangesByAccount([
+        targetId,
+        ...ids,
+      ]);
     const stampsInterleaved = stampRangesOverlap(stampRanges);
 
     // Colliding-anchor guard: read under the same locks, before the repoint that
     // would violate uq_transactions_opening_anchor. Refuse rather than choose an
     // anchor for the user (see collidingAnchorCurrencies).
     const collisions = collidingAnchorCurrencies(
-      await transactionRepository.getOpeningAnchorsByAccount([targetId, ...ids]),
+      await transactionRepository.getOpeningAnchorsByAccount([
+        targetId,
+        ...ids,
+      ]),
     );
     if (collisions.length) {
       throw new ValidationError(
-        `More than one of these accounts has an opening balance in ${collisions.join(', ')}. `
-        + 'Remove the opening balance from all but one of them, then merge '
-        + '(an account can hold only one opening balance per currency).',
+        `More than one of these accounts has an opening balance in ${collisions.join(", ")}. ` +
+          "Remove the opening balance from all but one of them, then merge " +
+          "(an account can hold only one opening balance per currency).",
       );
     }
 
-    const txCount = await transactionRepository.repointAccount(targetId, targetName, ids);
-    const plannedCount = await plannedTransactionRepository.repointAccount(targetId, targetName, ids);
+    const txCount = await transactionRepository.repointAccount(
+      targetId,
+      targetName,
+      ids,
+    );
+    const plannedCount = await plannedTransactionRepository.repointAccount(
+      targetId,
+      targetName,
+      ids,
+    );
 
     // Portfolio lots: account_id lives on the flat portfolio_transactions table
     // (the only shape after migration 0087, ADR-109).
-    const portfolioCount = await portfolioTransactionRepository.repointAccount(targetId, ids);
+    const portfolioCount = await portfolioTransactionRepository.repointAccount(
+      targetId,
+      ids,
+    );
 
     // Accounts that used a merged source as their funding/settlement account.
-    const fundingCount = await accountRepository.repointFundingAccount(targetId, ids);
+    const fundingCount = await accountRepository.repointFundingAccount(
+      targetId,
+      ids,
+    );
 
     // Interleaved stamps invalidate the survivor's statement anchor: drift
     // would be computed against a figure reconciled for a pre-merge partition.
@@ -217,36 +263,60 @@ export async function mergeAccounts(targetId, sourceIds) {
  *
  * @param {number} sourceId  the account that would be merged away
  * @param {number} targetId  the survivor (`?into=`)
- * @returns {Promise<{ into:number, source:number, reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, projectedBalance:number, projectedBalanceCurrency:string, stampsInterleaved:boolean, openingAnchorCollision:boolean }>}
+ * @returns {Promise<{ into:number, source:number, reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, projectedBalance:number, projectedBalanceCurrency:string, balanceParts:Array<{currency:string,balance:number}>, projectedBalanceIncomplete:boolean, unconvertedCurrencies:string[], stampsInterleaved:boolean, openingAnchorCollision:boolean }>}
  */
 export async function previewMerge(sourceId, targetId) {
   if (!Number.isInteger(sourceId) || sourceId <= 0) {
-    throw new ValidationError('source account id must be a positive integer');
+    throw new ValidationError("source account id must be a positive integer");
   }
   if (!Number.isInteger(targetId) || targetId <= 0) {
-    throw new ValidationError('into must be a positive integer account id');
+    throw new ValidationError("into must be a positive integer account id");
   }
   if (targetId === sourceId) {
-    throw new ValidationError('An account cannot be merged into itself');
+    throw new ValidationError("An account cannot be merged into itself");
   }
 
   const accounts = await query(
-    'SELECT id, currency FROM accounts WHERE id = ANY($1::int[])',
+    "SELECT id, currency FROM accounts WHERE id = ANY($1::int[])",
     [[sourceId, targetId]],
   );
-  const byId = new Map(accounts.rows.map(
-    (/** @type {{ id: number, currency: string }} */ r) => [r.id, r],
-  ));
-  if (!byId.has(targetId)) throw new NotFoundError(`Account ${targetId} not found`);
-  if (!byId.has(sourceId)) throw new NotFoundError(`Account ${sourceId} not found`);
+  const byId = new Map(
+    accounts.rows.map((/** @type {{ id: number, currency: string }} */ r) => [
+      r.id,
+      r,
+    ]),
+  );
+  if (!byId.has(targetId))
+    throw new NotFoundError(`Account ${targetId} not found`);
+  if (!byId.has(sourceId))
+    throw new NotFoundError(`Account ${sourceId} not found`);
 
   // Same table set mergeAccounts repoints, as COUNTs.
   const unionIds = [targetId, sourceId];
-  const [txCount, plannedCount, portfolioCount, fundingCount, projected, rates, stampRanges, anchors] = await Promise.all([
-    query('SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1', [sourceId]),
-    query('SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1', [sourceId]),
-    query('SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1', [sourceId]),
-    query('SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1', [sourceId]),
+  const [
+    txCount,
+    plannedCount,
+    portfolioCount,
+    fundingCount,
+    projected,
+    rates,
+    stampRanges,
+    anchors,
+  ] = await Promise.all([
+    query("SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1", [
+      sourceId,
+    ]),
+    query(
+      "SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1",
+      [sourceId],
+    ),
+    query(
+      "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1",
+      [sourceId],
+    ),
+    query("SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1", [
+      sourceId,
+    ]),
     // Per-currency anchor+delta over the union set, via the shared hub builder:
     // within each currency the most recent stamped row across BOTH accounts
     // anchors and every active row of that currency after it is the delta. The
@@ -256,8 +326,8 @@ export async function previewMerge(sourceId, targetId) {
     query(
       `SELECT bp.balance_parts
          FROM (SELECT 1) merge_drv
-         ${computedBalanceByCurrencyAggLateral({ account: 'ANY($1::int[])' })}`,
-      [unionIds],
+         ${computedBalanceByCurrencyAggLateral({ account: "ANY($1::int[])", asOfDate: "$2::date" })}`,
+      [unionIds, todayAppDateString()],
     ),
     // One rate table for every partition; these are CURRENT balances, so each
     // converts at today's rate (see computedBalanceByCurrencyLateral).
@@ -266,17 +336,28 @@ export async function previewMerge(sourceId, targetId) {
     transactionRepository.getOpeningAnchorsByAccount(unionIds),
   ]);
 
-  const targetCurrency = (byId.get(targetId).currency || 'EUR').toUpperCase();
+  const targetCurrency = (byId.get(targetId).currency || "EUR").toUpperCase();
   /** @type {Array<{ currency: string, balance: string }>} */
   const partitions = projected.rows[0]?.balance_parts ?? [];
   let total = toDecimal(0);
+  /** @type {string[]} */
+  const unconvertedCurrencies = [];
   for (const part of partitions) {
-    total = total.plus(toDecimal(convertWithRates(
-      toNumber(toDecimal(part.balance)),
-      (part.currency || 'EUR').toUpperCase(),
-      targetCurrency,
-      rates,
-    )));
+    const partCurrency = (part.currency || "EUR").toUpperCase();
+    if (!hasConversionRate(partCurrency, targetCurrency, rates)) {
+      unconvertedCurrencies.push(partCurrency);
+      continue;
+    }
+    total = total.plus(
+      toDecimal(
+        convertWithRates(
+          toNumber(toDecimal(part.balance)),
+          partCurrency,
+          targetCurrency,
+          rates,
+        ),
+      ),
+    );
   }
 
   return {
@@ -292,9 +373,20 @@ export async function previewMerge(sourceId, targetId) {
     // total as a rounded number (banker's, cents), like the hub's computed_balance.
     projectedBalance: toNumber(roundToCents(total)),
     projectedBalanceCurrency: targetCurrency,
+    balanceParts: partitions.map((part) => ({
+      currency: (part.currency || "EUR").toUpperCase(),
+      balance: toNumber(toDecimal(part.balance)),
+    })),
+    projectedBalanceIncomplete: unconvertedCurrencies.length > 0,
+    unconvertedCurrencies,
     stampsInterleaved: stampRangesOverlap(stampRanges),
     openingAnchorCollision: collidingAnchorCurrencies(anchors).length > 0,
   };
 }
 
-export default { mergeAccounts, previewMerge, stampRangesOverlap, collidingAnchorCurrencies };
+export default {
+  mergeAccounts,
+  previewMerge,
+  stampRangesOverlap,
+  collidingAnchorCurrencies,
+};

@@ -21,15 +21,15 @@
  *    already correct when the auto-commit path returns.
  */
 
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
-import { ValidationError } from '../../middleware/errorHandler.js';
-import { invalidatePortfolioCaches } from '../info/cache.js';
+import { query } from "../../database/connection.js";
+import { logger } from "../../config/logger.js";
+import { ValidationError } from "../../middleware/errorHandler.js";
+import { invalidatePortfolioCaches } from "../info/cache.js";
 
-import { createBatch, stageBatch } from './stage.js';
-import { validateBatch } from './validate.js';
-import { matchBatch } from './matchInvestments.js';
-import { commitBatch } from './commit.js';
+import { createBatch, stageBatch } from "./stage.js";
+import { validateBatch } from "./validate.js";
+import { matchBatch } from "./matchInvestments.js";
+import { commitBatch } from "./commit.js";
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -69,8 +69,13 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * @throws {ValidationError} when the column mapping / date format parsed zero rows
  */
 
-export async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
-  const { rowsTotal, rowsSkipped } = await stageBatch({ batchId, filePath, customConfig, onProgress });
+async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
+  const { rowsTotal, rowsSkipped } = await stageBatch({
+    batchId,
+    filePath,
+    customConfig,
+    onProgress,
+  });
 
   // A mapping that matches no column (or a wrong date format) null-parses every
   // row: the adapter skips them all and the batch would sail through to a
@@ -79,34 +84,56 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
     throw new ValidationError(
       rowsSkipped > 0
         ? `No importable rows: all ${rowsSkipped} data rows failed to parse. Check the column mapping and date format.`
-        : 'No importable rows found in the file.',
+        : "No importable rows found in the file.",
     );
   }
 
-  const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
-  const { matchSourceCounts, unresolved } = await matchBatch({ batchId, onProgress });
+  const { errors: validateErrors } = await validateBatch({
+    batchId,
+    onProgress,
+  });
+  const { matchSourceCounts, unresolved } = await matchBatch({
+    batchId,
+    onProgress,
+  });
 
   // Brokerage imports (ADR-095) ALWAYS go through staged review — the user must
   // confirm cash-vs-trade routing and instrument matching before any fan-out.
-  const { rows: brRows } = await query(`SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`, [batchId]);
+  const { rows: brRows } = await query(
+    `SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`,
+    [batchId],
+  );
   const isBrokerage = brRows[0]?.is_brokerage === true;
 
   // Conservative: only a batch where every row matched by exact symbol and
   // nothing errored or went unresolved is safe to auto-commit. Name matches are
   // weaker (homonyms) and unresolved rows have no instrument yet.
-  const requiresReview = (
+  const requiresReview =
     isBrokerage ||
     (validateErrors || 0) > 0 ||
     (matchSourceCounts.name_exact || 0) > 0 ||
-    (unresolved || 0) > 0
-  );
+    (unresolved || 0) > 0;
 
   if (requiresReview) {
-    await query(`UPDATE portfolio_import_batches SET status = 'awaiting_review' WHERE id = $1`, [batchId]);
-    logger.info('[portfolio-pipeline] awaiting review', { batchId, matchSourceCounts, validateErrors });
+    await query(
+      `UPDATE portfolio_import_batches SET status = 'awaiting_review' WHERE id = $1`,
+      [batchId],
+    );
+    logger.info("[portfolio-pipeline] awaiting review", {
+      batchId,
+      matchSourceCounts,
+      validateErrors,
+    });
   }
 
-  return { batchId, rowsTotal, rowsSkipped, requiresReview, matchSourceCounts, validateErrors };
+  return {
+    batchId,
+    rowsTotal,
+    rowsSkipped,
+    requiresReview,
+    matchSourceCounts,
+    validateErrors,
+  };
 }
 
 /**
@@ -116,7 +143,10 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
 export async function commitPortfolioImport({ batchId, onProgress }) {
-  const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
+  const { imported, duplicates, errors } = await commitBatch({
+    batchId,
+    onProgress,
+  });
 
   // A batch that still has any 'error' staging row is not truly done — it lands
   // in 'complete_with_errors' so it stays reviewable (the commit route re-accepts
@@ -142,11 +172,19 @@ export async function commitPortfolioImport({ batchId, onProgress }) {
     try {
       invalidatePortfolioCaches();
     } catch (err) {
-      logger.warn('[portfolio-pipeline] cache invalidation failed (non-fatal)', { err: err?.message });
+      logger.warn(
+        "[portfolio-pipeline] cache invalidation failed (non-fatal)",
+        { err: err?.message },
+      );
     }
   }
 
-  logger.info('[portfolio-pipeline] committed', { batchId, imported, duplicates, errors });
+  logger.info("[portfolio-pipeline] committed", {
+    batchId,
+    imported,
+    duplicates,
+    errors,
+  });
   return { imported, duplicates, errors };
 }
 
@@ -158,32 +196,94 @@ export async function commitPortfolioImport({ batchId, onProgress }) {
  * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, isBrokerage?: boolean, accountId?: number, onProgress?: PortfolioImportProgressCallback }} args
  * @returns {Promise<{ batchId: PortfolioImportBatchId, total: number, skipped: number, requiresReview: boolean, matchSourceCounts?: Record<string, number>, imported?: number, duplicates?: number, errors?: number }>}
  */
-export async function runPortfolioImportPipeline({ filePath, adapterName, customConfig, defaultAssetClass, defaultType, filename, sizeBytes, isBrokerage, accountId, onProgress }) {
-  const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage, accountId });
-  logger.info('[portfolio-pipeline] created batch', { batchId, adapterName });
+export async function runPortfolioImportPipeline({
+  filePath,
+  adapterName,
+  customConfig,
+  defaultAssetClass,
+  defaultType,
+  filename,
+  sizeBytes,
+  isBrokerage,
+  accountId,
+  onProgress,
+}) {
+  const batchId = await createBatch({
+    adapterName,
+    filename,
+    sizeBytes,
+    customConfig,
+    defaultAssetClass,
+    defaultType,
+    isBrokerage,
+    accountId,
+  });
+  logger.info("[portfolio-pipeline] created batch", { batchId, adapterName });
 
   try {
-    const { rowsTotal, rowsSkipped, requiresReview, matchSourceCounts, validateErrors } = await prepareImport({
-      batchId, filePath, customConfig, onProgress,
+    const {
+      rowsTotal,
+      rowsSkipped,
+      requiresReview,
+      matchSourceCounts,
+      validateErrors,
+    } = await prepareImport({
+      batchId,
+      filePath,
+      customConfig,
+      onProgress,
     });
 
     if (requiresReview) {
-      return { batchId, total: rowsTotal, skipped: rowsSkipped, requiresReview: true, matchSourceCounts };
+      return {
+        batchId,
+        total: rowsTotal,
+        skipped: rowsSkipped,
+        requiresReview: true,
+        matchSourceCounts,
+      };
     }
 
-    const { imported, duplicates, errors: commitErrors } = await commitPortfolioImport({ batchId, onProgress });
+    const {
+      imported,
+      duplicates,
+      errors: commitErrors,
+    } = await commitPortfolioImport({ batchId, onProgress });
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
 
-    logger.info('[portfolio-pipeline] complete', { batchId, total: rowsTotal, skipped: rowsSkipped, imported, duplicates, errors: totalErrors });
-    return { batchId, total: rowsTotal, skipped: rowsSkipped, requiresReview: false, imported, duplicates, errors: totalErrors };
+    logger.info("[portfolio-pipeline] complete", {
+      batchId,
+      total: rowsTotal,
+      skipped: rowsSkipped,
+      imported,
+      duplicates,
+      errors: totalErrors,
+    });
+    return {
+      batchId,
+      total: rowsTotal,
+      skipped: rowsSkipped,
+      requiresReview: false,
+      imported,
+      duplicates,
+      errors: totalErrors,
+    };
   } catch (err) {
     await query(
       `UPDATE portfolio_import_batches SET status = 'failed', completed_at = NOW(), error_summary = $2 WHERE id = $1`,
       [batchId, String(err?.message || err).slice(0, 2000)],
     ).catch((updateErr) => {
-      logger.error('[portfolio-pipeline] failed to mark batch failed', { batchId, error: updateErr?.message });
+      logger.error("[portfolio-pipeline] failed to mark batch failed", {
+        batchId,
+        error: updateErr?.message,
+      });
     });
-    logger.error('[portfolio-pipeline] failed', { batchId, error: err?.message });
+    logger.error("[portfolio-pipeline] failed", {
+      batchId,
+      error: err?.message,
+    });
     throw err;
   }
 }
+
+export { prepareImport };

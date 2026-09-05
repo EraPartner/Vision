@@ -17,37 +17,42 @@
  * Nothing here touches TEST_DATABASE_URL's own tables.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import pg from 'pg';
-import { hasTestDatabase } from './setup/db.js';
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import pg from "pg";
+import { hasTestDatabase } from "./setup/db.js";
 
 const execFileAsync = promisify(execFile);
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const ALEMBIC_BIN = process.env.ALEMBIC_BIN || 'alembic';
-const ALEMBIC_CONFIG = path.join(REPO_ROOT, 'config/alembic.ini');
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
+const ALEMBIC_BIN = process.env.ALEMBIC_BIN || "alembic";
+const ALEMBIC_CONFIG = path.join(REPO_ROOT, "config/alembic.ini");
 
-const REV_BEFORE_LEGACY_BRANCHES = '0051_account_id_dual_write_trigger';
-const REV_BEFORE_CONVERSION = '0086_portfolio_transactions_import_batch_id';
+const REV_BEFORE_LEGACY_BRANCHES = "0051_account_id_dual_write_trigger";
+const REV_BEFORE_CONVERSION = "0086_portfolio_transactions_import_batch_id";
 
 /** Throwaway database, derived from TEST_DATABASE_URL so host/credentials match. */
 function scratchDbName() {
-  const base = new URL(process.env.TEST_DATABASE_URL ?? 'postgres://x/x').pathname.replace(/^\//, '');
+  const base = new URL(
+    process.env.TEST_DATABASE_URL ?? "postgres://x/x",
+  ).pathname.replace(/^\//, "");
   return `${base}_adr109`;
 }
 
 function scratchUrl() {
-  const url = new URL(process.env.TEST_DATABASE_URL ?? 'postgres://x/x');
+  const url = new URL(process.env.TEST_DATABASE_URL ?? "postgres://x/x");
   url.pathname = `/${scratchDbName()}`;
   return url.toString();
 }
 
 function alembic(...args) {
-  return execFileAsync(ALEMBIC_BIN, ['-c', ALEMBIC_CONFIG, ...args], {
+  return execFileAsync(ALEMBIC_BIN, ["-c", ALEMBIC_CONFIG, ...args], {
     cwd: REPO_ROOT,
     env: { ...process.env, DATABASE_URL: scratchUrl() },
     timeout: 120_000,
@@ -271,12 +276,14 @@ COMMIT;
 
 const haveDb = hasTestDatabase();
 
-describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
+describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
   beforeAll(async () => {
-    const adminUrl = new URL(process.env.TEST_DATABASE_URL ?? '');
+    const adminUrl = new URL(process.env.TEST_DATABASE_URL ?? "");
     const admin = new pg.Client({ connectionString: adminUrl.toString() });
     await admin.connect();
-    await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
+    await admin.query(
+      `DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`,
+    );
     await admin.query(
       `CREATE DATABASE ${scratchDbName()} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8'`,
     );
@@ -286,20 +293,26 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     await db.connect();
     // Same preflight db-migrate performs: modern revision ids overflow the
     // VARCHAR(32) alembic would otherwise create.
-    await q('CREATE TABLE alembic_version (version_num VARCHAR(64) NOT NULL, CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))');
+    await q(
+      "CREATE TABLE alembic_version (version_num VARCHAR(64) NOT NULL, CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))",
+    );
 
-    await alembic('upgrade', REV_BEFORE_LEGACY_BRANCHES);
+    await alembic("upgrade", REV_BEFORE_LEGACY_BRANCHES);
     await q(LEGACYIZE_SQL);
     // The real 0052/0061/0079/0086 now run their legacy (inheritance) branches.
-    await alembic('upgrade', REV_BEFORE_CONVERSION);
+    await alembic("upgrade", REV_BEFORE_CONVERSION);
     await q(SEED_SQL);
   }, 180_000);
 
   afterAll(async () => {
     if (db) await db.end();
-    const admin = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+    const admin = new pg.Client({
+      connectionString: process.env.TEST_DATABASE_URL,
+    });
     await admin.connect();
-    await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
+    await admin.query(
+      `DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`,
+    );
     await admin.end();
   });
 
@@ -311,45 +324,82 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
   async function expectUpgradeRefused(pattern) {
     let err = null;
     try {
-      await alembic('upgrade', 'head');
+      await alembic("upgrade", "head");
     } catch (e) {
       err = e;
     }
-    expect(err, 'expected alembic upgrade to be refused by the pre-flight').not.toBeNull();
-    expect(`${err.stderr ?? ''}\n${err.stdout ?? ''}\n${err.message ?? ''}`).toMatch(pattern);
+    expect(
+      err,
+      "expected alembic upgrade to be refused by the pre-flight",
+    ).not.toBeNull();
+    expect(
+      `${err.stderr ?? ""}\n${err.stdout ?? ""}\n${err.message ?? ""}`,
+    ).toMatch(pattern);
     // Untouched at 0086: still the legacy shape, and the legacy views still answer
     // (row counts are asserted per-case — the injected corruption itself can
     // legitimately change what the view shows until it is cleaned up).
-    expect(await scalar('SELECT version_num FROM alembic_version')).toBe(REV_BEFORE_CONVERSION);
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
-    expect(await scalar("SELECT to_regclass('public.legacy_inh_investments_base')")).toBeNull();
-    expect(Number(await scalar('SELECT count(*) FROM investments'))).toBeGreaterThanOrEqual(7);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBeGreaterThanOrEqual(9);
+    expect(await scalar("SELECT version_num FROM alembic_version")).toBe(
+      REV_BEFORE_CONVERSION,
+    );
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
+      ),
+    ).toBe("v");
+    expect(
+      await scalar("SELECT to_regclass('public.legacy_inh_investments_base')"),
+    ).toBeNull();
+    expect(
+      Number(await scalar("SELECT count(*) FROM investments")),
+    ).toBeGreaterThanOrEqual(7);
+    expect(
+      Number(await scalar("SELECT count(*) FROM portfolio_transactions")),
+    ).toBeGreaterThanOrEqual(9);
   }
 
-  it('data pre-flight refuses corrupt legacy states with actionable errors, leaving 0086 intact', async () => {
+  it("data pre-flight refuses corrupt legacy states with actionable errors, leaving 0086 intact", async () => {
     // (a) crypto symbol longer than the canonical VARCHAR(20) (legacy child is VARCHAR(50)).
-    await q("UPDATE crypto_investments SET symbol = 'BTC-EXTREMELY-LONG-TICKER' WHERE id = 3");
-    await expectUpgradeRefused(/ADR-109 conversion: crypto investment symbol\(s\) longer than 20 characters[\s\S]*crypto_investments id 3 symbol 'BTC-EXTREMELY-LONG-TICKER'/);
+    await q(
+      "UPDATE crypto_investments SET symbol = 'BTC-EXTREMELY-LONG-TICKER' WHERE id = 3",
+    );
+    await expectUpgradeRefused(
+      /ADR-109 conversion: crypto investment symbol\(s\) longer than 20 characters[\s\S]*crypto_investments id 3 symbol 'BTC-EXTREMELY-LONG-TICKER'/,
+    );
     await q("UPDATE crypto_investments SET symbol = 'BTC' WHERE id = 3");
 
     // (b) same id present in two transaction child tables (reachable organically from a
     //     behind-max sequence resync + one ordinary insert into another child).
-    await q("INSERT INTO etf_transactions (id, investment_id, type, date, amount, currency) VALUES (1, 2, 'buy', '2026-01-01', 1, 'EUR')");
-    await expectUpgradeRefused(/ADR-109 conversion: portfolio transaction id\(s\) 1 exist in more than one asset-class child table/);
-    await q('DELETE FROM etf_transactions WHERE id = 1');
+    await q(
+      "INSERT INTO etf_transactions (id, investment_id, type, date, amount, currency) VALUES (1, 2, 'buy', '2026-01-01', 1, 'EUR')",
+    );
+    await expectUpgradeRefused(
+      /ADR-109 conversion: portfolio transaction id\(s\) 1 exist in more than one asset-class child table/,
+    );
+    await q("DELETE FROM etf_transactions WHERE id = 1");
 
     // (c) base-only investments_base row with no child — no asset_class to convert with;
     //     the error must say the refusal is by design and what to do.
-    await q("INSERT INTO investments_base (id, name) VALUES (99, 'orphan base row')");
-    await expectUpgradeRefused(/ADR-109 conversion: investments_base row\(s\) 99 have no asset-class child row[\s\S]*deliberately refuses/);
-    await q('DELETE FROM ONLY investments_base WHERE id = 99');
+    await q(
+      "INSERT INTO investments_base (id, name) VALUES (99, 'orphan base row')",
+    );
+    await expectUpgradeRefused(
+      /ADR-109 conversion: investments_base row\(s\) 99 have no asset-class child row[\s\S]*deliberately refuses/,
+    );
+    await q("DELETE FROM ONLY investments_base WHERE id = 99");
   }, 180_000);
 
-  it('converts, preserves valid rows, completes legacy delete cascades, rolls back, and re-converts', async () => {
+  it("converts, preserves valid rows, completes legacy delete cascades, rolls back, and re-converts", async () => {
     // Sanity: the constructed database really is legacy-shaped.
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
-    expect(await scalar("SELECT 'metals' = ANY(enum_range(NULL::asset_class)::text[])")).toBe(false);
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
+      ),
+    ).toBe("v");
+    expect(
+      await scalar(
+        "SELECT 'metals' = ANY(enum_range(NULL::asset_class)::text[])",
+      ),
+    ).toBe(false);
 
     // Legacy investments sequence runs AHEAD of the surviving rows (top rows were
     // deleted on this hypothetical install): the conversion must not re-issue
@@ -357,17 +407,33 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     await q("SELECT setval('investments_base_id_seq', 500)");
 
     // ------------------------------------------------------------------ upgrade
-    await alembic('upgrade', 'head');
+    await alembic("upgrade", "head");
 
     // Flat tables took the canonical names; legacy relations renamed aside.
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('r');
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.portfolio_transactions')")).toBe('r');
-    expect(await scalar("SELECT to_regclass('public.legacy_inh_investments_base') IS NOT NULL")).toBe(true);
-    expect(await scalar("SELECT to_regclass('public.investments_base')")).toBeNull();
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
+      ),
+    ).toBe("r");
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.portfolio_transactions')",
+      ),
+    ).toBe("r");
+    expect(
+      await scalar(
+        "SELECT to_regclass('public.legacy_inh_investments_base') IS NOT NULL",
+      ),
+    ).toBe(true);
+    expect(
+      await scalar("SELECT to_regclass('public.investments_base')"),
+    ).toBeNull();
 
     // Row-for-row parity against the renamed legacy view (which still reads the
     // renamed inheritance tables) — every column the view exposes.
-    expect(Number(await scalar(`
+    expect(
+      Number(
+        await scalar(`
       SELECT count(*) FROM (
         SELECT id, name, asset_class::text, currency, notes, is_active, symbol, current_price,
                maturity_date, location, municipality, cadastral_income, municipality_tax_rate,
@@ -377,9 +443,13 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
         SELECT id, name, asset_class::text, currency, notes, is_active, symbol, current_price,
                maturity_date, location, municipality, cadastral_income, municipality_tax_rate,
                created_at, updated_at
-        FROM legacy_inh_investments) d`))).toBe(0);
-    expect(Number(await scalar('SELECT count(*) FROM investments'))).toBe(7);
-    expect(Number(await scalar(`
+        FROM legacy_inh_investments) d`),
+      ),
+    ).toBe(0);
+    expect(Number(await scalar("SELECT count(*) FROM investments"))).toBe(7);
+    expect(
+      Number(
+        await scalar(`
       SELECT count(*) FROM (
         SELECT id, investment_id, type::text, date, amount, units, price_per_unit, fees, taxes,
                currency, note, is_recurring, recurrence_interval::text, recurrence_end_date,
@@ -395,49 +465,100 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
         SELECT id, investment_id, type::text, date, amount, units, price_per_unit, fees, taxes,
                currency, note, is_recurring, recurrence_interval::text, recurrence_end_date,
                created_at, updated_at, fx_rate_to_eur, account_id, import_batch_id
-        FROM portfolio_transactions) d`))).toBe(0);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(8);
-    expect(await scalar('SELECT id FROM portfolio_transactions WHERE id = 9')).toBeUndefined();
-    expect(Number(await scalar('SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9'))).toBe(8);
+        FROM portfolio_transactions) d`),
+      ),
+    ).toBe(0);
+    expect(
+      Number(await scalar("SELECT count(*) FROM portfolio_transactions")),
+    ).toBe(8);
+    expect(
+      await scalar("SELECT id FROM portfolio_transactions WHERE id = 9"),
+    ).toBeUndefined();
+    expect(
+      Number(
+        await scalar(
+          "SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9",
+        ),
+      ),
+    ).toBe(8);
 
     // The bond interest_rate the legacy VIEW never exposed is preserved from the child table.
-    expect(Number(await scalar('SELECT interest_rate FROM investments WHERE id = 7'))).toBe(3.3);
-    expect(await scalar('SELECT interest_rate FROM legacy_inh_investments WHERE id = 7')).toBeNull();
+    expect(
+      Number(
+        await scalar("SELECT interest_rate FROM investments WHERE id = 7"),
+      ),
+    ).toBe(3.3);
+    expect(
+      await scalar(
+        "SELECT interest_rate FROM legacy_inh_investments WHERE id = 7",
+      ),
+    ).toBeNull();
 
     // Dangling links (unenforceable on legacy children) were nulled; valid ones kept.
-    expect(await scalar('SELECT account_id FROM portfolio_transactions WHERE id = 5')).toBeNull();
-    expect(await scalar('SELECT import_batch_id FROM portfolio_transactions WHERE id = 3')).toBeNull();
-    expect(Number(await scalar('SELECT account_id FROM portfolio_transactions WHERE id = 1'))).toBe(1);
-    expect(Number(await scalar('SELECT import_batch_id FROM portfolio_transactions WHERE id = 1'))).toBe(41);
+    expect(
+      await scalar(
+        "SELECT account_id FROM portfolio_transactions WHERE id = 5",
+      ),
+    ).toBeNull();
+    expect(
+      await scalar(
+        "SELECT import_batch_id FROM portfolio_transactions WHERE id = 3",
+      ),
+    ).toBeNull();
+    expect(
+      Number(
+        await scalar(
+          "SELECT account_id FROM portfolio_transactions WHERE id = 1",
+        ),
+      ),
+    ).toBe(1);
+    expect(
+      Number(
+        await scalar(
+          "SELECT import_batch_id FROM portfolio_transactions WHERE id = 1",
+        ),
+      ),
+    ).toBe(41);
 
     // Sequences: GREATEST(legacy sequence's next value, MAX(id)+1). The investments
     // side had its legacy sequence pushed AHEAD to 500 → next id is 501, never a
     // reused one; the portfolio side keeps the legacy next value 10 even though
     // orphan transaction 9 is absent from the flat copy. (Read
     // non-consumingly — later FK-violation INSERTs below burn nextval values.)
-    expect(Number(await scalar(`
+    expect(
+      Number(
+        await scalar(`
       SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END
-        FROM portfolio_transactions_flat_id_seq`))).toBe(10);
+        FROM portfolio_transactions_flat_id_seq`),
+      ),
+    ).toBe(10);
     const inserted = await q(
       "INSERT INTO investments (name, asset_class, currency, symbol) VALUES ('New', 'metals', 'EUR', 'XAG') RETURNING id",
     );
     expect(inserted.rows[0].id).toBe(501);
     // updated_at trigger reattached.
-    await q('UPDATE investments SET current_price = 1 WHERE id = 501');
-    expect(await scalar('SELECT updated_at > created_at FROM investments WHERE id = 501')).toBe(true);
-    await q('DELETE FROM investments WHERE id = 501');
+    await q("UPDATE investments SET current_price = 1 WHERE id = 501");
+    expect(
+      await scalar(
+        "SELECT updated_at > created_at FROM investments WHERE id = 501",
+      ),
+    ).toBe(true);
+    await q("DELETE FROM investments WHERE id = 501");
 
     // The FKs the view shape could never hold are real now — and enforced.
     // contype 'n' (per-column NOT NULL) exists only on PG >= 18; exclude it so
     // the exact list is portable across the PG 16 (local) / 18 (CI) split.
-    const cons = (await q(
-      "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass AND contype <> 'n' ORDER BY conname",
-    )).rows.map((r) => r.conname);
+    const cons = (
+      await q(
+        "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass AND contype <> 'n' ORDER BY conname",
+      )
+    ).rows.map((r) => r.conname);
     expect(cons).toEqual([
-      'portfolio_transactions_account_id_fkey',
-      'portfolio_transactions_import_batch_id_fkey',
-      'portfolio_transactions_investment_id_fkey',
-      'portfolio_transactions_pkey',
+      "chk_portfolio_transactions_dividend_amount_convention",
+      "portfolio_transactions_account_id_fkey",
+      "portfolio_transactions_import_batch_id_fkey",
+      "portfolio_transactions_investment_id_fkey",
+      "portfolio_transactions_pkey",
     ]);
     // On PG >= 18 the catalogued NOT NULL constraints are minted with the
     // transient *_flat table name; 0087 renames them to the fresh-install
@@ -447,56 +568,129 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     );
     expect(flatNamed).toBe(0);
     await expect(
-      q("INSERT INTO portfolio_transactions (investment_id, type, date, amount) VALUES (4242, 'buy', '2026-01-01', 1)"),
+      q(
+        "INSERT INTO portfolio_transactions (investment_id, type, date, amount) VALUES (4242, 'buy', '2026-01-01', 1)",
+      ),
     ).rejects.toThrow(/portfolio_transactions_investment_id_fkey/);
-    await expect(q('DELETE FROM accounts WHERE id = 1')).rejects.toThrow(/portfolio_transactions_account_id_fkey/);
+    await expect(q("DELETE FROM accounts WHERE id = 1")).rejects.toThrow(
+      /portfolio_transactions_account_id_fkey/,
+    );
 
     // 0026/0040 parity: orphan price row deleted, staging FKs added with dangling refs nulled.
-    expect(Number(await scalar('SELECT count(*) FROM asset_price_history'))).toBe(1);
-    expect(await scalar('SELECT resolved_investment_id FROM portfolio_import_staging_rows WHERE row_index = 1')).toBeNull();
-    expect(Number(await scalar('SELECT resolved_investment_id FROM portfolio_import_staging_rows WHERE row_index = 0'))).toBe(1);
+    expect(
+      Number(await scalar("SELECT count(*) FROM asset_price_history")),
+    ).toBe(1);
+    expect(
+      await scalar(
+        "SELECT resolved_investment_id FROM portfolio_import_staging_rows WHERE row_index = 1",
+      ),
+    ).toBeNull();
+    expect(
+      Number(
+        await scalar(
+          "SELECT resolved_investment_id FROM portfolio_import_staging_rows WHERE row_index = 0",
+        ),
+      ),
+    ).toBe(1);
 
     // The enum gained 'metals' (the flat asset_class column needs it).
-    expect(await scalar("SELECT 'metals' = ANY(enum_range(NULL::asset_class)::text[])")).toBe(true);
+    expect(
+      await scalar(
+        "SELECT 'metals' = ANY(enum_range(NULL::asset_class)::text[])",
+      ),
+    ).toBe(true);
 
     // The 0061 side table is untouched.
-    expect(await scalar('SELECT show_in_ticker FROM investment_ticker_prefs WHERE investment_id = 3')).toBe(false);
+    expect(
+      await scalar(
+        "SELECT show_in_ticker FROM investment_ticker_prefs WHERE investment_id = 3",
+      ),
+    ).toBe(false);
 
     // ---------------------------------------------------------------- downgrade
     // Back to the revision BEFORE the conversion (not `-1`: head has moved past
     // 0087 — e.g. 0088's money-precision alignment — and those later downgrades
     // must also unwind for the legacy shape to be restorable).
-    await alembic('downgrade', REV_BEFORE_CONVERSION);
+    await alembic("downgrade", REV_BEFORE_CONVERSION);
 
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
-    expect(await scalar("SELECT to_regclass('public.investments_base') IS NOT NULL")).toBe(true);
-    expect(Number(await scalar('SELECT count(*) FROM pg_class WHERE relname LIKE $1', ['legacy\\_inh\\_%']))).toBe(0);
-    expect(Number(await scalar('SELECT count(*) FROM pg_constraint WHERE conname LIKE $1', ['legacy\\_inh\\_%']))).toBe(0);
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
+      ),
+    ).toBe("v");
+    expect(
+      await scalar("SELECT to_regclass('public.investments_base') IS NOT NULL"),
+    ).toBe(true);
+    expect(
+      Number(
+        await scalar("SELECT count(*) FROM pg_class WHERE relname LIKE $1", [
+          "legacy\\_inh\\_%",
+        ]),
+      ),
+    ).toBe(0);
+    expect(
+      Number(
+        await scalar(
+          "SELECT count(*) FROM pg_constraint WHERE conname LIKE $1",
+          ["legacy\\_inh\\_%"],
+        ),
+      ),
+    ).toBe(0);
     // Data readable through the restored view, dangling links back as they were.
-    expect(Number(await scalar('SELECT count(*) FROM investments'))).toBe(7);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(9);
-    expect(Number(await scalar('SELECT investment_id FROM portfolio_transactions WHERE id = 9'))).toBe(8);
-    expect(Number(await scalar('SELECT account_id FROM portfolio_transactions WHERE id = 5'))).toBe(999);
+    expect(Number(await scalar("SELECT count(*) FROM investments"))).toBe(7);
+    expect(
+      Number(await scalar("SELECT count(*) FROM portfolio_transactions")),
+    ).toBe(9);
+    expect(
+      Number(
+        await scalar(
+          "SELECT investment_id FROM portfolio_transactions WHERE id = 9",
+        ),
+      ),
+    ).toBe(8);
+    expect(
+      Number(
+        await scalar(
+          "SELECT account_id FROM portfolio_transactions WHERE id = 5",
+        ),
+      ),
+    ).toBe(999);
     // The canonical PK name went back to the pre-0013 snapshot it came from.
-    expect(await scalar(
-      "SELECT c.relname FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class c ON c.oid = x.indrelid WHERE i.relname = 'investments_pkey'",
-    )).toBe('investments_legacy');
+    expect(
+      await scalar(
+        "SELECT c.relname FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class c ON c.oid = x.indrelid WHERE i.relname = 'investments_pkey'",
+      ),
+    ).toBe("investments_legacy");
 
     // --------------------------------------------------------------- re-upgrade
-    await alembic('upgrade', 'head');
-    expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('r');
-    expect(Number(await scalar('SELECT count(*) FROM investments'))).toBe(7);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(8);
-    expect(await scalar('SELECT id FROM portfolio_transactions WHERE id = 9')).toBeUndefined();
-    expect(Number(await scalar('SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9'))).toBe(8);
+    await alembic("upgrade", "head");
+    expect(
+      await scalar(
+        "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
+      ),
+    ).toBe("r");
+    expect(Number(await scalar("SELECT count(*) FROM investments"))).toBe(7);
+    expect(
+      Number(await scalar("SELECT count(*) FROM portfolio_transactions")),
+    ).toBe(8);
+    expect(
+      await scalar("SELECT id FROM portfolio_transactions WHERE id = 9"),
+    ).toBeUndefined();
+    expect(
+      Number(
+        await scalar(
+          "SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9",
+        ),
+      ),
+    ).toBe(8);
   }, 180_000);
 
-  it('is a strict no-op on a database that is already flat', async () => {
+  it("is a strict no-op on a database that is already flat", async () => {
     // The conversion already ran above; running the chain again must change nothing.
     const before = await scalar(
       "SELECT md5(string_agg(c.relname || ':' || c.relkind::text, ',' ORDER BY c.relname)) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'",
     );
-    await alembic('upgrade', 'head');
+    await alembic("upgrade", "head");
     const after = await scalar(
       "SELECT md5(string_agg(c.relname || ':' || c.relkind::text, ',' ORDER BY c.relname)) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'",
     );

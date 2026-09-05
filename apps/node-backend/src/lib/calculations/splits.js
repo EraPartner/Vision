@@ -11,7 +11,13 @@
  * All functions are pure: no I/O, no mutation of inputs.
  */
 
-import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal, Decimal } from '../money.js';
+import {
+  addAll,
+  toNumber,
+  toDecimal,
+  roundToCents as roundToCentsDecimal,
+  Decimal,
+} from "../money.js";
 
 /**
  * Storage scale of split/payment money columns: NUMERIC(18,4) since migration
@@ -30,7 +36,10 @@ export const MONEY_DECIMALS = 4;
  * @returns {import('decimal.js').default}
  */
 export function roundToMoneyPrecision(value) {
-  return toDecimal(value).toDecimalPlaces(MONEY_DECIMALS, Decimal.ROUND_HALF_EVEN);
+  return toDecimal(value).toDecimalPlaces(
+    MONEY_DECIMALS,
+    Decimal.ROUND_HALF_EVEN,
+  );
 }
 
 /**
@@ -53,7 +62,7 @@ export function normalizeMoneyAmount(value) {
  */
 
 /**
- * Raw projection of splitRepository.getOwedSummary's aggregate query — see
+ * Raw projection of splitRepository.getOwedSummaryRows' aggregate query — see
  * that file for the SQL. `total_owed`/`total_paid` are `SUM(NUMERIC)`, which
  * pg emits as strings; `split_count` is `COUNT(...)`, also a string (bigint
  * on the wire).
@@ -102,16 +111,18 @@ export function validateSplitAllocation({
   currentSplitTotal,
 }) {
   if (!Number.isFinite(newSplitAmount) || newSplitAmount <= 0) {
-    return { ok: false, error: 'Split amount must be a positive number' };
+    return { ok: false, error: "Split amount must be a positive number" };
   }
   // Compare at the NUMERIC(18,4) storage precision: existing totals arrive
   // exact from the DB, and callers normalize the candidate via
   // normalizeMoneyAmount, so projected-vs-limit here is exactly the
   // comparison Postgres would see after INSERT.
-  const projected = roundToMoneyPrecision(toDecimal(currentSplitTotal).plus(newSplitAmount));
+  const projected = roundToMoneyPrecision(
+    toDecimal(currentSplitTotal).plus(newSplitAmount),
+  );
   const limit = roundToMoneyPrecision(transactionTotal);
   if (projected.gt(limit)) {
-    return { ok: false, error: 'Split amount exceeds transaction total' };
+    return { ok: false, error: "Split amount exceeds transaction total" };
   }
   return { ok: true, error: null };
 }
@@ -133,13 +144,13 @@ export function validateBatchSplitAllocation({
   currentSplitTotal,
 }) {
   if (!Array.isArray(splits) || splits.length === 0) {
-    return { ok: false, error: 'Splits must be a non-empty array' };
+    return { ok: false, error: "Splits must be a non-empty array" };
   }
   const amounts = [];
   for (const split of splits) {
     const amount = Number(split?.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return { ok: false, error: 'Split amount must be a positive number' };
+      return { ok: false, error: "Split amount must be a positive number" };
     }
     amounts.push(amount);
   }
@@ -168,14 +179,19 @@ export function validatePaymentAmount({
   alreadyPaid,
 }) {
   if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-    return { ok: false, error: 'Payment amount must be a positive number' };
+    return { ok: false, error: "Payment amount must be a positive number" };
   }
   // Same storage-precision comparison as validateSplitAllocation — a cent-level
   // cap would re-admit the sub-cent over-payment regression (see migration 0088).
-  const projected = roundToMoneyPrecision(toDecimal(alreadyPaid).plus(paymentAmount));
+  const projected = roundToMoneyPrecision(
+    toDecimal(alreadyPaid).plus(paymentAmount),
+  );
   const limit = roundToMoneyPrecision(splitAmount);
   if (projected.gt(limit)) {
-    return { ok: false, error: 'Payment would exceed split outstanding balance' };
+    return {
+      ok: false,
+      error: "Payment would exceed split outstanding balance",
+    };
   }
   return { ok: true, error: null };
 }
@@ -185,12 +201,14 @@ export function validatePaymentAmount({
  * @param {{ amount: number, amount_paid?: number }} split
  * @returns {number}
  */
-export function computeSplitRemaining(split) {
+function computeSplitRemaining(split) {
   const amount = Number(split?.amount) || 0;
   const paid = Number(split?.amount_paid) || 0;
   const remaining = toDecimal(amount).minus(toDecimal(paid));
   return roundToCents(remaining.lessThan(0) ? toDecimal(0) : remaining);
 }
+
+export { computeSplitRemaining as __computeSplitRemaining };
 
 /**
  * Project outstanding-balance rows (from agg_split_outstanding joined to

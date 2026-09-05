@@ -19,9 +19,10 @@ import {
   convertToCurrency,
   warmCache,
   backfillPortfolioHistoricalRates,
-  clearHistoricalIndexCache,
+  __clearHistoricalIndexCache as clearHistoricalIndexCache,
   getHistoricalRateIndex,
 } from "../src/services/currency/currencyConversionService.js";
+import { hasConversionRate } from "../src/lib/exchangeRates.js";
 import { query } from "../src/database/connection.js";
 import { logger } from "../src/config/logger.js";
 
@@ -41,6 +42,15 @@ describe("Currency Conversion Service", () => {
       return;
     }
     delete global.fetch;
+  });
+
+  it("reports whether a conversion has both required rates", () => {
+    const rates = { EUR: 1, USD: 0.5 };
+    expect(hasConversionRate("USD", "EUR", rates)).toBe(true);
+    expect(hasConversionRate("EUR", "USD", rates)).toBe(true);
+    expect(hasConversionRate("ZZZ", "ZZZ", rates)).toBe(true);
+    expect(hasConversionRate("ZZZ", "EUR", rates)).toBe(false);
+    expect(hasConversionRate("EUR", "ZZZ", rates)).toBe(false);
   });
 
   // ── EUR identity ──────────────────────────────────────────

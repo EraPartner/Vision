@@ -6,7 +6,7 @@
  * every future date. This ensures bottom-up consistency with the aggregate.
  */
 
-import * as simpleAverage from './methods/simpleAverage.js';
+import * as simpleAverage from "./methods/simpleAverage.js";
 
 /**
  * @typedef {{ date: string, category_id: number|null, general: string, detail: string, net: number }} CategoryHistoryRow
@@ -19,6 +19,7 @@ import * as simpleAverage from './methods/simpleAverage.js';
  * @param {{
  *   historyByCategory:       Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>,
  *   currentActualByCategory: Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>,
+ *   scheduledActualByCategory?: Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>,
  *   future:        string[],
  *   all:           string[],
  *   todayDay:      number,
@@ -36,12 +37,17 @@ import * as simpleAverage from './methods/simpleAverage.js';
 export function buildCategoryBreakdown({
   historyByCategory,
   currentActualByCategory,
+  scheduledActualByCategory = [],
   future,
   all,
   todayDay,
   referenceDaily,
 }) {
-  const categories = extractCategories(historyByCategory, currentActualByCategory);
+  const categories = extractCategories(
+    historyByCategory,
+    currentActualByCategory,
+    scheduledActualByCategory,
+  );
 
   const refByDate = new Map(referenceDaily.map((p) => [p.date, p.value]));
 
@@ -52,7 +58,10 @@ export function buildCategoryBreakdown({
 
     const rawSeries =
       trainHistory.length > 0
-        ? simpleAverage.forecast({ history: trainHistory, forecastDates: future })
+        ? simpleAverage.forecast({
+            history: trainHistory,
+            forecastDates: future,
+          })
         : future.map((date) => ({ date, value: 0 }));
 
     const series = rawSeries.map((p) => ({
@@ -63,7 +72,11 @@ export function buildCategoryBreakdown({
     return { cat, series };
   });
 
-  const reconciled = reconcileCategoryForecasts(categoryForecasts, future, refByDate);
+  const reconciled = reconcileCategoryForecasts(
+    categoryForecasts,
+    future,
+    refByDate,
+  );
 
   return reconciled.map(({ cat, series }) => {
     const actualByDate = buildActualByDate(
@@ -74,10 +87,23 @@ export function buildCategoryBreakdown({
 
     const lastActualCum =
       todayDay > 0
-        ? (actualByDate.find((r) => r.date === all[todayDay - 1])?.cumulative ?? 0)
+        ? (actualByDate.find((r) => r.date === all[todayDay - 1])?.cumulative ??
+          0)
         : 0;
 
-    const cumulative = buildCumulative(series, actualByDate, all, todayDay, lastActualCum);
+    const scheduledByDate = new Map(
+      scheduledActualByCategory
+        .filter((r) => catKey(r) === cat.key)
+        .map((r) => [r.date, r.net]),
+    );
+    const cumulative = buildCumulative(
+      series,
+      actualByDate,
+      all,
+      todayDay,
+      lastActualCum,
+      scheduledByDate,
+    );
 
     return {
       category_id: cat.category_id,
@@ -94,29 +120,31 @@ export function buildCategoryBreakdown({
 
 /** @param {CategoryHistoryRow} r */
 function catKey(r) {
-  return `${r.category_id ?? 'null'}|${r.general}|${r.detail}`;
+  return `${r.category_id ?? "null"}|${r.general}|${r.detail}`;
 }
 
 /**
- * @param {CategoryHistoryRow[]} historyRows
- * @param {CategoryHistoryRow[]} actualRows
+ * @param {...CategoryHistoryRow[]} rowGroups
  * @returns {CategoryKey[]}
  */
-function extractCategories(historyRows, actualRows) {
+function extractCategories(...rowGroups) {
   /** @type {Map<string, CategoryKey>} */
   const seen = new Map();
-  for (const r of [...historyRows, ...actualRows]) {
+  for (const r of rowGroups.flat()) {
     const k = catKey(r);
     if (!seen.has(k)) {
       seen.set(k, {
         key: k,
         category_id: r.category_id ?? null,
-        general: r.general ?? 'Uncategorized',
-        detail: r.detail ?? 'Uncategorized',
+        general: r.general ?? "Uncategorized",
+        detail: r.detail ?? "Uncategorized",
       });
     }
   }
-  return [...seen.values()].sort((a, b) => a.general.localeCompare(b.general) || a.detail.localeCompare(b.detail));
+  return [...seen.values()].sort(
+    (a, b) =>
+      a.general.localeCompare(b.general) || a.detail.localeCompare(b.detail),
+  );
 }
 
 /**
@@ -125,7 +153,7 @@ function extractCategories(historyRows, actualRows) {
  * @param {Map<string, number>} refByDate
  * @returns {Array<{ cat: CategoryKey, series: SeriesPoint[] }>}
  */
-export function reconcileCategoryForecasts(categoryForecasts, future, refByDate) {
+function reconcileCategoryForecasts(categoryForecasts, future, refByDate) {
   /** @type {Map<string, number>} */
   const sumByDate = new Map();
   /** @type {Map<string, number>} */
@@ -203,9 +231,17 @@ function buildActualByDate(rows, allDates, todayDay) {
  * @param {string[]} allDates
  * @param {number} todayDay
  * @param {number} lastActualCum
+ * @param {Map<string, number>} scheduledByDate
  * @returns {SeriesPoint[]}
  */
-function buildCumulative(forecastSeries, actualByDate, allDates, todayDay, lastActualCum) {
+function buildCumulative(
+  forecastSeries,
+  actualByDate,
+  allDates,
+  todayDay,
+  lastActualCum,
+  scheduledByDate,
+) {
   /** @type {Map<string, number>} */
   const actualCumByDate = new Map(
     actualByDate
@@ -215,9 +251,12 @@ function buildCumulative(forecastSeries, actualByDate, allDates, todayDay, lastA
   const forecastByDate = new Map(forecastSeries.map((p) => [p.date, p.value]));
   let cum = lastActualCum;
   return allDates.map((date, i) => {
-    if (i + 1 <= todayDay) return { date, value: actualCumByDate.get(date) ?? 0 };
+    if (i + 1 <= todayDay)
+      return { date, value: actualCumByDate.get(date) ?? 0 };
     const daily = forecastByDate.get(date) ?? 0;
-    cum += daily;
+    cum += daily + (scheduledByDate.get(date) ?? 0);
     return { date, value: cum };
   });
 }
+
+export { reconcileCategoryForecasts as __reconcileCategoryForecasts };

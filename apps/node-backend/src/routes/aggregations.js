@@ -483,7 +483,7 @@ router.get(
       bucket,
       startDate,
       endDate,
-      recipientIds: recipientIds.length > 0 ? recipientIds : null,
+      recipientIds: recipientIds.length > 0 ? recipientIds : undefined,
     });
     res.ok({ data, meta });
   },
@@ -508,7 +508,7 @@ router.get(
       bucket,
       startDate,
       endDate,
-      tagIds: tagIds.length > 0 ? tagIds : null,
+      tagIds: tagIds.length > 0 ? tagIds : undefined,
       allTags,
     });
     res.ok({ data, meta });

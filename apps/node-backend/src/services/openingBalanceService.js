@@ -23,15 +23,15 @@
  * inert — the service returns a `warning` in that case.
  */
 
-import { z } from 'zod';
-import { query, withTransaction } from '../database/connection.js';
-import accountRepository from '../repositories/accountRepository.js';
-import { recipientRepository } from '../repositories/recipientRepository.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { assertCurrency, assertYmd } from '../lib/validation.js';
-import { toWireDate } from '../lib/dateFormat.js';
+import { z } from "zod";
+import { query, withTransaction } from "../database/connection.js";
+import accountRepository from "../repositories/accountRepository.js";
+import { recipientRepository } from "../repositories/recipientRepository.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { assertCurrency, assertYmd } from "../lib/validation.js";
+import { toWireDate } from "../lib/dateFormat.js";
 
-const OPENING_MEMO = 'OPENING BALANCE';
+const OPENING_MEMO = "OPENING BALANCE";
 
 /* ── Zod schema (schema → safeParse → ValidationError, settings.js idiom) ── */
 
@@ -39,38 +39,53 @@ const OPENING_MEMO = 'OPENING BALANCE';
 const openingBalanceBodySchema = z.looseObject({
   balance: z.unknown().transform((value, ctx) => {
     const balance = Number(value);
-    if (value == null || value === '' || !Number.isFinite(balance)) {
-      ctx.addIssue({ code: 'custom', message: 'balance is required and must be a number' });
+    if (value == null || value === "" || !Number.isFinite(balance)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "balance is required and must be a number",
+      });
       return z.NEVER;
     }
     return balance;
   }),
   date: z.unknown().transform((value, ctx) => {
-    const date = String(value ?? '');
+    const date = String(value ?? "");
     if (!date) {
-      ctx.addIssue({ code: 'custom', message: 'date is required and must be an ISO date (YYYY-MM-DD)' });
+      ctx.addIssue({
+        code: "custom",
+        message: "date is required and must be an ISO date (YYYY-MM-DD)",
+      });
       return z.NEVER;
     }
     // assertYmd also parse-checks the calendar (rejects e.g. 2026-13-40), which
     // a bare regex lets through to fail the Postgres DATE cast as a 500.
     try {
-      assertYmd(date, 'date');
+      assertYmd(date, "date");
     } catch (err) {
-      ctx.addIssue({ code: 'custom', message: /** @type {Error} */ (err).message });
+      ctx.addIssue({
+        code: "custom",
+        message: /** @type {Error} */ (err).message,
+      });
       return z.NEVER;
     }
     return date;
   }),
   // Shared ISO-4217 guard: absent/empty input returns undefined, so the
   // account's own currency applies — same fallback as the old inline check.
-  currency: z.unknown().transform((value, ctx) => {
-    try {
-      return assertCurrency(value);
-    } catch (err) {
-      ctx.addIssue({ code: 'custom', message: /** @type {Error} */ (err).message });
-      return z.NEVER;
-    }
-  }).optional(),
+  currency: z
+    .unknown()
+    .transform((value, ctx) => {
+      try {
+        return assertCurrency(value);
+      } catch (err) {
+        ctx.addIssue({
+          code: "custom",
+          message: /** @type {Error} */ (err).message,
+        });
+        return z.NEVER;
+      }
+    })
+    .optional(),
 });
 
 /**
@@ -81,15 +96,21 @@ const openingBalanceBodySchema = z.looseObject({
  * @param {{ currency?:string }} account
  * @returns {{ balance:number, date:string, currency:string }}
  */
-export function normalizeOpeningBalance(body, account) {
+function normalizeOpeningBalance(body, account) {
   const result = openingBalanceBodySchema.safeParse(body ?? {});
   if (!result.success) {
-    const msg = result.error.issues.map((issue) => issue.message).join('; ');
+    const msg = result.error.issues.map((issue) => issue.message).join("; ");
     throw new ValidationError(msg);
   }
   const { balance, date, currency } = result.data;
-  return { balance, date, currency: currency ?? (account?.currency || 'EUR').toUpperCase() };
+  return {
+    balance,
+    date,
+    currency: currency ?? (account?.currency || "EUR").toUpperCase(),
+  };
 }
+
+export { normalizeOpeningBalance as __normalizeOpeningBalance };
 
 /**
  * Set (create or update) the opening-balance anchor for an account+currency.
@@ -113,7 +134,9 @@ export async function setOpeningBalance(accountId, body) {
   // takes the UPDATE branch. The partial unique index (migration
   // 0077_opening_anchor_unique_index) is the defense-in-depth backstop.
   return withTransaction(async () => {
-    await query(`SELECT id FROM accounts WHERE id = $1 FOR UPDATE`, [accountId]);
+    await query(`SELECT id FROM accounts WHERE id = $1 FOR UPDATE`, [
+      accountId,
+    ]);
 
     // Warn when the anchor does not precede the account's real activity: a later
     // import-stamped balance wins, leaving a mid-history anchor inert.
@@ -132,7 +155,7 @@ export async function setOpeningBalance(accountId, body) {
     const earliest = toWireDate(earliestRes.rows[0]?.earliest);
     const warning =
       earliest && earliest <= date
-        ? 'Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.'
+        ? "Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor."
         : null;
 
     // `recipient_id` is NOT NULL (migration 0001) and an anchor has no payee, so

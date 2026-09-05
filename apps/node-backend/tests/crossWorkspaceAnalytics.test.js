@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  projectNetWorth, rebalanceDeployment, resolveDeployableCash,
+  __projectNetWorth as projectNetWorth, rebalanceDeployment, resolveDeployableCash,
 } from '../src/services/crossWorkspaceAnalytics.js';
 import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.js';
 

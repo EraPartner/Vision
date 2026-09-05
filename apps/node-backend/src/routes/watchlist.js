@@ -213,12 +213,12 @@ function parseWatchlistBody(schema, body) {
  * where binding a Supertest listener is prohibited.
  * @param {unknown} body
  */
-export function parseWatchlistCreateBody(body) {
+ function parseWatchlistCreateBody(body) {
   return parseWatchlistBody(watchlistCreateSchema, body);
 }
 
 /** @param {unknown} body */
-export function parseWatchlistUpdateBody(body) {
+ function parseWatchlistUpdateBody(body) {
   return parseWatchlistBody(watchlistUpdateSchema, body);
 }
 
@@ -233,7 +233,7 @@ router.get(
     const opts = {
       limit,
       offset,
-      assetClass: asset_class || null,
+      assetClass: asset_class || undefined,
     };
     const result = await watchlistRepository.getAllWithCount(opts);
     res.ok({
@@ -328,3 +328,5 @@ router.delete(
 );
 
 export default router;
+
+export { parseWatchlistCreateBody as __parseWatchlistCreateBody, parseWatchlistUpdateBody as __parseWatchlistUpdateBody };

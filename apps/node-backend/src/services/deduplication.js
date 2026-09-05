@@ -25,7 +25,7 @@ import { epochMsToUtcYmd } from "../lib/dateFormat.js";
  * @param {FieldHashInput} transactionData
  * @returns {string}
  */
-export function createTransactionHash(transactionData) {
+function createTransactionHash(transactionData) {
   let raw = transactionData.rawData;
   if (!raw) {
     raw = `${epochMsToUtcYmd(transactionData.date.getTime())}|${transactionData.amount}|${transactionData.recipient}|${transactionData.memo || ""}`;
@@ -48,7 +48,7 @@ export function createTransactionHash(transactionData) {
  * @param {ManualHashInput} input
  * @returns {string}
  */
-export function createManualTransactionHash({
+function createManualTransactionHash({
   date,
   amount,
   recipientId,
@@ -63,7 +63,7 @@ export function createManualTransactionHash({
  * @param {FieldHashInput} transactionData
  * @returns {Promise<boolean>}
  */
-export async function isDuplicate(transactionData) {
+async function isDuplicate(transactionData) {
   // Same UTC-instant contract as createTransactionHash above:
   // transactionData.date must be a genuine UTC-instant Date, not a pg-read
   // local-midnight DATE column.
@@ -101,7 +101,7 @@ export async function isDuplicate(transactionData) {
  * @param {string} [memo]
  * @returns {Promise<boolean>}
  */
-export async function isDuplicateByFields(date, amount, recipientName, memo) {
+async function isDuplicateByFields(date, amount, recipientName, memo) {
   const result = await query(
     `SELECT id FROM transactions t
      LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -240,3 +240,10 @@ export async function recordManualRawTransaction({
     // Table may not exist yet — silently skip
   }
 }
+
+export {
+  createTransactionHash as __createTransactionHash,
+  createManualTransactionHash as __createManualTransactionHash,
+  isDuplicate,
+  isDuplicateByFields as __isDuplicateByFields,
+};

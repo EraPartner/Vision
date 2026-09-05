@@ -76,7 +76,7 @@ export function classifyBrokerageRow(row) {
  * @param {{ account_id:number|string, investment_id:number|string, date:string, kind:string, units?:number|string, amount?:number|string }} row
  * @returns {string}
  */
-export function tradeDedupKey(row) {
+ function tradeDedupKey(row) {
   const norm = (/** @type {unknown} */ v) => (v == null ? '' : String(v).trim());
   return [
     norm(row.account_id),
@@ -87,3 +87,5 @@ export function tradeDedupKey(row) {
     norm(row.amount),
   ].join('|');
 }
+
+export { tradeDedupKey as __tradeDedupKey };

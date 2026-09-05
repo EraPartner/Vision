@@ -17,16 +17,16 @@
  * undici dispatcher is the follow-up hardening if this surface ever grows.
  */
 
-import dnsPromises from 'node:dns/promises';
-import net from 'node:net';
+import dnsPromises from "node:dns/promises";
+import net from "node:net";
 
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
+const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
-export class BlockedUrlError extends Error {
+class BlockedUrlError extends Error {
   /** @param {string} message */
   constructor(message) {
     super(message);
-    this.name = 'BlockedUrlError';
+    this.name = "BlockedUrlError";
   }
 }
 
@@ -35,10 +35,15 @@ export class BlockedUrlError extends Error {
  * @returns {number[]|undefined}
  */
 function parseIpv4Octets(ip) {
-  const parts = ip.split('.');
+  const parts = ip.split(".");
   if (parts.length !== 4) return undefined;
   const octets = parts.map((/** @type {string} */ p) => Number(p));
-  if (octets.some((/** @type {number} */ n) => !Number.isInteger(n) || n < 0 || n > 255)) return undefined;
+  if (
+    octets.some(
+      (/** @type {number} */ n) => !Number.isInteger(n) || n < 0 || n > 255,
+    )
+  )
+    return undefined;
   return octets;
 }
 
@@ -46,7 +51,7 @@ function parseIpv4Octets(ip) {
  * @param {string} ip dotted-quad IPv4
  * @returns {boolean} true when the address must not be reached by the server
  */
-export function isBlockedIpv4(ip) {
+function isBlockedIpv4(ip) {
   const o = parseIpv4Octets(ip);
   if (!o) return true; // unparseable → fail closed
   const [a, b] = o;
@@ -64,12 +69,12 @@ export function isBlockedIpv4(ip) {
  * @param {string} ip IPv6 address (optionally with %zone)
  * @returns {boolean} true when the address must not be reached by the server
  */
-export function isBlockedIpv6(ip) {
-  const addr = String(ip).toLowerCase().split('%')[0]; // drop zone id
-  if (addr === '::1' || addr === '::') return true; // loopback / unspecified
+function isBlockedIpv6(ip) {
+  const addr = String(ip).toLowerCase().split("%")[0]; // drop zone id
+  if (addr === "::1" || addr === "::") return true; // loopback / unspecified
   const mapped = addr.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
   if (mapped) return isBlockedIpv4(mapped[1]); // IPv4-mapped ::ffff:a.b.c.d
-  if (addr.startsWith('fc') || addr.startsWith('fd')) return true; // fc00::/7 ULA
+  if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // fc00::/7 ULA
   if (/^fe[89ab]/.test(addr)) return true; // fe80::/10 link-local
   return false;
 }
@@ -78,7 +83,7 @@ export function isBlockedIpv6(ip) {
  * @param {string} ip an IPv4 or IPv6 literal
  * @returns {boolean} true when the address is private/loopback/link-local/etc.
  */
-export function isBlockedAddress(ip) {
+function isBlockedAddress(ip) {
   const kind = net.isIP(ip);
   if (kind === 4) return isBlockedIpv4(ip);
   if (kind === 6) return isBlockedIpv6(ip);
@@ -109,16 +114,19 @@ export async function assertPublicHttpUrl(rawUrl, opts = {}) {
   }
 
   if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
-    throw new BlockedUrlError(`Blocked URL scheme "${url.protocol}" — only http and https are allowed`);
+    throw new BlockedUrlError(
+      `Blocked URL scheme "${url.protocol}" — only http and https are allowed`,
+    );
   }
 
   const host = url.hostname;
-  if (!host) throw new BlockedUrlError('URL has no host');
+  if (!host) throw new BlockedUrlError("URL has no host");
 
   // URL.hostname keeps the [] around IPv6 literals (e.g. "[::1]"); strip them so
   // net.isIP recognizes the address — otherwise a bracketed literal would skip
   // the IP check and slip through as a "DNS name".
-  const literal = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  const literal =
+    host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
   if (net.isIP(literal)) {
     if (isBlockedAddress(literal)) {
       throw new BlockedUrlError(`Blocked private/loopback address: ${host}`);
@@ -139,8 +147,17 @@ export async function assertPublicHttpUrl(rawUrl, opts = {}) {
   }
   for (const r of results) {
     if (isBlockedAddress(r.address)) {
-      throw new BlockedUrlError(`Host ${host} resolves to a blocked address: ${r.address}`);
+      throw new BlockedUrlError(
+        `Host ${host} resolves to a blocked address: ${r.address}`,
+      );
     }
   }
   return url;
 }
+
+export {
+  BlockedUrlError,
+  isBlockedIpv4 as __isBlockedIpv4,
+  isBlockedIpv6 as __isBlockedIpv6,
+  isBlockedAddress as __isBlockedAddress,
+};

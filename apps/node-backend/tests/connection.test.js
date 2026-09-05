@@ -228,7 +228,7 @@ describe("database connection module", () => {
 
       await module.query("SELECT 1");
       expect(pool.query).toHaveBeenCalledWith("SELECT 1", undefined);
-      expect(module.getAmbientTransactionClient()).toBeNull();
+      expect(module.__getAmbientTransactionClient()).toBeNull();
     });
 
     it("a continuation leaked past the transaction falls back to the pool", async () => {

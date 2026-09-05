@@ -66,7 +66,7 @@ import { ToolValidationError } from './_validate.js';
  */
 
 /** @type {Record<string, Tool>} */
-export const TOOLS = Object.freeze({
+ const TOOLS = Object.freeze({
   [getSpendByCategory.name]: getSpendByCategory,
   [getMonthlySpend.name]: getMonthlySpend,
   [getTopRecipients.name]: getTopRecipients,
@@ -213,3 +213,5 @@ export async function dispatchTool(name, rawArgs, context = {}) {
     return { args, result: formatError(err) };
   }
 }
+
+export { TOOLS as __TOOLS };

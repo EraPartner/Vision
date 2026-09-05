@@ -96,7 +96,7 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
   return new OllamaError(`${failurePrefix}: ${err.message}`, { code: 'NETWORK_ERROR', cause: err });
 }
 
-export function createOllamaClient({
+ function createOllamaClient({
   baseUrl = settings.ollama.url,
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
   healthTimeoutMs = settings.ollama.healthTimeoutMs,
@@ -446,3 +446,5 @@ export function getOllamaClient() {
 export function __resetOllamaClientForTests() {
   defaultClient = null;
 }
+
+export { createOllamaClient as __createOllamaClient };

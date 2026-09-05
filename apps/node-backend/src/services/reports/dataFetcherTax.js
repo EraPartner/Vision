@@ -68,6 +68,7 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   symbol: string|null,
  *   asset_class: string,
  *   type: string,
+ *   dividend_amount_convention: 'gross'|'net'|'unknown',
  *   amount: string,
  *   taxes: string,
  *   fees: string,
@@ -112,6 +113,9 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   otherTaxTotal: number,
  *   feesTotal: number,
  *   dividendsReceived: number,
+ *   grossDividendBase: number|null,
+ *   netDividendResult: number|null,
+ *   unknownDividendConventionCount: number,
  *   byMonth: TaxMonthBucket[],
  *   byAssetClass: TaxAssetClassBucket[],
  *   byInvestment: TaxInvestmentBucket[],
@@ -140,6 +144,9 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   otherTaxTotal: number,
  *   feesTotal: number,
  *   dividendsReceived: number,
+ *   grossDividendBase: number|null,
+ *   netDividendResult: number|null,
+ *   unknownDividendConventionCount: number,
  *   byMonth: TaxMonthBucket[],
  *   byAssetClass: TaxAssetClassBucket[],
  *   byInvestment: TaxInvestmentBucket[],
@@ -253,6 +260,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       i.symbol,
       i.asset_class,
       pt.type,
+      pt.dividend_amount_convention,
       COALESCE(pt.amount, 0)  AS amount,
       COALESCE(pt.taxes,  0)  AS taxes,
       COALESCE(pt.fees,   0)  AS fees,
@@ -278,6 +286,9 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   let otherTaxTotal = 0;
   let feesTotal = 0;
   let dividendsReceived = 0;
+  let grossDividendBase = 0;
+  let netDividendResult = 0;
+  let unknownDividendConventionCount = 0;
 
   /** @type {Map<string, TaxMonthBucket>} */
   const byMonthMap = new Map(); // key: 'YYYY-MM'
@@ -394,6 +405,15 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       case "dividend":
         whtAmt = taxes;
         dividendsReceived = addMoney(dividendsReceived, amount);
+        if (row.dividend_amount_convention === "gross") {
+          grossDividendBase = addMoney(grossDividendBase, amount);
+          netDividendResult = addMoney(netDividendResult, amount, -taxes);
+        } else if (row.dividend_amount_convention === "net") {
+          grossDividendBase = addMoney(grossDividendBase, amount, taxes);
+          netDividendResult = addMoney(netDividendResult, amount);
+        } else {
+          unknownDividendConventionCount += 1;
+        }
         break;
       case "tax":
         otherAmt = amount; // 'tax' type transactions record the tax amount itself
@@ -471,6 +491,11 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     otherTaxTotal,
     feesTotal,
     dividendsReceived,
+    grossDividendBase:
+      unknownDividendConventionCount > 0 ? null : grossDividendBase,
+    netDividendResult:
+      unknownDividendConventionCount > 0 ? null : netDividendResult,
+    unknownDividendConventionCount,
     byMonth: [...byMonthMap.values()].sort((a, b) =>
       a.year !== b.year ? a.year - b.year : a.month - b.month,
     ),
@@ -523,6 +548,9 @@ export async function fetchTaxData(
     otherTaxTotal: txns?.otherTaxTotal ?? 0,
     feesTotal: txns?.feesTotal ?? 0,
     dividendsReceived: txns?.dividendsReceived ?? 0,
+    grossDividendBase: txns?.grossDividendBase ?? null,
+    netDividendResult: txns?.netDividendResult ?? null,
+    unknownDividendConventionCount: txns?.unknownDividendConventionCount ?? 0,
     byMonth: txns?.byMonth ?? [],
     byAssetClass: txns?.byAssetClass ?? [],
     byInvestment: txns?.byInvestment ?? [],

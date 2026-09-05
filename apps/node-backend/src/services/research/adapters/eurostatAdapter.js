@@ -38,7 +38,7 @@ const jsonStatSchema = z.looseObject({
  * @param {any} payload
  * @returns {Array<{ period: string, time: number, value: number }>}
  */
-export function parseJsonStat(payload) {
+ function parseJsonStat(payload) {
   const parsed = parseOr(jsonStatSchema, payload, undefined);
   if (!parsed) return [];
   const timeIndex = /** @type {Record<string, unknown>} */ (parsed.dimension.time.category.index);
@@ -92,3 +92,5 @@ const eurostatAdapter = {
 };
 
 export default eurostatAdapter;
+
+export { parseJsonStat as __parseJsonStat };

@@ -2,7 +2,7 @@
  * Real-Postgres tests for the surfaces that read the shared computed balance and
  * had to be migrated off its single cross-currency `SUM(t2.amount)`:
  *
- *   - the accounts hub          — `accountRepository.getAll` (computed_balance + drift)
+ *   - the accounts hub          — `accountService.list` (computed_balance + drift)
  *   - drift reconciliation      — `reconcileService.reconcileAccount`
  *   - the rebalance cash input  — `crossWorkspaceDataService.assembleRebalanceInputs`
  *   - the net-worth current point — `infoRepositoryNetWorth.getNetWorthFromSnapshots`
@@ -30,23 +30,30 @@
  * every test so no test sees another's seeded rates.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from './setup/db.js';
-import accountRepository from '../src/repositories/accountRepository.js';
-import { reconcileAccount } from '../src/services/reconcileService.js';
-import { mergeAccounts, previewMerge } from '../src/services/accountMergeService.js';
-import { assembleRebalanceInputs } from '../src/services/crossWorkspaceDataService.js';
-import { netWorthRepository } from '../src/repositories/infoRepositoryNetWorth.js';
-import { banksRepository } from '../src/repositories/infoRepositoryBanks.js';
-import { clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
-import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
-import { closePool } from '../src/database/connection.js';
+} from "./setup/db.js";
+import { accountService } from "../src/services/accountService.js";
+import { accountRepository } from "../src/repositories/accountRepository.js";
+
+const listAccounts = async (opts = {}) =>
+  (await accountService.list(opts)).items;
+import { reconcileAccount } from "../src/services/reconcileService.js";
+import {
+  mergeAccounts,
+  previewMerge,
+} from "../src/services/accountMergeService.js";
+import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
+import { netWorthRepository } from "../src/repositories/infoRepositoryNetWorth.js";
+import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { closePool } from "../src/database/connection.js";
 
 const rec = {};
 
@@ -63,20 +70,23 @@ async function seedRecipient() {
  * spendable / in_net_worth / statement_balance — that the trigger's onboarding
  * INSERT does not set.
  */
-async function addAccount(name, {
-  type = 'checking',
-  currency = 'EUR',
-  spendable = true,
-  inNetWorth = true,
-  isActive = true,
-  statementBalance = null,
-  statementBalanceDate = null,
-} = {}) {
+async function addAccount(
+  name,
+  {
+    type = "checking",
+    currency = "EUR",
+    spendable = true,
+    inNetWorth = true,
+    isActive = true,
+    statementBalance = null,
+    statementBalanceDate = null,
+  } = {},
+) {
   const { rows } = await getTestPool().query(
     `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active,
                            statement_balance, statement_balance_date)
      VALUES ($1, $2::account_type, $3, $4, $5, $6, $7,
-             CASE WHEN $7::numeric IS NULL THEN NULL ELSE (${statementBalanceDate ?? 'CURRENT_DATE'})::date END)
+             CASE WHEN $7::numeric IS NULL THEN NULL ELSE (${statementBalanceDate ?? "CURRENT_DATE"})::date END)
      RETURNING id`,
     [name, type, currency, spendable, inNetWorth, isActive, statementBalance],
   );
@@ -84,7 +94,14 @@ async function addAccount(name, {
 }
 
 /** `balance` NULL means "not stamped by a bank import" — the anchor distinction. */
-async function insertTxn({ dateExpr, amount, currency = 'EUR', bank, balance = null, isActive = true }) {
+async function insertTxn({
+  dateExpr,
+  amount,
+  currency = "EUR",
+  bank,
+  balance = null,
+  isActive = true,
+}) {
   await getTestPool().query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account, balance, is_active)
      VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6)`,
@@ -106,450 +123,738 @@ async function insertRate(code, dateExpr, rate, isLatest = true) {
  *   correct   → 100 + (100 × 0.5) = 150
  *   old (bad) → (100 + 100) × 0.5 = 100
  */
-async function seedMultiCurrencyAccount(name = 'WISE MULTI', accountOpts = {}) {
+async function seedMultiCurrencyAccount(name = "WISE MULTI", accountOpts = {}) {
   await seedRecipient();
-  const id = await addAccount(name, { currency: 'EUR', ...accountOpts });
-  await insertRate('USD', 'CURRENT_DATE', '0.5');
-  await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: name });
-  await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: name });
+  const id = await addAccount(name, { currency: "EUR", ...accountOpts });
+  await insertRate("USD", "CURRENT_DATE", "0.5");
+  await insertTxn({
+    dateExpr: "CURRENT_DATE - interval '2 days'",
+    amount: "100.00",
+    currency: "EUR",
+    bank: name,
+  });
+  await insertTxn({
+    dateExpr: "CURRENT_DATE - interval '1 day'",
+    amount: "100.00",
+    currency: "USD",
+    bank: name,
+  });
   return id;
 }
 
-describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader surfaces (real DB)', () => {
-  beforeAll(async () => {
-    expect(
-      process.env.DATABASE_URL,
-      'DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)',
-    ).toBe(process.env.TEST_DATABASE_URL);
-    // DB suites share one database across parallel vitest workers — serialize.
-    await acquireDbSuiteLock();
-  }, 180_000);
+describe.skipIf(!hasTestDatabase())(
+  "cross-currency computed balance, all reader surfaces (real DB)",
+  () => {
+    beforeAll(async () => {
+      expect(
+        process.env.DATABASE_URL,
+        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
+      ).toBe(process.env.TEST_DATABASE_URL);
+      // DB suites share one database across parallel vitest workers — serialize.
+      await acquireDbSuiteLock();
+    }, 180_000);
 
-  afterEach(async () => {
-    const pool = getTestPool();
-    await pool.query('DELETE FROM transactions');
-    await pool.query('DELETE FROM accounts');
-    await pool.query('DELETE FROM recipients');
-    await pool.query('DELETE FROM exchange_rates');
-    for (const k of Object.keys(rec)) delete rec[k];
-    clearMemoryCache();
-    clearMvCache();
-  });
-
-  afterAll(async () => {
-    await releaseDbSuiteLock();
-    await closeTestPool();
-    await closePool();
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Surface 1 — accounts hub (accountRepository.getAll)
-  // ───────────────────────────────────────────────────────────────────────────
-  describe('accounts hub', () => {
-    it('sums the currency partitions into the account currency instead of across them', async () => {
-      await seedMultiCurrencyAccount();
-
-      const [row] = await accountRepository.getAll();
-
-      expect(row.computed_balance).toBe(150); // NOT 100
-      // Provenance still describes the account, not one currency: nothing is
-      // stamped here, so it is the "sum of N entries" shape.
-      expect(row.anchor_date).toBeUndefined();
-      expect(row.post_anchor_count).toBe(2);
-      expect(row.has_transactions).toBe(true);
+    afterEach(async () => {
+      const pool = getTestPool();
+      await pool.query("DELETE FROM transactions");
+      await pool.query("DELETE FROM accounts");
+      await pool.query("DELETE FROM recipients");
+      await pool.query("DELETE FROM exchange_rates");
+      for (const k of Object.keys(rec)) delete rec[k];
+      clearMemoryCache();
+      clearMvCache();
     });
 
-    it('derives drift from the account-currency partition, not the cross-currency sum', async () => {
-      // Statement says 120 EUR. The EUR partition holds 100, so the drift the
-      // badge must show is 20 EUR. The cross-currency Σ (200) would have shown
-      // −80 — a number no reconcile action could ever clear.
-      await seedMultiCurrencyAccount('WISE MULTI', { statementBalance: '120.00' });
-
-      const [row] = await accountRepository.getAll();
-
-      expect(row.computed_balance).toBe(150);
-      expect(row.drift).toBe(20);
-      // The base behind that subtraction ships with it, so the reconcile dialog
-      // previews against the figure the server resolves against rather than
-      // against the converted computed_balance (which would preview −30 for a
-      // reading of 120 the server would stamp as +20).
-      expect(row.reconcilable_balance).toBe(100);
-      expect(row.reconcilable_currency).toBe('EUR');
-      expect(row.statement_balance - row.reconcilable_balance).toBe(row.drift);
+    afterAll(async () => {
+      await releaseDbSuiteLock();
+      await closeTestPool();
+      await closePool();
     });
 
-    // The zero-sum-partition discontinuity: an offsetting foreign transfer pair
-    // is invisible in every balance, so it must be invisible in the drift too.
-    it('is not knocked off its reconciliation base by an offsetting foreign transfer pair', async () => {
-      await seedRecipient();
-      // Declared GBP, ledger is USD — one funded partition, so it reconciles
-      // against that (single-currency parity). Statement matches it exactly.
-      await addAccount('NOISY', { currency: 'GBP', statementBalance: '100.00' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '100.00', currency: 'USD', bank: 'NOISY' });
+    // ───────────────────────────────────────────────────────────────────────────
+    // Surface 1 — accounts hub (accountService.list)
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("accounts hub", () => {
+      it("keeps legacy scalar create, update, clear, and currency changes in sync", async () => {
+        const created = await accountService.create({
+          name: "COMPAT PRIMARY",
+          currency: "EUR",
+          statement_balance: 10,
+          statement_balance_date: "2026-09-01",
+        });
+        await accountService.setStatementBalance(created.id, "USD", {
+          balance: 20,
+          date: "2026-09-02",
+        });
 
-      const before = (await accountRepository.getAll())[0];
-      expect(before.reconcilable_balance).toBe(100);
-      expect(before.drift).toBe(0);
+        await accountService.update(created.id, { currency: "USD" });
+        let account = await accountRepository.getById(created.id);
+        expect(Number(account.statement_balance)).toBe(20);
+        expect(account.statement_balance_date).toBe("2026-09-02");
 
-      // Now a cancelled EUR transfer pair: two real rows that net to zero.
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '250.00', currency: 'EUR', bank: 'NOISY' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-250.00', currency: 'EUR', bank: 'NOISY' });
+        await accountService.update(created.id, {
+          statement_balance: 25,
+          statement_balance_date: "2026-09-03",
+        });
+        let { rows } = await getTestPool().query(
+          `SELECT currency, balance::text AS balance,
+                  to_char(balance_date, 'YYYY-MM-DD') AS balance_date
+             FROM account_statement_balances
+            WHERE account_id = $1 ORDER BY currency`,
+          [created.id],
+        );
+        expect(rows).toEqual([
+          { currency: "EUR", balance: "10.0000", balance_date: "2026-09-01" },
+          { currency: "USD", balance: "25.0000", balance_date: "2026-09-03" },
+        ]);
 
-      const after = (await accountRepository.getAll())[0];
-      // Nothing about the account's money changed, so nothing about its
-      // reconciliation may change. Before the zero-sum drop this flipped the
-      // base to 0 and the drift to the whole 100.
-      expect(after.reconcilable_balance).toBe(100);
-      expect(after.reconcilable_currency).toBe('USD');
-      expect(after.drift).toBe(0);
+        await accountService.update(created.id, {
+          statement_balance: null,
+          statement_balance_date: null,
+        });
+        account = await accountRepository.getById(created.id);
+        expect(account.statement_balance).toBeNull();
+        expect(account.statement_balance_date).toBeNull();
+        ({ rows } = await getTestPool().query(
+          `SELECT currency FROM account_statement_balances
+            WHERE account_id = $1 ORDER BY currency`,
+          [created.id],
+        ));
+        expect(rows).toEqual([{ currency: "EUR" }]);
+      });
+
+      it("keeps the repository raw and shapes mixed-currency rows in the service", async () => {
+        await seedMultiCurrencyAccount();
+
+        const [raw] = await accountRepository.getAll();
+        expect(raw.balance_parts).toEqual([
+          { currency: "EUR", balance: "100.0000" },
+          { currency: "USD", balance: "100.0000" },
+        ]);
+        expect(raw.statement_balances).toEqual([]);
+        expect(raw).not.toHaveProperty("computed_balance");
+        expect(raw).not.toHaveProperty("drift");
+
+        const [shaped] = await listAccounts();
+        expect(shaped.computed_balance).toBe(150);
+        expect(shaped.balance_parts).toEqual([
+          { currency: "EUR", balance: 100 },
+          { currency: "USD", balance: 100 },
+        ]);
+      });
+
+      it("sums the currency partitions into the account currency instead of across them", async () => {
+        await seedMultiCurrencyAccount();
+
+        const [row] = await listAccounts();
+
+        expect(row.computed_balance).toBe(150); // NOT 100
+        // Provenance still describes the account, not one currency: nothing is
+        // stamped here, so it is the "sum of N entries" shape.
+        expect(row.anchor_date).toBeUndefined();
+        expect(row.post_anchor_count).toBe(2);
+        expect(row.has_transactions).toBe(true);
+      });
+
+      it("derives drift from the account-currency partition, not the cross-currency sum", async () => {
+        // Statement says 120 EUR. The EUR partition holds 100, so the drift the
+        // badge must show is 20 EUR. The cross-currency Σ (200) would have shown
+        // −80 — a number no reconcile action could ever clear.
+        await seedMultiCurrencyAccount("WISE MULTI", {
+          statementBalance: "120.00",
+        });
+
+        const [row] = await listAccounts();
+
+        expect(row.computed_balance).toBe(150);
+        expect(row.drift).toBe(20);
+        // The base behind that subtraction ships with it, so the reconcile dialog
+        // previews against the figure the server resolves against rather than
+        // against the converted computed_balance (which would preview −30 for a
+        // reading of 120 the server would stamp as +20).
+        expect(row.reconcilable_balance).toBe(100);
+        expect(row.reconcilable_currency).toBe("EUR");
+        expect(row.statement_balance - row.reconcilable_balance).toBe(
+          row.drift,
+        );
+      });
+
+      // The zero-sum-partition discontinuity: an offsetting foreign transfer pair
+      // is invisible in every balance, so it must be invisible in the drift too.
+      it("is not knocked off its reconciliation base by an offsetting foreign transfer pair", async () => {
+        await seedRecipient();
+        // Declared GBP, ledger is USD — one funded partition, so it reconciles
+        // against that (single-currency parity). Statement matches it exactly.
+        await addAccount("NOISY", {
+          currency: "GBP",
+          statementBalance: "100.00",
+        });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '3 days'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "NOISY",
+        });
+
+        const before = (await listAccounts())[0];
+        expect(before.reconcilable_balance).toBe(100);
+        expect(before.drift).toBe(0);
+
+        // Now a cancelled EUR transfer pair: two real rows that net to zero.
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '2 days'",
+          amount: "250.00",
+          currency: "EUR",
+          bank: "NOISY",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "-250.00",
+          currency: "EUR",
+          bank: "NOISY",
+        });
+
+        const after = (await listAccounts())[0];
+        // Nothing about the account's money changed, so nothing about its
+        // reconciliation may change. Before the zero-sum drop this flipped the
+        // base to 0 and the drift to the whole 100.
+        expect(after.reconcilable_balance).toBe(100);
+        expect(after.reconcilable_currency).toBe("USD");
+        expect(after.drift).toBe(0);
+      });
+
+      // D3/D4: the statement names a currency the account holds nothing in. The
+      // base is 0, and 'accept' below writes exactly that — visible in the dialog
+      // rather than arriving unannounced.
+      it("exposes a zero base when no partition matches the declared currency", async () => {
+        await seedRecipient();
+        await addAccount("GBP SHELL", {
+          currency: "GBP",
+          statementBalance: "50.00",
+        });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("GBP", "CURRENT_DATE", "2");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '2 days'",
+          amount: "100.00",
+          currency: "EUR",
+          bank: "GBP SHELL",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "GBP SHELL",
+        });
+
+        const [row] = await listAccounts();
+
+        expect(row.reconcilable_balance).toBe(0);
+        expect(row.reconcilable_currency).toBe("GBP");
+        expect(row.drift).toBe(50); // 50 − 0, all in GBP
+        // …while computed_balance is the whole account converted into GBP: it is a
+        // different question, which is why the dialog shows both.
+        expect(row.computed_balance).toBe(75); // (100 EUR + 50 EUR) ÷ 2
+      });
+
+      it("anchors each currency on its own stamp — a EUR statement never absorbs USD activity", async () => {
+        await seedRecipient();
+        await addAccount("WISE STAMPED", { currency: "EUR" });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        // EUR: stamp 1000 (day-10), then −25 (day-3) → 975 EUR
+        // USD: nothing stamped → Σ = 100 USD → 50 EUR
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '10 days'",
+          amount: "-50.00",
+          currency: "EUR",
+          bank: "WISE STAMPED",
+          balance: "1000.00",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '5 days'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "WISE STAMPED",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '3 days'",
+          amount: "-25.00",
+          currency: "EUR",
+          bank: "WISE STAMPED",
+        });
+
+        const [row] = await listAccounts();
+
+        // The cross-currency form gave 1000 + (100 − 25) = 1075.
+        expect(row.computed_balance).toBe(1025);
+      });
+
+      it("leaves a single-currency account byte-identical to the unpartitioned computation", async () => {
+        await seedRecipient();
+        await addAccount("ONE CCY USD", {
+          currency: "USD",
+          statementBalance: "900.00",
+        });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '10 days'",
+          amount: "-50.00",
+          currency: "USD",
+          bank: "ONE CCY USD",
+          balance: "1000.00",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '5 days'",
+          amount: "-100.00",
+          currency: "USD",
+          bank: "ONE CCY USD",
+        });
+
+        const [row] = await listAccounts();
+
+        // Native USD throughout: the account currency IS the partition currency,
+        // so nothing is converted and the drift is the same native figure as before.
+        expect(row.computed_balance).toBe(900);
+        expect(row.drift).toBe(0);
+        // The base and the computed balance coincide here — which is what lets the
+        // dialog stay visually unchanged for the common single-currency account.
+        expect(row.reconcilable_balance).toBe(900);
+        expect(row.reconcilable_currency).toBe("USD");
+        expect(row.anchor_date).toBeDefined();
+        expect(row.post_anchor_count).toBe(1);
+      });
+
+      it("keeps an account with no ledger rows at 0 rather than dropping it from the list", async () => {
+        await addAccount("FRESH");
+        const rows = await listAccounts();
+        expect(rows.map((r) => r.name)).toEqual(["FRESH"]);
+        expect(rows[0].computed_balance).toBe(0);
+        expect(rows[0].drift).toBeNull();
+        expect(rows[0].has_transactions).toBe(false);
+      });
+
+      it("pages by ACCOUNT, not by currency partition", async () => {
+        // The per-currency lateral is used in its aggregated (one row per account)
+        // form precisely so LIMIT keeps counting accounts: a row-per-partition
+        // form would have returned the multi-currency account's two partitions as
+        // "two accounts" and truncated the page.
+        await seedMultiCurrencyAccount("AAA MULTI");
+        await addAccount("BBB PLAIN");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE",
+          amount: "10.00",
+          bank: "BBB PLAIN",
+        });
+
+        const page = await listAccounts({ limit: 2, offset: 0 });
+        expect(page.map((r) => r.name)).toEqual(["AAA MULTI", "BBB PLAIN"]);
+        expect(page[0].computed_balance).toBe(150);
+        expect(page[1].computed_balance).toBe(10);
+      });
     });
 
-    // D3/D4: the statement names a currency the account holds nothing in. The
-    // base is 0, and 'accept' below writes exactly that — visible in the dialog
-    // rather than arriving unannounced.
-    it('exposes a zero base when no partition matches the declared currency', async () => {
-      await seedRecipient();
-      await addAccount('GBP SHELL', { currency: 'GBP', statementBalance: '50.00' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertRate('GBP', 'CURRENT_DATE', '2');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'GBP SHELL' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'GBP SHELL' });
+    // ───────────────────────────────────────────────────────────────────────────
+    // Surface 2 — reconcile (reconcileService)
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("reconcile", () => {
+      // 'adjustment' end-to-end lives in systemRecipientRows.db.test.js together
+      // with the rest of the recipient_id fix; the per-currency SIZING of that
+      // row is asserted there against the real schema too.
 
-      const [row] = await accountRepository.getAll();
+      it("stores and reconciles independent statement readings per currency", async () => {
+        const id = await seedMultiCurrencyAccount("REVOLUT CURRENT");
+        await accountService.setStatementBalance(id, "EUR", {
+          balance: 120,
+          date: "2026-09-01",
+        });
+        await accountService.setStatementBalance(id, "USD", {
+          balance: 80,
+          date: "2026-09-02",
+        });
 
-      expect(row.reconcilable_balance).toBe(0);
-      expect(row.reconcilable_currency).toBe('GBP');
-      expect(row.drift).toBe(50); // 50 − 0, all in GBP
-      // …while computed_balance is the whole account converted into GBP: it is a
-      // different question, which is why the dialog shows both.
-      expect(row.computed_balance).toBe(75); // (100 EUR + 50 EUR) ÷ 2
+        const [before] = await listAccounts();
+        expect(before.statement_balances).toEqual([
+          { currency: "EUR", balance: 120, balance_date: "2026-09-01" },
+          { currency: "USD", balance: 80, balance_date: "2026-09-02" },
+        ]);
+        expect(before.statement_balance).toBe(120);
+
+        await reconcileAccount(id, { mode: "accept", currency: "USD" });
+        const { rows } = await getTestPool().query(
+          `SELECT currency, balance::text AS balance,
+                  to_char(balance_date, 'YYYY-MM-DD') AS balance_date
+             FROM account_statement_balances
+            WHERE account_id = $1 ORDER BY currency`,
+          [id],
+        );
+        expect(rows).toEqual([
+          { currency: "EUR", balance: "120.0000", balance_date: "2026-09-01" },
+          {
+            currency: "USD",
+            balance: "100.0000",
+            balance_date: expect.any(String),
+          },
+        ]);
+      });
+
+      it("'accept' adopts exactly the base the hub displays when no partition matches", async () => {
+        // D4: GBP account, EUR + USD rows, statement £50. The base is 0 (nothing
+        // is held in GBP) and accept writes 0 — the same 0 the hub payload carries
+        // as reconcilable_balance, so the dialog showed it before the click.
+        await seedRecipient();
+        const id = await addAccount("GBP SHELL", {
+          currency: "GBP",
+          statementBalance: "50.00",
+        });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("GBP", "CURRENT_DATE", "2");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '2 days'",
+          amount: "100.00",
+          currency: "EUR",
+          bank: "GBP SHELL",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "GBP SHELL",
+        });
+
+        const shown = (await listAccounts())[0].reconcilable_balance;
+        const result = await reconcileAccount(id, { mode: "accept" });
+
+        expect(result.statement_balance).toBe(shown);
+        expect(result).toMatchObject({
+          mode: "accept",
+          drift: 0,
+          computed_balance: 0,
+        });
+        const [after] = await listAccounts();
+        expect(after.drift).toBe(0);
+        expect(Number(after.statement_balance)).toBe(0);
+      });
+
+      it("'accept' adopts the own-currency partition as the statement of record", async () => {
+        const id = await seedMultiCurrencyAccount("WISE MULTI", {
+          statementBalance: "120.00",
+        });
+
+        const result = await reconcileAccount(id, { mode: "accept" });
+
+        // 100 = the EUR partition. The cross-currency Σ would have written 200 as
+        // the statement of record — a EUR statement figure with USD folded in.
+        expect(result).toMatchObject({
+          mode: "accept",
+          drift: 0,
+          statement_balance: 100,
+          computed_balance: 100,
+        });
+        const [row] = await listAccounts();
+        // The badge the user clicked is now actually clear, and the converted
+        // balance beside it is untouched (no ledger row was created).
+        expect(row.drift).toBe(0);
+        expect(row.computed_balance).toBe(150);
+      });
+
+      it("refuses a multi-currency account whose own-currency partition already matches", async () => {
+        // The cross-currency Σ (200) is 100 away from the statement, so the old
+        // reading would have minted a 100 EUR adjustment out of thin air.
+        const id = await seedMultiCurrencyAccount("WISE MULTI", {
+          statementBalance: "100.00",
+        });
+
+        await expect(
+          reconcileAccount(id, { mode: "adjustment" }),
+        ).rejects.toThrow(/already reconciled/i);
+        const { rows } = await getTestPool().query(
+          `SELECT COUNT(*)::int AS n FROM transactions`,
+        );
+        expect(rows[0].n).toBe(2); // nothing inserted
+      });
     });
 
-    it('anchors each currency on its own stamp — a EUR statement never absorbs USD activity', async () => {
-      await seedRecipient();
-      await addAccount('WISE STAMPED', { currency: 'EUR' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      // EUR: stamp 1000 (day-10), then −25 (day-3) → 975 EUR
-      // USD: nothing stamped → Σ = 100 USD → 50 EUR
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'EUR', bank: 'WISE STAMPED', balance: '1000.00' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '100.00', currency: 'USD', bank: 'WISE STAMPED' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '-25.00', currency: 'EUR', bank: 'WISE STAMPED' });
+    // ───────────────────────────────────────────────────────────────────────────
+    // Surface 3 — rebalance available cash (crossWorkspaceDataService)
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("rebalance available cash", () => {
+      it("converts each currency partition at its own rate", async () => {
+        await seedMultiCurrencyAccount("WISE MULTI", { spendable: true });
 
-      const [row] = await accountRepository.getAll();
+        const out = await assembleRebalanceInputs({ currency: "EUR" });
 
-      // The cross-currency form gave 1000 + (100 − 25) = 1075.
-      expect(row.computed_balance).toBe(1025);
+        expect(out.availableCash).toBe(150); // NOT 100
+        expect(out.cashAccounts).toEqual([
+          {
+            id: expect.any(Number),
+            name: "WISE MULTI",
+            accountCurrency: "EUR",
+            balance: 150,
+            balanceCurrency: "EUR",
+          },
+        ]);
+      });
+
+      it("honours the spendable/active gates and keeps a zero-activity account listed", async () => {
+        await seedMultiCurrencyAccount("WISE MULTI");
+        await addAccount("NOT SPENDABLE", { spendable: false });
+        await addAccount("ARCHIVED", { isActive: false });
+        await addAccount("NO ACTIVITY");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE",
+          amount: "999.00",
+          bank: "NOT SPENDABLE",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE",
+          amount: "999.00",
+          bank: "ARCHIVED",
+        });
+
+        const out = await assembleRebalanceInputs({ currency: "EUR" });
+
+        expect(out.cashAccounts.map((a) => a.name)).toEqual([
+          "NO ACTIVITY",
+          "WISE MULTI",
+        ]);
+        expect(
+          out.cashAccounts.find((a) => a.name === "NO ACTIVITY").balance,
+        ).toBe(0);
+        expect(out.availableCash).toBe(150);
+      });
+
+      it("converts into a non-EUR target from every partition", async () => {
+        // Target USD: the EUR partition converts at 1/0.5 and the USD one passes
+        // through — 100 EUR → 200 USD, plus 100 USD = 300 USD.
+        await seedMultiCurrencyAccount("WISE MULTI");
+
+        const out = await assembleRebalanceInputs({ currency: "USD" });
+
+        expect(out.currency).toBe("USD");
+        expect(out.availableCash).toBe(300);
+      });
     });
 
-    it('leaves a single-currency account byte-identical to the unpartitioned computation', async () => {
-      await seedRecipient();
-      await addAccount('ONE CCY USD', { currency: 'USD', statementBalance: '900.00' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'USD', bank: 'ONE CCY USD', balance: '1000.00' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '-100.00', currency: 'USD', bank: 'ONE CCY USD' });
+    // ───────────────────────────────────────────────────────────────────────────
+    // Surface 4 — net-worth current point (infoRepositoryNetWorth)
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("net worth current point", () => {
+      it("values each currency partition at its own rate", async () => {
+        await seedMultiCurrencyAccount("WISE MULTI", { inNetWorth: true });
 
-      const [row] = await accountRepository.getAll();
+        const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
 
-      // Native USD throughout: the account currency IS the partition currency,
-      // so nothing is converted and the drift is the same native figure as before.
-      expect(row.computed_balance).toBe(900);
-      expect(row.drift).toBe(0);
-      // The base and the computed balance coincide here — which is what lets the
-      // dialog stay visually unchanged for the common single-currency account.
-      expect(row.reconcilable_balance).toBe(900);
-      expect(row.reconcilable_currency).toBe('USD');
-      expect(row.anchor_date).toBeDefined();
-      expect(row.post_anchor_count).toBe(1);
+        expect(nw.current.liquid).toBe(150); // NOT 100
+        expect(nw.current.netWorth).toBe(150);
+      });
+
+      it("leaves no step between the last history point and the headline", async () => {
+        // The invariant the history walk's byCurrency flag protects: the walk and
+        // the current point must resolve a multi-currency account the same way, or
+        // the chart ends one figure below the headline printed above it and the
+        // monthly-change figure reports the gap as a real gain.
+        await seedMultiCurrencyAccount("WISE MULTI");
+
+        const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
+        const last = nw.snapshots[nw.snapshots.length - 1];
+
+        expect(last.liquid).toBe(nw.current.liquid);
+        expect(last.netWorth).toBe(nw.current.netWorth);
+        // …and the point before the USD leg posted holds only the EUR partition,
+        // so the series genuinely moves rather than being flat by accident.
+        expect(nw.snapshots[0].liquid).toBe(100);
+      });
+
+      it("splits liabilities out of the liquid bucket per currency", async () => {
+        await seedRecipient();
+        await addAccount("WISE MULTI", { currency: "EUR" });
+        await addAccount("CARD", { type: "liability", currency: "USD" });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '2 days'",
+          amount: "100.00",
+          currency: "EUR",
+          bank: "WISE MULTI",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "WISE MULTI",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "-200.00",
+          currency: "USD",
+          bank: "CARD",
+        });
+
+        const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
+
+        expect(nw.current.liquid).toBe(150);
+        expect(nw.current.liabilities).toBe(-100); // −200 USD × 0.5
+        expect(nw.current.netWorth).toBe(50);
+      });
+
+      it("excludes tracking-only accounts from the partitioned current point", async () => {
+        await seedMultiCurrencyAccount("WISE MULTI", { inNetWorth: true });
+        await addAccount("TRACKING", { inNetWorth: false });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE",
+          amount: "9999.00",
+          bank: "TRACKING",
+        });
+
+        const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
+
+        expect(nw.current.liquid).toBe(150);
+      });
     });
 
-    it('keeps an account with no ledger rows at 0 rather than dropping it from the list', async () => {
-      await addAccount('FRESH');
-      const rows = await accountRepository.getAll();
-      expect(rows.map((r) => r.name)).toEqual(['FRESH']);
-      expect(rows[0].computed_balance).toBe(0);
-      expect(rows[0].drift).toBeNull();
-      expect(rows[0].has_transactions).toBe(false);
+    // ───────────────────────────────────────────────────────────────────────────
+    // Surface 5 — account merge preview (accountMergeService.previewMerge)
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("merge preview", () => {
+      /**
+       * Survivor EUR account holding 100 EUR + 100 USD, source USD account
+       * holding 200 USD. Per currency over the union: EUR 100, USD 300.
+       *   correct   → 100 + (300 × 0.5) = 250 EUR
+       *   old (bad) → Σ of bare amounts over the union = 400
+       * @returns {Promise<{ survivor:number, source:number }>}
+       */
+      async function seedMergePair() {
+        await seedRecipient();
+        const survivor = await addAccount("SURVIVOR", { currency: "EUR" });
+        const source = await addAccount("SOURCE", { currency: "USD" });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '3 days'",
+          amount: "100.00",
+          currency: "EUR",
+          bank: "SURVIVOR",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '2 days'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "SURVIVOR",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '1 day'",
+          amount: "200.00",
+          currency: "USD",
+          bank: "SOURCE",
+        });
+        return { survivor, source };
+      }
+
+      it("converts each currency partition of the union at its own rate", async () => {
+        const { survivor, source } = await seedMergePair();
+
+        const preview = await previewMerge(source, survivor);
+
+        expect(preview.projectedBalance).toBe(250); // NOT 400
+        expect(preview.projectedBalanceCurrency).toBe("EUR"); // the survivor's
+        expect(preview.reassigned.transactions).toBe(1);
+      });
+
+      // The contract the dialog rests on: the number previewed is the number the
+      // hub prints once the merge lands. Nothing else pins preview to the hub —
+      // they were separate SQL, which is how they drifted apart.
+      it("previews exactly the computed balance the hub reports after the merge", async () => {
+        const { survivor, source } = await seedMergePair();
+
+        const preview = await previewMerge(source, survivor);
+        await mergeAccounts(survivor, [source]);
+
+        const rows = await listAccounts();
+        expect(rows.map((r) => r.name)).toEqual(["SURVIVOR"]);
+        expect(rows[0].computed_balance).toBe(preview.projectedBalance);
+        expect(rows[0].computed_balance).toBe(250);
+      });
+
+      it("anchors each currency of the union on that currency's own latest stamp", async () => {
+        // Survivor EUR: stamped 1000 (day-10), then −25 → 975 EUR.
+        // Source USD:   unstamped 100 USD → 50 EUR.
+        // The unpartitioned union anchored on whichever stamp was newest and then
+        // added every later row of ANY currency: 1000 − 25 + 100 = 1075.
+        await seedRecipient();
+        const survivor = await addAccount("SURVIVOR", { currency: "EUR" });
+        const source = await addAccount("SOURCE", { currency: "USD" });
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '10 days'",
+          amount: "-50.00",
+          currency: "EUR",
+          bank: "SURVIVOR",
+          balance: "1000.00",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '3 days'",
+          amount: "-25.00",
+          currency: "EUR",
+          bank: "SURVIVOR",
+        });
+        await insertTxn({
+          dateExpr: "CURRENT_DATE - interval '5 days'",
+          amount: "100.00",
+          currency: "USD",
+          bank: "SOURCE",
+        });
+
+        const preview = await previewMerge(source, survivor);
+
+        expect(preview.projectedBalance).toBe(1025); // NOT 1075
+      });
+
+      it("keeps reporting 0 for a pair of accounts with no ledger rows at all", async () => {
+        const survivor = await addAccount("SURVIVOR", { currency: "EUR" });
+        const source = await addAccount("SOURCE", { currency: "EUR" });
+
+        const preview = await previewMerge(source, survivor);
+
+        expect(preview.projectedBalance).toBe(0);
+        expect(preview.reassigned).toEqual({
+          transactions: 0,
+          planned: 0,
+          portfolio: 0,
+          funding: 0,
+        });
+        expect(preview.stampsInterleaved).toBe(false);
+      });
     });
 
-    it('pages by ACCOUNT, not by currency partition', async () => {
-      // The per-currency lateral is used in its aggregated (one row per account)
-      // form precisely so LIMIT keeps counting accounts: a row-per-partition
-      // form would have returned the multi-currency account's two partitions as
-      // "two accounts" and truncated the page.
-      await seedMultiCurrencyAccount('AAA MULTI');
-      await addAccount('BBB PLAIN');
-      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '10.00', bank: 'BBB PLAIN' });
+    // ───────────────────────────────────────────────────────────────────────────
+    // The cross-surface invariant the two findings are really about
+    // ───────────────────────────────────────────────────────────────────────────
+    it("reports ONE figure for the same account across every reader surface", async () => {
+      await seedMultiCurrencyAccount("WISE MULTI", {
+        statementBalance: "120.00",
+      });
 
-      const page = await accountRepository.getAll({ limit: 2, offset: 0 });
-      expect(page.map((r) => r.name)).toEqual(['AAA MULTI', 'BBB PLAIN']);
-      expect(page[0].computed_balance).toBe(150);
-      expect(page[1].computed_balance).toBe(10);
-    });
-  });
+      const [hub] = await listAccounts();
+      const cash = await assembleRebalanceInputs({ currency: "EUR" });
+      const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
+      const widget = await banksRepository.getBankBalances("EUR");
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Surface 2 — reconcile (reconcileService)
-  // ───────────────────────────────────────────────────────────────────────────
-  describe('reconcile', () => {
-    // 'adjustment' end-to-end lives in systemRecipientRows.db.test.js together
-    // with the rest of the recipient_id fix; the per-currency SIZING of that
-    // row is asserted there against the real schema too.
-
-    it("'accept' adopts exactly the base the hub displays when no partition matches", async () => {
-      // D4: GBP account, EUR + USD rows, statement £50. The base is 0 (nothing
-      // is held in GBP) and accept writes 0 — the same 0 the hub payload carries
-      // as reconcilable_balance, so the dialog showed it before the click.
-      await seedRecipient();
-      const id = await addAccount('GBP SHELL', { currency: 'GBP', statementBalance: '50.00' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertRate('GBP', 'CURRENT_DATE', '2');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'GBP SHELL' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'GBP SHELL' });
-
-      const shown = (await accountRepository.getAll())[0].reconcilable_balance;
-      const result = await reconcileAccount(id, { mode: 'accept' });
-
-      expect(result.statement_balance).toBe(shown);
-      expect(result).toMatchObject({ mode: 'accept', drift: 0, computed_balance: 0 });
-      const [after] = await accountRepository.getAll();
-      expect(after.drift).toBe(0);
-      expect(Number(after.statement_balance)).toBe(0);
-    });
-
-    it("'accept' adopts the own-currency partition as the statement of record", async () => {
-      const id = await seedMultiCurrencyAccount('WISE MULTI', { statementBalance: '120.00' });
-
-      const result = await reconcileAccount(id, { mode: 'accept' });
-
-      // 100 = the EUR partition. The cross-currency Σ would have written 200 as
-      // the statement of record — a EUR statement figure with USD folded in.
-      expect(result).toMatchObject({ mode: 'accept', drift: 0, statement_balance: 100, computed_balance: 100 });
-      const [row] = await accountRepository.getAll();
-      // The badge the user clicked is now actually clear, and the converted
-      // balance beside it is untouched (no ledger row was created).
-      expect(row.drift).toBe(0);
-      expect(row.computed_balance).toBe(150);
-    });
-
-    it('refuses a multi-currency account whose own-currency partition already matches', async () => {
-      // The cross-currency Σ (200) is 100 away from the statement, so the old
-      // reading would have minted a 100 EUR adjustment out of thin air.
-      const id = await seedMultiCurrencyAccount('WISE MULTI', { statementBalance: '100.00' });
-
-      await expect(reconcileAccount(id, { mode: 'adjustment' })).rejects.toThrow(/already reconciled/i);
-      const { rows } = await getTestPool().query(`SELECT COUNT(*)::int AS n FROM transactions`);
-      expect(rows[0].n).toBe(2); // nothing inserted
-    });
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Surface 3 — rebalance available cash (crossWorkspaceDataService)
-  // ───────────────────────────────────────────────────────────────────────────
-  describe('rebalance available cash', () => {
-    it('converts each currency partition at its own rate', async () => {
-      await seedMultiCurrencyAccount('WISE MULTI', { spendable: true });
-
-      const out = await assembleRebalanceInputs({ currency: 'EUR' });
-
-      expect(out.availableCash).toBe(150); // NOT 100
-      expect(out.cashAccounts).toEqual([
-        {
-          id: expect.any(Number),
-          name: 'WISE MULTI',
-          accountCurrency: 'EUR',
-          balance: 150,
-          balanceCurrency: 'EUR',
-        },
-      ]);
-    });
-
-    it('honours the spendable/active gates and keeps a zero-activity account listed', async () => {
-      await seedMultiCurrencyAccount('WISE MULTI');
-      await addAccount('NOT SPENDABLE', { spendable: false });
-      await addAccount('ARCHIVED', { isActive: false });
-      await addAccount('NO ACTIVITY');
-      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '999.00', bank: 'NOT SPENDABLE' });
-      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '999.00', bank: 'ARCHIVED' });
-
-      const out = await assembleRebalanceInputs({ currency: 'EUR' });
-
-      expect(out.cashAccounts.map((a) => a.name)).toEqual(['NO ACTIVITY', 'WISE MULTI']);
-      expect(out.cashAccounts.find((a) => a.name === 'NO ACTIVITY').balance).toBe(0);
-      expect(out.availableCash).toBe(150);
-    });
-
-    it('converts into a non-EUR target from every partition', async () => {
-      // Target USD: the EUR partition converts at 1/0.5 and the USD one passes
-      // through — 100 EUR → 200 USD, plus 100 USD = 300 USD.
-      await seedMultiCurrencyAccount('WISE MULTI');
-
-      const out = await assembleRebalanceInputs({ currency: 'USD' });
-
-      expect(out.currency).toBe('USD');
-      expect(out.availableCash).toBe(300);
-    });
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Surface 4 — net-worth current point (infoRepositoryNetWorth)
-  // ───────────────────────────────────────────────────────────────────────────
-  describe('net worth current point', () => {
-    it('values each currency partition at its own rate', async () => {
-      await seedMultiCurrencyAccount('WISE MULTI', { inNetWorth: true });
-
-      const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
-
-      expect(nw.current.liquid).toBe(150); // NOT 100
-      expect(nw.current.netWorth).toBe(150);
-    });
-
-    it('leaves no step between the last history point and the headline', async () => {
-      // The invariant the history walk's byCurrency flag protects: the walk and
-      // the current point must resolve a multi-currency account the same way, or
-      // the chart ends one figure below the headline printed above it and the
-      // monthly-change figure reports the gap as a real gain.
-      await seedMultiCurrencyAccount('WISE MULTI');
-
-      const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
-      const last = nw.snapshots[nw.snapshots.length - 1];
-
-      expect(last.liquid).toBe(nw.current.liquid);
-      expect(last.netWorth).toBe(nw.current.netWorth);
-      // …and the point before the USD leg posted holds only the EUR partition,
-      // so the series genuinely moves rather than being flat by accident.
-      expect(nw.snapshots[0].liquid).toBe(100);
-    });
-
-    it('splits liabilities out of the liquid bucket per currency', async () => {
-      await seedRecipient();
-      await addAccount('WISE MULTI', { currency: 'EUR' });
-      await addAccount('CARD', { type: 'liability', currency: 'USD' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'WISE MULTI' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'WISE MULTI' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-200.00', currency: 'USD', bank: 'CARD' });
-
-      const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
-
+      expect(hub.computed_balance).toBe(150);
+      expect(cash.availableCash).toBe(150);
       expect(nw.current.liquid).toBe(150);
-      expect(nw.current.liabilities).toBe(-100); // −200 USD × 0.5
-      expect(nw.current.netWorth).toBe(50);
+      expect(widget.total_net_position).toBe(150);
+      // …and the hub badge and the dashboard badge show the SAME drift, which is
+      // the figure reconcile acts on. Keeping those two in step is what previously
+      // held the dashboard on the cross-currency sum.
+      expect(hub.drift).toBe(20);
+      expect(widget.accounts[0].drift).toBe(20);
+      // …and the dialog's three native figures are arithmetically consistent with
+      // each other, which is what stops it previewing a number the server would
+      // contradict: drift = statement − base, all in reconcilable_currency.
+      expect(hub.reconcilable_balance).toBe(100);
+      expect(hub.reconcilable_currency).toBe("EUR");
+      expect(Number(hub.statement_balance) - hub.reconcilable_balance).toBe(
+        hub.drift,
+      );
     });
-
-    it('excludes tracking-only accounts from the partitioned current point', async () => {
-      await seedMultiCurrencyAccount('WISE MULTI', { inNetWorth: true });
-      await addAccount('TRACKING', { inNetWorth: false });
-      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '9999.00', bank: 'TRACKING' });
-
-      const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
-
-      expect(nw.current.liquid).toBe(150);
-    });
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Surface 5 — account merge preview (accountMergeService.previewMerge)
-  // ───────────────────────────────────────────────────────────────────────────
-  describe('merge preview', () => {
-    /**
-     * Survivor EUR account holding 100 EUR + 100 USD, source USD account
-     * holding 200 USD. Per currency over the union: EUR 100, USD 300.
-     *   correct   → 100 + (300 × 0.5) = 250 EUR
-     *   old (bad) → Σ of bare amounts over the union = 400
-     * @returns {Promise<{ survivor:number, source:number }>}
-     */
-    async function seedMergePair() {
-      await seedRecipient();
-      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
-      const source = await addAccount('SOURCE', { currency: 'USD' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '100.00', currency: 'EUR', bank: 'SURVIVOR' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'USD', bank: 'SURVIVOR' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '200.00', currency: 'USD', bank: 'SOURCE' });
-      return { survivor, source };
-    }
-
-    it('converts each currency partition of the union at its own rate', async () => {
-      const { survivor, source } = await seedMergePair();
-
-      const preview = await previewMerge(source, survivor);
-
-      expect(preview.projectedBalance).toBe(250); // NOT 400
-      expect(preview.projectedBalanceCurrency).toBe('EUR'); // the survivor's
-      expect(preview.reassigned.transactions).toBe(1);
-    });
-
-    // The contract the dialog rests on: the number previewed is the number the
-    // hub prints once the merge lands. Nothing else pins preview to the hub —
-    // they were separate SQL, which is how they drifted apart.
-    it('previews exactly the computed balance the hub reports after the merge', async () => {
-      const { survivor, source } = await seedMergePair();
-
-      const preview = await previewMerge(source, survivor);
-      await mergeAccounts(survivor, [source]);
-
-      const rows = await accountRepository.getAll();
-      expect(rows.map((r) => r.name)).toEqual(['SURVIVOR']);
-      expect(rows[0].computed_balance).toBe(preview.projectedBalance);
-      expect(rows[0].computed_balance).toBe(250);
-    });
-
-    it('anchors each currency of the union on that currency\'s own latest stamp', async () => {
-      // Survivor EUR: stamped 1000 (day-10), then −25 → 975 EUR.
-      // Source USD:   unstamped 100 USD → 50 EUR.
-      // The unpartitioned union anchored on whichever stamp was newest and then
-      // added every later row of ANY currency: 1000 − 25 + 100 = 1075.
-      await seedRecipient();
-      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
-      const source = await addAccount('SOURCE', { currency: 'USD' });
-      await insertRate('USD', 'CURRENT_DATE', '0.5');
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'EUR', bank: 'SURVIVOR', balance: '1000.00' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '-25.00', currency: 'EUR', bank: 'SURVIVOR' });
-      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '100.00', currency: 'USD', bank: 'SOURCE' });
-
-      const preview = await previewMerge(source, survivor);
-
-      expect(preview.projectedBalance).toBe(1025); // NOT 1075
-    });
-
-    it('keeps reporting 0 for a pair of accounts with no ledger rows at all', async () => {
-      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
-      const source = await addAccount('SOURCE', { currency: 'EUR' });
-
-      const preview = await previewMerge(source, survivor);
-
-      expect(preview.projectedBalance).toBe(0);
-      expect(preview.reassigned).toEqual({ transactions: 0, planned: 0, portfolio: 0, funding: 0 });
-      expect(preview.stampsInterleaved).toBe(false);
-    });
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // The cross-surface invariant the two findings are really about
-  // ───────────────────────────────────────────────────────────────────────────
-  it('reports ONE figure for the same account across every reader surface', async () => {
-    await seedMultiCurrencyAccount('WISE MULTI', { statementBalance: '120.00' });
-
-    const [hub] = await accountRepository.getAll();
-    const cash = await assembleRebalanceInputs({ currency: 'EUR' });
-    const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
-    const widget = await banksRepository.getBankBalances('EUR');
-
-    expect(hub.computed_balance).toBe(150);
-    expect(cash.availableCash).toBe(150);
-    expect(nw.current.liquid).toBe(150);
-    expect(widget.total_net_position).toBe(150);
-    // …and the hub badge and the dashboard badge show the SAME drift, which is
-    // the figure reconcile acts on. Keeping those two in step is what previously
-    // held the dashboard on the cross-currency sum.
-    expect(hub.drift).toBe(20);
-    expect(widget.accounts[0].drift).toBe(20);
-    // …and the dialog's three native figures are arithmetically consistent with
-    // each other, which is what stops it previewing a number the server would
-    // contradict: drift = statement − base, all in reconcilable_currency.
-    expect(hub.reconcilable_balance).toBe(100);
-    expect(hub.reconcilable_currency).toBe('EUR');
-    expect(Number(hub.statement_balance) - hub.reconcilable_balance).toBe(hub.drift);
-  });
-});
+  },
+);

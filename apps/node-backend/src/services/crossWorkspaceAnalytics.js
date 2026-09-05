@@ -15,7 +15,7 @@ import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
  * @param {{ current:number, monthlyContribution:number, annualReturn:number, annualVolatility?:number, months:number }} p
  * @returns {Array<{ month:number, median:number, p10:number, p90:number }>}
  */
-export function projectNetWorth({ current, monthlyContribution, annualReturn, annualVolatility = 0, months }) {
+ function projectNetWorth({ current, monthlyContribution, annualReturn, annualVolatility = 0, months }) {
   const Z = 1.2816;
   const r = Number(annualReturn) || 0;
   const vol = Number(annualVolatility) || 0;
@@ -112,3 +112,5 @@ export function rebalanceDeployment({ actualValues, targetWeights, availableCash
   }
   return out;
 }
+
+export { projectNetWorth as __projectNetWorth };

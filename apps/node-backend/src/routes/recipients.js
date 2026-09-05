@@ -71,20 +71,20 @@ router.get(
     const opts = {
       limit,
       offset,
-      name: name || null,
+      name: name || undefined,
       // Same strict id parse as every other id query param: absent/empty is "no
-      // filter" (null, 200), malformed is a 400. `parseInt` truncated instead —
+      // filter" (undefined, 200), malformed is a 400. `parseInt` truncated instead —
       // ?default_category_id=12abc listed the recipients defaulting to category
       // 12 — and a NaN reached Postgres as a 22P02 500.
       defaultCategoryId: assertOptionalId(
         default_category_id,
         "default_category_id",
       ),
-      search: search ? String(search).slice(0, 200) : null,
+      search: search ? String(search).slice(0, 200) : undefined,
       active: parseBooleanQueryParam(active, true),
       uncategorized: parseBooleanQueryParam(uncategorized),
-      sortBy: sort_by || null,
-      sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : null,
+      sortBy: sort_by || undefined,
+      sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : undefined,
     };
 
     const [items, total] = await Promise.all([

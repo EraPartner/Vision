@@ -15,6 +15,7 @@ import investmentRepository, {
   pickInvestmentCreateFields,
 } from "../repositories/investmentRepository.js";
 import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
+import portfolioTransactionService from "../services/portfolio/portfolioTransactionService.js";
 import {
   fetchHistoricalPrices,
   fetchLivePricesDetailed,
@@ -327,6 +328,7 @@ const portfolioTransactionBodySchema = z.looseObject({
   price_per_unit: portfolioNumberField("price_per_unit", 999_999_999_999),
   fees: portfolioNumberField("fees"),
   taxes: portfolioNumberField("taxes"),
+  dividend_amount_convention: z.enum(["gross", "net", "unknown"]).optional(),
   currency: portfolioCurrencyField,
   fx_rate_to_eur: portfolioNumberField("fx_rate_to_eur", 9_999_999_999),
   note: z.string().nullable().optional(),
@@ -340,7 +342,7 @@ const portfolioTransactionBodySchema = z.looseObject({
  * @param {unknown} body
  * @returns {any}
  */
-export function parsePortfolioTransactionBody(body) {
+function parsePortfolioTransactionBody(body) {
   const result = portfolioTransactionBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
@@ -488,7 +490,7 @@ function parseInvestmentIdsQuery(rawInvestmentIds) {
  * @param {Record<string, unknown>} query
  * @returns {{ limit: number, offset: number, assetClass: string|null, active: boolean }}
  */
-export function parseDefaultListOptions(query) {
+function parseDefaultListOptions(query) {
   const { asset_class, active = "true" } = query;
   const { limit, offset } = parsePagination(query, {
     defaultLimit: 200,
@@ -870,6 +872,7 @@ export async function createTransaction(req, res) {
     price_per_unit,
     fees,
     taxes,
+    dividend_amount_convention,
     currency,
     note,
     is_recurring,
@@ -893,7 +896,7 @@ export async function createTransaction(req, res) {
 
   let txn;
   try {
-    txn = await portfolioTransactionRepository.create({
+    txn = await portfolioTransactionService.create({
       investment_id,
       type,
       date,
@@ -902,6 +905,7 @@ export async function createTransaction(req, res) {
       price_per_unit,
       fees,
       taxes,
+      dividend_amount_convention,
       currency: effectiveCurrency,
       note,
       is_recurring,
@@ -936,7 +940,7 @@ export async function deleteTransaction(req, res) {
   const existingTxn = await portfolioTransactionRepository.getById(txnId);
   if (!existingTxn) throw new NotFoundError("Portfolio transaction not found");
 
-  const ok = await portfolioTransactionRepository.hardDelete(txnId);
+  const ok = await portfolioTransactionService.remove(txnId);
   if (!ok) throw new NotFoundError("Portfolio transaction not found");
 
   clearInvestmentsCaches();
@@ -994,7 +998,7 @@ export async function updateTransaction(req, res) {
 
   let txn;
   try {
-    txn = await portfolioTransactionRepository.update(txnId, fields);
+    txn = await portfolioTransactionService.update(txnId, fields);
   } catch (err) {
     translateRepoError(err);
   }
@@ -1019,3 +1023,8 @@ export async function getInvestmentSummary(req, res) {
   const summary = await portfolioTransactionRepository.getSummary(investmentId);
   res.ok({ investment_id: investmentId, breakdown: summary });
 }
+
+export {
+  parsePortfolioTransactionBody as __parsePortfolioTransactionBody,
+  parseDefaultListOptions as __parseDefaultListOptions,
+};

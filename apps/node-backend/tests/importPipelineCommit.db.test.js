@@ -83,10 +83,11 @@ async function wipe() {
 }
 
 /** Create an import batch and return its id. */
-async function newBatch() {
+async function newBatch(adapterName = "belfius") {
   const { rows } = await pool.query(
     `INSERT INTO import_batches (adapter_name, status, rows_total)
-     VALUES ('belfius', 'awaiting_review', 0) RETURNING id`,
+     VALUES ($1, 'awaiting_review', 0) RETURNING id`,
+    [adapterName],
   );
   return rows[0].id;
 }
@@ -226,6 +227,28 @@ describeDb("importPipeline commit (real Postgres)", () => {
   });
 
   // ── the core dedup verdicts ───────────────────────────────────────────────
+
+  it("makes Revolut-created accounts permanently multi-currency capable", async () => {
+    const batchId = await newBatch("revolut");
+    await stageRow(batchId, 0, { bank_account: "REVOLUT CURRENT" });
+
+    await commitBatch({ batchId });
+    const { rows } = await pool.query(
+      `SELECT multi_currency_cash FROM accounts WHERE name = 'REVOLUT CURRENT'`,
+    );
+    expect(rows[0].multi_currency_cash).toBe(true);
+
+    const ordinaryBatch = await newBatch("belfius");
+    await stageRow(ordinaryBatch, 0, {
+      bank_account: "REVOLUT CURRENT",
+      memo: "SECOND ROW",
+    });
+    await commitBatch({ batchId: ordinaryBatch });
+    const after = await pool.query(
+      `SELECT multi_currency_cash FROM accounts WHERE name = 'REVOLUT CURRENT'`,
+    );
+    expect(after.rows[0].multi_currency_cash).toBe(true);
+  });
 
   it("marks the second of an intra-chunk identical pair as a duplicate", async () => {
     const batchId = await newBatch();

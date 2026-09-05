@@ -17,7 +17,7 @@ import { query } from "../src/database/connection.js";
 import {
   computeAndStoreSnapshots,
   getSnapshots,
-  getLatestSnapshot,
+  __getLatestSnapshot as getLatestSnapshot,
   computeMetrics,
   computeHeatmap,
 } from "../src/services/portfolioPerformanceSnapshotService.js";
@@ -345,6 +345,66 @@ describe("portfolioPerformanceSnapshotService", () => {
     expect(String(txCall[0])).toContain(
       "CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END",
     );
+  });
+
+  it("replays fully assigned historical units per broker partition", async () => {
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: "EUR", current_price: 10, asset_class: "stock" },
+      ],
+      transactions: [
+        {
+          id: 1,
+          investment_id: 1,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 50,
+          units: 5,
+          account_id: 1,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          id: 2,
+          investment_id: 1,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 50,
+          units: 5,
+          account_id: 2,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          id: 3,
+          investment_id: 1,
+          day: "2026-01-02",
+          type: "sell",
+          amount: 70,
+          units: 7,
+          account_id: 1,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+      ],
+      prices: [
+        { investment_id: 1, day: "2026-01-01", close_price: 10 },
+        { investment_id: 1, day: "2026-01-02", close_price: 10 },
+        { investment_id: 1, day: "2026-01-03", close_price: 10 },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots("EUR");
+
+    // Account 1 clamps to zero after its oversell; account 2 keeps all five
+    // units. A flat replay would incorrectly report only three units / EUR 30.
+    expect(snapshots[1].value).toBe(50);
+    expect(snapshots[2].value).toBe(50);
+    expect(snapshots[2].value_fx_neutral).toBe(50);
+    // The live cost-basis engine scales proceeds by consumed/requested units
+    // when clamping an invalid oversell. Snapshot cash flow uses the same ratio.
+    expect(snapshots[2].invested).toBe(50);
+    expect(snapshots[2].gain_loss).toBe(0);
   });
 
   it("reduces invested on return_of_capital without changing units/value", async () => {

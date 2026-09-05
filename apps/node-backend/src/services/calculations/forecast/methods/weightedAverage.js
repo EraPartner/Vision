@@ -5,17 +5,17 @@
  * Heavier weight on recent months without the sharper discount of EWMA.
  */
 
-import { dayOfMonth } from '../seasonality.js';
-import { monthKey, orderedMonthKeys } from '../months.js';
+import { dayOfMonth } from "../seasonality.js";
+import { monthKey, orderedMonthKeys } from "../months.js";
 
-export const id = 'weighted_avg';
-export const label = 'Weighted average';
+export const id = "weighted_avg";
+export const label = "Weighted average";
 
 /**
  * @param {{history: Array<{date:string, net:number}>, forecastDates: string[]}} ctx
  * @returns {Array<{date:string, value:number}>}
  */
-export function forecast({ history, forecastDates }) {
+function forecast({ history, forecastDates }) {
   const monthOrder = orderedMonthKeys(history);
   const monthRank = new Map(monthOrder.map((mk, i) => [mk, i]));
 
@@ -37,3 +37,5 @@ export function forecast({ history, forecastDates }) {
     return { date, value: v };
   });
 }
+
+export { forecast };

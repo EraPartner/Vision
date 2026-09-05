@@ -14,7 +14,7 @@ vi.mock("../src/config/logger.js", () => ({
 
 import {
   detectCategoryOutliers,
-  filterDismissedFindings,
+  __filterDismissedFindings as filterDismissedFindings,
   __clearCategoryOutlierCacheForTests,
 } from "../src/services/categoryOutlierService.js";
 

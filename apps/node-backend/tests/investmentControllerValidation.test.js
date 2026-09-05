@@ -40,7 +40,7 @@ import investmentRepository from "../src/repositories/investmentRepository.js";
 import {
   createInvestment,
   updateInvestment,
-  parseDefaultListOptions,
+  __parseDefaultListOptions as parseDefaultListOptions,
 } from "../src/controllers/investmentController.js";
 import { ValidationError } from "../src/middleware/errorHandler.js";
 

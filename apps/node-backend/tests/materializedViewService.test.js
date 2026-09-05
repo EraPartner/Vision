@@ -95,13 +95,13 @@ describe("materializedViewService", () => {
     expect(firstRefreshIdx).toBeGreaterThan(-1);
     expect(
       clientSql.filter((sql) => sql === "SET statement_timeout = 0"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(
       clientSql.filter((sql) => sql === "RESET statement_timeout"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(clientSql[firstRefreshIdx - 1]).toBe("SET statement_timeout = 0");
     // Clients go back to the pool healthy (no destructive release).
-    expect(release).toHaveBeenCalledTimes(3);
+    expect(release).toHaveBeenCalledTimes(2);
     expect(release).not.toHaveBeenCalledWith(true);
   });
 
@@ -125,7 +125,7 @@ describe("materializedViewService", () => {
 
     query.mockImplementation(() => {
       callCount += 1;
-      if (callCount <= 3) {
+      if (callCount <= 2) {
         return new Promise((resolve) => {
           pendingResolvers.push(resolve);
         });
@@ -134,19 +134,33 @@ describe("materializedViewService", () => {
     });
 
     const firstRefresh = refreshMaterializedViews();
-    await refreshMaterializedViews();
+    const coalescedRefresh = refreshMaterializedViews();
     // Flush the microtask hops (getClient + SET statement_timeout) that now
     // precede each REFRESH statement.
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
 
     pendingResolvers.forEach((resolve) => resolve({ rows: [] }));
-    await firstRefresh;
+    await Promise.all([firstRefresh, coalescedRefresh]);
 
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(query).toHaveBeenCalledTimes(6);
+    expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  it("rejects when a view is still missing during post-listen creation", async () => {
+    const { refreshMaterializedViews, query, logger } =
+      await loadMaterializedViewService();
+    query.mockRejectedValue(
+      new Error('relation "mv_monthly_summary" does not exist'),
+    );
+
+    await expect(refreshMaterializedViews()).rejects.toThrow("does not exist");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Materialized view refresh failed",
+      { error: 'relation "mv_monthly_summary" does not exist' },
+    );
   });
 
   it("debounces scheduleRefresh calls into one refresh", async () => {
@@ -163,7 +177,7 @@ describe("materializedViewService", () => {
     expect(query).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   // TODO E20: trailing-only debounce let a steady mutation stream (< debounce
@@ -190,14 +204,14 @@ describe("materializedViewService", () => {
 
     // Crossing the 10s deadline flushes even though the last call was < 5s ago.
     await vi.advanceTimersByTimeAsync(step);
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
 
     // The burst state resets: the next lone call waits the full trailing window again.
     scheduleRefresh();
     await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(6);
+    expect(query).toHaveBeenCalledTimes(4);
   });
 
   it("creates materialized views and indexes in expected order", async () => {
@@ -218,7 +232,7 @@ describe("materializedViewService", () => {
     expect(
       sqlCalls.some((sql) =>
         sql.includes(
-          "CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx",
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_summary",
         ),
       ),
     ).toBe(true);
@@ -229,13 +243,9 @@ describe("materializedViewService", () => {
         ),
       ),
     ).toBe(true);
-    expect(
-      sqlCalls.some((sql) =>
-        sql.includes(
-          "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily",
-        ),
-      ),
-    ).toBe(true);
+    expect(sqlCalls.some((sql) => sql.includes("mv_cashflow_daily"))).toBe(
+      false,
+    );
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringMatching(/^Materialized views ready in \d+ms$/),
     );
@@ -277,7 +287,7 @@ describe("materializedViewService", () => {
     const sqlCalls = query.mock.calls.map(([sql]) => sql);
     expect(sqlCalls).toContain("ANALYZE mv_monthly_summary");
     expect(sqlCalls).toContain("ANALYZE mv_category_totals");
-    expect(sqlCalls).toContain("ANALYZE mv_cashflow_daily");
+    expect(sqlCalls).not.toContain("ANALYZE mv_cashflow_daily");
   });
 
   // Guard for the canonical 3-level effective-category resolution (own →
@@ -325,7 +335,7 @@ describe("materializedViewService", () => {
     const { ensureMaterializedViewIndexes, query, logger } =
       await loadMaterializedViewService();
     query.mockImplementation((sql) => {
-      if (sql.includes("mv_cashflow_daily_idx")) {
+      if (sql.includes("idx_mv_category_totals")) {
         return Promise.reject(new Error("index create denied"));
       }
       return Promise.resolve({ rows: [] });
@@ -334,8 +344,13 @@ describe("materializedViewService", () => {
     await ensureMaterializedViewIndexes();
 
     expect(query).toHaveBeenCalledTimes(3);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        sql.includes("DROP INDEX IF EXISTS mv_monthly_summary_idx"),
+      ),
+    ).toBe(true);
     expect(logger.warn).toHaveBeenCalledWith(
-      "Could not create index mv_cashflow_daily_idx on mv_cashflow_daily",
+      "Could not create index idx_mv_category_totals on mv_category_totals",
       { error: "index create denied" },
     );
   });

@@ -25,7 +25,7 @@ import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
 const ONE_MINUTE_MS = 60_000;
 
 /** Documented free-tier ceilings. Absent provider = unmetered by this governor. */
-export const PROVIDER_LIMITS = Object.freeze({
+ const PROVIDER_LIMITS = Object.freeze({
   twelve_data: { perMinute: 8, perDay: 800 },
   finnhub: { perMinute: 60 },
   fmp: { perDay: 250 },
@@ -40,7 +40,7 @@ export const PROVIDER_LIMITS = Object.freeze({
  * @param {number} ms
  * @returns {string}
  */
-export function dayKeyUtc(ms) {
+ function dayKeyUtc(ms) {
   return epochMsToUtcYmd(ms);
 }
 
@@ -159,3 +159,5 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
 
   return { canSpend, spend, snapshot };
 }
+
+export { PROVIDER_LIMITS as __PROVIDER_LIMITS, dayKeyUtc as __dayKeyUtc };

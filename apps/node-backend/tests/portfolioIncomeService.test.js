@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateIncome, coverageRatio } from '../src/services/portfolio/portfolioIncomeService.js';
+import { __aggregateIncome as aggregateIncome, __coverageRatio as coverageRatio } from '../src/services/portfolio/portfolioIncomeService.js';
 
 describe('aggregateIncome (ADR-096)', () => {
   it('sums realized totalIncome and projected annual interest across holdings', () => {

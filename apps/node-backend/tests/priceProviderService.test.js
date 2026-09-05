@@ -2,16 +2,16 @@
  * Price Provider Service tests.
  * Tests price fetching from Binance, Yahoo, Kinesis, and custom endpoints.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockConnection } from './helpers/repoMocks.js';
-import { mockLogger } from './helpers/mockLogger.js';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.js";
 
 const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
   mockYahooQuote: vi.fn(),
   mockYahooChart: vi.fn(),
 }));
 
-vi.mock('yahoo-finance2', () => ({
+vi.mock("yahoo-finance2", () => ({
   default: vi.fn().mockImplementation(function MockYahooFinance() {
     return {
       quote: mockYahooQuote,
@@ -20,34 +20,34 @@ vi.mock('yahoo-finance2', () => ({
   }),
 }));
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock("../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../src/database/connection.js', () => mockConnection());
+vi.mock("../src/database/connection.js", () => mockConnection());
 
 // The SSRF guard (lib/urlSafety) resolves custom-provider hostnames before fetch.
 // Stub DNS to a public address so these hermetic tests don't hit the network;
 // the guard's private-IP/scheme logic is unit-tested in tests/urlSafety.test.js.
-vi.mock('node:dns/promises', () => {
-  const lookup = vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]);
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]);
   return { default: { lookup }, lookup };
 });
 
 import {
-  fetchLivePrices,
+  __fetchLivePrices as fetchLivePrices,
   fetchLivePricesDetailed,
   fetchHistoricalPrices,
   sanitizePersistedKinesisHistory,
   getHistoricalPriceAt,
   SUPPORTED_PROVIDERS,
   __resetPriceCache,
-} from '../src/services/priceProviderService.js';
-import { query } from '../src/database/connection.js';
-import { logger } from '../src/config/logger.js';
-import { clearHistoricalIndexCache } from '../src/services/currency/currencyConversionService.js';
+} from "../src/services/priceProviderService.js";
+import { query } from "../src/database/connection.js";
+import { logger } from "../src/config/logger.js";
+import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.js";
 
-describe('Price Provider Service', () => {
+describe("Price Provider Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
@@ -62,18 +62,18 @@ describe('Price Provider Service', () => {
   });
 
   // ── SUPPORTED_PROVIDERS ────────────────────────────────────
-  describe('SUPPORTED_PROVIDERS', () => {
-    it('should list all supported providers', () => {
+  describe("SUPPORTED_PROVIDERS", () => {
+    it("should list all supported providers", () => {
       expect(SUPPORTED_PROVIDERS.length).toBeGreaterThanOrEqual(4);
-      const keys = SUPPORTED_PROVIDERS.map(p => p.key);
-      expect(keys).toContain('manual');
-      expect(keys).toContain('binance');
-      expect(keys).toContain('yahoo');
-      expect(keys).toContain('kinesis');
-      expect(keys).toContain('custom');
+      const keys = SUPPORTED_PROVIDERS.map((p) => p.key);
+      expect(keys).toContain("manual");
+      expect(keys).toContain("binance");
+      expect(keys).toContain("yahoo");
+      expect(keys).toContain("kinesis");
+      expect(keys).toContain("custom");
     });
 
-    it('should have name and description for each provider', () => {
+    it("should have name and description for each provider", () => {
       for (const provider of SUPPORTED_PROVIDERS) {
         expect(provider.name).toBeTruthy();
         expect(provider.description).toBeTruthy();
@@ -82,70 +82,100 @@ describe('Price Provider Service', () => {
   });
 
   // ── fetchLivePrices ────────────────────────────────────────
-  describe('fetchLivePrices', () => {
-    it('should return empty object for empty list', async () => {
+  describe("fetchLivePrices", () => {
+    it("should return empty object for empty list", async () => {
       const result = await fetchLivePrices([]);
       expect(result).toEqual({});
     });
 
-    it('should skip manual provider investments', async () => {
+    it("should skip manual provider investments", async () => {
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'manual', price_provider_id: null },
+        { id: 1, price_provider: "manual", price_provider_id: null },
       ]);
       expect(result).toEqual({});
     });
 
-    it('should handle Binance API errors gracefully', async () => {
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+    it("should handle Binance API errors gracefully", async () => {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("Network error"),
+      );
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "binance",
+          price_provider_id: "BTCUSDT",
+          currency: "USD",
+        },
       ]);
 
       // Should not throw, returns empty results for failed providers
-      expect(typeof result).toBe('object');
+      expect(typeof result).toBe("object");
     });
 
-    it('should handle Yahoo Finance API errors gracefully', async () => {
-      mockYahooQuote.mockRejectedValue(new Error('Network error'));
+    it("should handle Yahoo Finance API errors gracefully", async () => {
+      mockYahooQuote.mockRejectedValue(new Error("Network error"));
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
       ]);
 
-      expect(typeof result).toBe('object');
+      expect(typeof result).toBe("object");
     });
 
-    it('should handle Kinesis API errors gracefully', async () => {
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+    it("should handle Kinesis API errors gracefully", async () => {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("Network error"),
+      );
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'kinesis', price_provider_id: 'XAU_USD' },
+        { id: 1, price_provider: "kinesis", price_provider_id: "XAU_USD" },
       ]);
 
-      expect(typeof result).toBe('object');
+      expect(typeof result).toBe("object");
     });
 
-    it('should handle custom provider with missing URL', async () => {
+    it("should handle custom provider with missing URL", async () => {
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'custom', price_provider_id: 'price', price_provider_url: null },
+        {
+          id: 1,
+          price_provider: "custom",
+          price_provider_id: "price",
+          price_provider_url: null,
+        },
       ]);
 
-      expect(typeof result).toBe('object');
+      expect(typeof result).toBe("object");
     });
 
-    it('should group investments by provider', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should group investments by provider", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([
-          { symbol: 'BTCUSDT', price: '50000.00' },
-          { symbol: 'ETHUSDT', price: '3000.00' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { symbol: "BTCUSDT", price: "50000.00" },
+            { symbol: "ETHUSDT", price: "3000.00" },
+          ]),
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' },
-        { id: 2, price_provider: 'binance', price_provider_id: 'ETHUSDT', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "binance",
+          price_provider_id: "BTCUSDT",
+          currency: "USD",
+        },
+        {
+          id: 2,
+          price_provider: "binance",
+          price_provider_id: "ETHUSDT",
+          currency: "USD",
+        },
       ]);
 
       // Should batch into single Binance call
@@ -154,267 +184,351 @@ describe('Price Provider Service', () => {
       expect(result[2]).toBe(3000);
     });
 
-    it('should handle Binance successful response', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should handle Binance successful response", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([{ symbol: 'BTCUSDT', price: '50000.00' }]),
+        json: () => Promise.resolve([{ symbol: "BTCUSDT", price: "50000.00" }]),
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "binance",
+          price_provider_id: "BTCUSDT",
+          currency: "USD",
+        },
       ]);
 
       expect(result[1]).toBe(50000);
     });
 
-    it('should handle Kinesis successful response', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should handle Kinesis successful response", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          XAU_USD: [
-            { createdAt: '2026-01-01T00:00:00Z', price: 1987.12 },
-            { createdAt: '2026-01-02T00:00:00Z', price: 1999.99 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            XAU_USD: [
+              { createdAt: "2026-01-01T00:00:00Z", price: 1987.12 },
+              { createdAt: "2026-01-02T00:00:00Z", price: 1999.99 },
+            ],
+          }),
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'kinesis', price_provider_id: 'XAU_USD' },
+        { id: 1, price_provider: "kinesis", price_provider_id: "XAU_USD" },
       ]);
 
       expect(result[1]).toBe(1999.99);
     });
 
-    it('converts a Kinesis EUR-symbol live price out of USD', async () => {
+    it("converts a Kinesis EUR-symbol live price out of USD", async () => {
       // exchange_rates: 1 USD = 0.5 EUR (rate_to_eur), so the live price halves.
       query.mockResolvedValue({
-        rows: [{ currency_code: 'USD', rate_to_eur: '0.5' }],
+        rows: [{ currency_code: "USD", rate_to_eur: "0.5" }],
       });
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          KAU_USD: [
-            { createdAt: '2026-01-01T00:00:00Z', price: 80 },
-            { createdAt: '2026-01-02T00:00:00Z', price: 100 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            KAU_USD: [
+              { createdAt: "2026-01-01T00:00:00Z", price: 80 },
+              { createdAt: "2026-01-02T00:00:00Z", price: 100 },
+            ],
+          }),
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'kinesis', price_provider_id: 'KAU_EUR', currency: 'EUR' },
+        {
+          id: 1,
+          price_provider: "kinesis",
+          price_provider_id: "KAU_EUR",
+          currency: "EUR",
+        },
       ]);
 
       expect(result[1]).toBe(50);
     });
 
-    it('should resolve Kinesis symbol from configured asset name when provider id is missing', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should resolve Kinesis symbol from configured asset name when provider id is missing", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          KAU_USD: [
-            { createdAt: '2026-01-01T00:00:00Z', price: 101.5 },
-            { createdAt: '2026-01-02T00:00:00Z', price: 102.25 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            KAU_USD: [
+              { createdAt: "2026-01-01T00:00:00Z", price: 101.5 },
+              { createdAt: "2026-01-02T00:00:00Z", price: 102.25 },
+            ],
+          }),
       });
 
       const result = await fetchLivePrices([
-        { id: 1, name: 'kaufen_gold', price_provider: 'kinesis', price_provider_id: null, currency: 'USD' },
+        {
+          id: 1,
+          name: "kaufen_gold",
+          price_provider: "kinesis",
+          price_provider_id: null,
+          currency: "USD",
+        },
       ]);
 
       expect(result[1]).toBe(102.25);
     });
 
-    it('should handle Yahoo Finance successful response', async () => {
+    it("should handle Yahoo Finance successful response", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'AAPL',
-        regularMarketPrice: 175.50,
-        regularMarketPreviousClose: 174.20,
-        currency: 'USD',
+        symbol: "AAPL",
+        regularMarketPrice: 175.5,
+        regularMarketPreviousClose: 174.2,
+        currency: "USD",
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toBe(175.50);
+      expect(result[1]).toBe(175.5);
     });
 
-    it('should fallback to previous close for Yahoo when live is zero', async () => {
+    it("should fallback to previous close for Yahoo when live is zero", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'AAPL',
+        symbol: "AAPL",
         regularMarketPrice: 0,
-        regularMarketPreviousClose: 174.20,
-        currency: 'USD',
+        regularMarketPreviousClose: 174.2,
+        currency: "USD",
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toBe(174.20);
+      expect(result[1]).toBe(174.2);
     });
 
-    it('should fallback to cached DB price when provider has no valid quote', async () => {
+    it("should fallback to cached DB price when provider has no valid quote", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'AAPL',
+        symbol: "AAPL",
         regularMarketPrice: 0,
         regularMarketPreviousClose: 0,
-        currency: 'USD',
+        currency: "USD",
       });
 
       const result = await fetchLivePricesDetailed(
-        [{ id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' }],
-        { cachedPricesByInvestmentId: { 1: 171.11 } }
+        [
+          {
+            id: 1,
+            price_provider: "yahoo",
+            price_provider_id: "AAPL",
+            currency: "USD",
+          },
+        ],
+        { cachedPricesByInvestmentId: { 1: 171.11 } },
       );
 
-      expect(result[1]).toEqual({ price: 171.11, source: 'cached' });
+      expect(result[1]).toEqual({ price: 171.11, source: "cached" });
     });
 
-    it('should fallback to Yahoo chart close when quote endpoints return zero', async () => {
+    it("should fallback to Yahoo chart close when quote endpoints return zero", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'AAPL',
+        symbol: "AAPL",
         regularMarketPrice: 0,
         regularMarketPreviousClose: 0,
-        currency: 'USD',
+        currency: "USD",
       });
       mockYahooChart.mockResolvedValue({
         quotes: [{ close: undefined }, { close: 173.22 }],
       });
 
       const result = await fetchLivePricesDetailed([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toEqual({ price: 173.22, source: 'close' });
+      expect(result[1]).toEqual({ price: 173.22, source: "close" });
     });
 
-    it('should batch multiple Yahoo symbols into a single quote() call', async () => {
+    it("should batch multiple Yahoo symbols into a single quote() call", async () => {
       // yahoo-finance2 `.quote([symbols])` returns one Quote per symbol; the
       // provider must issue ONE request for the whole portfolio, not one each.
       mockYahooQuote.mockResolvedValue([
-        { symbol: 'AAPL', regularMarketPrice: 175.5, regularMarketPreviousClose: 174.2, currency: 'USD' },
-        { symbol: 'MSFT', regularMarketPrice: 420.1, regularMarketPreviousClose: 418.9, currency: 'USD' },
+        {
+          symbol: "AAPL",
+          regularMarketPrice: 175.5,
+          regularMarketPreviousClose: 174.2,
+          currency: "USD",
+        },
+        {
+          symbol: "MSFT",
+          regularMarketPrice: 420.1,
+          regularMarketPreviousClose: 418.9,
+          currency: "USD",
+        },
       ]);
 
       const result = await fetchLivePricesDetailed([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
-        { id: 2, price_provider: 'yahoo', price_provider_id: 'MSFT', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
+        {
+          id: 2,
+          price_provider: "yahoo",
+          price_provider_id: "MSFT",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toEqual({ price: 175.5, source: 'live' });
-      expect(result[2]).toEqual({ price: 420.1, source: 'live' });
+      expect(result[1]).toEqual({ price: 175.5, source: "live" });
+      expect(result[2]).toEqual({ price: 420.1, source: "live" });
       // The whole point of the change: exactly one upstream request.
       expect(mockYahooQuote).toHaveBeenCalledTimes(1);
       expect(mockYahooChart).not.toHaveBeenCalled();
     });
 
-    it('should use yahoo-finance2 quote path for Yahoo provider', async () => {
+    it("should use yahoo-finance2 quote path for Yahoo provider", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'IONQ',
+        symbol: "IONQ",
         regularMarketPrice: 31.2,
         regularMarketPreviousClose: 31.9,
-        currency: 'USD',
+        currency: "USD",
       });
 
       const result = await fetchLivePricesDetailed([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'IONQ', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "IONQ",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toEqual({ price: 31.2, source: 'live' });
+      expect(result[1]).toEqual({ price: 31.2, source: "live" });
     });
 
-    it('should use yahoo-finance2 previous close when live is unavailable', async () => {
+    it("should use yahoo-finance2 previous close when live is unavailable", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'IONQ',
+        symbol: "IONQ",
         regularMarketPrice: 0,
         regularMarketPreviousClose: 31.9,
-        currency: 'USD',
+        currency: "USD",
       });
 
       const result = await fetchLivePricesDetailed([
-        { id: 1, price_provider: 'yahoo', price_provider_id: 'IONQ', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: "IONQ",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toEqual({ price: 31.9, source: 'close' });
+      expect(result[1]).toEqual({ price: 31.9, source: "close" });
     });
 
-    it('should resolve Yahoo symbol from investment.symbol when provider id is missing', async () => {
+    it("should resolve Yahoo symbol from investment.symbol when provider id is missing", async () => {
       mockYahooQuote.mockResolvedValue({
-        symbol: 'MSFT',
+        symbol: "MSFT",
         regularMarketPrice: 420.15,
         regularMarketPreviousClose: 418.9,
-        currency: 'USD',
+        currency: "USD",
       });
 
       const result = await fetchLivePricesDetailed([
-        { id: 1, price_provider: 'yahoo', price_provider_id: null, symbol: 'msft', currency: 'USD' },
+        {
+          id: 1,
+          price_provider: "yahoo",
+          price_provider_id: null,
+          symbol: "msft",
+          currency: "USD",
+        },
       ]);
 
-      expect(result[1]).toEqual({ price: 420.15, source: 'live' });
+      expect(result[1]).toEqual({ price: 420.15, source: "live" });
     });
 
-    it('should handle custom JSON endpoint', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should handle custom JSON endpoint", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ data: { price: 42.50 } }),
-      });
-
-      const result = await fetchLivePrices([
-        { id: 1, price_provider: 'custom', price_provider_id: 'data.price', price_provider_url: 'https://example.com/price' },
-      ]);
-
-      expect(result[1]).toBe(42.50);
-    });
-
-    it('should derive custom latest from history payload when latest path is missing', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          points: [
-            { timestamp_ms: 1700000000000, price: 700 },
-            { timestamp_ms: 1700000100000, price: 710 },
-          ],
-        }),
+        json: () => Promise.resolve({ data: { price: 42.5 } }),
       });
 
       const result = await fetchLivePrices([
         {
           id: 1,
-          price_provider: 'custom',
-          price_provider_latest_url: 'https://example.com/napoleon',
-          price_provider_history_path: 'points',
-          price_provider_history_ts_path: 'timestamp_ms',
-          price_provider_history_price_path: 'price',
+          price_provider: "custom",
+          price_provider_id: "data.price",
+          price_provider_url: "https://example.com/price",
+        },
+      ]);
+
+      expect(result[1]).toBe(42.5);
+    });
+
+    it("should derive custom latest from history payload when latest path is missing", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            points: [
+              { timestamp_ms: 1700000000000, price: 700 },
+              { timestamp_ms: 1700000100000, price: 710 },
+            ],
+          }),
+      });
+
+      const result = await fetchLivePrices([
+        {
+          id: 1,
+          price_provider: "custom",
+          price_provider_latest_url: "https://example.com/napoleon",
+          price_provider_history_path: "points",
+          price_provider_history_ts_path: "timestamp_ms",
+          price_provider_history_price_path: "price",
         },
       ]);
 
       expect(result[1]).toBe(710);
     });
 
-    it('should fetch latest from history endpoint when latest endpoint is unavailable', async () => {
-      vi.spyOn(globalThis, 'fetch')
-        .mockRejectedValueOnce(new Error('timeout'))
+    it("should fetch latest from history endpoint when latest endpoint is unavailable", async () => {
+      vi.spyOn(globalThis, "fetch")
+        .mockRejectedValueOnce(new Error("timeout"))
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({
-            points: [
-              { timestamp_ms: 1700000000000, price: 705.1 },
-              { timestamp_ms: 1700000100000, price: 706.8 },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              points: [
+                { timestamp_ms: 1700000000000, price: 705.1 },
+                { timestamp_ms: 1700000100000, price: 706.8 },
+              ],
+            }),
         });
 
       const result = await fetchLivePrices([
         {
           id: 1,
-          price_provider: 'custom',
-          price_provider_latest_url: 'https://example.com/latest',
-          price_provider_latest_path: 'napoleon.price',
-          price_provider_history_url: 'https://example.com/history',
-          price_provider_history_path: 'points',
-          price_provider_history_ts_path: 'timestamp_ms',
-          price_provider_history_price_path: 'price',
+          price_provider: "custom",
+          price_provider_latest_url: "https://example.com/latest",
+          price_provider_latest_path: "napoleon.price",
+          price_provider_history_url: "https://example.com/history",
+          price_provider_history_path: "points",
+          price_provider_history_ts_path: "timestamp_ms",
+          price_provider_history_price_path: "price",
         },
       ]);
 
@@ -422,74 +536,100 @@ describe('Price Provider Service', () => {
       expect(result[1]).toBe(706.8);
     });
 
-    it('should handle custom provider HTTP error', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should handle custom provider HTTP error", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: false,
         status: 500,
       });
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'custom', price_provider_id: 'price', price_provider_url: 'https://example.com/price' },
+        {
+          id: 1,
+          price_provider: "custom",
+          price_provider_id: "price",
+          price_provider_url: "https://example.com/price",
+        },
       ]);
 
       expect(result[1]).toBeUndefined();
     });
 
-    it('should re-use provider cache and apply cached-price fallback map', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    it("should re-use provider cache and apply cached-price fallback map", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([{ symbol: 'BTCUSDT', price: '50000.00' }]),
+        json: () => Promise.resolve([{ symbol: "BTCUSDT", price: "50000.00" }]),
       });
 
-      const inv = { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' };
+      const inv = {
+        id: 1,
+        price_provider: "binance",
+        price_provider_id: "BTCUSDT",
+        currency: "USD",
+      };
       const first = await fetchLivePricesDetailed([inv]);
       const second = await fetchLivePricesDetailed([inv]);
 
-      expect(first[1]).toEqual({ price: 50000, source: 'live' });
-      expect(second[1]).toEqual({ price: 50000, source: 'live' });
+      expect(first[1]).toEqual({ price: 50000, source: "live" });
+      expect(second[1]).toEqual({ price: 50000, source: "live" });
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
 
       const fallbackResult = await fetchLivePricesDetailed(
-        [{ id: 9, price_provider: 'custom', price_provider_url: 'https://bad.example' }],
-        { cachedPricesByInvestmentId: { 9: 123.45 } }
+        [
+          {
+            id: 9,
+            price_provider: "custom",
+            price_provider_url: "https://bad.example",
+          },
+        ],
+        { cachedPricesByInvestmentId: { 9: 123.45 } },
       );
-      expect(fallbackResult[9]).toEqual({ price: 123.45, source: 'cached' });
+      expect(fallbackResult[9]).toEqual({ price: 123.45, source: "cached" });
     });
 
-    it('should handle mixed providers', async () => {
+    it("should handle mixed providers", async () => {
       // Will fail all fetches but should not throw
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network'));
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network"));
 
       const result = await fetchLivePrices([
-        { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' },
-        { id: 2, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
-        { id: 3, price_provider: 'manual', price_provider_id: null },
+        {
+          id: 1,
+          price_provider: "binance",
+          price_provider_id: "BTCUSDT",
+          currency: "USD",
+        },
+        {
+          id: 2,
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
+          currency: "USD",
+        },
+        { id: 3, price_provider: "manual", price_provider_id: null },
       ]);
 
-      expect(typeof result).toBe('object');
+      expect(typeof result).toBe("object");
       // Manual should be skipped, others failed gracefully
     });
   });
 
-  describe('fetchHistoricalPrices', () => {
-    it('returns covered range from database cache without provider fetch', async () => {
+  describe("fetchHistoricalPrices", () => {
+    it("returns covered range from database cache without provider fetch", async () => {
       const fromMs = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
       const toMs = Date.UTC(2026, 0, 10, 23, 59, 59, 999);
 
       query.mockResolvedValue({
         rows: [
-          { price_date: '2026-01-01', close_price: '100' },
-          { price_date: '2026-01-10', close_price: '120' },
+          { price_date: "2026-01-01", close_price: "100" },
+          { price_date: "2026-01-10", close_price: "120" },
         ],
       });
 
       const points = await fetchHistoricalPrices(
         {
           id: 11,
-          price_provider: 'yahoo',
-          price_provider_id: 'AAPL',
+          price_provider: "yahoo",
+          price_provider_id: "AAPL",
         },
-        { fromMs, toMs }
+        { fromMs, toMs },
       );
 
       expect(points).toEqual([
@@ -499,23 +639,23 @@ describe('Price Provider Service', () => {
       expect(mockYahooChart).not.toHaveBeenCalled();
     });
 
-    it('sanitizes covered cached DB points for kinesis without provider refetch', async () => {
+    it("sanitizes covered cached DB points for kinesis without provider refetch", async () => {
       const fromMs = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
       const toMs = Date.UTC(2026, 0, 5, 23, 59, 59, 999);
 
       query
         .mockResolvedValueOnce({
           rows: [
-            { price_date: '2026-01-01', close_price: '100' },
-            { price_date: '2026-01-02', close_price: '101' },
-            { price_date: '2026-01-03', close_price: '1200' },
-            { price_date: '2026-01-04', close_price: '102' },
-            { price_date: '2026-01-05', close_price: '103' },
+            { price_date: "2026-01-01", close_price: "100" },
+            { price_date: "2026-01-02", close_price: "101" },
+            { price_date: "2026-01-03", close_price: "1200" },
+            { price_date: "2026-01-04", close_price: "102" },
+            { price_date: "2026-01-05", close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({});
 
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({}),
       });
@@ -523,10 +663,10 @@ describe('Price Provider Service', () => {
       const points = await fetchHistoricalPrices(
         {
           id: 24,
-          price_provider: 'kinesis',
-          price_provider_id: 'XAU_USD',
+          price_provider: "kinesis",
+          price_provider_id: "XAU_USD",
         },
-        { fromMs, toMs }
+        { fromMs, toMs },
       );
 
       expect(points).toHaveLength(5);
@@ -536,42 +676,41 @@ describe('Price Provider Service', () => {
       expect(query).toHaveBeenCalledTimes(2);
     });
 
-    it('returns normalized custom history points with filters', async () => {
+    it("returns normalized custom history points with filters", async () => {
       query
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({
-          rows: [
-            { price_date: '2023-11-14', close_price: '710' },
-          ],
+          rows: [{ price_date: "2023-11-14", close_price: "710" }],
         });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          data: {
-            series: [
-              { ts: 1700000000000, px: 700 },
-              { ts: 1700000100000, px: 710 },
-              { ts: 1700000200000, px: 720 },
-            ],
-          },
-        }),
+        json: () =>
+          Promise.resolve({
+            data: {
+              series: [
+                { ts: 1700000000000, px: 700 },
+                { ts: 1700000100000, px: 710 },
+                { ts: 1700000200000, px: 720 },
+              ],
+            },
+          }),
       });
 
       const points = await fetchHistoricalPrices(
         {
           id: 5,
-          price_provider: 'custom',
-          price_provider_history_url: 'https://example.com/series',
-          price_provider_history_path: 'data.series',
-          price_provider_history_ts_path: 'ts',
-          price_provider_history_price_path: 'px',
+          price_provider: "custom",
+          price_provider_history_url: "https://example.com/series",
+          price_provider_history_path: "data.series",
+          price_provider_history_ts_path: "ts",
+          price_provider_history_price_path: "px",
         },
         {
           fromMs: Date.UTC(2023, 10, 14, 0, 0, 0, 0),
           toMs: Date.UTC(2023, 10, 14, 23, 59, 59, 999),
-        }
+        },
       );
 
       expect(points).toEqual([
@@ -579,28 +718,28 @@ describe('Price Provider Service', () => {
       ]);
     });
 
-    it('falls back to cached database points when provider fetch fails', async () => {
+    it("falls back to cached database points when provider fetch fails", async () => {
       const fromMs = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [
-          { price_date: '2026-01-03', close_price: '104.5' },
-        ],
+        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
       });
 
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("network down"),
+      );
 
       const points = await fetchHistoricalPrices(
         {
           id: 12,
-          price_provider: 'custom',
-          price_provider_history_url: 'https://example.com/history',
-          price_provider_history_path: 'points',
-          price_provider_history_ts_path: 'timestamp_ms',
-          price_provider_history_price_path: 'price',
+          price_provider: "custom",
+          price_provider_history_url: "https://example.com/history",
+          price_provider_history_path: "points",
+          price_provider_history_ts_path: "timestamp_ms",
+          price_provider_history_price_path: "price",
         },
-        { fromMs, toMs }
+        { fromMs, toMs },
       );
 
       expect(points).toEqual([
@@ -608,66 +747,70 @@ describe('Price Provider Service', () => {
       ]);
     });
 
-    it('still falls back (no escape) when the provider answers non-2xx — now a typed UpstreamError, caught locally as before', async () => {
+    it("still falls back (no escape) when the provider answers non-2xx — now a typed UpstreamError, caught locally as before", async () => {
       const fromMs = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [
-          { price_date: '2026-01-03', close_price: '104.5' },
-        ],
+        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
       });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503 });
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: false,
+        status: 503,
+      });
 
       const points = await fetchHistoricalPrices(
         {
           id: 12,
-          price_provider: 'custom',
-          price_provider_history_url: 'https://example.com/history',
-          price_provider_history_path: 'points',
-          price_provider_history_ts_path: 'timestamp_ms',
-          price_provider_history_price_path: 'price',
+          price_provider: "custom",
+          price_provider_history_url: "https://example.com/history",
+          price_provider_history_path: "points",
+          price_provider_history_ts_path: "timestamp_ms",
+          price_provider_history_price_path: "price",
         },
-        { fromMs, toMs }
+        { fromMs, toMs },
       );
 
       expect(points).toEqual([
         { timestampMs: Date.UTC(2026, 0, 3, 12, 0, 0, 0), price: 104.5 },
       ]);
       // Same warn wording as before the UpstreamError conversion.
-      expect(logger.warn).toHaveBeenCalledWith('Custom history fetch error for investment 12: HTTP 503');
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Custom history fetch error for investment 12: HTTP 503",
+      );
     });
 
-    it('sanitizes isolated Kinesis spike while preserving surrounding points', async () => {
+    it("sanitizes isolated Kinesis spike while preserving surrounding points", async () => {
       query
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({ rows: [] });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          XAU_USD: [
-            { createdAt: '2026-01-01T00:00:00Z', price: 100 },
-            { createdAt: '2026-01-02T00:00:00Z', price: 101 },
-            { createdAt: '2026-01-03T00:00:00Z', price: 1200 },
-            { createdAt: '2026-01-04T00:00:00Z', price: 102 },
-            { createdAt: '2026-01-05T00:00:00Z', price: 103 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            XAU_USD: [
+              { createdAt: "2026-01-01T00:00:00Z", price: 100 },
+              { createdAt: "2026-01-02T00:00:00Z", price: 101 },
+              { createdAt: "2026-01-03T00:00:00Z", price: 1200 },
+              { createdAt: "2026-01-04T00:00:00Z", price: 102 },
+              { createdAt: "2026-01-05T00:00:00Z", price: 103 },
+            ],
+          }),
       });
 
       const points = await fetchHistoricalPrices(
         {
           id: 22,
-          price_provider: 'kinesis',
-          price_provider_id: 'XAU_USD',
+          price_provider: "kinesis",
+          price_provider_id: "XAU_USD",
         },
         {
           fromMs: Date.UTC(2026, 0, 1, 0, 0, 0, 0),
           toMs: Date.UTC(2026, 0, 5, 23, 59, 59, 999),
-        }
+        },
       );
 
       expect(points).toHaveLength(5);
@@ -680,45 +823,54 @@ describe('Price Provider Service', () => {
       expect(points[4]?.price).toBe(103);
     });
 
-    it('sanitizes moderate one-day Kinesis spike and preserves series detail', async () => {
+    it("sanitizes moderate one-day Kinesis spike and preserves series detail", async () => {
       // KAU_EUR is fetched from Kinesis as KAU_USD, then converted USD→EUR at
       // each point's historical rate. A 1:1 USD rate keeps the converted
       // values identical so the spike-sanitisation assertions stay meaningful.
       query.mockImplementation(async (sql) => {
-        if (typeof sql === 'string' && sql.includes('FROM exchange_rates')) {
+        if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
           return {
-            rows: ['2023-05-19', '2023-05-20', '2023-05-21', '2023-05-22', '2023-05-23'].map(
-              (rate_date) => ({ currency_code: 'USD', rate_date, rate_to_eur: '1' }),
-            ),
+            rows: [
+              "2023-05-19",
+              "2023-05-20",
+              "2023-05-21",
+              "2023-05-22",
+              "2023-05-23",
+            ].map((rate_date) => ({
+              currency_code: "USD",
+              rate_date,
+              rate_to_eur: "1",
+            })),
           };
         }
         return { rows: [] };
       });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          KAU_USD: [
-            { createdAt: '2023-05-19T00:00:00Z', price: 59 },
-            { createdAt: '2023-05-20T00:00:00Z', price: 60 },
-            { createdAt: '2023-05-21T00:00:00Z', price: 120 },
-            { createdAt: '2023-05-22T00:00:00Z', price: 61 },
-            { createdAt: '2023-05-23T00:00:00Z', price: 62 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            KAU_USD: [
+              { createdAt: "2023-05-19T00:00:00Z", price: 59 },
+              { createdAt: "2023-05-20T00:00:00Z", price: 60 },
+              { createdAt: "2023-05-21T00:00:00Z", price: 120 },
+              { createdAt: "2023-05-22T00:00:00Z", price: 61 },
+              { createdAt: "2023-05-23T00:00:00Z", price: 62 },
+            ],
+          }),
       });
 
       const points = await fetchHistoricalPrices(
         {
           id: 23,
-          price_provider: 'kinesis',
-          price_provider_id: 'KAU_EUR',
-          currency: 'EUR',
+          price_provider: "kinesis",
+          price_provider_id: "KAU_EUR",
+          currency: "EUR",
         },
         {
           fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0),
           toMs: Date.UTC(2023, 4, 23, 23, 59, 59, 999),
-        }
+        },
       );
 
       expect(points).toHaveLength(5);
@@ -730,65 +882,85 @@ describe('Price Provider Service', () => {
       expect(points[4]?.price).toBe(62);
     });
 
-    it('converts a Kinesis EUR symbol history series from USD at historical rates', async () => {
+    it("converts a Kinesis EUR symbol history series from USD at historical rates", async () => {
       // USD rate 2.0 → every converted EUR price is double the USD source.
       query.mockImplementation(async (sql) => {
-        if (typeof sql === 'string' && sql.includes('FROM exchange_rates')) {
+        if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
           return {
-            rows: ['2023-05-19', '2023-05-20', '2023-05-21'].map(
-              (rate_date) => ({ currency_code: 'USD', rate_date, rate_to_eur: '2' }),
+            rows: ["2023-05-19", "2023-05-20", "2023-05-21"].map(
+              (rate_date) => ({
+                currency_code: "USD",
+                rate_date,
+                rate_to_eur: "2",
+              }),
             ),
           };
         }
         return { rows: [] };
       });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          KAU_USD: [
-            { createdAt: '2023-05-19T00:00:00Z', price: 50 },
-            { createdAt: '2023-05-20T00:00:00Z', price: 51 },
-            { createdAt: '2023-05-21T00:00:00Z', price: 52 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            KAU_USD: [
+              { createdAt: "2023-05-19T00:00:00Z", price: 50 },
+              { createdAt: "2023-05-20T00:00:00Z", price: 51 },
+              { createdAt: "2023-05-21T00:00:00Z", price: 52 },
+            ],
+          }),
       });
 
       const points = await fetchHistoricalPrices(
-        { id: 24, price_provider: 'kinesis', price_provider_id: 'KAU_EUR', currency: 'EUR' },
-        { fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0), toMs: Date.UTC(2023, 4, 21, 23, 59, 59, 999) },
+        {
+          id: 24,
+          price_provider: "kinesis",
+          price_provider_id: "KAU_EUR",
+          currency: "EUR",
+        },
+        {
+          fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0),
+          toMs: Date.UTC(2023, 4, 21, 23, 59, 59, 999),
+        },
       );
 
       expect(points.map((p) => p.price)).toEqual([100, 102, 104]);
     });
 
-    it('returns empty history for yahoo when symbol cannot be resolved', async () => {
+    it("returns empty history for yahoo when symbol cannot be resolved", async () => {
       query.mockResolvedValueOnce({ rows: [] });
 
-      const points = await fetchHistoricalPrices({ id: 1, price_provider: 'yahoo', price_provider_id: '', symbol: '' }, {});
+      const points = await fetchHistoricalPrices(
+        { id: 1, price_provider: "yahoo", price_provider_id: "", symbol: "" },
+        {},
+      );
       expect(points).toEqual([]);
     });
 
-    it('fetches and persists binance history points', async () => {
+    it("fetches and persists binance history points", async () => {
       query
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ price_date: '2026-01-01', close_price: '100' }] });
+        .mockResolvedValueOnce({
+          rows: [{ price_date: "2026-01-01", close_price: "100" }],
+        });
 
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([
-          [Date.UTC(2026, 0, 1), '0', '0', '0', '100', '0'],
-        ]),
+        json: () =>
+          Promise.resolve([[Date.UTC(2026, 0, 1), "0", "0", "0", "100", "0"]]),
       });
 
-      const points = await fetchHistoricalPrices({ id: 11, price_provider: 'binance', price_provider_id: 'BTCUSDT' }, {});
+      const points = await fetchHistoricalPrices(
+        { id: 11, price_provider: "binance", price_provider_id: "BTCUSDT" },
+        {},
+      );
 
       expect(points).toHaveLength(1);
       expect(points[0].price).toBe(100);
     });
 
-    it('paginates binance history beyond a single 1000-row page', async () => {
+    it("paginates binance history beyond a single 1000-row page", async () => {
       const DAY = 24 * 60 * 60 * 1000;
       const base = Date.UTC(2020, 0, 1);
       const fromMs = base;
@@ -801,32 +973,50 @@ describe('Price Provider Service', () => {
         .mockResolvedValueOnce({ rows: [] });
 
       const page1 = Array.from({ length: 1000 }, (_, i) => [
-        base + i * DAY, '0', '0', '0', String(100 + i), '0',
+        base + i * DAY,
+        "0",
+        "0",
+        "0",
+        String(100 + i),
+        "0",
       ]);
-      const page2 = [[base + 1000 * DAY, '0', '0', '0', '2000', '0']];
+      const page2 = [[base + 1000 * DAY, "0", "0", "0", "2000", "0"]];
 
-      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(page2),
+        });
 
       const points = await fetchHistoricalPrices(
-        { id: 21, price_provider: 'binance', price_provider_id: 'BTCUSDT' },
+        { id: 21, price_provider: "binance", price_provider_id: "BTCUSDT" },
         { fromMs, toMs },
       );
 
       // Two pages fetched; the second request advances startTime past the first page.
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(String(fetchSpy.mock.calls[1][0])).toContain(`startTime=${base + 1000 * DAY}`);
+      expect(String(fetchSpy.mock.calls[1][0])).toContain(
+        `startTime=${base + 1000 * DAY}`,
+      );
       // All 1001 daily points survive into the merged series (old 365-day cap would drop most).
       expect(points).toHaveLength(1001);
     });
 
-    it('falls back to cached db points when kinesis has no symbol', async () => {
-      query.mockResolvedValueOnce({ rows: [{ price_date: '2026-01-03', close_price: '104.5' }] });
+    it("falls back to cached db points when kinesis has no symbol", async () => {
+      query.mockResolvedValueOnce({
+        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
+      });
 
       const points = await fetchHistoricalPrices(
-        { id: 12, price_provider: 'kinesis', price_provider_id: '', name: 'unknown-asset' },
-        {}
+        {
+          id: 12,
+          price_provider: "kinesis",
+          price_provider_id: "",
+          name: "unknown-asset",
+        },
+        {},
       );
 
       expect(points).toEqual([
@@ -834,34 +1024,39 @@ describe('Price Provider Service', () => {
       ]);
     });
 
-    it('returns db-only custom history when dbOnly mode is enabled', async () => {
+    it("returns db-only custom history when dbOnly mode is enabled", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          { price_date: '2026-01-01', close_price: '99' },
-          { price_date: '2026-01-02', close_price: '101' },
+          { price_date: "2026-01-01", close_price: "99" },
+          { price_date: "2026-01-02", close_price: "101" },
         ],
       });
 
       const points = await fetchHistoricalPrices(
         {
           id: 13,
-          price_provider: 'custom',
-          price_provider_history_url: 'https://example.com/history',
-          price_provider_history_path: 'points',
-          price_provider_history_ts_path: 'timestamp_ms',
-          price_provider_history_price_path: 'price',
+          price_provider: "custom",
+          price_provider_history_url: "https://example.com/history",
+          price_provider_history_path: "points",
+          price_provider_history_ts_path: "timestamp_ms",
+          price_provider_history_price_path: "price",
         },
-        { dbOnly: true }
+        { dbOnly: true },
       );
 
       expect(points).toHaveLength(2);
       expect(points[0].price).toBe(99);
     });
 
-    it('returns db fallback for unsupported providers', async () => {
-      query.mockResolvedValueOnce({ rows: [{ price_date: '2026-01-04', close_price: '88' }] });
+    it("returns db fallback for unsupported providers", async () => {
+      query.mockResolvedValueOnce({
+        rows: [{ price_date: "2026-01-04", close_price: "88" }],
+      });
 
-      const points = await fetchHistoricalPrices({ id: 14, price_provider: 'manual' }, {});
+      const points = await fetchHistoricalPrices(
+        { id: 14, price_provider: "manual" },
+        {},
+      );
 
       expect(points).toEqual([
         { timestampMs: Date.UTC(2026, 0, 4, 12, 0, 0, 0), price: 88 },
@@ -869,48 +1064,63 @@ describe('Price Provider Service', () => {
     });
   });
 
-  describe('sanitizePersistedKinesisHistory', () => {
-    it('returns zero summary when there are no kinesis investments', async () => {
+  describe("sanitizePersistedKinesisHistory", () => {
+    it("returns zero summary when there are no kinesis investments", async () => {
       query.mockResolvedValueOnce({ rows: [] });
 
       const result = await sanitizePersistedKinesisHistory();
 
-      expect(result).toEqual({ processed: 0, updated: 0, correctedPoints: 0, failed: 0 });
+      expect(result).toEqual({
+        processed: 0,
+        updated: 0,
+        correctedPoints: 0,
+        failed: 0,
+      });
     });
 
-    it('sanitizes persisted kinesis spikes and saves corrected points', async () => {
+    it("sanitizes persisted kinesis spikes and saves corrected points", async () => {
       query
         .mockResolvedValueOnce({ rows: [{ id: 42 }] })
         .mockResolvedValueOnce({
           rows: [
-            { price_date: '2026-01-01', close_price: '100' },
-            { price_date: '2026-01-02', close_price: '101' },
-            { price_date: '2026-01-03', close_price: '1200' },
-            { price_date: '2026-01-04', close_price: '102' },
-            { price_date: '2026-01-05', close_price: '103' },
+            { price_date: "2026-01-01", close_price: "100" },
+            { price_date: "2026-01-02", close_price: "101" },
+            { price_date: "2026-01-03", close_price: "1200" },
+            { price_date: "2026-01-04", close_price: "102" },
+            { price_date: "2026-01-05", close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({ rows: [] });
 
       const result = await sanitizePersistedKinesisHistory();
 
-      expect(result).toEqual({ processed: 1, updated: 1, correctedPoints: 1, failed: 0 });
+      expect(result).toEqual({
+        processed: 1,
+        updated: 1,
+        correctedPoints: 1,
+        failed: 0,
+      });
       expect(query).toHaveBeenCalledTimes(3);
     });
 
-    it('increments failed count when loading persisted points throws', async () => {
+    it("increments failed count when loading persisted points throws", async () => {
       query
         .mockResolvedValueOnce({ rows: [{ id: 42 }] })
-        .mockRejectedValueOnce(new Error('history load failed'));
+        .mockRejectedValueOnce(new Error("history load failed"));
 
       const result = await sanitizePersistedKinesisHistory();
 
-      expect(result).toEqual({ processed: 1, updated: 0, correctedPoints: 0, failed: 1 });
+      expect(result).toEqual({
+        processed: 1,
+        updated: 0,
+        correctedPoints: 0,
+        failed: 1,
+      });
     });
   });
 
-  describe('getHistoricalPriceAt', () => {
-    it('returns the last point at or before requested timestamp', () => {
+  describe("getHistoricalPriceAt", () => {
+    it("returns the last point at or before requested timestamp", () => {
       const points = [
         { timestampMs: 1000, price: 10 },
         { timestampMs: 2000, price: 20 },

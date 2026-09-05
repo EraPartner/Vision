@@ -277,7 +277,7 @@ async function stampBaselineWithQuery(migrationQuery) {
   }
 }
 
-export async function stampBaselineIfLegacy() {
+ async function stampBaselineIfLegacy() {
   return withMigrationQuery(stampBaselineWithQuery);
 }
 
@@ -425,3 +425,5 @@ export async function runMigrations(options = {}) {
   // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
   await analyzeAfterMigrations();
 }
+
+export { stampBaselineIfLegacy as __stampBaselineIfLegacy };

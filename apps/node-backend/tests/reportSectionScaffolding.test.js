@@ -11,9 +11,9 @@ import {
   sectionPage,
 } from "../src/services/reports/sectionHelpers.js";
 import {
-  buildPerformanceTrendData,
-  buildPortfolioExecutiveSummaryData,
-  normalizeBreakdownRow,
+  __buildPerformanceTrendData as buildPerformanceTrendData,
+  __buildPortfolioExecutiveSummaryData as buildPortfolioExecutiveSummaryData,
+  __normalizeBreakdownRow as normalizeBreakdownRow,
 } from "../src/services/reports/dataFetcherPortfolio.js";
 import { renderAssetClassDetail } from "../src/services/reports/sections/assetClassDetail.js";
 import { renderBankBalances } from "../src/services/reports/sections/bankBalances.js";
@@ -400,7 +400,7 @@ const POPULATED_BODY_MARKERS = {
   dividendIncome: "Total Dividends",
   taxExecutiveSummary: "Total Taxes Paid",
   taxTypeBreakdown: "TOB (Transaction Tax)",
-  taxByAssetClass: "<td>etf</td>",
+  taxByAssetClass: "<td>ETFs</td>",
   taxMonthlyTrend: "Jan'26",
   topInvestmentsByCost: "<td>Index Fund</td>",
   feeBreakdown: "Total fees:",
@@ -572,16 +572,14 @@ describe("report section scaffolding", () => {
 });
 
 describe("portfolio breakdown normalization", () => {
-  it("normalizes legacy aliases once while preserving canonical-field precedence", () => {
+  it("applies canonical defaults at the portfolio report boundary", () => {
     expect(
       normalizeBreakdownRow({
         assetClass: "etf",
-        asset_class: "stock",
         currentValue: 10,
-        current_value: 20,
-        total_invested: 7,
-        gain_loss: 3,
-        gain_loss_pct: 42,
+        totalInvested: 7,
+        gainLoss: 3,
+        gainLossPercent: 42,
       }),
     ).toMatchObject({
       assetClass: "etf",

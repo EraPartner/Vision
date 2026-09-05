@@ -368,12 +368,12 @@ function parseTransactionBody(schema, body) {
  * `?ids=5,` is 400.
  * @param {any} raw
  * @param {string} field
- * @returns {number[]|null} null when the param is absent/empty
+ * @returns {number[]|undefined} undefined when the param is absent/empty
  */
 function parseIdListQueryParam(raw, field) {
-  if (raw == null) return null;
+  if (raw == null) return undefined;
   const joined = String(raw);
-  if (joined === "") return null;
+  if (joined === "") return undefined;
   const result = validateIntArray(joined.split(","), field);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
@@ -416,7 +416,7 @@ function parseTransactionListQuery(query) {
         .split(",")
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean)
-    : null;
+    : undefined;
 
   // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
   // bulkSelection). amount_exact is shorthand for min == max.
@@ -435,7 +435,7 @@ function parseTransactionListQuery(query) {
     limit,
     offset,
     // Every scalar id here goes through assertOptionalId — absent/empty means
-    // "no filter" (null, 200), anything malformed is a 400. These were bare
+    // "no filter" (undefined, 200), anything malformed is a 400. These were bare
     // `x ? parseInt(x) : null`, which took the leading digits of anything:
     // ?category_id=12abc filtered by category 12, ?recipient_group_id=1e3 by
     // group 1, ?transaction_id=0 and ?recipient_id=-4 reached the SQL builder
@@ -448,7 +448,7 @@ function parseTransactionListQuery(query) {
     // account_id is the preferred account filter (ADR-088 — reads key on the
     // FK); bank_account stays as a substring escape hatch.
     accountId: assertOptionalId(account_id, "account_id"),
-    bankAccount: bank_account || null,
+    bankAccount: bank_account || undefined,
     categoryId: assertOptionalId(category_id, "category_id"),
     categoryIds: parsedCategoryIds,
     recipientId: assertOptionalId(recipient_id, "recipient_id"),
@@ -456,20 +456,20 @@ function parseTransactionListQuery(query) {
       recipient_group_id,
       "recipient_group_id",
     ),
-    recipientName: recipient_name || null,
-    search: search ? String(search).slice(0, 200) : null,
+    recipientName: recipient_name || undefined,
+    search: search ? String(search).slice(0, 200) : undefined,
     active: parseBooleanQueryParam(active, true),
-    sortBy: sort_by || null,
-    sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : null,
+    sortBy: sort_by || undefined,
+    sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : undefined,
     includeBalance: parseBooleanQueryParam(include_balance),
     transactionType:
       transaction_type === "income" || transaction_type === "expense"
         ? transaction_type
-        : null,
+        : undefined,
     amountMin,
     amountMax,
     amountSigned,
-    tagSlugs: parsedTagSlugs?.length ? parsedTagSlugs : null,
+    tagSlugs: parsedTagSlugs?.length ? parsedTagSlugs : undefined,
   };
 }
 
@@ -494,11 +494,10 @@ function buildExportFilters(query) {
   // EXPORT_MAX_LIST_SIZE still rejects rather than being sliced away unseen.
   // The cap itself is unchanged (it silently truncates an over-long list — a
   // separate, pre-existing narrowing, shared with bank_accounts below).
-  const accountIds =
-    parseIdListQueryParam(query.account_ids, "account_ids")?.slice(
-      0,
-      EXPORT_MAX_LIST_SIZE,
-    ) ?? null;
+  const accountIds = parseIdListQueryParam(
+    query.account_ids,
+    "account_ids",
+  )?.slice(0, EXPORT_MAX_LIST_SIZE);
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
@@ -506,16 +505,17 @@ function buildExportFilters(query) {
         .map((s) => s.trim())
         .filter(Boolean)
         .slice(0, EXPORT_MAX_LIST_SIZE)
-    : null;
+    : undefined;
 
   return {
     transactionId: opts.transactionId,
     startDate: opts.startDate,
     endDate: opts.endDate,
     accountId: opts.accountId,
-    accountIds: accountIds && accountIds.length > 0 ? accountIds : null,
+    accountIds: accountIds && accountIds.length > 0 ? accountIds : undefined,
     bankAccount: opts.bankAccount,
-    bankAccounts: bankAccounts && bankAccounts.length > 0 ? bankAccounts : null,
+    bankAccounts:
+      bankAccounts && bankAccounts.length > 0 ? bankAccounts : undefined,
     categoryId: opts.categoryId,
     categoryIds: opts.categoryIds,
     recipientId: opts.recipientId,

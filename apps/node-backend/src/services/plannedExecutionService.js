@@ -6,16 +6,16 @@
  * (plannedMatchService) so both compute the same updateFields, advance
  * recurring rows identically, and inherit tags the same way.
  *
- * Idempotency is delegated to plannedTransactionRepository.executeAndAdvance,
+ * Idempotency is delegated to plannedTransactionService.executeAndAdvance,
  * which guards on the UNIQUE (planned_transaction_id, executed_transaction_id)
  * index — re-running the same (planned, tx) pair is a no-op (duplicate: true).
  */
 
-import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
-import { calculateNextDate } from '../lib/calculations/recurrence.js';
-import { NotFoundError } from '../middleware/errorHandler.js';
-import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
-import { toWireDate } from '../lib/dateFormat.js';
+import plannedTransactionService from "./plannedTransactionService.js";
+import { calculateNextDate } from "../lib/calculations/recurrence.js";
+import { NotFoundError } from "../middleware/errorHandler.js";
+import { toAppDateString, todayAppDateString } from "../lib/timezone.js";
+import { toWireDate } from "../lib/dateFormat.js";
 
 /**
  * Execute a planned transaction against an existing real transaction.
@@ -25,13 +25,17 @@ import { toWireDate } from '../lib/dateFormat.js';
  *          planned-transaction row (raw, unformatted) and whether the execute
  *          was a duplicate replay.
  */
-export async function executePlanned({ id, executedTransactionId, executionDate }) {
-  const existing = await plannedTransactionRepository.getById(id);
+export async function executePlanned({
+  id,
+  executedTransactionId,
+  executionDate,
+}) {
+  const existing = await plannedTransactionService.getById(id);
   if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
   const execDate = executionDate || todayAppDateString();
   /**
-   * Sanitized update payload for `plannedTransactionRepository.executeAndAdvance`
+   * Sanitized update payload for `plannedTransactionService.executeAndAdvance`
    * — write-side values, NOT the read-side row shape: both dates go in as
    * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
    * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.js).
@@ -50,7 +54,8 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
     // at every layer, so bounded recurrences generated due bills forever.
     const priorExecutions = Number(existing.execution_count || 0);
     const reachedMaxOccurrences =
-      existing.max_occurrences != null && priorExecutions + 1 >= Number(existing.max_occurrences);
+      existing.max_occurrences != null &&
+      priorExecutions + 1 >= Number(existing.max_occurrences);
 
     const baseDate = new Date(existing.planned_date);
     const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
@@ -74,7 +79,7 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
   }
 
   const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
-  const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
+  const { duplicate } = await plannedTransactionService.executeAndAdvance(
     id,
     executedTransactionId,
     execDate,
@@ -82,7 +87,7 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
     tagIdsToInherit,
   );
 
-  const current = await plannedTransactionRepository.getById(id);
+  const current = await plannedTransactionService.getById(id);
   return { current, duplicate };
 }
 

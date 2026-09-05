@@ -10,8 +10,8 @@
 import { describe, it } from 'vitest';
 import { runGolden } from './runGolden.js';
 import {
-  createTransactionHash,
-  createManualTransactionHash,
+  __createTransactionHash as createTransactionHash,
+  __createManualTransactionHash as createManualTransactionHash,
 } from '../../src/services/deduplication.js';
 
 /**

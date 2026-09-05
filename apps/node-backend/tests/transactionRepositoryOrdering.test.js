@@ -54,6 +54,17 @@ describe("transaction list ORDER BY tiebreaker", () => {
     expect(sql).toMatch(/ORDER BY .+, t\.date DESC, t\.id DESC/);
   });
 
+  it.each(["getAll", "getAllWithCount"])(
+    "%s partitions requested balances by account and currency",
+    async (method) => {
+      await transactionRepository[method]({ includeBalance: true });
+      const sql = query.mock.calls[0][0];
+      expect(sql).toContain(
+        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance",
+      );
+    },
+  );
+
   it("getAllWithCount count query uses only the recipient join needed by filters", async () => {
     await transactionRepository.getAllWithCount({ recipientName: "shop" });
 
@@ -96,7 +107,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
     });
     const sql = query.mock.calls[0][0];
     expect(sql).toContain(
-      "SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance",
+      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance",
     );
   });
 });

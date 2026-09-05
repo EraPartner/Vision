@@ -9,11 +9,12 @@
  *    balances, FX-converted).
  */
 
-import { query } from '../database/connection.js';
-import { convertToCurrency } from './currency/currencyConversionService.js';
-import { getPortfolioSummary } from './portfolio/portfolioSummaryService.js';
-import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
-import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBalanceSql.js';
+import { query } from "../database/connection.js";
+import { convertToCurrency } from "./currency/currencyConversionService.js";
+import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.js";
+import { toDecimal, toNumber, roundToCents } from "../lib/money.js";
+import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
+import { todayAppDateString } from "../lib/timezone.js";
 
 // Roll the fine-grained `asset_class` taxonomy up into the coarse allocation
 // sleeves the classic-portfolio presets target (CLASSIC_PORTFOLIOS uses
@@ -22,10 +23,10 @@ import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBala
 // into `stocks` and precious metals into `gold`; unmapped classes (crypto,
 // real_estate, savings) keep their own key and simply carry a 0% target.
 const SLEEVE_ROLLUP = Object.freeze({
-  stock: 'stocks',
-  etf: 'stocks',
-  bond: 'bonds',
-  metals: 'gold',
+  stock: "stocks",
+  etf: "stocks",
+  bond: "bonds",
+  metals: "gold",
 });
 
 /**
@@ -44,19 +45,29 @@ const SLEEVE_ROLLUP = Object.freeze({
  * @param {{ currency?: string }} args
  * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, accountCurrency:string, balance:number, balanceCurrency:string }> }>}
  */
-export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
-  const target = (currency || 'EUR').toUpperCase();
+export async function assembleRebalanceInputs({ currency = "EUR" } = {}) {
+  const target = (currency || "EUR").toUpperCase();
 
   const { summaries } = await getPortfolioSummary(target);
   const actualValues = /** @type {Record<string, number>} */ ({});
   // getPortfolioSummary's JSDoc return type is deliberately loose
   // (`summaries: object[]`) since portfolioSummaryService.js is outside this
   // ratchet slice — narrow locally to the two fields this loop actually reads.
-  const typedSummaries = /** @type {Array<{ asset_class?: string, currentValue?: number }>} */ (summaries);
+  const typedSummaries =
+    /** @type {Array<{ asset_class?: string, currentValue?: number }>} */ (
+      summaries
+    );
   for (const s of typedSummaries) {
-    const assetClass = s.asset_class || 'other';
-    const key = /** @type {string} */ (SLEEVE_ROLLUP[/** @type {keyof typeof SLEEVE_ROLLUP} */ (assetClass)] ?? assetClass);
-    actualValues[key] = toNumber(roundToCents(toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue ?? 0))));
+    const assetClass = s.asset_class || "other";
+    const key = /** @type {string} */ (
+      SLEEVE_ROLLUP[/** @type {keyof typeof SLEEVE_ROLLUP} */ (assetClass)] ??
+        assetClass
+    );
+    actualValues[key] = toNumber(
+      roundToCents(
+        toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue ?? 0)),
+      ),
+    );
   }
 
   // Available cash = the deployable balance of every spendable, active account
@@ -78,24 +89,26 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   const { rows } = await query(
     `SELECT a.id, a.name, a.currency, bp.balance_parts
        FROM accounts a
-       ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
+       ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
       WHERE a.spendable = true AND a.is_active = true
       ORDER BY a.name`,
+    [todayAppDateString()],
   );
 
   const cashAccounts = [];
   let availableCash = toDecimal(0);
   for (const r of rows) {
-    const acctCurrency = (r.currency || 'EUR').toUpperCase();
+    const acctCurrency = (r.currency || "EUR").toUpperCase();
     /** @type {Array<{ currency: string, balance: string }>} */
     const partitions = r.balance_parts ?? [];
     let accountTotal = toDecimal(0);
     for (const part of partitions) {
-      const partCurrency = (part.currency || 'EUR').toUpperCase();
+      const partCurrency = (part.currency || "EUR").toUpperCase();
       const native = toNumber(toDecimal(part.balance));
-      const converted = partCurrency === target
-        ? native
-        : await convertToCurrency(native, partCurrency, target);
+      const converted =
+        partCurrency === target
+          ? native
+          : await convertToCurrency(native, partCurrency, target);
       accountTotal = accountTotal.plus(toDecimal(converted));
     }
     availableCash = availableCash.plus(accountTotal);

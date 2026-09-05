@@ -10,14 +10,23 @@
  * target currency to eliminate frontend FX drift across pages.
  */
 
-import { query } from '../../database/connection.js';
-import { convertToCurrency } from '../currency/currencyConversionService.js';
-import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
-import { buildInvestmentSummaryCorePartitioned } from '@vision/shared-utils/portfolio';
-import { settingsRepository } from '../../repositories/settingsRepository.js';
-import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
-import { todayAppDateString } from '../../lib/timezone.js';
-import { toDecimal, addAll, multiply, divide, roundMoney } from '../../lib/money.js';
+import { query } from "../../database/connection.js";
+import { convertToCurrency } from "../currency/currencyConversionService.js";
+import {
+  buildHistoricalRateIndex,
+  findRateOnOrBeforeInIndex,
+} from "../currency/rateFetcher.js";
+import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
+import { settingsRepository } from "../../repositories/settingsRepository.js";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
+import { todayAppDateString } from "../../lib/timezone.js";
+import {
+  toDecimal,
+  addAll,
+  multiply,
+  divide,
+  roundMoney,
+} from "../../lib/money.js";
 
 /** @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput */
 /** @typedef {import('decimal.js').default} Decimal */
@@ -27,7 +36,7 @@ const round2 = (value) => roundMoney(value, 2);
 /** @param {DecimalInput} value */
 const round6 = (value) => roundMoney(value, 6);
 
-const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
+const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 /** @typedef {import('@vision/shared-utils/portfolio').CostBasisMethod} CostBasisMethod */
 
@@ -63,10 +72,12 @@ const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
  */
 async function resolveCostBasisMethod() {
   try {
-    const value = await settingsRepository.get('cost_basis_method');
-    return COST_BASIS_METHODS.has(value) ? /** @type {CostBasisMethod} */ (value) : 'weighted_avg';
+    const value = await settingsRepository.get("cost_basis_method");
+    return COST_BASIS_METHODS.has(value)
+      ? /** @type {CostBasisMethod} */ (value)
+      : "weighted_avg";
   } catch {
-    return 'weighted_avg';
+    return "weighted_avg";
   }
 }
 
@@ -83,14 +94,15 @@ async function resolveCostBasisMethod() {
  *   byAccount: ReturnType<typeof aggregateByAccount>,
  * }>}
  */
-export async function getPortfolioSummary(targetCurrency = 'EUR') {
-  const target = (targetCurrency || 'EUR').toUpperCase();
+export async function getPortfolioSummary(targetCurrency = "EUR") {
+  const target = (targetCurrency || "EUR").toUpperCase();
 
   const costBasisMethod = await resolveCostBasisMethod();
   const todayYmd = todayAppDateString();
 
   const [investmentsResult, txnRows] = await Promise.all([
-    /** @type {Promise<{ rows: RawInvestmentRow[] }>} */ (query(`
+    /** @type {Promise<{ rows: RawInvestmentRow[] }>} */ (
+      query(`
       SELECT i.*,
              COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price,
@@ -98,9 +110,12 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
       FROM investments i
       WHERE i.is_active = true
       ORDER BY i.name
-    `)),
+    `)
+    ),
     /** @type {Promise<AnnotatedTxRow[]>} */ (
-      portfolioTransactionRepository.getRowsForPortfolioMath({ activeInvestmentsOnly: true })
+      portfolioTransactionRepository.getRowsForPortfolioMath({
+        activeInvestmentsOnly: true,
+      })
     ),
   ]);
 
@@ -117,8 +132,10 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   // currencies (per-txn fallback) are needed.
   const distinctCurrencies = [
     ...new Set([
-      ...investmentsResult.rows.map((inv) => (inv.currency || 'EUR').toUpperCase()),
-      ...txnRows.map((txn) => (txn.currency || 'EUR').toUpperCase()),
+      ...investmentsResult.rows.map((inv) =>
+        (inv.currency || "EUR").toUpperCase(),
+      ),
+      ...txnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
     ]),
   ];
   const multiplierByCurrency = new Map();
@@ -126,27 +143,43 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
     distinctCurrencies.map(async (cur) => {
       multiplierByCurrency.set(
         cur,
-        cur === target ? 1 : await convertToCurrency(1, cur, target)
+        cur === target ? 1 : await convertToCurrency(1, cur, target),
       );
-    })
+    }),
   );
 
   // Historical rates for every involved currency (plus the target), so each
   // transaction converts at the rate of ITS date — invested capital must not
   // move when today's rate does (the FX-attribution contract).
-  const historicalIndex = await loadHistoricalRateIndex(distinctCurrencies, target);
-  annotateTransactionFxMultipliers(txnRows, target, historicalIndex, multiplierByCurrency);
+  const historicalIndex = await loadHistoricalRateIndex(
+    distinctCurrencies,
+    target,
+  );
+  annotateTransactionFxMultipliers(
+    txnRows,
+    target,
+    historicalIndex,
+    multiplierByCurrency,
+  );
 
   const perInvestment = investmentsResult.rows.map((inv) =>
-    buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency, {
-      costBasisMethod,
-      todayYmd,
-    })
+    buildInvestmentSummary(
+      inv,
+      txnsByInvestment.get(Number(inv.id)) ?? [],
+      target,
+      multiplierByCurrency,
+      {
+        costBasisMethod,
+        todayYmd,
+      },
+    ),
   );
   const summaries = perInvestment.map((r) => r.summary);
 
   const totals = aggregateTotals(summaries);
-  const byAccount = aggregateByAccount(perInvestment.flatMap((r) => r.accountContributions));
+  const byAccount = aggregateByAccount(
+    perInvestment.flatMap((r) => r.accountContributions),
+  );
 
   return {
     currency: target,
@@ -163,6 +196,8 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
  *
  * @typedef {{
  *   account_id: number|null,
+ *   assignment: "account"|"unassigned",
+ *   oversold: boolean,
  *   currentValue: Decimal,
  *   totalInvested: Decimal,
  *   realizedGain: Decimal,
@@ -189,6 +224,8 @@ function aggregateByAccount(contributions) {
   for (const c of contributions) {
     const cur = acc.get(c.account_id) ?? {
       account_id: c.account_id,
+      assignment: c.account_id == null ? "unassigned" : "account",
+      oversold: false,
       currentValue: toDecimal(0),
       totalInvested: toDecimal(0),
       realizedGain: toDecimal(0),
@@ -200,11 +237,14 @@ function aggregateByAccount(contributions) {
     cur.realizedGain = cur.realizedGain.plus(c.realizedGain);
     cur.unrealizedGain = cur.unrealizedGain.plus(c.unrealizedGain);
     cur.gainLoss = cur.gainLoss.plus(c.gainLoss);
+    cur.oversold ||= c.oversold;
     acc.set(c.account_id, cur);
   }
   return [...acc.values()]
     .map((a) => ({
       account_id: a.account_id,
+      assignment: a.assignment,
+      oversold: a.oversold,
       currentValue: round2(a.currentValue),
       totalInvested: round2(a.totalInvested),
       realizedGain: round2(a.realizedGain),
@@ -223,7 +263,9 @@ function aggregateByAccount(contributions) {
  * @returns {Promise<import('../../types/rows.js').HistoricalRateIndex>}
  */
 async function loadHistoricalRateIndex(currencies, target) {
-  const relevant = [...new Set([...currencies, target])].filter((c) => c && c !== 'EUR');
+  const relevant = [...new Set([...currencies, target])].filter(
+    (c) => c && c !== "EUR",
+  );
   if (relevant.length === 0) return new Map();
   /** @type {{ rows: Array<Pick<import('../../types/rows.js').ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }> }} */
   const result = await query(
@@ -231,7 +273,7 @@ async function loadHistoricalRateIndex(currencies, target) {
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])
      ORDER BY currency_code ASC, rate_date ASC`,
-    [relevant]
+    [relevant],
   );
   return buildHistoricalRateIndex(result.rows || []);
 }
@@ -247,21 +289,28 @@ async function loadHistoricalRateIndex(currencies, target) {
  * @param {import('../../types/rows.js').HistoricalRateIndex} historicalIndex
  * @param {Map<string, number>} multiplierByCurrency
  */
-function annotateTransactionFxMultipliers(txns, target, historicalIndex, multiplierByCurrency) {
+function annotateTransactionFxMultipliers(
+  txns,
+  target,
+  historicalIndex,
+  multiplierByCurrency,
+) {
   for (const txn of txns) {
-    const txnCurrency = (txn.currency || 'EUR').toUpperCase();
+    const txnCurrency = (txn.currency || "EUR").toUpperCase();
     if (txnCurrency === target) {
       txn.fxMultiplier = 1;
       continue;
     }
 
     const stampedRate = Number(txn.fx_rate_to_eur);
-    const rateFrom = Number.isFinite(stampedRate) && stampedRate > 0
-      ? stampedRate
-      : findRateOnOrBeforeInIndex(historicalIndex, txnCurrency, txn.date);
-    const rateTo = target === 'EUR'
-      ? 1
-      : findRateOnOrBeforeInIndex(historicalIndex, target, txn.date);
+    const rateFrom =
+      Number.isFinite(stampedRate) && stampedRate > 0
+        ? stampedRate
+        : findRateOnOrBeforeInIndex(historicalIndex, txnCurrency, txn.date);
+    const rateTo =
+      target === "EUR"
+        ? 1
+        : findRateOnOrBeforeInIndex(historicalIndex, target, txn.date);
 
     if (rateFrom !== undefined && rateTo !== undefined && rateTo > 0) {
       txn.fxMultiplier = rateFrom / rateTo;
@@ -299,14 +348,22 @@ function annotateTransactionFxMultipliers(txns, target, historicalIndex, multipl
  * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
  * @returns {{ summary: Record<string, any>, accountContributions: AccountContribution[] }}
  */
-function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency, opts) {
-  const invCurrency = (inv.currency || 'EUR').toUpperCase();
+function buildInvestmentSummary(
+  inv,
+  txns,
+  targetCurrency,
+  multiplierByCurrency,
+  opts,
+) {
+  const invCurrency = (inv.currency || "EUR").toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
 
-  const { core, partitions, fullyAssigned } = buildInvestmentSummaryCorePartitioned(
-    inv, txns, { ...opts, fxMultiplierNow: multiplier },
-  );
+  const { core, partitions, fullyAssigned } =
+    buildInvestmentSummaryCorePartitioned(inv, txns, {
+      ...opts,
+      fxMultiplierNow: multiplier,
+    });
   const cv = core.converted;
   /** @param {DecimalInput} v */
   const conv = (v) => multiply(v, multiplier);
@@ -337,6 +394,10 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
   // the summary itself emits, so Σ contributions ≡ the summary's own fields.
   const accountContributions = partitions.map((p) => ({
     account_id: p.accountId,
+    assignment: /** @type {"account"|"unassigned"} */ (
+      p.accountId == null ? "unassigned" : "account"
+    ),
+    oversold: p.core.oversold,
     currentValue: p.core.converted.currentValue,
     totalInvested: p.core.converted.totalBuyCost,
     realizedGain: p.core.converted.realizedGain,
@@ -417,6 +478,7 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
     // unassigned lots (its per-account figures then live entirely on the
     // byAccount null row — read surfaces show an "assign lots" nudge instead).
     fullyAssigned,
+    oversold: core.oversold,
   };
 
   return { summary, accountContributions };
@@ -474,7 +536,7 @@ function aggregateTotals(summaries) {
  * Backward-compat narrow shape for /portfolio-performance.breakdownSummary.
  * Delegates to the same compute path so values can never diverge.
  */
-export async function getBreakdownSummary(targetCurrency = 'EUR') {
+export async function getBreakdownSummary(targetCurrency = "EUR") {
   const { summaries } = await getPortfolioSummary(targetCurrency);
   return summaries.map((s) => ({
     id: s.id,

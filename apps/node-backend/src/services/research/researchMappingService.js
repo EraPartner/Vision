@@ -42,7 +42,7 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
  * @param {(provider: string) => unknown} [deps.recordSuccess]
  * @param {(provider: string, error: unknown) => unknown} [deps.recordError]
  */
-export function createResearchMappingService({
+ function createResearchMappingService({
   repo = mapRepo,
   investments = investmentRepo,
   adapters = ADAPTERS,
@@ -242,7 +242,7 @@ function fromStore(provider, row, status) {
  * @param {Array<{ provider: string, currency?: string, price?: number, error?: string, skipped?: string }>} quotes
  * @returns {object[]} discrepancies
  */
-export function analyzeQuotes(quotes) {
+ function analyzeQuotes(quotes) {
   const discrepancies = [];
   const priced = quotes.filter((q) => Number.isFinite(q.price));
 
@@ -268,3 +268,5 @@ export function analyzeQuotes(quotes) {
 
 /** Process-wide singleton used by the research routes. */
 export const researchMappingService = createResearchMappingService();
+
+export { createResearchMappingService as __createResearchMappingService, analyzeQuotes as __analyzeQuotes };

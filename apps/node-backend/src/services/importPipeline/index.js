@@ -67,7 +67,7 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * @param {{ batchId: ImportBatchId, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: ImportProgressCallback }} args
  * @returns {Promise<{ batchId: ImportBatchId, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object, validateErrors: number }>}
  */
-export async function prepareImport({
+async function prepareImport({
   batchId,
   filePath,
   adapterName,
@@ -275,3 +275,5 @@ export async function runImportPipeline({
     throw err;
   }
 }
+
+export { prepareImport };

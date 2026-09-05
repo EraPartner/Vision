@@ -3,10 +3,10 @@
  * Not intended for direct use outside this folder.
  */
 
-import { query } from '../database/connection.js';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { toDecimal, toNumber, roundMoney } from '../lib/money.js';
-import settingsRepository from './settingsRepository.js';
+import { query } from "../database/connection.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { toDecimal, toNumber, roundMoney } from "../lib/money.js";
+import settingsRepository from "./settingsRepository.js";
 
 /**
  * Whether internal transfers (ADR-083) should be counted in cash-flow
@@ -15,37 +15,30 @@ import settingsRepository from './settingsRepository.js';
  * transfer-excluding materialized views and use the base-table path.
  */
 export async function getIncludeTransfers() {
-  return (await settingsRepository.get('includeTransfers')) === true;
+  return (await settingsRepository.get("includeTransfers")) === true;
 }
 
 // ── Materialized-view cache ────────────────────────────────────────────────
 // Keyed by view name. There is no production caller that clears it after an
-// import: negative entries self-heal via the short TTL below (a freshly created
-// view is picked up within MV_NEGATIVE_CACHE_TTL_MS), and positive entries are
-// stable schema facts. clearMvCache() exists only as a test-reset seam.
-// Stores entries as { value: boolean, expires: number | null } so that a
-// negative result (view missing or empty) does not force a DB round-trip on
-// every request — without it, a fresh DB or a missing MV produces N hits
-// per second under load. Positive entries never expire (the view existing
-// is a stable schema fact); negative entries expire after a short TTL so
-// that a freshly created view is picked up quickly.
+// import: entries self-heal via the short TTL below. A freshly created view is
+// picked up promptly, while a view dropped during the process lifetime stops
+// being treated as available. clearMvCache() exists only as a test-reset seam.
+// Stores entries as { value: boolean, expires: number }; the TTL avoids a DB
+// round-trip on every request without making either result permanent.
 const mvCache = new Map();
-const MV_NEGATIVE_CACHE_TTL_MS = 60_000;
+const MV_CACHE_TTL_MS = 60_000;
 
 // Allowlist of materialized-view names that may be passed to mvAvailable.
 // The function builds raw SQL with the name interpolated, which is safe
 // today because every caller passes a literal — but pinning the set here
 // keeps it that way and makes a future caller adding a user-controlled
 // name fail loudly instead of opening an injection vector.
-const ALLOWED_MV_NAMES = new Set([
-  'mv_category_totals',
-  'mv_monthly_summary',
-]);
+const ALLOWED_MV_NAMES = new Set(["mv_category_totals", "mv_monthly_summary"]);
 
 /**
  * Check if a materialized view exists and has rows.
- * Positive results cached in-process indefinitely; negative results cached
- * for {@link MV_NEGATIVE_CACHE_TTL_MS} so we recover quickly after MV creation.
+ * Results are cached for {@link MV_CACHE_TTL_MS}, then re-probed so runtime
+ * creation and removal both self-heal without a process restart.
  *
  * @param {string} viewName
  * @returns {Promise<boolean>}
@@ -57,7 +50,7 @@ export async function mvAvailable(viewName) {
   }
   const cached = mvCache.get(viewName);
   if (cached !== undefined) {
-    if (cached.expires === null || cached.expires > Date.now()) {
+    if (cached.expires > Date.now()) {
       return cached.value;
     }
     mvCache.delete(viewName);
@@ -65,23 +58,24 @@ export async function mvAvailable(viewName) {
   try {
     const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
     const available = r.rows.length > 0;
-    if (available) {
-      mvCache.set(viewName, { value: true, expires: null });
-    } else {
-      mvCache.set(viewName, { value: false, expires: Date.now() + MV_NEGATIVE_CACHE_TTL_MS });
-    }
+    mvCache.set(viewName, {
+      value: available,
+      expires: Date.now() + MV_CACHE_TTL_MS,
+    });
     return available;
   } catch {
-    mvCache.set(viewName, { value: false, expires: Date.now() + MV_NEGATIVE_CACHE_TTL_MS });
+    mvCache.set(viewName, {
+      value: false,
+      expires: Date.now() + MV_CACHE_TTL_MS,
+    });
     return false;
   }
 }
 
 /**
  * Clear the materialized-view availability cache. Test-reset seam only — there
- * is no production caller (negative entries self-heal via the negative TTL, and
- * positive entries reflect a stable schema fact). Kept for tests that need a
- * deterministic starting cache state.
+ * is no production caller because entries self-heal through the bounded TTL.
+ * Kept for tests that need a deterministic starting cache state.
  */
 export function clearMvCache() {
   mvCache.clear();
@@ -89,9 +83,14 @@ export function clearMvCache() {
 
 // Compatibility re-exports for callers outside the info-repository family.
 // Internal consumers import these helpers from their canonical owners.
-export { roundMoney as roundToCents } from '../lib/money.js';
-export { formatDateToYmd, toWireDate } from '../lib/dateFormat.js';
-export { formatYearMonthKey, addDaysUtc, getDayKeyUtc, extractYearMonth } from '../lib/dateKeys.js';
+export { roundMoney as roundToCents } from "../lib/money.js";
+export { formatDateToYmd, toWireDate } from "../lib/dateFormat.js";
+export {
+  formatYearMonthKey,
+  addDaysUtc,
+  getDayKeyUtc,
+  extractYearMonth,
+} from "../lib/dateKeys.js";
 
 // ── Aggregation helpers ────────────────────────────────────────────────────
 
@@ -106,7 +105,10 @@ export { formatYearMonthKey, addDaysUtc, getDayKeyUtc, extractYearMonth } from '
  * @param {{ idField: string, labelField: string, idKey: string, labelKey: string }} shape
  * @returns {Record<string, Array<Record<string, any>>>}
  */
-export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, labelKey }) {
+export function buildPeriodPivot(
+  convertedRows,
+  { idField, labelField, idKey, labelKey },
+) {
   /** @type {Record<string, Record<string, Record<string, any>>>} */
   const periodMap = {};
   for (const row of convertedRows) {
@@ -117,7 +119,12 @@ export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, la
 
     if (!periodMap[period]) periodMap[period] = {};
     if (!periodMap[period][id]) {
-      periodMap[period][id] = { [idKey]: id, [labelKey]: row[labelField], total: 0, transactionCount: 0 };
+      periodMap[period][id] = {
+        [idKey]: id,
+        [labelKey]: row[labelField],
+        total: 0,
+        transactionCount: 0,
+      };
     }
     periodMap[period][id].total += eur;
     periodMap[period][id].transactionCount += cnt;
@@ -141,9 +148,24 @@ export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, la
  */
 export function buildMonthlySummary(months) {
   return {
-    total_spending: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_spending)), toDecimal(0))),
-    total_income: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_income)), toDecimal(0))),
-    net_amount: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.net_amount)), toDecimal(0))),
+    total_spending: toNumber(
+      months.reduce(
+        (sum, m) => sum.plus(toDecimal(m.total_spending)),
+        toDecimal(0),
+      ),
+    ),
+    total_income: toNumber(
+      months.reduce(
+        (sum, m) => sum.plus(toDecimal(m.total_income)),
+        toDecimal(0),
+      ),
+    ),
+    net_amount: toNumber(
+      months.reduce(
+        (sum, m) => sum.plus(toDecimal(m.net_amount)),
+        toDecimal(0),
+      ),
+    ),
     // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     transaction_count: months.reduce((sum, m) => sum + m.transaction_count, 0),
     period_start: months[0]?.period_start,
@@ -157,8 +179,12 @@ export function buildMonthlySummary(months) {
  * @param {boolean} [fallbackToZero]
  * @returns {Array<Record<string, any>>} rows with a numeric `amount` merged in
  */
-export function mapRowsForAmountConversion(rows, amountField = 'amount', fallbackToZero = true) {
-  return rows.map(row => ({
+export function mapRowsForAmountConversion(
+  rows,
+  amountField = "amount",
+  fallbackToZero = true,
+) {
+  return rows.map((row) => ({
     ...row,
     amount: fallbackToZero
       ? toNumber(toDecimal(row[amountField] ?? 0))
@@ -173,7 +199,7 @@ export function mapRowsForAmountConversion(rows, amountField = 'amount', fallbac
  * @returns {string}
  */
 function getCategoryKey(categoryId) {
-  return categoryId === -1 ? 'null' : String(categoryId);
+  return categoryId === -1 ? "null" : String(categoryId);
 }
 
 /**
@@ -226,9 +252,16 @@ export function buildCategoryFromConvertedRows(convertedRows) {
  * @param {string} [dateField] Date field used for the historical rate lookup.
  * @returns {Promise<Array<Record<string, any>>>} rows with `amount_eur` merged in
  */
-export async function convertRowsWithHistoricalRateFallback(rows, targetCurrency, dateField = 'date') {
+export async function convertRowsWithHistoricalRateFallback(
+  rows,
+  targetCurrency,
+  dateField = "date",
+) {
   try {
-    return await convertRowsToEur(rows, targetCurrency, { useHistoricalRatesByDate: true, dateField });
+    return await convertRowsToEur(rows, targetCurrency, {
+      useHistoricalRatesByDate: true,
+      dateField,
+    });
   } catch {
     return await convertRowsToEur(rows, targetCurrency);
   }
@@ -247,22 +280,29 @@ export async function convertRowsWithHistoricalRateFallback(rows, targetCurrency
  * @param {string} [dateField='date'] - Date field used for historical rate lookup
  * @returns {Promise<Array<Array<Record<string, any>>>>} Converted groups in the same order as input
  */
-export async function batchConvertGroupsWithHistoricalRateFallback(groups, targetCurrency, dateField = 'date') {
-  const TAG = '_batchGroup';
+export async function batchConvertGroupsWithHistoricalRateFallback(
+  groups,
+  targetCurrency,
+  dateField = "date",
+) {
+  const TAG = "_batchGroup";
   const tagged = groups.flatMap((group, groupIdx) =>
-    group.map(row => ({ ...row, [TAG]: groupIdx }))
+    group.map((row) => ({ ...row, [TAG]: groupIdx })),
   );
 
   let converted;
   try {
-    converted = await convertRowsToEur(tagged, targetCurrency, { useHistoricalRatesByDate: true, dateField });
+    converted = await convertRowsToEur(tagged, targetCurrency, {
+      useHistoricalRatesByDate: true,
+      dateField,
+    });
   } catch {
     converted = await convertRowsToEur(tagged, targetCurrency);
   }
 
   return groups.map((_, i) =>
     converted
-      .filter(r => r[TAG] === i)
-      .map(({ [TAG]: _tag, ...rest }) => rest)
+      .filter((r) => r[TAG] === i)
+      .map(({ [TAG]: _tag, ...rest }) => rest),
   );
 }

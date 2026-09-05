@@ -54,7 +54,7 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
 import { closePool } from "../src/database/connection.js";
 import {
-  buildIdListWhere,
+  __buildIdListWhere as buildIdListWhere,
   streamCsvExport,
   streamNdjsonExport,
 } from "../src/services/transactionExport.js";
@@ -63,11 +63,7 @@ import plannedTransactionRepository from "../src/repositories/plannedTransaction
 import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.js";
 import { todayAppDateString } from "../src/lib/timezone.js";
 
-const MANAGED_VIEWS = [
-  "mv_monthly_summary",
-  "mv_category_totals",
-  "mv_cashflow_daily",
-];
+const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
 /**
  * The APP_TIMEZONE calendar day as a SQL date literal, resolved at call time —
@@ -558,9 +554,7 @@ describe.skipIf(!hasTestDatabase())(
         __clearRecurringCacheForTests();
 
         const { patterns } = await detectRecurringPatterns();
-        const alias = patterns.find(
-          (p) => p.recipientId === rec.electrabelAlias,
-        );
+        const alias = patterns.find((p) => p.recipientId === rec.electrabel);
         expect(alias).toBeDefined();
         expect(alias.detectedPattern).toBe("monthly");
         expect(alias.occurrences).toBe(3);
@@ -582,9 +576,7 @@ describe.skipIf(!hasTestDatabase())(
         __clearRecurringCacheForTests();
 
         const { patterns } = await detectRecurringPatterns();
-        const alias = patterns.find(
-          (p) => p.recipientId === rec.electrabelAlias,
-        );
+        const alias = patterns.find((p) => p.recipientId === rec.electrabel);
         expect(alias).toBeDefined();
         // Pre-fix: categoryId was the raw (null) t.category_id while categoryName
         // was already resolved through the 3-level COALESCE — so a

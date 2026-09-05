@@ -9,8 +9,8 @@ import {
   cleanKbcRecipientName,
   normalizeToUppercase,
   normalizeForMatching,
-  formatAmountString,
-  extractCurrencyCode,
+  __formatAmountString as formatAmountString,
+  __extractCurrencyCode as extractCurrencyCode,
 } from '../src/lib/textNormalization.js';
 
 describe('TextNormalizationService', () => {

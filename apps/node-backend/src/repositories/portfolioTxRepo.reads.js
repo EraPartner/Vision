@@ -2,24 +2,77 @@
  * Portfolio transaction repo — read operations (list, count, getById, summary).
  */
 
-import { query } from '../database/connection.js';
-import { coerceNumericFields } from '../lib/money.js';
-import { toYmd } from '../lib/dateFormat.js';
-import { validateId } from '../lib/validation.js';
-import { buildListWhereClause } from './portfolioTxRepo.common.js';
+import { query } from "../database/connection.js";
+import { coerceNumericFields } from "../lib/money.js";
+import { toYmd } from "../lib/dateFormat.js";
+import { validateId } from "../lib/validation.js";
+import { buildListWhereClause } from "./portfolioTxRepo.common.js";
+import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.js";
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
 /** @typedef {import('../types/rows.js').PortfolioTransactionSummaryRow} PortfolioTransactionSummaryRow */
 
+/** @param {number} investmentId @returns {Promise<string|undefined>} */
+export async function getAssetClassByInvestmentId(investmentId) {
+  const result = await query(
+    "SELECT asset_class FROM investments WHERE id = $1",
+    [investmentId],
+  );
+  return result.rows[0]?.asset_class;
+}
+
+/** @param {number} investmentId */
+export async function getUnitEventsForInvestment(investmentId) {
+  const sql = `
+    SELECT id, type, to_char(date, 'YYYY-MM-DD') AS date,
+           COALESCE(units, 0) AS units, account_id
+    FROM portfolio_transactions
+    WHERE investment_id = $1
+    ORDER BY date ASC, id ASC
+  `;
+  return (await query(sql, [investmentId])).rows;
+}
+
+/** @param {number|string} batchId */
+export async function getUnitEventIdsForImportBatch(batchId) {
+  if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
+  const result = await query(
+    `SELECT id, investment_id
+     FROM portfolio_transactions
+     WHERE import_batch_id = $1
+       AND type = ANY($2::portfolio_txn_type[])
+     ORDER BY investment_id ASC, id ASC`,
+    [batchId, ["buy", "gift", "sell", "split"]],
+  );
+  return result.rows;
+}
+
+/** @param {number} accountId */
+export async function getAccountLabel(accountId) {
+  const result = await query(
+    "SELECT display_name, name FROM accounts WHERE id = $1",
+    [accountId],
+  );
+  const row = result.rows[0];
+  return row?.display_name || row?.name || `account #${accountId}`;
+}
+
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so portfolio transaction rows match their `number` API/TS types.
-const PORTFOLIO_TX_NUMERIC_FIELDS = ['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur'];
+const PORTFOLIO_TX_NUMERIC_FIELDS = [
+  "amount",
+  "units",
+  "price_per_unit",
+  "fees",
+  "taxes",
+  "fx_rate_to_eur",
+];
 // DATE columns node-postgres returns as local-midnight Date objects; emitted
 // raw they JSON-serialize to an ISO timestamp that is the PREVIOUS day east of
 // UTC. The frontend then T-splits that shifted value (edit dialogs wrote the
 // date back one day earlier per save) or NaNs on it (parseLocalDateFromYmd).
 // Emit calendar-day strings — the API/TS contract is `string` here.
-const PORTFOLIO_TX_DATE_FIELDS = ['date', 'recurrence_end_date'];
+const PORTFOLIO_TX_DATE_FIELDS = ["date", "recurrence_end_date"];
 /**
  * Coerce a `portfolio_transactions` row to its emitted shape: NUMERIC columns
  * become numbers and both DATE columns 'YYYY-MM-DD' strings.
@@ -39,8 +92,16 @@ export const mapPortfolioTxRow = (row) => {
  * @param {{ investmentId?: number|null, type?: string|null, limit?: number, offset?: number }} [filters]
  * @returns {Promise<PortfolioTransactionRow[]>}
  */
-export async function getAll({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
-  const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
+export async function getAll({
+  investmentId = null,
+  type = null,
+  limit = 200,
+  offset = 0,
+} = {}) {
+  const { where, params, nextParam } = buildListWhereClause({
+    investmentId,
+    type,
+  });
   let sql = `SELECT * FROM portfolio_transactions ${where}`;
   let idx = nextParam;
 
@@ -55,22 +116,34 @@ export async function getAll({ investmentId = null, type = null, limit = 200, of
  * @param {{ investmentId?: number|null, type?: string|null, limit?: number, offset?: number }} [filters]
  * @returns {Promise<{ rows: PortfolioTransactionRow[], total: number }>}
  */
-export async function getAllWithCount({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
-  const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
+export async function getAllWithCount({
+  investmentId = null,
+  type = null,
+  limit = 200,
+  offset = 0,
+} = {}) {
+  const { where, params, nextParam } = buildListWhereClause({
+    investmentId,
+    type,
+  });
   let idx = nextParam;
 
   const sql = `
     SELECT pt.*, COUNT(*) OVER () AS total_count
     FROM portfolio_transactions pt
-    ${where.replace(/\binvestment_id\b/g, 'pt.investment_id').replace(/\btype\b/g, 'pt.type')}
+    ${where.replace(/\binvestment_id\b/g, "pt.investment_id").replace(/\btype\b/g, "pt.type")}
     ORDER BY pt.date DESC, pt.id DESC
     LIMIT $${idx} OFFSET $${idx + 1}
   `;
 
   const queryParams = [...params, limit, offset];
   const result = await query(sql, queryParams);
-  const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-  const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => mapPortfolioTxRow(row));
+  const total =
+    result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+  const rows = result.rows.map(
+    (/** @type {any} */ { total_count: _total_count, ...row }) =>
+      mapPortfolioTxRow(row),
+  );
   return { rows, total };
 }
 
@@ -95,7 +168,7 @@ function normalizeInvestmentIds(investmentIds) {
   /** @type {number[]} */
   const ids = [];
   for (const id of investmentIds || []) {
-    const result = validateId(id, 'investment_id');
+    const result = validateId(id, "investment_id");
     if (result.valid) ids.push(result.value);
   }
   return Array.from(new Set(ids));
@@ -122,9 +195,22 @@ export async function getAllByInvestmentIds({
 
   if (normalizedIds.length === 0) return [];
 
-  const safePerInvestmentLimit = Math.max(1, Math.min(Number.parseInt(String(perInvestmentLimit), 10) || 1000, 5000));
+  const safePerInvestmentLimit = Math.max(
+    1,
+    Math.min(Number.parseInt(String(perInvestmentLimit), 10) || 1000, 5000),
+  );
   const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
-  const safeLimit = limit == null ? null : Math.max(1, Math.min(Number.parseInt(String(limit), 10) || normalizedIds.length * safePerInvestmentLimit, 200000));
+  const safeLimit =
+    limit == null
+      ? null
+      : Math.max(
+          1,
+          Math.min(
+            Number.parseInt(String(limit), 10) ||
+              normalizedIds.length * safePerInvestmentLimit,
+            200000,
+          ),
+        );
 
   let sql = `
     WITH ranked AS (
@@ -172,7 +258,11 @@ export async function getAllByInvestmentIds({
  * @param {{ investmentId?: number|null, investmentIds?: Array<number|string>|null, type?: string|null }} [filters]
  * @returns {Promise<number>}
  */
-export async function getCount({ investmentId = null, investmentIds = null, type = null } = {}) {
+export async function getCount({
+  investmentId = null,
+  investmentIds = null,
+  type = null,
+} = {}) {
   let sql = `SELECT count(*) FROM portfolio_transactions WHERE 1=1`;
   /** @type {any[]} */
   const params = [];
@@ -188,7 +278,10 @@ export async function getCount({ investmentId = null, investmentIds = null, type
       params.push(normalizedIds);
     }
   }
-  if (type) { sql += ` AND type = $${idx}`; params.push(type); }
+  if (type) {
+    sql += ` AND type = $${idx}`;
+    params.push(type);
+  }
 
   const result = await query(sql, params);
   return parseInt(result.rows[0].count, 10);
@@ -199,7 +292,10 @@ export async function getCount({ investmentId = null, investmentIds = null, type
  * @returns {Promise<PortfolioTransactionRow|null>}
  */
 export async function getById(id) {
-  const result = await query('SELECT * FROM portfolio_transactions WHERE id = $1', [id]);
+  const result = await query(
+    "SELECT * FROM portfolio_transactions WHERE id = $1",
+    [id],
+  );
   return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
 
@@ -236,7 +332,7 @@ export async function getRowsForPortfolioMath({
   const conditions = [];
   const params = [];
 
-  if (activeInvestmentsOnly) conditions.push('i.is_active = true');
+  if (activeInvestmentsOnly) conditions.push("i.is_active = true");
   if (dateFrom !== undefined) {
     params.push(dateFrom);
     conditions.push(`pt.date >= $${params.length}::date`);
@@ -246,12 +342,14 @@ export async function getRowsForPortfolioMath({
     conditions.push(`pt.date <= $${params.length}::date`);
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = sellsLastWithinDay
     ? `ORDER BY pt.date::date, CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END, pt.id`
-    : 'ORDER BY pt.date::date, pt.id';
+    : "ORDER BY pt.date::date, pt.id";
 
-  const result = await query(`
+  const result = await query(
+    `
     SELECT pt.id, pt.investment_id, pt.type,
            COALESCE(pt.amount, 0) AS amount,
            COALESCE(pt.units, 0) AS units,
@@ -266,18 +364,26 @@ export async function getRowsForPortfolioMath({
     JOIN investments i ON i.id = pt.investment_id
     ${where}
     ${orderBy}
-  `, params);
+  `,
+    params,
+  );
   return result.rows;
 }
 
-const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = ['total_amount', 'total_units', 'total_fees', 'total_taxes'];
+const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = [
+  "total_amount",
+  "total_units",
+  "total_fees",
+  "total_taxes",
+];
 
 /**
  * @param {number} investmentId
  * @returns {Promise<PortfolioTransactionSummaryRow[]>}
  */
 export async function getSummary(investmentId) {
-  const result = await query(`
+  const result = await query(
+    `
     SELECT
       type,
       SUM(amount) as total_amount,
@@ -288,7 +394,9 @@ export async function getSummary(investmentId) {
     FROM portfolio_transactions
     WHERE investment_id = $1
     GROUP BY type
-  `, [investmentId]);
+  `,
+    [investmentId],
+  );
   return result.rows.map((/** @type {any} */ row) => ({
     ...coerceNumericFields(row, PORTFOLIO_SUMMARY_NUMERIC_FIELDS),
     count: parseInt(row.count, 10),

@@ -19,9 +19,9 @@
  * JSON number (services/importPipeline/stage.js createBatch).
  */
 
-import { z } from 'zod';
-import { ValidationError } from '../middleware/errorHandler.js';
-import { validateId, MAX_SAFE_ID } from './validation.js';
+import { z } from "zod";
+import { ValidationError } from "../middleware/errorHandler.js";
+import { validateId, MAX_SAFE_ID } from "./validation.js";
 
 /**
  * The slice of an Express `Request` these parsers read. Structural, not
@@ -33,10 +33,10 @@ import { validateId, MAX_SAFE_ID } from './validation.js';
  * @property {Record<string, string>} params
  */
 
-export const coercedIdSchema = z.unknown().transform((value, ctx) => {
-  const result = validateId(value, 'id', MAX_SAFE_ID);
+const coercedIdSchema = z.unknown().transform((value, ctx) => {
+  const result = validateId(value, "id", MAX_SAFE_ID);
   if (!result.valid) {
-    ctx.addIssue({ code: 'custom', message: 'must be a positive integer' });
+    ctx.addIssue({ code: "custom", message: "must be a positive integer" });
     return z.NEVER;
   }
   return result.value;
@@ -49,7 +49,7 @@ export const coercedIdSchema = z.unknown().transform((value, ctx) => {
  */
 export function parseBatchIdParam(req) {
   const result = coercedIdSchema.safeParse(req.params.id);
-  if (!result.success) throw new ValidationError('Invalid batch id');
+  if (!result.success) throw new ValidationError("Invalid batch id");
   return result.data;
 }
 
@@ -61,7 +61,8 @@ export function parseBatchIdParam(req) {
 export function parseBatchRowIdParams(req) {
   const batch = coercedIdSchema.safeParse(req.params.id);
   const row = coercedIdSchema.safeParse(req.params.rowId);
-  if (!batch.success || !row.success) throw new ValidationError('Invalid batch or row id');
+  if (!batch.success || !row.success)
+    throw new ValidationError("Invalid batch or row id");
   return { batchId: batch.data, rowId: row.data };
 }
 
@@ -90,7 +91,11 @@ export function parseOverrideId(value, fieldName) {
   if (value === undefined || value === null) return null;
   const result = validateId(value, fieldName);
   if (!result.valid) {
-    throw new ValidationError(`${fieldName} must be a positive integer or null`);
+    throw new ValidationError(
+      `${fieldName} must be a positive integer or null`,
+    );
   }
   return result.value;
 }
+
+export { coercedIdSchema };

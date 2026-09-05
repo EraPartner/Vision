@@ -51,7 +51,7 @@ router.get(
     // `all` is a documented collection mode for accounts and tags only. Other
     // active filters remain boolean instead of silently gaining a tri-state API.
     const activeFilter =
-      active === "all" ? null : parseBooleanQueryParam(active, true);
+      active === "all" ? undefined : parseBooleanQueryParam(active, true);
     const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
     const { items, total } = await accountService.list({
       active: activeFilter,
@@ -226,6 +226,37 @@ router.post(
     scheduleAggregationRefresh();
     // Also drop the net-worth + bank-balances response caches (shared seam) so the
     // new anchored balance is not masked by a stale cached response.
+    invalidatePortfolioCaches();
+    res.ok({ ...result, links: [] });
+  },
+);
+
+// Authoritative per-currency statement readings (ADR-089 D2). These routes
+// replace hand-editing the legacy scalar fields for multi-currency accounts.
+router.put(
+  "/:id/statement-balances/:currency",
+  validateIdParam,
+  async (req, res) => {
+    const id = assertIdParam(req);
+    const result = await accountService.setStatementBalance(
+      id,
+      req.params.currency,
+      req.body,
+    );
+    invalidatePortfolioCaches();
+    res.ok({ ...result, links: [] });
+  },
+);
+
+router.delete(
+  "/:id/statement-balances/:currency",
+  validateIdParam,
+  async (req, res) => {
+    const id = assertIdParam(req);
+    const result = await accountService.removeStatementBalance(
+      id,
+      req.params.currency,
+    );
     invalidatePortfolioCaches();
     res.ok({ ...result, links: [] });
   },

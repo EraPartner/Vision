@@ -6,7 +6,7 @@ vi.mock('../src/services/recurringDetectionService.js', () => ({
 
 import { detectRecurringPatterns } from '../src/services/recurringDetectionService.js';
 import {
-  buildSubscriptionCreep,
+  __buildSubscriptionCreep as buildSubscriptionCreep,
   detectSubscriptionCreep,
 } from '../src/services/subscriptionCreepService.js';
 
