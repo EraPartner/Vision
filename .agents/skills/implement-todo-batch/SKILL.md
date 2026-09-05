@@ -116,12 +116,16 @@ After implementation and validation, change only the selected completed headings
 `- [x]`. Do not add dates, commit SHAs, pull-request numbers, or other stamps. Keep an item open and
 describe its remaining scope when any named sub-case is incomplete.
 
+Run `bun run todo:check` after updating the selected headings and resolve any batch-introduced
+queue validation failure before reporting completion. Preserve unrelated queue edits.
+
 Git history and the merged pull request are the completion record.
 
 ## Publish only when authorized
 
 In cloud, use the platform-managed **Open pull request** action rather than terminal Git
-publication. Open a non-draft pull request so it is eligible for native auto-merge. The
+publication. Do not configure Git credentials or switch to LockBox or `git-agent` to publish a
+cloud batch. Open a non-draft pull request so it is eligible for native auto-merge. The
 pull-request description includes:
 
 - every exact selected heading and the reason for batching them;
@@ -145,9 +149,10 @@ Keep the pull request mergeable while it is queued:
 - do not absorb a failure that was already present on the default branch unless repairing it was
   the selected one-item batch.
 
-If native auto-merge is unavailable, remain in the task and merge through the connected integration
-after all required checks and approvals pass and no blocking review, code-quality, or code-scanning
-condition remains. Never bypass protections or fall back to shell credentials or pushes.
+If native auto-merge is unavailable and the user authorized merge, remain in the task and merge
+through the connected integration after all required checks and approvals pass and no blocking
+review, code-quality, or code-scanning condition remains. Never bypass protections, directly update
+`main`, or fall back to shell credentials or pushes.
 
 The **Open pull request** action may be a post-task platform control rather than an agent-visible
 tool. Do not require a `make_pr` tool or MCP resource before selecting or implementing the batch. If
@@ -160,10 +165,17 @@ Finish with exactly one route:
 
 - verified merged: `NEXT_BATCH_SESSION: START_FRESH_CLOUD_TASK`;
 - native auto-merge verified queued but not yet merged: `NEXT_BATCH_SESSION: WAIT_FOR_AUTO_MERGE`;
-- reviewed implementation ready but PR creation unavailable:
+- reviewed implementation ready but PR creation not authorized:
+  `NEXT_BATCH_SESSION: WAIT_FOR_PUBLICATION_AUTHORIZATION` plus the prepared diff for review;
+- pull request open but merge not authorized:
+  `NEXT_BATCH_SESSION: WAIT_FOR_MERGE_AUTHORIZATION` plus the exact pull request for review;
+- reviewed implementation ready and PR creation authorized but unavailable:
   `NEXT_BATCH_SESSION: WAIT_FOR_PLATFORM_PR` plus the exact missing platform action;
-- pull request open but neither auto-merge nor an authorized integration merge is available:
+- pull request open and merge authorized but neither auto-merge nor integration merge is available:
   `NEXT_BATCH_SESSION: WAIT_FOR_MERGE_CAPABILITY` plus the missing merge capability; or
 - a concrete CI, ruleset, implementation, selection, environment, setup, or validation blocker:
   `NEXT_BATCH_SESSION: BLOCKED` plus the exact blocker. Unavailable remote state by itself remains
   unverified and does not qualify.
+
+Distinguish missing authorization from missing tool capability. Reuse authorization already
+provided in the current task; do not ask for it again.

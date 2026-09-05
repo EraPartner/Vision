@@ -15,14 +15,14 @@ description: Evaluate documentation impact from completed Vision implementation 
 4. Update every affected surface in the same change. If no update is needed, do not edit docs;
    report the reason in the completion report.
 
-| Documentation required | Usually no documentation update |
-|---|---|
-| User-visible behavior or workflow changed | Tests or fixtures only |
-| API path, operation, input, output, status, error, or rate limit changed | Formatting, comments, or lint-only edits |
-| Schema, environment, configuration, security, packaging, or operations changed | Generated-output refresh with unchanged source behavior |
-| Architecture, ownership, dependency, integration, or end-to-end flow changed | Internal refactor preserving behavior, contracts, architecture, and documented paths |
-| Documented interface, component role, or code location changed | Dependency or lockfile update with no documented compatibility, security, or build effect |
-| Existing documentation is inaccurate or records a limitation that was removed | Bug fix that restores behavior already described accurately |
+| Documentation required                                                         | Usually no documentation update                                                           |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| User-visible behavior or workflow changed                                      | Tests or fixtures only                                                                    |
+| API path, operation, input, output, status, error, or rate limit changed       | Formatting, comments, or lint-only edits                                                  |
+| Schema, environment, configuration, security, packaging, or operations changed | Generated-output refresh with unchanged source behavior                                   |
+| Architecture, ownership, dependency, integration, or end-to-end flow changed   | Internal refactor preserving behavior, contracts, architecture, and documented paths      |
+| Documented interface, component role, or code location changed                 | Dependency or lockfile update with no documented compatibility, security, or build effect |
+| Existing documentation is inaccurate or records a limitation that was removed  | Bug fix that restores behavior already described accurately                               |
 
 When uncertain, search for references to the changed symbols, paths, endpoints, configuration keys,
 and workflows before deciding.
@@ -30,7 +30,11 @@ and workflows before deciding.
 ## Route affected documentation
 
 - API contract: update `openapi.yaml`, its `docs/api/` page, and
-  `docs/reference/api-endpoint-matrix.md`; regenerate derived types and state whether it is breaking.
+  `docs/reference/api-endpoint-matrix.md`; state whether it is breaking. Derived types must be
+  regenerated before final product validation. A documentation-only worker reports the required
+  command and outputs to the parent, which owns generation and final validation; the worker must
+  not write generated product artifacts. When using this skill directly, the main agent runs
+  `bun run generate:types` and validates the resulting changes itself.
 - Behavior: update the relevant feature, integration, guide, security, performance, testing, or
   troubleshooting page.
 - Schema, environment, configuration, or packaging: update the matching reference and operational
@@ -40,8 +44,9 @@ and workflows before deciding.
 - Architectural decision: add a new ADR from `docs/adr/template.md`; never rewrite an accepted ADR.
 - New document: update the relevant index or map-of-content note.
 
-Use `obsidian:obsidian-markdown`. Preserve required frontmatter, wikilinks, embeds, callouts, and
-cross-references. Update dates. Prefer existing Dataview patterns over static listings.
+Use `obsidian:obsidian-markdown` when available. Otherwise use plain repository file tools and
+follow `docs/AGENTS.md` and adjacent notes. Preserve required frontmatter, wikilinks, embeds,
+callouts, and cross-references. Update dates. Prefer existing Dataview patterns over static listings.
 
 Every new or heavily changed note must link to a relevant index and at least one related feature,
 API, integration, or guide. Add a useful `## Related` section and reciprocal links where needed.
@@ -53,16 +58,16 @@ Do not update PlantUML merely because a file in a mapped layer changed. Update d
 component is added, removed, renamed, moved, changes ownership, gains or loses a load-bearing
 dependency, or changes an end-to-end flow.
 
-| Structural change | Diagrams |
-|---|---|
-| Repository boundary, ownership, or dependency | `backend-repository-layer.puml`, `backend-domain-model.puml` |
-| Backend service boundary or call relationship | `backend-service-layer.puml`, `system-architecture.puml` |
-| Express route group, mount, or middleware chain | `backend-api-layer.puml`, `system-architecture.puml` |
-| Table, view, aggregation, or relationship | `backend-database-schema.puml`, `backend-domain-model.puml` |
-| React page, route, or feature boundary | `frontend-pages-routes.puml`, `frontend-component-structure.puml` |
-| State ownership or data-flow relationship | `frontend-state-management.puml`, `frontend-data-flow.puml` |
-| External integration or provider relationship | `system-architecture.puml` and its flow diagram |
-| End-to-end workflow hop or payload | Corresponding sequence or flow diagram |
+| Structural change                               | Diagrams                                                          |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| Repository boundary, ownership, or dependency   | `backend-repository-layer.puml`, `backend-domain-model.puml`      |
+| Backend service boundary or call relationship   | `backend-service-layer.puml`, `system-architecture.puml`          |
+| Express route group, mount, or middleware chain | `backend-api-layer.puml`, `system-architecture.puml`              |
+| Table, view, aggregation, or relationship       | `backend-database-schema.puml`, `backend-domain-model.puml`       |
+| React page, route, or feature boundary          | `frontend-pages-routes.puml`, `frontend-component-structure.puml` |
+| State ownership or data-flow relationship       | `frontend-state-management.puml`, `frontend-data-flow.puml`       |
+| External integration or provider relationship   | `system-architecture.puml` and its flow diagram                   |
+| End-to-end workflow hop or payload              | Corresponding sequence or flow diagram                            |
 
 Embed updated diagrams in the relevant architecture document. For a new diagram, update
 `docs/diagrams/index.md` and `docs/architecture/index.md`; link a new flow diagram from its feature.
@@ -99,6 +104,6 @@ Report:
 - docs changed, or the reason no update was required;
 - PlantUML and flow-visualizer changes, or why neither was needed;
 - index, backlink, frontmatter, and Dataview checks;
-- validation performed and remaining gaps.
+- validation performed, pending parent generation or validation actions, and remaining gaps.
 
 Confirm claims against code and tests. Never document intended behavior as implemented.

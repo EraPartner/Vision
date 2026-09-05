@@ -52,21 +52,11 @@ bun vitest run --test-name-pattern="name"
 Use the repository skills in `.agents/skills/` for database migrations, localization, releases,
 documentation synchronization, and TODO backlog batches.
 
-For TODO backlog implementation, use the `implement-todo-batch` skill and the short cloud kickoff
-in `.agents/prompts/implement-todo-batch.md`. A normal batch contains two to four compatible,
-cloud-verifiable findings from one subsystem and produces one reviewed pull request. Keep a
-security, financial-correctness, persistence, migration, packaging, visual, or architectural item
-alone. Use read-only subagents freely for triage and review; delegate writes only when workers have
-isolated worktrees and explicit non-overlapping ownership. Finish the current batch before choosing
-another, and use a fresh cloud task for the next batch.
-
-Before selecting a Cloud batch, attempt to verify the latest required `CI Complete` result on
-`main` when the connected integration exposes that state. A known red result blocks unrelated
-backlog work, but unavailable remote state is unverified and does not block selection or portable
-implementation. After opening a non-draft pull request, request GitHub native squash auto-merge and
-read the pull request back to confirm it is queued. Keep the branch current and repair
-batch-introduced failures until the ruleset passes. Start the next batch only after the merge is
-present on `main`; a queued merge is a wait state, not completion.
+For TODO backlog implementation, read `.agents/skills/implement-todo-batch/SKILL.md` for the
+canonical selection, recovery, delegation, validation, and publication workflow. Use
+`.agents/prompts/implement-todo-batch.md` as the cloud kickoff when its goal and explicit
+publication authorization match the user's request. Deliver one batch, then stop; the skill itself
+does not authorize publication or merge.
 
 ## Provider and host behavior
 
