@@ -131,4 +131,65 @@ if bash "$repo_root/.codex/cloud/provision-test-db.sh" --unknown-option >/dev/nu
   exit 1
 fi
 
+# Full provisioning remains mocked: no package install, daemon or database runs.
+cat > "$fake_bin/sudo" <<'FAKE_ADMIN'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == -n ]] && shift
+[[ "${1:-}" == true ]] && exit 0
+if [[ "${1:-}" == -u ]]; then
+  [[ "${2:-}" == postgres ]] || exit 1
+  shift 2
+fi
+[[ "${1:-}" == -- ]] && shift
+exec "$@"
+FAKE_ADMIN
+cp "$fake_bin/sudo" "$fake_bin/runuser"
+cat > "$fake_bin/pg_conftool" <<'FAKE_CONFIG'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'conftool:%s\n' "$*" >> "$CALL_LOG"
+if [[ "$3" == show ]]; then
+  printf 'shared_preload_libraries = %s\n' "$(cat "$PRELOAD_STATE")"
+else
+  printf '%s\n' "$5" > "$PRELOAD_STATE"
+fi
+FAKE_CONFIG
+cat > "$fake_bin/pg_ctlcluster" <<'FAKE_CLUSTER'
+#!/usr/bin/env bash
+printf 'cluster:%s\n' "$*" >> "$CALL_LOG"
+FAKE_CLUSTER
+cat > "$fake_bin/pg_isready" <<'FAKE_READY'
+#!/usr/bin/env bash
+exit 0
+FAKE_READY
+cat > "$fake_bin/psql" <<'FAKE_PSQL'
+#!/usr/bin/env bash
+printf 'psql:%s\n' "$*" >> "$CALL_LOG"
+case "$*" in
+  *pg_encoding_to_char*) printf '%s\n' UTF8 ;;
+  *'SHOW shared_preload_libraries'*) cat "$PRELOAD_STATE" ;;
+esac
+FAKE_PSQL
+cat > "$fake_bin/bun" <<'FAKE_BUN'
+#!/usr/bin/env bash
+printf 'bun:%s\n' "$*" >> "$CALL_LOG"
+FAKE_BUN
+chmod +x "$fake_bin/"*
+export PRELOAD_STATE="$test_root/preloads"
+printf '%s\n' auto_explain > "$PRELOAD_STATE"
+bash "$repo_root/.codex/cloud/provision-test-db.sh" >/dev/null
+grep -Fxq 'auto_explain,pg_stat_statements' "$PRELOAD_STATE"
+[[ "$(grep -c '^cluster:18 main restart$' "$CALL_LOG")" -eq 1 ]]
+grep -Fq 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;' "$CALL_LOG"
+# Repeat provisioning must not restart an already configured cluster.
+bash "$repo_root/.codex/cloud/provision-test-db.sh" >/dev/null
+[[ "$(grep -c '^cluster:18 main restart$' "$CALL_LOG")" -eq 1 ]]
+
+# A default empty preload value must also configure successfully.
+printf '\n' > "$PRELOAD_STATE"
+bash "$repo_root/.codex/cloud/provision-test-db.sh" >/dev/null
+grep -Fxq 'pg_stat_statements' "$PRELOAD_STATE"
+[[ "$(grep -c '^cluster:18 main restart$' "$CALL_LOG")" -eq 2 ]]
+
 printf '%s\n' 'PASS: cloud PostgreSQL package provisioning tests'

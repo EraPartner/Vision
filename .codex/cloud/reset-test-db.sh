@@ -38,6 +38,18 @@ command -v bun >/dev/null 2>&1 || {
   exit 1
 }
 
+# pg_stat_statements is not trusted: only the fixed managed database's bootstrap
+# uses the administrator. Migrations and application tests retain NOSUPERUSER.
+if (( EUID == 0 )); then
+  postgres_user=(runuser -u postgres --)
+else
+  command -v sudo >/dev/null && sudo -n true || {
+    printf '%s\n' 'Managed query statistics setup requires non-interactive sudo.' >&2
+    exit 1
+  }
+  postgres_user=(sudo -n -u postgres)
+fi
+
 export DATABASE_URL="$expected_url"
 export TEST_DATABASE_URL="$expected_url"
 export PGCONNECT_TIMEOUT=5
@@ -52,6 +64,14 @@ cloud_run_step 'Reset the managed PostgreSQL test schema' \
   --command='DROP SCHEMA IF EXISTS public CASCADE;
 CREATE SCHEMA public AUTHORIZATION vision_test;
 GRANT ALL ON SCHEMA public TO public;'
+
+# DROP SCHEMA CASCADE removes extensions in public; recreate the untrusted
+# extension as the administrator before running migrations as vision_test.
+cloud_run_step 'Install managed query statistics extension' \
+  cloud_run_with_timeout 60s "${postgres_user[@]}" \
+  psql --host=/var/run/postgresql --port=5432 --username=postgres \
+  --dbname=vision_test --no-password --set=ON_ERROR_STOP=1 --quiet \
+  --command='CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;'
 
 cloud_run_step 'Migrate the clean PostgreSQL test schema' \
   cloud_run_with_timeout 330s bun run apps/node-backend/scripts/db-migrate.js

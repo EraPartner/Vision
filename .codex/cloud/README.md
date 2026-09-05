@@ -61,7 +61,12 @@ role is not a superuser and cannot bypass row security. It owns the disposable d
 `CREATEDB` because three migration suites create isolated scratch databases. It has `CREATEROLE`
 because the role-bootstrap suite verifies role creation, grants, default privileges, idempotency,
 and degraded behavior with a separate restricted role. The active `pg_trgm` and `pgcrypto`
-migrations use PostgreSQL trusted extensions, so database ownership is sufficient. Setup writes
+migrations use PostgreSQL trusted extensions, so database ownership is sufficient for those two.
+Migration 0095 also needs `pg_stat_statements`, which is not trusted. Provisioning preserves
+existing preloaded libraries, adds query statistics when absent, and restarts the managed cluster
+only when needed. After each schema reset, a fixed local administrator connection recreates this
+extension before migrations run as `vision_test`; the test role stays `NOSUPERUSER`. Reset now
+requires root or non-interactive sudo before making any schema changes. Setup writes
 fixed connection variables to `~/.codex/vision-cloud-test-db.env`, drops and rebuilds the
 disposable schema, and migrates it through the same runner used by CI and application startup.
 

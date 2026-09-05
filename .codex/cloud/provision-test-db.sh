@@ -168,6 +168,24 @@ cloud_run_step 'Wait for PostgreSQL 18 readiness' wait_for_postgres || {
 export PGCONNECT_TIMEOUT=5
 export PGOPTIONS='-c statement_timeout=30000 -c lock_timeout=5000'
 
+# Read the effective value (including server defaults) and preserve other preloads.
+preloads="$(cloud_run_with_timeout 15s "${postgres_user[@]}" \
+  psql --host=/var/run/postgresql --port=5432 --username=postgres \
+  --dbname=postgres --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+  --command='SHOW shared_preload_libraries')"
+normalized_preloads="$(printf '%s' "$preloads" | tr -d '[:space:]')"
+case ",$normalized_preloads," in
+  *,pg_stat_statements,*) ;;
+  *)
+    cloud_run_step 'Enable query statistics in the managed PostgreSQL cluster' \
+      cloud_run_with_timeout 15s "${root[@]}" pg_conftool 18 main set \
+        shared_preload_libraries "${preloads:+$preloads,}pg_stat_statements"
+    cloud_run_step 'Restart PostgreSQL with query statistics' \
+      cloud_run_with_closed_fds_timeout 90s "${root[@]}" pg_ctlcluster 18 main restart
+    cloud_run_step 'Wait for PostgreSQL after enabling query statistics' wait_for_postgres
+    ;;
+esac
+
 cloud_run_step 'Ensure the disposable PostgreSQL role exists' \
   cloud_run_with_timeout 45s "${postgres_user[@]}" \
   psql --dbname=postgres --set=ON_ERROR_STOP=1 --quiet \
