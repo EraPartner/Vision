@@ -814,7 +814,7 @@ async function bulkInsertPlanned(toInsert, batchId) {
  * Commit one chunk: try the batched plan, fall back to the per-row loop under
  * a chunk-level SAVEPOINT if the bulk write cannot be applied as planned.
  *
- * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
+ * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string>, capabilities?: { multiCurrencyCash?: boolean } }} args
  * @returns {Promise<ChunkResult>}
  */
 async function commitChunk({ chunk, batchId, committedHashes, capabilities }) {
