@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-09-04
+updated: 2026-09-05
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -113,6 +113,11 @@ account`.
   to 400 `funding_account_id does not reference an existing account` rather than surfacing as a
   raw 500.
 
+Create, PATCH, and merge operations that can change a funding edge take the same
+transaction-scoped PostgreSQL advisory lock before validation. Validation and mutation therefore
+observe one serialized funding graph; a concurrent PATCH cannot apply a stale, previously valid
+edge after a merge repoints one of its ancestors.
+
 Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: false }` stamps
 `closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.
 `closed_at` is never accepted from the request body.
@@ -148,9 +153,10 @@ D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDial
 `404` if not found.
 
 > [!tip] Close-account workflow
-> Use `CloseAccountDialog` (wired into `AccountsPage`) to transfer all portfolio lots in-specie to
-> another account via `POST /api/investments/:id/move`, then archive with `PATCH /api/accounts/:id`
-> `{ is_active: false }`. This is the recommended path for a brokerage account you are closing.
+> `CloseAccountDialog` currently warns about residual cash and archives with
+> `PATCH /api/accounts/:id` `{ is_active: false }`. It preserves portfolio lots and ledger history.
+> Broker lot reassignment and a final cash-transfer step remain planned lifecycle work; the removed
+> `POST /api/investments/:id/move` endpoint is not part of the current workflow.
 
 ### POST /api/accounts/:id/merge
 
@@ -170,6 +176,13 @@ survivor's name so the dual-write trigger keeps it merged), `planned_transaction
 `404` if the survivor or any source is missing. Irreversible (the source rows are gone; identity
 lives on `account_id`). Used to unify e.g. an old literal `'KBC'` account into its IBAN account
 after the ADR-088 adapter change.
+
+Before any repoint, the service evaluates the survivor's projected funding chain with every source
+reference replaced by the survivor. A direct self-reference or longer cycle rejects the whole merge
+with `400 Merging these accounts would create a funding-account cycle`; no references move and no
+source is deleted. The shared funding-graph advisory lock covers this validation and every repoint
+in the same transaction. A pre-existing cycle that the merge does not create remains outside this
+guard.
 
 **Overlapping-stamp guard (WP-A3, §1 F2):** per-row `balance` stamps are per-source-bank running
 balances, so merging two accounts that were both being stamped over the same period interleaves

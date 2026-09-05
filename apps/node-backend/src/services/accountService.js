@@ -24,6 +24,7 @@ import {
 import { hasConversionRate } from "../lib/exchangeRates.js";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.js";
 import { statementPartition } from "../repositories/accountBalanceSql.js";
+import { withTransaction } from "../database/connection.js";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = [
@@ -427,25 +428,31 @@ const accountService = {
   /** @param {any} body unvalidated wire payload — see `sanitize`. */
   async create(body) {
     const fields = sanitize(body, { requireName: true });
-    assertStatementBalanceHasDate(
-      fields.statement_balance,
-      fields.statement_balance_date,
-    );
-    await assertFundingAccountValid(fields.funding_account_id, null);
-    try {
-      return await accountRepository.create(fields);
-    } catch (err) {
-      if (err?.code === "23505")
-        throw new ConflictError(
-          `An account named "${fields.name}" already exists`,
-        );
-      // FK violation (e.g. funding_account_id lost a race with a delete) → 400.
-      if (err?.code === "23503")
-        throw new ValidationError(
-          "funding_account_id does not reference an existing account",
-        );
-      throw err;
-    }
+    const mutate = async () => {
+      if ("funding_account_id" in fields) {
+        await accountRepository.lockFundingGraphForMutation();
+      }
+      assertStatementBalanceHasDate(
+        fields.statement_balance,
+        fields.statement_balance_date,
+      );
+      await assertFundingAccountValid(fields.funding_account_id, null);
+      try {
+        return await accountRepository.create(fields);
+      } catch (err) {
+        if (err?.code === "23505")
+          throw new ConflictError(
+            `An account named "${fields.name}" already exists`,
+          );
+        // FK violation (e.g. funding_account_id lost a race with a delete) → 400.
+        if (err?.code === "23503")
+          throw new ValidationError(
+            "funding_account_id does not reference an existing account",
+          );
+        throw err;
+      }
+    };
+    return "funding_account_id" in fields ? withTransaction(mutate) : mutate();
   },
 
   /**
@@ -459,58 +466,64 @@ const accountService = {
       /** @type {ReturnType<typeof sanitize> & { closed_at?: Date | null }} */ (
         sanitize(body, { requireName: false })
       );
-    await assertFundingAccountValid(fields.funding_account_id, id);
-    const touchesStatement =
-      "statement_balance" in fields || "statement_balance_date" in fields;
-    let current;
-    if (touchesStatement || "is_active" in fields) {
-      current = await accountRepository.getById(id);
-      if (!current) throw new NotFoundError(`Account ${id} not found`);
-    }
-    // Partial PATCH: validate the merged state, not just the provided keys —
-    // e.g. setting a balance while the stored date is NULL must still fail.
-    if (touchesStatement) {
-      assertStatementBalanceHasDate(
-        "statement_balance" in fields
-          ? fields.statement_balance
-          : current.statement_balance,
-        "statement_balance_date" in fields
-          ? fields.statement_balance_date
-          : current.statement_balance_date,
-      );
-    }
-    // Lifecycle (ADR-088 addendum, D5): closing stamps closed_at once (a
-    // redundant re-archive keeps the original timestamp); reactivating clears
-    // it. Server-stamped only — sanitize() never accepts closed_at from the body.
-    if (fields.is_active === false && current.is_active) {
-      fields.closed_at = new Date();
-      // §1 F3 aggregate semantics: `in_net_worth` governs aggregates,
-      // `is_active` governs UI listing — so closing an account also drops it
-      // from every aggregate (net worth, bank-balances widget). An explicit
-      // in_net_worth in the same PATCH wins (respect
-      // explicit intent). Reactivating deliberately does NOT auto-restore
-      // in_net_worth: whether a reopened account should count again is a user
-      // decision, made explicitly via PATCH { in_net_worth: true }.
-      if (!("in_net_worth" in fields)) fields.in_net_worth = false;
-    } else if (fields.is_active === true) {
-      fields.closed_at = null;
-    }
-    let updated;
-    try {
-      updated = await accountRepository.update(id, fields);
-    } catch (err) {
-      if (err?.code === "23505")
-        throw new ConflictError(
-          `An account named "${fields.name}" already exists`,
+    const mutate = async () => {
+      if ("funding_account_id" in fields) {
+        await accountRepository.lockFundingGraphForMutation();
+      }
+      await assertFundingAccountValid(fields.funding_account_id, id);
+      const touchesStatement =
+        "statement_balance" in fields || "statement_balance_date" in fields;
+      let current;
+      if (touchesStatement || "is_active" in fields) {
+        current = await accountRepository.getById(id);
+        if (!current) throw new NotFoundError(`Account ${id} not found`);
+      }
+      // Partial PATCH: validate the merged state, not just the provided keys —
+      // e.g. setting a balance while the stored date is NULL must still fail.
+      if (touchesStatement) {
+        assertStatementBalanceHasDate(
+          "statement_balance" in fields
+            ? fields.statement_balance
+            : current.statement_balance,
+          "statement_balance_date" in fields
+            ? fields.statement_balance_date
+            : current.statement_balance_date,
         );
-      if (err?.code === "23503")
-        throw new ValidationError(
-          "funding_account_id does not reference an existing account",
-        );
-      throw err;
-    }
-    if (!updated) throw new NotFoundError(`Account ${id} not found`);
-    return updated;
+      }
+      // Lifecycle (ADR-088 addendum, D5): closing stamps closed_at once (a
+      // redundant re-archive keeps the original timestamp); reactivating clears
+      // it. Server-stamped only — sanitize() never accepts closed_at from the body.
+      if (fields.is_active === false && current.is_active) {
+        fields.closed_at = new Date();
+        // §1 F3 aggregate semantics: `in_net_worth` governs aggregates,
+        // `is_active` governs UI listing — so closing an account also drops it
+        // from every aggregate (net worth, bank-balances widget). An explicit
+        // in_net_worth in the same PATCH wins (respect
+        // explicit intent). Reactivating deliberately does NOT auto-restore
+        // in_net_worth: whether a reopened account should count again is a user
+        // decision, made explicitly via PATCH { in_net_worth: true }.
+        if (!("in_net_worth" in fields)) fields.in_net_worth = false;
+      } else if (fields.is_active === true) {
+        fields.closed_at = null;
+      }
+      let updated;
+      try {
+        updated = await accountRepository.update(id, fields);
+      } catch (err) {
+        if (err?.code === "23505")
+          throw new ConflictError(
+            `An account named "${fields.name}" already exists`,
+          );
+        if (err?.code === "23503")
+          throw new ValidationError(
+            "funding_account_id does not reference an existing account",
+          );
+        throw err;
+      }
+      if (!updated) throw new NotFoundError(`Account ${id} not found`);
+      return updated;
+    };
+    return "funding_account_id" in fields ? withTransaction(mutate) : mutate();
   },
 
   /** Replace one currency's authoritative statement reading. */

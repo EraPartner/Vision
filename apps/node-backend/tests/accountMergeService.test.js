@@ -30,14 +30,22 @@ import {
 // Default happy-path SQL router: target #2 ('TARGET'), source #1 exists.
 // `stampRanges` primes the per-original-account stamped-date ranges the
 // overlapping-stamp guard reads before the repoint (default: nothing stamped).
-function happyPath({ stampRanges = [], openingAnchors = [] } = {}) {
-  mockClient.query.mockImplementation(async (sql) => {
+function happyPath({
+  stampRanges = [],
+  openingAnchors = [],
+  fundingAccounts = {},
+} = {}) {
+  mockClient.query.mockImplementation(async (sql, params = []) => {
     if (sql.includes("transfer_source = 'opening'"))
       return { rows: openingAnchors };
     if (sql.includes("FOR UPDATE") && sql.includes("WHERE id = $1"))
       return { rows: [{ id: 2, name: "TARGET" }] };
     if (sql.includes("FOR UPDATE") && sql.includes("ANY"))
       return { rows: [{ id: 1 }] };
+    if (sql.includes("FROM accounts WHERE id = $1"))
+      return {
+        rows: fundingAccounts[params[0]] ? [fundingAccounts[params[0]]] : [],
+      };
     if (sql.includes("GROUP BY account_id")) return { rows: stampRanges };
     if (sql.includes("UPDATE transactions")) return { rowCount: 3 };
     if (sql.includes("UPDATE planned_transactions")) return { rowCount: 1 };
@@ -130,6 +138,58 @@ describe("mergeAccounts (ADR-088)", () => {
       sql.includes("UPDATE transactions"),
     );
     expect(txCall[1]).toEqual([2, "TARGET", [1]]);
+  });
+
+  it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
+    happyPath({
+      fundingAccounts: {
+        2: { id: 2, funding_account_id: 1 },
+      },
+    });
+
+    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+      /would create a funding-account cycle/,
+    );
+
+    const writes = mockClient.query.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => /^\s*(UPDATE|DELETE|INSERT)\b/i.test(sql));
+    expect(writes).toEqual([]);
+  });
+
+  it("rejects a longer cycle introduced by the projected funding repoint", async () => {
+    happyPath({
+      fundingAccounts: {
+        2: { id: 2, funding_account_id: 3 },
+        3: { id: 3, funding_account_id: 1 },
+      },
+    });
+
+    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+      /would create a funding-account cycle/,
+    );
+
+    const calls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const graphLockIndex = calls.findIndex((sql) =>
+      sql.includes("pg_advisory_xact_lock"),
+    );
+    const firstGraphReadIndex = calls.findIndex((sql) =>
+      sql.includes("FROM accounts WHERE id = $1"),
+    );
+    expect(graphLockIndex).toBeGreaterThanOrEqual(0);
+    expect(graphLockIndex).toBeLessThan(firstGraphReadIndex);
+  });
+
+  it("does not make an unrelated pre-existing funding cycle a merge blocker", async () => {
+    happyPath({
+      fundingAccounts: {
+        2: { id: 2, funding_account_id: 3 },
+        3: { id: 3, funding_account_id: 4 },
+        4: { id: 4, funding_account_id: 3 },
+      },
+    });
+
+    await expect(mergeAccounts(2, [1])).resolves.toMatchObject({ into: 2 });
   });
 
   it("filters invalid direct-call ids and duplicates without coercing strings", async () => {

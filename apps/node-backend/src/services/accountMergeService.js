@@ -111,6 +111,40 @@ function collidingAnchorCurrencies(anchors) {
     .sort();
 }
 
+/**
+ * Reject a merge when repointing a source funding edge to the survivor would
+ * close a cycle. Starting at the survivor is sufficient: a changed edge can
+ * create a cycle only when its owning account is already on the survivor's
+ * funding chain. Existing unrelated cycles are left for the separate repair
+ * workflow; this merge must not make them worse.
+ *
+ * @param {number} targetId
+ * @param {number[]} sourceIds
+ */
+async function assertMergeFundingCycleSafe(targetId, sourceIds) {
+  const sources = new Set(sourceIds);
+  const visited = new Set();
+  let currentId = targetId;
+  let traversedRepointedEdge = false;
+
+  while (!visited.has(currentId)) {
+    visited.add(currentId);
+    const account = await accountRepository.getById(currentId);
+    if (!account || account.funding_account_id == null) return;
+
+    const rawParentId = Number(account.funding_account_id);
+    const parentId = sources.has(rawParentId) ? targetId : rawParentId;
+    traversedRepointedEdge ||= parentId !== rawParentId;
+    currentId = parentId;
+  }
+
+  if (traversedRepointedEdge) {
+    throw new ValidationError(
+      "Merging these accounts would create a funding-account cycle",
+    );
+  }
+}
+
 export {
   stampRangesOverlap as __stampRangesOverlap,
   collidingAnchorCurrencies as __collidingAnchorCurrencies,
@@ -150,6 +184,12 @@ export async function mergeAccounts(targetId, sourceIds) {
   // each repo call onto this transaction's client, so every statement below
   // shares the FOR UPDATE locks taken here and rolls back atomically.
   return withTransaction(async () => {
+    // Every writer of funding_account_id takes this transaction-scoped lock
+    // before validating and mutating the graph. Row locks alone are
+    // insufficient: the bulk repoint can change a dependent that was not on
+    // the survivor chain when validation started.
+    await accountRepository.lockFundingGraphForMutation();
+
     // Lock the survivor + sources so concurrent merges serialize.
     const tgt = await accountRepository.lockByIdForMerge(targetId);
     if (!tgt) throw new NotFoundError(`Account ${targetId} not found`);
@@ -160,6 +200,11 @@ export async function mergeAccounts(targetId, sourceIds) {
     const missing = ids.filter((id) => !found.has(id));
     if (missing.length)
       throw new NotFoundError(`Account(s) not found: ${missing.join(", ")}`);
+
+    // The bulk funding-account repoint below bypasses accountService's normal
+    // per-write ancestor guard. Validate the projected survivor chain before
+    // any write so a merge cannot create a self-reference or longer cycle.
+    await assertMergeFundingCycleSafe(targetId, ids);
 
     // Overlapping-stamp guard (§1 F2, module header): capture per-original-
     // account stamped ranges before the repoint erases the provenance.

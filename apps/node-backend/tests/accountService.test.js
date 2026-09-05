@@ -7,12 +7,17 @@ vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   ),
 }));
 
+vi.mock("../src/database/connection.js", () => ({
+  withTransaction: vi.fn(async (fn) => fn()),
+}));
+
 vi.mock("../src/repositories/accountRepository.js", () => {
   const repo = {
     getAll: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
     getByName: vi.fn(),
+    lockFundingGraphForMutation: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
@@ -429,6 +434,12 @@ describe("accountService — funding chain cycles", () => {
     expect(accountRepository.update).toHaveBeenCalledWith(1, {
       funding_account_id: 2,
     });
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.update.mock.invocationCallOrder[0]);
   });
 
   // The pre-existing-cycle case: this guard did not exist before, so the stored
@@ -452,6 +463,12 @@ describe("accountService — funding chain cycles", () => {
       name: "New",
       funding_account_id: 2,
     });
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.create.mock.invocationCallOrder[0]);
     expect(accountRepository.getById).toHaveBeenCalledTimes(1); // existence check only
   });
 });

@@ -200,6 +200,23 @@ export const accountRepository = {
   },
 
   /**
+   * Serialize every mutation of the account funding graph. Callers must hold
+   * this transaction-scoped lock before validating or changing a
+   * funding_account_id edge. A single graph lock is deliberately coarse: the
+   * graph is small, writes are rare, and partial row-lock protocols can miss a
+   * dependent whose edge is repointed by an account merge.
+   *
+   * The two-key advisory namespace spells "VISI" plus the funding-graph slot.
+   * @returns {Promise<void>}
+   */
+  async lockFundingGraphForMutation() {
+    await query(
+      "SELECT pg_advisory_xact_lock($1::integer, $2::integer)",
+      [0x56495349, 1],
+    );
+  },
+
+  /**
    * Insert an account. Only whitelisted, defined fields are written; everything
    * else falls back to the column default (e.g. type='checking', owner='me').
    *

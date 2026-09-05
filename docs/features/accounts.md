@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-09-04
+updated: 2026-09-05
 tags:
   [
     feature,
@@ -146,8 +146,8 @@ All from the detail route's header menu (WP-B4):
 
 - **Edit** — the account form in edit mode (PATCH; emptied fields sent as explicit null to clear).
 - **Set opening balance** — seeds/updates the statement anchor so manual/cash accounts get meaningful balances and drift.
-- **Merge into…** — repoints transactions/planned/holdings/funding onto a surviving account and deletes the source (irreversible; per-tree cache invalidation via `invalidateAccountRepoint`).
-- **Close account** — transfers holdings if any, then archives (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). **Archive/Restore** toggles listing without the residual-balance flow.
+- **Merge into…** — repoints transactions/planned/holdings/funding onto a surviving account and deletes the source (irreversible; per-tree cache invalidation via `invalidateAccountRepoint`). The merge is rejected before any write when the projected funding links would make the survivor self-funding or close a longer cycle. Create, edit, and merge serialize funding-edge validation and mutation with one transaction-scoped graph lock, so a concurrent edit cannot invalidate that decision before the repoint commits.
+- **Close account** — warns when cash remains, then archives (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). Holdings and ledger history are preserved. Broker lot reassignment and a final cash-transfer step remain planned lifecycle work. **Archive/Restore** toggles listing without the residual-balance flow.
 - **Delete** — hard delete; a 409 (still referenced) routes to the close flow instead of dead-ending.
 
 ## Transactions-page account filter

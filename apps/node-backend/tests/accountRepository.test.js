@@ -38,6 +38,17 @@ const listAccounts = async (opts = {}) =>
 describe("accountRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("takes the transaction-scoped funding-graph advisory lock", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await accountRepository.lockFundingGraphForMutation();
+
+    expect(query).toHaveBeenCalledWith(
+      "SELECT pg_advisory_xact_lock($1::integer, $2::integer)",
+      [0x56495349, 1],
+    );
+  });
+
   describe("getAll", () => {
     it("returns database rows unchanged for service-layer shaping", async () => {
       const raw = {
