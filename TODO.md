@@ -196,12 +196,6 @@ look-changing one.
   - Evidence: the canonical function now returns nonzero for rsync or merge failure and makes staged host values win conflicts.
   - Completion: compare the installed Fish function byte-for-byte, then force a failing container command and confirm a nonzero result plus visible failure message.
 
-- [ ] **Verify the deployed host command guard matches the fixed canonical pipeline rules** ⬇
-  - Tracking: 🔎 needs-host-check 2026-09-05 (canonical dotfiles implementation is complete; deployed-host parity and harness behavior are unverified)
-  - ↪ _from: 2026-09-05 full checked-item revalidation of the D4 guard finding_
-  - Evidence: the canonical guard parses pipeline stages and covers downloader-to-interpreter plus ordinary and interpreter secret-read patterns.
-  - Completion: compare the deployed hook byte-for-byte and run its harness against multi-stage, wrapped, and benign-lookalike cases.
-
 - [ ] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫
   - Tracking: 🔎 needs-GitHub-check 2026-09-05 (local workflow structure and high-risk journeys pass, but the current scheduled-run result and alerting behavior have not been verified on GitHub)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
