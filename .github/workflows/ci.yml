@@ -33,6 +33,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  cloud-tooling:
+    name: Cloud Tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - name: Check generated cloud agreement
+        run: python3 .codex/cloud/check-instructions.py
+      - name: Check cloud shell syntax and mocked regressions
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' script; do bash -n "$script"; done < <(find .codex/cloud -name '*.sh' -print0)
+          for suite in .codex/cloud/tests/*.test.sh; do bash "$suite"; done
+      - name: Check agent instructions and CI classification
+        run: |
+          python3 scripts/check-agent-instructions.py
+          python3 scripts/tests/ci-classify.test.py
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range
   # ─────────────────────────────────────────────────────────────────────────────
@@ -42,8 +62,10 @@ jobs:
   # check (see the note on the triggers above).
   #
   # "docs" means the `docs/` tree or a ROOT-level *.md. Anything else — including
-  # a nested *.md outside docs/, e.g. apps/frontend/README.md — counts as code,
-  # because such files can be referenced by builds or tooling.
+  # a nested *.md outside docs/ and .agents/ or .codex/ — counts as code,
+  # because such files can be referenced by builds or tooling. Executable files,
+  # symlinks and agent configuration also count as code. Plain agent Markdown
+  # uses the focused cloud-tooling checks; mixed changes run the full pipeline.
   #
   # Fails safe: if the base cannot be resolved for any reason, `code` is 'true'
   # and the full pipeline runs.
@@ -71,50 +93,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base="$PR_BASE_SHA"; head="$PR_HEAD_SHA"
-          else
-            base="$PUSH_BEFORE"; head="$PUSH_SHA"
-          fi
-
-          # New branch / unknown base / missing objects → run everything.
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$base^{commit}" 2>/dev/null \
-             || ! git cat-file -e "$head^{commit}" 2>/dev/null; then
-            echo "Base not resolvable (base='$base') — running the full pipeline."
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed=$(git diff --name-only "$base" "$head")
-          if [ -z "$changed" ]; then
-            echo "Empty diff — running the full pipeline."
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
-
-          code=false
-          while IFS= read -r f; do
-            [ -n "$f" ] || continue
-            case "$f" in
-              docs/*) ;;        # docs tree            → docs
-              */*)  code=true ;; # any other nested path → code
-              *.md) ;;          # root-level markdown  → docs
-              *)    code=true ;; # any other root file  → code
-            esac
-          done <<< "$changed"
-
-          if [ "$code" = "true" ]; then
-            echo "Classified as: code (full pipeline)"
-          else
-            echo "Classified as: docs-only (code and Docker tiers will skip)"
-          fi
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+        run: python3 scripts/ci-classify.py
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Commit messages — enforce the same conventional-commit contract as the
@@ -663,6 +642,7 @@ jobs:
     needs:
       - changes
       - commitlint
+      - cloud-tooling
       - secrets-scan
       - deps-audit
       - pip-audit
@@ -689,8 +669,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          CLOUD_TOOLING_RESULT: ${{ needs.cloud-tooling.result }}
         run: |
           set -euo pipefail
+          # Cancellation passes only after the existing superseded-PR policy
+          # below verifies a newer live head. Skipping is never allowed.
+          case "$CLOUD_TOOLING_RESULT" in
+            success|cancelled) ;;
+            *) echo "Cloud tooling did not pass: $CLOUD_TOOLING_RESULT"; exit 1 ;;
+          esac
 
           # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the eleven
           # code jobs are gated off by `changes.outputs.code`, so they report
@@ -1007,8 +994,8 @@ jobs:
           # still runs and reports, which is the whole point — "CI Complete" is
           # the required check and must never be left pending.
           if [ "$CODE_CHANGED" != "true" ]; then
-            echo "Docs-only diff — code and Docker tiers intentionally skipped."
-            echo "All CI stages complete (docs-only)."
+            echo "Documentation/instruction diff — code and Docker tiers intentionally skipped."
+            echo "All CI stages complete (documentation/instructions)."
             exit 0
           fi
 

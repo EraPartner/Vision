@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-08-31
+date: 2026-09-05
 updated: 2026-09-03
 tags:
   [
@@ -83,7 +83,16 @@ on:
 
 The workflow intentionally has no top-level path filter. Documentation-only changes must still
 produce the required `CI Complete` check; an internal changes job skips only work that is genuinely
-unnecessary.
+unnecessary. Plain Markdown under `.agents/` and `.codex/` also skips application and Docker
+jobs. Agent configuration, scripts, executable files, symlinks, unknown paths, and mixed code
+changes run the full pipeline. Missing commit objects and empty diffs also run the full pipeline.
+The classifier uses NUL-delimited paths and checks both sides of renames and file modes.
+
+The always-running **Cloud Tooling** job checks cloud shell syntax, runs every
+`.codex/cloud/tests/*.test.sh` mocked regression suite, checks agent Markdown and role TOML
+structure, and runs classifier regression tests. Quality Gate requires its success even when
+application jobs are skipped. These structural checks do not establish instruction semantics;
+review remains required. No application dependency installation or live database is needed.
 
 **Permissions:** Minimal per-job basis; most jobs run with `contents: read` only. The two aggregation gates additionally receive `pull-requests: read` so they can verify whether a cancelled pull-request run was actually superseded by a newer head SHA.
 
