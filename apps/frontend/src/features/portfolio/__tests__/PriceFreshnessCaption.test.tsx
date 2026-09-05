@@ -6,9 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import { PriceFreshnessCaption } from "@/features/portfolio/PriceFreshnessCaption";
 import { renderWithApp } from "@/test/renderWithApp";
 
-vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/contexts/LanguageContext")>();
+        await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
     const { default: en } = await import("@/locales/en");
     return {
         ...actual,
@@ -25,9 +25,9 @@ vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
     };
 });
 
-vi.mock("@/contexts/AppSettingsContext", async (importOriginal) => {
+vi.mock("@/stores/hydration/AppSettingsHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/contexts/AppSettingsContext")>();
+        await importOriginal<typeof import("@/stores/hydration/AppSettingsHydration")>();
     return {
         ...actual,
         useAppSettings: () => ({

@@ -1,8 +1,8 @@
 import { memo, useMemo } from "react";
 import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     appLanguageToLocale,
     CHART_DATE_PATTERNS,

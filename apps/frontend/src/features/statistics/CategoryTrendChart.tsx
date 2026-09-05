@@ -3,7 +3,7 @@ import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
 import { appLanguageToLocale, CHART_DATE_PATTERNS, formatDate, parseISO } from "@/lib/dateUtils";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface CategoryTrendDatum {

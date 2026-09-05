@@ -91,6 +91,37 @@ function mockAccounts(items: unknown[] = FIXTURE) {
 }
 
 describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
+    it("keeps Reconcile reachable for a multi-currency account with no primary drift", async () => {
+        mockAccounts([
+            {
+                ...ACCOUNT_STUB,
+                id: 91,
+                name: "Wise",
+                display_name: "Wise",
+                multi_currency_cash: true,
+                drift: 0,
+                statement_balances: [
+                    {
+                        currency: "USD",
+                        balance: 20,
+                        balance_date: "2026-09-02",
+                    },
+                ],
+            },
+        ]);
+        renderWithApp(<AccountsPage />);
+
+        const card = (await screen.findByText("Wise")).closest(
+            ".glass-regular",
+        ) as HTMLElement;
+        await userEvent.click(
+            within(card).getByRole("button", { name: "Account actions" }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: "Reconcile balance" }),
+        ).toBeInTheDocument();
+    });
+
     it("uses the shared retryable error state when accounts fail to load", async () => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
@@ -103,6 +134,43 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(await screen.findByText(/access denied/i)).toBeInTheDocument();
         expect(
             screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("marks partial account and net-cash totals and shows excluded native balances", async () => {
+        mockAccounts([
+            {
+                ...ACCOUNT_STUB,
+                id: 90,
+                name: "Unsupported currency",
+                display_name: "Unsupported currency",
+                type: "checking",
+                computed_balance: 100,
+                balance_incomplete: true,
+                unconverted_currencies: ["USD"],
+                balance_parts: [
+                    { currency: "EUR", balance: 100 },
+                    { currency: "USD", balance: 40 },
+                ],
+            },
+        ]);
+        renderWithApp(<AccountsPage />);
+
+        const link = await screen.findByRole("link", {
+            name: "Unsupported currency",
+        });
+        const card = link.closest(".glass-regular") as HTMLElement;
+        expect(
+            within(card).getByText(/converted total incomplete/i),
+        ).toBeInTheDocument();
+        expect(card).toHaveTextContent("40,00");
+        expect(
+            within(card).getByText(/excluded from the converted total/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                /total is incomplete because at least one native balance/i,
+            ),
         ).toBeInTheDocument();
     });
 

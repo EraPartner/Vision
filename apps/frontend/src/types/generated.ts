@@ -193,6 +193,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{id}/statement-balances/{currency}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                currency: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a per-currency statement reading */
+        put: operations["setAccountStatementBalance"];
+        post?: never;
+        /** Delete a per-currency statement reading */
+        delete: operations["deleteAccountStatementBalance"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions": {
         parameters: {
             query?: never;
@@ -1238,7 +1259,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List available cashflow forecast methods */
+        /**
+         * List available cashflow forecast methods
+         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+         */
         get: operations["getCashflowForecastMethods"];
         put?: never;
         post?: never;
@@ -1255,7 +1279,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rolling-window cashflow forecast */
+        /**
+         * Rolling-window cashflow forecast
+         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+         */
         get: operations["getCashflowForecastRolling"];
         put?: never;
         post?: never;
@@ -2427,7 +2454,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve an unmatched portfolio import row to an existing investment or request a new one be created */
+        /** Resolve an unmatched non-cash portfolio import row to an existing investment or request a new one be created */
         post: operations["portfolioImportRowInvestmentOverride"];
         delete?: never;
         options?: never;
@@ -3080,6 +3107,44 @@ export interface components {
         UpdateCheckEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["UpdateCheck"];
         };
+        PortfolioSummaryItem: {
+            /** Format: int32 */
+            id: number;
+            /** @description False while any unit transaction remains unassigned to a broker account. */
+            fullyAssigned: boolean;
+            /** @description True when at least one assigned broker partition sold more units than its lots provide. */
+            oversold: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        PortfolioSummaryByAccountItem: {
+            /** Format: int32 */
+            account_id: number | null;
+            /**
+             * @description Stable machine-readable identity for accountless contributions.
+             * @enum {string}
+             */
+            assignment: "account" | "unassigned";
+            oversold: boolean;
+            currentValue: number;
+            totalInvested: number;
+            realizedGain: number;
+            unrealizedGain: number;
+            gainLoss: number;
+        };
+        PortfolioSummaryData: {
+            currency: string;
+            /** Format: date-time */
+            computed_at: string;
+            totals: {
+                [key: string]: number;
+            };
+            summaries: components["schemas"]["PortfolioSummaryItem"][];
+            byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+        };
+        PortfolioSummaryEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["PortfolioSummaryData"];
+        };
         ResearchMeta: {
             provider: string | null;
             /** @enum {string} */
@@ -3530,8 +3595,24 @@ export interface components {
             statement_balance?: number | null;
             /** Format: date */
             statement_balance_date?: string | null;
-            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. */
+            /** @description Authoritative statement readings per native currency (ADR-089 D2). */
+            statement_balances?: {
+                currency: string;
+                balance: number;
+                /** Format: date */
+                balance_date: string;
+            }[];
+            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. A partition with no usable source or target rate is excluded rather than treated as 1:1; when that happens `balance_incomplete` is true and the native amount is available in `balance_parts`. */
             computed_balance?: number | null;
+            /** @description Native per-currency ledger balances; only returned by the list endpoint. */
+            balance_parts?: {
+                currency: string;
+                balance: number;
+            }[];
+            /** @description Whether computed_balance excludes at least one partition because a conversion rate is unavailable; only returned by the list endpoint. */
+            balance_incomplete?: boolean;
+            /** @description Currency codes excluded from computed_balance because a conversion rate is unavailable; only returned by the list endpoint. */
+            unconverted_currencies?: string[];
             /** @description The reconciliation base: the computed balance of the single currency partition `statement_balance` is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. The declared `currency` partition wins whenever it exists, including at exactly zero. Zero/sub-cent filtering applies only to the fallback when that partition is absent. Only returned by the list endpoint. */
             reconcilable_balance?: number | null;
             /** @description Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole funded partition's code when the declared currency partition is absent and the ledger contains one funded foreign partition. Only returned by the list endpoint. */
@@ -3689,7 +3770,7 @@ export interface components {
             balance?: number;
             /**
              * Format: double
-             * @description Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
+             * @description Per-account, per-currency running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true. Rows with no currency are treated as EUR.
              */
             running_balance?: number;
             category_id?: number;
@@ -3908,6 +3989,11 @@ export interface components {
             price_per_unit?: number;
             fees?: number;
             taxes?: number;
+            /**
+             * @description Whether a dividend transaction's amount is before or after withholding tax. Unknown for legacy or unclassified rows and ignored for non-dividend transactions.
+             * @enum {string}
+             */
+            dividend_amount_convention: "gross" | "net" | "unknown";
             currency: string;
             fx_rate_to_eur?: number;
             /** @description Owning account for the lot (ADR-091); null = unassigned/global */
@@ -4675,6 +4761,15 @@ export interface operations {
                             projectedBalance?: number;
                             /** @description The survivor's native currency (ISO-4217) */
                             projectedBalanceCurrency?: string;
+                            /** @description Native per-currency balances in the projected merged ledger */
+                            balanceParts?: {
+                                currency: string;
+                                balance: number;
+                            }[];
+                            /** @description Whether projectedBalance excludes at least one partition because a conversion rate is unavailable */
+                            projectedBalanceIncomplete?: boolean;
+                            /** @description Currency codes excluded from projectedBalance because a conversion rate is unavailable */
+                            unconvertedCurrencies?: string[];
                             /** @description Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor) */
                             stampsInterleaved?: boolean;
                             /** @description Whether both accounts hold an opening balance in the same currency (only one is allowed per account and currency, so POST /merge would refuse with a 400 until one is removed) */
@@ -4768,6 +4863,8 @@ export interface operations {
                      * @enum {string}
                      */
                     mode: "accept" | "adjustment";
+                    /** @description Native currency partition to reconcile; defaults to the account currency. */
+                    currency?: string;
                 };
             };
         };
@@ -4789,6 +4886,88 @@ export interface operations {
                 content?: never;
             };
             /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setAccountStatementBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                currency: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    balance: number;
+                    /** Format: date */
+                    date: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored statement reading */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid balance */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteAccountStatementBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                currency: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted statement reading identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account or statement reading not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6917,7 +7096,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["PortfolioSummaryEnvelope"];
                 };
             };
         };
@@ -7427,6 +7606,11 @@ export interface operations {
                     price_per_unit?: number;
                     fees?: number;
                     taxes?: number;
+                    /**
+                     * @description Only meaningful for dividend transactions
+                     * @enum {string}
+                     */
+                    dividend_amount_convention?: "gross" | "net" | "unknown";
                     currency?: string;
                     /** @description Explicit EUR conversion rate; null clears it */
                     fx_rate_to_eur?: number | null;
@@ -7625,6 +7809,12 @@ export interface operations {
                     price_per_unit?: number;
                     fees?: number;
                     taxes?: number;
+                    /**
+                     * @description Only meaningful for dividend transactions
+                     * @default unknown
+                     * @enum {string}
+                     */
+                    dividend_amount_convention?: "gross" | "net" | "unknown";
                     currency?: string;
                     note?: string | null;
                     is_recurring?: boolean;
@@ -9684,7 +9874,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Batch or staging row not found */
+            /** @description Batch or staging row not found, or the row is cash and cannot accept an investment override */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -9737,7 +9927,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Investment or requested row not found, belongs to another batch, or is no longer reviewable; no rows are changed */
+            /** @description Investment or requested row not found, belongs to another batch, is a cash row, or is no longer reviewable; no rows are changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -9760,7 +9950,7 @@ export interface operations {
                 "application/json": {
                     /**
                      * Format: int32
-                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — leaves the batch without one. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check.
+                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — leaves the batch without one. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check. On recommit, a present account also resets cash rows that failed solely because the batch account was missing.
                      */
                     account_id?: number | null;
                 };

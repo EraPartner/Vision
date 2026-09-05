@@ -10,13 +10,26 @@
  * Each test opens a real dialog, performs the user gesture, asserts the
  * dialog closes (or focus moves) — exactly what a user would do.
  */
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 
-async function openDialog(page: Page, path: string, button: RegExp) {
+async function openDialog(
+  page: Page,
+  path: string,
+  button: RegExp,
+): Promise<Locator> {
   await page.goto(path);
   await page.getByRole("button", { name: button }).first().click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const dialog = page.locator('[role="dialog"][data-state="open"]').first();
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function clickBackdrop(page: Page, dialog: Locator) {
+  const overlay = page.locator('.modal-overlay[data-state="open"]').first();
+  await expect(overlay).toBeVisible();
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(dialog).not.toBeVisible({ timeout: 4000 });
 }
 
 const openAddTransactionDialog = (page: Page) =>
@@ -30,42 +43,37 @@ const openWidgetVisibilityDialog = (page: Page) =>
 
 test.describe("Dialog backdrop click", () => {
   test("AddTransaction backdrop click closes dialog", async ({ page }) => {
-    await openAddTransactionDialog(page);
-    // Click far outside the dialog content (top-left corner)
-    await page.mouse.click(5, 5);
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    const dialog = await openAddTransactionDialog(page);
+    await clickBackdrop(page, dialog);
   });
 
   test("AddCategory backdrop click closes dialog", async ({ page }) => {
-    await openAddCategoryDialog(page);
-    await page.mouse.click(5, 5);
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    const dialog = await openAddCategoryDialog(page);
+    await clickBackdrop(page, dialog);
   });
 
   test("AddRecipient backdrop click closes dialog", async ({ page }) => {
-    await openAddRecipientDialog(page);
-    await page.mouse.click(5, 5);
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    const dialog = await openAddRecipientDialog(page);
+    await clickBackdrop(page, dialog);
   });
 
   test("WidgetVisibility backdrop click closes dialog", async ({ page }) => {
-    await openWidgetVisibilityDialog(page);
-    await page.mouse.click(5, 5);
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    const dialog = await openWidgetVisibilityDialog(page);
+    await clickBackdrop(page, dialog);
   });
 });
 
 test.describe("Dialog Escape key (real browser)", () => {
   test("AddTransaction Escape closes dialog", async ({ page }) => {
-    await openAddTransactionDialog(page);
+    const dialog = await openAddTransactionDialog(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    await expect(dialog).not.toBeVisible({ timeout: 4000 });
   });
 
   test("AddCategory Escape closes dialog", async ({ page }) => {
-    await openAddCategoryDialog(page);
+    const dialog = await openAddCategoryDialog(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
+    await expect(dialog).not.toBeVisible({ timeout: 4000 });
   });
 });
 
@@ -73,9 +81,9 @@ test.describe("Dialog focus trap (Tab keyboard nav)", () => {
   test("AddTransaction Tab key cycles focus inside dialog", async ({
     page,
   }) => {
-    await openAddTransactionDialog(page);
+    const dialog = await openAddTransactionDialog(page);
     // Press Tab a few times. Active element must always be inside the dialog.
-    const dialogHandle = await page.getByRole("dialog").elementHandle();
+    const dialogHandle = await dialog.elementHandle();
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press("Tab");
       const isInsideDialog = await page.evaluate((dialog) => {
@@ -87,8 +95,8 @@ test.describe("Dialog focus trap (Tab keyboard nav)", () => {
   });
 
   test("AddCategory Tab key cycles focus inside dialog", async ({ page }) => {
-    await openAddCategoryDialog(page);
-    const dialogHandle = await page.getByRole("dialog").elementHandle();
+    const dialog = await openAddCategoryDialog(page);
+    const dialogHandle = await dialog.elementHandle();
     for (let i = 0; i < 6; i++) {
       await page.keyboard.press("Tab");
       const isInsideDialog = await page.evaluate((dialog) => {
@@ -102,8 +110,8 @@ test.describe("Dialog focus trap (Tab keyboard nav)", () => {
   test("AddRecipient Shift+Tab reverses focus inside dialog", async ({
     page,
   }) => {
-    await openAddRecipientDialog(page);
-    const dialogHandle = await page.getByRole("dialog").elementHandle();
+    const dialog = await openAddRecipientDialog(page);
+    const dialogHandle = await dialog.elementHandle();
     for (let i = 0; i < 4; i++) {
       await page.keyboard.press("Shift+Tab");
       const isInsideDialog = await page.evaluate((dialog) => {
@@ -119,9 +127,9 @@ test.describe("Dialog autofocus on open", () => {
   test("AddTransaction places initial focus inside dialog", async ({
     page,
   }) => {
-    await openAddTransactionDialog(page);
+    const dialog = await openAddTransactionDialog(page);
     // Radix focuses the first focusable element by default
-    const dialogHandle = await page.getByRole("dialog").elementHandle();
+    const dialogHandle = await dialog.elementHandle();
     const focusInside = await page.evaluate(
       (dialog) => dialog?.contains(document.activeElement) ?? false,
       dialogHandle,

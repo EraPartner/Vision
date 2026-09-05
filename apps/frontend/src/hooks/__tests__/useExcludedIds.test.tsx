@@ -18,7 +18,7 @@ import { delay, http } from "msw";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
-import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SettingsProvider } from "@/stores/hydration/SettingsHydration";
 import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS } from "@/stores/settingsStore";
 import {
     resetCategoriesPreloadForTests,

@@ -11,7 +11,7 @@ import { useMemo } from "react";
 
 import { CHART_NEUTRAL } from "./palette";
 import { durations, easings } from "@/lib/motion";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface SparklineProps {
     readonly data: ReadonlyArray<number>;

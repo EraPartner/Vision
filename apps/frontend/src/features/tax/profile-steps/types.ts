@@ -1,6 +1,6 @@
-import type { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
+import type { BelgianTaxProfile } from "@/lib/belgianTax";
 
-export type TaxProfile = ReturnType<typeof useBelgianTaxProfile>['profile'];
+export type TaxProfile = BelgianTaxProfile;
 
 export interface StepProps {
     profile: TaxProfile;

@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useCreateSplits, useSplitsByTransaction } from "@/hooks/useSplits";
 import { Split, Plus, Trash2, Users } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { parseDecimal } from "@/lib/decimal";
 import { toDecimal, addAll, multiply, roundMoney } from "@/lib/money";

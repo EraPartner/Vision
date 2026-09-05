@@ -15,8 +15,9 @@
  */
 import { useMemo, useState, useEffect } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
 import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
@@ -57,7 +58,13 @@ interface MetricRow {
 
 export function YearComparisonCard({ className }: YearComparisonCardProps) {
     const { t } = useLanguage();
-    const { viewedYear, displayCalculationForYear } = useBelgianTaxProfile();
+    const { viewedYear, profile, snapshots, snapshotMetas } =
+        useBelgianTaxProfile((state) => ({
+            viewedYear: state.viewedYear,
+            profile: state.profile,
+            snapshots: state.snapshots,
+            snapshotMetas: state.snapshotMetas,
+        }));
     const years = useAvailableTaxYears();
 
     const defaultCompareYear = useMemo(() => {
@@ -96,8 +103,9 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
 
     const rows: MetricRow[] | null = useMemo(() => {
         if (compareYear == null) return null;
-        const calcA = displayCalculationForYear(viewedYear);
-        const calcB = displayCalculationForYear(compareYear);
+        const taxState = { profile, snapshots, snapshotMetas };
+        const calcA = resolveBelgianTaxCalculation(taxState, viewedYear);
+        const calcB = resolveBelgianTaxCalculation(taxState, compareYear);
         return [
             {
                 key: "grossIncome",
@@ -138,7 +146,15 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
         // fmtCurrency wraps the shared formatter, whose identity carries the
         // locale/currency/decimals settings.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [compareYear, viewedYear, displayCalculationForYear, t, fmtBase]);
+    }, [
+        compareYear,
+        viewedYear,
+        profile,
+        snapshots,
+        snapshotMetas,
+        t,
+        fmtBase,
+    ]);
 
     if (years.length < 2 || compareYear == null || rows == null) {
         return null;

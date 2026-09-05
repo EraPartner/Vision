@@ -1,6 +1,6 @@
 import { MultiCombobox } from "@/components/shared/MultiCombobox";
 import { useCategories } from "@/hooks/useCategories";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { Category } from "@/types/api";
 
 interface CategoryMultiComboboxProps {

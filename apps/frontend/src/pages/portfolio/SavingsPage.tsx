@@ -19,8 +19,8 @@ import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyPartsFormatter,
     usePercentFormatter,

@@ -8,7 +8,7 @@
 
 import { useState, type ComponentType } from "react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
   Card,
   CardContent,

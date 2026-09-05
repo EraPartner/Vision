@@ -1,7 +1,5 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { adminKeys } from "@/lib/queryKeys";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
@@ -17,11 +15,11 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { getRequestMetrics, getEndpointManifest } from "@/lib/api/admin";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { RouteMetric, EndpointEntry } from "@/lib/api/admin";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useEndpointLivenessQueries } from "@/features/admin/useAdminQueries";
 
 function methodBadgeClass(method: string) {
     switch (method) {
@@ -53,17 +51,10 @@ export default function EndpointLivenessPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [filter, setFilter] = useState("");
 
-    const { data: manifest, isLoading: manifestLoading } = useQuery({
-        queryKey: adminKeys.endpoints,
-        queryFn: getEndpointManifest,
-        staleTime: 300_000,
-    });
-
-    const { data: metrics } = useQuery({
-        queryKey: adminKeys.requestMetrics,
-        queryFn: getRequestMetrics,
-        staleTime: 15_000,
-    });
+    const { manifest: manifestQuery, metrics: metricsQuery } =
+        useEndpointLivenessQueries();
+    const { data: manifest, isLoading: manifestLoading } = manifestQuery;
+    const { data: metrics } = metricsQuery;
 
     const rows = useMemo<MergedRow[]>(() => {
         if (!manifest) return [];

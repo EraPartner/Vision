@@ -34,9 +34,9 @@ import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { SUPPORTED_CURRENCIES } from "@/utils/currency";
 import {
@@ -118,8 +118,9 @@ export function ExportDialog({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const { settings: dashSettings } = useSettings();
-    const { profile: taxProfile, calculation: pitCalc } =
-        useBelgianTaxProfile();
+    const { profile: taxProfile, calculation: pitCalc } = useBelgianTaxProfile(
+        (state) => ({ profile: state.profile, calculation: state.calculation }),
+    );
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const currentYear = new Date().getFullYear();
 

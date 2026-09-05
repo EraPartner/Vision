@@ -1,8 +1,8 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -569,13 +569,15 @@ export default function TransactionsPage() {
                 recipientId: tx.recipient_id ?? 0,
                 bank: (tx.bank_account as string | undefined) || tx.bank || "",
                 amount: tx.amount ?? 0,
-                currency: tx.currency || appSettings.defaultCurrency,
+                // Matches the backend window's COALESCE(currency, 'EUR').
+                currency: tx.currency ?? "EUR",
+                runningBalance: tx.running_balance ?? undefined,
                 balance: tx.balance ?? undefined,
                 comment: tx.comment || "",
                 is_active: tx.is_active ?? true,
                 tags: tx.tags ?? [],
             })),
-        [allItems, t, appSettings.defaultCurrency],
+        [allItems, t],
     );
 
     if (isLoading) {

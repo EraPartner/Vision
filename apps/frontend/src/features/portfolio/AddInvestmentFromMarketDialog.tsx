@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { deriveUnitMath, parsePositive } from "@/lib/portfolioUnitMath";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     Dialog,
     DialogContent,
@@ -34,7 +34,7 @@ import { getTxnTypeLabel } from "@/types/portfolio";
 import { toast } from "sonner";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
 import { SUPPORTED_CURRENCIES } from "@/utils/currency";
 import {
@@ -110,6 +110,7 @@ export function AddInvestmentFromMarketDialog({
         pricePerUnit: quote.price.toString(),
         fees: "",
         taxes: "",
+        dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
         isRecurring: false,
@@ -259,6 +260,10 @@ export function AddInvestmentFromMarketDialog({
                 price_per_unit: pricePerUnit,
                 fees: feesValue,
                 taxes: taxesValue,
+                dividend_amount_convention:
+                    transactionForm.type === "dividend"
+                        ? transactionForm.dividendAmountConvention
+                        : "unknown",
                 fx_rate_to_eur: fxRateValue,
                 currency: existingInvestment.currency,
                 note: transactionForm.note.trim() || undefined,
@@ -546,6 +551,9 @@ export function AddInvestmentFromMarketDialog({
                             }
                             showUnits={showUnits}
                             showFeesTaxes={showFeesTaxes}
+                            showDividendConvention={
+                                transactionForm.type === "dividend"
+                            }
                             showRecurring={showRecurring}
                             derivedAmount={derivedAmount}
                             isBuySell={deriveUnits}

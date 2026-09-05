@@ -8,8 +8,8 @@
  * Read-only. Surfaces the append-only `meta.history` produced by the provider's mutators
  * (ADR-059).
  */
-import type { ReactNode } from 'react';
-import { History } from 'lucide-react';
+import type { ReactNode } from "react";
+import { History } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -17,33 +17,38 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import type { SnapshotAuditEntry, SnapshotAuditEntryKind } from '@/lib/belgianTax';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import type {
+    SnapshotAuditEntry,
+    SnapshotAuditEntryKind,
+} from "@/lib/belgianTax";
+import { cn } from "@/lib/utils";
 
 interface SnapshotHistoryDialogProps {
     trigger?: ReactNode;
     year: number;
 }
 
+const EMPTY_HISTORY: SnapshotAuditEntry[] = [];
+
 const KIND_VARIANT: Record<SnapshotAuditEntryKind, string> = {
-    created: 'bg-primary/15 text-primary border-primary/30',
-    patched: 'bg-warning/10 text-warning border-warning/30',
-    frozen: 'bg-info/10 text-info border-info/30',
-    unfrozen: 'bg-muted text-muted-foreground border-border',
-    filed: 'bg-success/10 text-success border-success/30',
-    unfiled: 'bg-muted text-muted-foreground border-border',
+    created: "bg-primary/15 text-primary border-primary/30",
+    patched: "bg-warning/10 text-warning border-warning/30",
+    frozen: "bg-info/10 text-info border-info/30",
+    unfrozen: "bg-muted text-muted-foreground border-border",
+    filed: "bg-success/10 text-success border-success/30",
+    unfiled: "bg-muted text-muted-foreground border-border",
 };
 
 function formatTimestamp(iso: string, locale: string): string {
     try {
         return new Intl.DateTimeFormat(locale, {
-            dateStyle: 'medium',
-            timeStyle: 'short',
+            dateStyle: "medium",
+            timeStyle: "short",
         }).format(new Date(iso));
     } catch {
         return iso;
@@ -55,27 +60,31 @@ function formatTimestamp(iso: string, locale: string): string {
  * pass through. Long arrays and objects collapse to `[N items]` / `{N keys}` to keep the
  * timeline scannable.
  */
-function summarizePatch(changes: SnapshotAuditEntry['changes']): string {
-    if (!changes) return '';
+function summarizePatch(changes: SnapshotAuditEntry["changes"]): string {
+    if (!changes) return "";
     const parts: string[] = [];
     for (const [k, v] of Object.entries(changes)) {
         if (Array.isArray(v)) {
             parts.push(`${k}: [${v.length} items]`);
-        } else if (v !== null && typeof v === 'object') {
+        } else if (v !== null && typeof v === "object") {
             parts.push(`${k}: {${Object.keys(v).length} keys}`);
-        } else if (typeof v === 'string') {
+        } else if (typeof v === "string") {
             parts.push(`${k}: "${v}"`);
         } else {
             parts.push(`${k}: ${String(v)}`);
         }
     }
-    return parts.join(', ');
+    return parts.join(", ");
 }
 
-export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogProps) {
+export function SnapshotHistoryDialog({
+    trigger,
+    year,
+}: SnapshotHistoryDialogProps) {
     const { t, language } = useLanguage();
-    const { getSnapshotHistory } = useBelgianTaxProfile();
-    const history = getSnapshotHistory(year);
+    const history = useBelgianTaxProfile(
+        (state) => state.snapshotMetas[year]?.history ?? EMPTY_HISTORY,
+    );
     // Newest first for chronology display.
     const ordered = [...history].reverse();
 
@@ -86,14 +95,16 @@ export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogPr
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <History className="h-4 w-4 text-muted-foreground" />
-                        {t('tax.history.title', { year: String(year) })}
+                        {t("tax.history.title", { year: String(year) })}
                     </DialogTitle>
-                    <DialogDescription>{t('tax.history.description')}</DialogDescription>
+                    <DialogDescription>
+                        {t("tax.history.description")}
+                    </DialogDescription>
                 </DialogHeader>
 
                 {ordered.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                        {t('tax.history.empty')}
+                        {t("tax.history.empty")}
                     </p>
                 ) : (
                     <ScrollArea className="max-h-[60vh] pr-3">
@@ -106,12 +117,20 @@ export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogPr
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Badge
                                             variant="outline"
-                                            className={cn('eyebrow ', KIND_VARIANT[entry.kind])}
+                                            className={cn(
+                                                "eyebrow ",
+                                                KIND_VARIANT[entry.kind],
+                                            )}
                                         >
-                                            {t(`tax.history.kind.${entry.kind}`)}
+                                            {t(
+                                                `tax.history.kind.${entry.kind}`,
+                                            )}
                                         </Badge>
                                         <span className="text-xs text-muted-foreground tabular-nums">
-                                            {formatTimestamp(entry.at, language)}
+                                            {formatTimestamp(
+                                                entry.at,
+                                                language,
+                                            )}
                                         </span>
                                         {entry.reference && (
                                             <span className="text-xs font-medium text-warning">
@@ -119,11 +138,13 @@ export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogPr
                                             </span>
                                         )}
                                     </div>
-                                    {entry.changes && Object.keys(entry.changes).length > 0 && (
-                                        <p className="text-xs text-muted-foreground break-words">
-                                            {summarizePatch(entry.changes)}
-                                        </p>
-                                    )}
+                                    {entry.changes &&
+                                        Object.keys(entry.changes).length >
+                                            0 && (
+                                            <p className="text-xs text-muted-foreground break-words">
+                                                {summarizePatch(entry.changes)}
+                                            </p>
+                                        )}
                                 </li>
                             ))}
                         </ol>

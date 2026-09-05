@@ -17,7 +17,7 @@ import { useRecipients } from "@/hooks/useRecipients";
 import { useTags } from "@/hooks/useTags";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/types/apiClient";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
 import { getChartColor } from "@/components/charts/palette";

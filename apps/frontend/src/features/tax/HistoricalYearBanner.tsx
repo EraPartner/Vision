@@ -15,7 +15,7 @@
  *    profile snapshot for that year so the user can adjust it. Secondary: back to current.
  */
 import { History, Lock, Plus, Snowflake } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

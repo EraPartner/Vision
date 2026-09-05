@@ -1,12 +1,9 @@
 import { useMemo } from "react";
 import { Money } from "@/components/shared/Money";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
-import { portfolioKeys } from "@/lib/queryKeys";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     AreaChart as VisxAreaChart,
     ChartCard,
@@ -14,21 +11,26 @@ import {
     CHART_PERIODS,
     type ChartPeriod,
 } from "@/components/charts";
-import { TrendingUp, TrendingDown, Percent, Activity } from "lucide-react";
+import {
+    TrendingUp,
+    TrendingDown,
+    Percent,
+    Activity,
+    Info,
+} from "lucide-react";
 import {
     appLanguageToLocale,
     CHART_DATE_PATTERNS,
     formatDate,
     parseISO,
 } from "@/lib/dateUtils";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import PerformanceBreakdown from "@/features/portfolio/PerformanceBreakdown";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { StatCard } from "@/components/shared/StatCard";
@@ -43,6 +45,7 @@ import {
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { usePerformanceQueries } from "@/features/portfolio/usePortfolioQueries";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -134,36 +137,18 @@ export default function PerformancePage() {
         booleanSearchParamCodec,
     );
 
+    const { performance, sparkline1m } = usePerformanceQueries(
+        defaultCurrency,
+        selectedPeriod,
+    );
     const {
         data: portfolioPerformanceData,
         isLoading,
         isError,
         error,
-        isFetching,
-        isPlaceholderData,
-    } = useQuery({
-        queryKey: portfolioKeys.performance(defaultCurrency, selectedPeriod),
-        queryFn: () =>
-            apiClient.getPortfolioPerformance({
-                currency: defaultCurrency,
-                period: selectedPeriod,
-            }),
-        staleTime: 300_000,
-        gcTime: 10 * 60_000,
-        placeholderData: keepPreviousData,
-    });
-    useBackgroundQueryCue(isFetching && isPlaceholderData);
+    } = performance;
 
-    const { data: sparkline1mData } = useQuery({
-        queryKey: portfolioKeys.performance(defaultCurrency, "1m"),
-        queryFn: () =>
-            apiClient.getPortfolioPerformance({
-                currency: defaultCurrency,
-                period: "1m",
-            }),
-        staleTime: 300_000,
-        gcTime: 10 * 60_000,
-    });
+    const { data: sparkline1mData } = sparkline1m;
 
     const PERIOD_LABELS: Record<ChartPeriod, string> = {
         "1m": t("performance.period.1m"),
@@ -356,6 +341,28 @@ export default function PerformancePage() {
                 onChange={setSelectedPeriod}
                 labels={PERIOD_LABELS}
             />
+
+            {snapshots.at(-1)?.is_provisional ? (
+                <div
+                    role="note"
+                    className="flex max-w-3xl items-start gap-2 rounded-lg border border-border/70 bg-muted/35 px-3 py-2 text-sm"
+                >
+                    <Info
+                        className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                    <div>
+                        <span className="font-medium text-foreground">
+                            {t("performance.latestSnapshotProvisional")}
+                        </span>{" "}
+                        <span className="text-muted-foreground">
+                            {t(
+                                "performance.latestSnapshotProvisionalDescription",
+                            )}
+                        </span>
+                    </div>
+                </div>
+            ) : null}
 
             {/* Key metrics cards */}
             {overallMetrics && (

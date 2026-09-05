@@ -34,7 +34,7 @@ import {
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -47,7 +47,7 @@ import {
 } from "@/features/accounts/groupAccounts";
 import { AddAccountDialog } from "@/features/accounts/AddAccountDialog";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { Account } from "@/types/api";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
@@ -96,6 +96,17 @@ export default function AccountsPage() {
         () => computeNetCash(accounts, convertToTarget),
         [accounts, convertToTarget],
     );
+    const netCashIncomplete = useMemo(
+        () =>
+            accounts.some(
+                (account) =>
+                    account.is_active &&
+                    account.in_net_worth &&
+                    !isPortfolioType(account.type) &&
+                    account.balance_incomplete,
+            ),
+        [accounts],
+    );
 
     // Legacy deep link (?account=<id>) from before the /accounts/:id route:
     // forward to the route (replace, so Back doesn't bounce through the hub).
@@ -131,6 +142,7 @@ export default function AccountsPage() {
         // Drift chip content: "Drift +€15,50 · statement 03/06/2026", in warning
         // tone once that statement reading is older than ~45 days (§3 F1).
         const drift = driftBadge(a);
+        const canReconcile = !!drift || a.multi_currency_cash;
         return (
             <Card
                 key={a.id}
@@ -226,6 +238,30 @@ export default function AccountsPage() {
                                             {provenanceText}
                                         </div>
                                     )}
+                                {a.balance_incomplete && (
+                                    <div className="mt-1 text-xs text-warning">
+                                        <div>
+                                            {t("accounts.balanceIncomplete")}
+                                        </div>
+                                        {a.balance_parts
+                                            ?.filter((part) =>
+                                                a.unconverted_currencies?.includes(
+                                                    part.currency,
+                                                ),
+                                            )
+                                            .map((part) => (
+                                                <div key={part.currency}>
+                                                    <Money
+                                                        amount={part.balance}
+                                                        currency={part.currency}
+                                                    />{" "}
+                                                    {t(
+                                                        "accounts.balanceExcluded",
+                                                    )}
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
@@ -263,7 +299,7 @@ export default function AccountsPage() {
                                     </Link>
                                 </DropdownMenuItem>
                             )}
-                            {drift && (
+                            {canReconcile && (
                                 <DropdownMenuItem
                                     onClick={() => setReconciling(a)}
                                 >
@@ -292,6 +328,11 @@ export default function AccountsPage() {
                     currency={displayCurrency}
                 />
             </span>
+            {group.accounts.some((account) => account.balance_incomplete) && (
+                <span className="ml-1 text-warning">
+                    {t("accounts.group.subtotalIncomplete")}
+                </span>
+            )}
         </p>
     );
 
@@ -353,6 +394,11 @@ export default function AccountsPage() {
                             <p className="text-xs text-muted-foreground">
                                 {t("accounts.netCashHint")}
                             </p>
+                            {netCashIncomplete && (
+                                <p className="text-xs text-warning">
+                                    {t("accounts.totalIncomplete")}
+                                </p>
+                            )}
                         </div>
                         <span className="text-lg font-semibold tabular-nums">
                             <Money

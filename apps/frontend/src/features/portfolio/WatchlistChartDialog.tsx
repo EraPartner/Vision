@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MAX_NUMERIC_18_6, parseDecimal } from "@/lib/decimal";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     Dialog,
     DialogContent,
@@ -20,8 +20,8 @@ import {
 } from "@/components/charts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
@@ -35,6 +35,7 @@ import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
+import { useWatchlistMarketQueries } from "./usePortfolioQueries";
 
 interface WatchlistChartDialogProps {
     item: WatchlistItem | null;
@@ -67,42 +68,14 @@ export function WatchlistChartDialog({
         setNewTargetPrice("");
     }, [item?.id]);
 
-    const { data: chartData, isLoading: isChartLoading } = useQuery({
-        queryKey: ["watchlist-chart", item?.symbol, selectedRange.range],
-        queryFn: async () => {
-            if (!item?.symbol) return null;
-            try {
-                return await apiClient.getMarketChart(
-                    item.symbol,
-                    selectedRange.range,
-                    selectedRange.interval,
-                );
-            } catch {
-                return null;
-            }
-        },
-        enabled: !!item?.symbol && open,
-        retry: false,
-        refetchOnWindowFocus: false,
-    });
-
-    const { data: quoteData } = useQuery({
-        queryKey: ["watchlist-quote", item?.symbol],
-        queryFn: async () => {
-            if (!item?.symbol) return null;
-            try {
-                const quotes = await apiClient.getMarketQuotes(item.symbol, {
-                    detail: "basic",
-                });
-                return quotes[0] ?? null;
-            } catch {
-                return null;
-            }
-        },
-        enabled: !!item?.symbol && open,
-        retry: false,
-        refetchOnWindowFocus: false,
-    });
+    const { chart: chartQuery, quote: quoteQuery } = useWatchlistMarketQueries(
+        item?.symbol,
+        selectedRange.range,
+        selectedRange.interval,
+        open,
+    );
+    const { data: chartData, isLoading: isChartLoading } = chartQuery;
+    const { data: quoteData } = quoteQuery;
 
     const handleUpdateTargetPrice = async () => {
         if (!item || !newTargetPrice) return;

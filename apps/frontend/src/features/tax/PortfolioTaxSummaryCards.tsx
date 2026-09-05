@@ -5,7 +5,7 @@ import {
     AlertTriangle,
     SlidersHorizontal,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyPartsFormatter,
     usePercentFormatter,

@@ -2,7 +2,7 @@ import { useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 

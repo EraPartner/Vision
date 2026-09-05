@@ -8,8 +8,8 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import {
     appLanguageToLocale,

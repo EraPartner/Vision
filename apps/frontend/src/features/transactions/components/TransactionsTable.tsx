@@ -29,8 +29,8 @@ import {
     ToggleRight,
     Trash2,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Money } from "@/components/shared/Money";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
@@ -283,6 +283,18 @@ export function TransactionsTable({
                 },
             },
             {
+                key: "currency",
+                header: t("txPage.col.currency"),
+                editable: false,
+                defaultWidth: 76,
+                minWidth: 68,
+                render: (row: TableTransaction) => (
+                    <span className="eyebrow text-muted-foreground">
+                        {row.currency}
+                    </span>
+                ),
+            },
+            {
                 key: "amount",
                 header: t("txPage.col.amount"),
                 editable: true,
@@ -303,6 +315,28 @@ export function TransactionsTable({
                             amount={row.amount}
                             currency={row.currency}
                         />
+                    </span>
+                ),
+            },
+            {
+                key: "runningBalance",
+                header: t("txPage.col.runningBalance"),
+                editable: false,
+                sortable: false,
+                filterable: false,
+                defaultWidth: 120,
+                minWidth: 100,
+                className: "text-right",
+                render: (row: TableTransaction) => (
+                    <span className="whitespace-nowrap tabular-nums">
+                        {row.runningBalance == null ? (
+                            "—"
+                        ) : (
+                            <Money
+                                amount={row.runningBalance}
+                                currency={row.currency}
+                            />
+                        )}
                     </span>
                 ),
             },

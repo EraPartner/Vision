@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { isPriceStale } from "@/utils/priceStaleness";

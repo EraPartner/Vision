@@ -38,8 +38,8 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { AssetClass } from "@/types/portfolio";
 import { useMemo } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -55,6 +55,7 @@ import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
+import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 
 interface StocksPageProps {
     assetClasses?: AssetClass[];
@@ -627,6 +628,11 @@ export default function StocksPage({
                                                                         "stocks.stock",
                                                                     )}
                                                         </Badge>
+                                                        <PortfolioOversoldBadge
+                                                            oversold={
+                                                                h.oversold
+                                                            }
+                                                        />
                                                     </td>
                                                 </>
                                             ) : (
@@ -654,6 +660,11 @@ export default function StocksPage({
                                                                 </span>
                                                             )}
                                                         </div>
+                                                        <PortfolioOversoldBadge
+                                                            oversold={
+                                                                h.oversold
+                                                            }
+                                                        />
                                                     </div>
                                                 </td>
                                             )}

@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { LanguageProvider } from "@/stores/hydration/LanguageHydration";
 import { FileHeadersPanel } from "./FileHeadersPanel";
 import { detectSeparator } from "./csvSeparator";
 

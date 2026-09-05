@@ -5,7 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { useTags, useCreateTag } from '@/hooks/useTags';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { slugify } from '@/lib/slugify';
 import type { Tag } from '@/types/api';
 

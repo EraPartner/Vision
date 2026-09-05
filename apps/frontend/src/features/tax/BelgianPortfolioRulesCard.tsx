@@ -1,4 +1,4 @@
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
@@ -16,8 +16,9 @@ import {
 interface BelgianPortfolioRulesCardProps {
     totalDividendIncome: number;
     grossDividendWht: number;
-    dividendWhtReclaim: number;
-    dividendWhtNetCost: number;
+    dividendWhtReclaim: number | null;
+    dividendWhtNetCost: number | null;
+    unknownDividendConventionCount: number;
     dividendExemption: number;
     tobRecorded: number;
     tobAutoEstimate: number;
@@ -33,6 +34,7 @@ export function BelgianPortfolioRulesCard({
     grossDividendWht,
     dividendWhtReclaim,
     dividendWhtNetCost,
+    unknownDividendConventionCount,
     dividendExemption,
     tobRecorded,
     tobAutoEstimate,
@@ -145,7 +147,9 @@ export function BelgianPortfolioRulesCard({
                             <p
                                 className={`text-lg font-bold tabular-nums ${metric.valueClassName}`}
                             >
-                                {fmt(metric.value)}
+                                {metric.value === null
+                                    ? t("tax.incomplete")
+                                    : fmt(metric.value)}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                                 {metric.description}
@@ -153,6 +157,14 @@ export function BelgianPortfolioRulesCard({
                         </div>
                     ))}
                 </div>
+
+                {unknownDividendConventionCount > 0 && (
+                    <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+                        {t("tax.dividendConventionIncomplete", {
+                            count: unknownDividendConventionCount,
+                        })}
+                    </p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {estimateCards

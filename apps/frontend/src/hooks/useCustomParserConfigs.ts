@@ -3,7 +3,7 @@ import { apiClient, type SavedParserConfig, type CustomParserConfigPayload } fro
 import { toast } from 'sonner';
 import { importKeys } from '@/lib/queryKeys';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 
 export type { SavedParserConfig, CustomParserConfigPayload };
 

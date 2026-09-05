@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { CheckCircle2, ChevronDown, X } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageHeader } from "@/components/shared/PageHeader";

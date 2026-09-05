@@ -123,10 +123,18 @@ function buildBandMaps(
     visibleMethodIds: ReadonlySet<string>,
     view: "cumulative" | "daily",
     lastActualCum: number,
+    cumulativeOverlays: ReadonlyArray<{ date: string; net: number }>,
 ) {
     type BandPair = { pLo: Map<string, number>; pHi: Map<string, number> };
     const bandsCum = new Map<string, BandPair>();
     const bandsDaily = new Map<string, BandPair>();
+    const overlayByDate = new Map<string, number>();
+    for (const point of cumulativeOverlays) {
+        overlayByDate.set(
+            point.date,
+            (overlayByDate.get(point.date) ?? 0) + point.net,
+        );
+    }
 
     for (const m of methods) {
         if (!m.bands || !visibleMethodIds.has(m.id)) continue;
@@ -140,11 +148,11 @@ function buildBandMaps(
             const pLo = new Map<string, number>();
             const pHi = new Map<string, number>();
             for (const pt of loSrc) {
-                cumLo += pt.value;
+                cumLo += pt.value + (overlayByDate.get(pt.date) ?? 0);
                 pLo.set(pt.date, cumLo);
             }
             for (const pt of hiSrc) {
-                cumHi += pt.value;
+                cumHi += pt.value + (overlayByDate.get(pt.date) ?? 0);
                 pHi.set(pt.date, cumHi);
             }
             bandsCum.set(m.id, { pLo, pHi });
@@ -181,6 +189,10 @@ export function mergeForView(
         visibleMethodIds,
         view,
         lastActualCum,
+        [
+            ...data.scheduled_actual,
+            ...(data.include_planned ? data.planned : []),
+        ],
     );
 
     const methodMaps = new Map<string, Map<string, number>>();
@@ -253,6 +265,10 @@ export function mergeForViewRolling(
         visibleMethodIds,
         view,
         lastActualCum,
+        [
+            ...data.scheduled_actual,
+            ...(data.include_planned ? data.planned : []),
+        ],
     );
 
     const methodMaps = new Map<string, Map<string, number>>();

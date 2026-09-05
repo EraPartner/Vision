@@ -1,6 +1,6 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
@@ -24,23 +24,23 @@ import {
     useUpdateRecipient,
     useDeleteRecipient,
     useUnmergeRecipient,
+    useVirtualRecipients,
 } from "@/hooks/useRecipients";
 import { AddRecipientDialog } from "@/features/recipients/AddRecipientDialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDialog";
 import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { recipientKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import type { Recipient } from "@/lib/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { parseCategoryName } from "@vision/shared-utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageError } from "@/components/shared/PageError";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
@@ -118,31 +118,14 @@ export default function RecipientsPage() {
         data: initialData,
         isLoading,
         error,
-        isFetching,
-        isPlaceholderData,
-    } = useQuery({
-        queryKey: recipientKeys.virtualList({
-            active: !showAll,
-            search: search || undefined,
-            uncategorized: showUncategorized,
-            sortKey,
-            sortDir,
-            pageSize,
-        }),
-        queryFn: () =>
-            apiClient.getRecipients({
-                limit: pageSize,
-                offset: 0,
-                active: !showAll,
-                search: search || undefined,
-                uncategorized: showUncategorized,
-                sort_by: sortKey || undefined,
-                sort_dir: sortDir || undefined,
-            }),
-        placeholderData: (prev) => prev, // keep previous list while a new filter/search/sort round-trips
-        staleTime: 30_000,
+    } = useVirtualRecipients({
+        active: !showAll,
+        search: search || undefined,
+        uncategorized: showUncategorized,
+        sortKey,
+        sortDir,
+        pageSize,
     });
-    useBackgroundQueryCue(isFetching && isPlaceholderData);
 
     useEffect(() => {
         if (initialData) {

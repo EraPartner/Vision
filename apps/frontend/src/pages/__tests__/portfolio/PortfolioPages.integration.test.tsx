@@ -329,6 +329,7 @@ describe("Portfolio pages (integration)", () => {
                             inflation_adjusted_value: 1_220,
                             gain_loss: 150,
                             return_pct: 13.64,
+                            is_provisional: true,
                         },
                     ],
                     metrics: {
@@ -387,6 +388,9 @@ describe("Portfolio pages (integration)", () => {
         expect(hero).toHaveTextContent("900,00 € (72,0%)");
         expect(hero).toHaveTextContent("220,00 € (17,6%)");
         expect(hero).toHaveTextContent("130,00 € (10,4%)");
+        expect(screen.getByRole("note")).toHaveTextContent(
+            "Latest chart snapshot is provisional",
+        );
         expect(
             screen.getByRole("heading", { name: "Total Return" }),
         ).toBeInTheDocument();

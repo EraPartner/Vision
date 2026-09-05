@@ -308,6 +308,7 @@ export interface CashflowForecastMethodsData {
     readonly days_in_month: number;
     readonly current_day: number;
     readonly actual: ForecastActualPoint[];
+    readonly scheduled_actual: ForecastPlannedPoint[];
     readonly methods: CashflowForecastMethod[];
     readonly planned: ForecastPlannedPoint[];
     readonly diagnostics: ForecastDiagnostics | null;
@@ -365,6 +366,7 @@ export interface CashflowForecastRollingData {
     readonly days_back: number;
     readonly days_forward: number;
     readonly actual: ForecastActualPoint[];
+    readonly scheduled_actual: ForecastPlannedPoint[];
     readonly methods: CashflowForecastMethod[];
     readonly planned: ForecastPlannedPoint[];
     readonly diagnostics: ForecastDiagnostics | null;

@@ -10,7 +10,7 @@ import { useCallback, useState, type ReactNode } from "react";
 
 import { getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { PieDatum } from "./PieChart";
 import { useChartKeyboardNav } from "./keyboardNav";
 

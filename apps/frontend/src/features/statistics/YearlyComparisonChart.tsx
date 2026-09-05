@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { BarChart, type BarSeries } from "@/components/charts";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import type { StatisticsData } from "@/hooks/useStatistics";
 

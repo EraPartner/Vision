@@ -1,21 +1,38 @@
-import { memo, useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { portfolioKeys } from '@/lib/queryKeys';
-import { apiClient } from '@/lib/api';
-import type { CostBasisMethod, StartupSection } from '@/stores/settingsStore';
-import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
+import { memo, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { Switch } from "@/components/ui/switch";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { portfolioKeys } from "@/lib/queryKeys";
+import { apiClient } from "@/lib/api";
+import type { CostBasisMethod, StartupSection } from "@/stores/settingsStore";
+import {
+    SettingsSection,
+    SettingsGroup,
+    SettingRow,
+    SelectSettingRow,
+} from "../SettingsPrimitives";
+import {
+    useBrokerageCashCategoryIds,
+    type BrokerageCashCategoryIds,
+} from "../useSettingsQueries";
 
-const DISMISSED_RECURRING_PATTERNS_KEY = 'dismissed_recurring_patterns';
+const DISMISSED_RECURRING_PATTERNS_KEY = "dismissed_recurring_patterns";
 
 export const BehaviorSection = memo(function BehaviorSection() {
     const { t } = useLanguage();
     const { appSettings, updateAppSettings } = useAppSettings();
     const queryClient = useQueryClient();
+    const brokerageCategories = useBrokerageCashCategoryIds();
+    const [cashCategoryIds, setCashCategoryIds] =
+        useState<BrokerageCashCategoryIds>(brokerageCategories.value);
+
+    useEffect(() => {
+        setCashCategoryIds(brokerageCategories.value);
+    }, [brokerageCategories.value]);
 
     // Opt-in "keep services running on quit" toggle — Electron-only, so it's
     // loaded/persisted through the desktop IPC bridge, not the AppSettings
@@ -25,13 +42,18 @@ export const BehaviorSection = memo(function BehaviorSection() {
     useEffect(() => {
         if (!apiClient.isElectron()) return;
         let cancelled = false;
-        apiClient.loadServicesSettings()
+        apiClient
+            .loadServicesSettings()
             .then((s) => {
                 if (cancelled || !s) return;
                 setKeepServicesOnQuit(s.keepServicesOnQuit);
             })
-            .catch(() => { /* leave default (off) — saves stay possible from there */ });
-        return () => { cancelled = true; };
+            .catch(() => {
+                /* leave default (off) — saves stay possible from there */
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const handleKeepServicesOnQuitChange = (v: boolean) => {
@@ -44,74 +66,116 @@ export const BehaviorSection = memo(function BehaviorSection() {
         try {
             // Server-computed summaries (portfolioSummaryService) read the
             // top-level cost_basis_method setting, not the app_settings blob.
-            await apiClient.saveSetting('cost_basis_method', v);
-            await queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
+            await apiClient.saveSetting("cost_basis_method", v);
+            await queryClient.invalidateQueries({
+                queryKey: portfolioKeys.summaryAll,
+            });
         } catch {
-            toast.error(t('settings.saveFailed'));
+            toast.error(t("settings.saveFailed"));
         }
     };
 
     const handleResetRecurringDismissals = async () => {
         try {
             window.localStorage.removeItem(DISMISSED_RECURRING_PATTERNS_KEY);
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
         try {
             await apiClient.saveSetting(DISMISSED_RECURRING_PATTERNS_KEY, []);
-            toast.success(t('settings.app.recurringDismissalsResetSuccess'));
+            toast.success(t("settings.app.recurringDismissalsResetSuccess"));
         } catch {
-            toast.error(t('settings.app.recurringDismissalsResetFailed'));
+            toast.error(t("settings.app.recurringDismissalsResetFailed"));
+        }
+    };
+
+    const handleCashCategoryChange = async (
+        kind: keyof BrokerageCashCategoryIds,
+        categoryId: number | null,
+    ) => {
+        const next = { ...cashCategoryIds, [kind]: categoryId };
+        setCashCategoryIds(next);
+        try {
+            await brokerageCategories.save(next);
+        } catch {
+            setCashCategoryIds(brokerageCategories.value);
+            toast.error(t("settings.saveFailed"));
         }
     };
 
     return (
         <SettingsSection
-            title={t('settings.section.behavior')}
-            description={t('settings.section.behavior.desc')}
+            title={t("settings.section.behavior")}
+            description={t("settings.section.behavior.desc")}
         >
             <SettingsGroup>
                 <SelectSettingRow
-                    title={t('settings.general.startupSection')}
-                    description={t('settings.general.startupSectionHint')}
-                    value={appSettings.startupSection ?? 'budgeting'}
-                    onValueChange={(v) => updateAppSettings({ startupSection: v as StartupSection })}
+                    title={t("settings.general.startupSection")}
+                    description={t("settings.general.startupSectionHint")}
+                    value={appSettings.startupSection ?? "budgeting"}
+                    onValueChange={(v) =>
+                        updateAppSettings({
+                            startupSection: v as StartupSection,
+                        })
+                    }
                     options={[
-                        { value: 'budgeting', label: t('nav.budgeting') },
-                        { value: 'portfolio', label: t('nav.portfolio') },
-                        { value: 'research', label: t('nav.research') },
-                        { value: 'ai-chat', label: t('nav.aiChat') },
-                        { value: 'last', label: t('settings.general.startupSection.last') },
+                        { value: "budgeting", label: t("nav.budgeting") },
+                        { value: "portfolio", label: t("nav.portfolio") },
+                        { value: "research", label: t("nav.research") },
+                        { value: "ai-chat", label: t("nav.aiChat") },
+                        {
+                            value: "last",
+                            label: t("settings.general.startupSection.last"),
+                        },
                     ]}
                 />
 
                 <SelectSettingRow
-                    title={t('settings.general.costBasisMethod')}
-                    description={t('settings.general.costBasisMethodHint')}
-                    value={appSettings.costBasisMethod ?? 'weighted_avg'}
-                    onValueChange={(v) => { void handleCostBasisMethodChange(v); }}
-                    triggerAriaLabel={t('settings.general.costBasisMethod')}
+                    title={t("settings.general.costBasisMethod")}
+                    description={t("settings.general.costBasisMethodHint")}
+                    value={appSettings.costBasisMethod ?? "weighted_avg"}
+                    onValueChange={(v) => {
+                        void handleCostBasisMethodChange(v);
+                    }}
+                    triggerAriaLabel={t("settings.general.costBasisMethod")}
                     options={[
-                        { value: 'weighted_avg', label: t('settings.general.costBasisMethod.weighted_avg') },
-                        { value: 'fifo', label: t('settings.general.costBasisMethod.fifo') },
-                        { value: 'lifo', label: t('settings.general.costBasisMethod.lifo') },
+                        {
+                            value: "weighted_avg",
+                            label: t(
+                                "settings.general.costBasisMethod.weighted_avg",
+                            ),
+                        },
+                        {
+                            value: "fifo",
+                            label: t("settings.general.costBasisMethod.fifo"),
+                        },
+                        {
+                            value: "lifo",
+                            label: t("settings.general.costBasisMethod.lifo"),
+                        },
                     ]}
                 />
 
                 <SettingRow
-                    title={t('settings.general.autoClearPlanned')}
-                    description={t('settings.general.autoClearPlannedHint')}
+                    title={t("settings.general.autoClearPlanned")}
+                    description={t("settings.general.autoClearPlannedHint")}
                     htmlFor="auto-clear-planned"
                 >
                     <Switch
                         id="auto-clear-planned"
                         checked={appSettings.autoClearPlannedOnMatch ?? true}
-                        onCheckedChange={(v) => updateAppSettings({ autoClearPlannedOnMatch: v })}
+                        onCheckedChange={(v) =>
+                            updateAppSettings({ autoClearPlannedOnMatch: v })
+                        }
                     />
                 </SettingRow>
 
                 {apiClient.isElectron() && (
                     <SettingRow
-                        title={t('settings.general.keepServicesOnQuit')}
-                        description={t('settings.general.keepServicesOnQuitHint')}
+                        title={t("settings.general.keepServicesOnQuit")}
+                        description={t(
+                            "settings.general.keepServicesOnQuitHint",
+                        )}
                         htmlFor="keep-services-on-quit"
                     >
                         <Switch
@@ -123,10 +187,55 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 )}
             </SettingsGroup>
 
+            <SettingsGroup
+                label={t("settings.behavior.brokerageCashCategories")}
+                description={t("settings.behavior.brokerageCashCategoriesHint")}
+            >
+                {(["dividend", "interest", "fee", "tax"] as const).map(
+                    (kind) => (
+                        <SettingRow
+                            key={kind}
+                            title={t(
+                                `settings.behavior.brokerageCashCategory.${kind}`,
+                            )}
+                            htmlFor={`brokerage-cash-category-${kind}`}
+                        >
+                            <CategoryCombobox
+                                id={`brokerage-cash-category-${kind}`}
+                                aria-label={t(
+                                    `settings.behavior.brokerageCashCategory.${kind}`,
+                                )}
+                                value={cashCategoryIds[kind]}
+                                disabled={
+                                    brokerageCategories.isLoading ||
+                                    brokerageCategories.isSaving
+                                }
+                                onSelect={(categoryId) => {
+                                    void handleCashCategoryChange(
+                                        kind,
+                                        categoryId,
+                                    );
+                                }}
+                                className="w-64"
+                            />
+                        </SettingRow>
+                    ),
+                )}
+            </SettingsGroup>
+
             <SettingsGroup>
-                <SettingRow title={t('settings.app.recurringDismissalsReset')} description={t('settings.app.recurringDismissalsResetHint')}>
-                    <Button variant="outline" size="sm" onClick={() => { void handleResetRecurringDismissals(); }}>
-                        {t('settings.app.reset')}
+                <SettingRow
+                    title={t("settings.app.recurringDismissalsReset")}
+                    description={t("settings.app.recurringDismissalsResetHint")}
+                >
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            void handleResetRecurringDismissals();
+                        }}
+                    >
+                        {t("settings.app.reset")}
                     </Button>
                 </SettingRow>
             </SettingsGroup>

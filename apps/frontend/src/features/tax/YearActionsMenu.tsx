@@ -16,7 +16,7 @@ import {
     Unlock,
 } from "lucide-react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -29,7 +29,7 @@ import {
 import { MarkAsFiledDialog } from "./MarkAsFiledDialog";
 import { SnapshotHistoryDialog } from "./SnapshotHistoryDialog";
 import { exportTaxYearCsv } from "@/lib/belgianTax/exportTaxYearCsv";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
@@ -40,20 +40,29 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const {
-        profile,
-        snapshotExistsForYear,
+        liveYear,
+        snapshotExists,
         profileForYear,
         displayCalculationForYear,
-        getFrozenCalculation,
-        isYearFiled,
+        hasFrozen,
+        filed,
         freezeCalculation,
         unfreezeCalculation,
         unmarkYearAsFiled,
-    } = useBelgianTaxProfile();
-
-    const filed = isYearFiled(year);
-    const hasFrozen = getFrozenCalculation(year) != null;
-    const liveYear = profile.taxYear;
+    } = useBelgianTaxProfile((state) => ({
+        liveYear: state.profile.taxYear,
+        snapshotExists: Object.prototype.hasOwnProperty.call(
+            state.snapshots,
+            year,
+        ),
+        profileForYear: state.profileForYear,
+        displayCalculationForYear: state.displayCalculationForYear,
+        hasFrozen: Boolean(state.snapshotMetas[year]?.frozenCalculation),
+        filed: Boolean(state.snapshotMetas[year]?.filing),
+        freezeCalculation: state.freezeCalculation,
+        unfreezeCalculation: state.unfreezeCalculation,
+        unmarkYearAsFiled: state.unmarkYearAsFiled,
+    }));
 
     function handleExport() {
         exportTaxYearCsv({
@@ -138,11 +147,7 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                     trigger={
                         <DropdownMenuItem
                             onSelect={(e) => e.preventDefault()}
-                            disabled={
-                                !snapshotExistsForYear(year) &&
-                                !hasFrozen &&
-                                !filed
-                            }
+                            disabled={!snapshotExists && !hasFrozen && !filed}
                             className="gap-2"
                         >
                             <History className="h-3.5 w-3.5 text-muted-foreground" />

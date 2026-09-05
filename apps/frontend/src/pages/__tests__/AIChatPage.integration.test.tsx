@@ -27,14 +27,18 @@ describe("AIChatPage (integration)", () => {
     it("renders empty state heading when no messages exist", async () => {
         renderWithApp(<AIChatPage />);
         expect(
-            await screen.findByRole("heading", { name: /ask anything about your finances/i }),
+            await screen.findByRole("heading", {
+                name: /ask anything about your finances/i,
+            }),
         ).toBeInTheDocument();
     });
 
     it("disables composer textarea when local AI is unreachable", async () => {
         renderWithApp(<AIChatPage />);
         // Default MSW returns { ok: false } → composerDisabled = true
-        const textarea = await screen.findByPlaceholderText(/ask about your spending/i);
+        const textarea = await screen.findByPlaceholderText(
+            /ask about your spending/i,
+        );
         expect(textarea).toBeDisabled();
     });
 
@@ -54,15 +58,15 @@ describe("AIChatPage (integration)", () => {
 
     it("shows Conversations sidebar label", async () => {
         renderWithApp(<AIChatPage />);
-        expect(
-            await screen.findByText(/conversations/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/conversations/i)).toBeInTheDocument();
     });
 
     it("uses the actionable banner as the sole unreachable status", async () => {
         renderWithApp(<AIChatPage />);
         await screen.findByRole("alert");
-        const matches = await screen.findAllByText(/local ai model unreachable/i);
+        const matches = await screen.findAllByText(
+            /local ai model unreachable/i,
+        );
         expect(matches).toHaveLength(1);
     });
 
@@ -85,28 +89,38 @@ describe("AIChatPage (integration)", () => {
     it("shows banner install hint text", async () => {
         renderWithApp(<AIChatPage />);
         // aiChat.banner.hint = "Install Ollama and start it locally to enable chat."
-        expect(
-            await screen.findByText(/install ollama/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/install ollama/i)).toBeInTheDocument();
     });
 
     it("enables composer textarea when AI is reachable", async () => {
         server.use(
             http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({ ok: true, baseUrl: "http://localhost:11434", defaultModel: "llama3", enabled: true }),
+                ok({
+                    ok: true,
+                    baseUrl: "http://localhost:11434",
+                    defaultModel: "llama3",
+                    enabled: true,
+                }),
             ),
         );
 
         renderWithApp(<AIChatPage />);
 
-        const textarea = await screen.findByPlaceholderText(/ask about your spending/i);
-        expect(textarea).not.toBeDisabled();
+        const textarea = await screen.findByPlaceholderText(
+            /ask about your spending/i,
+        );
+        await waitFor(() => expect(textarea).not.toBeDisabled());
     });
 
     it("shows 'Local AI model ready' status label when AI is reachable", async () => {
         server.use(
             http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({ ok: true, baseUrl: "http://localhost:11434", defaultModel: "llama3", enabled: true }),
+                ok({
+                    ok: true,
+                    baseUrl: "http://localhost:11434",
+                    defaultModel: "llama3",
+                    enabled: true,
+                }),
             ),
         );
 
@@ -120,7 +134,12 @@ describe("AIChatPage (integration)", () => {
     it("does not show OllamaStatusBanner when AI is reachable", async () => {
         server.use(
             http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({ ok: true, baseUrl: "http://localhost:11434", defaultModel: "llama3", enabled: true }),
+                ok({
+                    ok: true,
+                    baseUrl: "http://localhost:11434",
+                    defaultModel: "llama3",
+                    enabled: true,
+                }),
             ),
         );
 
@@ -132,18 +151,26 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("shows unreachable banner when AI status API returns 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () => err(500, "service unavailable")),
+            http.get(`${API_BASE}/api/ai/status`, () =>
+                err(500, "service unavailable"),
+            ),
         );
         renderWithApp(<AIChatPage />);
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
-        expect(await screen.findByRole("alert", {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("alert", {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("shows unreachable banner when AI status API returns 403", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/ai/status`, () => err(403, "Forbidden")),
         );
@@ -158,13 +185,25 @@ describe("AIChatPage (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/ai/conversations`, () =>
                 ok({
-                    conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z" },
+                    conversation: {
+                        id: "conv-1",
+                        title: "New Conversation",
+                        model: "llama3",
+                        createdAt: "2025-01-01T00:00:00.000Z",
+                        updatedAt: "2025-01-01T00:00:00.000Z",
+                    },
                     messages: [],
                 }),
             ),
             http.get(`${API_BASE}/api/ai/conversations/conv-1`, () =>
                 ok({
-                    conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z" },
+                    conversation: {
+                        id: "conv-1",
+                        title: "New Conversation",
+                        model: "llama3",
+                        createdAt: "2025-01-01T00:00:00.000Z",
+                        updatedAt: "2025-01-01T00:00:00.000Z",
+                    },
                     messages: [],
                 }),
             ),
@@ -172,11 +211,15 @@ describe("AIChatPage (integration)", () => {
 
         renderWithApp(<AIChatPage />);
 
-        const newConvBtn = await screen.findByRole("button", { name: /new conversation/i });
+        const newConvBtn = await screen.findByRole("button", {
+            name: /new conversation/i,
+        });
         await user.click(newConvBtn);
 
         // After click, header title updates to the new conversation title
-        expect(await screen.findByRole("heading", { name: /new conversation/i })).toHaveClass("text-lg");
+        expect(
+            await screen.findByRole("heading", { name: /new conversation/i }),
+        ).toHaveClass("text-lg");
     });
 
     it("clicking insights digest quick action sends the fixed prompt with tools forced on and insightsPreCall", async () => {
@@ -192,7 +235,12 @@ describe("AIChatPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({ ok: true, baseUrl: "http://localhost:11434", defaultModel: "llama3", enabled: true }),
+                ok({
+                    ok: true,
+                    baseUrl: "http://localhost:11434",
+                    defaultModel: "llama3",
+                    enabled: true,
+                }),
             ),
             http.post(`${API_BASE}/api/ai/conversations`, () =>
                 ok({ conversation, messages: [] }),
@@ -201,7 +249,10 @@ describe("AIChatPage (integration)", () => {
                 ok({ conversation, messages: [] }),
             ),
             http.post(`${API_BASE}/api/ai/chat/stream`, async ({ request }) => {
-                capturedBody = (await request.json()) as Record<string, unknown>;
+                capturedBody = (await request.json()) as Record<
+                    string,
+                    unknown
+                >;
                 const donePayload = {
                     conversation,
                     assistantMessage: {
@@ -210,7 +261,11 @@ describe("AIChatPage (integration)", () => {
                         content: "Here is your digest",
                         createdAt: "2025-01-01T00:00:01.000Z",
                     },
-                    usage: { evalCount: 1, promptEvalCount: 1, totalDurationMs: 2 },
+                    usage: {
+                        evalCount: 1,
+                        promptEvalCount: 1,
+                        totalDurationMs: 2,
+                    },
                     iterations: 1,
                 };
                 return new HttpResponse(
@@ -223,14 +278,17 @@ describe("AIChatPage (integration)", () => {
         renderWithApp(<AIChatPage />);
 
         // Fresh conversation → empty state with the quick-action button
-        const digestBtn = await screen.findByRole("button", { name: /show my insights digest/i });
+        const digestBtn = await screen.findByRole("button", {
+            name: /show my insights digest/i,
+        });
         await waitFor(() => expect(digestBtn).not.toBeDisabled());
         await user.click(digestBtn);
 
         await waitFor(() => expect(capturedBody).not.toBeNull());
         expect(capturedBody).toMatchObject({
             conversationId: "conv-digest",
-            message: "Give me my insights digest for today — anything new or unusual in my spending?",
+            message:
+                "Give me my insights digest for today — anything new or unusual in my spending?",
             useTools: true,
             insightsPreCall: true,
         });
@@ -241,7 +299,9 @@ describe("AIChatPage (integration)", () => {
     it("does not crash when conversations list returns 4xx", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/ai/conversations`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/ai/conversations`, () =>
+                err(404, "Not found"),
+            ),
         );
         const { container } = renderWithApp(<AIChatPage />);
         await new Promise((r) => setTimeout(r, 200));

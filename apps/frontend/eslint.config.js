@@ -191,6 +191,71 @@ const noHardcodedUserFacingString = {
   },
 };
 
+const SERVER_QUERY_HOOKS = new Set([
+  "useQuery",
+  "useInfiniteQuery",
+  "useQueries",
+]);
+
+/** Keep server-state ownership in named hooks instead of UI modules. */
+const noInlineServerQuery = {
+  meta: {
+    type: "problem",
+    docs: {
+      description:
+        "Pages and components must consume named server-state hooks instead of defining TanStack queries inline.",
+      url: null,
+    },
+    messages: {
+      inline:
+        "Move {{hook}} and its query definition into a named custom hook module.",
+    },
+    schema: [],
+  },
+  create(context) {
+    const directImports = new Map();
+    const namespaceImports = new Set();
+    return {
+      ImportDeclaration(node) {
+        if (node.source.value !== "@tanstack/react-query") return;
+        for (const specifier of node.specifiers) {
+          if (
+            specifier.type === "ImportSpecifier" &&
+            SERVER_QUERY_HOOKS.has(specifier.imported.name)
+          ) {
+            directImports.set(specifier.local.name, specifier.imported.name);
+          } else if (specifier.type === "ImportNamespaceSpecifier") {
+            namespaceImports.add(specifier.local.name);
+          }
+        }
+      },
+      CallExpression(node) {
+        if (node.callee.type === "Identifier") {
+          const hook = directImports.get(node.callee.name);
+          if (hook) {
+            context.report({ node, messageId: "inline", data: { hook } });
+          }
+          return;
+        }
+        if (
+          node.callee.type === "MemberExpression" &&
+          !node.callee.computed &&
+          node.callee.object.type === "Identifier" &&
+          namespaceImports.has(node.callee.object.name) &&
+          node.callee.property.type === "Identifier" &&
+          SERVER_QUERY_HOOKS.has(node.callee.property.name)
+        ) {
+          context.report({
+            node,
+            messageId: "inline",
+            data: { hook: node.callee.property.name },
+          });
+        }
+      },
+    };
+  },
+};
+
 export default tseslint.config(
   // coverage/ is an istanbul build artifact — linting it produced six
   // "unused eslint-disable" warnings from generated files.
@@ -241,6 +306,22 @@ export default tseslint.config(
     // to wrapper components; fast refresh never applies under vitest.
     files: ["src/test/**/*.{ts,tsx}"],
     rules: { "react-refresh/only-export-components": "off" },
+  },
+  {
+    files: ["src/{components,pages,features}/**/*.{ts,tsx}"],
+    ignores: [
+      "src/**/hooks/**",
+      "src/**/use*.{ts,tsx}",
+      "src/**/__tests__/**",
+      "src/**/*.test.{ts,tsx}",
+      "src/**/*.spec.{ts,tsx}",
+    ],
+    plugins: {
+      "vision-query": {
+        rules: { "no-inline-server-query": noInlineServerQuery },
+      },
+    },
+    rules: { "vision-query/no-inline-server-query": "error" },
   },
   {
     // components/ → features/ enforcement — shared components only.

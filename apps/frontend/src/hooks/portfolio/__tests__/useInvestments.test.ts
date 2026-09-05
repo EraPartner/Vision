@@ -11,8 +11,8 @@ import {
 } from "@/hooks/portfolio/useInvestments";
 import { INVESTMENT_STUB } from "@/test/msw/handlers";
 
-vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/contexts/LanguageContext")>();
+vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
     const { default: enDict } = await import("@/locales/en");
     return {
         ...actual,

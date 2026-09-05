@@ -28,24 +28,41 @@ function setMocks({
     frozenYears = [] as number[],
     metaOnlyYears = [] as number[],
     taxIncomeCategoryIds = [] as number[],
-    portfolioTxns = [] as Array<{ date: string; taxes?: number; fees?: number; type?: string }>,
-    pivot = [] as Array<{ categoryId: number | null; incomeMonths: Record<string, number> }>,
+    portfolioTxns = [] as Array<{
+        date: string;
+        taxes?: number;
+        fees?: number;
+        type?: string;
+    }>,
+    pivot = [] as Array<{
+        categoryId: number | null;
+        incomeMonths: Record<string, number>;
+    }>,
 } = {}) {
     const snapshots: Record<number, unknown> = {};
     for (const y of snapshotYears) snapshots[y] = { taxYear: y };
-    const snapshotMetas: Record<number, { filing?: object; frozenCalculation?: object }> = {};
-    for (const y of filedYears) snapshotMetas[y] = { filing: { filedAt: "2024-01-01T00:00:00Z" } };
+    const snapshotMetas: Record<
+        number,
+        { filing?: object; frozenCalculation?: object }
+    > = {};
+    for (const y of filedYears)
+        snapshotMetas[y] = { filing: { filedAt: "2024-01-01T00:00:00Z" } };
     for (const y of frozenYears) {
-        snapshotMetas[y] = { ...(snapshotMetas[y] ?? {}), frozenCalculation: {} };
+        snapshotMetas[y] = {
+            ...(snapshotMetas[y] ?? {}),
+            frozenCalculation: {},
+        };
     }
     for (const y of metaOnlyYears) {
         snapshotMetas[y] = { ...(snapshotMetas[y] ?? {}) };
     }
-    mockedProfileCtx.mockReturnValue({
-        profile: { taxYear, taxIncomeCategoryIds },
-        snapshots,
-        snapshotMetas,
-    } as unknown as ReturnType<typeof useBelgianTaxProfile>);
+    mockedProfileCtx.mockImplementation((selector) =>
+        selector({
+            profile: { taxYear, taxIncomeCategoryIds },
+            snapshots,
+            snapshotMetas,
+        } as never),
+    );
     mockedPortfolio.mockReturnValue({
         summaries: [{ transactions: portfolioTxns }],
     } as unknown as ReturnType<typeof usePortfolio>);
@@ -77,9 +94,15 @@ describe("useAvailableTaxYears", () => {
     it("includes snapshot years, sorted descending", () => {
         setMocks({ taxYear: 2026, snapshotYears: [2023, 2024, 2025] });
         const { result } = renderHook(() => useAvailableTaxYears());
-        expect(result.current.map((y) => y.year)).toEqual([2026, 2025, 2024, 2023]);
-        expect(result.current.find((y) => y.year === 2024)?.hasSnapshot).toBe(true);
-        expect(result.current.find((y) => y.year === 2026)?.hasSnapshot).toBe(false);
+        expect(result.current.map((y) => y.year)).toEqual([
+            2026, 2025, 2024, 2023,
+        ]);
+        expect(result.current.find((y) => y.year === 2024)?.hasSnapshot).toBe(
+            true,
+        );
+        expect(result.current.find((y) => y.year === 2026)?.hasSnapshot).toBe(
+            false,
+        );
     });
 
     it("adds years from portfolio transactions with taxes or fees", () => {
@@ -98,7 +121,9 @@ describe("useAvailableTaxYears", () => {
         expect(years).toContain(2021);
         expect(years).toContain(2024);
         expect(years).not.toContain(2020);
-        expect(result.current.find((y) => y.year === 2022)?.hasTransactions).toBe(true);
+        expect(
+            result.current.find((y) => y.year === 2022)?.hasTransactions,
+        ).toBe(true);
     });
 
     it("adds years from taxable-income category pivot when categories are configured", () => {
@@ -106,7 +131,10 @@ describe("useAvailableTaxYears", () => {
             taxYear: 2026,
             taxIncomeCategoryIds: [10],
             pivot: [
-                { categoryId: 10, incomeMonths: { "2022-04": 3000, "2023-12": 4000 } },
+                {
+                    categoryId: 10,
+                    incomeMonths: { "2022-04": 3000, "2023-12": 4000 },
+                },
                 { categoryId: 99, incomeMonths: { "2019-01": 5000 } }, // not flagged → skip
                 { categoryId: null, incomeMonths: { "2018-01": 100 } }, // null id → skip
             ],
@@ -185,7 +213,9 @@ describe("useAvailableTaxYears", () => {
         setMocks({
             taxYear: 2026,
             taxIncomeCategoryIds: [10],
-            pivot: [{ categoryId: 10, incomeMonths: { "junk": 100, "2023-02": 50 } }],
+            pivot: [
+                { categoryId: 10, incomeMonths: { junk: 100, "2023-02": 50 } },
+            ],
             portfolioTxns: [
                 { date: "", taxes: 1 } as { date: string; taxes: number },
                 { date: "2025-03-03", fees: 2 },

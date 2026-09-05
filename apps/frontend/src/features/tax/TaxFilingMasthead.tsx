@@ -17,7 +17,7 @@
  * calculation the page already had.
  */
 import { History, Lock, Plus, Snowflake, Sparkles } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -65,23 +65,39 @@ export function TaxFilingMasthead({
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const {
-        profile: liveProfile,
+        liveYear,
         viewedYear,
         setViewedYear,
         isViewingHistorical,
-        snapshotExistsForYear,
+        hasSnapshot,
         createSnapshotFromLive,
-        isYearFiled,
-        getFrozenCalculation,
-        metaForYear,
-    } = useBelgianTaxProfile();
+        isFiled,
+        hasFrozenCalculation,
+        filingReference,
+    } = useBelgianTaxProfile((state) => ({
+        liveYear: state.profile.taxYear,
+        viewedYear: state.viewedYear,
+        setViewedYear: state.setViewedYear,
+        isViewingHistorical: state.isViewingHistorical,
+        hasSnapshot: Object.prototype.hasOwnProperty.call(
+            state.snapshots,
+            state.viewedYear,
+        ),
+        createSnapshotFromLive: state.createSnapshotFromLive,
+        isFiled: Boolean(state.snapshotMetas[state.viewedYear]?.filing),
+        hasFrozenCalculation: Boolean(
+            state.snapshotMetas[state.viewedYear]?.frozenCalculation,
+        ),
+        filingReference:
+            state.snapshotMetas[state.viewedYear]?.filing?.reference,
+    }));
 
     const historical = isViewingHistorical
         ? resolveHistoricalBannerMode({
-              isFiled: isYearFiled(viewedYear),
-              hasFrozenCalculation: getFrozenCalculation(viewedYear) != null,
-              hasSnapshot: snapshotExistsForYear(viewedYear),
-              filingReference: metaForYear(viewedYear)?.filing?.reference,
+              isFiled,
+              hasFrozenCalculation,
+              hasSnapshot,
+              filingReference,
           })
         : undefined;
 
@@ -218,12 +234,10 @@ export function TaxFilingMasthead({
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() =>
-                                    setViewedYear(liveProfile.taxYear)
-                                }
+                                onClick={() => setViewedYear(liveYear)}
                             >
                                 {t("tax.historical.banner.returnCta", {
-                                    year: String(liveProfile.taxYear),
+                                    year: String(liveYear),
                                 })}
                             </Button>
                         </span>

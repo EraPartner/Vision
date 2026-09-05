@@ -1,6 +1,6 @@
 import { MultiCombobox } from "@/components/shared/MultiCombobox";
 import { useTags } from "@/hooks/useTags";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { Tag } from "@/types/api";
 
 interface TagFilterComboboxProps {

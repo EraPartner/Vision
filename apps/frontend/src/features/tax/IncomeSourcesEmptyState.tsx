@@ -1,5 +1,5 @@
 import { ListChecks } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { EmptyState } from "@/components/shared/EmptyState";

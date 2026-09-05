@@ -67,11 +67,13 @@ describe("boot placeholder markup", () => {
 
     it("is styled from the theme tokens the pre-paint class already selected", () => {
         // The inline script in <head> sets `.dark` before first paint, and the
-        // placeholder reads --background/--foreground/--primary, so it is correct
-        // in both themes with no flash and no second source of truth for color.
-        expect(INDEX_HTML).toContain("--boot-bg: var(--background");
-        expect(INDEX_HTML).toContain("--boot-fg: var(--foreground");
-        expect(INDEX_HTML).toContain("--boot-glow: var(--primary");
+        // A resolved three-token cache prevents non-default palettes from
+        // re-tinting after first paint; theme tokens remain the safe fallback.
+        expect(INDEX_HTML).toContain("vision_boot_palette");
+        expect(INDEX_HTML).toContain("--vision-boot-bg");
+        expect(INDEX_HTML).toContain("var(--background");
+        expect(INDEX_HTML).toContain("var(--foreground");
+        expect(INDEX_HTML).toContain("var(--primary");
         expect(INDEX_HTML).toMatch(/\.dark #boot-splash\s*\{/);
     });
 });
@@ -124,7 +126,13 @@ describe("boot placeholder fidelity to the Electron splash", () => {
 
     it.each(SHARED)("matches the splash on %s", (fragment) => {
         expect(splashCss).toContain(fragment);
-        expect(INDEX_HTML).toContain(fragment);
+        if (fragment === "radial-gradient(85% 60% at 50% 38%") {
+            expect(INDEX_HTML).toMatch(
+                /radial-gradient\(\s*85% 60% at 50% 38%/,
+            );
+        } else {
+            expect(INDEX_HTML).toContain(fragment);
+        }
     });
 
     it("hides the spinner under prefers-reduced-motion, exactly as the splash does", () => {

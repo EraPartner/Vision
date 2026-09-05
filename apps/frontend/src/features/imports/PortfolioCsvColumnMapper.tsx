@@ -8,7 +8,7 @@
  */
 
 import { useMemo } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
 import {
   Select,

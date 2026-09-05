@@ -5,6 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { apiClient } from "@/lib/api";
 import { BehaviorSection } from "@/features/settings/sections/BehaviorSection";
+import { http } from "msw";
+import { server } from "@/test/msw/server";
+import { ok } from "@/test/msw/handlers";
+
+const API_BASE = "http://localhost:3002";
 
 // The server-computed portfolio summary reads the TOP-LEVEL cost_basis_method
 // setting (portfolioSummaryService.resolveCostBasisMethod), not the
@@ -33,17 +38,24 @@ describe("BehaviorSection — cost basis method", () => {
         await user.click(await screen.findByRole("option", { name: /fifo/i }));
 
         await waitFor(() => {
-            expect(saveSetting).toHaveBeenCalledWith("cost_basis_method", "fifo");
+            expect(saveSetting).toHaveBeenCalledWith(
+                "cost_basis_method",
+                "fifo",
+            );
         });
         await waitFor(() => {
-            expect(invalidate).toHaveBeenCalledWith({ queryKey: ["portfolio-summary"] });
+            expect(invalidate).toHaveBeenCalledWith({
+                queryKey: ["portfolio-summary"],
+            });
         });
     });
 
     it("surfaces a save failure instead of swallowing it", async () => {
         vi.spyOn(apiClient, "saveSetting").mockRejectedValue(new Error("boom"));
         const { toast } = await import("sonner");
-        const errorToast = vi.spyOn(toast, "error").mockReturnValue("t" as never);
+        const errorToast = vi
+            .spyOn(toast, "error")
+            .mockReturnValue("t" as never);
         const user = userEvent.setup();
         renderWithApp(<BehaviorSection />);
 
@@ -51,6 +63,99 @@ describe("BehaviorSection — cost basis method", () => {
         await user.click(await screen.findByRole("option", { name: /lifo/i }));
 
         await waitFor(() => {
+            expect(errorToast).toHaveBeenCalled();
+        });
+    });
+});
+
+describe("BehaviorSection — brokerage cash categories", () => {
+    beforeEach(() => {
+        server.use(
+            http.get(`${API_BASE}/api/categories`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 7,
+                            general: "INCOME",
+                            detail: "DIVIDENDS",
+                            is_active: true,
+                        },
+                        {
+                            id: 8,
+                            general: "INVESTMENTS",
+                            detail: "FEES",
+                            is_active: true,
+                        },
+                    ],
+                    total: 2,
+                    links: [],
+                }),
+            ),
+        );
+    });
+
+    it("hydrates and saves the complete four-kind mapping atomically", async () => {
+        vi.spyOn(apiClient, "getSetting").mockResolvedValue({
+            key: "brokerage_cash_category_ids",
+            value: { dividend: 7, interest: null, fee: null, tax: null },
+        });
+        const save = vi.spyOn(apiClient, "saveSetting").mockResolvedValue({
+            key: "brokerage_cash_category_ids",
+            value: { dividend: 7, interest: null, fee: 8, tax: null },
+        });
+        const user = userEvent.setup();
+        renderWithApp(<BehaviorSection />);
+
+        const dividend = await screen.findByRole("combobox", {
+            name: "Dividends",
+        });
+        await waitFor(() => {
+            expect(dividend).toHaveTextContent("INCOME: DIVIDENDS");
+        });
+        await user.click(screen.getByRole("combobox", { name: "Fees" }));
+        await user.click(
+            await screen.findByRole("option", { name: "INVESTMENTS: FEES" }),
+        );
+
+        await waitFor(() => {
+            expect(save).toHaveBeenCalledWith("brokerage_cash_category_ids", {
+                dividend: 7,
+                interest: null,
+                fee: 8,
+                tax: null,
+            });
+        });
+    });
+
+    it("persists clearing as null and surfaces a failed save", async () => {
+        vi.spyOn(apiClient, "getSetting").mockResolvedValue({
+            key: "brokerage_cash_category_ids",
+            value: { dividend: 7, interest: null, fee: null, tax: null },
+        });
+        const save = vi
+            .spyOn(apiClient, "saveSetting")
+            .mockRejectedValue(new Error("boom"));
+        const { toast } = await import("sonner");
+        const errorToast = vi
+            .spyOn(toast, "error")
+            .mockReturnValue("t" as never);
+        const user = userEvent.setup();
+        renderWithApp(<BehaviorSection />);
+
+        await user.click(
+            await screen.findByRole("combobox", { name: "Dividends" }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "No category" }),
+        );
+
+        await waitFor(() => {
+            expect(save).toHaveBeenCalledWith("brokerage_cash_category_ids", {
+                dividend: null,
+                interest: null,
+                fee: null,
+                tax: null,
+            });
             expect(errorToast).toHaveBeenCalled();
         });
     });
@@ -65,7 +170,9 @@ interface ServicesSettings {
     keepServicesOnQuit: boolean;
 }
 
-function installElectronStubs(loadedSettings: ServicesSettings = { keepServicesOnQuit: false }) {
+function installElectronStubs(
+    loadedSettings: ServicesSettings = { keepServicesOnQuit: false },
+) {
     const win = window as unknown as Record<string, unknown>;
     win.electronUpdater = {
         pullImage: vi.fn().mockResolvedValue({ success: true, wasNew: false }),
@@ -99,7 +206,9 @@ describe("BehaviorSection — keep services running on quit", () => {
         await costBasisTrigger();
 
         expect(
-            screen.queryByRole("switch", { name: /keep services running on quit/i }),
+            screen.queryByRole("switch", {
+                name: /keep services running on quit/i,
+            }),
         ).not.toBeInTheDocument();
     });
 
@@ -107,19 +216,27 @@ describe("BehaviorSection — keep services running on quit", () => {
         installElectronStubs({ keepServicesOnQuit: true });
         renderWithApp(<BehaviorSection />);
 
-        const switchEl = await screen.findByRole("switch", { name: /keep services running on quit/i });
+        const switchEl = await screen.findByRole("switch", {
+            name: /keep services running on quit/i,
+        });
         await waitFor(() => {
             expect(switchEl).toHaveAttribute("data-state", "checked");
         });
     });
 
     it("persists the toggle via the services save-settings IPC", async () => {
-        const { saveSettings } = installElectronStubs({ keepServicesOnQuit: false });
+        const { saveSettings } = installElectronStubs({
+            keepServicesOnQuit: false,
+        });
         const user = userEvent.setup();
         renderWithApp(<BehaviorSection />);
 
-        const switchEl = await screen.findByRole("switch", { name: /keep services running on quit/i });
-        await waitFor(() => expect(switchEl).toHaveAttribute("data-state", "unchecked"));
+        const switchEl = await screen.findByRole("switch", {
+            name: /keep services running on quit/i,
+        });
+        await waitFor(() =>
+            expect(switchEl).toHaveAttribute("data-state", "unchecked"),
+        );
 
         await user.click(switchEl);
 
@@ -127,7 +244,9 @@ describe("BehaviorSection — keep services running on quit", () => {
             expect(switchEl).toHaveAttribute("data-state", "checked");
         });
         await waitFor(() => {
-            expect(saveSettings).toHaveBeenCalledWith({ keepServicesOnQuit: true });
+            expect(saveSettings).toHaveBeenCalledWith({
+                keepServicesOnQuit: true,
+            });
         });
     });
 });

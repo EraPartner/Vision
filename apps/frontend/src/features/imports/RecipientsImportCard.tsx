@@ -1,4 +1,4 @@
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
 import { Users } from "lucide-react";
 import { SimpleImportCard } from "@/features/imports/SimpleImportCard";

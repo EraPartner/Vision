@@ -12,10 +12,10 @@
  * Pure derivation — no fetching. Consumers must mount under both
  * `BelgianTaxProfileProvider` and the providers that back `usePortfolio` / `useStatistics`.
  */
-import { useMemo } from 'react';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { usePortfolio } from '@/hooks/usePortfolio';
-import { useStatistics } from '@/hooks/useStatistics';
+import { useMemo } from "react";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { useStatistics } from "@/hooks/useStatistics";
 
 export interface AvailableTaxYear {
     year: number;
@@ -41,13 +41,19 @@ function yearFromMonthKey(period: string | undefined | null): number | null {
 }
 
 export function useAvailableTaxYears(): AvailableTaxYear[] {
-    const { profile, snapshots, snapshotMetas } = useBelgianTaxProfile();
+    const { currentYear, configuredCategoryIds, snapshots, snapshotMetas } =
+        useBelgianTaxProfile((state) => ({
+            currentYear: state.profile.taxYear,
+            configuredCategoryIds: state.profile.taxIncomeCategoryIds,
+            snapshots: state.snapshots,
+            snapshotMetas: state.snapshotMetas,
+        }));
     const { summaries } = usePortfolio();
     const stats = useStatistics();
 
     const taxIncomeCategoryIds = useMemo(
-        () => new Set(profile.taxIncomeCategoryIds ?? []),
-        [profile.taxIncomeCategoryIds],
+        () => new Set(configuredCategoryIds ?? []),
+        [configuredCategoryIds],
     );
 
     const portfolioTaxFeeYears = useMemo(() => {
@@ -57,8 +63,8 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
                 const hasTaxOrFee =
                     (Number(txn.taxes) || 0) > 0 ||
                     (Number(txn.fees) || 0) > 0 ||
-                    txn.type === 'tax' ||
-                    txn.type === 'fee';
+                    txn.type === "tax" ||
+                    txn.type === "fee";
                 if (!hasTaxOrFee) continue;
                 const y = yearFromIsoDate(txn.date);
                 if (y != null) years.add(y);
@@ -72,7 +78,11 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
         const pivot = stats.data?.categoryPivot ?? [];
         if (taxIncomeCategoryIds.size === 0) return years;
         for (const cat of pivot) {
-            if (cat.categoryId == null || !taxIncomeCategoryIds.has(cat.categoryId)) continue;
+            if (
+                cat.categoryId == null ||
+                !taxIncomeCategoryIds.has(cat.categoryId)
+            )
+                continue;
             for (const [period, amount] of Object.entries(cat.incomeMonths)) {
                 if (amount <= 0) continue;
                 const y = yearFromMonthKey(period);
@@ -83,9 +93,12 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
     }, [stats.data?.categoryPivot, taxIncomeCategoryIds]);
 
     return useMemo(() => {
-        const currentYear = profile.taxYear;
-        const snapshotYears = Object.keys(snapshots).map((k) => Number(k)).filter(Number.isFinite);
-        const metaYears = Object.keys(snapshotMetas).map((k) => Number(k)).filter(Number.isFinite);
+        const snapshotYears = Object.keys(snapshots)
+            .map((k) => Number(k))
+            .filter(Number.isFinite);
+        const metaYears = Object.keys(snapshotMetas)
+            .map((k) => Number(k))
+            .filter(Number.isFinite);
         const transactionYears = new Set<number>([
             ...portfolioTaxFeeYears,
             ...taxableIncomeYears,
@@ -104,11 +117,20 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
                 return {
                     year,
                     isCurrent: year === currentYear,
-                    hasSnapshot: Object.prototype.hasOwnProperty.call(snapshots, year),
+                    hasSnapshot: Object.prototype.hasOwnProperty.call(
+                        snapshots,
+                        year,
+                    ),
                     hasTransactions: transactionYears.has(year),
                     isFiled: !!meta?.filing,
                     hasFrozenCalculation: !!meta?.frozenCalculation,
                 };
             });
-    }, [profile.taxYear, snapshots, snapshotMetas, portfolioTaxFeeYears, taxableIncomeYears]);
+    }, [
+        currentYear,
+        snapshots,
+        snapshotMetas,
+        portfolioTaxFeeYears,
+        taxableIncomeYears,
+    ]);
 }

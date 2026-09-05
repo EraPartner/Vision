@@ -89,12 +89,24 @@ export interface Account {
     funding_account_id?: number;
     statement_balance?: number;
     statement_balance_date?: string;
+    /** Authoritative statement readings, one per native currency (ADR-089 D2). */
+    statement_balances?: Array<{
+        currency: string;
+        balance: number;
+        balance_date: string;
+    }>;
     /**
      * The account's anchor+delta computed balance (ADR-094), denominated in
      * `currency`; computed, read-only. A multi-currency account's partitions are
      * converted into `currency` at today's rate, so this figure moves with FX.
      */
     computed_balance?: number;
+    /** Native per-currency ledger partitions returned by the list endpoint. */
+    balance_parts?: Array<{ currency: string; balance: number }>;
+    /** True when computed_balance excludes one or more partitions with no rate. */
+    balance_incomplete?: boolean;
+    /** Currency codes excluded from computed_balance because no conversion rate exists. */
+    unconverted_currencies?: string[];
     /**
      * The reconciliation base: the computed balance of the ONE currency
      * partition `statement_balance` is a statement for, in
@@ -135,7 +147,7 @@ export interface AccountCreate {
     name: string;
     display_name?: string;
     institution?: string;
-    currency?: string;
+    currency?: string | null;
     type?: AccountType;
     liquidity_class?: AccountLiquidityClass;
     spendable?: boolean;
@@ -223,7 +235,7 @@ export interface Transaction {
     amount_eur?: number;
     currency?: string;
     balance?: number;
-    /** Per-account running balance (SQL window); only present when the list was fetched with include_balance=true (WP-B4). */
+    /** Per-account, per-currency running balance; present when include_balance=true. */
     running_balance?: number;
     category_id?: number | null;
     category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
@@ -520,6 +532,7 @@ export interface PortfolioTransaction {
     price_per_unit?: number;
     fees?: number;
     taxes?: number;
+    dividend_amount_convention?: DividendAmountConvention;
     currency: string;
     fx_rate_to_eur?: number;
     account_id?: number;
@@ -548,6 +561,7 @@ export interface PortfolioTransactionCreate {
     price_per_unit?: number;
     fees?: number;
     taxes?: number;
+    dividend_amount_convention?: DividendAmountConvention;
     currency?: string;
     fx_rate_to_eur?: number;
     account_id?: number;
@@ -558,6 +572,8 @@ export interface PortfolioTransactionCreate {
     recurrence_interval?: RecurrenceInterval;
     recurrence_end_date?: string;
 }
+
+export type DividendAmountConvention = "gross" | "net" | "unknown";
 
 export type PortfolioTransactionUpdate =
     operations["updatePortfolioTransaction"]["requestBody"]["content"]["application/json"];

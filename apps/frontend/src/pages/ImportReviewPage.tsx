@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAccounts } from "@/hooks/useAccounts";
 import {
     useImportPreview,
@@ -28,7 +28,7 @@ import {
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { formatPercent } from "@/utils/currency";
 import { numberFormatToLocale } from "@/utils/currency";

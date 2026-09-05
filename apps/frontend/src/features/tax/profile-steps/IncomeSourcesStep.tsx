@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Info } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { apiClient } from "@/lib/api";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useState } from "react";
 import type { StepProps } from "./types";
+import { useTaxIncomeCategories } from "../useTaxProfileQueries";
 
 /**
  * Tax income source step.
@@ -23,17 +22,7 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
     const [filter, setFilter] = useState("");
 
-    const categoriesQuery = useQuery({
-        queryKey: ["categories", "all-for-tax-profile"],
-        queryFn: async () => {
-            const res = await apiClient.getCategories({
-                limit: 500,
-                active: true,
-            });
-            return res.items;
-        },
-        staleTime: 60_000,
-    });
+    const categoriesQuery = useTaxIncomeCategories();
 
     const selected = profile.taxIncomeCategoryIds ?? [];
 

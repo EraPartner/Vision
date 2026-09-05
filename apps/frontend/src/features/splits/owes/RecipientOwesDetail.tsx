@@ -25,8 +25,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { RecentRecipientTransactionsTable } from "@/features/splits/owes/RecentRecipientTransactionsTable";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {

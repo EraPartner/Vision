@@ -2,9 +2,16 @@ import { describe, expect, test } from "vitest";
 import { mergeForViewRolling } from "./forecastMerge";
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 
-function buildData(daysBack: number, daysForward: number): CashflowForecastRollingData {
+function buildData(
+    daysBack: number,
+    daysForward: number,
+): CashflowForecastRollingData {
     const today = new Date();
-    const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const todayMs = Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+    );
     const isoAt = (offset: number) =>
         new Date(todayMs + offset * 86_400_000).toISOString().slice(0, 10);
 
@@ -30,12 +37,16 @@ function buildData(daysBack: number, daysForward: number): CashflowForecastRolli
         days_back: daysBack,
         days_forward: daysForward,
         actual,
+        scheduled_actual: [],
         methods: [
             {
                 id: "simple_avg",
                 label: "Simple Average",
                 daily: futureDates.map((d) => ({ date: d, value: 5 })),
-                cumulative: actual.map((a, i) => ({ date: a.date, value: i * 5 })),
+                cumulative: actual.map((a, i) => ({
+                    date: a.date,
+                    value: i * 5,
+                })),
                 bands: null,
                 error: null,
             },
@@ -43,7 +54,10 @@ function buildData(daysBack: number, daysForward: number): CashflowForecastRolli
                 id: "monte_carlo_parametric",
                 label: "MC Parametric",
                 daily: futureDates.map((d) => ({ date: d, value: 4 })),
-                cumulative: actual.map((a, i) => ({ date: a.date, value: i * 4 })),
+                cumulative: actual.map((a, i) => ({
+                    date: a.date,
+                    value: i * 4,
+                })),
                 bands: {
                     p25: futureDates.map((d) => ({ date: d, value: 2 })),
                     p75: futureDates.map((d) => ({ date: d, value: 8 })),
@@ -62,7 +76,12 @@ describe("mergeForViewRolling", () => {
     test("rows length === daysBack + daysForward + 1", () => {
         const data = buildData(7, 7);
         const visible = new Set(["simple_avg", "monte_carlo_parametric"]);
-        const { rows } = mergeForViewRolling(data, "cumulative", visible, "Actual");
+        const { rows } = mergeForViewRolling(
+            data,
+            "cumulative",
+            visible,
+            "Actual",
+        );
         expect(rows).toHaveLength(15);
     });
 
@@ -72,7 +91,7 @@ describe("mergeForViewRolling", () => {
         const { rows } = mergeForViewRolling(data, "daily", visible, "Actual");
         expect(rows.every((r) => r.t instanceof Date)).toBe(true);
         const t = rows[0].t;
-        const localDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        const localDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
         expect(localDate).toBe(rows[0].date);
     });
 
@@ -88,11 +107,30 @@ describe("mergeForViewRolling", () => {
     test("cumulative view: bands carry forward last actual cumulative", () => {
         const data = buildData(3, 3);
         const visible = new Set(["monte_carlo_parametric"]);
-        const { rows } = mergeForViewRolling(data, "cumulative", visible, "Actual");
+        const { rows } = mergeForViewRolling(
+            data,
+            "cumulative",
+            visible,
+            "Actual",
+        );
         // Last actual cum = 4*10 = 40 (4th entry, index 3). Future band p25 starts at 40 + 2 = 42.
         const futureRow = rows[4];
         expect(futureRow.monte_carlo_parametric__pLo).toBe(42);
         expect(futureRow.monte_carlo_parametric__pHi).toBe(48);
+    });
+
+    test("cumulative bands apply scheduled ledger rows", () => {
+        const data = buildData(3, 3);
+        data.scheduled_actual.push({ date: data.actual[4].date, net: -12 });
+        const { rows } = mergeForViewRolling(
+            data,
+            "cumulative",
+            new Set(["monte_carlo_parametric"]),
+            "Actual",
+        );
+
+        expect(rows[4].monte_carlo_parametric__pLo).toBe(30);
+        expect(rows[4].monte_carlo_parametric__pHi).toBe(36);
     });
 
     test("malformed dates are filtered out instead of producing Invalid Date rows", () => {
@@ -112,7 +150,12 @@ describe("mergeForViewRolling", () => {
     test("hidden methods omitted from rows", () => {
         const data = buildData(3, 3);
         const visible = new Set<string>(); // none visible
-        const { rows, series } = mergeForViewRolling(data, "daily", visible, "Actual");
+        const { rows, series } = mergeForViewRolling(
+            data,
+            "daily",
+            visible,
+            "Actual",
+        );
         expect(rows[0].simple_avg).toBeUndefined();
         // Only the actual series remains.
         expect(series).toHaveLength(1);

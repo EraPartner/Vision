@@ -16,7 +16,7 @@ import {
     useUnsavedChanges,
 } from "@/contexts/UnsavedChangesContext";
 
-vi.mock("@/contexts/LanguageContext", () => ({
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
         t: (key: string) =>
             ({

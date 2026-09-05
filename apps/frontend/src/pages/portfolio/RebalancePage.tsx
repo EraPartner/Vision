@@ -6,7 +6,7 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
  * Custom plans are persisted via useRebalancePlans (the `rebalance_plans` setting).
  */
 import { useCallback, useEffect, useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +34,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Scale, Loader2, Plus, Trash2, Save } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
@@ -56,6 +56,7 @@ import {
     type RebalanceUrlDraft,
 } from "./rebalanceUrlState";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useRebalanceInputs } from "@/features/portfolio/usePortfolioQueries";
 
 const MODELS: ModelPortfolio[] = ["sixty_forty", "all_weather", "three_fund"];
 
@@ -212,12 +213,7 @@ export default function RebalancePage() {
     // Lightweight inputs read: the rebalance endpoint returns available cash + actual
     // sleeve values regardless of target, so a throwaway preset call gives us the
     // figures needed to show available cash, default the cap, and seed "current mix".
-    const inputs = useQuery({
-        queryKey: ["rebalance-inputs", currency],
-        queryFn: () =>
-            apiClient.computeRebalance({ model: "sixty_forty", currency }),
-        staleTime: 60_000,
-    });
+    const inputs = useRebalanceInputs(currency);
     const availableCash = inputs.data?.availableCash ?? 0;
     const currentActuals = inputs.data?.actualValues ?? {};
 

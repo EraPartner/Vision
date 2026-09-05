@@ -1,5 +1,5 @@
 import type { ChangeEventHandler } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface IndicatorPeriodInputProps {
   indicator: string;

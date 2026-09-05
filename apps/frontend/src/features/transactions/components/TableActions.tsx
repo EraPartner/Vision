@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
 
 interface TableActionsProps {

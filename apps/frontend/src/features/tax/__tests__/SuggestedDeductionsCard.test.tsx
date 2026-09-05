@@ -3,10 +3,10 @@ import React from 'react';
 import { expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BelgianTaxProfileProvider } from '@/contexts/BelgianTaxProfileContext';
-import { AppSettingsProvider } from '@/contexts/AppSettingsContext';
+import { AppSettingsProvider } from '@/stores/hydration/AppSettingsHydration';
 import SuggestedDeductionsCard from '../SuggestedDeductionsCard';
 
-vi.mock('@/contexts/LanguageContext', () => ({
+vi.mock('@/stores/hydration/LanguageHydration', () => ({
   LanguageProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useLanguage: () => ({
     t: (key: string) => {

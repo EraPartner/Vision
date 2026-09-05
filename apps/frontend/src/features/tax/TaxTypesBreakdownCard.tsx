@@ -1,4 +1,4 @@
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { CostBreakdownEntry } from "@/hooks/usePortfolioTaxData";
 import { cn } from "@/lib/utils";

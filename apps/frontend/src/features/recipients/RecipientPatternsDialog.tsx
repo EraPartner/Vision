@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
-import type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate } from "@/lib/api";
+import type {
+    RecipientPattern,
+    RecipientPatternCreate,
+    RecipientPatternUpdate,
+} from "@/lib/api";
 import {
     Dialog,
     DialogContent,
@@ -28,6 +32,7 @@ import { Loader2, Plus, Trash2, Eye } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { cn } from "@/lib/utils";
+import { useRecipientPatterns } from "@/hooks/useRecipients";
 
 type PatternKind = "literal_prefix" | "glob" | "regex";
 
@@ -72,12 +77,7 @@ export function RecipientPatternsDialog({
 
     const queryKey = ["recipient-patterns", recipientId];
 
-    const { data, isLoading } = useQuery({
-        queryKey,
-        enabled: open,
-        queryFn: () => apiClient.listRecipientPatterns(recipientId),
-        staleTime: 30_000,
-    });
+    const { data, isLoading } = useRecipientPatterns(recipientId, open);
 
     const patterns = data?.items ?? [];
 
@@ -95,8 +95,13 @@ export function RecipientPatternsDialog({
     });
 
     const updateMutation = useMutation({
-        mutationFn: ({ patternId, data }: { patternId: number; data: RecipientPatternUpdate }) =>
-            apiClient.updateRecipientPattern(recipientId, patternId, data),
+        mutationFn: ({
+            patternId,
+            data,
+        }: {
+            patternId: number;
+            data: RecipientPatternUpdate;
+        }) => apiClient.updateRecipientPattern(recipientId, patternId, data),
         onSuccess: () => {
             toast.success(t("recipientPatterns.toast.updated"));
             resetForm();
@@ -139,11 +144,14 @@ export function RecipientPatternsDialog({
         if (!form.pattern) return;
         setIsPreviewing(true);
         try {
-            const result = await apiClient.previewRecipientPattern(recipientId, {
-                pattern: form.pattern,
-                pattern_kind: form.pattern_kind,
-                case_sensitive: form.case_sensitive,
-            });
+            const result = await apiClient.previewRecipientPattern(
+                recipientId,
+                {
+                    pattern: form.pattern,
+                    pattern_kind: form.pattern_kind,
+                    case_sensitive: form.case_sensitive,
+                },
+            );
             setPreviewCount(result.matchCount);
         } catch {
             toast.error(t("recipientPatterns.toast.error"));
@@ -206,9 +214,13 @@ export function RecipientPatternsDialog({
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>{t("recipientPatterns.title")}</DialogTitle>
+                        <DialogTitle>
+                            {t("recipientPatterns.title")}
+                        </DialogTitle>
                         <DialogDescription>
-                            <span className="font-medium text-foreground">{recipientName}</span>
+                            <span className="font-medium text-foreground">
+                                {recipientName}
+                            </span>
                             {" — "}
                             {t("recipientPatterns.subtitle")}
                         </DialogDescription>
@@ -241,29 +253,48 @@ export function RecipientPatternsDialog({
                                                     {p.pattern}
                                                 </code>
                                                 <span
-                                                    className={cn("text-xs px-1.5 py-0.5 rounded font-medium", kindBadgeColor[p.pattern_kind])}
+                                                    className={cn(
+                                                        "text-xs px-1.5 py-0.5 rounded font-medium",
+                                                        kindBadgeColor[
+                                                            p.pattern_kind
+                                                        ],
+                                                    )}
                                                 >
                                                     {kindLabel[p.pattern_kind]}
                                                 </span>
                                                 {p.case_sensitive && (
-                                                    <Badge variant="outline" className="text-xs">Aa</Badge>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-xs"
+                                                    >
+                                                        Aa
+                                                    </Badge>
                                                 )}
                                                 {p.source !== "user" && (
-                                                    <Badge variant="secondary" className="text-xs">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="text-xs"
+                                                    >
                                                         {p.source}
                                                     </Badge>
                                                 )}
                                             </div>
                                             {p.notes && (
-                                                <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {p.notes}
+                                                </p>
                                             )}
                                         </div>
 
                                         <div className="flex items-center gap-1 shrink-0">
                                             <Switch
                                                 checked={p.is_active}
-                                                onCheckedChange={() => handleToggleActive(p)}
-                                                disabled={updateMutation.isPending}
+                                                onCheckedChange={() =>
+                                                    handleToggleActive(p)
+                                                }
+                                                disabled={
+                                                    updateMutation.isPending
+                                                }
                                                 className="scale-75"
                                             />
                                             <Button
@@ -271,11 +302,19 @@ export function RecipientPatternsDialog({
                                                 size="icon"
                                                 className="h-7 w-7 text-muted-foreground hover:text-foreground"
                                                 onClick={() =>
-                                                    editingId === p.id ? resetForm() : startEdit(p)
+                                                    editingId === p.id
+                                                        ? resetForm()
+                                                        : startEdit(p)
                                                 }
                                             >
-                                                <span className="sr-only">Edit</span>
-                                                <svg className="h-3.5 w-3.5" viewBox="0 0 15 15" fill="none">
+                                                <span className="sr-only">
+                                                    Edit
+                                                </span>
+                                                <svg
+                                                    className="h-3.5 w-3.5"
+                                                    viewBox="0 0 15 15"
+                                                    fill="none"
+                                                >
                                                     <path
                                                         d="M11.8536 1.14645C11.6583 0.951184 11.3417 0.951184 11.1465 1.14645L3.71455 8.57836C3.62459 8.66832 3.55263 8.77461 3.50251 8.89155L2.04044 12.303C1.9599 12.491 2.00189 12.709 2.14646 12.8536C2.29103 12.9981 2.50905 13.0401 2.69697 12.9596L6.10847 11.4975C6.2254 11.4474 6.3317 11.3754 6.42166 11.2855L13.8536 3.85355C14.0488 3.65829 14.0488 3.34171 13.8536 3.14645L11.8536 1.14645Z"
                                                         fill="currentColor"
@@ -287,8 +326,12 @@ export function RecipientPatternsDialog({
                                                 size="icon"
                                                 className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                 onClick={() => handleDelete(p)}
-                                                disabled={deleteMutation.isPending}
-                                                aria-label={t("recipientPatterns.deleteTitle")}
+                                                disabled={
+                                                    deleteMutation.isPending
+                                                }
+                                                aria-label={t(
+                                                    "recipientPatterns.deleteTitle",
+                                                )}
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -304,21 +347,32 @@ export function RecipientPatternsDialog({
                                 <Separator />
                                 {/* Real <form>: Enter in the pattern/priority/notes
                                     fields saves. Same block layout as the div it replaces. */}
-                                <form onSubmit={handleSave} className="space-y-4 p-4 rounded-lg border border-primary/30 bg-primary/5">
+                                <form
+                                    onSubmit={handleSave}
+                                    className="space-y-4 p-4 rounded-lg border border-primary/30 bg-primary/5"
+                                >
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="sm:col-span-2 space-y-2">
                                             <Label htmlFor="pattern-input">
-                                                {t("recipientPatterns.patternLabel")}
+                                                {t(
+                                                    "recipientPatterns.patternLabel",
+                                                )}
                                             </Label>
                                             <div className="flex gap-2">
                                                 <Input
                                                     id="pattern-input"
                                                     value={form.pattern}
                                                     onChange={(e) => {
-                                                        setForm({ ...form, pattern: e.target.value });
+                                                        setForm({
+                                                            ...form,
+                                                            pattern:
+                                                                e.target.value,
+                                                        });
                                                         setPreviewCount(null);
                                                     }}
-                                                    placeholder={t("recipientPatterns.patternPlaceholder")}
+                                                    placeholder={t(
+                                                        "recipientPatterns.patternPlaceholder",
+                                                    )}
                                                     className="font-mono"
                                                     autoFocus
                                                 />
@@ -327,9 +381,14 @@ export function RecipientPatternsDialog({
                                                     variant="outline"
                                                     size="icon"
                                                     className="shrink-0"
-                                                    title={t("recipientPatterns.previewBtn")}
+                                                    title={t(
+                                                        "recipientPatterns.previewBtn",
+                                                    )}
                                                     onClick={handlePreview}
-                                                    disabled={!form.pattern || isPreviewing}
+                                                    disabled={
+                                                        !form.pattern ||
+                                                        isPreviewing
+                                                    }
                                                 >
                                                     {isPreviewing ? (
                                                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -339,22 +398,42 @@ export function RecipientPatternsDialog({
                                                 </Button>
                                             </div>
                                             {previewCount != null && (
-                                                <p className={cn("text-xs", previewCount > 0 ? "text-info" : "text-muted-foreground")}>
+                                                <p
+                                                    className={cn(
+                                                        "text-xs",
+                                                        previewCount > 0
+                                                            ? "text-info"
+                                                            : "text-muted-foreground",
+                                                    )}
+                                                >
                                                     {previewCount > 0
-                                                        ? t("recipientPatterns.previewCount", { n: previewCount })
-                                                        : t("recipientPatterns.previewZero")}
+                                                        ? t(
+                                                              "recipientPatterns.previewCount",
+                                                              {
+                                                                  n: previewCount,
+                                                              },
+                                                          )
+                                                        : t(
+                                                              "recipientPatterns.previewZero",
+                                                          )}
                                                 </p>
                                             )}
                                         </div>
 
                                         <div className="space-y-2">
                                             <Label htmlFor="pattern-kind">
-                                                {t("recipientPatterns.kindLabel")}
+                                                {t(
+                                                    "recipientPatterns.kindLabel",
+                                                )}
                                             </Label>
                                             <Select
                                                 value={form.pattern_kind}
                                                 onValueChange={(v) =>
-                                                    setForm({ ...form, pattern_kind: v as PatternKind })
+                                                    setForm({
+                                                        ...form,
+                                                        pattern_kind:
+                                                            v as PatternKind,
+                                                    })
                                                 }
                                             >
                                                 <SelectTrigger id="pattern-kind">
@@ -362,13 +441,19 @@ export function RecipientPatternsDialog({
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="literal_prefix">
-                                                        {t("recipientPatterns.kindLiteralPrefix")}
+                                                        {t(
+                                                            "recipientPatterns.kindLiteralPrefix",
+                                                        )}
                                                     </SelectItem>
                                                     <SelectItem value="glob">
-                                                        {t("recipientPatterns.kindGlob")}
+                                                        {t(
+                                                            "recipientPatterns.kindGlob",
+                                                        )}
                                                     </SelectItem>
                                                     <SelectItem value="regex">
-                                                        {t("recipientPatterns.kindRegex")}
+                                                        {t(
+                                                            "recipientPatterns.kindRegex",
+                                                        )}
                                                     </SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -376,7 +461,9 @@ export function RecipientPatternsDialog({
 
                                         <div className="space-y-2">
                                             <Label htmlFor="pattern-priority">
-                                                {t("recipientPatterns.priorityLabel")}
+                                                {t(
+                                                    "recipientPatterns.priorityLabel",
+                                                )}
                                             </Label>
                                             <Input
                                                 id="pattern-priority"
@@ -387,7 +474,10 @@ export function RecipientPatternsDialog({
                                                 onChange={(e) =>
                                                     setForm({
                                                         ...form,
-                                                        priority: parseInt(e.target.value) || 100,
+                                                        priority:
+                                                            parseInt(
+                                                                e.target.value,
+                                                            ) || 100,
                                                     })
                                                 }
                                             />
@@ -395,15 +485,22 @@ export function RecipientPatternsDialog({
 
                                         <div className="sm:col-span-2 space-y-2">
                                             <Label htmlFor="pattern-notes">
-                                                {t("recipientPatterns.notesLabel")}
+                                                {t(
+                                                    "recipientPatterns.notesLabel",
+                                                )}
                                             </Label>
                                             <Input
                                                 id="pattern-notes"
                                                 value={form.notes}
                                                 onChange={(e) =>
-                                                    setForm({ ...form, notes: e.target.value })
+                                                    setForm({
+                                                        ...form,
+                                                        notes: e.target.value,
+                                                    })
                                                 }
-                                                placeholder={t("recipientPatterns.notesPlaceholder")}
+                                                placeholder={t(
+                                                    "recipientPatterns.notesPlaceholder",
+                                                )}
                                             />
                                         </div>
 
@@ -412,22 +509,36 @@ export function RecipientPatternsDialog({
                                                 id="pattern-case"
                                                 checked={form.case_sensitive}
                                                 onCheckedChange={(v) =>
-                                                    setForm({ ...form, case_sensitive: v })
+                                                    setForm({
+                                                        ...form,
+                                                        case_sensitive: v,
+                                                    })
                                                 }
                                             />
-                                            <Label htmlFor="pattern-case" className="cursor-pointer">
-                                                {t("recipientPatterns.caseSensitive")}
+                                            <Label
+                                                htmlFor="pattern-case"
+                                                className="cursor-pointer"
+                                            >
+                                                {t(
+                                                    "recipientPatterns.caseSensitive",
+                                                )}
                                             </Label>
                                         </div>
                                     </div>
 
                                     <div className="flex gap-2 justify-end">
-                                        <Button type="button" variant="ghost" onClick={resetForm}>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={resetForm}
+                                        >
                                             {t("recipientPatterns.cancelBtn")}
                                         </Button>
                                         <Button
                                             type="submit"
-                                            disabled={!form.pattern.trim() || isSaving}
+                                            disabled={
+                                                !form.pattern.trim() || isSaving
+                                            }
                                         >
                                             {isSaving && (
                                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

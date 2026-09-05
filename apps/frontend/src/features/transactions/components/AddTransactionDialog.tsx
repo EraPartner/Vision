@@ -18,8 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Loader2 } from "lucide-react";
 import { useCreateTransaction } from "@/hooks/useTransactions";
 import { ApiClientError } from "@/lib/api/client";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { DatePicker } from "@/components/shared/DatePicker";
 import {
     formatDateStringWithAppSettings,

@@ -1,4 +1,4 @@
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { MonthlyCostDatum } from "@/hooks/usePortfolioTaxData";
 import { BarChart, type BarSeries } from "@/components/charts";

@@ -19,9 +19,9 @@ import type { MemoryRouterProps } from "react-router";
 const measureElementMock = vi.hoisted(() => vi.fn());
 
 // Provide synchronous translations so tests don't depend on async locale loading.
-vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/contexts/LanguageContext")>();
+        await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
     const { default: enDict } = await import("@/locales/en");
     return {
         ...actual,

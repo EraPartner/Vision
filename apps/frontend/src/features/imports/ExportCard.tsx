@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { requestBlob } from "@/lib/api/helpers";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { todayYmd } from "@/lib/timezone";

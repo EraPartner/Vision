@@ -1,5 +1,5 @@
 import { Calculator, Landmark } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";

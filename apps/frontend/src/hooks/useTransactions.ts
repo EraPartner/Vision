@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { ApiClientError } from "@/lib/api/client";
 import { ApiErrorCode } from "@vision/types";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 interface UseTransactionsParams {
@@ -46,6 +46,29 @@ export function useTransactions(params?: UseTransactionsParams) {
         queryFn: () => apiClient.getTransactions(params),
         staleTime: 30_000,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
+    });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
+}
+
+export function useAccountLedger(
+    accountId: number | undefined,
+    ledgerLimit: number,
+    enabled: boolean,
+) {
+    const query = useQuery({
+        queryKey: transactionKeys.accountLedger(accountId, ledgerLimit),
+        queryFn: () =>
+            apiClient.getTransactions({
+                account_id: accountId!,
+                limit: ledgerLimit,
+                sort_by: "date",
+                sort_dir: "desc",
+                include_balance: true,
+            }),
+        enabled,
+        staleTime: 30_000,
+        placeholderData: (previous) => previous,
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
     return query;

@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "@/components/ui/sonner";
 
-vi.mock("@/contexts/ThemeContext", () => ({
+vi.mock("@/stores/hydration/ThemeHydration", () => ({
     useTheme: () => ({ mode: "system" }),
 }));
 

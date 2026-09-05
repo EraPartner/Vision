@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { apiClient } from '@/lib/api';
 import { importKeys } from '@/lib/queryKeys';
 import type { PortfolioCustomConfig } from '@/lib/api/portfolioImports';

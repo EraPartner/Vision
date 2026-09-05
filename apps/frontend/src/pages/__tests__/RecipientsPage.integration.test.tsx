@@ -36,7 +36,7 @@ describe("RecipientsPage (integration)", () => {
         });
         expect(headings).toHaveLength(1);
         expect(
-            screen.getByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add recipient/i }),
         ).toBeInTheDocument();
         expect(
             screen.getByRole("button", { name: /merge recipients/i }),

@@ -2,7 +2,7 @@
  * Canonical registry of every localStorage key used by Vision's frontend.
  *
  * Single source of truth imported by:
- *   - contexts/ThemeContext.tsx          (theme, variant)
+ *   - stores/hydration/ThemeHydration.tsx (theme, variant)
  *   - features/settings/sections/BackupSection.tsx  (passphrase reminder)
  *   - components/notifications/UpcomingPaymentsNotification.tsx
  *   - features/planned/RecurringDetectionPanel.tsx
@@ -66,7 +66,7 @@ export type LocalStorageKey =
  */
 export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
     [
-        // Legacy key — SettingsContext migrates value to DB and then removes it.
+        // Legacy key — SettingsHydration migrates value to DB and then removes it.
         // No value survives to be backed up.
         "vision_dashboardSettings",
         // Admin Bearer token (see lib/adminToken.ts). Session-scoped auth held in

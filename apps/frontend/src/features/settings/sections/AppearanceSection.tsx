@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useTheme } from '@/stores/hydration/ThemeHydration';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
+import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';

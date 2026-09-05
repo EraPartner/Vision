@@ -9,7 +9,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { TagFilterCombobox } from "@/components/shared/TagFilterCombobox";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
 interface BulkTagDialogProps {

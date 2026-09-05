@@ -10,7 +10,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface BulkRecategorizeDialogProps {
     open: boolean;

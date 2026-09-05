@@ -8,7 +8,7 @@ import {
 import type {CategoryCreate, CategoryUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import {useLanguage} from '@/contexts/LanguageContext';
+import {useLanguage} from '@/stores/hydration/LanguageHydration';
 import {useBackgroundQueryCue} from '@/components/shared/BackgroundQueryIndicator';
 
 export function useCategories(params?: {

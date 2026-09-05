@@ -1,7 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyFormatter,
     useCurrencyPartsFormatter,
@@ -61,6 +61,7 @@ import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageShell } from "@/components/shared/PageShell";
+import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
     return [
@@ -670,6 +671,11 @@ export default function PortfolioOverviewPage() {
                                                                         ]
                                                                     }
                                                                 </Badge>
+                                                                <PortfolioOversoldBadge
+                                                                    oversold={
+                                                                        inv.oversold
+                                                                    }
+                                                                />
                                                             </div>
                                                             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                                                                 <span>

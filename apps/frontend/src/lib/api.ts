@@ -10,29 +10,42 @@
  */
 
 // Re-export shared primitives (call sites do `import { API_BASE_URL, ApiClientError } from '@/lib/api'`)
-export { API_BASE_URL, ApiClientError } from '@/lib/api/client';
-export type { AggregationEnvelope, ImportProgress, ImportResult, NetWorthSnapshot, NetWorthResponse, SavedChart, SavedChartCreate, MarketNewsArticle, ImportPreviewResponse, ImportPreviewGroup, ImportStagingRow, MatchSource } from '@/types/apiClient';
+export { API_BASE_URL, ApiClientError } from "@/lib/api/client";
+export type {
+    AggregationEnvelope,
+    ImportProgress,
+    ImportResult,
+    NetWorthSnapshot,
+    NetWorthResponse,
+    SavedChart,
+    SavedChartCreate,
+    MarketNewsArticle,
+    ImportPreviewResponse,
+    ImportPreviewGroup,
+    ImportStagingRow,
+    MatchSource,
+} from "@/types/apiClient";
 
 // Domain modules
-import * as txn from '@/lib/api/transactions';
-import * as cat from '@/lib/api/categories';
-import * as acct from '@/lib/api/accounts';
-import * as rec from '@/lib/api/recipients';
-import * as pln from '@/lib/api/planned';
-import * as imp from '@/lib/api/imports';
-import * as sett from '@/lib/api/settings';
-import * as port from '@/lib/api/portfolio';
-import * as portImp from '@/lib/api/portfolioImports';
-import * as info from '@/lib/api/info';
-import * as splits from '@/lib/api/splits';
-import * as electron from '@/lib/api/electron';
-import * as charts from '@/lib/api/charts';
-import * as market from '@/lib/api/market';
-import * as research from '@/lib/api/research';
-import * as agg from '@/lib/api/aggregations';
-import * as ai from '@/lib/api/ai';
-import * as tags from '@/lib/api/tags';
-import * as crossWorkspace from '@/lib/api/crossWorkspace';
+import * as txn from "@/lib/api/transactions";
+import * as cat from "@/lib/api/categories";
+import * as acct from "@/lib/api/accounts";
+import * as rec from "@/lib/api/recipients";
+import * as pln from "@/lib/api/planned";
+import * as imp from "@/lib/api/imports";
+import * as sett from "@/lib/api/settings";
+import * as port from "@/lib/api/portfolio";
+import * as portImp from "@/lib/api/portfolioImports";
+import * as info from "@/lib/api/info";
+import * as splits from "@/lib/api/splits";
+import * as electron from "@/lib/api/electron";
+import * as charts from "@/lib/api/charts";
+import * as market from "@/lib/api/market";
+import * as research from "@/lib/api/research";
+import * as agg from "@/lib/api/aggregations";
+import * as ai from "@/lib/api/ai";
+import * as tags from "@/lib/api/tags";
+import * as crossWorkspace from "@/lib/api/crossWorkspace";
 
 export const apiClient = {
     // Transactions
@@ -58,6 +71,8 @@ export const apiClient = {
     mergeAccounts: acct.mergeAccounts,
     previewMerge: acct.previewMerge,
     setOpeningBalance: acct.setOpeningBalance,
+    setStatementBalance: acct.setStatementBalance,
+    deleteStatementBalance: acct.deleteStatementBalance,
     reconcileAccount: acct.reconcileAccount,
 
     // Recipients
@@ -135,17 +150,22 @@ export const apiClient = {
     getSupportedParsers: info.getSupportedParsers,
     getDistinctBankAccounts: info.getDistinctBankAccounts,
     getTransactionCount: info.getTransactionCount,
-    getCashflowForecastMethods: (params?: Parameters<typeof agg.getCashflowForecastMethods>[0]) =>
-        agg.getCashflowForecastMethods(params).then(r => r.data),
-    getCashflowForecastRolling: (params?: Parameters<typeof agg.getCashflowForecastRolling>[0]) =>
-        agg.getCashflowForecastRolling(params).then(r => r.data),
-    getCashflowForecastAccuracy: (params?: Parameters<typeof agg.getCashflowForecastAccuracy>[0]) =>
-        agg.getCashflowForecastAccuracy(params).then(r => r.data),
-    getBankBalances: (params?: Parameters<typeof agg.getAggregationBankBalances>[0]) =>
-        agg.getAggregationBankBalances(params).then(r => r.data),
+    getCashflowForecastMethods: (
+        params?: Parameters<typeof agg.getCashflowForecastMethods>[0],
+    ) => agg.getCashflowForecastMethods(params).then((r) => r.data),
+    getCashflowForecastRolling: (
+        params?: Parameters<typeof agg.getCashflowForecastRolling>[0],
+    ) => agg.getCashflowForecastRolling(params).then((r) => r.data),
+    getCashflowForecastAccuracy: (
+        params?: Parameters<typeof agg.getCashflowForecastAccuracy>[0],
+    ) => agg.getCashflowForecastAccuracy(params).then((r) => r.data),
+    getBankBalances: (
+        params?: Parameters<typeof agg.getAggregationBankBalances>[0],
+    ) => agg.getAggregationBankBalances(params).then((r) => r.data),
     getRecurringPatterns: info.getRecurringPatterns,
-    getRecipientInsights: (params?: Parameters<typeof agg.getAggregationRecipientInsights>[0]) =>
-        agg.getAggregationRecipientInsights(params).then(r => r.data),
+    getRecipientInsights: (
+        params?: Parameters<typeof agg.getAggregationRecipientInsights>[0],
+    ) => agg.getAggregationRecipientInsights(params).then((r) => r.data),
     getPortfolioPerformance: info.getPortfolioPerformance,
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
@@ -265,7 +285,7 @@ export type {
     BulkExportRequest,
     BulkDeleteResult,
     BulkUpdateResult,
-} from '@/types/api';
+} from "@/types/api";
 export type {
     ChatMessage,
     ChatRole,
@@ -282,10 +302,39 @@ export type {
     TokenUsage,
     ToolRenderAs,
     ToolResultPayload,
-} from '@/types/aiChat';
-export type { SavedParserConfig, CustomParserConfigPayload } from '@/lib/api/imports';
-export type { SplitItem, SplitPayment, SplitCreateInput, OwedSummaryItem, OwedDetailItem } from '@/lib/api/splits';
-export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, PatternSuggestion } from '@/lib/api/recipients';
-export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
-export type { RebalanceRequest, RebalanceResponse, ModelPortfolio } from '@/lib/api/crossWorkspace';
-export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
+} from "@/types/aiChat";
+export type {
+    SavedParserConfig,
+    CustomParserConfigPayload,
+} from "@/lib/api/imports";
+export type {
+    SplitItem,
+    SplitPayment,
+    SplitCreateInput,
+    OwedSummaryItem,
+    OwedDetailItem,
+} from "@/lib/api/splits";
+export type {
+    RecipientPattern,
+    RecipientPatternCreate,
+    RecipientPatternUpdate,
+    PatternSuggestion,
+} from "@/lib/api/recipients";
+export type {
+    ExchangeRate,
+    ExchangeRatesData,
+    PortfolioSummaryItem,
+    PortfolioSummaryResponse,
+    PortfolioSummaryTotals,
+} from "@/lib/api/info";
+export type {
+    RebalanceRequest,
+    RebalanceResponse,
+    ModelPortfolio,
+} from "@/lib/api/crossWorkspace";
+export type {
+    WatchlistItem,
+    WatchlistCreate,
+    WatchlistUpdate,
+    WatchlistListResponse,
+} from "@/types/watchlist";

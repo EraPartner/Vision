@@ -1,30 +1,15 @@
-import { memo, useMemo } from "react";
-import {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Legend,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-} from "recharts";
-import { getChartColor } from "@/components/charts";
+import { lazy, memo, Suspense, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import type {
     ToolErrorDetail,
     ToolRenderAs,
     ToolResultPayload,
 } from "@/types/aiChat";
-import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+
+const ToolResultChart = lazy(() => import("./ToolResultChart"));
 
 function formatToolError(
     error: ToolResultPayload["error"],
@@ -92,13 +77,6 @@ function inferColumns(rows: Row[], preferred?: string[]): string[] {
     return Object.keys(rows[0]);
 }
 
-function pickNumericKeys(rows: Row[], exclude: string): string[] {
-    if (rows.length === 0) return [];
-    return Object.keys(rows[0]).filter(
-        (key) => key !== exclude && typeof rows[0][key] === "number",
-    );
-}
-
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     const { t } = useLanguage();
     const rows = useMemo(
@@ -125,28 +103,24 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
             {renderAs === "table" && (
                 <TableView rows={rows} columns={meta?.columns} />
             )}
-            {renderAs === "line" && (
-                <CartesianChartView
-                    kind="line"
-                    rows={rows}
-                    xKey={meta?.xKey}
-                    yKeys={meta?.yKeys}
-                />
-            )}
-            {renderAs === "bar" && (
-                <CartesianChartView
-                    kind="bar"
-                    rows={rows}
-                    xKey={meta?.xKey}
-                    yKeys={meta?.yKeys}
-                />
-            )}
-            {renderAs === "pie" && (
-                <PieChartView
-                    rows={rows}
-                    xKey={meta?.xKey}
-                    yKeys={meta?.yKeys}
-                />
+            {(renderAs === "line" ||
+                renderAs === "bar" ||
+                renderAs === "pie") && (
+                <Suspense
+                    fallback={
+                        <div
+                            className="h-56 w-full animate-pulse rounded-lg bg-muted/35"
+                            aria-hidden="true"
+                        />
+                    }
+                >
+                    <ToolResultChart
+                        kind={renderAs}
+                        rows={rows}
+                        xKey={meta?.xKey}
+                        yKeys={meta?.yKeys}
+                    />
+                </Suspense>
             )}
             {renderAs === "json" && <JsonView data={result.data} />}
             <Footer meta={meta} rowCount={rows.length} />
@@ -212,150 +186,6 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
     );
 }
 
-interface ChartViewProps {
-    rows: Row[];
-    xKey?: string;
-    yKeys?: string[];
-}
-
-function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
-    const xk = xKey ?? (rows.length > 0 ? Object.keys(rows[0])[0] : "");
-    const yk = yKeys && yKeys.length > 0 ? yKeys : pickNumericKeys(rows, xk);
-    return { xk, yk };
-}
-
-// Line and bar tool-result charts share the entire frame (grid/axes/tooltip/
-// legend) and differ only in the container element and the mark, so one view
-// renders both.
-function CartesianChartView({
-    rows,
-    xKey,
-    yKeys,
-    kind,
-}: ChartViewProps & { kind: "line" | "bar" }) {
-    const { xk, yk } = resolveAxes(rows, xKey, yKeys);
-    if (rows.length === 0 || yk.length === 0) {
-        return <p className="text-xs text-muted-foreground">No chart data.</p>;
-    }
-    const frame = [
-        <CartesianGrid
-            key="grid"
-            strokeDasharray="3 3"
-            stroke="hsl(var(--border))"
-            opacity={0.3}
-        />,
-        <XAxis
-            key="x"
-            dataKey={xk}
-            tick={{
-                className: "tabular-nums",
-                fill: "hsl(var(--muted-foreground))",
-                fontFamily: "inherit",
-                fontSize: 11,
-            }}
-            stroke="hsl(var(--muted-foreground))"
-        />,
-        <YAxis
-            key="y"
-            tick={{
-                className: "tabular-nums",
-                fill: "hsl(var(--muted-foreground))",
-                fontFamily: "inherit",
-                fontSize: 11,
-            }}
-            stroke="hsl(var(--muted-foreground))"
-        />,
-        <Tooltip key="tooltip" contentStyle={tooltipStyle} />,
-        ...(yk.length > 1
-            ? [<Legend key="legend" wrapperStyle={{ fontSize: 11 }} />]
-            : []),
-        ...yk.map((key, i) =>
-            kind === "line" ? (
-                <Line
-                    key={key}
-                    type="monotone"
-                    dataKey={key}
-                    stroke={getChartColor(i)}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                />
-            ) : (
-                <Bar
-                    key={key}
-                    dataKey={key}
-                    fill={getChartColor(i)}
-                    radius={[4, 4, 0, 0]}
-                    isAnimationActive={false}
-                />
-            ),
-        ),
-    ];
-    return (
-        <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                {kind === "line" ? (
-                    <LineChart
-                        data={rows}
-                        margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                    >
-                        {frame}
-                    </LineChart>
-                ) : (
-                    <BarChart
-                        data={rows}
-                        margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                    >
-                        {frame}
-                    </BarChart>
-                )}
-            </ResponsiveContainer>
-        </div>
-    );
-}
-
-function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
-    const formatPercent = usePercentFormatter();
-    const { xk, yk } = resolveAxes(rows, xKey, yKeys);
-    const valueKey = yk[0];
-    if (rows.length === 0 || !valueKey) {
-        return <p className="text-xs text-muted-foreground">No chart data.</p>;
-    }
-    const data = rows.map((r) => ({
-        name: String(r[xk] ?? ""),
-        value: typeof r[valueKey] === "number" ? (r[valueKey] as number) : 0,
-    }));
-    return (
-        <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                    <Pie
-                        data={data}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        innerRadius={40}
-                        dataKey="value"
-                        label={({ name, percent }) =>
-                            `${name} ${formatPercent((percent ?? 0) * 100, { digits: 0 })}`
-                        }
-                        labelLine={{ strokeWidth: 1 }}
-                        isAnimationActive={false}
-                    >
-                        {data.map((entry, i) => (
-                            <Cell
-                                key={`${entry.name}-${i}`}
-                                fill={getChartColor(i)}
-                            />
-                        ))}
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} />
-                </PieChart>
-            </ResponsiveContainer>
-        </div>
-    );
-}
-
 function JsonView({ data }: { data: unknown }) {
     return (
         <pre className="max-h-64 overflow-auto rounded-md border border-border/40 bg-background/60 p-2 text-2xs leading-snug text-foreground/80">
@@ -380,14 +210,6 @@ function Footer({
             : `${shown} row${shown === 1 ? "" : "s"}`;
     return <p className="eyebrow">{label}</p>;
 }
-
-const tooltipStyle = {
-    backgroundColor: "hsl(var(--popover))",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: "8px",
-    fontSize: "11px",
-    color: "hsl(var(--popover-foreground))",
-};
 
 // Memoized: for completed tool messages the props (toolName/result) are stable
 // across streamed AI-chat token chunks, so the whole card — including its

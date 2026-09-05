@@ -35,9 +35,7 @@ import {
     useMonthlySummary,
 } from "@/hooks/useFilteredDashboardStats";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
-import { useQuery } from "@tanstack/react-query";
-import { dashboardKeys } from "@/lib/queryKeys";
-import { fetchRecentDashboardTransactions } from "@/features/dashboard/recentTransactions";
+import { useDashboardRecentTransactions } from "@/features/dashboard/useDashboardQueries";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
@@ -48,8 +46,8 @@ import {
     useWidgetVisibility,
     type WidgetDefinition,
 } from "@/hooks/useWidgetVisibility";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { parseCategoryName } from "@vision/shared-utils";
 import {
@@ -153,6 +151,7 @@ export default function DashboardPage() {
         excludedCategoryIds: allExcludedCategoryIds,
         excludedRecipientIds,
         exclusionsApply: exclusionScopeApplies,
+        isReady: exclusionsReady,
     } = useExcludedIds("dashboard");
 
     // Switch to the *filtered* aggregation queries only when there is actually
@@ -193,15 +192,18 @@ export default function DashboardPage() {
     });
 
     // Monthly summary — UNFILTERED version (no exclusions in the key).
-    // Always enabled as fallback when users toggle a graph to "ignore filters";
-    // with exclusions off this collapses onto the same cache entry as the
-    // filtered variant and the stat cards — one fetch for the whole page.
+    // Enabled only when it is the active source: either no exclusions apply or
+    // at least one graph is explicitly ignoring them.
     const {
         data: monthlySummaryUnfiltered,
         isLoading: monthlyUnfilteredLoading,
         error: monthlyUnfilteredError,
         refetch: refetchMonthlyUnfiltered,
-    } = useMonthlySummary();
+    } = useMonthlySummary({
+        enabled:
+            !exclusionsApply ||
+            Object.values(graphExclusions).some((value) => value === false),
+    });
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
@@ -212,20 +214,12 @@ export default function DashboardPage() {
         isLoading: recentFilteredLoading,
         error: recentFilteredError,
         refetch: refetchRecentFiltered,
-    } = useQuery({
-        queryKey: dashboardKeys.recentTransactions(
-            allExcludedCategoryIds,
-            excludedRecipientIds,
-            exclusionsApply,
-        ),
-        queryFn: () =>
-            fetchRecentDashboardTransactions(
-                allExcludedCategoryIds,
-                excludedRecipientIds,
-            ),
-        enabled: exclusionsApply,
-        staleTime: 30000,
-    });
+    } = useDashboardRecentTransactions(
+        allExcludedCategoryIds,
+        excludedRecipientIds,
+        exclusionsReady,
+        exclusionsApply,
+    );
 
     const recentTransactionsLoading = exclusionsApply
         ? recentFilteredLoading
@@ -571,12 +565,14 @@ export default function DashboardPage() {
     const incomeCompact = formatCurrencyCompact(
         totalIncome,
         appSettings.defaultCurrency,
-        locale, appSettings.showDecimalPlaces ?? 2
+        locale,
+        appSettings.showDecimalPlaces ?? 2,
     );
     const spendingCompact = formatCurrencyCompact(
         totalSpending,
         appSettings.defaultCurrency,
-        locale, appSettings.showDecimalPlaces ?? 2
+        locale,
+        appSettings.showDecimalPlaces ?? 2,
     );
 
     return (

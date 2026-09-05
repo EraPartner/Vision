@@ -19,7 +19,7 @@ import {
     Wallet,
     X,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import {

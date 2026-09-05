@@ -1,20 +1,30 @@
-import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useBelgianTaxProfile, getTaxTable } from '@/contexts/BelgianTaxProfileContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { TaxProfileDialog } from './TaxProfileDialog';
+import { useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { getTaxTable } from "@/lib/belgianTax";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { TaxProfileDialog } from "./TaxProfileDialog";
 
 export function SuggestedDeductionsCard() {
-    const { profile, calculation } = useBelgianTaxProfile();
+    const { profile, calculation } = useBelgianTaxProfile((state) => ({
+        profile: state.profile,
+        calculation: state.calculation,
+    }));
     const { t } = useLanguage();
 
     // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
     const fmt = useCurrencyFormatter();
 
     const suggestions = useMemo(() => {
-        const items: Array<{ id: string; title: string; desc: string; estimate?: number; note?: string }> = [];
+        const items: Array<{
+            id: string;
+            title: string;
+            desc: string;
+            estimate?: number;
+            note?: string;
+        }> = [];
         // All rates / caps resolved from the year-aware tax table so suggestions stay
         // accurate when historical (or future) tax years are selected.
         const table = getTaxTable(profile.taxYear);
@@ -28,75 +38,211 @@ export function SuggestedDeductionsCard() {
         const alimonyFraction = table.alimonyDeductibleFraction;
 
         // Pension savings
-        const pensionCeiling = profile.pensionScheme === '1350'
-            ? table.pensionSavingsCapAlternative
-            : table.pensionSavingsCapStandard;
-        const pensionRate = profile.pensionScheme === '1350'
-            ? table.pensionSavingsRateAlternative
-            : table.pensionSavingsRateStandard;
+        const pensionCeiling =
+            profile.pensionScheme === "1350"
+                ? table.pensionSavingsCapAlternative
+                : table.pensionSavingsCapStandard;
+        const pensionRate =
+            profile.pensionScheme === "1350"
+                ? table.pensionSavingsRateAlternative
+                : table.pensionSavingsRateStandard;
         const pensionMaxCredit = pensionCeiling * pensionRate;
-        if (profile.pensionEligible && !(profile.personalPensionContributions > 0)) {
-            items.push({ id: 'pension.no_amount', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.noAmount'), estimate: pensionMaxCredit });
-        } else if (!profile.pensionEligible && profile.personalPensionContributions > 0) {
-            const est = Math.min(profile.personalPensionContributions, pensionCeiling) * pensionRate;
-            items.push({ id: 'pension.not_marked', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.notMarked'), estimate: est });
-        } else if (!profile.pensionEligible && profile.grossAnnualIncome > 0 && profile.personalPensionContributions === 0) {
-            items.push({ id: 'pension.suggest', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.suggest'), estimate: pensionMaxCredit });
+        if (
+            profile.pensionEligible &&
+            !(profile.personalPensionContributions > 0)
+        ) {
+            items.push({
+                id: "pension.no_amount",
+                title: t("tax.suggestions.item.pension"),
+                desc: t("tax.suggestions.pension.noAmount"),
+                estimate: pensionMaxCredit,
+            });
+        } else if (
+            !profile.pensionEligible &&
+            profile.personalPensionContributions > 0
+        ) {
+            const est =
+                Math.min(profile.personalPensionContributions, pensionCeiling) *
+                pensionRate;
+            items.push({
+                id: "pension.not_marked",
+                title: t("tax.suggestions.item.pension"),
+                desc: t("tax.suggestions.pension.notMarked"),
+                estimate: est,
+            });
+        } else if (
+            !profile.pensionEligible &&
+            profile.grossAnnualIncome > 0 &&
+            profile.personalPensionContributions === 0
+        ) {
+            items.push({
+                id: "pension.suggest",
+                title: t("tax.suggestions.item.pension"),
+                desc: t("tax.suggestions.pension.suggest"),
+                estimate: pensionMaxCredit,
+            });
         }
 
         // Life insurance
-        if (profile.lifeInsuranceEligible && !(profile.lifeInsurancePremiums > 0)) {
-            items.push({ id: 'life.no_amount', title: t('tax.suggestions.item.life'), desc: t('tax.suggestions.life.noAmount'), estimate: lifeInsuranceCap * lifeInsuranceRate });
-        } else if (!profile.lifeInsuranceEligible && profile.lifeInsurancePremiums > 0) {
-            const est = Math.min(profile.lifeInsurancePremiums, lifeInsuranceCap) * lifeInsuranceRate;
-            items.push({ id: 'life.not_marked', title: t('tax.suggestions.item.life'), desc: t('tax.suggestions.life.notMarked'), estimate: est });
+        if (
+            profile.lifeInsuranceEligible &&
+            !(profile.lifeInsurancePremiums > 0)
+        ) {
+            items.push({
+                id: "life.no_amount",
+                title: t("tax.suggestions.item.life"),
+                desc: t("tax.suggestions.life.noAmount"),
+                estimate: lifeInsuranceCap * lifeInsuranceRate,
+            });
+        } else if (
+            !profile.lifeInsuranceEligible &&
+            profile.lifeInsurancePremiums > 0
+        ) {
+            const est =
+                Math.min(profile.lifeInsurancePremiums, lifeInsuranceCap) *
+                lifeInsuranceRate;
+            items.push({
+                id: "life.not_marked",
+                title: t("tax.suggestions.item.life"),
+                desc: t("tax.suggestions.life.notMarked"),
+                estimate: est,
+            });
         }
 
         // Group insurance
-        if (profile.employeeGroupInsuranceEligible && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
-            items.push({ id: 'group.no_amount', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.noAmount'), estimate: 0 });
-        } else if (!profile.employeeGroupInsuranceEligible && (profile.employeeGroupInsuranceContributions ?? 0) > 0) {
-            items.push({ id: 'group.not_marked', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.notMarked'), estimate: (profile.employeeGroupInsuranceContributions ?? 0) * groupInsuranceRate });
-        } else if (!profile.employeeGroupInsuranceEligible && profile.employmentType === 'employee' && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
-            items.push({ id: 'group.suggest', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.suggest'), estimate: 0 });
+        if (
+            profile.employeeGroupInsuranceEligible &&
+            !((profile.employeeGroupInsuranceContributions ?? 0) > 0)
+        ) {
+            items.push({
+                id: "group.no_amount",
+                title: t("tax.suggestions.item.group"),
+                desc: t("tax.suggestions.group.noAmount"),
+                estimate: 0,
+            });
+        } else if (
+            !profile.employeeGroupInsuranceEligible &&
+            (profile.employeeGroupInsuranceContributions ?? 0) > 0
+        ) {
+            items.push({
+                id: "group.not_marked",
+                title: t("tax.suggestions.item.group"),
+                desc: t("tax.suggestions.group.notMarked"),
+                estimate:
+                    (profile.employeeGroupInsuranceContributions ?? 0) *
+                    groupInsuranceRate,
+            });
+        } else if (
+            !profile.employeeGroupInsuranceEligible &&
+            profile.employmentType === "employee" &&
+            !((profile.employeeGroupInsuranceContributions ?? 0) > 0)
+        ) {
+            items.push({
+                id: "group.suggest",
+                title: t("tax.suggestions.item.group"),
+                desc: t("tax.suggestions.group.suggest"),
+                estimate: 0,
+            });
         }
 
         // Charitable donations
-        if (profile.charitableDonationsEligible && !(profile.charitableDonations > 0)) {
-            items.push({ id: 'donations.no_amount', title: t('tax.suggestions.item.donations'), desc: t('tax.suggestions.donations.noAmount'), note: t('tax.suggestions.donations.note') });
-        } else if (!profile.charitableDonationsEligible && profile.charitableDonations > 0) {
+        if (
+            profile.charitableDonationsEligible &&
+            !(profile.charitableDonations > 0)
+        ) {
+            items.push({
+                id: "donations.no_amount",
+                title: t("tax.suggestions.item.donations"),
+                desc: t("tax.suggestions.donations.noAmount"),
+                note: t("tax.suggestions.donations.note"),
+            });
+        } else if (
+            !profile.charitableDonationsEligible &&
+            profile.charitableDonations > 0
+        ) {
             const est = donationRate * profile.charitableDonations;
-            items.push({ id: 'donations.not_marked', title: t('tax.suggestions.item.donations'), desc: t('tax.suggestions.donations.notMarked'), estimate: est });
+            items.push({
+                id: "donations.not_marked",
+                title: t("tax.suggestions.item.donations"),
+                desc: t("tax.suggestions.donations.notMarked"),
+                estimate: est,
+            });
         }
 
         // Childcare
-        const childcareCap = (profile.childcareEligibleDays || 0) * childcareDailyCap;
+        const childcareCap =
+            (profile.childcareEligibleDays || 0) * childcareDailyCap;
         if (profile.childcareEligible && !(profile.childcareCosts > 0)) {
-            items.push({ id: 'childcare.no_amount', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.noAmount'), estimate: 0 });
+            items.push({
+                id: "childcare.no_amount",
+                title: t("tax.suggestions.item.childcare"),
+                desc: t("tax.suggestions.childcare.noAmount"),
+                estimate: 0,
+            });
         } else if (!profile.childcareEligible && profile.childcareCosts > 0) {
-            const est = childcareRate * Math.min(profile.childcareCosts, childcareCap);
-            items.push({ id: 'childcare.not_marked', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.notMarked'), estimate: est });
-        } else if (!profile.childcareEligible && profile.dependentChildren > 0 && profile.childcareEligibleDays === 0) {
+            const est =
+                childcareRate * Math.min(profile.childcareCosts, childcareCap);
+            items.push({
+                id: "childcare.not_marked",
+                title: t("tax.suggestions.item.childcare"),
+                desc: t("tax.suggestions.childcare.notMarked"),
+                estimate: est,
+            });
+        } else if (
+            !profile.childcareEligible &&
+            profile.dependentChildren > 0 &&
+            profile.childcareEligibleDays === 0
+        ) {
             // soft suggestion — show example using 120 days
             const exampleDays = 120;
-            const exampleEst = childcareRate * (exampleDays * childcareDailyCap);
-            items.push({ id: 'childcare.suggest', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.suggest', { days: exampleDays }), estimate: exampleEst });
+            const exampleEst =
+                childcareRate * (exampleDays * childcareDailyCap);
+            items.push({
+                id: "childcare.suggest",
+                title: t("tax.suggestions.item.childcare"),
+                desc: t("tax.suggestions.childcare.suggest", {
+                    days: exampleDays,
+                }),
+                estimate: exampleEst,
+            });
         }
 
         // Domestic help
-        if (profile.domesticHelpEligible && !((profile.domesticHelpCosts ?? 0) > 0)) {
-            items.push({ id: 'domestic.no_amount', title: t('tax.suggestions.item.domestic'), desc: t('tax.suggestions.domestic.noAmount'), estimate: 0 });
-        } else if (!profile.domesticHelpEligible && (profile.domesticHelpCosts ?? 0) > 0) {
+        if (
+            profile.domesticHelpEligible &&
+            !((profile.domesticHelpCosts ?? 0) > 0)
+        ) {
+            items.push({
+                id: "domestic.no_amount",
+                title: t("tax.suggestions.item.domestic"),
+                desc: t("tax.suggestions.domestic.noAmount"),
+                estimate: 0,
+            });
+        } else if (
+            !profile.domesticHelpEligible &&
+            (profile.domesticHelpCosts ?? 0) > 0
+        ) {
             const est = domesticHelpRate * (profile.domesticHelpCosts ?? 0);
-            items.push({ id: 'domestic.not_marked', title: t('tax.suggestions.item.domestic'), desc: t('tax.suggestions.domestic.notMarked'), estimate: est });
+            items.push({
+                id: "domestic.not_marked",
+                title: t("tax.suggestions.item.domestic"),
+                desc: t("tax.suggestions.domestic.notMarked"),
+                estimate: est,
+            });
         }
 
         // Alimony (deduction) — estimate tax saving using marginal rate
         if (profile.alimonyPaid > 0) {
             const deduction = alimonyFraction * profile.alimonyPaid;
-            const marginal = Math.max(0, Math.min(calculation.marginalRate, 100)) / 100;
+            const marginal =
+                Math.max(0, Math.min(calculation.marginalRate, 100)) / 100;
             const estSaving = deduction * marginal;
-            items.push({ id: 'alimony.applied', title: t('tax.suggestions.item.alimony'), desc: t('tax.suggestions.alimony.applied'), estimate: estSaving });
+            items.push({
+                id: "alimony.applied",
+                title: t("tax.suggestions.item.alimony"),
+                desc: t("tax.suggestions.alimony.applied"),
+                estimate: estSaving,
+            });
         }
 
         return items;
@@ -106,12 +252,23 @@ export function SuggestedDeductionsCard() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>{t('tax.suggestions.title')}</CardTitle>
+                    <CardTitle>{t("tax.suggestions.title")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">{t('tax.suggestions.none')}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{t('tax.suggestions.regionalNote')}</p>
-                    <a className="text-sm text-primary mt-2 inline-block" href="https://taxsummaries.pwc.com/belgium/individual/deductions" target="_blank" rel="noreferrer">{t('tax.suggestions.pwcLink')}</a>
+                    <p className="text-sm text-muted-foreground">
+                        {t("tax.suggestions.none")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        {t("tax.suggestions.regionalNote")}
+                    </p>
+                    <a
+                        className="text-sm text-primary mt-2 inline-block"
+                        href="https://taxsummaries.pwc.com/belgium/individual/deductions"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        {t("tax.suggestions.pwcLink")}
+                    </a>
                 </CardContent>
             </Card>
         );
@@ -120,34 +277,68 @@ export function SuggestedDeductionsCard() {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>{t('tax.suggestions.title')}</CardTitle>
+                <CardTitle>{t("tax.suggestions.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
                 {suggestions.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between">
+                    <div
+                        key={s.id}
+                        className="flex items-center justify-between"
+                    >
                         <div>
                             <p className="text-sm font-medium">{s.title}</p>
-                            <p className="text-xs text-muted-foreground">{s.desc}</p>
-                            {s.note && <p className="text-xs text-muted-foreground mt-1">{s.note}</p>}
+                            <p className="text-xs text-muted-foreground">
+                                {s.desc}
+                            </p>
+                            {s.note && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {s.note}
+                                </p>
+                            )}
                         </div>
                         <div className="text-right">
-                            {typeof s.estimate === 'number' && s.estimate > 0 ? (
-                                <p className="font-semibold">{fmt(s.estimate)}</p>
+                            {typeof s.estimate === "number" &&
+                            s.estimate > 0 ? (
+                                <p className="font-semibold">
+                                    {fmt(s.estimate)}
+                                </p>
                             ) : (
-                                <p className="text-xs text-muted-foreground">{t('tax.suggestions.estimateNote')}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {t("tax.suggestions.estimateNote")}
+                                </p>
                             )}
                             <div className="mt-2 flex justify-end">
-                                <TaxProfileDialog trigger={<Button size="sm">{t('tax.suggestions.cta')}</Button>} initialStep={'exemptions'} />
+                                <TaxProfileDialog
+                                    trigger={
+                                        <Button size="sm">
+                                            {t("tax.suggestions.cta")}
+                                        </Button>
+                                    }
+                                    initialStep={"exemptions"}
+                                />
                             </div>
                         </div>
                     </div>
                 ))}
 
                 <div className="pt-2 border-t mt-2">
-                    <p className="text-sm font-semibold">{t('tax.suggestions.regionalTitle')}</p>
-                    <p className="text-xs text-muted-foreground">{t('tax.suggestions.regionalDesc')}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{t('tax.suggestions.multipleResidencesNote')}</p>
-                    <a className="text-sm text-primary mt-2 inline-block" href="https://taxsummaries.pwc.com/belgium/individual/deductions" target="_blank" rel="noreferrer">{t('tax.suggestions.pwcLink')}</a>
+                    <p className="text-sm font-semibold">
+                        {t("tax.suggestions.regionalTitle")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        {t("tax.suggestions.regionalDesc")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        {t("tax.suggestions.multipleResidencesNote")}
+                    </p>
+                    <a
+                        className="text-sm text-primary mt-2 inline-block"
+                        href="https://taxsummaries.pwc.com/belgium/individual/deductions"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        {t("tax.suggestions.pwcLink")}
+                    </a>
                 </div>
             </CardContent>
         </Card>

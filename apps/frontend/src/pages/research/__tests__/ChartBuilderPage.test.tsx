@@ -32,9 +32,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     };
 });
 
-vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/contexts/LanguageContext")>();
+        await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
     const { default: en } = await import("@/locales/en");
     return {
         ...actual,
@@ -46,7 +46,7 @@ vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
     };
 });
 
-vi.mock("@/contexts/AppSettingsContext", () => ({
+vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({
         appSettings: { numberFormat: "en-US", dateFormat: "yyyy-MM-dd" },
     }),

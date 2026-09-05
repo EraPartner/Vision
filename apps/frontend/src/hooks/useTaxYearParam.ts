@@ -35,8 +35,19 @@ function parseYearParam(raw: string | null): number | undefined {
  */
 export function useTaxYearParam(): void {
     const [searchParams, setSearchParams] = useSearchParams();
-    const { viewedYear, setViewedYear, profile, snapshotExistsForYear, isLoading } =
-        useBelgianTaxProfile();
+    const {
+        viewedYear,
+        setViewedYear,
+        liveYear,
+        snapshotExistsForYear,
+        isLoading,
+    } = useBelgianTaxProfile((state) => ({
+        viewedYear: state.viewedYear,
+        setViewedYear: state.setViewedYear,
+        liveYear: state.profile.taxYear,
+        snapshotExistsForYear: state.snapshotExistsForYear,
+        isLoading: state.isLoading,
+    }));
 
     const hasAdopted = useRef(false);
     // Year handed to `setViewedYear` that the provider has not reported back
@@ -46,22 +57,28 @@ export function useTaxYearParam(): void {
     const pendingYear = useRef<number | undefined>(undefined);
 
     const paramYear = parseYearParam(searchParams.get("year"));
-    const liveYear = profile.taxYear;
-
     useEffect(() => {
         if (hasAdopted.current || isLoading) return;
         hasAdopted.current = true;
         if (paramYear === undefined) return;
         const isValid =
             snapshotExistsForYear(paramYear) ||
-            (paramYear >= liveYear - MAX_YEARS_BACK && paramYear <= liveYear + 1);
+            (paramYear >= liveYear - MAX_YEARS_BACK &&
+                paramYear <= liveYear + 1);
         if (isValid && paramYear !== viewedYear) {
             pendingYear.current = paramYear;
             setViewedYear(paramYear);
         }
         // Invalid years fall through: the mirror effect below rewrites the
         // param to whatever year is actually being viewed (the live year).
-    }, [isLoading, paramYear, liveYear, viewedYear, setViewedYear, snapshotExistsForYear]);
+    }, [
+        isLoading,
+        paramYear,
+        liveYear,
+        viewedYear,
+        setViewedYear,
+        snapshotExistsForYear,
+    ]);
 
     useEffect(() => {
         // Hold the URL steady until adoption has run, otherwise the live-year

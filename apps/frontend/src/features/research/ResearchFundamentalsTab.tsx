@@ -1,18 +1,17 @@
 import { useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
-import { apiClient } from "@/lib/api";
 import { ProvenanceBadge } from "@/features/research/ProvenanceBadge";
 import { ResearchUnavailableNote } from "@/features/research/ResearchUnavailableNote";
 import { ScorecardPanel } from "@/features/research/ResearchScorecard";
 import type { ResearchFundamentals } from "@/types/research";
+import { useResearchScorecardQuery } from "./useResearchQueries";
 
 interface ResearchFundamentalsTabProps {
     symbol: string;
@@ -159,12 +158,10 @@ export function ResearchFundamentalsTab({
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const fmtCurrency = useCurrencyFormatter();
 
-    const { data: result, isFetching } = useQuery({
-        queryKey: ["research-scorecard", symbol],
-        queryFn: () => apiClient.getResearchScorecard(symbol),
-        enabled: enabled && !!symbol,
-        staleTime: 24 * 60 * 60 * 1000,
-    });
+    const { data: result, isFetching } = useResearchScorecardQuery(
+        symbol,
+        enabled,
+    );
 
     const f = result?.data?.fundamentals;
     const currency = f?.currency || "USD";

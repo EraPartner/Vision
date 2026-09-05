@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { KeyRound } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ApiClientError } from "@/lib/api/client";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 

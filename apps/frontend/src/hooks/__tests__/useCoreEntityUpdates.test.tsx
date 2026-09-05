@@ -19,32 +19,52 @@ afterEach(() => {
 
 describe("core entity update receipts", () => {
     it("invalidates categories and confirms the update", async () => {
-        const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
-        vi.spyOn(apiClient, "updateCategory").mockResolvedValue({ id: 3 } as never);
+        const invalidateSpy = vi.spyOn(
+            QueryClient.prototype,
+            "invalidateQueries",
+        );
+        vi.spyOn(apiClient, "updateCategory").mockResolvedValue({
+            id: 3,
+        } as never);
         const { result } = renderHook(() => useUpdateCategory(), {
             wrapper: createLanguageQueryWrapper(),
         });
 
         await act(async () => {
-            await result.current.mutateAsync({ id: 3, data: { detail: "Food" } as never });
+            await result.current.mutateAsync({
+                id: 3,
+                data: { detail: "Food" } as never,
+            });
         });
 
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["categories"] });
-        expect(toast.success).toHaveBeenCalledWith("categories.updated");
+        expect(invalidateSpy).toHaveBeenCalledWith({
+            queryKey: ["categories"],
+        });
+        expect(toast.success).toHaveBeenCalledWith("Category updated");
     });
 
     it("invalidates recipients and confirms the update", async () => {
-        const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
-        vi.spyOn(apiClient, "updateRecipient").mockResolvedValue({ id: 4 } as never);
+        const invalidateSpy = vi.spyOn(
+            QueryClient.prototype,
+            "invalidateQueries",
+        );
+        vi.spyOn(apiClient, "updateRecipient").mockResolvedValue({
+            id: 4,
+        } as never);
         const { result } = renderHook(() => useUpdateRecipient(), {
             wrapper: createLanguageQueryWrapper(),
         });
 
         await act(async () => {
-            await result.current.mutateAsync({ id: 4, data: { name: "Bakery" } as never });
+            await result.current.mutateAsync({
+                id: 4,
+                data: { name: "Bakery" } as never,
+            });
         });
 
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["recipients"] });
-        expect(toast.success).toHaveBeenCalledWith("recipients.updated");
+        expect(invalidateSpy).toHaveBeenCalledWith({
+            queryKey: ["recipients"],
+        });
+        expect(toast.success).toHaveBeenCalledWith("Recipient updated");
     });
 });

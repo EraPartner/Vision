@@ -1,15 +1,12 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { apiClient } from "@/lib/api";
-import { netWorthKeys } from "@/lib/queryKeys";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     appLanguageToLocale,
     CHART_DATE_PATTERNS,
     formatDate,
 } from "@/lib/dateUtils";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyFormatter,
     useCurrencyPartsFormatter,
@@ -54,6 +51,7 @@ import {
     enumSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
+import { useNetWorthSummary } from "@/features/portfolio/usePortfolioQueries";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -67,11 +65,7 @@ export default function NetWorthPage() {
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: netWorthKeys.byCurrency(targetCurrency),
-        queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
-        staleTime: 120_000,
-    });
+    const { data, isLoading, error } = useNetWorthSummary(targetCurrency);
 
     const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
     const isOnline = useOnlineStatus();

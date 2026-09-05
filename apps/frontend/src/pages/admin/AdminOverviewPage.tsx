@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { adminKeys } from "@/lib/queryKeys";
 import { Activity, Database, KeyRound } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { Link } from "react-router";
@@ -12,12 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
-import { useLanguage } from "@/contexts/LanguageContext";
-import {
-    getDbStats,
-    getProviderHealth,
-    getRequestMetrics,
-} from "@/lib/api/admin";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     setAdminToken,
     clearAdminToken,
@@ -25,6 +18,7 @@ import {
 } from "@/lib/adminToken";
 import { cn } from "@/lib/utils";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useAdminOverviewQueries } from "@/features/admin/useAdminQueries";
 
 function OverviewCard({
     label,
@@ -152,23 +146,14 @@ export default function AdminOverviewPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
-    const { data: dbStats, isLoading: dbLoading } = useQuery({
-        queryKey: adminKeys.dbStats,
-        queryFn: getDbStats,
-        staleTime: 60_000,
-    });
-
-    const { data: providers, isLoading: providersLoading } = useQuery({
-        queryKey: adminKeys.providerHealth,
-        queryFn: getProviderHealth,
-        staleTime: 30_000,
-    });
-
-    const { data: metrics, isLoading: metricsLoading } = useQuery({
-        queryKey: adminKeys.requestMetrics,
-        queryFn: getRequestMetrics,
-        staleTime: 15_000,
-    });
+    const {
+        dbStats: dbStatsQuery,
+        providers: providersQuery,
+        metrics: metricsQuery,
+    } = useAdminOverviewQueries();
+    const { data: dbStats, isLoading: dbLoading } = dbStatsQuery;
+    const { data: providers, isLoading: providersLoading } = providersQuery;
+    const { data: metrics, isLoading: metricsLoading } = metricsQuery;
 
     const failingProviders =
         providers?.filter((p) => p.consecutive_failures > 0).length ?? 0;

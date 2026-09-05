@@ -211,6 +211,7 @@ const PortfolioSummarySchema = z.object({
     computed_at: z.string(),
     totals: PortfolioTotalsSchema,
     summaries: z.array(z.object({}).passthrough()),
+    byAccount: z.array(z.object({}).passthrough()),
 });
 
 // ── Tests: static GET endpoints ───────────────────────────────────────────────
@@ -733,6 +734,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     days_in_month: z.number(),
                     current_day: z.number(),
                     actual: z.array(z.unknown()),
+                    scheduled_actual: z.array(z.unknown()),
                     methods: z.array(z.unknown()),
                     planned: z.array(z.unknown()),
                     diagnostics: z.unknown().nullable(),
@@ -754,6 +756,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     days_back: z.number(),
                     days_forward: z.number(),
                     actual: z.array(z.unknown()),
+                    scheduled_actual: z.array(z.unknown()),
                     methods: z.array(z.unknown()),
                     planned: z.array(z.unknown()),
                     diagnostics: z.unknown().nullable(),

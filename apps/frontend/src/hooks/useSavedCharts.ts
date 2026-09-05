@@ -3,7 +3,7 @@ import { apiClient, type SavedChart, type SavedChartCreate } from '@/lib/api';
 import { toast } from 'sonner';
 import { savedChartKeys } from '@/lib/queryKeys';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 
 export type { SavedChart };
 

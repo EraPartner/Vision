@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import logger from "@/lib/logger";
 import type { RawApiTransaction } from "../types";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
@@ -154,6 +154,7 @@ export function useTransactionListData({
                     bank_account: bankAccountFilter,
                     sort_by: sortKey || undefined,
                     sort_dir: sortDir || undefined,
+                    include_balance: true,
                 },
                 signal,
             ),
@@ -229,6 +230,7 @@ export function useTransactionListData({
                 bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
+                include_balance: true,
             });
             // Sort/filter change bumped requestIdRef while we awaited — drop
             // this stale page so it cannot append rows from a prior query.

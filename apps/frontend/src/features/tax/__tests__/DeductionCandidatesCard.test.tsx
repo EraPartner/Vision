@@ -2,13 +2,13 @@
 import React from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { AppSettingsProvider } from '@/contexts/AppSettingsContext';
+import { AppSettingsProvider } from '@/stores/hydration/AppSettingsHydration';
 import type { BelgianTaxProfile } from '@/lib/belgianTax';
 import type { DeductionCandidatesResponse } from '@/lib/api/info';
 import { DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY } from '@/lib/deductionCandidatesDismiss';
 import DeductionCandidatesCard from '../DeductionCandidatesCard';
 
-vi.mock('@/contexts/LanguageContext', () => ({
+vi.mock('@/stores/hydration/LanguageHydration', () => ({
   LanguageProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useLanguage: () => ({
     t: (key: string, vars?: Record<string, string | number>) => {

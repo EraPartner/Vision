@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
     TrendingUp,
     Activity,
@@ -7,8 +6,8 @@ import {
     AlertTriangle,
     Wallet,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import {
     formatDateWithAppSettings,
@@ -33,12 +32,12 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { useDebounce } from "@/hooks/useDebounce";
-import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { ForecastMethod, ForecastPoint } from "@/types/research";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageShell } from "@/components/shared/PageShell";
+import { usePortfolioForecastQuery } from "@/features/research/useResearchQueries";
 
 const HORIZONS = [
     { labelKey: "research.forecast.h1y", months: 12 },
@@ -121,11 +120,7 @@ export default function PortfolioForecastPage() {
         data: result,
         isFetching,
         isError,
-    } = useQuery({
-        queryKey: ["portfolio-forecast", debouncedInput],
-        queryFn: () => apiClient.getPortfolioForecast(debouncedInput),
-        staleTime: 5 * 60 * 1000,
-    });
+    } = usePortfolioForecastQuery(debouncedInput);
     const forecast = result?.data;
 
     const { rows, series } = useMemo(() => {

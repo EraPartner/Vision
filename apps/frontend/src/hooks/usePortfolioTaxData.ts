@@ -1,8 +1,12 @@
 import { useMemo } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { getTaxTable } from "@/lib/belgianTax";
+import {
+    resolveBelgianTaxCalculation,
+    resolveBelgianTaxProfile,
+} from "@/stores/belgianTaxStore";
 import { buildPortfolioCostBreakdowns } from "@/lib/belgianTax/costBreakdown";
 import {
     yearOf,
@@ -55,14 +59,29 @@ export interface MonthlyCostDatum {
 export function usePortfolioTaxData() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const {
-        profile: liveProfile,
-        viewedYear,
-        profileForYear,
-        displayCalculationForYear,
-    } = useBelgianTaxProfile();
-    const profile = profileForYear(viewedYear);
-    const calculation = displayCalculationForYear(viewedYear);
+    const { liveProfile, snapshots, snapshotMetas, viewedYear } =
+        useBelgianTaxProfile((state) => ({
+            liveProfile: state.profile,
+            snapshots: state.snapshots,
+            snapshotMetas: state.snapshotMetas,
+            viewedYear: state.viewedYear,
+        }));
+    const profile = useMemo(
+        () =>
+            resolveBelgianTaxProfile(
+                { profile: liveProfile, snapshots },
+                viewedYear,
+            ),
+        [liveProfile, snapshots, viewedYear],
+    );
+    const calculation = useMemo(
+        () =>
+            resolveBelgianTaxCalculation(
+                { profile: liveProfile, snapshots, snapshotMetas },
+                viewedYear,
+            ),
+        [liveProfile, snapshots, snapshotMetas, viewedYear],
+    );
     const { summaries: rawSummaries } = usePortfolio();
     const { getAdjustment } = usePortfolioTaxAdjustments();
     const { getClassification } = usePortfolioTaxClassifications();
@@ -244,6 +263,7 @@ export function usePortfolioTaxData() {
         grossDividendWht,
         dividendWhtReclaim,
         dividendWhtNetCost,
+        unknownDividendConventionCount,
     } = useMemo(
         () =>
             computeDividendWht(
@@ -358,6 +378,7 @@ export function usePortfolioTaxData() {
         grossDividendWht,
         dividendWhtReclaim,
         dividendWhtNetCost,
+        unknownDividendConventionCount,
         tobRecorded,
         tobAutoEstimate,
         tacrEstimate,

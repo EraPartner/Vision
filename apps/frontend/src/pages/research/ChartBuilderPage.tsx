@@ -1,6 +1,5 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
 import {
     Copy,
     FilePlus2,
@@ -12,8 +11,8 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,6 +90,10 @@ import {
 } from "./chartBuilderLayouts";
 import { IndicatorPeriodInput } from "./IndicatorPeriodInput";
 import { PageShell } from "@/components/shared/PageShell";
+import {
+    useChartBuilderSeriesQueries,
+    useMacroSearchQuery,
+} from "@/features/research/useResearchQueries";
 
 const PROVIDERS = [
     "",
@@ -292,12 +295,7 @@ export default function ChartBuilderPage() {
     // Macro search runs alongside the ticker search; results merge into one
     // dropdown, tagged "Economic" (ADR-082). Keyless providers always respond;
     // FRED contributes only when its key is configured.
-    const { data: macroResult } = useQuery({
-        queryKey: ["macro-search", debouncedSearch],
-        queryFn: () => apiClient.searchMacro(debouncedSearch),
-        enabled: debouncedSearch.length >= 1,
-        staleTime: 60_000,
-    });
+    const { data: macroResult } = useMacroSearchQuery(debouncedSearch);
 
     const addSeries = (symbol: string) => {
         const s = symbol.toUpperCase();
@@ -414,26 +412,7 @@ export default function ChartBuilderPage() {
         return keys;
     }, [series]);
 
-    const chartQueries = useQueries({
-        queries: fetchKeys.map((fk) => ({
-            queryKey: ["research-chart", fk.key, range],
-            queryFn: () =>
-                fk.macro
-                    ? apiClient.getMacroSeries(
-                          fk.macro.provider,
-                          fk.macro.seriesId,
-                          range,
-                      )
-                    : apiClient.getResearchChart(
-                          fk.symbol,
-                          range,
-                          undefined,
-                          fk.provider || undefined,
-                      ),
-            enabled: fk.macro ? true : !!fk.symbol,
-            staleTime: 60_000,
-        })),
-    });
+    const chartQueries = useChartBuilderSeriesQueries(fetchKeys, range);
 
     const pointsByKey = useMemo(() => {
         const map = new Map<string, ResearchChartPoint[]>();

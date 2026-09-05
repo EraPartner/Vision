@@ -18,6 +18,7 @@ function baseData(
             { date: "2026-01-02", net: 20, cumulative: 30 },
             { date: "2026-01-03", net: null, cumulative: null },
         ],
+        scheduled_actual: [],
         methods,
         planned: [],
         diagnostics: null,
@@ -105,5 +106,29 @@ describe("mergeForView", () => {
         const keys = series.map((s) => s.key);
         expect(keys).toContain("ewma__pLo");
         expect(keys).toContain("ewma__pHi");
+    });
+
+    test("cumulative bands include scheduled and enabled planned overlays", () => {
+        const banded: CashflowForecastMethod = {
+            ...simpleMethod,
+            id: "ewma",
+            bands: {
+                p25: [{ date: "2026-01-03", value: 5 }],
+                p75: [{ date: "2026-01-03", value: 25 }],
+            },
+        };
+        const data = baseData([banded]);
+        data.scheduled_actual.push({ date: "2026-01-03", net: -10 });
+        data.planned.push({ date: "2026-01-03", net: 4 });
+        Object.assign(data, { include_planned: true });
+
+        const { rows } = mergeForView(
+            data,
+            "cumulative",
+            new Set(["ewma"]),
+            "Actual",
+        );
+        expect(rows[2].ewma__pLo).toBe(29);
+        expect(rows[2].ewma__pHi).toBe(49);
     });
 });

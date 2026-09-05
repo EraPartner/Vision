@@ -15,7 +15,7 @@ import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface BarSeries<Datum> {
     readonly key: string;

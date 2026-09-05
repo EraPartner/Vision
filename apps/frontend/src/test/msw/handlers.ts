@@ -417,6 +417,7 @@ export const defaultHandlers = [
             days_in_month: 31,
             current_day: 1,
             actual: [],
+            scheduled_actual: [],
             methods: [],
             planned: [],
             diagnostics: null,
@@ -433,6 +434,7 @@ export const defaultHandlers = [
             days_back: 14,
             days_forward: 14,
             actual: [],
+            scheduled_actual: [],
             methods: [],
             planned: [],
             diagnostics: null,
@@ -484,6 +486,7 @@ export const defaultHandlers = [
                 totalReturnPct: 0,
             },
             summaries: [],
+            byAccount: [],
         }),
     ),
 
@@ -843,6 +846,7 @@ export const defaultHandlers = [
                 totalReturnPct: 0,
             },
             summaries: [],
+            byAccount: [],
         }),
     ),
     // `res.ok({ message: 'Exchange rates refreshed from ECB' })` —

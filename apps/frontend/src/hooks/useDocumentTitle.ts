@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { matchNavTitleKey } from "@/lib/navigation";
 
 // Shown for routes with no nav entry (e.g. deep detail pages) and mirrors the

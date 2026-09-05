@@ -19,8 +19,8 @@ import {
     resolveSettingsSection,
     type SettingsSectionId,
 } from "@/features/settings/DashboardSettingsDialog";
-import { useTheme } from "@/contexts/ThemeContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useTheme } from "@/stores/hydration/ThemeHydration";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
 import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
 import { UpdateNotification } from "@/components/notifications/UpdateNotification";

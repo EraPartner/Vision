@@ -349,8 +349,11 @@ describe("TableDataEditorPage (integration)", () => {
             </Routes>,
             { initialEntries: ["/admin/db/kv"] },
         );
-        // Add row is disabled when there is no primary key.
-        const addBtn = await screen.findByRole("button", { name: /add row/i });
+        // A mutation cannot be staged while metadata is loading or after the
+        // response confirms that the table has no primary key.
+        const addBtn = screen.getByRole("button", { name: /add row/i });
+        expect(addBtn).toBeDisabled();
+        await screen.findByText(/no rows/i);
         expect(addBtn).toBeDisabled();
     });
 });

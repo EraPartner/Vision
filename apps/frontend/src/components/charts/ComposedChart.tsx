@@ -15,11 +15,11 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { summarizeSeriesChart } from "./chartAria";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export type ComposedSeriesType = "line" | "area" | "bar" | "candlestick";
 

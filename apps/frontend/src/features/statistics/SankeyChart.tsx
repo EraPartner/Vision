@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
 import type { SankeyGraph, SankeyNode } from "d3-sankey";
 import { ParentSize } from "@visx/responsive";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { SankeyFlowData } from "@/lib/api/aggregations";

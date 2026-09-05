@@ -22,7 +22,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRecipient, useRecipients } from "@/hooks/useRecipients";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { Recipient } from "@/types/api";
 import type { FieldErrorAria } from "@/hooks/useFieldErrors";

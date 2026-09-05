@@ -149,10 +149,10 @@ describe("money typography contract", () => {
             "utf8",
         );
         expect(accountDetail).toMatch(
-            /amount=\{txn\.amount\}[\s\S]*?currency=\{\s*txn\.currency\s*\|\|\s*a\.currency\s*\}[\s\S]*?signed/,
+            /amount=\{txn\.amount\}[\s\S]*?currency=\{\s*txn\.currency\s*\?\?\s*"EUR"\s*\}[\s\S]*?signed/,
         );
         expect(accountDetail).toMatch(
-            /amount=\{\s*txn\.running_balance\s*\}[\s\S]*?currency=\{\s*txn\.currency\s*\|\|\s*a\.currency\s*\}/,
+            /amount=\{\s*txn\.running_balance\s*\}[\s\S]*?currency=\{\s*txn\.currency\s*\?\?\s*"EUR"\s*\}/,
         );
 
         const stocks = readFileSync(

@@ -33,8 +33,8 @@ import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { AddPortfolioTxnDialog } from "./AddPortfolioTxnDialog";
 import { EditInvestmentDialog } from "./EditInvestmentDialog";
 import { EditPortfolioTxnDialog } from "./EditPortfolioTxnDialog";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
@@ -43,6 +43,7 @@ import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { TextLink } from "@/components/shared/TextLink";
+import { PortfolioOversoldBadge } from "./PortfolioOversoldBadge";
 
 type TxnRow = InvestmentSummary["transactions"][number];
 
@@ -417,9 +418,10 @@ export function InvestmentDetailDialog({
     // machinery). The query is shared with the overview/performance pages, so this
     // is usually a cache hit.
     const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
-    const fxSummary = isForeignCurrency
-        ? apiSummary?.summaries.find((s) => s.id === investment.id)
-        : undefined;
+    const apiHolding = apiSummary?.summaries.find(
+        (summary) => summary.id === investment.id,
+    );
+    const fxSummary = isForeignCurrency ? apiHolding : undefined;
 
     // FX-aware realized/unrealized P&L in the target currency, computed here so the
     // dialog renders identically wherever it is opened (overview, stocks, crypto,
@@ -532,6 +534,11 @@ export function InvestmentDetailDialog({
                             <Badge variant="secondary">
                                 {getAssetClassLabel(t, investment.assetClass)}
                             </Badge>
+                            <PortfolioOversoldBadge
+                                oversold={
+                                    apiHolding?.oversold ?? investment.oversold
+                                }
+                            />
                             <div className="ml-auto flex items-center gap-1.5">
                                 {onEditInvestment ? (
                                     <Button

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     formatCurrency,
     formatCurrencyParts,

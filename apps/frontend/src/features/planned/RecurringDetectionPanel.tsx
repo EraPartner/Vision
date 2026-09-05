@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
 import {
@@ -26,8 +26,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -35,6 +35,7 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
+import { useRecurringPatterns } from "@/hooks/usePlannedMatchSuggestions";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
@@ -159,14 +160,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         };
     }, []);
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: plannedKeys.recurringPatterns,
-        queryFn: () => apiClient.getRecurringPatterns(),
-        staleTime: 5 * 60_000,
-        retry: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-    });
+    const { data, isLoading, error } = useRecurringPatterns();
 
     const dismiss = (recipientId: number) => {
         const next = new Set(dismissedIds);

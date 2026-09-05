@@ -4,7 +4,7 @@ import {
     invalidOptionalFxRate,
     invalidOptionalMoney,
 } from "./portfolioTxnSchema";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     Dialog,
     DialogContent,
@@ -94,6 +94,7 @@ export function AddPortfolioTxnDialog({
         pricePerUnit: "",
         fees: "",
         taxes: "",
+        dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
         isRecurring: false,
@@ -196,6 +197,10 @@ export function AddPortfolioTxnDialog({
                 price_per_unit: parsed.data.pricePerUnit,
                 fees: parsed.data.fees,
                 taxes: parsed.data.taxes,
+                dividend_amount_convention:
+                    form.type === "dividend"
+                        ? form.dividendAmountConvention
+                        : "unknown",
                 fx_rate_to_eur: parsed.data.fxRateToEur,
                 currency: investment.currency,
                 note: form.note.trim() || undefined,
@@ -297,6 +302,7 @@ export function AddPortfolioTxnDialog({
                         }
                         showUnits={showUnits}
                         showFeesTaxes={showFeesTaxes}
+                        showDividendConvention={form.type === "dividend"}
                         showRecurring={showRecurring}
                         derivedAmount={derivedAmount}
                         isBuySell={isBuySell}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { clearOnboardingDraft } from "./onboardingDraft";

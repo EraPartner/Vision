@@ -36,7 +36,7 @@ export async function getTransactions(
         target_currency?: string;
         sort_by?: string;
         sort_dir?: "asc" | "desc";
-        /** Adds a per-account `running_balance` to each row (SQL window, ADR-088 partition). First consumer: the /accounts/:id ledger (WP-B4). */
+        /** Adds a per-account, per-currency `running_balance` to each row. */
         include_balance?: boolean;
         transaction_type?: "income" | "expense";
         amount_min?: number;

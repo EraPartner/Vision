@@ -16,7 +16,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { useCategories } from "@/hooks/useCategories";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface CategoryComboboxProps {
     /** Put on the trigger, so a <Label htmlFor> can reach it. */

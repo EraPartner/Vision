@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { useOllamaStatus, useOllamaModels } from '@/hooks/useOllamaStatus';
 import { cn } from '@/lib/utils';
 import { SettingsGroup, SettingRow } from '@/features/settings/SettingsPrimitives';

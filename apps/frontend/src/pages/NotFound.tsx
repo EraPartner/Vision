@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router";
 import { useEffect } from "react";
 import logger from "@/lib/logger";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VisionMark } from "@/components/shared/VisionMark";

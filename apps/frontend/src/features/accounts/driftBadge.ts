@@ -23,8 +23,8 @@
  * local/UTC Date instances, which shift a day either side of midnight.
  */
 import { useCallback } from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
+import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { formatDateStringWithAppSettings, toYmd } from '@/lib/dateUtils';
 import type { Account } from '@/types/api';

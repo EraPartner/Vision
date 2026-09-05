@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import { currentDisplayIsLarge, resolveEffectiveTier } from '@/lib/visualEffects';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { VisualEffectsTier } from '@/stores/settingsStore';

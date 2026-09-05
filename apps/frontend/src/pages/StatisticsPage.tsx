@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ChartCard } from "@/features/statistics/ChartCard";
 import { InsightsDigestPanel } from "@/features/statistics/InsightsDigestPanel";
 import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";

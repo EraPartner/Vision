@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import type { SavedChart } from '@/types/apiClient';
 import { aggregationKeys } from '@/lib/queryKeys';
 

@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, type DefaultOptions } from "@tanstack/react-query";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { LanguageProvider } from "@/stores/hydration/LanguageHydration";
 
 /**
  * QueryClient / provider wrappers for `renderHook` in hook tests.

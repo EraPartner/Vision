@@ -1,5 +1,5 @@
 /**
- * SettingsContext (dashboard settings)
+ * SettingsHydration (dashboard settings)
  *
  * Provider: hydrates the Zustand settings store from the single preloaded
  * settings fetch and persists changes back to the API (debounced).
@@ -9,25 +9,29 @@
  * useShallow ensures the hook only re-renders when the selected values change.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import { apiClient } from '@/lib/api';
-import logger from '@/lib/logger';
-import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS, migrateDashboardSettings } from '@/stores/settingsStore';
-import type { ExclusionScope, DashboardSettings } from '@/stores/settingsStore';
+import { useEffect, useRef, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
+import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
+import {
+    useSettingsStore,
+    DEFAULT_DASHBOARD_SETTINGS,
+    migrateDashboardSettings,
+} from "@/stores/settingsStore";
+import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
 
-// Re-export so existing consumers don't need to change their imports
+// Re-export the dashboard-settings types alongside the hydration bridge.
 export type { ExclusionScope, DashboardSettings };
 
-interface SettingsContextType {
+interface SettingsHydrationValue {
     settings: DashboardSettings;
     updateSettings: (settings: Partial<DashboardSettings>) => void;
     resetSettings: () => void;
     isLoading: boolean;
 }
 
-const SETTINGS_KEY = 'dashboard_settings';
+const SETTINGS_KEY = "dashboard_settings";
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
@@ -35,8 +39,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const { value: preloaded, isLoading: preloadLoading } =
         usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
 
-    const _hydrateDashboardSettings = useSettingsStore((s) => s._hydrateDashboardSettings);
-    const _markSettingsSaveError = useSettingsStore((s) => s._markSettingsSaveError);
+    const _hydrateDashboardSettings = useSettingsStore(
+        (s) => s._hydrateDashboardSettings,
+    );
+    const _markSettingsSaveError = useSettingsStore(
+        (s) => s._markSettingsSaveError,
+    );
     const dashboardSettings = useSettingsStore((s) => s.dashboardSettings);
     const isLoading = useSettingsStore((s) => s.isDashboardSettingsLoading);
 
@@ -51,46 +59,70 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (preloadLoading) return;
 
         if (preloaded) {
-            _hydrateDashboardSettings({ ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded }, false);
+            _hydrateDashboardSettings(
+                { ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded },
+                false,
+            );
         } else {
             // Fallback: migrate from localStorage for users upgrading from older
             // versions. The blob is untrusted — migrateDashboardSettings validates
             // it (per-field fallback to defaults) so a malformed legacy value can
             // never be written back to the API below.
             try {
-                const stored = localStorage.getItem('vision_dashboardSettings');
+                const stored = localStorage.getItem("vision_dashboardSettings");
                 if (stored) {
                     const parsed: unknown = JSON.parse(stored);
                     const migrated = migrateDashboardSettings(parsed);
                     _hydrateDashboardSettings(migrated, false);
-                    apiClient.saveSetting(SETTINGS_KEY, migrated).catch((err) => {
-                        logger.error('Failed to migrate settings to database', err);
-                        _markSettingsSaveError();
-                    });
-                    localStorage.removeItem('vision_dashboardSettings');
+                    apiClient
+                        .saveSetting(SETTINGS_KEY, migrated)
+                        .catch((err) => {
+                            logger.error(
+                                "Failed to migrate settings to database",
+                                err,
+                            );
+                            _markSettingsSaveError();
+                        });
+                    localStorage.removeItem("vision_dashboardSettings");
                 } else {
-                    _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
+                    _hydrateDashboardSettings(
+                        DEFAULT_DASHBOARD_SETTINGS,
+                        false,
+                    );
                 }
             } catch (err) {
-                logger.warn('Failed to read legacy settings from localStorage', err);
+                logger.warn(
+                    "Failed to read legacy settings from localStorage",
+                    err,
+                );
                 _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
             }
         }
         hasHydrated.current = true;
-    }, [preloaded, preloadLoading, _hydrateDashboardSettings, _markSettingsSaveError]);
+    }, [
+        preloaded,
+        preloadLoading,
+        _hydrateDashboardSettings,
+        _markSettingsSaveError,
+    ]);
 
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
         if (!hasHydrated.current) return;
-        if (isFirstPersistRun.current) { isFirstPersistRun.current = false; return; }
+        if (isFirstPersistRun.current) {
+            isFirstPersistRun.current = false;
+            return;
+        }
         if (isLoading) return;
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, dashboardSettings).catch((err) => {
-                logger.error('Failed to save settings to database:', err);
-                _markSettingsSaveError();
-            });
+            apiClient
+                .saveSetting(SETTINGS_KEY, dashboardSettings)
+                .catch((err) => {
+                    logger.error("Failed to save settings to database:", err);
+                    _markSettingsSaveError();
+                });
         }, 500);
 
         return () => {
@@ -104,13 +136,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function useSettings(): SettingsContextType {
+export function useSettings(): SettingsHydrationValue {
     return useSettingsStore(
         useShallow((s) => ({
             settings: s.dashboardSettings,
             updateSettings: s.updateDashboardSettings,
             resetSettings: s.resetDashboardSettings,
             isLoading: s.isDashboardSettingsLoading,
-        }))
+        })),
     );
 }

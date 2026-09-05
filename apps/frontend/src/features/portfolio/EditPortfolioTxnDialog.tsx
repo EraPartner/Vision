@@ -5,7 +5,7 @@ import {
     invalidOptionalMoney,
     parseNonNegative,
 } from "./portfolioTxnSchema";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     Dialog,
     DialogContent,
@@ -102,6 +102,8 @@ export function EditPortfolioTxnDialog({
                 : "",
         fees: transaction.fees !== undefined ? String(transaction.fees) : "",
         taxes: transaction.taxes !== undefined ? String(transaction.taxes) : "",
+        dividendAmountConvention:
+            transaction.dividend_amount_convention ?? "unknown",
         fxRateToEur:
             transaction.fx_rate_to_eur !== undefined
                 ? String(transaction.fx_rate_to_eur)
@@ -233,6 +235,10 @@ export function EditPortfolioTxnDialog({
                 // null, same semantics as account_id below.
                 fees: parsed.data.fees,
                 taxes: parsed.data.taxes,
+                dividend_amount_convention:
+                    transaction.type === "dividend"
+                        ? form.dividendAmountConvention
+                        : "unknown",
                 fx_rate_to_eur: parsed.data.fxRateToEur,
                 note: form.note.trim() || null,
                 account_id: form.accountId ? Number(form.accountId) : null,
@@ -300,6 +306,7 @@ export function EditPortfolioTxnDialog({
                         }
                         showUnits={showUnits}
                         showFeesTaxes={showFeesTaxes}
+                        showDividendConvention={transaction.type === "dividend"}
                         showRecurring={showRecurring}
                         derivedAmount={derivedAmount}
                         isBuySell={isBuySell}

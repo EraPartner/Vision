@@ -59,6 +59,15 @@ export function setNativeLanguage(language: "en" | "nl"): void {
         });
 }
 
+/** Toggle the macOS under-window material. No-op outside a supporting shell. */
+export function setNativeVibrancy(enabled: boolean): void {
+    getElectronAPI()
+        ?.setVibrancy?.(enabled)
+        .catch(() => {
+            /* best-effort visual optimization */
+        });
+}
+
 /**
  * Persist the resolved theme's primary colors so the Electron boot splash can
  * paint in the active palette next launch (emerald on default, purple on

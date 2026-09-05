@@ -1,5 +1,5 @@
 import { ChartPeriodSelector } from "@/components/charts/ChartPeriodSelector";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { ChartRangeOption } from "@/lib/research/ranges";
 import type { ResearchRange } from "@/types/research";
 

@@ -1,6 +1,6 @@
 import { MultiCombobox } from "@/components/shared/MultiCombobox";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface BankAccountMultiComboboxProps {
     value: string[];

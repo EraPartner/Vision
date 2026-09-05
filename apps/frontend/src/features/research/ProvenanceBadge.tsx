@@ -1,6 +1,6 @@
 import { Database, Radio } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { ResearchMeta } from "@/types/research";
 
 interface ProvenanceBadgeProps {

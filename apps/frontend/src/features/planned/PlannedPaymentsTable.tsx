@@ -5,7 +5,7 @@ import { Money } from "@/components/shared/Money";
 import { VirtualDataTable, type Column } from "@/components/shared/VirtualDataTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PlannedDueBadge } from "@/features/planned/PlannedDueBadge";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { cn } from "@/lib/utils";

@@ -1,13 +1,13 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminKeys } from "@/lib/queryKeys";
 import { Database, HardDrive, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
@@ -23,12 +23,13 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { getDbStats, vacuumTable } from "@/lib/api/admin";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { vacuumTable } from "@/lib/api/admin";
 import type { DbTableStat } from "@/lib/api/admin";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
+import { useDbStats } from "@/features/admin/useAdminQueries";
 
 // ── Row skeleton ──────────────────────────────────────────────────────────────
 
@@ -162,11 +163,7 @@ export default function DbMaintenancePage() {
         undefined as unknown as null,
     );
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: adminKeys.dbStats,
-        queryFn: getDbStats,
-        staleTime: 30_000,
-    });
+    const { data, isLoading, error } = useDbStats();
 
     const vacuumMutation = useMutation({
         mutationFn: (table: string | null) => vacuumTable(table),

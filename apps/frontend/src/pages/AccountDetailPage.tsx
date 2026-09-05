@@ -21,8 +21,6 @@
  */
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -61,20 +59,19 @@ import {
     MoreVertical,
     Pencil,
     Receipt,
+    Scale,
     Trash2,
     X,
 } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { apiClient } from "@/lib/api";
-import { transactionKeys } from "@/lib/queryKeys";
 import {
     useAccounts,
     useUpdateAccount,
     useDeleteAccount,
 } from "@/hooks/useAccounts";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { isPortfolioType } from "@/features/accounts/groupAccounts";
@@ -96,6 +93,7 @@ import { cn } from "@/lib/utils";
 import type { Account } from "@/types/api";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
+import { useAccountLedger } from "@/hooks/useTransactions";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -169,23 +167,12 @@ export default function AccountDetailPage() {
         isLoading: txLoading,
         isError: txIsError,
         error: txError,
-        isFetching,
         isPlaceholderData,
-    } = useQuery({
-        queryKey: transactionKeys.accountLedger(account?.id, ledgerLimit),
-        queryFn: () =>
-            apiClient.getTransactions({
-                account_id: account!.id,
-                limit: ledgerLimit,
-                sort_by: "date",
-                sort_dir: "desc",
-                include_balance: true,
-            }),
-        enabled: !!account && canViewTransactions,
-        staleTime: 30_000,
-        placeholderData: (prev) => prev, // keep rows visible while Load more fetches
-    });
-    useBackgroundQueryCue(isFetching && isPlaceholderData);
+    } = useAccountLedger(
+        account?.id,
+        ledgerLimit,
+        !!account && canViewTransactions,
+    );
 
     const rows = useMemo(() => txData?.items ?? [], [txData]);
     const total = txData?.total ?? 0;
@@ -209,11 +196,14 @@ export default function AccountDetailPage() {
     const hasMore =
         rows.length < total && (!since || visibleRows.length === rows.length);
 
-    // Oldest → newest running balances for the header trend line, most recent
-    // window only. Prefer the computed running_balance; fall back to the
-    // import-stamped balance column for older cached rows.
+    // A single line cannot combine balances denominated in different
+    // currencies. Keep the account header sparkline in its declared currency;
+    // the ledger below still shows each currency partition explicitly.
     const sparkPoints = useMemo(() => {
+        const accountCurrency = account?.currency;
+        if (!accountCurrency) return [];
         return rows
+            .filter((r) => (r.currency ?? "EUR") === accountCurrency)
             .slice(0, SPARKLINE_MAX_POINTS)
             .map((r) =>
                 typeof r.running_balance === "number"
@@ -222,7 +212,7 @@ export default function AccountDetailPage() {
             )
             .filter((v): v is number => typeof v === "number")
             .reverse();
-    }, [rows]);
+    }, [rows, account?.currency]);
 
     const sparkColor = useMemo(() => {
         if (sparkPoints.length < 2) return SPARK_COLOR_NEUTRAL;
@@ -522,6 +512,17 @@ export default function AccountDetailPage() {
                                 <TooltipContent>{drift.tooltip}</TooltipContent>
                             </Tooltip>
                         )}
+                        {!drift && a.multi_currency_cash && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3"
+                                onClick={() => setReconciling(true)}
+                            >
+                                <Scale className="mr-2 h-4 w-4" />
+                                {t("accounts.reconcile.open")}
+                            </Button>
+                        )}
                     </div>
                     {sparkPoints.length >= 2 && (
                         <div className="w-full shrink-0 sm:w-64">
@@ -681,8 +682,7 @@ export default function AccountDetailPage() {
                                                 <Money
                                                     amount={txn.amount}
                                                     currency={
-                                                        txn.currency ||
-                                                        a.currency
+                                                        txn.currency ?? "EUR"
                                                     }
                                                     signed
                                                 />
@@ -694,8 +694,8 @@ export default function AccountDetailPage() {
                                                             txn.running_balance
                                                         }
                                                         currency={
-                                                            txn.currency ||
-                                                            a.currency
+                                                            txn.currency ??
+                                                            "EUR"
                                                         }
                                                     />
                                                 ) : (

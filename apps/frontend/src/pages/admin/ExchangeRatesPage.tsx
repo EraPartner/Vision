@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Card,
     CardContent,
@@ -10,11 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Database, Globe, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
-import type { ExchangeRatesData } from "@/lib/api/info";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -32,6 +31,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { PageShell } from "@/components/shared/PageShell";
+import { useExchangeRatesQuery } from "@/features/admin/useAdminQueries";
 
 const EXCHANGE_RATE_TABS = ["live", "fallback"] as const;
 
@@ -104,7 +104,8 @@ function RatesTable({
                                 {formatCurrency(
                                     100 * rate,
                                     defaultCurrency,
-                                    locale, appSettings.showDecimalPlaces ?? 2
+                                    locale,
+                                    appSettings.showDecimalPlaces ?? 2,
                                 )}
                             </TableCell>
                         </TableRow>
@@ -128,12 +129,7 @@ export default function ExchangeRatesPage() {
     // duplicate (the request is always db-only, so the {dbOnly} discriminator
     // carried no information). "Refresh rates" below invalidates the shared
     // namespace for everyone.
-    const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: exchangeRateKeys.all,
-        queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
-        staleTime: 10 * 60_000,
-        gcTime: 30 * 60_000,
-    });
+    const { data, isLoading, error, isFetching } = useExchangeRatesQuery();
 
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),

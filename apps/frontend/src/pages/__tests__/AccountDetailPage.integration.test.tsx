@@ -95,7 +95,7 @@ const LEDGER_ROWS = [
 function mockApi({
     accounts = [CHECKING, BROKER, DRIFTING],
     rows = LEDGER_ROWS,
-} = {}) {
+}: { accounts?: unknown[]; rows?: typeof LEDGER_ROWS } = {}) {
     const captured: URLSearchParams[] = [];
     server.use(
         http.get(`${API_BASE}/api/accounts`, () =>
@@ -126,6 +126,73 @@ function renderDetail(path: string) {
 }
 
 describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
+    it("keeps Reconcile reachable for a multi-currency account with no primary drift", async () => {
+        mockApi({
+            accounts: [
+                {
+                    ...CHECKING,
+                    multi_currency_cash: true,
+                    drift: 0,
+                    statement_balances: [
+                        {
+                            currency: "USD",
+                            balance: 20,
+                            balance_date: "2026-09-02",
+                        },
+                    ],
+                },
+            ],
+        });
+        renderDetail("/accounts/1");
+
+        expect(
+            await screen.findByRole("button", { name: "Reconcile balance" }),
+        ).toBeInTheDocument();
+    });
+
+    it("treats a NULL-currency ledger row as EUR on a USD account", async () => {
+        const usdAccount = {
+            ...CHECKING,
+            id: 4,
+            name: "USD account",
+            display_name: "USD account",
+            currency: "USD",
+        };
+        mockApi({
+            accounts: [usdAccount],
+            rows: [
+                {
+                    ...LEDGER_ROWS[0],
+                    id: 41,
+                    recipient_name: "Legacy null row",
+                    currency: null as never,
+                    amount: 25,
+                    running_balance: 25,
+                },
+                {
+                    ...LEDGER_ROWS[1],
+                    id: 42,
+                    recipient_name: "Dollar row",
+                    currency: "USD",
+                    amount: 10,
+                    running_balance: 10,
+                },
+            ],
+        });
+        renderDetail("/accounts/4");
+
+        const table = await screen.findByRole("table");
+        const legacyRow = within(table)
+            .getByText("Legacy null row")
+            .closest("tr") as HTMLElement;
+        expect(legacyRow).toHaveTextContent("€");
+        // Only one USD point remains, so the compact sparkline does not join
+        // it to the legacy row's separate EUR series.
+        expect(
+            screen.queryByLabelText(/account balance trend/i),
+        ).not.toBeInTheDocument();
+    });
+
     it("renders header (name, balance, provenance) over the running-balance ledger", async () => {
         const captured = mockApi();
         renderDetail("/accounts/1");

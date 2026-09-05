@@ -34,7 +34,7 @@ import { VisionMark } from "@/components/shared/VisionMark";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { toast } from "sonner";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
 import { isReviewRequired } from "@/lib/api/imports";
 import { useAdapters } from "@/features/imports/useAdapters";

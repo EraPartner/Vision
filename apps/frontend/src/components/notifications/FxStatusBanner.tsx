@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -6,11 +6,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { exchangeRateKeys } from "@/lib/queryKeys";
-import type { ExchangeRatesData } from "@/lib/api/info";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
+import { useFxStatus } from "@/hooks/useExchangeRates";
 
 const DISMISS_KEY = "fx-status-banner-dismissed-at";
 const DISMISS_TTL_MS = 60 * 60 * 1000;
@@ -30,22 +30,23 @@ export function FxStatusBanner() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const [dismissed, setDismissed] = useState<boolean>(() => isDismissedRecently());
+    const [dismissed, setDismissed] = useState<boolean>(() =>
+        isDismissedRecently(),
+    );
     const queryClient = useQueryClient();
 
-    const { data, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: exchangeRateKeys.fxStatus,
-        queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
-        staleTime: 60_000,
-        retry: false,
-    });
+    const { data, isFetching } = useFxStatus();
 
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: async () => {
             await Promise.all([
-                queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all }),
-                queryClient.invalidateQueries({ queryKey: exchangeRateKeys.fxStatus }),
+                queryClient.invalidateQueries({
+                    queryKey: exchangeRateKeys.all,
+                }),
+                queryClient.invalidateQueries({
+                    queryKey: exchangeRateKeys.fxStatus,
+                }),
             ]);
             toast.success(t("exchangeRates.refreshSuccess"));
         },
@@ -60,13 +61,18 @@ export function FxStatusBanner() {
     if (!data) return null;
     if (!data.is_stale && data.source !== "fallback") return null;
 
-    const message = data.source === "fallback"
-        ? t("exchangeRates.fallbackInUse")
-        : t("exchangeRates.staleWarning", {
-            date: data.last_fetched_at
-                ? formatDateTimeStringWithAppSettings(data.last_fetched_at, appSettings.dateFormat, locale)
-                : "—",
-        });
+    const message =
+        data.source === "fallback"
+            ? t("exchangeRates.fallbackInUse")
+            : t("exchangeRates.staleWarning", {
+                  date: data.last_fetched_at
+                      ? formatDateTimeStringWithAppSettings(
+                            data.last_fetched_at,
+                            appSettings.dateFormat,
+                            locale,
+                        )
+                      : "—",
+              });
 
     const handleDismiss = () => {
         try {
@@ -90,7 +96,9 @@ export function FxStatusBanner() {
                     onClick={() => refreshMutation.mutate()}
                     className="gap-1.5"
                 >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                        className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+                    />
                     {t("exchangeRates.refresh")}
                 </Button>
             </AlertDescription>

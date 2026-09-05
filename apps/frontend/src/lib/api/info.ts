@@ -1,7 +1,7 @@
-import logger from '@/lib/logger';
-import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery } from '@/lib/api/helpers';
-import type { NetWorthResponse } from '@/types/apiClient';
+import logger from "@/lib/logger";
+import { apiRequest } from "@/lib/api/client";
+import { requestWithQuery } from "@/lib/api/helpers";
+import type { NetWorthResponse } from "@/types/apiClient";
 
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)
@@ -14,15 +14,18 @@ export interface SupportedAdapter {
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getSupportedParsers(): Promise<SupportedAdapter[]> {
-    const { items } = await apiRequest<{ items: SupportedAdapter[]; total: number }>(
-        '/api/info/supported-adapters',
-    );
+    const { items } = await apiRequest<{
+        items: SupportedAdapter[];
+        total: number;
+    }>("/api/info/supported-adapters");
     return items;
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getDistinctBankAccounts(): Promise<string[]> {
-    const { items } = await apiRequest<{ items: string[]; total: number }>('/api/info/banks');
+    const { items } = await apiRequest<{ items: string[]; total: number }>(
+        "/api/info/banks",
+    );
     return items;
 }
 
@@ -30,7 +33,7 @@ export async function getDistinctBankAccounts(): Promise<string[]> {
 // deleted in the Phase 9 cutover; it had no callers.)
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
-    return apiRequest('/api/info/transaction-count');
+    return apiRequest("/api/info/transaction-count");
 }
 
 export async function getRecurringPatterns(): Promise<{
@@ -38,7 +41,7 @@ export async function getRecurringPatterns(): Promise<{
         recipientId: number;
         recipientName: string;
         /** Flow direction — a recipient can yield one pattern per direction. */
-        direction: 'income' | 'expense';
+        direction: "income" | "expense";
         detectedPattern: string;
         intervalDays: number;
         consistency: number;
@@ -65,10 +68,10 @@ export async function getRecurringPatterns(): Promise<{
     total: number;
 }> {
     try {
-        return await apiRequest('/api/info/recurring-patterns');
+        return await apiRequest("/api/info/recurring-patterns");
     } catch (err) {
         // Fail-soft: recurrence detection is optional UI enrichment.
-        logger.warn('Recurring patterns unavailable; using empty result', err);
+        logger.warn("Recurring patterns unavailable; using empty result", err);
         return { patterns: [], total: 0 };
     }
 }
@@ -77,7 +80,7 @@ export async function getRecurringPatterns(): Promise<{
 export interface SubscriptionCreepNew {
     recipientId: number;
     recipientName: string;
-    findingType: 'new';
+    findingType: "new";
     latestAmount: number;
     currency: string;
     detectedPattern: string;
@@ -90,7 +93,7 @@ export interface SubscriptionCreepNew {
 export interface SubscriptionCreepPriceChange {
     recipientId: number;
     recipientName: string;
-    findingType: 'priceChange';
+    findingType: "priceChange";
     previousAmount: number;
     newAmount: number;
     percentChange: number;
@@ -136,10 +139,10 @@ export interface InsightsDigestResponse {
 /** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */
 export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
     try {
-        return await apiRequest('/api/info/insights-digest');
+        return await apiRequest("/api/info/insights-digest");
     } catch (err) {
         // Fail-soft: the insights digest is optional UI enrichment.
-        logger.warn('Insights digest unavailable; using empty result', err);
+        logger.warn("Insights digest unavailable; using empty result", err);
         return {
             subscriptionCreep: { new: [], priceChanges: [] },
             categoryOutliers: [],
@@ -174,17 +177,22 @@ export interface DeductionCandidatesResponse {
 }
 
 /** Transaction-derived Belgian deduction candidates for the tax review card. */
-export async function getDeductionCandidates(year: number): Promise<DeductionCandidatesResponse> {
+export async function getDeductionCandidates(
+    year: number,
+): Promise<DeductionCandidatesResponse> {
     try {
-        return await apiRequest('/api/info/deduction-candidates?year=' + year);
+        return await apiRequest("/api/info/deduction-candidates?year=" + year);
     } catch (err) {
         // Fail-soft: deduction candidates are optional UI enrichment.
-        logger.warn('Deduction candidates unavailable; using empty result', err);
+        logger.warn(
+            "Deduction candidates unavailable; using empty result",
+            err,
+        );
         return {
             year,
             from: `${year}-01-01`,
             to: `${year}-12-31`,
-            currency: 'EUR',
+            currency: "EUR",
             byDeductionType: [],
         };
     }
@@ -210,6 +218,8 @@ export function getPortfolioPerformance(params?: {
         inflation_adjusted_value: number;
         gain_loss: number;
         return_pct: number;
+        /** True for the newest returned point, which is intentionally not spike-smoothed yet. */
+        is_provisional: boolean;
         /** Value at cost-weighted purchase-date FX rates. Absent until migration 0039 + a snapshot recompute. */
         value_fx_neutral?: number;
     }>;
@@ -244,7 +254,7 @@ export function getPortfolioPerformance(params?: {
     }>;
     totals?: PortfolioSummaryTotals;
 }> {
-    return requestWithQuery('/api/info/portfolio-performance', params);
+    return requestWithQuery("/api/info/portfolio-performance", params);
 }
 
 export interface PortfolioSummaryTotals {
@@ -318,6 +328,20 @@ export interface PortfolioSummaryItem {
     accruedInterest: number;
     projectedAnnualInterest: number;
     totalAppreciation: number;
+    fullyAssigned: boolean;
+    oversold: boolean;
+}
+
+export interface PortfolioSummaryByAccountItem {
+    account_id: number | null;
+    /** Machine-readable identity; clients localize `unassigned` for display. */
+    assignment: "account" | "unassigned";
+    oversold: boolean;
+    currentValue: number;
+    totalInvested: number;
+    realizedGain: number;
+    unrealizedGain: number;
+    gainLoss: number;
 }
 
 export interface PortfolioSummaryResponse {
@@ -325,10 +349,13 @@ export interface PortfolioSummaryResponse {
     computed_at: string;
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
+    byAccount: PortfolioSummaryByAccountItem[];
 }
 
-export function getPortfolioSummary(params?: { currency?: string }): Promise<PortfolioSummaryResponse> {
-    return requestWithQuery('/api/info/portfolio-summary', params);
+export function getPortfolioSummary(params?: {
+    currency?: string;
+}): Promise<PortfolioSummaryResponse> {
+    return requestWithQuery("/api/info/portfolio-summary", params);
 }
 
 export function getNetWorth(params?: {
@@ -336,7 +363,7 @@ export function getNetWorth(params?: {
     limit?: number;
     offset?: number;
 }): Promise<NetWorthResponse> {
-    return requestWithQuery('/api/info/net-worth', params);
+    return requestWithQuery("/api/info/net-worth", params);
 }
 
 export interface ExchangeRate {
@@ -350,16 +377,18 @@ export interface ExchangeRatesData {
     total_rates: number;
     rates: ExchangeRate[];
     fallback_rates: Record<string, number>;
-    source?: 'database' | 'fallback';
+    source?: "database" | "fallback";
     is_stale?: boolean;
     last_fetched_at?: string | null;
 }
 
-export function getExchangeRates(options: { dbOnly?: boolean } = {}): Promise<ExchangeRatesData> {
-    const qs = options.dbOnly ? '?db_only=true' : '';
+export function getExchangeRates(
+    options: { dbOnly?: boolean } = {},
+): Promise<ExchangeRatesData> {
+    const qs = options.dbOnly ? "?db_only=true" : "";
     return apiRequest(`/api/info/exchange-rates${qs}`);
 }
 
 export function refreshExchangeRates(): Promise<{ message: string }> {
-    return apiRequest('/api/info/exchange-rates/refresh', { method: 'POST' });
+    return apiRequest("/api/info/exchange-rates/refresh", { method: "POST" });
 }

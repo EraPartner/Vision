@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Star } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
 import { cn } from "@/lib/utils";

@@ -6,7 +6,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import type { BelgianRegion } from "@/contexts/BelgianTaxProfileContext";
+import type { BelgianRegion } from "@/lib/belgianTax";
 
 interface BelgianRegionSelectProps {
     id: string;

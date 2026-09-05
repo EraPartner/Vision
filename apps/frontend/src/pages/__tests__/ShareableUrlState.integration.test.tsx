@@ -44,7 +44,7 @@ describe("shareable page URL state", () => {
             screen.getByRole("tab", { name: /fundamentals/i }),
         ).toHaveAttribute("data-state", "active");
         expect(
-            screen.getByRole("button", { name: /sort by p\/e/i }),
+            await screen.findByRole("button", { name: /sort by p\/e/i }),
         ).toHaveClass("font-semibold");
     });
 

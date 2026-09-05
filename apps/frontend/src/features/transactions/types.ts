@@ -1,4 +1,4 @@
-import type { Tag } from '@/types/api';
+import type { Tag } from "@/types/api";
 
 export type TableTransaction = {
     id: number;
@@ -11,6 +11,7 @@ export type TableTransaction = {
     bank: string;
     amount: number;
     currency: string;
+    runningBalance?: number;
     balance?: number;
     comment?: string;
     is_active: boolean;
@@ -27,7 +28,8 @@ export interface RawApiTransaction {
     recipient_name?: string | null;
     bank?: string;
     amount?: number;
-    currency?: string;
+    currency?: string | null;
+    running_balance?: number | null;
     balance?: number | null;
     comment?: string | null;
     is_active?: boolean;
@@ -39,9 +41,4 @@ export interface RawApiTransaction {
 // import data and the account total anchors on it (ADR-094). It is shown
 // read-only in the info dialog but never user-editable.
 export type InfoEditableField =
-    | 'date'
-    | 'memo'
-    | 'amount'
-    | 'currency'
-    | 'bank'
-    | 'comment';
+    "date" | "memo" | "amount" | "currency" | "bank" | "comment";

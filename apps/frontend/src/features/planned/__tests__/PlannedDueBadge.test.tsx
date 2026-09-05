@@ -14,7 +14,7 @@ const translations = vi.hoisted<Record<string, string>>(() => ({
   "plannedPage.due.inDays": "In {n}d",
 }));
 
-vi.mock("@/contexts/LanguageContext", () => ({
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
   useLanguage: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const template = translations[key] ?? key;

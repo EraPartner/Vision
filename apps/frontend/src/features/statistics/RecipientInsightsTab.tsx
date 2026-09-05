@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Money } from "@/components/shared/Money";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
-import { aggregationKeys } from "@/lib/queryKeys";
 import {
     Card,
     CardContent,
@@ -25,14 +22,15 @@ import {
 import { parseISO } from "@/lib/dateUtils";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
+import { useRecipientInsights } from "@/hooks/useStatistics";
 
 type RecipientDetailRow = {
     recipientId: number;
@@ -73,23 +71,11 @@ export function RecipientInsightsTab({
             formatCurrencyBase(val, undefined, fractionDigits),
         [formatCurrencyBase],
     );
-    const { data, isLoading, isError } = useQuery({
-        // Keyed under the ['aggregations', …] prefix so invalidateTransactionData
-        // (which invalidates the whole aggregations family) reaches this copy too —
-        // otherwise it stayed stale until staleTime expiry after a mutation.
-        queryKey: aggregationKeys.recipientInsightsWithExclusions(
-            targetCurrency,
-            effectiveExcludedCatIds,
-            effectiveExcludedRecIds,
-        ),
-        queryFn: () =>
-            apiClient.getRecipientInsights({
-                currency: targetCurrency,
-                excluded_category_ids: effectiveExcludedCatIds,
-                excluded_recipient_ids: effectiveExcludedRecIds,
-            }),
-        staleTime: 60000,
-    });
+    const { data, isLoading, isError } = useRecipientInsights(
+        targetCurrency,
+        effectiveExcludedCatIds,
+        effectiveExcludedRecIds,
+    );
 
     // Server already applied exclusions (alias-aware) — no client-side post-filter.
     const filteredData = data;

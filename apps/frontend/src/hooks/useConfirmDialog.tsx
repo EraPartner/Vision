@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, type ReactNode } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     AlertDialog,
     AlertDialogAction,

@@ -3,19 +3,14 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import {
-    useQuery,
-    useQueryClient,
-    keepPreviousData,
-} from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { toast } from "sonner";
 import { formatDate, parseISO } from "@/lib/dateUtils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import {
     Card,
     CardContent,
@@ -29,6 +24,7 @@ import { Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/types/apiClient";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useImportBatches } from "./useImportHistoryData";
 
 const PAGE_SIZE = 10;
 
@@ -185,13 +181,8 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
     const queryClient = useQueryClient();
     const [offset, setOffset] = useState(0);
 
-    const { data, isLoading, isFetching, isPlaceholderData, isError, error } =
-        useQuery({
-            queryKey: importKeys.batches(offset),
-            queryFn: () => apiClient.listImportBatches(PAGE_SIZE, offset),
-            placeholderData: keepPreviousData,
-        });
-    useBackgroundQueryCue(isFetching && isPlaceholderData);
+    const { data, isLoading, isFetching, isError, error } =
+        useImportBatches(offset);
 
     const batches = data?.items ?? [];
     const total = data?.total ?? 0;

@@ -6,7 +6,7 @@ import {Label} from "@/components/ui/label";
 import {Textarea} from "@/components/ui/textarea";
 import {Plus, Loader2} from "lucide-react";
 import {useCreateCategory} from "@/hooks/useCategories";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 type CategoryFormValues = {
     general: string;

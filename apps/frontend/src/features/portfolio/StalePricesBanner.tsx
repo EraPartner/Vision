@@ -1,7 +1,7 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { countStalePrices } from "@/utils/priceStaleness";
 import { cn } from "@/lib/utils";

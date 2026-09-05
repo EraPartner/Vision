@@ -6,20 +6,27 @@
  */
 
 import { useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, Trash2, Upload, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    Paperclip,
+    Trash2,
+    Upload,
+    ExternalLink,
+    Loader2,
+    AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
-    listAttachments,
     uploadAttachment,
     deleteAttachment,
     getAttachmentDownloadUrl,
     type Attachment,
 } from "@/lib/api/attachments";
+import { attachmentKeys, useAttachments } from "@/hooks/useAttachments";
 
 interface AttachmentPanelProps {
     transactionId: number;
@@ -79,7 +86,7 @@ function AttachmentRow({
                 className="icon-touch-target text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
                 onClick={() => onDelete(attachment.id)}
                 disabled={deleting}
-                title={t('txPage.deleteAttachment')}
+                title={t("txPage.deleteAttachment")}
             >
                 {deleting ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -98,12 +105,9 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
-    const queryKey = ["attachments", transactionId];
+    const queryKey = attachmentKeys.byTransaction(transactionId);
 
-    const { data, isLoading, isError } = useQuery({
-        queryKey,
-        queryFn: () => listAttachments(transactionId),
-    });
+    const { data, isLoading, isError } = useAttachments(transactionId);
 
     const attachments: Attachment[] = data?.items ?? [];
 
@@ -125,7 +129,7 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
             // Resetting the spinner alone left a failed delete looking like a
             // no-op (the row just stays). This handler also suppresses the
             // global MutationCache backstop, so it has to speak for itself.
-            toast.error(t('txPage.deleteAttachmentError'), {
+            toast.error(t("txPage.deleteAttachmentError"), {
                 description: apiErrorToMessage(err, t),
             });
         },
@@ -142,10 +146,12 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
     async function handleDelete(id: number) {
         const target = attachments.find((a) => a.id === id);
         const ok = await confirm({
-            title: t('txPage.deleteAttachment'),
-            description: t('txPage.deleteAttachment.desc', { name: target?.filename ?? '' }),
-            confirmLabel: t('common.delete'),
-            variant: 'destructive',
+            title: t("txPage.deleteAttachment"),
+            description: t("txPage.deleteAttachment.desc", {
+                name: target?.filename ?? "",
+            }),
+            confirmLabel: t("common.delete"),
+            variant: "destructive",
         });
         if (!ok) return;
         setDeletingId(id);
@@ -154,71 +160,73 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
 
     return (
         <>
-        <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">
-                    {t("txPage.attachments")}
-                </span>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 text-xs"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadMutation.isPending}
-                >
-                    {uploadMutation.isPending ? (
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                        {t("txPage.attachments")}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadMutation.isPending}
+                    >
+                        {uploadMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                            <Upload className="h-3 w-3" />
+                        )}
+                        {t("txPage.uploadAttachment")}
+                    </Button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={ALLOWED_MIME}
+                        className="hidden"
+                        onChange={handleFileChange}
+                    />
+                </div>
+
+                {isLoading && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                        <Upload className="h-3 w-3" />
-                    )}
-                    {t("txPage.uploadAttachment")}
-                </Button>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={ALLOWED_MIME}
-                    className="hidden"
-                    onChange={handleFileChange}
-                />
+                        {t("common.loading")}
+                    </div>
+                )}
+
+                {isError && (
+                    <div className="flex items-center gap-2 text-xs text-destructive py-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {t("txPage.attachmentsError")}
+                    </div>
+                )}
+
+                {uploadMutation.isError && (
+                    <div className="flex items-center gap-2 text-xs text-destructive py-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {t("txPage.uploadError")}
+                    </div>
+                )}
+
+                {!isLoading && !isError && attachments.length === 0 && (
+                    <p className="text-xs text-muted-foreground py-1">
+                        {t("txPage.noAttachments")}
+                    </p>
+                )}
+
+                {attachments.map((att) => (
+                    <AttachmentRow
+                        key={att.id}
+                        attachment={att}
+                        onDelete={handleDelete}
+                        deleting={
+                            deletingId === att.id && deleteMutation.isPending
+                        }
+                    />
+                ))}
             </div>
-
-            {isLoading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    {t("common.loading")}
-                </div>
-            )}
-
-            {isError && (
-                <div className="flex items-center gap-2 text-xs text-destructive py-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {t("txPage.attachmentsError")}
-                </div>
-            )}
-
-            {uploadMutation.isError && (
-                <div className="flex items-center gap-2 text-xs text-destructive py-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {t("txPage.uploadError")}
-                </div>
-            )}
-
-            {!isLoading && !isError && attachments.length === 0 && (
-                <p className="text-xs text-muted-foreground py-1">
-                    {t("txPage.noAttachments")}
-                </p>
-            )}
-
-            {attachments.map((att) => (
-                <AttachmentRow
-                    key={att.id}
-                    attachment={att}
-                    onDelete={handleDelete}
-                    deleting={deletingId === att.id && deleteMutation.isPending}
-                />
-            ))}
-        </div>
-        <ConfirmDialog />
+            <ConfirmDialog />
         </>
     );
 }

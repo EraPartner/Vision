@@ -19,12 +19,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Link2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMergeRecipients } from "@/hooks/useRecipients";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
-import { recipientKeys } from "@/lib/queryKeys";
-import type { Recipient } from "@/types/api";
+import {
+    useAllRecipientsForMerge,
+    useMergeRecipients,
+} from "@/hooks/useRecipients";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
 interface MergeRecipientsDialogProps {
@@ -42,35 +41,8 @@ export function MergeRecipientsDialog({
     useUnsavedChanges(primaryId !== null || aliasIds.length > 0);
     const mergeMutation = useMergeRecipients();
 
-    const { data: recipients = [], isLoading: recipientsLoading } = useQuery({
-        queryKey: recipientKeys.mergeAll,
-        enabled: open,
-        staleTime: 2 * 60_000,
-        queryFn: async () => {
-            const pageSize = 1000;
-            let offset = 0;
-            let total: number;
-            const all: Recipient[] = [];
-
-            do {
-                const response = await apiClient.getRecipients({
-                    limit: pageSize,
-                    offset,
-                    active: false,
-                    sort_by: "name",
-                    sort_dir: "asc",
-                });
-
-                all.push(...response.items);
-                total = response.total ?? all.length;
-                offset += response.items.length;
-
-                if (response.items.length === 0) break;
-            } while (offset < total);
-
-            return all;
-        },
-    });
+    const { data: recipients = [], isLoading: recipientsLoading } =
+        useAllRecipientsForMerge(open);
 
     // Only show recipients that are NOT already aliases of someone else
     const availableRecipients = recipients.filter(

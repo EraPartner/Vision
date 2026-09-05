@@ -3,7 +3,7 @@
  *
  * Fetches ALL user settings in a single `GET /api/settings` call on app startup
  * and provides the raw values for the individual setting contexts
- * (AppSettingsContext, ThemeContext, SettingsContext) to consume as their
+ * (AppSettingsHydration, ThemeHydration, SettingsHydration) to consume as their
  * initial state.
  *
  * Before this, each context fired its own `GET /api/settings/:key` request,
@@ -11,10 +11,17 @@
  * Now there is exactly 1 round-trip at mount time.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiClient } from '@/lib/api';
-import { getStartedSettingsPreload } from '@/lib/settingsPreload';
-import logger from '@/lib/logger';
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
+import { apiClient } from "@/lib/api";
+import { getStartedSettingsPreload } from "@/lib/settingsPreload";
+import logger from "@/lib/logger";
 
 interface SettingsPreload {
     /** Raw settings map from the backend, keyed by settings key. */
@@ -29,7 +36,10 @@ const SettingsPreloadContext = createContext<SettingsPreload>({
 });
 
 export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
-    const [rawSettings, setRawSettings] = useState<Record<string, unknown> | null>(null);
+    const [rawSettings, setRawSettings] = useState<Record<
+        string,
+        unknown
+    > | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -47,15 +57,19 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                         for (const row of all) {
                             if (
                                 row !== null &&
-                                typeof row === 'object' &&
-                                'key' in row &&
-                                typeof (row as { key: unknown }).key === 'string'
+                                typeof row === "object" &&
+                                "key" in row &&
+                                typeof (row as { key: unknown }).key ===
+                                    "string"
                             ) {
-                                const typed = row as { key: string; value: unknown };
+                                const typed = row as {
+                                    key: string;
+                                    value: unknown;
+                                };
                                 map[typed.key] = typed.value;
                             }
                         }
-                    } else if (all && typeof all === 'object') {
+                    } else if (all && typeof all === "object") {
                         // Already a key-value map (depending on backend version)
                         Object.assign(map, all);
                     }
@@ -64,14 +78,21 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
             })
             .catch((err) => {
                 // Backend unreachable on startup — contexts will use their own defaults
-                logger.warn('Settings preload failed; using defaults', err);
+                logger.warn("Settings preload failed; using defaults", err);
                 if (!cancelled) setRawSettings({});
             })
-            .finally(() => { if (!cancelled) setIsLoading(false); });
-        return () => { cancelled = true; };
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
-    const value = useMemo(() => ({ rawSettings, isLoading }), [rawSettings, isLoading]);
+    const value = useMemo(
+        () => ({ rawSettings, isLoading }),
+        [rawSettings, isLoading],
+    );
 
     return (
         <SettingsPreloadContext.Provider value={value}>
@@ -85,7 +106,10 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
  * Returns `undefined` while loading, and `null` if the key was not found.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function usePreloadedSetting<T>(key: string): { value: T | null; isLoading: boolean } {
+export function usePreloadedSetting<T>(key: string): {
+    value: T | null;
+    isLoading: boolean;
+} {
     const { rawSettings, isLoading } = useContext(SettingsPreloadContext);
     if (isLoading) return { value: null, isLoading: true };
     const v = rawSettings?.[key];

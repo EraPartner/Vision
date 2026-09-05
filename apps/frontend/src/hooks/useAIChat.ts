@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { aiKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { aiChatStreamStore, type SendBody } from "@/lib/aiChatStreamStore";
 import type {
     ChatDoneEvent,

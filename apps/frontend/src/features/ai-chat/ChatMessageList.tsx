@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Bot } from "lucide-react";
 import type { ChatMessage } from "@/types/aiChat";
 import { ChatBubble } from "./ChatBubble";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
 import type { StreamState } from "@/lib/aiChatStreamStore";
 import { isOptimisticUserId } from "@/lib/aiChatStreamStore";

@@ -3,15 +3,12 @@ import { render, RenderOptions, RenderResult } from "@testing-library/react";
 import { MemoryRouter, type MemoryRouterProps } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SettingsProvider } from "@/stores/hydration/SettingsHydration";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
-import {
-    AppSettingsProvider,
-    useAppSettings,
-} from "@/contexts/AppSettingsContext";
+import { AppSettingsProvider } from "@/stores/hydration/AppSettingsHydration";
 import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
+import { ThemeProvider } from "@/stores/hydration/ThemeHydration";
+import { LanguageHydration } from "@/stores/hydration/LanguageHydration";
 
 interface RenderWithAppOptions extends Omit<RenderOptions, "wrapper"> {
     initialEntries?: MemoryRouterProps["initialEntries"];
@@ -31,18 +28,6 @@ function makeTestQueryClient(): QueryClient {
     });
 }
 
-function LanguageBridge({ children }: { children: ReactNode }) {
-    const { appSettings, updateAppSettings } = useAppSettings();
-    const language: Language = (appSettings.language as Language) ?? "en";
-    const setLanguage = (lang: Language) =>
-        updateAppSettings({ language: lang });
-    return (
-        <LanguageProvider language={language} setLanguage={setLanguage}>
-            {children}
-        </LanguageProvider>
-    );
-}
-
 function AllProviders({
     children,
     initialEntries,
@@ -59,7 +44,7 @@ function AllProviders({
                     <SettingsProvider>
                         <AppSettingsProvider>
                             <BelgianTaxProfileProvider>
-                                <LanguageBridge>
+                                <LanguageHydration>
                                     <TooltipProvider>
                                         <MemoryRouter
                                             initialEntries={initialEntries}
@@ -67,7 +52,7 @@ function AllProviders({
                                             {children}
                                         </MemoryRouter>
                                     </TooltipProvider>
-                                </LanguageBridge>
+                                </LanguageHydration>
                             </BelgianTaxProfileProvider>
                         </AppSettingsProvider>
                     </SettingsProvider>

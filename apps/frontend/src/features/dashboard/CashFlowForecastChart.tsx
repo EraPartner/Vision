@@ -9,7 +9,6 @@
 import { useState, useCallback } from "react";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { useSearchParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { FlaskConical } from "lucide-react";
 
 import {
@@ -27,16 +26,15 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getChartColor } from "@/components/charts/palette";
 import { numberFormatToLocale } from "@/utils/currency";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
-import { apiClient } from "@/lib/api";
-import { cashflowKeys } from "@/lib/queryKeys";
 import type { CashflowForecastMethod } from "@/lib/api/aggregations";
 import { ACTUAL_COLOR, METHOD_COLORS } from "@/utils/forecastMerge";
 import { CashFlowForecastDiagnostics } from "./CashFlowForecastDiagnostics";
 import { ForecastInner } from "./ForecastInner";
 import { ForecastInnerRolling } from "./ForecastInnerRolling";
+import { useCashflowForecastQueries } from "./useDashboardQueries";
 
 type ForecastMode = "month" | "rolling";
 type RollingDays = 30 | 60 | 90 | 180;
@@ -123,74 +121,16 @@ export function CashFlowForecastChart({
         () => new Set(DEFAULT_VISIBLE_METHOD_IDS),
     );
 
-    const monthQuery = useQuery({
-        queryKey: cashflowKeys.forecastMethods(
+    const { monthQuery, rollingQuery, rollingDiagnosticsQuery } =
+        useCashflowForecastQueries({
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
             includePlanned,
-        ),
-        queryFn: () =>
-            apiClient.getCashflowForecastMethods({
-                currency,
-                excluded_category_ids: excludedCategoryIds,
-                excluded_recipient_ids: excludedRecipientIds,
-                include_planned: includePlanned,
-                include_backtest: true,
-                mc_paths: 500,
-                mc_percentiles: [25, 75],
-            }),
-        staleTime: 60_000,
-        enabled: mode === "month",
-    });
-
-    const rollingQuery = useQuery({
-        queryKey: cashflowKeys.forecastRolling(
-            currency,
-            excludedCategoryIds,
-            excludedRecipientIds,
-            includePlanned,
+            mode,
             rollingDays,
-        ),
-        queryFn: () =>
-            apiClient.getCashflowForecastRolling({
-                currency,
-                excluded_category_ids: excludedCategoryIds,
-                excluded_recipient_ids: excludedRecipientIds,
-                include_planned: includePlanned,
-                days_back: rollingDays,
-                days_forward: rollingDays,
-                mc_paths: 500,
-                mc_percentiles: [25, 75],
-                include_backtest: false,
-            }),
-        staleTime: 60_000,
-        enabled: mode === "rolling",
-    });
-
-    const rollingDiagnosticsQuery = useQuery({
-        queryKey: cashflowKeys.forecastRollingDiagnostics(
-            currency,
-            excludedCategoryIds,
-            excludedRecipientIds,
-            includePlanned,
-            rollingDays,
-        ),
-        queryFn: () =>
-            apiClient.getCashflowForecastRolling({
-                currency,
-                excluded_category_ids: excludedCategoryIds,
-                excluded_recipient_ids: excludedRecipientIds,
-                include_planned: includePlanned,
-                days_back: rollingDays,
-                days_forward: rollingDays,
-                mc_paths: 500,
-                mc_percentiles: [25, 75],
-                include_backtest: true,
-            }),
-        staleTime: 300_000,
-        enabled: mode === "rolling" && showDiagnostics,
-    });
+            showDiagnostics,
+        });
 
     const data = mode === "month" ? monthQuery.data : rollingQuery.data;
     const isLoading =

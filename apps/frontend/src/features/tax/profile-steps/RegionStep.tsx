@@ -1,11 +1,11 @@
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import {
     DEFAULT_COMMUNAL_SURCHARGE,
     type BelgianRegion,
-} from "@/contexts/BelgianTaxProfileContext";
+} from "@/lib/belgianTax";
 import type { StepProps } from "./types";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 

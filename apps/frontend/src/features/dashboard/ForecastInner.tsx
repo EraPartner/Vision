@@ -1,8 +1,8 @@
 import { memo, useMemo } from "react";
 import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { CashflowForecastMethodsData } from "@/lib/api/aggregations";
 import { mergeForView, type MergedDay } from "@/utils/forecastMerge";
 

@@ -35,16 +35,23 @@ function monthlySummaryWithData() {
                 period_end: "2025-03-31",
             },
         },
-        meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+        meta: {
+            computedAt: "2025-04-01T00:00:00.000Z",
+            source: "live" as const,
+        },
     });
 }
 
 describe("StatisticsPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<StatisticsPage />);
-        expect(
-            await screen.findByRole("heading", { name: /statistics/i }),
-        ).toBeInTheDocument();
+        await waitFor(
+            () =>
+                expect(
+                    screen.getByRole("heading", { name: /statistics/i }),
+                ).toBeInTheDocument(),
+            { timeout: 5000 },
+        );
     });
 
     it("renders without crashing with empty transaction data", async () => {
@@ -53,7 +60,9 @@ describe("StatisticsPage (integration)", () => {
     });
 
     it("shows error state when the aggregation API fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
                 err(500, "aggregation failed"),
@@ -63,7 +72,11 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
 
         expect(
-            await screen.findByText(/failed to load statistics/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /failed to load statistics/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
@@ -77,19 +90,28 @@ describe("StatisticsPage (integration)", () => {
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
                 ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
                 ok({
                     data: { topMerchants: [], monthOverMonth: [] },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
                 ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
         );
@@ -97,9 +119,15 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
 
         // Tabs only render when monthlyData.length > 0
-        expect(await screen.findByRole("tab", { name: /overview/i })).toBeInTheDocument();
-        expect(screen.getByRole("tab", { name: /categories/i })).toBeInTheDocument();
-        expect(screen.getByRole("tab", { name: /yearly/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("tab", { name: /overview/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("tab", { name: /categories/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("tab", { name: /yearly/i }),
+        ).toBeInTheDocument();
     });
 
     it("switches to Categories tab when clicked", async () => {
@@ -112,26 +140,37 @@ describe("StatisticsPage (integration)", () => {
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
                 ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
                 ok({
                     data: { topMerchants: [], monthOverMonth: [] },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
                 ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
         );
 
         renderWithApp(<StatisticsPage />);
 
-        const categoriesTab = await screen.findByRole("tab", { name: /categories/i });
+        const categoriesTab = await screen.findByRole("tab", {
+            name: /categories/i,
+        });
         await user.click(categoriesTab);
 
         // After switching tabs, the Categories tab should be selected
@@ -148,37 +187,50 @@ describe("StatisticsPage (integration)", () => {
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
                 ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
                 ok({
                     data: {
-                        topMerchants: [{
-                            recipientId: 7,
-                            name: "Corner Shop",
-                            totalSpend: 42,
-                            transactionCount: 2,
-                            avgAmount: 21,
-                            firstSeen: "2025-02-01",
-                            lastSeen: "2025-03-01",
-                        }],
+                        topMerchants: [
+                            {
+                                recipientId: 7,
+                                name: "Corner Shop",
+                                totalSpend: 42,
+                                transactionCount: 2,
+                                avgAmount: 21,
+                                firstSeen: "2025-02-01",
+                                lastSeen: "2025-03-01",
+                            },
+                        ],
                         monthOverMonth: [],
                     },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
                 ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
         );
 
         renderWithApp(<StatisticsPage />);
 
-        await user.click(await screen.findByRole("tab", { name: /^recipients$/i }));
+        await user.click(
+            await screen.findByRole("tab", { name: /^recipients$/i }),
+        );
 
         expect(await screen.findByText("Corner Shop")).toBeInTheDocument();
         expect(screen.getByText(/recipient details/i)).toBeInTheDocument();
@@ -211,7 +263,9 @@ describe("StatisticsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<StatisticsPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", {
+            name: /widgets/i,
+        });
         await user.click(widgetsBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -224,7 +278,9 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
         // statsPage.subtitle = "Income, spending and net balance over time"
         expect(
-            await screen.findByText(/income, spending and net balance over time/i),
+            await screen.findByText(
+                /income, spending and net balance over time/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -232,7 +288,9 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
         // statsPage.noDataDesc = "Import your bank transactions to see statistics."
         expect(
-            await screen.findByText(/import your bank transactions to see statistics/i),
+            await screen.findByText(
+                /import your bank transactions to see statistics/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -240,7 +298,9 @@ describe("StatisticsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<StatisticsPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", {
+            name: /widgets/i,
+        });
         await user.click(widgetsBtn);
         await screen.findByRole("dialog");
 
@@ -259,19 +319,28 @@ describe("StatisticsPage (integration)", () => {
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
                 ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
                 ok({
                     data: { topMerchants: [], monthOverMonth: [] },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
                 ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
         );
@@ -295,7 +364,9 @@ describe("StatisticsPage (integration)", () => {
         );
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", { name: /statistics|analytics/i }),
+            await screen.findByRole("heading", {
+                name: /statistics|analytics/i,
+            }),
         ).toBeInTheDocument();
         errSpy.mockRestore();
     });
@@ -303,7 +374,9 @@ describe("StatisticsPage (integration)", () => {
     it("renders heading when statistics endpoint returns empty data (Empty)", async () => {
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", { name: /statistics|analytics/i }),
+            await screen.findByRole("heading", {
+                name: /statistics|analytics/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -321,21 +394,30 @@ describe("StatisticsPage (integration)", () => {
                 track("category");
                 return ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 });
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () => {
                 track("insights");
                 return ok({
                     data: { topMerchants: [], monthOverMonth: [] },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 });
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () => {
                 track("by-year");
                 return ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 });
             }),
         );
@@ -345,11 +427,15 @@ describe("StatisticsPage (integration)", () => {
         await screen.findByRole("tab", { name: /overview/i });
 
         // Switch tabs to fan-out queries across endpoints
-        await user.click(await screen.findByRole("tab", { name: /categories/i }));
+        await user.click(
+            await screen.findByRole("tab", { name: /categories/i }),
+        );
         await user.click(await screen.findByRole("tab", { name: /yearly/i }));
 
         // Each endpoint must be hit at least once across tab switches
-        await waitFor(() => expect(callsByEndpoint["monthly"]).toBeGreaterThan(0));
+        await waitFor(() =>
+            expect(callsByEndpoint["monthly"]).toBeGreaterThan(0),
+        );
         // Other endpoints lazy-load — wait briefly
         await new Promise((r) => setTimeout(r, 200));
         const hits = Object.keys(callsByEndpoint).length;
@@ -359,28 +445,40 @@ describe("StatisticsPage (integration)", () => {
     it("changing year filter triggers monthly-summary refetch with new year param", async () => {
         const yearsSeen = new Set<string>();
         server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, ({ request }) => {
-                const url = new URL(request.url);
-                const year = url.searchParams.get("year") ?? "current";
-                yearsSeen.add(year);
-                return monthlySummaryWithData();
-            }),
+            http.get(
+                `${API_BASE}/api/aggregations/monthly-summary`,
+                ({ request }) => {
+                    const url = new URL(request.url);
+                    const year = url.searchParams.get("year") ?? "current";
+                    yearsSeen.add(year);
+                    return monthlySummaryWithData();
+                },
+            ),
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
                 ok({
                     data: { categoryPivot: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
                 ok({
                     data: { topMerchants: [], monthOverMonth: [] },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
                 ok({
                     data: { recipientsByYear: {} },
-                    meta: { computedAt: "2025-04-01T00:00:00.000Z", source: "live" as const },
+                    meta: {
+                        computedAt: "2025-04-01T00:00:00.000Z",
+                        source: "live" as const,
+                    },
                 }),
             ),
         );

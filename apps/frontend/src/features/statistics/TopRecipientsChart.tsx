@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import { BarChart, type BarSeries } from "@/components/charts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import type { StatisticsData } from "@/hooks/useStatistics";
 

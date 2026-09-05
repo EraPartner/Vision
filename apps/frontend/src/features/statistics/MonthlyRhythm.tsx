@@ -6,7 +6,7 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { useChartKeyboardNav } from "@/components/charts/keyboardNav";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { appLanguageToLocale } from "@/lib/dateUtils";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodLabel } from "./statisticsUtils";

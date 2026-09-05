@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
@@ -10,7 +10,7 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -22,6 +22,7 @@ import {
 import type { InvestmentsListResponse } from "@/types/api";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
+import { usePortfolioTickerQuotes } from "./usePortfolioQueries";
 
 interface PortfolioTickerProps {
     /** Holdings to surface — only those with a ticker symbol Yahoo can quote appear. */
@@ -120,19 +121,12 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
 
     // Same cadence/guards as the home benchmark strip and Market Overview: 60s
     // poll, online-gated, price-only (detail=basic skips fundamentals).
-    const { data } = useQuery({
-        queryKey: ["portfolio-ticker", symbols],
-        queryFn: () =>
-            apiClient.getMarketQuotes<TickerQuote>(symbols, {
-                detail: "basic",
-            }),
-        enabled: isOnline && symbolList.length > 0,
-        staleTime: 60_000,
-        // Poll only while visible; a stale tape refreshes the moment it reappears.
-        refetchInterval: active && isOnline ? 60_000 : false,
-        refetchOnWindowFocus: false,
-        retry: isOnline ? 1 : false,
-    });
+    const { data } = usePortfolioTickerQuotes<TickerQuote>(
+        symbols,
+        symbolList.length > 0,
+        isOnline,
+        active,
+    );
 
     const entries = useMemo<TickerEntry[]>(() => {
         const bySymbol = new Map<string, TickerQuote>();

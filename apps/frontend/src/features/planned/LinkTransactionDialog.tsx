@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import { toast } from "sonner";
 import logger from "@/lib/logger";
@@ -21,15 +20,13 @@ import {
     parseLocalDateFromYmd,
     toYmd,
 } from "@/lib/dateUtils";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { apiClient } from "@/lib/api";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { getRecipient } from "@/lib/api/recipients";
 import { cn } from "@/lib/utils";
-import type { Transaction } from "@/types/api";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import { useLinkTransactionCandidates } from "@/hooks/usePlannedMatchSuggestions";
 
 interface LinkTransactionDialogProps {
     open: boolean;
@@ -137,35 +134,7 @@ export function LinkTransactionDialog({
         isLoading: txLoading,
         isError: txError,
         error: txErrorObj,
-        isFetching: txFetching,
-        isPlaceholderData: txPlaceholder,
-    } = useQuery({
-        queryKey: ["linkTxCandidates", payment?.id, debouncedFilters],
-        enabled: open && !!payment && debouncedFilters !== null,
-        placeholderData: keepPreviousData,
-        queryFn: async () => {
-            const f = debouncedFilters!;
-            const params: Record<string, string | number | boolean> = {
-                limit: 50,
-            };
-            if (f.start_date) params.start_date = f.start_date;
-            if (f.end_date) params.end_date = f.end_date;
-            if (f.bank_account) params.bank_account = f.bank_account;
-            if (f.recipient_id != null) {
-                params.recipient_id = f.recipient_id;
-            } else if (f.recipient_name) {
-                params.recipient_name = f.recipient_name;
-            } else if (payment?.recipient) {
-                params.recipient_name = payment.recipient;
-            }
-            if (f.uncategorised) params.uncategorised = true;
-            params.active = f.active;
-
-            const res = await apiClient.getTransactions(params);
-            return (res.items ?? []) as Transaction[];
-        },
-    });
-    useBackgroundQueryCue(txFetching && txPlaceholder);
+    } = useLinkTransactionCandidates(payment, debouncedFilters, open);
 
     useEffect(() => {
         if (txError) logger.error("Failed to fetch transactions:", txErrorObj);

@@ -19,12 +19,10 @@ import {
     Sun,
     Users,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useTheme } from "@/stores/hydration/ThemeHydration";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
@@ -49,15 +47,10 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-
-interface PaletteQuote {
-    symbol: string;
-    name: string;
-    price: number;
-    change: number;
-    changePercent: number;
-    currency: string;
-}
+import {
+    usePaletteRecipientSearch,
+    usePaletteTickerQuote,
+} from "@/hooks/useCommandPaletteQueries";
 
 function GoToHint({ url }: { url: string }) {
     const key = GO_TO_KEY_BY_URL.get(url);
@@ -143,34 +136,17 @@ export function CommandPalette({
         );
     };
 
-    const { data: recipientHits } = useQuery({
-        queryKey: ["palette-recipients", debouncedQuery],
-        queryFn: () =>
-            apiClient.getRecipients({
-                search: debouncedQuery,
-                active: true,
-                limit: 5,
-            }),
-        enabled: open && debouncedQuery.length >= 2,
-        staleTime: 30_000,
-    });
+    const { data: recipientHits } = usePaletteRecipientSearch(
+        debouncedQuery,
+        open,
+    );
 
     // Inline ticker quote — when the query looks like a symbol, fetch a price-only
     // quote and surface its absolute + relative move. Enter opens Market Lookup.
     const tickerSymbol = useMemo(() => parseTickerQuery(query.trim()), [query]);
     const debouncedTicker = useDebounce(tickerSymbol ?? "", SEARCH_DEBOUNCE_MS);
-    const { data: tickerQuote, isFetching: tickerLoading } = useQuery({
-        queryKey: ["palette-quote", debouncedTicker],
-        queryFn: async () => {
-            const quotes = await apiClient.getMarketQuotes<PaletteQuote>(
-                debouncedTicker,
-                { detail: "basic" },
-            );
-            return quotes[0] ?? null;
-        },
-        enabled: open && debouncedTicker.length >= 1,
-        staleTime: 30_000,
-    });
+    const { data: tickerQuote, isFetching: tickerLoading } =
+        usePaletteTickerQuote(debouncedTicker, open);
     const fmtTickerPrice = (val: number, currency: string) =>
         fmtSafeCurrency(val, currency, 2);
 

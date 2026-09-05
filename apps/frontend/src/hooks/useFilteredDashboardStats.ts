@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { dashboardKeys, monthlySummaryKeys } from "@/lib/queryKeys";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 
 export interface NetHistoryPoint {

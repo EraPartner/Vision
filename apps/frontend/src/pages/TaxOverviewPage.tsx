@@ -1,5 +1,5 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { TaxFilingMasthead } from "@/features/tax/TaxFilingMasthead";

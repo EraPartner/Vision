@@ -10,37 +10,42 @@
  * write. Behaviour is intentionally identical to the three original effects.
  */
 
-import { useEffect, useRef } from 'react';
-import { apiClient } from '@/lib/api';
-import logger from '@/lib/logger';
+import { useEffect, useRef } from "react";
+import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
 
 const PERSIST_DEBOUNCE_MS = 500;
 
 export function useDebouncedSetting<T>(
-  key: string,
-  value: T,
-  isLoading: boolean,
-  onError: () => void,
-  errorMessage: string,
+    key: string,
+    value: T,
+    isLoading: boolean,
+    onError: () => void,
+    errorMessage: string,
 ): void {
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFirstRender = useRef(true);
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasObservedHydratedValue = useRef(false);
 
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (isLoading) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      apiClient.saveSetting(key, value).catch((err) => {
-        logger.error(errorMessage, err);
-        onError();
-      });
-    }, PERSIST_DEBOUNCE_MS);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [value, isLoading, onError, key, errorMessage]);
+    useEffect(() => {
+        if (isLoading) {
+            hasObservedHydratedValue.current = false;
+            return;
+        }
+        // The first non-loading value came from SettingsPreloadContext. Treat it as
+        // the persistence baseline instead of immediately writing it back.
+        if (!hasObservedHydratedValue.current) {
+            hasObservedHydratedValue.current = true;
+            return;
+        }
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+            apiClient.saveSetting(key, value).catch((err) => {
+                logger.error(errorMessage, err);
+                onError();
+            });
+        }, PERSIST_DEBOUNCE_MS);
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        };
+    }, [value, isLoading, onError, key, errorMessage]);
 }

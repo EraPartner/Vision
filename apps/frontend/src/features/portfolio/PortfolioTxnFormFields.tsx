@@ -33,6 +33,7 @@ import {
     type FieldErrorMap,
 } from "@/hooks/useFieldErrors";
 import type { RecurrenceInterval } from "@/types/portfolio";
+import type { DividendAmountConvention } from "@/types/api";
 
 type TranslateFn = (
     key: string,
@@ -47,6 +48,7 @@ export interface PortfolioTxnFieldsForm {
     pricePerUnit: string;
     fees: string;
     taxes: string;
+    dividendAmountConvention: DividendAmountConvention;
     fxRateToEur: string;
     note: string;
     isRecurring: boolean;
@@ -79,6 +81,7 @@ interface PortfolioTxnFormFieldsProps<F extends PortfolioTxnFieldsForm> {
     typeField: ReactNode;
     showUnits: boolean;
     showFeesTaxes: boolean;
+    showDividendConvention: boolean;
     showRecurring: boolean;
     derivedAmount?: number;
     isBuySell: boolean;
@@ -107,6 +110,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
     typeField,
     showUnits,
     showFeesTaxes,
+    showDividendConvention,
     showRecurring,
     derivedAmount,
     isBuySell,
@@ -319,6 +323,44 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                             />
                         </div>
                     </>
+                )}
+
+                {showDividendConvention && (
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor={`${idPrefix}-dividend-convention`}>
+                            {t("addPortTxn.dividendAmountConvention")}
+                        </Label>
+                        <Select
+                            value={form.dividendAmountConvention}
+                            onValueChange={(value) =>
+                                setForm((f) => ({
+                                    ...f,
+                                    dividendAmountConvention:
+                                        value as DividendAmountConvention,
+                                }))
+                            }
+                        >
+                            <SelectTrigger
+                                id={`${idPrefix}-dividend-convention`}
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="gross">
+                                    {t("addPortTxn.dividendConvention.gross")}
+                                </SelectItem>
+                                <SelectItem value="net">
+                                    {t("addPortTxn.dividendConvention.net")}
+                                </SelectItem>
+                                <SelectItem value="unknown">
+                                    {t("addPortTxn.dividendConvention.unknown")}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            {t("addPortTxn.dividendConvention.help")}
+                        </p>
+                    </div>
                 )}
 
                 <div

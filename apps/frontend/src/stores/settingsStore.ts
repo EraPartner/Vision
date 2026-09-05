@@ -1,28 +1,33 @@
 /**
  * settingsStore — unified Zustand store for all user settings.
  *
- * Consolidates three previously separate React contexts:
- *   - AppSettingsContext  (app_settings key)
- *   - SettingsContext     (dashboard_settings key)
- *   - ThemeContext        (theme_settings key)
+ * Consolidates four previously separate settings state owners:
+ *   - AppSettingsHydration (app_settings key)
+ *   - SettingsHydration    (dashboard_settings key)
+ *   - ThemeHydration       (theme_settings key)
+ *   - Belgian tax slice    (profile, snapshots, snapshot metadata)
  *
  * The Provider components in each context file still exist to handle:
  *   - Hydration from SettingsPreloadContext
  *   - Debounced persistence back to the API
- *   - DOM side-effects (ThemeContext: CSS class, matchMedia, interval)
+ *   - DOM side-effects (ThemeHydration: CSS class, matchMedia, interval)
  *
  * Consumer hooks (useAppSettings, useSettings, useTheme) select only the
  * slice they need, so unrelated slice updates do not trigger re-renders.
  */
 
-import { create } from 'zustand';
-import { z } from 'zod';
-import type { Language } from '@/contexts/LanguageContext';
-import type { ThemeVariant } from '@/styles/themes';
+import { create } from "zustand";
+import { z } from "zod";
+import type { Language } from "@/types/i18n";
+import type { ThemeVariant } from "@/styles/themes";
+import {
+    createBelgianTaxSlice,
+    type BelgianTaxSlice,
+} from "@/stores/belgianTaxStore";
 
 // ─── App settings types ───────────────────────────────────────────────────────
 
-export type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo';
+export type CostBasisMethod = "weighted_avg" | "fifo" | "lifo";
 
 /**
  * The section the app lands on at launch. Maps to a sidebar workspace's main
@@ -30,7 +35,8 @@ export type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo';
  * workspace-agnostic AI Chat (/ai-chat). 'last' reopens the page the user was
  * on when they last closed the app. See StartupRedirect.
  */
-export type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat' | 'last';
+export type StartupSection =
+    "budgeting" | "portfolio" | "research" | "ai-chat" | "last";
 
 /**
  * Atmosphere/material tier (ADR-075, supersedes the ADR-071 boolean):
@@ -39,22 +45,22 @@ export type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat' 
  * - standard: CSS aurora blobs + glass materials (the default look).
  * - enhanced: adds the WebGL shader aurora and Electron vibrancy.
  */
-export type VisualEffectsTier = 'reduced' | 'standard' | 'enhanced';
+export type VisualEffectsTier = "reduced" | "standard" | "enhanced";
 export const APP_DATE_FORMATS = [
-    'DD/MM/YYYY',
-    'MM/DD/YYYY',
-    'YYYY-MM-DD',
-    'DD.MM.YYYY',
-    'DD-MM-YYYY',
+    "DD/MM/YYYY",
+    "MM/DD/YYYY",
+    "YYYY-MM-DD",
+    "DD.MM.YYYY",
+    "DD-MM-YYYY",
 ] as const;
-export type AppDateFormat = typeof APP_DATE_FORMATS[number];
+export type AppDateFormat = (typeof APP_DATE_FORMATS)[number];
 
 export interface AppSettings {
     defaultCurrency: string;
     dateFormat: AppDateFormat;
     numberFormat: string;
     defaultPageSize: number;
-    startOfWeek: 'monday' | 'sunday';
+    startOfWeek: "monday" | "sunday";
     showDecimalPlaces: number;
     language: Language;
     aiDefaultModel?: string;
@@ -79,7 +85,7 @@ export interface AppSettings {
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
 
-export type ExclusionScope = 'everywhere' | 'dashboard' | 'statistics';
+export type ExclusionScope = "everywhere" | "dashboard" | "statistics";
 
 export interface DashboardSettings {
     excludedCategoryIds: number[];
@@ -90,28 +96,28 @@ export interface DashboardSettings {
 
 // ─── Theme types ──────────────────────────────────────────────────────────────
 
-export type Theme = 'dark' | 'light';
-export type ThemeMode = 'light' | 'dark' | 'system' | 'schedule';
+export type Theme = "dark" | "light";
+export type ThemeMode = "light" | "dark" | "system" | "schedule";
 export interface ThemeSchedule {
     lightFrom: string; // HH:MM
-    darkFrom: string;  // HH:MM
+    darkFrom: string; // HH:MM
 }
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-    defaultCurrency: 'EUR',
-    dateFormat: 'DD/MM/YYYY',
-    numberFormat: 'eu',
+    defaultCurrency: "EUR",
+    dateFormat: "DD/MM/YYYY",
+    numberFormat: "eu",
     defaultPageSize: 50,
-    startOfWeek: 'monday',
+    startOfWeek: "monday",
     showDecimalPlaces: 2,
-    language: 'en',
-    costBasisMethod: 'weighted_avg',
+    language: "en",
+    costBasisMethod: "weighted_avg",
     adminMode: false,
-    visualEffects: 'standard',
+    visualEffects: "standard",
     autoAdaptDisplay: true,
-    startupSection: 'budgeting',
+    startupSection: "budgeting",
     autoClearPlannedOnMatch: true,
     colorblindGainLoss: false,
 };
@@ -142,9 +148,16 @@ const storedAppSettingsSchema = z.looseObject({
         .catch(DEFAULT_APP_SETTINGS.defaultCurrency),
     dateFormat: z.enum(APP_DATE_FORMATS).catch(DEFAULT_APP_SETTINGS.dateFormat),
     numberFormat: z.string().catch(DEFAULT_APP_SETTINGS.numberFormat),
-    defaultPageSize: z.number().int().positive().catch(DEFAULT_APP_SETTINGS.defaultPageSize),
+    defaultPageSize: z
+        .number()
+        .int()
+        .positive()
+        .catch(DEFAULT_APP_SETTINGS.defaultPageSize),
     startOfWeek: z
-        .enum(['monday', 'sunday'] as const satisfies readonly AppSettings['startOfWeek'][])
+        .enum([
+            "monday",
+            "sunday",
+        ] as const satisfies readonly AppSettings["startOfWeek"][])
         .catch(DEFAULT_APP_SETTINGS.startOfWeek),
     showDecimalPlaces: z
         .number()
@@ -153,31 +166,43 @@ const storedAppSettingsSchema = z.looseObject({
         .max(20)
         .catch(DEFAULT_APP_SETTINGS.showDecimalPlaces),
     language: z
-        .enum(['en', 'nl'] as const satisfies readonly Language[])
+        .enum(["en", "nl"] as const satisfies readonly Language[])
         .catch(DEFAULT_APP_SETTINGS.language),
     aiDefaultModel: z.string().optional().catch(undefined),
     costBasisMethod: z
-        .enum(['weighted_avg', 'fifo', 'lifo'] as const satisfies readonly CostBasisMethod[])
+        .enum([
+            "weighted_avg",
+            "fifo",
+            "lifo",
+        ] as const satisfies readonly CostBasisMethod[])
         .catch(DEFAULT_APP_SETTINGS.costBasisMethod),
     adminMode: z.boolean().catch(DEFAULT_APP_SETTINGS.adminMode),
     // Optional (not caught to the default): the pre-ADR-075 legacy mapping in
     // migrateAppSettings must still see "absent" to apply `enhancedEffects`.
     visualEffects: z
-        .enum(['reduced', 'standard', 'enhanced'] as const satisfies readonly VisualEffectsTier[])
+        .enum([
+            "reduced",
+            "standard",
+            "enhanced",
+        ] as const satisfies readonly VisualEffectsTier[])
         .optional()
         .catch(undefined),
     autoAdaptDisplay: z.boolean().catch(DEFAULT_APP_SETTINGS.autoAdaptDisplay),
     startupSection: z
         .enum([
-            'budgeting',
-            'portfolio',
-            'research',
-            'ai-chat',
-            'last',
+            "budgeting",
+            "portfolio",
+            "research",
+            "ai-chat",
+            "last",
         ] as const satisfies readonly StartupSection[])
         .catch(DEFAULT_APP_SETTINGS.startupSection),
-    autoClearPlannedOnMatch: z.boolean().catch(DEFAULT_APP_SETTINGS.autoClearPlannedOnMatch),
-    colorblindGainLoss: z.boolean().catch(DEFAULT_APP_SETTINGS.colorblindGainLoss),
+    autoClearPlannedOnMatch: z
+        .boolean()
+        .catch(DEFAULT_APP_SETTINGS.autoClearPlannedOnMatch),
+    colorblindGainLoss: z
+        .boolean()
+        .catch(DEFAULT_APP_SETTINGS.colorblindGainLoss),
     enhancedEffects: z.boolean().optional().catch(undefined),
 });
 
@@ -197,10 +222,12 @@ const storedAppSettingsSchema = z.looseObject({
 export function migrateAppSettings(raw: unknown): AppSettings {
     const parsed = storedAppSettingsSchema.safeParse(raw);
     if (!parsed.success) return DEFAULT_APP_SETTINGS;
-    const { enhancedEffects, visualEffects, aiDefaultModel, ...rest } = parsed.data;
+    const { enhancedEffects, visualEffects, aiDefaultModel, ...rest } =
+        parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
-    merged.visualEffects = visualEffects ?? (enhancedEffects ? 'enhanced' : 'standard');
+    merged.visualEffects =
+        visualEffects ?? (enhancedEffects ? "enhanced" : "standard");
     return merged;
 }
 
@@ -208,7 +235,7 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
     excludedCategoryIds: [],
     excludedRecipientIds: [],
     excludeHiddenCategories: true,
-    exclusionScope: 'everywhere',
+    exclusionScope: "everywhere",
 };
 
 /**
@@ -225,7 +252,11 @@ const storedDashboardSettingsSchema = z.looseObject({
         .boolean()
         .catch(DEFAULT_DASHBOARD_SETTINGS.excludeHiddenCategories),
     exclusionScope: z
-        .enum(['everywhere', 'dashboard', 'statistics'] as const satisfies readonly ExclusionScope[])
+        .enum([
+            "everywhere",
+            "dashboard",
+            "statistics",
+        ] as const satisfies readonly ExclusionScope[])
         .catch(DEFAULT_DASHBOARD_SETTINGS.exclusionScope),
 });
 
@@ -244,8 +275,8 @@ export function migrateDashboardSettings(raw: unknown): DashboardSettings {
 }
 
 export const DEFAULT_THEME_SCHEDULE: ThemeSchedule = {
-    lightFrom: '07:00',
-    darkFrom: '20:00',
+    lightFrom: "07:00",
+    darkFrom: "20:00",
 };
 
 // ─── Store shape ─────────────────────────────────────────────────────────────
@@ -296,7 +327,10 @@ interface SettingsActions {
     updateDashboardSettings: (updates: Partial<DashboardSettings>) => void;
     resetDashboardSettings: () => void;
     /** Called by SettingsProvider once preloaded data arrives. */
-    _hydrateDashboardSettings: (settings: DashboardSettings, isLoading: boolean) => void;
+    _hydrateDashboardSettings: (
+        settings: DashboardSettings,
+        isLoading: boolean,
+    ) => void;
 
     // Theme
     setThemeMode: (mode: ThemeMode) => void;
@@ -317,11 +351,12 @@ interface SettingsActions {
     _setThemeLoaded: (loaded: boolean) => void;
 }
 
-export type SettingsStore = SettingsState & SettingsActions;
+export type SettingsStore = SettingsState & SettingsActions & BelgianTaxSlice;
 
 // ─── Store ───────────────────────────────────────────────────────────────────
 
-export const useSettingsStore = create<SettingsStore>((set, get) => ({
+export const useSettingsStore = create<SettingsStore>((set, get, store) => ({
+    ...createBelgianTaxSlice(set, get, store),
     // ── App settings ──────────────────────────────────────────────────────────
     appSettings: DEFAULT_APP_SETTINGS,
     isAppSettingsLoading: true,
@@ -329,13 +364,17 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     sessionTierOverride: undefined,
 
     updateAppSettings: (updates) =>
-        set((s) => ({ appSettings: migrateAppSettings({ ...s.appSettings, ...updates }) })),
+        set((s) => ({
+            appSettings: migrateAppSettings({ ...s.appSettings, ...updates }),
+        })),
 
     resetAppSettings: () =>
-        set({ appSettings: DEFAULT_APP_SETTINGS, sessionTierOverride: undefined }),
+        set({
+            appSettings: DEFAULT_APP_SETTINGS,
+            sessionTierOverride: undefined,
+        }),
 
-    setSessionTierOverride: (tier) =>
-        set({ sessionTierOverride: tier }),
+    setSessionTierOverride: (tier) => set({ sessionTierOverride: tier }),
 
     _hydrateAppSettings: (settings, isLoading) =>
         set({ appSettings: settings, isAppSettingsLoading: isLoading }),
@@ -348,19 +387,24 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     isDashboardSettingsLoading: true,
 
     updateDashboardSettings: (updates) =>
-        set((s) => ({ dashboardSettings: { ...s.dashboardSettings, ...updates } })),
+        set((s) => ({
+            dashboardSettings: { ...s.dashboardSettings, ...updates },
+        })),
 
     resetDashboardSettings: () =>
         set({ dashboardSettings: DEFAULT_DASHBOARD_SETTINGS }),
 
     _hydrateDashboardSettings: (settings, isLoading) =>
-        set({ dashboardSettings: settings, isDashboardSettingsLoading: isLoading }),
+        set({
+            dashboardSettings: settings,
+            isDashboardSettingsLoading: isLoading,
+        }),
 
     // ── Theme ─────────────────────────────────────────────────────────────────
-    theme: 'dark',
-    themeMode: 'dark',
+    theme: "dark",
+    themeMode: "dark",
     themeSchedule: DEFAULT_THEME_SCHEDULE,
-    themeVariant: 'default',
+    themeVariant: "default",
     themeSystemAccent: false,
     isThemeLoaded: false,
 
@@ -371,7 +415,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     // Sets both the resolved theme AND the mode (used for explicit light/dark override)
     setTheme: (theme) => set({ theme, themeMode: theme }),
     toggleTheme: () => {
-        const next = get().theme === 'dark' ? 'light' : 'dark';
+        const next = get().theme === "dark" ? "light" : "dark";
         set({ theme: next, themeMode: next });
     },
 

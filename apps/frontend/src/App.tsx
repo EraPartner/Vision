@@ -12,20 +12,19 @@ import {
     useParams,
 } from "react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SettingsProvider } from "@/stores/hydration/SettingsHydration";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import {
     AppSettingsProvider,
     SettingsSaveErrorToaster,
-    useAppSettings,
-} from "@/contexts/AppSettingsContext";
+} from "@/stores/hydration/AppSettingsHydration";
 import {
     BelgianTaxProfileProvider,
     BelgianTaxSaveErrorToaster,
 } from "@/contexts/BelgianTaxProfileContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
-import { lazy, Suspense, useCallback, useEffect, type ReactNode } from "react";
+import { ThemeProvider } from "@/stores/hydration/ThemeHydration";
+import { LanguageHydration } from "@/stores/hydration/LanguageHydration";
+import { lazy, Suspense, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { GlobalMutationErrorToaster } from "@/components/shared/GlobalMutationErrorToaster";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
@@ -39,8 +38,6 @@ import { useSettingsStore } from "@/stores/settingsStore";
 // sidebar hover can warm the same chunks the router requests on click.
 import { routeLoaders } from "@/lib/routePreload";
 import { loadMotionFeatures } from "@/lib/motionFeatures";
-import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
-import { setNativeLanguage } from "@/lib/api/electron";
 import { UnsavedChangesProvider } from "@/contexts/UnsavedChangesContext";
 
 const TaxOverviewPage = lazy(routeLoaders["/tax"]);
@@ -124,38 +121,6 @@ const queryClient = new QueryClient({
         },
     },
 });
-
-// Bridge: reads language from AppSettings and provides it to LanguageContext
-function LanguageBridge({ children }: { children: React.ReactNode }) {
-    const { appSettings, updateAppSettings } = useAppSettings();
-    const language: Language = (appSettings.language as Language) ?? "en";
-    // `updateAppSettings` (zustand action) is referentially stable, so this
-    // callback identity stays stable across settings changes — otherwise every
-    // unrelated settings toggle would re-publish the LanguageContext value and
-    // re-render every `useLanguage` consumer app-wide.
-    const setLanguage = useCallback(
-        (lang: Language) => updateAppSettings({ language: lang }),
-        [updateAppSettings],
-    );
-
-    // Mirror the active language to localStorage so the next cold boot can start
-    // the correct locale chunk during entry execution (see LanguageContext),
-    // instead of waiting behind the settings API round trip.
-    useEffect(() => {
-        try {
-            localStorage.setItem(LOCAL_STORAGE_KEYS.LANGUAGE, language);
-        } catch {
-            // localStorage unavailable — locale prefetch falls back to English.
-        }
-        setNativeLanguage(language);
-    }, [language]);
-
-    return (
-        <LanguageProvider language={language} setLanguage={setLanguage}>
-            {children}
-        </LanguageProvider>
-    );
-}
 
 // Per-route error boundary, keyed by pathname. Keying remounts the boundary on
 // every navigation, so (a) a crash on one page is automatically cleared when the
@@ -415,7 +380,7 @@ const App = () => {
                         <SettingsProvider>
                             <AppSettingsProvider>
                                 <BelgianTaxProfileProvider>
-                                    <LanguageBridge>
+                                    <LanguageHydration>
                                         <TooltipProvider>
                                             <ErrorBoundary>
                                                 <Sonner />
@@ -427,7 +392,7 @@ const App = () => {
                                                 />
                                             </ErrorBoundary>
                                         </TooltipProvider>
-                                    </LanguageBridge>
+                                    </LanguageHydration>
                                 </BelgianTaxProfileProvider>
                             </AppSettingsProvider>
                         </SettingsProvider>

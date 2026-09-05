@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="en">
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Vision - Financial Management</title>
-    <meta content="Track your spending, manage transactions, and take control of your personal finances with Vision"
-        name="description" />
+    <meta
+      content="Track your spending, manage transactions, and take control of your personal finances with Vision"
+      name="description"
+    />
     <meta content="Vision" name="author" />
 
     <!-- Brand mark. `favicon.svg` is the packaged app icon (packaging/electron/
@@ -23,8 +24,16 @@
          dark by default) — so these are the closest declarative match, not an
          exact mirror. Values are the app's own `--background` token from
          tokens.css (:root / .dark). -->
-    <meta content="#F8F6F1" media="(prefers-color-scheme: light)" name="theme-color" />
-    <meta content="#0E1315" media="(prefers-color-scheme: dark)" name="theme-color" />
+    <meta
+      content="#F8F6F1"
+      media="(prefers-color-scheme: light)"
+      name="theme-color"
+    />
+    <meta
+      content="#0E1315"
+      media="(prefers-color-scheme: dark)"
+      name="theme-color"
+    />
 
     <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
          script: a `type="module"` script (even /src/theme-flash.ts) is folded into
@@ -35,10 +44,39 @@
       (function () {
         try {
           document.documentElement.classList.toggle(
-            'dark', localStorage.getItem('vision_theme') !== 'light'
+            "dark",
+            localStorage.getItem("vision_theme") !== "light",
           );
         } catch (e) {
-          document.documentElement.classList.add('dark');
+          document.documentElement.classList.add("dark");
+        }
+        try {
+          var bootPalette = JSON.parse(
+            localStorage.getItem("vision_boot_palette") || "null",
+          );
+          var hsl =
+            /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/;
+          if (
+            bootPalette &&
+            hsl.test(bootPalette.base) &&
+            hsl.test(bootPalette.foreground) &&
+            hsl.test(bootPalette.glow)
+          ) {
+            document.documentElement.style.setProperty(
+              "--vision-boot-bg",
+              bootPalette.base,
+            );
+            document.documentElement.style.setProperty(
+              "--vision-boot-fg",
+              bootPalette.foreground,
+            );
+            document.documentElement.style.setProperty(
+              "--vision-boot-glow",
+              bootPalette.glow,
+            );
+          }
+        } catch (e) {
+          /* Invalid optional boot palette: keep the selected base theme. */
         }
       })();
     </script>
@@ -59,88 +97,92 @@
          paint. The light/dark class is already on <html> (inline script above),
          so both themes are correct with no flash. -->
     <style>
-        #boot-splash {
-            --boot-bg: var(--background, 40 36% 96%);
-            --boot-fg: var(--foreground, 200 20% 9%);
-            --boot-glow: var(--primary, 164 78% 26%);
+      #boot-splash {
+        --boot-bg: var(--vision-boot-bg, var(--background, 40 36% 96%));
+        --boot-fg: var(--vision-boot-fg, var(--foreground, 200 20% 9%));
+        --boot-glow: var(--vision-boot-glow, var(--primary, 164 78% 26%));
 
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-            background: hsl(var(--boot-bg));
-            color: hsl(var(--boot-fg) / 0.82);
-            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-            -webkit-font-smoothing: antialiased;
-            user-select: none;
-            cursor: default;
-        }
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: hsl(var(--boot-bg));
+        color: hsl(var(--boot-fg) / 0.82);
+        font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+        cursor: default;
+      }
 
-        /* The splash's "pretty much black with a light emerald shine". Dark only:
+      /* The splash's "pretty much black with a light emerald shine". Dark only:
            the splash paints its flat fill in light mode too. */
-        .dark #boot-splash {
-            --boot-bg: var(--background, 200 20% 7%);
-            --boot-fg: var(--foreground, 42 25% 96%);
-            --boot-glow: var(--primary, 160 74% 52%);
-            background:
-                radial-gradient(85% 60% at 50% 38%, hsl(var(--boot-glow) / 0.16), transparent 70%),
-                hsl(var(--boot-bg));
-        }
+      .dark #boot-splash {
+        --boot-bg: var(--vision-boot-bg, var(--background, 200 20% 7%));
+        --boot-fg: var(--vision-boot-fg, var(--foreground, 42 25% 96%));
+        --boot-glow: var(--vision-boot-glow, var(--primary, 160 74% 52%));
+        background:
+          radial-gradient(
+            85% 60% at 50% 38%,
+            hsl(var(--boot-glow) / 0.16),
+            transparent 70%
+          ),
+          hsl(var(--boot-bg));
+      }
 
-        /* Brand mark, mirroring the Electron splash's .mark (currentColor, 44px)
+      /* Brand mark, mirroring the Electron splash's .mark (currentColor, 44px)
            so it does not blink out of existence at the splash → index.html
            handoff. */
-        #boot-splash .boot-splash__mark {
-            width: 44px;
-            height: 44px;
-            color: currentColor;
-        }
+      #boot-splash .boot-splash__mark {
+        width: 44px;
+        height: 44px;
+        color: currentColor;
+      }
 
+      #boot-splash .boot-splash__spinner {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 2.5px solid currentColor;
+        border-top-color: transparent;
+        opacity: 0.55;
+        animation: boot-splash-spin 0.9s linear infinite;
+      }
+
+      @keyframes boot-splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
         #boot-splash .boot-splash__spinner {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            border: 2.5px solid currentColor;
-            border-top-color: transparent;
-            opacity: 0.55;
-            animation: boot-splash-spin 0.9s linear infinite;
+          display: none;
         }
+      }
 
-        @keyframes boot-splash-spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+      #boot-splash .boot-splash__name {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        color: hsl(var(--boot-fg));
+      }
 
-        @media (prefers-reduced-motion: reduce) {
-            #boot-splash .boot-splash__spinner {
-                display: none;
-            }
-        }
-
-        #boot-splash .boot-splash__name {
-            font-size: 15px;
-            font-weight: 600;
-            letter-spacing: 0.01em;
-            color: hsl(var(--boot-fg));
-        }
-
-        /* The splash's status line ("Starting Vision…") is localized in the main
+      /* The splash's status line ("Starting Vision…") is localized in the main
            process; nothing here can pick the user's language without JS, so the
            line is reserved (&nbsp;) rather than written in the wrong one. Same
            font metrics ⇒ the spinner and wordmark keep the splash's exact
            vertical position across the handoff. */
-        #boot-splash .boot-splash__status {
-            font-size: 13px;
-            font-variant-numeric: tabular-nums;
-        }
+      #boot-splash .boot-splash__status {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <!-- The window is NOT blank between the Electron splash and React's first
          commit: the splash navigates here, and this static mirror of it holds
          the frame for the whole boot-graph parse/execute window.
@@ -148,18 +190,25 @@
          so the handoff is atomic and needs no teardown code. Keep it inert:
          no script, no imports, nothing that grows the boot graph. -->
     <div id="root">
-        <div id="boot-splash" aria-hidden="true">
-            <svg class="boot-splash__mark" viewBox="262 296 500 500" fill="none"
-                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M 268 300 L 512 792 L 756 300 L 656 300 L 512 596 L 368 300 Z" fill="currentColor" />
-                <circle cx="512" cy="444" r="40" fill="currentColor" />
-            </svg>
-            <div class="boot-splash__spinner"></div>
-            <div class="boot-splash__name">Vision</div>
-            <div class="boot-splash__status">&nbsp;</div>
-        </div>
+      <div id="boot-splash" aria-hidden="true">
+        <svg
+          class="boot-splash__mark"
+          viewBox="262 296 500 500"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            d="M 268 300 L 512 792 L 756 300 L 656 300 L 512 596 L 368 300 Z"
+            fill="currentColor"
+          />
+          <circle cx="512" cy="444" r="40" fill="currentColor" />
+        </svg>
+        <div class="boot-splash__spinner"></div>
+        <div class="boot-splash__name">Vision</div>
+        <div class="boot-splash__status">&nbsp;</div>
+      </div>
     </div>
     <script src="/src/main.tsx" type="module"></script>
-</body>
-
+  </body>
 </html>

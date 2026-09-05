@@ -573,13 +573,39 @@
         margin-top: 28px;
     }
 
-    /* Vibrancy prototype — only at the 'enhanced' effective tier
-       (ElectronBridge adds .vibrancy). The window carries an under-window material; a
-       translucent body lets the blurred desktop glow through while the
+    /* Vibrancy prototype — only at the 'enhanced' effective tier.
+       ElectronBridge adds .vibrancy and enables the native under-window material;
+       a translucent body lets the blurred desktop glow through while the
        liquid-canvas wash keeps contrast usable. body background propagates
        to the root canvas, so this one rule controls the whole backdrop. */
     html.electron-mac.vibrancy body {
         background-color: hsl(var(--background) / 0.72);
+    }
+
+    /* Native under-window vibrancy already supplies the full-window blur at
+       the enhanced tier. Keep the translucent material fills and their edge
+       treatment, but do not blur the same pixels again on persistent cards,
+       chrome, hero surfaces, or the full-width top bar. Small transient
+       materials (thin and thick) retain their local blur for hierarchy. */
+    @supports (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
+        html.electron-mac.vibrancy
+            :is(
+                .glass,
+                .glass-regular,
+                .liquid-glass,
+                .surface-glass,
+                .glass-effect,
+                .glass-chrome,
+                .glass-elevated,
+                .liquid-glass-hero,
+                .app-topbar,
+                .modal-overlay
+            ) {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
     }
 
     /* ------------------------------------------------------------------

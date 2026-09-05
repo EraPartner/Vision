@@ -10,8 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { Money } from "@/components/shared/Money";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     appLanguageToLocale,
     formatDateStringWithAppSettings,

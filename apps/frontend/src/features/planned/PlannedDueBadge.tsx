@@ -1,6 +1,6 @@
 import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/lib/dateUtils";
 import { Badge } from "@/components/ui/badge";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { parsePlannedDueDate, toLocalMidnight } from "@/features/planned/plannedDueDate";
 
 interface PlannedDueBadgeProps {

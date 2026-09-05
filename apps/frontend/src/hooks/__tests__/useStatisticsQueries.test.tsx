@@ -3,7 +3,7 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-query", () => ({ useQuery: vi.fn() }));
-vi.mock("@/contexts/AppSettingsContext", () => ({
+vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
   useAppSettings: () => ({ appSettings: { defaultCurrency: "USD" } }),
 }));
 vi.mock("@/hooks/useExcludedIds", () => ({

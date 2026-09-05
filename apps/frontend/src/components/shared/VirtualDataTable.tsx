@@ -33,7 +33,7 @@ import {
     X,
     type LucideIcon,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
 import { DatePicker } from "@/components/shared/DatePicker";

@@ -12,9 +12,15 @@ import {
     DEFAULT_DASHBOARD_SETTINGS,
     migrateDashboardSettings,
 } from "@/stores/settingsStore";
-import { useAppSettings, AppSettingsProvider } from "@/contexts/AppSettingsContext";
-import { useSettings, SettingsProvider } from "@/contexts/SettingsContext";
-import { useTheme } from "@/contexts/ThemeContext";
+import {
+    useAppSettings,
+    AppSettingsProvider,
+} from "@/stores/hydration/AppSettingsHydration";
+import {
+    useSettings,
+    SettingsProvider,
+} from "@/stores/hydration/SettingsHydration";
+import { useTheme } from "@/stores/hydration/ThemeHydration";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 
 const API_BASE = "http://localhost:3002";
@@ -47,7 +53,9 @@ describe("useAppSettings", () => {
         const { result } = renderHook(() => useAppSettings());
         act(() => result.current.updateAppSettings({ defaultCurrency: "USD" }));
         expect(result.current.appSettings.defaultCurrency).toBe("USD");
-        expect(result.current.appSettings.dateFormat).toBe(DEFAULT_APP_SETTINGS.dateFormat);
+        expect(result.current.appSettings.dateFormat).toBe(
+            DEFAULT_APP_SETTINGS.dateFormat,
+        );
     });
 
     it("updateAppSettings validates malformed runtime values", () => {
@@ -83,7 +91,9 @@ describe("useSettings", () => {
 
     it("updateSettings merges partial changes", () => {
         const { result } = renderHook(() => useSettings());
-        act(() => result.current.updateSettings({ excludedCategoryIds: [1, 2] }));
+        act(() =>
+            result.current.updateSettings({ excludedCategoryIds: [1, 2] }),
+        );
         expect(result.current.settings.excludedCategoryIds).toEqual([1, 2]);
         expect(result.current.settings.excludeHiddenCategories).toBe(
             DEFAULT_DASHBOARD_SETTINGS.excludeHiddenCategories,
@@ -138,7 +148,7 @@ function makeProviderWrapper() {
     };
 }
 
-describe("AppSettingsContext — edge cases", () => {
+describe("AppSettingsHydration — edge cases", () => {
     afterEach(() => vi.restoreAllMocks());
 
     it("hydrates from server-provided preload data (boot fetch success)", async () => {
@@ -147,17 +157,25 @@ describe("AppSettingsContext — edge cases", () => {
                 ok({ app_settings: { defaultCurrency: "USD" } }),
             ),
         );
-        const { result } = renderHook(() => useAppSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useAppSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.appSettings.defaultCurrency).toBe("USD");
     });
 
     it("falls back to defaults when preload boot fetch fails (network error)", async () => {
-        const spy = vi.spyOn(apiClient, "getSettings").mockRejectedValueOnce(new Error("Network error"));
+        const spy = vi
+            .spyOn(apiClient, "getSettings")
+            .mockRejectedValueOnce(new Error("Network error"));
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-        const { result } = renderHook(() => useAppSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useAppSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(result.current.appSettings.defaultCurrency).toBe(DEFAULT_APP_SETTINGS.defaultCurrency);
+        expect(result.current.appSettings.defaultCurrency).toBe(
+            DEFAULT_APP_SETTINGS.defaultCurrency,
+        );
         spy.mockRestore();
         errSpy.mockRestore();
     });
@@ -166,10 +184,16 @@ describe("AppSettingsContext — edge cases", () => {
         const errSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         const spy = vi
             .spyOn(apiClient, "getSettings")
-            .mockRejectedValueOnce(Object.assign(new Error("server error"), { status: 500 }));
-        const { result } = renderHook(() => useAppSettings(), { wrapper: makeProviderWrapper() });
+            .mockRejectedValueOnce(
+                Object.assign(new Error("server error"), { status: 500 }),
+            );
+        const { result } = renderHook(() => useAppSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(result.current.appSettings.defaultCurrency).toBe(DEFAULT_APP_SETTINGS.defaultCurrency);
+        expect(result.current.appSettings.defaultCurrency).toBe(
+            DEFAULT_APP_SETTINGS.defaultCurrency,
+        );
         spy.mockRestore();
         errSpy.mockRestore();
     });
@@ -182,7 +206,9 @@ describe("AppSettingsContext — edge cases", () => {
             .mockRejectedValue(new Error("save failed"));
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        const { result } = renderHook(() => useAppSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useAppSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await act(async () => {
             await vi.advanceTimersByTimeAsync(0);
         });
@@ -210,9 +236,13 @@ describe("AppSettingsContext — edge cases", () => {
     it("calls saveSetting after a debounce when settings change (mutation success)", async () => {
         vi.useFakeTimers();
         server.use(http.get(`${API_BASE}/api/settings`, () => ok({})));
-        const saveSpy = vi.spyOn(apiClient, "saveSetting").mockResolvedValue(undefined as never);
+        const saveSpy = vi
+            .spyOn(apiClient, "saveSetting")
+            .mockResolvedValue(undefined as never);
 
-        const { result } = renderHook(() => useAppSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useAppSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await act(async () => {
             await vi.advanceTimersByTimeAsync(0);
         });
@@ -232,22 +262,31 @@ describe("AppSettingsContext — edge cases", () => {
     });
 });
 
-describe("SettingsContext — legacy localStorage migration", () => {
+describe("SettingsHydration — legacy localStorage migration", () => {
     afterEach(() => {
         vi.restoreAllMocks();
         localStorage.removeItem("vision_dashboardSettings");
     });
 
     function renderWithLegacyBlob(blob: string) {
-        const getSpy = vi.spyOn(apiClient, "getSettings").mockResolvedValueOnce({});
-        const saveSpy = vi.spyOn(apiClient, "saveSetting").mockResolvedValue(undefined as never);
+        const getSpy = vi
+            .spyOn(apiClient, "getSettings")
+            .mockResolvedValueOnce({});
+        const saveSpy = vi
+            .spyOn(apiClient, "saveSetting")
+            .mockResolvedValue(undefined as never);
         localStorage.setItem("vision_dashboardSettings", blob);
-        const rendered = renderHook(() => useSettings(), { wrapper: makeProviderWrapper() });
+        const rendered = renderHook(() => useSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         return { ...rendered, getSpy, saveSpy };
     }
 
     it("hydrates a valid legacy blob merged over defaults and persists that merge to the API", async () => {
-        const blob = { excludedCategoryIds: [3, 4], exclusionScope: "dashboard" };
+        const blob = {
+            excludedCategoryIds: [3, 4],
+            exclusionScope: "dashboard",
+        };
         const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -277,30 +316,48 @@ describe("SettingsContext — legacy localStorage migration", () => {
     });
 
     it("defaults a malformed field instead of writing it back to the API", async () => {
-        const blob = { excludedCategoryIds: "not-an-array", exclusionScope: "dashboard" };
+        const blob = {
+            excludedCategoryIds: "not-an-array",
+            exclusionScope: "dashboard",
+        };
         const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-        const expected = { ...DEFAULT_DASHBOARD_SETTINGS, exclusionScope: "dashboard" };
+        const expected = {
+            ...DEFAULT_DASHBOARD_SETTINGS,
+            exclusionScope: "dashboard",
+        };
         expect(result.current.settings).toEqual(expected);
         expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", expected);
     });
 
     it("falls back to defaults wholesale when the legacy blob is not an object", async () => {
-        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify([1, 2]));
+        const { result, saveSpy } = renderWithLegacyBlob(
+            JSON.stringify([1, 2]),
+        );
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.settings).toEqual(DEFAULT_DASHBOARD_SETTINGS);
         // Still migrated (write-back timing unchanged), but with a valid shape —
         // never the old `{ ...defaults, ...[1,2] }` index-key poisoning.
-        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", DEFAULT_DASHBOARD_SETTINGS);
+        expect(saveSpy).toHaveBeenCalledWith(
+            "dashboard_settings",
+            DEFAULT_DASHBOARD_SETTINGS,
+        );
     });
 });
 
 describe("migrateDashboardSettings", () => {
     it("merges a valid partial blob over defaults, preserving unknown keys", () => {
         expect(
-            migrateDashboardSettings({ excludedRecipientIds: [7], someFutureKey: "x" }),
-        ).toEqual({ ...DEFAULT_DASHBOARD_SETTINGS, excludedRecipientIds: [7], someFutureKey: "x" });
+            migrateDashboardSettings({
+                excludedRecipientIds: [7],
+                someFutureKey: "x",
+            }),
+        ).toEqual({
+            ...DEFAULT_DASHBOARD_SETTINGS,
+            excludedRecipientIds: [7],
+            someFutureKey: "x",
+        });
     });
 
     it("keeps a fully valid blob unchanged", () => {
@@ -324,29 +381,43 @@ describe("migrateDashboardSettings", () => {
     });
 
     it("returns defaults for non-object blobs", () => {
-        expect(migrateDashboardSettings(null)).toEqual(DEFAULT_DASHBOARD_SETTINGS);
-        expect(migrateDashboardSettings([1])).toEqual(DEFAULT_DASHBOARD_SETTINGS);
-        expect(migrateDashboardSettings("x")).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+        expect(migrateDashboardSettings(null)).toEqual(
+            DEFAULT_DASHBOARD_SETTINGS,
+        );
+        expect(migrateDashboardSettings([1])).toEqual(
+            DEFAULT_DASHBOARD_SETTINGS,
+        );
+        expect(migrateDashboardSettings("x")).toEqual(
+            DEFAULT_DASHBOARD_SETTINGS,
+        );
     });
 });
 
-describe("SettingsContext — edge cases", () => {
+describe("SettingsHydration — edge cases", () => {
     afterEach(() => vi.restoreAllMocks());
 
     it("hydrates from preloaded dashboard_settings (boot fetch success)", async () => {
         const spy = vi
             .spyOn(apiClient, "getSettings")
-            .mockResolvedValueOnce({ dashboard_settings: { excludedCategoryIds: [42] } });
-        const { result } = renderHook(() => useSettings(), { wrapper: makeProviderWrapper() });
+            .mockResolvedValueOnce({
+                dashboard_settings: { excludedCategoryIds: [42] },
+            });
+        const { result } = renderHook(() => useSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.settings.excludedCategoryIds).toContain(42);
         spy.mockRestore();
     });
 
     it("falls back to defaults when preload boot fetch fails (network error)", async () => {
-        const spy = vi.spyOn(apiClient, "getSettings").mockRejectedValueOnce(new Error("Network error"));
+        const spy = vi
+            .spyOn(apiClient, "getSettings")
+            .mockRejectedValueOnce(new Error("Network error"));
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const { result } = renderHook(() => useSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.settings.excludedCategoryIds).toEqual([]);
         spy.mockRestore();
@@ -361,7 +432,9 @@ describe("SettingsContext — edge cases", () => {
             .mockRejectedValue(new Error("save failed"));
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        const { result } = renderHook(() => useSettings(), { wrapper: makeProviderWrapper() });
+        const { result } = renderHook(() => useSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
         await act(async () => {
             await vi.advanceTimersByTimeAsync(0);
         });
@@ -383,7 +456,7 @@ describe("SettingsContext — edge cases", () => {
     });
 });
 
-describe("ThemeContext — edge cases", () => {
+describe("ThemeHydration — edge cases", () => {
     it("setTheme to invalid value falls back gracefully (no crash)", () => {
         const { result } = renderHook(() => useTheme());
         // setTheme accepts "light" | "dark"; this is a type check + runtime no-op for unrelated calls

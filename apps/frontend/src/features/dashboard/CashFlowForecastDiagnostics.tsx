@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { FlaskConical, Database } from "lucide-react";
 
 import {
@@ -22,15 +21,14 @@ import { Sparkline } from "@/components/charts/Sparkline";
 import { getChartColor } from "@/components/charts/palette";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { getCashflowForecastAccuracy } from "@/lib/api/aggregations";
-import { cashflowKeys } from "@/lib/queryKeys";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type {
     ForecastDiagnostics,
     ForecastBacktestEntry,
     AccuracyHistoryPoint,
 } from "@/lib/api/aggregations";
+import { useCashflowForecastAccuracy } from "./useDashboardQueries";
 
 const METHOD_COLORS: Record<string, string> = {
     simple_avg: getChartColor(0),
@@ -150,13 +148,7 @@ export function CashFlowForecastDiagnostics({
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
 
-    const { data: persistedData } = useQuery({
-        queryKey: cashflowKeys.forecastAccuracy,
-        queryFn: () => getCashflowForecastAccuracy({ limit_months: 24 }),
-        staleTime: 10 * 60 * 1000,
-        enabled: open,
-        select: (res) => res.data,
-    });
+    const { data: persistedData } = useCashflowForecastAccuracy(open);
 
     const persistedByMethod = useMemo(() => {
         if (!persistedData) return new Map<string, AccuracyHistoryPoint[]>();

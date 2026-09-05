@@ -1,5 +1,5 @@
 /**
- * AppSettingsContext
+ * AppSettingsHydration
  *
  * Provider: hydrates the Zustand settings store from the single preloaded
  * settings fetch and persists changes back to the API (debounced).
@@ -9,28 +9,32 @@
  * useShallow ensures the hook only re-renders when the selected values change.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api';
-import logger from '@/lib/logger';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { useSettingsStore, DEFAULT_APP_SETTINGS, migrateAppSettings } from '@/stores/settingsStore';
-import type { AppSettings } from '@/stores/settingsStore';
-import { setSkinV2 } from '@/lib/skin';
+import { useEffect, useRef, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
+import {
+    useSettingsStore,
+    DEFAULT_APP_SETTINGS,
+    migrateAppSettings,
+} from "@/stores/settingsStore";
+import type { AppSettings } from "@/stores/settingsStore";
+import { setSkinV2 } from "@/lib/skin";
 
-// Re-export so existing consumers don't need to change their imports
+// Re-export the app-settings types alongside the hydration bridge.
 export type { AppSettings };
 
-interface AppSettingsContextType {
+interface AppSettingsHydrationValue {
     appSettings: AppSettings;
     updateAppSettings: (updates: Partial<AppSettings>) => void;
     resetAppSettings: () => void;
     isLoading: boolean;
 }
 
-const SETTINGS_KEY = 'app_settings';
+const SETTINGS_KEY = "app_settings";
 
 /** @deprecated Import DEFAULT_APP_SETTINGS from \@/stores/settingsStore instead. */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -43,7 +47,9 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         usePreloadedSetting<AppSettings>(SETTINGS_KEY);
 
     const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
-    const _markSettingsSaveError = useSettingsStore((s) => s._markSettingsSaveError);
+    const _markSettingsSaveError = useSettingsStore(
+        (s) => s._markSettingsSaveError,
+    );
     const appSettings = useSettingsStore((s) => s.appSettings);
     const isLoading = useSettingsStore((s) => s.isAppSettingsLoading);
 
@@ -77,13 +83,16 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
         if (!hasHydrated.current) return;
-        if (isFirstPersistRun.current) { isFirstPersistRun.current = false; return; }
+        if (isFirstPersistRun.current) {
+            isFirstPersistRun.current = false;
+            return;
+        }
         if (isLoading) return;
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SETTINGS_KEY, appSettings).catch((err) => {
-                logger.error('Failed to save app settings:', err);
+                logger.error("Failed to save app settings:", err);
                 // Instant-apply has no Save button, so a silent failure means the
                 // user believes a change persisted when it didn't. Signal it so the
                 // toaster (under LanguageProvider) can surface a translated message.
@@ -113,7 +122,7 @@ export function SettingsSaveErrorToaster() {
     useEffect(() => {
         if (nonce !== lastSeen.current) {
             lastSeen.current = nonce;
-            if (nonce > 0) toast.error(t('settings.saveFailed'));
+            if (nonce > 0) toast.error(t("settings.saveFailed"));
         }
     }, [nonce, t]);
     return null;
@@ -122,13 +131,13 @@ export function SettingsSaveErrorToaster() {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function useAppSettings(): AppSettingsContextType {
+export function useAppSettings(): AppSettingsHydrationValue {
     return useSettingsStore(
         useShallow((s) => ({
             appSettings: s.appSettings,
             updateAppSettings: s.updateAppSettings,
             resetAppSettings: s.resetAppSettings,
             isLoading: s.isAppSettingsLoading,
-        }))
+        })),
     );
 }

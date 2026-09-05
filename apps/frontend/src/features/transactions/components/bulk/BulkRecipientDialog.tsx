@@ -10,7 +10,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface BulkRecipientDialogProps {
     open: boolean;

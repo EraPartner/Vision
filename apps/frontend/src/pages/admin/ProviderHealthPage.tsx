@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminKeys } from "@/lib/queryKeys";
 import {
     Activity,
@@ -25,13 +25,14 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { numberFormatToLocale } from "@/utils/currency";
-import { getProviderHealth, probeProvider } from "@/lib/api/admin";
+import { probeProvider } from "@/lib/api/admin";
 import type { ProviderHealth } from "@/lib/api/admin";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { useProviderHealthQuery } from "@/features/admin/useAdminQueries";
 
 function StatusIcon({ failures }: { failures: number }) {
     if (failures === 0)
@@ -172,15 +173,7 @@ export default function ProviderHealthPage() {
     const qc = useQueryClient();
     const [probingSet, setProbingSet] = useState<Set<string>>(new Set());
 
-    const {
-        data: providers,
-        isLoading,
-        error,
-    } = useQuery({
-        queryKey: adminKeys.providerHealth,
-        queryFn: getProviderHealth,
-        staleTime: 30_000,
-    });
+    const { data: providers, isLoading, error } = useProviderHealthQuery();
 
     const probeMutation = useMutation({
         mutationFn: probeProvider,

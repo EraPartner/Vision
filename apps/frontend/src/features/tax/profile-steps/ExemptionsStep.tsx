@@ -9,7 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { StepProps } from "./types";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 import { BoundedCountSelect } from "./ProfileSelectFields";

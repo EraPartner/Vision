@@ -3,7 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import {

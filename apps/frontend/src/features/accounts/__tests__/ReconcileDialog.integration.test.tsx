@@ -14,7 +14,12 @@ import type { Account } from "@/types/api";
 import { toast } from "sonner";
 
 vi.mock("sonner", () => ({
-    toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    toast: {
+        success: vi.fn(),
+        error: vi.fn(),
+        warning: vi.fn(),
+        info: vi.fn(),
+    },
 }));
 
 /** A YYYY-MM-DD calendar day `n` days before today, in the LOCAL calendar. */
@@ -76,6 +81,15 @@ const MULTI_CURRENCY = {
     display_name: "Wise",
     type: "checking",
     currency: "EUR",
+    multi_currency_cash: true,
+    balance_parts: [
+        { currency: "EUR", balance: 100 },
+        { currency: "USD", balance: 100 },
+    ],
+    statement_balances: [
+        { currency: "EUR", balance: 120, balance_date: "2026-06-03" },
+        { currency: "USD", balance: 80, balance_date: "2026-06-04" },
+    ],
     computed_balance: 150,
     reconcilable_balance: 100,
     reconcilable_currency: "EUR",
@@ -137,39 +151,66 @@ const UNANCHORED = {
 
 function mockAccountApi({ reconcileFails = false } = {}) {
     const calls: {
-        patch: Array<{ id: string; body: Record<string, unknown> }>;
+        patch: Array<{
+            id: string;
+            currency?: string;
+            body: Record<string, unknown>;
+        }>;
         reconcile: Array<{ id: string; body: Record<string, unknown> }>;
         opening: Array<{ id: string; body: Record<string, unknown> }>;
     } = { patch: [], reconcile: [], opening: [] };
     server.use(
-        http.patch(`${API_BASE}/api/accounts/:id`, async ({ request, params }) => {
-            calls.patch.push({
-                id: String(params.id),
-                body: (await request.json()) as Record<string, unknown>,
-            });
-            return ok(ACCOUNT_STUB);
-        }),
-        http.post(`${API_BASE}/api/accounts/:id/reconcile`, async ({ request, params }) => {
-            calls.reconcile.push({
-                id: String(params.id),
-                body: (await request.json()) as Record<string, unknown>,
-            });
-            if (reconcileFails) return err(500, "reconcile blew up");
-            return ok({
-                mode: "accept",
-                drift: 0,
-                statement_balance: 1000,
-                computed_balance: 1000,
-                transaction: null,
-            });
-        }),
-        http.post(`${API_BASE}/api/accounts/:id/opening-balance`, async ({ request, params }) => {
-            calls.opening.push({
-                id: String(params.id),
-                body: (await request.json()) as Record<string, unknown>,
-            });
-            return ok({ warning: null });
-        }),
+        http.put(
+            `${API_BASE}/api/accounts/:id/statement-balances/:currency`,
+            async ({ request, params }) => {
+                calls.patch.push({
+                    id: String(params.id),
+                    currency: String(params.currency),
+                    body: (await request.json()) as Record<string, unknown>,
+                });
+                return ok({
+                    account_id: Number(params.id),
+                    currency: params.currency,
+                });
+            },
+        ),
+        http.patch(
+            `${API_BASE}/api/accounts/:id`,
+            async ({ request, params }) => {
+                calls.patch.push({
+                    id: String(params.id),
+                    body: (await request.json()) as Record<string, unknown>,
+                });
+                return ok(ACCOUNT_STUB);
+            },
+        ),
+        http.post(
+            `${API_BASE}/api/accounts/:id/reconcile`,
+            async ({ request, params }) => {
+                calls.reconcile.push({
+                    id: String(params.id),
+                    body: (await request.json()) as Record<string, unknown>,
+                });
+                if (reconcileFails) return err(500, "reconcile blew up");
+                return ok({
+                    mode: "accept",
+                    drift: 0,
+                    statement_balance: 1000,
+                    computed_balance: 1000,
+                    transaction: null,
+                });
+            },
+        ),
+        http.post(
+            `${API_BASE}/api/accounts/:id/opening-balance`,
+            async ({ request, params }) => {
+                calls.opening.push({
+                    id: String(params.id),
+                    body: (await request.json()) as Record<string, unknown>,
+                });
+                return ok({ warning: null });
+            },
+        ),
     );
     return calls;
 }
@@ -185,7 +226,10 @@ async function renderDialog(account: Account, queryClient?: QueryClient) {
             <ReconcileDialog account={account} open onOpenChange={() => {}} />
             <LocationProbe />
         </>,
-        { initialEntries: ["/dashboard"], ...(queryClient ? { queryClient } : {}) },
+        {
+            initialEntries: ["/dashboard"],
+            ...(queryClient ? { queryClient } : {}),
+        },
     );
     // The locale dictionary is a lazy dynamic import — wait for the first
     // translated string before querying by label/name.
@@ -232,7 +276,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const reading = screen.getByLabelText(/new statement reading/i);
         await user.type(reading, "1042,75");
         await waitFor(() => expect(deltaText()).toMatch(/\+.*42,75/));
-        expect(screen.getByText(/preview for the reading you entered/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/preview for the reading you entered/i),
+        ).toBeInTheDocument();
 
         // Retyping BELOW the ledger flips the sign (no stale +).
         await user.clear(reading);
@@ -255,16 +301,22 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         // A fresh (still negative) reading of -152.500,00 owes 159,50 MORE than
         // the ledger knows about → -159,50.
-        await user.type(screen.getByLabelText(/new statement reading/i), "-152500");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "-152500",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/-159,50/));
     });
 
-    it("saves a fresh reading through the account PATCH path (no new endpoint)", async () => {
+    it("saves a fresh reading through the per-currency statement endpoint", async () => {
         const calls = mockAccountApi();
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         await user.clear(screen.getByLabelText(/^as of$/i));
         await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
         await user.click(screen.getByRole("button", { name: /save reading/i }));
@@ -272,11 +324,31 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await waitFor(() => expect(calls.patch).toHaveLength(1));
         expect(calls.patch[0].id).toBe("7");
         expect(calls.patch[0].body).toEqual({
-            statement_balance: 1042.75,
-            statement_balance_date: "2026-07-20",
+            balance: 1042.75,
+            date: "2026-07-20",
         });
         // Saving a reading alone must NOT reconcile anything.
         expect(calls.reconcile).toHaveLength(0);
+    });
+
+    it("selects and stores an independent native-currency statement", async () => {
+        const calls = mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(MULTI_CURRENCY);
+
+        await user.selectOptions(
+            screen.getByLabelText("Statement currency"),
+            "USD",
+        );
+        await user.type(screen.getByLabelText(/new statement reading/i), "95");
+        await user.click(screen.getByRole("button", { name: /save reading/i }));
+
+        await waitFor(() => expect(calls.patch).toHaveLength(1));
+        expect(calls.patch[0]).toMatchObject({
+            id: "9",
+            currency: "USD",
+            body: { balance: 95 },
+        });
     });
 
     it("keeps Save reading disabled until a parseable reading is entered", async () => {
@@ -300,13 +372,21 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
-        await user.click(screen.getByRole("button", { name: /add adjustment transaction/i }));
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        );
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(1);
-        expect(calls.patch[0].body.statement_balance).toBe(1042.75);
-        expect(calls.reconcile[0].body).toEqual({ mode: "adjustment" });
+        expect(calls.patch[0].body.balance).toBe(1042.75);
+        expect(calls.reconcile[0].body).toEqual({
+            mode: "adjustment",
+            currency: "EUR",
+        });
     });
 
     it("resolves against the STORED figure when no fresh reading is entered (unchanged behaviour)", async () => {
@@ -314,11 +394,16 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        );
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(0);
-        expect(calls.reconcile[0].body).toEqual({ mode: "accept" });
+        expect(calls.reconcile[0].body).toEqual({
+            mode: "accept",
+            currency: "EUR",
+        });
     });
 
     it("backfills an opening balance from the valid fresh reading and date", async () => {
@@ -326,10 +411,15 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(UNANCHORED);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         await user.clear(screen.getByLabelText(/^as of$/i));
         await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
-        await user.click(screen.getByRole("button", { name: /opening balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /opening balance/i }),
+        );
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
         expect(calls.opening[0]).toEqual({
@@ -343,7 +433,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(UNANCHORED);
 
-        await user.click(screen.getByRole("button", { name: /opening balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /opening balance/i }),
+        );
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
         expect(calls.opening[0].body).toEqual({
@@ -356,17 +448,25 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
     it.each([
         ["garbage", false],
         ["1042,75", true],
-    ])("does not silently backfill the stored statement for an unusable draft %#", async (draft, clearDate) => {
-        const calls = mockAccountApi();
-        const user = userEvent.setup();
-        await renderDialog(UNANCHORED);
+    ])(
+        "does not silently backfill the stored statement for an unusable draft %#",
+        async (draft, clearDate) => {
+            const calls = mockAccountApi();
+            const user = userEvent.setup();
+            await renderDialog(UNANCHORED);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), draft);
-        if (clearDate) await user.clear(screen.getByLabelText(/^as of$/i));
+            await user.type(
+                screen.getByLabelText(/new statement reading/i),
+                draft,
+            );
+            if (clearDate) await user.clear(screen.getByLabelText(/^as of$/i));
 
-        expect(screen.queryByRole("button", { name: /opening balance/i })).not.toBeInTheDocument();
-        expect(calls.opening).toHaveLength(0);
-    });
+            expect(
+                screen.queryByRole("button", { name: /opening balance/i }),
+            ).not.toBeInTheDocument();
+            expect(calls.opening).toHaveLength(0);
+        },
+    );
 
     it("stops at the PATCH when the fresh reading already matches the ledger (server rejects zero-drift reconciles)", async () => {
         const calls = mockAccountApi();
@@ -374,9 +474,14 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         // computed_balance is exactly 1000 — entering it leaves nothing to resolve.
-        await user.type(screen.getByLabelText(/new statement reading/i), "1000");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1000",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/0,00/));
-        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        );
 
         await waitFor(() => expect(calls.patch).toHaveLength(1));
         expect(calls.reconcile).toHaveLength(0);
@@ -387,15 +492,26 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         await user.clear(screen.getByLabelText(/^as of$/i));
 
-        expect(await screen.findByText(/add the as-of date for this reading/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/add the as-of date for this reading/i),
+        ).toBeInTheDocument();
         // Resolving against the STORED figure while the preview shows another
         // number would be a silent money bug — both exits are closed instead.
-        expect(screen.getByRole("button", { name: /accept computed balance/i })).toBeDisabled();
-        expect(screen.getByRole("button", { name: /add adjustment transaction/i })).toBeDisabled();
-        expect(screen.getByRole("button", { name: /save reading/i })).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        ).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        ).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: /save reading/i }),
+        ).toBeDisabled();
         expect(calls.patch).toHaveLength(0);
         expect(calls.reconcile).toHaveLength(0);
     });
@@ -406,11 +522,15 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         // Label carries the app-formatted day (DD/MM/YYYY default), not the timestamp.
-        const exit = screen.getByRole("button", { name: /show transactions since 03\/06\/2026/i });
+        const exit = screen.getByRole("button", {
+            name: /show transactions since 03\/06\/2026/i,
+        });
         await user.click(exit);
 
         await waitFor(() =>
-            expect(screen.getByTestId("location")).toHaveTextContent("/accounts/7?since=2026-06-03"),
+            expect(screen.getByTestId("location")).toHaveTextContent(
+                "/accounts/7?since=2026-06-03",
+            ),
         );
     });
 
@@ -419,13 +539,22 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         await user.clear(screen.getByLabelText(/^as of$/i));
         await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
 
-        await user.click(await screen.findByRole("button", { name: /show transactions since 20\/07\/2026/i }));
+        await user.click(
+            await screen.findByRole("button", {
+                name: /show transactions since 20\/07\/2026/i,
+            }),
+        );
         await waitFor(() =>
-            expect(screen.getByTestId("location")).toHaveTextContent("/accounts/7?since=2026-07-20"),
+            expect(screen.getByTestId("location")).toHaveTextContent(
+                "/accounts/7?since=2026-07-20",
+            ),
         );
     });
     // ── Round 2: money-safety guards ────────────────────────────────────────
@@ -441,17 +570,25 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         // The server computes drift against the balance as of NOW and stamps any
         // adjustment TODAY, so a backdated reading can mint a bogus row.
-        const warning = await screen.findByText(/anything you spent or received after that date/i);
+        const warning = await screen.findByText(
+            /anything you spent or received after that date/i,
+        );
         expect(warning.textContent).toContain(
             ymdDaysAgo(26).split("-").reverse().join("/"),
         );
         // The recommended path sits inside the same callout.
         const callout = warning.closest("div") as HTMLElement;
-        expect(callout.querySelector("button")).toHaveTextContent(/show transactions since/i);
+        expect(callout.querySelector("button")).toHaveTextContent(
+            /show transactions since/i,
+        );
 
         // Warned, NOT blocked — a days-old statement with no later activity is legitimate.
-        expect(screen.getByRole("button", { name: /add adjustment transaction/i })).toBeEnabled();
-        expect(screen.getByRole("button", { name: /accept computed balance/i })).toBeEnabled();
+        expect(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        ).toBeEnabled();
+        expect(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        ).toBeEnabled();
     });
 
     it("does not warn when the reading is dated today", async () => {
@@ -464,12 +601,18 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await user.type(screen.getByLabelText(/new statement reading/i), "800");
 
         await waitFor(() => expect(deltaText()).toMatch(/-200,00/));
-        expect(screen.queryByText(/anything you spent or received after that date/i))
-            .not.toBeInTheDocument();
+        expect(
+            screen.queryByText(
+                /anything you spent or received after that date/i,
+            ),
+        ).not.toBeInTheDocument();
     });
 
     it.each([
-        ["12,,3", "a doubled separator that parseLocaleNumber would read as 12"],
+        [
+            "12,,3",
+            "a doubled separator that parseLocaleNumber would read as 12",
+        ],
         ["1234..56", "doubled dots parseLocaleNumber would read as 123456"],
         ["-", "a lone sign"],
         ["12 34", "an embedded space"],
@@ -480,13 +623,19 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         await user.type(screen.getByLabelText(/new statement reading/i), typo);
 
-        expect(await screen.findByText(/enter a plain amount/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /save reading/i })).toBeDisabled();
+        expect(
+            await screen.findByText(/enter a plain amount/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /save reading/i }),
+        ).toBeDisabled();
         // The preview stays on the STORED drift — it never previews a typo.
         expect(deltaText()).toMatch(/-20,00/);
 
         // The resolutions treat it as "no reading": stored-value path, no PATCH.
-        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        );
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(0);
     });
@@ -499,13 +648,18 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // 1000.005 rounds AWAY from zero to 1000,01 — a real 0,01 drift against
         // the computed 1000,00. Previewing it as "no drift" and toasting success
         // would leave an unresolved difference on the account.
-        await user.type(screen.getByLabelText(/new statement reading/i), "1000.005");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1000.005",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/\+.*0,01/));
 
-        await user.click(screen.getByRole("button", { name: /add adjustment transaction/i }));
+        await user.click(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        );
         await waitFor(() => expect(calls.patch).toHaveLength(1));
         // The PATCH carries the ROUNDED figure, so stored == previewed.
-        expect(calls.patch[0].body.statement_balance).toBe(1000.01);
+        expect(calls.patch[0].body.balance).toBe(1000.01);
         // 0,01 > the half-cent epsilon, so it is a real reconcile, not a no-op.
         expect(calls.reconcile).toHaveLength(1);
     });
@@ -516,12 +670,17 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         // 1000.004 rounds to 1000,00 — identical to the computed balance.
-        await user.type(screen.getByLabelText(/new statement reading/i), "1000.004");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1000.004",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/0,00/));
 
-        await user.click(screen.getByRole("button", { name: /add adjustment transaction/i }));
+        await user.click(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        );
         await waitFor(() => expect(calls.patch).toHaveLength(1));
-        expect(calls.patch[0].body.statement_balance).toBe(1000);
+        expect(calls.patch[0].body.balance).toBe(1000);
         expect(calls.reconcile).toHaveLength(0);
     });
 
@@ -530,19 +689,27 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/\+.*42,75/));
-        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        );
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         // Order matters: the statement lands first so the server's drift (and so
         // the resolution) is computed against the figure the user just typed.
         expect(calls.patch).toHaveLength(1);
         expect(calls.patch[0].body).toEqual({
-            statement_balance: 1042.75,
-            statement_balance_date: TODAY,
+            balance: 1042.75,
+            date: TODAY,
         });
-        expect(calls.reconcile[0].body).toEqual({ mode: "accept" });
+        expect(calls.reconcile[0].body).toEqual({
+            mode: "accept",
+            currency: "EUR",
+        });
         await waitFor(() =>
             expect(toast.success).toHaveBeenCalledWith(
                 "Statement balance updated to the computed figure",
@@ -553,22 +720,32 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
     it("refetches account-derived data when the reconcile half of a PATCH+reconcile fails", async () => {
         const calls = mockAccountApi({ reconcileFails: true });
         const queryClient = new QueryClient({
-            defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 }, mutations: { retry: false } },
+            defaultOptions: {
+                queries: { retry: false, gcTime: 0, staleTime: 0 },
+                mutations: { retry: false },
+            },
         });
         const invalidate = vi.spyOn(queryClient, "invalidateQueries");
         const user = userEvent.setup();
         await renderDialog(DRIFTING, queryClient);
 
-        await user.type(screen.getByLabelText(/new statement reading/i), "1042,75");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1042,75",
+        );
         invalidate.mockClear();
-        await user.click(screen.getByRole("button", { name: /add adjustment transaction/i }));
+        await user.click(
+            screen.getByRole("button", { name: /add adjustment transaction/i }),
+        );
 
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
         // The PATCH landed; the reconcile did not. Leaving the cache alone would
         // show the OLD drift for up to the 2-minute staleTime.
         expect(calls.patch).toHaveLength(1);
         expect(invalidate).toHaveBeenCalled();
-        const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+        const keys = invalidate.mock.calls.map((c) =>
+            JSON.stringify(c[0]?.queryKey),
+        );
         expect(keys.some((k) => k?.includes("accounts"))).toBe(true);
     });
 
@@ -609,8 +786,12 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // converted whole-account figure is shown separately as the computed
         // balance so neither number is mistaken for the other.
         expect(baseText()).toMatch(/100,00/);
-        expect(screen.getByText(/reconciles against \(EUR\)/i)).toBeInTheDocument();
-        expect(screen.getByText(/does not move with exchange rates/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/reconciles against \(EUR\)/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(/does not move with exchange rates/i),
+        ).toBeInTheDocument();
         expect(deltaText()).toMatch(/\+.*20,00/);
     });
 
@@ -620,7 +801,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         expect(baseText()).toBeNull();
-        expect(screen.queryByText(/reconciles against/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/reconciles against/i),
+        ).not.toBeInTheDocument();
     });
 
     // A payload without the field (older server, or the account-detail endpoint,
@@ -628,8 +811,16 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
     it("falls back to the computed balance when the payload carries no base", async () => {
         mockAccountApi();
         const user = userEvent.setup();
-        const { reconcilable_balance: _b, reconcilable_currency: _c, ...legacy } =
-            MULTI_CURRENCY as Account & { reconcilable_balance?: number; reconcilable_currency?: string };
+        const {
+            reconcilable_balance: _b,
+            reconcilable_currency: _c,
+            balance_parts: _parts,
+            statement_balances: _statements,
+            ...legacy
+        } = MULTI_CURRENCY as Account & {
+            reconcilable_balance?: number;
+            reconcilable_currency?: string;
+        };
         await renderDialog(legacy as Account);
 
         expect(baseText()).toBeNull();
@@ -647,16 +838,21 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // Base and difference in US$; the computed balance stays in the
         // account's declared EUR, since that is what it was converted into.
         expect(baseText()).toMatch(/1\.000,00/);
-        expect(baseText()).toContain('$');
-        expect(screen.getByText(/reconciles against \(USD\)/i)).toBeInTheDocument();
-        expect(deltaText()).toContain('$');
+        expect(baseText()).toContain("$");
+        expect(
+            screen.getByText(/reconciles against \(USD\)/i),
+        ).toBeInTheDocument();
+        expect(deltaText()).toContain("$");
         // …while the computed balance stays the converted, euro-denominated one.
-        expect(screen.getByText(/500,00/).textContent).toContain('€');
+        expect(screen.getByText(/500,00/).textContent).toContain("€");
 
         // …and the preview stays in that same currency and base.
-        await user.type(screen.getByLabelText(/new statement reading/i), "1100");
+        await user.type(
+            screen.getByLabelText(/new statement reading/i),
+            "1100",
+        );
         await waitFor(() => expect(deltaText()).toMatch(/\+.*100,00/));
-        expect(deltaText()).toContain('$');
+        expect(deltaText()).toContain("$");
     });
 
     // D4: 'accept' writes the base. Rendering it means the user sees the 0 it
@@ -668,9 +864,14 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         expect(baseText()).toMatch(/0,00/);
         expect(deltaText()).toMatch(/\+.*50,00/); // 50 − 0
-        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+        await user.click(
+            screen.getByRole("button", { name: /accept computed balance/i }),
+        );
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
-        expect(calls.reconcile[0].body).toEqual({ mode: "accept" });
+        expect(calls.reconcile[0].body).toEqual({
+            mode: "accept",
+            currency: "GBP",
+        });
     });
 });

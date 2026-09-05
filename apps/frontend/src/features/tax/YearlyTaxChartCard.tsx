@@ -1,5 +1,5 @@
 import { Info, ListChecks } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { YearlyIncomeDatum } from "@/hooks/useTaxOverviewData";
 import { BarChart, type BarSeries } from "@/components/charts";

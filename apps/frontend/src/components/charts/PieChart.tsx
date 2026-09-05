@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChartTooltip } from "./ChartTooltip";
 import { getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 

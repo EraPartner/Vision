@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { MonthlyIncomeTaxDatum } from "@/hooks/useTaxOverviewData";

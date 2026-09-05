@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { CATEGORY_FETCH_LIMIT } from '@/lib/categoriesPreload';
 import { useAllCategories } from '@/hooks/useCategories';
-import { useSettings } from '@/contexts/SettingsContext';
+import { useSettings } from '@/stores/hydration/SettingsHydration';
 
 /**
  * Single source of truth for "which category/recipient IDs are excluded from

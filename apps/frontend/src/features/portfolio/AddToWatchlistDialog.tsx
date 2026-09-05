@@ -24,17 +24,15 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Loader2 } from "lucide-react";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useQuery } from "@tanstack/react-query";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { toast } from "sonner";
 
-import {
-    searchMarket,
-    getMarketQuotes,
-    createWatchlistItem,
-    type MarketSearchResult,
-} from "@/lib/api/market";
+import { createWatchlistItem, type MarketSearchResult } from "@/lib/api/market";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useMarketQuoteQuery,
+    useMarketSearchQuery,
+} from "./usePortfolioQueries";
 
 type SearchResult = MarketSearchResult;
 type AssetClass = "stock" | "etf" | "crypto" | "metals";
@@ -88,39 +86,13 @@ export function AddToWatchlistDialog({
     const queryClient = useQueryClient();
     const { t } = useLanguage();
 
-    const { data: searchResults, isLoading: isSearching } = useQuery({
-        queryKey: ["market-search", debouncedQuery],
-        queryFn: async () => {
-            if (!debouncedQuery || debouncedQuery.length < 2)
-                return { items: [] };
-            try {
-                return await searchMarket(debouncedQuery);
-            } catch {
-                return { items: [] };
-            }
-        },
-        enabled: debouncedQuery.length >= 2 && !selectedAsset,
-        retry: false,
-        refetchOnWindowFocus: false,
-    });
+    const { data: searchResults, isLoading: isSearching } =
+        useMarketSearchQuery(
+            debouncedQuery,
+            debouncedQuery.length >= 2 && !selectedAsset,
+        );
 
-    const { data: quoteData } = useQuery({
-        queryKey: ["quote", selectedAsset?.symbol],
-        queryFn: async () => {
-            if (!selectedAsset?.symbol) return null;
-            try {
-                const quotes = await getMarketQuotes(selectedAsset.symbol, {
-                    detail: "basic",
-                });
-                return quotes[0] ?? null;
-            } catch {
-                return null;
-            }
-        },
-        enabled: !!selectedAsset?.symbol,
-        retry: false,
-        refetchOnWindowFocus: false,
-    });
+    const { data: quoteData } = useMarketQuoteQuery(selectedAsset?.symbol);
 
     // Seed from a prefill when the dialog opens that way (e.g. from Market
     // Lookup), so the user lands straight on the target-price step.

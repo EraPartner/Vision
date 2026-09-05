@@ -8,8 +8,8 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { BarChart, ChartLegend } from "@/components/charts";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatCurrency } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";

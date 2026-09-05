@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { LanguageProvider } from "@/stores/hydration/LanguageHydration";
 import { ChatMessageList } from "@/features/ai-chat/ChatMessageList";
 import type { ChatMessage } from "@/types/aiChat";
 

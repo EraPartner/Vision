@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
+import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import { AIChatSettingsSection } from '@/features/settings/AIChatSettingsSection';
 import { ResearchKeysSection } from '@/features/settings/ResearchKeysSection';
 import { SettingsSection } from '../SettingsPrimitives';

@@ -22,8 +22,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { AccountCombobox } from "@/components/shared/AccountCombobox";

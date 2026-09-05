@@ -1,8 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
@@ -53,6 +52,7 @@ import {
     parseResearchSymbols,
 } from "./researchCompareUrlState";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useResearchCompareQueries } from "@/features/research/useResearchQueries";
 
 const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
@@ -391,24 +391,8 @@ export default function ResearchComparePage() {
         );
     };
 
-    const chartQueries = useQueries({
-        queries: symbols.map((symbol) => ({
-            queryKey: ["research-chart", symbol, selectedRange.range],
-            queryFn: () =>
-                apiClient.getResearchChart(symbol, selectedRange.range),
-            enabled: !!symbol,
-            staleTime: 60_000,
-        })),
-    });
-
-    const fundamentalsQueries = useQueries({
-        queries: symbols.map((symbol) => ({
-            queryKey: ["research-scorecard", symbol],
-            queryFn: () => apiClient.getResearchScorecard(symbol),
-            enabled: !!symbol,
-            staleTime: 24 * 60 * 60 * 1000,
-        })),
-    });
+    const { charts: chartQueries, fundamentals: fundamentalsQueries } =
+        useResearchCompareQueries(symbols, selectedRange.range);
 
     const isLoading = chartQueries.some((q) => q.isFetching && !q.data);
 

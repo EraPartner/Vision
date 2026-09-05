@@ -43,7 +43,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import {
@@ -297,7 +297,7 @@ export default function TableDataEditorPage() {
     const columns = useMemo(() => data?.columns ?? [], [data]);
     const primaryKey = useMemo(() => data?.primaryKey ?? [], [data]);
     const rows = useMemo(() => data?.rows ?? [], [data]);
-    const readOnly = !query.isLoading && primaryKey.length === 0;
+    const readOnly = query.isLoading || primaryKey.length === 0;
 
     const rowsByKey = useMemo(() => {
         const m = new Map<string, DbRow>();

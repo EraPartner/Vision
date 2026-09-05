@@ -78,7 +78,7 @@ describe("OnboardingWizard", () => {
                 name: /import your transactions/i,
             }),
         ).toBeInTheDocument();
-        expect(screen.getByText(/kbc/i)).toBeInTheDocument();
+        expect(await screen.findByText(/kbc/i)).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: /^import$/i }),
         ).not.toBeInTheDocument();

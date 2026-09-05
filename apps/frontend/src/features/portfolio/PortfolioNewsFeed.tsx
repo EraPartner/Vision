@@ -1,17 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import { safeHref } from "@/utils/safeHref";
-import { apiClient, type MarketNewsArticle } from "@/lib/api";
+import type { MarketNewsArticle } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock, WifiOff } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { formatDistanceToNow } from "@/lib/dateUtils";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { usePortfolioNews } from "./usePortfolioQueries";
 
 interface PortfolioNewsFeedProps {
     symbols: string[];
@@ -23,19 +23,11 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
     const { t, language } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const isOnline = useOnlineStatus();
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["market-news", symbols],
-        queryFn: () =>
-            apiClient.getMarketNews(
-                symbols.length > 0 ? symbols : undefined,
-                MAX_VISIBLE_ARTICLES,
-            ),
-        staleTime: 5 * 60 * 1000,
-        refetchInterval: isOnline ? 10 * 60 * 1000 : false,
-        refetchOnWindowFocus: false,
-        retry: isOnline ? 1 : false,
-        enabled: isOnline,
-    });
+    const { data, isLoading, error } = usePortfolioNews(
+        symbols,
+        MAX_VISIBLE_ARTICLES,
+        isOnline,
+    );
 
     const articles = (data ?? []).slice(0, MAX_VISIBLE_ARTICLES);
 

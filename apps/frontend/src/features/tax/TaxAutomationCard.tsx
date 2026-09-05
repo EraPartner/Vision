@@ -1,4 +1,4 @@
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /** "What is automatic vs manual" explainer card of the overview page. */

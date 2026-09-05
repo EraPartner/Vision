@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { isShortcutSafeTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES } from "@/lib/navigation";
 import { isElectron } from "@/lib/api/electron";

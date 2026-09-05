@@ -144,12 +144,10 @@ export default defineConfig(({ mode }) => ({
           ) {
             return "tanstack";
           }
-          // recharts is used by exactly one component (ToolResultCard),
-          // reachable only through the lazy-loaded AIChatPage. Forcing it
-          // into a named chunk dragged it (114 kB gz) into the initial
-          // modulepreload graph via a shared module. Leaving it unnamed
-          // lets Rollup keep it inside the AIChatPage async chunk so it
-          // loads only when /ai-chat is opened.
+          // Recharts is reachable only through ToolResultCard's nested lazy
+          // ToolResultChart boundary. Leaving it unnamed lets Rollup keep the
+          // renderer out of both the initial graph and the AI chat route chunk;
+          // it loads only when a chart-shaped tool result is actually shown.
           if (
             PRELOADED_RADIX_PACKAGES.some(
               (packageName) =>

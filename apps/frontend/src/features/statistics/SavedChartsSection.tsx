@@ -4,7 +4,7 @@ import { Plus, TrendingUp } from "lucide-react";
 import { useSavedCharts, useDeleteSavedChart } from "@/hooks/useSavedCharts";
 import type { SavedChart } from "@/types/apiClient";
 import type { StatisticsData } from "@/hooks/useStatistics";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { CustomChart } from "./CustomChart";
 import { CustomChartBuilderModal } from "./CustomChartBuilderModal";
 import { EmptyState } from "@/components/shared/EmptyState";

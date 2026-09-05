@@ -2,18 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 // Boot-time env validation (ADR-030): fail fast on misconfigured Vite vars.
 import "./lib/env";
-// Self-hosted fonts — imported here (not via CSS @import) so Vite tracks the
-// woff2/woff binaries through its module graph. Tailwind v4's PostCSS plugin
-// inlines @import contents but doesn't rebase url() refs, leaving Vite unable
-// to bundle font binaries when imported from index.css.
-import "@fontsource/fraunces/latin-400.css";
-import "@fontsource/fraunces/latin-600.css";
-import "@fontsource/fraunces/latin-700.css";
-import "@fontsource/inter/latin-400.css";
-import "@fontsource/inter/latin-400-italic.css";
-import "@fontsource/inter/latin-500.css";
-import "@fontsource/inter/latin-600.css";
-import "@fontsource/inter/latin-700.css";
+// Direct WOFF2-only self-hosted faces; the two critical body weights are also
+// discovered from index.html before the application stylesheet loads.
+import "./styles/fonts.css";
 // Apply the visual skin (skin-v2) class before first paint to avoid a flash.
 import { applySkinV2Class } from "./lib/skin";
 import { startSettingsPreload } from "./lib/settingsPreload";
@@ -28,10 +19,13 @@ applySkinV2Class();
 // parallel; SettingsPreloadProvider and useExcludedIds await these same shared
 // promises, so neither request is duplicated.
 startSettingsPreload();
+// Categories remain unconditional by design. Mirroring enough settings into
+// localStorage to gate this safely would create a second settings authority;
+// one occasionally unused request is the smaller and more reliable cost.
 startCategoriesPreload();
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+    <StrictMode>
+        <App />
+    </StrictMode>,
 );

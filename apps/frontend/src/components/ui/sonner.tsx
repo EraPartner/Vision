@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState, type ReactNode} from "react";
-import {useTheme} from "@/contexts/ThemeContext";
+import {useTheme} from "@/stores/hydration/ThemeHydration";
 import {toast, Toaster as Sonner, useSonner, type ToastT} from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;

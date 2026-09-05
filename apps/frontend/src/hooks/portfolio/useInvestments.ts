@@ -15,7 +15,7 @@ import type {
 } from '@/types/api';
 import { toast } from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 
 export function useInvestmentsQuery() {
   return useQuery({

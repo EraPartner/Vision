@@ -32,9 +32,8 @@
  *     typed here instead of Edit → Advanced → two raw fields. The Difference row
  *     previews `entered − reconcilable_balance` live as the user types — the
  *     same subtraction the server performs, so the preview cannot promise a
- *     figure the resolution then contradicts. Saving it PATCHes
- *     statement_balance/statement_balance_date through the normal account update
- *     path — no new endpoint. When a reading is entered, the two resolutions
+ *     figure the resolution then contradicts. Saving it writes the selected
+ *     currency through the per-currency statement endpoint. When a reading is entered, the two resolutions
  *     operate on THAT figure: the PATCH lands first, then the reconcile call
  *     reads it back server-side, so the resolved drift equals the preview.
  *   - "Show transactions since {date}" deep-links to /accounts/:id?since=YYYY-MM-DD,
@@ -42,30 +41,38 @@
  *     "what happened after my last statement?" rather than a dead end.
  */
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from "react";
+import { useNavigate } from "react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Check, Coins, ListFilter, Loader2, Plus, Save } from 'lucide-react';
-import { apiClient } from '@/lib/api';
-import type { ReconcileMode } from '@/lib/api/accounts';
-import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { useBalanceProvenance } from '@/features/accounts/balanceProvenance';
-import { statementYmd } from '@/features/accounts/driftBadge';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
-import { formatDateStringWithAppSettings, toYmd } from '@/lib/dateUtils';
-import { parseDecimal } from '@/lib/decimal';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import type { Account } from '@/types/api';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Check, Coins, ListFilter, Loader2, Plus, Save } from "lucide-react";
+import { apiClient } from "@/lib/api";
+import type { ReconcileMode } from "@/lib/api/accounts";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
+import { statementYmd } from "@/features/accounts/driftBadge";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import {
+    invalidateAccountDerived,
+    invalidateTransactionData,
+} from "@/lib/queryKeys";
+import { formatDateStringWithAppSettings, toYmd } from "@/lib/dateUtils";
+import { parseDecimal } from "@/lib/decimal";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import type { Account } from "@/types/api";
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -96,400 +103,547 @@ const DRIFT_EPSILON = 0.005;
  * drift would pop a success toast over an unresolved difference.
  */
 function roundToCents(value: number): number {
-  const sign = value < 0 ? -1 : 1;
-  return (sign * Math.round((Math.abs(value) + Number.EPSILON) * 100)) / 100;
+    const sign = value < 0 ? -1 : 1;
+    return (sign * Math.round((Math.abs(value) + Number.EPSILON) * 100)) / 100;
 }
 
-export function ReconcileDialog({ account, open, onOpenChange }: {
-  account: Account;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
+export function ReconcileDialog({
+    account,
+    open,
+    onOpenChange,
+}: {
+    account: Account;
+    open: boolean;
+    onOpenChange: (o: boolean) => void;
 }) {
-  const { t } = useLanguage();
-  const fmtCur = useCurrencyFormatter();
-  const { appSettings } = useAppSettings();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+    const { t } = useLanguage();
+    const fmtCur = useCurrencyFormatter();
+    const { appSettings } = useAppSettings();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
-  const statement = account.statement_balance ?? 0;
-  const computed = account.computed_balance ?? 0;
-  // The RECONCILIATION BASE: the balance of the one currency partition the
-  // statement figure is a statement for (server: statementPartition). On a
-  // single-currency account it IS `computed_balance`; on a multi-currency one it
-  // is not, because `computed_balance` is every partition converted into the
-  // account currency at today's rate. Every drift number this dialog shows —
-  // stored or previewed — is measured against this base, so it is always the
-  // number the server would stamp. Falling back to `computed_balance` keeps a
-  // payload without the field (an older server, or the detail endpoint, which
-  // does not return it) behaving exactly as before.
-  const base = account.reconcilable_balance ?? computed;
-  // The base, the statement figure and the drift are ONE native triple in this
-  // currency — no FX anywhere, so the difference never moves with the daily
-  // rate. It is the account currency except on a mislabelled single-currency
-  // account (a USD ledger still declared EUR), where it is the ledger's code.
-  const baseCurrency = account.reconcilable_currency ?? account.currency;
-  const delta = account.drift ?? statement - base;
-  // `computed_balance` answers a different question (what is this account worth,
-  // all currencies, in its own currency) and is a different figure only when the
-  // account holds a currency other than the base's. Show it as a separate row
-  // when it genuinely differs, so the arithmetic on screen stays
-  // drift = statement − base rather than looking like it should be
-  // statement − computed.
-  const baseIsComputed = baseCurrency === account.currency
-    && Math.abs(base - computed) < DRIFT_EPSILON;
-  // Provenance of the computed figure (WP-B2) — same subline as the hub card.
-  const provenanceText = useBalanceProvenance()(account);
+    const computed = account.computed_balance ?? 0;
+    const defaultCurrency = account.reconcilable_currency ?? account.currency;
+    const availableCurrencies = Array.from(
+        new Set([
+            defaultCurrency,
+            ...(account.balance_parts ?? []).map((part) => part.currency),
+            ...(account.statement_balances ?? []).map((item) => item.currency),
+        ]),
+    ).sort();
+    const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency);
+    const selectedStatement = account.statement_balances?.find(
+        (item) => item.currency === selectedCurrency,
+    );
+    const selectedPart = account.balance_parts?.find(
+        (part) => part.currency === selectedCurrency,
+    );
+    const statement =
+        selectedStatement?.balance ??
+        (selectedCurrency === defaultCurrency
+            ? account.statement_balance
+            : undefined) ??
+        0;
+    // The RECONCILIATION BASE: the balance of the one currency partition the
+    // statement figure is a statement for (server: statementPartition). On a
+    // single-currency account it IS `computed_balance`; on a multi-currency one it
+    // is not, because `computed_balance` is every partition converted into the
+    // account currency at today's rate. Every drift number this dialog shows —
+    // stored or previewed — is measured against this base, so it is always the
+    // number the server would stamp. Falling back to `computed_balance` keeps a
+    // payload without the field (an older server, or the detail endpoint, which
+    // does not return it) behaving exactly as before.
+    const base =
+        selectedPart?.balance ??
+        (selectedCurrency === defaultCurrency
+            ? (account.reconcilable_balance ?? computed)
+            : 0);
+    // The base, the statement figure and the drift are ONE native triple in this
+    // currency — no FX anywhere, so the difference never moves with the daily
+    // rate. It is the account currency except on a mislabelled single-currency
+    // account (a USD ledger still declared EUR), where it is the ledger's code.
+    const baseCurrency = selectedCurrency;
+    const delta =
+        selectedCurrency === defaultCurrency
+            ? (account.drift ?? statement - base)
+            : statement - base;
+    // `computed_balance` answers a different question (what is this account worth,
+    // all currencies, in its own currency) and is a different figure only when the
+    // account holds a currency other than the base's. Show it as a separate row
+    // when it genuinely differs, so the arithmetic on screen stays
+    // drift = statement − base rather than looking like it should be
+    // statement − computed.
+    const baseIsComputed =
+        baseCurrency === account.currency &&
+        Math.abs(base - computed) < DRIFT_EPSILON;
+    // Provenance of the computed figure (WP-B2) — same subline as the hub card.
+    const provenanceText = useBalanceProvenance()(account);
 
-  // ── Fresh statement reading (§3 F1) ──────────────────────────────────────
-  const [reading, setReading] = useState('');
-  const [readingDate, setReadingDate] = useState(() => toYmd(new Date()));
+    // ── Fresh statement reading (§3 F1) ──────────────────────────────────────
+    const [reading, setReading] = useState("");
+    const [readingDate, setReadingDate] = useState(() => toYmd(new Date()));
 
-  // Shape-check the RAW string first (parseLocaleNumber would happily turn
-  // "12,,3" into 12), then round to cents so the previewed figure is exactly
-  // the figure the server will store.
-  const readingRaw = reading.trim();
-  const parsedReading = READING_SHAPE_RE.test(readingRaw)
-    ? roundToCents(parseDecimal(readingRaw, NaN))
-    : NaN;
-  const hasReading = Number.isFinite(parsedReading);
-  /** Something was typed, but it is not a number we would dare send as money. */
-  const readingInvalid = readingRaw !== '' && !hasReading;
-  const readingDateValid = YMD_RE.test(readingDate);
-  const canSaveReading = hasReading && readingDateValid;
+    // Shape-check the RAW string first (parseLocaleNumber would happily turn
+    // "12,,3" into 12), then round to cents so the previewed figure is exactly
+    // the figure the server will store.
+    const readingRaw = reading.trim();
+    const parsedReading = READING_SHAPE_RE.test(readingRaw)
+        ? roundToCents(parseDecimal(readingRaw, NaN))
+        : NaN;
+    const hasReading = Number.isFinite(parsedReading);
+    /** Something was typed, but it is not a number we would dare send as money. */
+    const readingInvalid = readingRaw !== "" && !hasReading;
+    const readingDateValid = YMD_RE.test(readingDate);
+    const canSaveReading = hasReading && readingDateValid;
 
-  // Live preview: the drift the entered reading WOULD produce. Falls back to the
-  // stored drift while the input is empty (or unusable), so the figure never
-  // goes blank and never previews a half-typed number.
-  const previewDrift = hasReading ? parsedReading - base : delta;
-  const previewIsZero = Math.abs(previewDrift) < DRIFT_EPSILON;
+    // Live preview: the drift the entered reading WOULD produce. Falls back to the
+    // stored drift while the input is empty (or unusable), so the figure never
+    // goes blank and never previews a half-typed number.
+    const previewDrift = hasReading ? parsedReading - base : delta;
+    const previewIsZero = Math.abs(previewDrift) < DRIFT_EPSILON;
 
-  // The statement date in play for the ledger deep-link: the freshly entered one
-  // when a reading is being recorded, otherwise the stored anchor.
-  const storedStatementDate = statementYmd(account);
-  const sinceDate = (hasReading && readingDateValid ? readingDate : undefined)
-    ?? storedStatementDate;
+    // The statement date in play for the ledger deep-link: the freshly entered one
+    // when a reading is being recorded, otherwise the stored anchor.
+    const storedStatementDate =
+        selectedStatement?.balance_date ??
+        (selectedCurrency === defaultCurrency
+            ? statementYmd(account)
+            : undefined);
+    const sinceDate =
+        (hasReading && readingDateValid ? readingDate : undefined) ??
+        storedStatementDate;
 
-  // A reading dated BEFORE today is the dangerous case. The server computes
-  // drift against the balance as of NOW (accountRepository.js) and stamps any
-  // adjustment row with TODAY's date (reconcileService.js), so a difference that
-  // is entirely explained by activity after the statement date would be
-  // "resolved" by minting a bogus adjustment. Warn loudly; don't hard-block —
-  // reconciling a days-old statement with no later activity is legitimate.
-  const todayYmd = toYmd(new Date());
-  const readingIsBackdated = hasReading && readingDateValid && readingDate < todayYmd;
+    // A reading dated BEFORE today is the dangerous case. The server computes
+    // drift against the balance as of NOW (accountRepository.js) and stamps any
+    // adjustment row with TODAY's date (reconcileService.js), so a difference that
+    // is entirely explained by activity after the statement date would be
+    // "resolved" by minting a bogus adjustment. Warn loudly; don't hard-block —
+    // reconciling a days-old statement with no later activity is legitimate.
+    const todayYmd = toYmd(new Date());
+    const readingIsBackdated =
+        hasReading && readingDateValid && readingDate < todayYmd;
 
-  /** PATCH the entered reading onto the account (existing account update path). */
-  const patchReading = () =>
-    apiClient.updateAccount(account.id, {
-      statement_balance: parsedReading,
-      statement_balance_date: readingDate,
+    /** Store the entered reading in the selected currency's side-table row. */
+    const patchReading = () =>
+        apiClient.setStatementBalance(account.id, baseCurrency, {
+            balance: parsedReading,
+            date: readingDate,
+        });
+
+    const saveReading = useMutation({
+        mutationFn: patchReading,
+        onSuccess: () => {
+            // statement_balance feeds drift, which every account-derived view renders.
+            invalidateAccountDerived(queryClient);
+            toast.success(t("accounts.reconcile.readingSaved"));
+            onOpenChange(false);
+        },
+        onError: (e: Error) =>
+            toast.error(t("accounts.reconcile.readingFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 
-  const saveReading = useMutation({
-    mutationFn: patchReading,
-    onSuccess: () => {
-      // statement_balance feeds drift, which every account-derived view renders.
-      invalidateAccountDerived(queryClient);
-      toast.success(t('accounts.reconcile.readingSaved'));
-      onOpenChange(false);
-    },
-    onError: (e: Error) => toast.error(t('accounts.reconcile.readingFailed'), { description: apiErrorToMessage(e, t) }),
-  });
+    const reconcile = useMutation({
+        mutationFn: async (mode: ReconcileMode) => {
+            if (canSaveReading) {
+                // Record the reading first so the server resolves against the figure the
+                // user just typed — the resolved drift then equals the preview above.
+                await patchReading();
+                // A fresh reading that already matches the ledger leaves nothing to
+                // resolve (and the server would reject a zero-drift reconcile).
+                if (previewIsZero) return null;
+            }
+            return apiClient.reconcileAccount(account.id, mode, baseCurrency);
+        },
+        onSuccess: (result, mode) => {
+            // Balance, drift and every net-worth view derive from the ledger + statement.
+            invalidateAccountDerived(queryClient);
+            // The 'adjustment' mode stamps a real ledger row; the lists live under
+            // ['transactions-virtual', …] (+ derived widgets), so invalidate them all.
+            invalidateTransactionData(queryClient);
+            if (result == null)
+                toast.success(t("accounts.reconcile.readingSaved"));
+            else
+                toast.success(
+                    t(
+                        mode === "accept"
+                            ? "accounts.reconcile.acceptSaved"
+                            : "accounts.reconcile.adjustSaved",
+                    ),
+                );
+            onOpenChange(false);
+        },
+        onError: (e: Error) => {
+            // This mutation is two writes. The statement PATCH may already have landed
+            // (and, for 'adjustment', so may the ledger row) when the second call
+            // fails, so the cached drift/balance are stale the moment we error.
+            // Refetch instead of leaving the badge showing a number the server no
+            // longer holds for up to the 2-minute staleTime.
+            invalidateAccountDerived(queryClient);
+            invalidateTransactionData(queryClient);
+            toast.error(t("accounts.reconcile.failed"), {
+                description: apiErrorToMessage(e, t),
+            });
+        },
+    });
 
-  const reconcile = useMutation({
-    mutationFn: async (mode: ReconcileMode) => {
-      if (canSaveReading) {
-        // Record the reading first so the server resolves against the figure the
-        // user just typed — the resolved drift then equals the preview above.
-        await patchReading();
-        // A fresh reading that already matches the ledger leaves nothing to
-        // resolve (and the server would reject a zero-drift reconcile).
-        if (previewIsZero) return null;
-      }
-      return apiClient.reconcileAccount(account.id, mode);
-    },
-    onSuccess: (result, mode) => {
-      // Balance, drift and every net-worth view derive from the ledger + statement.
-      invalidateAccountDerived(queryClient);
-      // The 'adjustment' mode stamps a real ledger row; the lists live under
-      // ['transactions-virtual', …] (+ derived widgets), so invalidate them all.
-      invalidateTransactionData(queryClient);
-      if (result == null) toast.success(t('accounts.reconcile.readingSaved'));
-      else toast.success(t(mode === 'accept' ? 'accounts.reconcile.acceptSaved' : 'accounts.reconcile.adjustSaved'));
-      onOpenChange(false);
-    },
-    onError: (e: Error) => {
-      // This mutation is two writes. The statement PATCH may already have landed
-      // (and, for 'adjustment', so may the ledger row) when the second call
-      // fails, so the cached drift/balance are stale the moment we error.
-      // Refetch instead of leaving the badge showing a number the server no
-      // longer holds for up to the 2-minute staleTime.
-      invalidateAccountDerived(queryClient);
-      invalidateTransactionData(queryClient);
-      toast.error(t('accounts.reconcile.failed'), { description: apiErrorToMessage(e, t) });
-    },
-  });
+    // §3 F4 backfill: when NO statement anchor is stamped yet (anchor_date
+    // absent — list-endpoint provenance, WP-A1), offer an ADDITIVE third path
+    // that records the statement figure as the account's opening-balance anchor
+    // (same POST /accounts/:id/opening-balance the OpeningBalanceDialog uses).
+    const storedBackfillAvailable =
+        readingRaw === "" && account.statement_balance != null;
+    const canBackfillOpening =
+        !account.anchor_date && (canSaveReading || storedBackfillAvailable);
+    const backfillBalance = canSaveReading ? parsedReading : statement;
+    const backfillDate = canSaveReading
+        ? readingDate
+        : (storedStatementDate ?? toYmd(new Date()));
+    const backfill = useMutation({
+        mutationFn: () =>
+            apiClient.setOpeningBalance(account.id, {
+                balance: backfillBalance,
+                date: backfillDate,
+                // The statement figure is denominated in the base's currency (see
+                // `baseCurrency`), which is what the description below shows it as —
+                // stamping the anchor in any other code would record a different number.
+                currency: baseCurrency,
+            }),
+        onSuccess: (result) => {
+            invalidateAccountDerived(queryClient);
+            invalidateTransactionData(queryClient);
+            if (result.warning)
+                toast.warning(t("accounts.openingBalance.saved"), {
+                    description: result.warning,
+                });
+            else toast.success(t("accounts.openingBalance.saved"));
+            onOpenChange(false);
+        },
+        onError: (e: Error) =>
+            toast.error(t("accounts.openingBalance.failed"), {
+                description: apiErrorToMessage(e, t),
+            }),
+    });
 
-  // §3 F4 backfill: when NO statement anchor is stamped yet (anchor_date
-  // absent — list-endpoint provenance, WP-A1), offer an ADDITIVE third path
-  // that records the statement figure as the account's opening-balance anchor
-  // (same POST /accounts/:id/opening-balance the OpeningBalanceDialog uses).
-  const storedBackfillAvailable = readingRaw === '' && account.statement_balance != null;
-  const canBackfillOpening = !account.anchor_date && (canSaveReading || storedBackfillAvailable);
-  const backfillBalance = canSaveReading ? parsedReading : statement;
-  const backfillDate = canSaveReading
-    ? readingDate
-    : (storedStatementDate ?? toYmd(new Date()));
-  const backfill = useMutation({
-    mutationFn: () =>
-      apiClient.setOpeningBalance(account.id, {
-        balance: backfillBalance,
-        date: backfillDate,
-        // The statement figure is denominated in the base's currency (see
-        // `baseCurrency`), which is what the description below shows it as —
-        // stamping the anchor in any other code would record a different number.
-        currency: baseCurrency,
-      }),
-    onSuccess: (result) => {
-      invalidateAccountDerived(queryClient);
-      invalidateTransactionData(queryClient);
-      if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
-      else toast.success(t('accounts.openingBalance.saved'));
-      onOpenChange(false);
-    },
-    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: apiErrorToMessage(e, t) }),
-  });
+    const busy =
+        reconcile.isPending || backfill.isPending || saveReading.isPending;
+    const pendingMode = reconcile.variables;
 
-  const busy = reconcile.isPending || backfill.isPending || saveReading.isPending;
-  const pendingMode = reconcile.variables;
+    // A statement reading is only meaningful with its as-of date (ADR-094). If the
+    // user typed a figure and then cleared the date, resolving would silently fall
+    // back to the STORED statement — resolving a different number than the
+    // preview shows. Block the resolutions instead of quietly disagreeing.
+    const readingNeedsDate = hasReading && !readingDateValid;
+    const resolutionsBlocked = busy || readingNeedsDate;
 
-  // A statement reading is only meaningful with its as-of date (ADR-094). If the
-  // user typed a figure and then cleared the date, resolving would silently fall
-  // back to the STORED statement — resolving a different number than the
-  // preview shows. Block the resolutions instead of quietly disagreeing.
-  const readingNeedsDate = hasReading && !readingDateValid;
-  const resolutionsBlocked = busy || readingNeedsDate;
+    const showLedgerSince = () => {
+        onOpenChange(false);
+        navigate(`/accounts/${account.id}?since=${sinceDate}`);
+    };
 
-  const showLedgerSince = () => {
-    onOpenChange(false);
-    navigate(`/accounts/${account.id}?since=${sinceDate}`);
-  };
+    /**
+     * The "read what happened since {date}" exit. Rendered ONCE: emphasized inside
+     * the backdated-reading warning (where it is the recommended path), otherwise
+     * as the quiet secondary exit at the foot of the dialog.
+     */
+    const ledgerSinceButton = (emphasized: boolean) => (
+        <Button
+            variant={emphasized ? "outline" : "ghost"}
+            className={
+                emphasized
+                    ? "mt-2 w-full justify-start border-warning/50 text-sm font-medium text-warning hover:bg-warning/10"
+                    : "w-full justify-start border-t border-border/50 pt-3 text-sm font-normal"
+            }
+            disabled={busy}
+            onClick={showLedgerSince}
+        >
+            <ListFilter className="h-4 w-4 mr-1.5" />
+            {t("accounts.reconcile.showSince", {
+                date: formatDateStringWithAppSettings(
+                    sinceDate!,
+                    appSettings.dateFormat,
+                ),
+            })}
+        </Button>
+    );
 
-  /**
-   * The "read what happened since {date}" exit. Rendered ONCE: emphasized inside
-   * the backdated-reading warning (where it is the recommended path), otherwise
-   * as the quiet secondary exit at the foot of the dialog.
-   */
-  const ledgerSinceButton = (emphasized: boolean) => (
-    <Button
-      variant={emphasized ? 'outline' : 'ghost'}
-      className={emphasized
-        ? 'mt-2 w-full justify-start border-warning/50 text-sm font-medium text-warning hover:bg-warning/10'
-        : 'w-full justify-start border-t border-border/50 pt-3 text-sm font-normal'}
-      disabled={busy}
-      onClick={showLedgerSince}
-    >
-      <ListFilter className="h-4 w-4 mr-1.5" />
-      {t('accounts.reconcile.showSince', {
-        date: formatDateStringWithAppSettings(sinceDate!, appSettings.dateFormat),
-      })}
-    </Button>
-  );
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>{t("accounts.reconcile.title")}</DialogTitle>
+                    <DialogDescription>
+                        {t("accounts.reconcile.description", {
+                            name: account.display_name || account.name,
+                        })}
+                    </DialogDescription>
+                </DialogHeader>
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('accounts.reconcile.title')}</DialogTitle>
-          <DialogDescription>
-            {t('accounts.reconcile.description', { name: account.display_name || account.name })}
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Statement vs computed, a fresh-reading input, and the live delta */}
-        <div className="glass-thin rounded-xl p-4 text-sm">
-          <dl>
-            <div className="flex items-center justify-between py-1">
-              <dt className="text-muted-foreground">{t('accounts.reconcile.statementLabel')}</dt>
-              <dd className="tabular-nums font-medium">{fmtCur(statement, baseCurrency)}</dd>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <dt className="text-muted-foreground">{t('accounts.reconcile.computedLabel')}</dt>
-              <dd className="tabular-nums font-medium">{fmtCur(computed, account.currency)}</dd>
-            </div>
-            {/* The base the difference below is actually measured against.
+                {/* Statement vs computed, a fresh-reading input, and the live delta */}
+                <div className="glass-thin rounded-xl p-4 text-sm">
+                    {account.multi_currency_cash &&
+                        availableCurrencies.length > 1 && (
+                            <div className="mb-3 space-y-1.5">
+                                <Label htmlFor="reconcile-currency">
+                                    {t("accounts.reconcile.currencyLabel")}
+                                </Label>
+                                <select
+                                    id="reconcile-currency"
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                    value={selectedCurrency}
+                                    disabled={busy}
+                                    onChange={(event) => {
+                                        setSelectedCurrency(event.target.value);
+                                        setReading("");
+                                    }}
+                                >
+                                    {availableCurrencies.map((currency) => (
+                                        <option key={currency} value={currency}>
+                                            {currency}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    <dl>
+                        <div className="flex items-center justify-between py-1">
+                            <dt className="text-muted-foreground">
+                                {t("accounts.reconcile.statementLabel")}
+                            </dt>
+                            <dd className="tabular-nums font-medium">
+                                {fmtCur(statement, baseCurrency)}
+                            </dd>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                            <dt className="text-muted-foreground">
+                                {t("accounts.reconcile.computedLabel")}
+                            </dt>
+                            <dd className="tabular-nums font-medium">
+                                {fmtCur(computed, account.currency)}
+                            </dd>
+                        </div>
+                        {/* The base the difference below is actually measured against.
                 Rendered only when it differs from the computed balance — i.e.
                 only for a multi-currency (or mislabelled) account — so the
                 common single-currency dialog is unchanged. */}
-            {!baseIsComputed && (
-              <div className="flex items-center justify-between py-1">
-                <dt className="text-muted-foreground">
-                  {t('accounts.reconcile.reconcilableLabel', { currency: baseCurrency })}
-                </dt>
-                <dd data-testid="reconcile-base" className="tabular-nums font-medium">
-                  {fmtCur(base, baseCurrency)}
-                </dd>
-              </div>
-            )}
-            {provenanceText && (
-              <div className="pb-1 text-right text-xs text-muted-foreground">
-                {provenanceText}
-              </div>
-            )}
-          </dl>
-          {!baseIsComputed && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t('accounts.reconcile.reconcilableHint', { currency: baseCurrency })}
-            </p>
-          )}
+                        {!baseIsComputed && (
+                            <div className="flex items-center justify-between py-1">
+                                <dt className="text-muted-foreground">
+                                    {t("accounts.reconcile.reconcilableLabel", {
+                                        currency: baseCurrency,
+                                    })}
+                                </dt>
+                                <dd
+                                    data-testid="reconcile-base"
+                                    className="tabular-nums font-medium"
+                                >
+                                    {fmtCur(base, baseCurrency)}
+                                </dd>
+                            </div>
+                        )}
+                        {provenanceText && (
+                            <div className="pb-1 text-right text-xs text-muted-foreground">
+                                {provenanceText}
+                            </div>
+                        )}
+                    </dl>
+                    {!baseIsComputed && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {t("accounts.reconcile.reconcilableHint", {
+                                currency: baseCurrency,
+                            })}
+                        </p>
+                    )}
 
-          {/* Recording a statement reading no longer means Edit → Advanced. */}
-          <div className="mt-2 grid grid-cols-1 gap-3 border-t border-border/50 pt-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="reconcile-reading">{t('accounts.reconcile.readingLabel')}</Label>
-              <Input
-                id="reconcile-reading"
-                type="text"
-                inputMode="decimal"
-                pattern="^-?[0-9]+([.,][0-9]+)?$"
-                placeholder={fmtCur(statement, baseCurrency)}
-                value={reading}
-                disabled={busy}
-                onChange={(e) => setReading(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="reconcile-reading-date">{t('accounts.reconcile.readingDateLabel')}</Label>
-              <Input
-                id="reconcile-reading-date"
-                type="date"
-                value={readingDate}
-                required={hasReading}
-                disabled={busy}
-                onChange={(e) => setReadingDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">{t('accounts.reconcile.readingHint')}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2 w-full"
-            disabled={busy || !canSaveReading}
-            onClick={() => saveReading.mutate()}
-          >
-            {saveReading.isPending
-              ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              : <Save className="h-4 w-4 mr-1" />}
-            {t('accounts.reconcile.readingSubmit')}
-          </Button>
+                    {/* Recording a statement reading no longer means Edit → Advanced. */}
+                    <div className="mt-2 grid grid-cols-1 gap-3 border-t border-border/50 pt-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="reconcile-reading">
+                                {t("accounts.reconcile.readingLabel")}
+                            </Label>
+                            <Input
+                                id="reconcile-reading"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="^-?[0-9]+([.,][0-9]+)?$"
+                                placeholder={fmtCur(statement, baseCurrency)}
+                                value={reading}
+                                disabled={busy}
+                                onChange={(e) => setReading(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="reconcile-reading-date">
+                                {t("accounts.reconcile.readingDateLabel")}
+                            </Label>
+                            <Input
+                                id="reconcile-reading-date"
+                                type="date"
+                                value={readingDate}
+                                required={hasReading}
+                                disabled={busy}
+                                onChange={(e) => setReadingDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                        {t("accounts.reconcile.readingHint")}
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full"
+                        disabled={busy || !canSaveReading}
+                        onClick={() => saveReading.mutate()}
+                    >
+                        {saveReading.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                            <Save className="h-4 w-4 mr-1" />
+                        )}
+                        {t("accounts.reconcile.readingSubmit")}
+                    </Button>
 
-          <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
-            <span className="font-medium">{t('accounts.reconcile.deltaLabel')}</span>
-            <span
-              data-testid="reconcile-delta"
-              className={cn(
-                'tabular-nums font-semibold',
-                previewIsZero ? 'text-muted-foreground' : 'text-destructive',
-              )}
-            >
-              {fmtCur(previewDrift, { currency: baseCurrency, signed: true })}
-            </span>
-          </div>
-          {hasReading && (
-            <p className="mt-0.5 text-right text-xs text-muted-foreground">
-              {t('accounts.reconcile.deltaPreview')}
-            </p>
-          )}
-          {readingInvalid && (
-            <p className="mt-1 text-xs text-warning">
-              {t('accounts.reconcile.readingInvalid')}
-            </p>
-          )}
-          {readingNeedsDate && (
-            <p className="mt-1 text-xs text-warning">
-              {t('accounts.reconcile.readingNeedsDate')}
-            </p>
-          )}
-        </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
+                        <span className="font-medium">
+                            {t("accounts.reconcile.deltaLabel")}
+                        </span>
+                        <span
+                            data-testid="reconcile-delta"
+                            className={cn(
+                                "tabular-nums font-semibold",
+                                previewIsZero
+                                    ? "text-muted-foreground"
+                                    : "text-destructive",
+                            )}
+                        >
+                            {fmtCur(previewDrift, {
+                                currency: baseCurrency,
+                                signed: true,
+                            })}
+                        </span>
+                    </div>
+                    {hasReading && (
+                        <p className="mt-0.5 text-right text-xs text-muted-foreground">
+                            {t("accounts.reconcile.deltaPreview")}
+                        </p>
+                    )}
+                    {readingInvalid && (
+                        <p className="mt-1 text-xs text-warning">
+                            {t("accounts.reconcile.readingInvalid")}
+                        </p>
+                    )}
+                    {readingNeedsDate && (
+                        <p className="mt-1 text-xs text-warning">
+                            {t("accounts.reconcile.readingNeedsDate")}
+                        </p>
+                    )}
+                </div>
 
-        {/* Backdated reading: the difference may be later activity, not an error.
+                {/* Backdated reading: the difference may be later activity, not an error.
             Resolving with an adjustment here would double-count it. */}
-        {readingIsBackdated && sinceDate && (
-          <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5">
-            <p className="text-xs text-warning">
-              {t('accounts.reconcile.backdatedWarning', {
-                date: formatDateStringWithAppSettings(readingDate, appSettings.dateFormat),
-              })}
-            </p>
-            {ledgerSinceButton(true)}
-          </div>
-        )}
+                {readingIsBackdated && sinceDate && (
+                    <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5">
+                        <p className="text-xs text-warning">
+                            {t("accounts.reconcile.backdatedWarning", {
+                                date: formatDateStringWithAppSettings(
+                                    readingDate,
+                                    appSettings.dateFormat,
+                                ),
+                            })}
+                        </p>
+                        {ledgerSinceButton(true)}
+                    </div>
+                )}
 
-        {/* Two explicit resolutions */}
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">{t('accounts.reconcile.acceptTitle')}</p>
-            <p className="text-xs text-muted-foreground">{t('accounts.reconcile.acceptDescription')}</p>
-            <Button
-              variant="outline"
-              className="mt-1 w-full"
-              disabled={resolutionsBlocked}
-              onClick={() => reconcile.mutate('accept')}
-            >
-              {busy && pendingMode === 'accept'
-                ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                : <Check className="h-4 w-4 mr-1" />}
-              {t('accounts.reconcile.acceptSubmit')}
-            </Button>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">{t('accounts.reconcile.adjustTitle')}</p>
-            <p className="text-xs text-muted-foreground">{t('accounts.reconcile.adjustDescription')}</p>
-            <Button
-              className="mt-1 w-full"
-              disabled={resolutionsBlocked}
-              onClick={() => reconcile.mutate('adjustment')}
-            >
-              {busy && pendingMode === 'adjustment'
-                ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                : <Plus className="h-4 w-4 mr-1" />}
-              {t('accounts.reconcile.adjustSubmit')}
-            </Button>
-          </div>
-          {canBackfillOpening && (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t('accounts.reconcile.backfillTitle')}</p>
-              <p className="text-xs text-muted-foreground">
-                {t('accounts.reconcile.backfillDescription', {
-                  balance: fmtCur(backfillBalance, baseCurrency),
-                })}
-              </p>
-              <Button
-                variant="outline"
-                className="mt-1 w-full"
-                disabled={busy}
-                onClick={() => backfill.mutate()}
-              >
-                {backfill.isPending
-                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  : <Coins className="h-4 w-4 mr-1" />}
-                {t('accounts.reconcile.backfillSubmit')}
-              </Button>
-            </div>
-          )}
-        </div>
+                {/* Two explicit resolutions */}
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                            {t("accounts.reconcile.acceptTitle")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {t("accounts.reconcile.acceptDescription")}
+                        </p>
+                        <Button
+                            variant="outline"
+                            className="mt-1 w-full"
+                            disabled={resolutionsBlocked}
+                            onClick={() => reconcile.mutate("accept")}
+                        >
+                            {busy && pendingMode === "accept" ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : (
+                                <Check className="h-4 w-4 mr-1" />
+                            )}
+                            {t("accounts.reconcile.acceptSubmit")}
+                        </Button>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                            {t("accounts.reconcile.adjustTitle")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {t("accounts.reconcile.adjustDescription")}
+                        </p>
+                        <Button
+                            className="mt-1 w-full"
+                            disabled={resolutionsBlocked}
+                            onClick={() => reconcile.mutate("adjustment")}
+                        >
+                            {busy && pendingMode === "adjustment" ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : (
+                                <Plus className="h-4 w-4 mr-1" />
+                            )}
+                            {t("accounts.reconcile.adjustSubmit")}
+                        </Button>
+                    </div>
+                    {canBackfillOpening && (
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium">
+                                {t("accounts.reconcile.backfillTitle")}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {t("accounts.reconcile.backfillDescription", {
+                                    balance: fmtCur(
+                                        backfillBalance,
+                                        baseCurrency,
+                                    ),
+                                })}
+                            </p>
+                            <Button
+                                variant="outline"
+                                className="mt-1 w-full"
+                                disabled={busy}
+                                onClick={() => backfill.mutate()}
+                            >
+                                {backfill.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                ) : (
+                                    <Coins className="h-4 w-4 mr-1" />
+                                )}
+                                {t("accounts.reconcile.backfillSubmit")}
+                            </Button>
+                        </div>
+                    )}
+                </div>
 
-        {/* Second exit: go read what happened after the statement date. Skipped
+                {/* Second exit: go read what happened after the statement date. Skipped
             when the backdated warning above already renders it (emphasized). */}
-        {sinceDate && !readingIsBackdated && ledgerSinceButton(false)}
+                {sinceDate && !readingIsBackdated && ledgerSinceButton(false)}
 
-        <DialogFooter className="pt-2">
-          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+                <DialogFooter className="pt-2">
+                    <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => onOpenChange(false)}
+                    >
+                        {t("common.cancel")}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }

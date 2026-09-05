@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import type { StartupSection } from "@/stores/settingsStore";
 

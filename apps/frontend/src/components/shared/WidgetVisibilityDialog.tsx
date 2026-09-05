@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { LayoutGrid, RotateCcw } from 'lucide-react';
 import type { WidgetDefinition } from '@/hooks/useWidgetVisibility';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 interface WidgetVisibilityDialogProps {
     widgets: WidgetDefinition[];
     isVisible: (id: string) => boolean;

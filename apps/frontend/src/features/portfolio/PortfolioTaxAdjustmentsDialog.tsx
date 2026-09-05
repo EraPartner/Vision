@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { usePortfolioTaxAdjustments } from "@/hooks/usePortfolioTaxAdjustments";
@@ -54,7 +54,7 @@ interface Props {
 
 export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     const { t } = useLanguage();
-    const { profile } = useBelgianTaxProfile();
+    const profile = useBelgianTaxProfile((state) => state.profile);
     const { getAdjustment, saveManyForYear, isLoading } =
         usePortfolioTaxAdjustments();
     const {

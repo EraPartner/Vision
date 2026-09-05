@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { IndicatorPeriodInput } from "../IndicatorPeriodInput";
 
-vi.mock("@/contexts/LanguageContext", () => ({
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
   useLanguage: () => ({
     t: (key: string, vars?: Record<string, string | number>) =>
       key === "research.builder.indicatorPeriod"

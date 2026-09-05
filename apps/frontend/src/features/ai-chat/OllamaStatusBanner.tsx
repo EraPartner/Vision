@@ -2,7 +2,7 @@ import { AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { aiKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import type { OllamaStatus } from '@/types/aiChat';
 
 interface OllamaStatusBannerProps {

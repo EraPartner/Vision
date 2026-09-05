@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Coins, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
 import { toYmd } from '@/lib/dateUtils';
 import { toast } from 'sonner';

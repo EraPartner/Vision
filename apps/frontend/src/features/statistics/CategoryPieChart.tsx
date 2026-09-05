@@ -1,7 +1,7 @@
 import { memo, useState, useMemo } from "react";
 import { DonutChart, type PieDatum } from "@/components/charts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { StatisticsData } from "@/hooks/useStatistics";

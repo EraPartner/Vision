@@ -32,7 +32,7 @@ import {
     useBulkUpdateTransactions,
 } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { BulkRecategorizeDialog } from "./BulkRecategorizeDialog";
 import { BulkRecipientDialog } from "./BulkRecipientDialog";
 import { BulkTagDialog } from "./BulkTagDialog";

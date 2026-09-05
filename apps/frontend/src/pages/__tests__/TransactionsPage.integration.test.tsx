@@ -23,11 +23,16 @@ function renderTransactionsPage() {
 
 describe("TransactionsPage (integration)", () => {
     it("renders the page header without crashing on an empty transaction list", async () => {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
 
         renderTransactionsPage();
 
-        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        const heading = await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         expect(heading).toBeInTheDocument();
         expect(errorSpy).not.toHaveBeenCalled();
 
@@ -40,7 +45,9 @@ describe("TransactionsPage (integration)", () => {
         // selection-clear effect setState'd unconditionally — an infinite
         // update loop ("Maximum update depth exceeded") that wedged the app
         // until a hard refresh.
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
 
         renderWithApp(
             <Routes>
@@ -53,7 +60,10 @@ describe("TransactionsPage (integration)", () => {
             },
         );
 
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         // Give a pending loop a couple of frames to manifest before asserting.
         await new Promise((r) => setTimeout(r, 250));
 
@@ -66,21 +76,35 @@ describe("TransactionsPage (integration)", () => {
     });
 
     it("surfaces an error state when the transactions endpoint fails", async () => {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/transactions`, () =>
-                new Response(
-                    JSON.stringify({ data: null, error: { message: "boom" } }),
-                    { status: 500, headers: { "Content-Type": "application/json" } },
-                ),
+            http.get(
+                `${API_BASE}/api/transactions`,
+                () =>
+                    new Response(
+                        JSON.stringify({
+                            data: null,
+                            error: { message: "boom" },
+                        }),
+                        {
+                            status: 500,
+                            headers: { "Content-Type": "application/json" },
+                        },
+                    ),
             ),
         );
 
         renderTransactionsPage();
 
-        const errorBanner = await screen.findByText(/error loading transactions/i, {}, {
-            timeout: 4000,
-        });
+        const errorBanner = await screen.findByText(
+            /error loading transactions/i,
+            {},
+            {
+                timeout: 4000,
+            },
+        );
         expect(errorBanner).toBeInTheDocument();
 
         errorSpy.mockRestore();
@@ -88,7 +112,9 @@ describe("TransactionsPage (integration)", () => {
 
     it("shows the Add Transaction button in the actions bar", async () => {
         renderTransactionsPage();
-        const btn = await screen.findByRole("button", { name: /add transaction/i });
+        const btn = await screen.findByRole("button", {
+            name: /add transaction/i,
+        });
         expect(btn).toBeInTheDocument();
     });
 
@@ -96,14 +122,16 @@ describe("TransactionsPage (integration)", () => {
         const user = userEvent.setup();
         renderTransactionsPage();
 
-        const btn = await screen.findByRole("button", { name: /add transaction/i });
+        const btn = await screen.findByRole("button", {
+            name: /add transaction/i,
+        });
         await user.click(btn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         // Dialog title appears twice (trigger + header); heading role is the one we want
-        expect(
-            screen.getAllByText(/add transaction/i).length,
-        ).toBeGreaterThan(0);
+        expect(screen.getAllByText(/add transaction/i).length).toBeGreaterThan(
+            0,
+        );
     });
 
     it("shows empty transactions message when no transactions exist", async () => {
@@ -111,7 +139,9 @@ describe("TransactionsPage (integration)", () => {
         // Default MSW returns items: [] → TransactionsTable renders emptyMessage
         // VirtualDataTable title: "No transactions found"
         expect(
-            await screen.findByRole("heading", { name: /no transactions found/i }),
+            await screen.findByRole("heading", {
+                name: /no transactions found/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -145,7 +175,14 @@ describe("TransactionsPage (integration)", () => {
             http.get(`${API_BASE}/api/accounts`, () =>
                 ok({
                     items: [
-                        { id: 7, name: "KBC Checking", display_name: "KBC Checking", currency: "EUR", type: "checking", is_active: true },
+                        {
+                            id: 7,
+                            name: "KBC Checking",
+                            display_name: "KBC Checking",
+                            currency: "EUR",
+                            type: "checking",
+                            is_active: true,
+                        },
                     ],
                     total: 1,
                     links: [],
@@ -153,25 +190,43 @@ describe("TransactionsPage (integration)", () => {
             ),
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 captured.push(new URL(request.url).searchParams);
-                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
         renderTransactionsPage();
 
-        const trigger = await screen.findByRole("combobox", { name: /filter by account/i });
+        const trigger = await screen.findByRole("combobox", {
+            name: /filter by account/i,
+        });
         await user.click(trigger);
-        await user.click(await screen.findByRole("option", { name: /kbc checking/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /kbc checking/i }),
+        );
 
         // The list refetches with the FK-exact account filter (ADR-088)…
         await waitFor(() => {
-            expect(captured.some((p) => p.get("account_id") === "7")).toBe(true);
+            expect(captured.some((p) => p.get("account_id") === "7")).toBe(
+                true,
+            );
         });
         // …and the filter banner names the account via filter_label.
-        expect(await screen.findByText(/filtered by/i)).toHaveTextContent(/kbc checking/i);
+        expect(await screen.findByText(/filtered by/i)).toHaveTextContent(
+            /kbc checking/i,
+        );
 
         // Clearing via "All accounts" drops the filter again.
-        await user.click(screen.getByRole("combobox", { name: /filter by account/i }));
-        await user.click(await screen.findByRole("option", { name: /all accounts/i }));
+        await user.click(
+            screen.getByRole("combobox", { name: /filter by account/i }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: /all accounts/i }),
+        );
         await waitFor(() => {
             const last = captured[captured.length - 1];
             expect(last.get("account_id")).toBeNull();
@@ -190,13 +245,18 @@ describe("TransactionsPage (integration)", () => {
         const user = userEvent.setup();
         renderTransactionsPage();
 
-        const btn = await screen.findByRole("button", { name: /add transaction/i });
+        const btn = await screen.findByRole("button", {
+            name: /add transaction/i,
+        });
         await user.click(btn);
         await screen.findByRole("dialog");
 
         await user.click(screen.getByRole("button", { name: /cancel/i }));
 
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -204,7 +264,9 @@ describe("TransactionsPage (integration)", () => {
         const user = userEvent.setup();
         renderTransactionsPage();
 
-        const btn = await screen.findByRole("button", { name: /add transaction/i });
+        const btn = await screen.findByRole("button", {
+            name: /add transaction/i,
+        });
         await user.click(btn);
         await screen.findByRole("dialog");
 
@@ -248,7 +310,9 @@ describe("TransactionsPage (integration)", () => {
         renderTransactionsPage();
 
         // Open dialog
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // Fill amount
@@ -259,13 +323,20 @@ describe("TransactionsPage (integration)", () => {
         // Fill bank account via the AccountCombobox (Phase B2): type a new
         // label and take the explicit-create escape hatch (D1) — the MSW
         // accounts list is empty, so every label is "new".
-        await user.click(screen.getByRole("combobox", { name: /bank account/i }));
-        await user.type(screen.getByPlaceholderText(/search or type a new account/i), "IBAN001");
+        await user.click(
+            screen.getByRole("combobox", { name: /bank account/i }),
+        );
+        await user.type(
+            screen.getByPlaceholderText(/search or type a new account/i),
+            "IBAN001",
+        );
         await user.click(await screen.findByText(/create account "IBAN001"/i));
 
         // Select recipient (required by form guard).
         await user.click(screen.getByRole("combobox", { name: /recipient/i }));
-        await user.click(await screen.findByRole("option", { name: /test recipient/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /test recipient/i }),
+        );
 
         // Submit
         await user.click(screen.getByRole("button", { name: /create/i }));
@@ -278,7 +349,9 @@ describe("TransactionsPage (integration)", () => {
         const user = userEvent.setup();
         renderTransactionsPage();
 
-        const activeOnlyBtn = await screen.findByRole("button", { name: /active only/i });
+        const activeOnlyBtn = await screen.findByRole("button", {
+            name: /active only/i,
+        });
         await user.click(activeOnlyBtn);
 
         // txPage.showingAll = "Showing All" — label flips after toggle
@@ -298,8 +371,12 @@ describe("TransactionsPage (integration)", () => {
         );
 
         // txPage.export.csv = "Export CSV", txPage.export.json = "Export JSON"
-        expect(await screen.findByRole("button", { name: /^export csv$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("button", { name: /^export json$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /^export csv$/i }),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /^export json$/i }),
+        ).toBeInTheDocument();
     });
 
     it("Export CSV shows success toast when download succeeds", async () => {
@@ -311,11 +388,13 @@ describe("TransactionsPage (integration)", () => {
         URL.revokeObjectURL = vi.fn();
 
         server.use(
-            http.get(`${API_BASE}/api/transactions/export/csv`, () =>
-                new HttpResponse("date,amount\n2025-01-01,-10.00", {
-                    status: 200,
-                    headers: { "Content-Type": "text/csv" },
-                }),
+            http.get(
+                `${API_BASE}/api/transactions/export/csv`,
+                () =>
+                    new HttpResponse("date,amount\n2025-01-01,-10.00", {
+                        status: 200,
+                        headers: { "Content-Type": "text/csv" },
+                    }),
             ),
         );
 
@@ -326,7 +405,9 @@ describe("TransactionsPage (integration)", () => {
             { initialEntries: ["/transactions?recipient_id=1"] },
         );
 
-        await user.click(await screen.findByRole("button", { name: /^export csv$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^export csv$/i }),
+        );
 
         // txPage.toast.exportSuccess = "Transactions exported"
         await waitFor(() =>
@@ -339,8 +420,9 @@ describe("TransactionsPage (integration)", () => {
         const toastSpy = vi.spyOn(toast, "error");
 
         server.use(
-            http.get(`${API_BASE}/api/transactions/export/csv`, () =>
-                new HttpResponse(null, { status: 500 }),
+            http.get(
+                `${API_BASE}/api/transactions/export/csv`,
+                () => new HttpResponse(null, { status: 500 }),
             ),
         );
 
@@ -351,7 +433,9 @@ describe("TransactionsPage (integration)", () => {
             { initialEntries: ["/transactions?recipient_id=1"] },
         );
 
-        await user.click(await screen.findByRole("button", { name: /^export csv$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^export csv$/i }),
+        );
 
         // txPage.toast.exportFailed = "Failed to export transactions"
         await waitFor(() =>
@@ -371,11 +455,13 @@ describe("TransactionsPage (integration)", () => {
         URL.revokeObjectURL = vi.fn();
 
         server.use(
-            http.get(`${API_BASE}/api/transactions/export/json`, () =>
-                new HttpResponse('[{"id":1}]', {
-                    status: 200,
-                    headers: { "Content-Type": "application/json" },
-                }),
+            http.get(
+                `${API_BASE}/api/transactions/export/json`,
+                () =>
+                    new HttpResponse('[{"id":1}]', {
+                        status: 200,
+                        headers: { "Content-Type": "application/json" },
+                    }),
             ),
         );
 
@@ -386,7 +472,9 @@ describe("TransactionsPage (integration)", () => {
             { initialEntries: ["/transactions?recipient_id=1"] },
         );
 
-        await user.click(await screen.findByRole("button", { name: /^export json$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^export json$/i }),
+        );
 
         // txPage.toast.exportSuccess = "Transactions exported"
         await waitFor(() =>
@@ -399,8 +487,9 @@ describe("TransactionsPage (integration)", () => {
         const toastSpy = vi.spyOn(toast, "error");
 
         server.use(
-            http.get(`${API_BASE}/api/transactions/export/json`, () =>
-                new HttpResponse(null, { status: 500 }),
+            http.get(
+                `${API_BASE}/api/transactions/export/json`,
+                () => new HttpResponse(null, { status: 500 }),
             ),
         );
 
@@ -411,7 +500,9 @@ describe("TransactionsPage (integration)", () => {
             { initialEntries: ["/transactions?recipient_id=1"] },
         );
 
-        await user.click(await screen.findByRole("button", { name: /^export json$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^export json$/i }),
+        );
 
         // txPage.toast.exportFailed = "Failed to export transactions"
         await waitFor(() =>
@@ -423,9 +514,13 @@ describe("TransactionsPage (integration)", () => {
     });
 
     it("surfaces an error state when the transactions endpoint fails with 403", async () => {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/transactions`, () => err(403, "Forbidden")),
+            http.get(`${API_BASE}/api/transactions`, () =>
+                err(403, "Forbidden"),
+            ),
         );
 
         renderTransactionsPage();
@@ -441,25 +536,41 @@ describe("TransactionsPage (integration)", () => {
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("surfaces 404 error from transactions endpoint", async () => {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/transactions`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/transactions`, () =>
+                err(404, "Not found"),
+            ),
         );
         renderTransactionsPage();
         expect(
-            await screen.findByText(/error loading transactions/i, {}, { timeout: 4000 }),
+            await screen.findByText(
+                /error loading transactions/i,
+                {},
+                { timeout: 4000 },
+            ),
         ).toBeInTheDocument();
         errorSpy.mockRestore();
     });
 
     it("surfaces 401 unauthorized error", async () => {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/transactions`, () => err(401, "Unauthorized")),
+            http.get(`${API_BASE}/api/transactions`, () =>
+                err(401, "Unauthorized"),
+            ),
         );
         renderTransactionsPage();
         expect(
-            await screen.findByText(/error loading transactions/i, {}, { timeout: 4000 }),
+            await screen.findByText(
+                /error loading transactions/i,
+                {},
+                { timeout: 4000 },
+            ),
         ).toBeInTheDocument();
         errorSpy.mockRestore();
     });
@@ -469,8 +580,30 @@ describe("TransactionsPage (integration)", () => {
             http.get(`${API_BASE}/api/transactions`, () =>
                 ok({
                     items: [
-                        { id: 1, transaction_date: "2025-01-15", date: "2025-01-15", recipient_name: "Alice", amount: -25.5, currency: "EUR", category_name: "FOOD:GROCERIES", is_active: true, bank_account: "BE12", memo: "Test 1" },
-                        { id: 2, transaction_date: "2025-01-16", date: "2025-01-16", recipient_name: "Bob", amount: -15.0, currency: "EUR", category_name: "FOOD:RESTAURANT", is_active: true, bank_account: "BE12", memo: "Test 2" },
+                        {
+                            id: 1,
+                            transaction_date: "2025-01-15",
+                            date: "2025-01-15",
+                            recipient_name: "Alice",
+                            amount: -25.5,
+                            currency: "EUR",
+                            category_name: "FOOD:GROCERIES",
+                            is_active: true,
+                            bank_account: "BE12",
+                            memo: "Test 1",
+                        },
+                        {
+                            id: 2,
+                            transaction_date: "2025-01-16",
+                            date: "2025-01-16",
+                            recipient_name: "Bob",
+                            amount: -15.0,
+                            currency: "EUR",
+                            category_name: "FOOD:RESTAURANT",
+                            is_active: true,
+                            bank_account: "BE12",
+                            memo: "Test 2",
+                        },
                     ],
                     total: 2,
                     limit: 50,
@@ -480,8 +613,57 @@ describe("TransactionsPage (integration)", () => {
             ),
         );
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
-        expect(screen.queryByText(/error loading transactions/i)).not.toBeInTheDocument();
+        await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
+        expect(
+            screen.queryByText(/error loading transactions/i),
+        ).not.toBeInTheDocument();
+    });
+
+    it("requests account-and-currency running balances for the transaction list", async () => {
+        let includeBalance: string | null = null;
+        server.use(
+            http.get(`${API_BASE}/api/recipients/:id`, ({ params }) =>
+                ok({ id: Number(params.id), name: "Test recipient" }),
+            ),
+            http.get(`${API_BASE}/api/transactions`, ({ request }) => {
+                includeBalance = new URL(request.url).searchParams.get(
+                    "include_balance",
+                );
+                return ok({
+                    items: [
+                        {
+                            id: 91,
+                            transaction_date: "2026-01-02",
+                            recipient_name: "Dollar row",
+                            amount: 5,
+                            currency: "USD",
+                            running_balance: 35,
+                            is_active: true,
+                        },
+                        {
+                            id: 90,
+                            transaction_date: "2026-01-01",
+                            recipient_name: "Euro row",
+                            amount: 10,
+                            currency: "EUR",
+                            running_balance: 110,
+                            is_active: true,
+                        },
+                    ],
+                    total: 2,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
+            }),
+        );
+
+        renderTransactionsPage();
+
+        await waitFor(() => expect(includeBalance).toBe("true"));
     });
 
     it("after a PATCH succeeds, the transactions list refetches (stale refetch)", async () => {
@@ -489,7 +671,13 @@ describe("TransactionsPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/transactions`, () => {
                 getCalls += 1;
-                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
             }),
             http.patch(`${API_BASE}/api/transactions/:id`, () =>
                 ok({
@@ -506,7 +694,10 @@ describe("TransactionsPage (integration)", () => {
             ),
         );
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         await waitFor(() => expect(getCalls).toBeGreaterThan(0));
         const before = getCalls;
 
@@ -529,17 +720,28 @@ describe("TransactionsPage (integration)", () => {
                 const url = new URL(request.url);
                 offsetsSeen.push(url.searchParams.get("offset"));
                 limitsSeen.push(url.searchParams.get("limit"));
-                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
 
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         await waitFor(() => expect(offsetsSeen.length).toBeGreaterThan(0));
 
         // Hook should send numeric (or default) offset + limit. At minimum a limit
         // must be present — the absence would mean the page would request unbounded data.
-        const everyHasLimit = limitsSeen.every((l) => l !== null && Number(l) > 0);
+        const everyHasLimit = limitsSeen.every(
+            (l) => l !== null && Number(l) > 0,
+        );
         expect(everyHasLimit).toBe(true);
     });
 
@@ -550,12 +752,21 @@ describe("TransactionsPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/transactions`, async () => {
                 await new Promise((r) => setTimeout(r, 80));
-                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
         renderTransactionsPage();
         // Heading renders before the fetch resolves — proves shell renders w/o data
-        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        const heading = await screen.findByRole("heading", {
+            name: /^transactions$/i,
+            level: 1,
+        });
         expect(heading).toBeInTheDocument();
     });
 });

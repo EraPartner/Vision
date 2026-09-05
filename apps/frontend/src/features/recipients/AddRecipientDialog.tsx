@@ -6,7 +6,7 @@ import {Label} from "@/components/ui/label";
 import {Textarea} from "@/components/ui/textarea";
 import {Plus, Loader2} from "lucide-react";
 import {useCreateRecipient} from "@/hooks/useRecipients";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export function AddRecipientDialog() {
     const { t } = useLanguage();

@@ -16,9 +16,9 @@ import {
 import { PanelLeftClose } from "lucide-react";
 import { m, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { cn } from "@/lib/utils";
 import { springs } from "@/lib/motion";
 import { preloadRoute } from "@/lib/routePreload";

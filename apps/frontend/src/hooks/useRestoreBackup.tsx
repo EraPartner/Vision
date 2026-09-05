@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
 
 const ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED';

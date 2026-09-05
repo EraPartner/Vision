@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SidebarProvider, SidebarRail, SidebarTrigger } from "../sidebar";
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
-vi.mock("@/contexts/LanguageContext", () => ({
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
         t: (key: string) => key === "menu.toggleSidebar" ? "Zijbalk tonen/verbergen" : key,
     }),

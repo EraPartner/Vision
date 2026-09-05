@@ -17,7 +17,7 @@ import { apiClient } from '@/lib/api';
 import { invalidateAccountRepoint } from '@/lib/queryKeys';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
 

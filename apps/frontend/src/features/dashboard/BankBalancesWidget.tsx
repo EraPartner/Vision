@@ -8,9 +8,6 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { CardSheen } from "@/components/shared/CardSheen";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
-import { cashflowKeys } from "@/lib/queryKeys";
 import {
     formatCurrency,
     formatCurrencyCompact,
@@ -31,8 +28,8 @@ import {
     formatDate,
     parseISO,
 } from "@/lib/dateUtils";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
@@ -42,6 +39,7 @@ import {
 } from "@/components/shared/TouchDisclosure";
 import { badgeVariants } from "@/components/ui/badge";
 import { TextLink } from "@/components/shared/TextLink";
+import { useBankBalances } from "./useDashboardQueries";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -77,11 +75,7 @@ export function BankBalancesWidget() {
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const { data, isLoading, error } = useQuery({
-        queryKey: cashflowKeys.bankBalances(defaultCurrency),
-        queryFn: () => apiClient.getBankBalances({ currency: defaultCurrency }),
-        staleTime: 60_000,
-    });
+    const { data, isLoading, error } = useBankBalances(defaultCurrency);
     // The account entity is the source of truth for the balance CARDS: same
     // accounts, same shared balance source (computed_balance, ADR-094 Phase C)
     // the Accounts hub reads. getBankBalances still backs the history chart +
@@ -277,7 +271,8 @@ export function BankBalancesWidget() {
                             const r = formatCurrencyCompact(
                                 total_net_position,
                                 defaultCurrency,
-                                locale, appSettings.showDecimalPlaces ?? 2
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
                             );
                             return (
                                 <CompactValueDisclosure
@@ -373,7 +368,9 @@ export function BankBalancesWidget() {
                                             const r = formatCurrencyCompact(
                                                 balance,
                                                 a.currency,
-                                                locale, appSettings.showDecimalPlaces ?? 2
+                                                locale,
+                                                appSettings.showDecimalPlaces ??
+                                                    2,
                                             );
                                             return (
                                                 <CompactValueDisclosure
@@ -458,7 +455,12 @@ export function BankBalancesWidget() {
                                 )
                             }
                             yTickFormat={(v) =>
-                                formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
+                                formatCurrency(
+                                    v,
+                                    defaultCurrency,
+                                    locale,
+                                    appSettings.showDecimalPlaces ?? 2,
+                                )
                             }
                             tooltipTitle={(d) =>
                                 formatDate(
@@ -468,7 +470,12 @@ export function BankBalancesWidget() {
                                 )
                             }
                             tooltipValueFormat={(v) =>
-                                formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
+                                formatCurrency(
+                                    v,
+                                    defaultCurrency,
+                                    locale,
+                                    appSettings.showDecimalPlaces ?? 2,
+                                )
                             }
                         />
                         <ChartLegend items={legendItems} align="center" />

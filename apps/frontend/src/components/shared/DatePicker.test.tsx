@@ -8,7 +8,7 @@ import { DatePicker } from "./DatePicker";
 const languageState = vi.hoisted(() => ({ value: "en" as "en" | "nl" }));
 const dateFormatState = vi.hoisted(() => ({ value: "YYYY-MM-DD" }));
 
-vi.mock("@/contexts/LanguageContext", () => ({
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
         language: languageState.value,
         t: (key: string, vars?: Record<string, string>) =>
@@ -16,7 +16,7 @@ vi.mock("@/contexts/LanguageContext", () => ({
     }),
 }));
 
-vi.mock("@/contexts/AppSettingsContext", () => ({
+vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({
         appSettings: {
             dateFormat: dateFormatState.value,
