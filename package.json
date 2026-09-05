@@ -83,9 +83,9 @@
     "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-compose-sync && bun run check-test-only-exports && bun run todo:check && bun run db:check-destructive && bun run test:scripts && bun run test && bun run test:frontend && bun run test:electron"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.1",
-    "@commitlint/config-conventional": "^21.2.0",
-    "concurrently": "^10.0.3",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "concurrently": "^10.0.5",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.6"
   },
