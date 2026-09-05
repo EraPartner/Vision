@@ -119,3 +119,32 @@ test("both workflow aggregation gates call the shared policy with read-only PR a
     assert.match(gate, /PR_NUMBER:/);
   }
 });
+
+test("CI Complete requires the fail-closed branch-protection verifier", () => {
+  const workflow = fs.readFileSync(
+    path.join(__dirname, "../../.github/workflows/ci.yml"),
+    "utf8",
+  );
+  const verifier = workflow.match(
+    /  verify-branch-protection:\n([\s\S]*?)\n  # ─+\n  # Compose sync/,
+  )?.[1];
+  const ciComplete = workflow.match(/  ci-complete:\n([\s\S]*?)$/)?.[1];
+
+  assert.ok(verifier, "branch-protection verifier block must be present");
+  assert.match(verifier, /Could not read branch rules[\s\S]*Failing closed/);
+  assert.doesNotMatch(
+    verifier,
+    /Could not read branch rules[\s\S]{0,300}exit 0/,
+  );
+
+  assert.ok(ciComplete, "CI Complete block must be present");
+  assert.match(ciComplete, /verify-branch-protection/);
+  assert.match(
+    ciComplete,
+    /BRANCH_PROTECTION_RESULT: \$\{\{ needs\.verify-branch-protection\.result \}\}/,
+  );
+  assert.match(
+    ciComplete,
+    /require verify-branch-protection "\$BRANCH_PROTECTION_RESULT"/,
+  );
+});

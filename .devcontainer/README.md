@@ -6,17 +6,17 @@ inside this container, so there is no Docker-in-Docker.
 
 ## What's inside
 
-| Component | Where it runs | Port |
-| --- | --- | --- |
-| PostgreSQL 18 | Native (apt) | `5432` (in-container only) |
-| Backend (bun + Express) | `bun run dev` | `3002` published to `127.0.0.1` |
-| Frontend (Vite) | `bun run dev` | `8080` published to `127.0.0.1` |
-| Alembic migrations | Python venv at `./venv` | — |
-| GitHub CLI (`gh`) | apt | — |
-| Claude Code | npm, pinned + SHA256-verified in `Dockerfile` (not the devcontainer feature) | — |
-| OpenAI Codex CLI | npm, pinned + SHA256-verified in `Dockerfile` | — |
-| Bubblewrap (`bwrap`) | apt; required by Codex and fingerprinted at build time | — |
-| safe-chain | npm, baked at a reviewed version and fingerprinted at build time | — |
+| Component               | Where it runs                                                                | Port                            |
+| ----------------------- | ---------------------------------------------------------------------------- | ------------------------------- |
+| PostgreSQL 18           | Native (apt)                                                                 | `5432` (in-container only)      |
+| Backend (bun + Express) | `bun run dev`                                                                | `3002` published to `127.0.0.1` |
+| Frontend (Vite)         | `bun run dev`                                                                | `8080` published to `127.0.0.1` |
+| Alembic migrations      | Python venv at `./venv`                                                      | —                               |
+| GitHub CLI (`gh`)       | apt                                                                          | —                               |
+| Claude Code             | npm, pinned + SHA256-verified in `Dockerfile` (not the devcontainer feature) | —                               |
+| OpenAI Codex CLI        | npm, pinned + SHA256-verified in `Dockerfile`                                | —                               |
+| Bubblewrap (`bwrap`)    | apt; required by Codex and fingerprinted at build time                       | —                               |
+| safe-chain              | npm, baked at a reviewed version and fingerprinted at build time             | —                               |
 
 The base image is plain `debian:bookworm-slim`. The container user is
 `dev` (UID 1000).
@@ -47,11 +47,13 @@ vision-claude --dangerously-skip-permissions
 ```
 
 To drop into a shell instead of Claude:
+
 ```sh
 container exec -it --user dev vision-dev bash
 ```
 
 To force a full rebuild (e.g. after changing the Dockerfile or allowlist):
+
 ```sh
 VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 ```
@@ -73,7 +75,7 @@ Egress is enforced in two layers by the root entrypoint on every start:
 
 1. **In-container SNI proxy** (`squid`, peek+splice). All outbound
    HTTP(S) must traverse `squid` on `127.0.0.1:3128`. squid peeks the TLS
-   SNI and *splices* allowed hostnames (tunnels without decrypting —
+   SNI and _splices_ allowed hostnames (tunnels without decrypting —
    end-to-end TLS preserved, no MITM) and terminates the rest. Hostname
    enforcement can't be bypassed by an exfil endpoint sharing an allowed
    CDN IP, and it defeats `CONNECT`-host ≠ SNI domain-fronting.
@@ -83,7 +85,7 @@ Egress is enforced in two layers by the root entrypoint on every start:
    (`dmesg | grep egress-deny`).
 
 Allowlist (generated as `allowlist.txt`, copied to `/etc/squid/allowlist.txt`;
-`squid.conf` only *references* it): Anthropic, Claude Code, OpenAI Codex, npm,
+`squid.conf` only _references_ it): Anthropic, Claude Code, OpenAI Codex, npm,
 GitHub, PyPI, Yahoo Finance, safe-chain, and Context7. **No Debian/PostgreSQL apt
 hosts are allowlisted**, so `apt-get` does not work inside the container.
 
@@ -126,28 +128,32 @@ forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed
 
 ## Persistence
 
-| Source | Container path | Type | Holds |
-| --- | --- | --- | --- |
-| `.devcontainer` (host) | `/workspaces/Vision/.devcontainer` | bind **RO** | Overlay on the rw workspace so the sandbox config + host launcher can't be rewritten from inside (see Safety note) |
-| `vision-claude` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
-| `~/.claude-sandbox/stage/vision` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
-| (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
-| `vision-pgdata` | `/var/lib/postgresql` | named volume | Postgres data dir |
-| `vision-venv` | `/workspaces/Vision/venv` | named volume | Container's Python venv (alembic) |
-| `vision-nm-root` | `/workspaces/Vision/node_modules` | named volume | Container's JS deps (root) |
-| `vision-nm-frontend` | `/workspaces/Vision/apps/frontend/node_modules` | named volume | Container's JS deps (workspace) |
-| `vision-nm-backend` | `/workspaces/Vision/apps/node-backend/node_modules` | named volume | Container's JS deps (workspace) |
-| `vision-nm-shared` | `/workspaces/Vision/packages/shared-utils/node_modules` | named volume | Container's JS deps (workspace) |
-| `vision-nm-types` | `/workspaces/Vision/packages/types/node_modules` | named volume | Container's JS deps (workspace) |
-| `vision-nm-electron` | `/workspaces/Vision/packaging/electron/node_modules` | named volume | Shields the host's Electron deps (never installed in here) |
+| Source                                  | Container path                                          | Type         | Holds                                                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.devcontainer` (host)                  | `/workspaces/Vision/.devcontainer`                      | bind **RO**  | Overlay on the rw workspace so the sandbox config + host launcher can't be rewritten from inside (see Safety note)                                 |
+| `vision-claude`                         | `/home/dev/.claude`                                     | named volume | Container's writable Claude config — seeded from the sanitized stage on first create                                                               |
+| `~/.claude-sandbox/stage/vision` (host) | `/home/dev/.claude-stage`                               | bind **RO**  | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
+| (container fs)                          | `/home/dev/.claude.json`                                | regular file | Container's writable global config, seeded from `…/claude.json` in the stage                                                                       |
+| `vision-pgdata`                         | `/var/lib/postgresql`                                   | named volume | Postgres data dir                                                                                                                                  |
+| `vision-venv`                           | `/workspaces/Vision/venv`                               | named volume | Container's Python venv (alembic)                                                                                                                  |
+| `vision-nm-root`                        | `/workspaces/Vision/node_modules`                       | named volume | Container's JS deps (root)                                                                                                                         |
+| `vision-nm-frontend`                    | `/workspaces/Vision/apps/frontend/node_modules`         | named volume | Container's JS deps (workspace)                                                                                                                    |
+| `vision-nm-backend`                     | `/workspaces/Vision/apps/node-backend/node_modules`     | named volume | Container's JS deps (workspace)                                                                                                                    |
+| `vision-nm-shared`                      | `/workspaces/Vision/packages/shared-utils/node_modules` | named volume | Container's JS deps (workspace)                                                                                                                    |
+| `vision-nm-types`                       | `/workspaces/Vision/packages/types/node_modules`        | named volume | Container's JS deps (workspace)                                                                                                                    |
+| `vision-nm-electron`                    | `/workspaces/Vision/packaging/electron/node_modules`    | named volume | Shields the host's Electron deps (never installed in here)                                                                                         |
 
 The Vision repo is bind-mounted at `/workspaces/Vision`, so edits appear
 on the host immediately.
 
+Runtime database and application settings are passed with the launcher's `-e`
+arguments. Container lifecycle scripts never create a repository `.env`, because
+the workspace is a host bind mount and that file could change host-side behavior.
+
 ### Dependency volumes (`node_modules/` + `./venv`)
 
-**Your host's `node_modules/` and `./venv` are never touched by the container,
-and vice versa.** Both trees hold platform-specific artifacts — native `.node`
+**Your host's `node_modules/`, `./venv`, and repository `.env` are never written
+by container setup.** The dependency trees hold platform-specific artifacts — native `.node`
 binaries (esbuild, rollup, lightningcss, tailwind-oxide) and a venv whose
 `bin/python` symlinks a specific CPython — so a single shared copy on the bind
 mount cannot serve both a macOS host and a Linux container. Sharing one meant
@@ -156,7 +162,7 @@ failing on a wrong-platform binary, `bun run db:upgrade` dying with "cannot
 execute binary file") until a full reinstall.
 
 Each tree is therefore shadowed by its own native named volume, mounted at the
-*same in-repo path*. Nothing in the repo changes shape: inside the container
+_same in-repo path_. Nothing in the repo changes shape: inside the container
 `./venv/bin/alembic`, `node_modules/.bin`, `$ALEMBIC_BIN` and `bun run db:*` all
 resolve exactly as they do on the host — they just resolve into container-private
 storage. Run `.devcontainer/bin/doctor` to confirm the isolation is live (it
@@ -166,9 +172,11 @@ fails if a stale container is still sharing the host's trees).
 > **create** time, and `perms-fix.sh` is baked into the image — so a container
 > created before this change keeps sharing the host's trees (doctor says so).
 > Recreate it once:
+>
 > ```sh
 > VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 > ```
+>
 > Your host's `node_modules/` and `./venv` are left exactly as they are; the
 > container builds its own from scratch on that first boot.
 
@@ -201,7 +209,8 @@ Consequences worth knowing:
   ```
 
   Note `rm -rf venv` (without the `/*`) fails with "Device or resource busy" —
-  these paths are mountpoints, so clear their *contents*, never the directory.
+  these paths are mountpoints, so clear their _contents_, never the directory.
+
 - **Adding a workspace to `package.json` needs a matching volume** in
   `.devcontainer/bin/claude` (`dep_volume …`), otherwise that workspace's
   `node_modules/` falls back to the shared bind mount and reintroduces the
@@ -272,6 +281,7 @@ auto-push).
 
 **Push safety.** Every push backs up `~/.claude.json` to
 `~/.claude.json.pre-push.<timestamp>` before merging. Roll back with:
+
 ```sh
 mv ~/.claude.json.pre-push.<timestamp> ~/.claude.json
 ```
@@ -347,12 +357,12 @@ is bind-mounted **read-only**, no git credential (`GH_TOKEN`/`GITHUB_TOKEN`) is
 forwarded, and the host ssh-agent is **not** forwarded. So a compromised agent
 can't rewrite history, push, or sign/authenticate as you over SSH.
 
-| Operation | Works? | Notes |
-| --- | --- | --- |
-| `git status` / `diff` / `log` / `show` | ✅ | Read-only on the bind-mounted repo (`safe.directory` is set) |
-| `git commit` / `rebase` / `reset` / `amend` | ❌ | `.git` is read-only — fails with EROFS, by design |
-| `git push` / `gh pr create` | ❌ | No credential in the container; `git push` errors with "could not read Username" |
-| commit signing (ssh-agent) | ❌ (n/a) | No ssh-agent forwarded; nothing to sign with — commits happen on the host |
+| Operation                                   | Works?   | Notes                                                                            |
+| ------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `git status` / `diff` / `log` / `show`      | ✅       | Read-only on the bind-mounted repo (`safe.directory` is set)                     |
+| `git commit` / `rebase` / `reset` / `amend` | ❌       | `.git` is read-only — fails with EROFS, by design                                |
+| `git push` / `gh pr create`                 | ❌       | No credential in the container; `git push` errors with "could not read Username" |
+| commit signing (ssh-agent)                  | ❌ (n/a) | No ssh-agent forwarded; nothing to sign with — commits happen on the host        |
 
 **Workflow:** make changes inside the container (they appear on the host via the
 bind mount immediately), then **commit and push from your host** where your
@@ -379,28 +389,28 @@ set up.
 
 ## Verified isolation + functionality
 
-| Check | Result |
-| --- | --- |
-| Read `/Users/<you>` on host from container | ❌ blocked — only `/workspaces/Vision` is mounted |
-| Connect to host's `host.docker.internal:5432` | ❌ firewall drops |
-| Connect to host gateway `172.17.0.1:22` | ❌ firewall drops |
-| Reach `api.anthropic.com`, `github.com`, `registry.npmjs.org` | ✅ |
-| Reach `example.com` / direct egress bypassing the proxy | ❌ blocked (proxy terminates / firewall drops) |
-| `claude -p` API call through the proxy | ✅ |
-| Postgres role/db created by the entrypoint | ✅ `ftm_user` / `financial_transactions` |
-| `dev` can `sudo` or modify iptables | ❌ no sudo; `no-new-privileges` |
-| File written from container appears on host (bind-mount) | ✅ |
-| `git log`/`diff` (read-only) | ✅ |
-| `git commit` / `push` from inside the container | ❌ `.git` is RO + no credential — commit/push on the host |
-| Host browser hits `http://localhost:8080` | ✅ |
+| Check                                                         | Result                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------- |
+| Read `/Users/<you>` on host from container                    | ❌ blocked — only `/workspaces/Vision` is mounted         |
+| Connect to host's `host.docker.internal:5432`                 | ❌ firewall drops                                         |
+| Connect to host gateway `172.17.0.1:22`                       | ❌ firewall drops                                         |
+| Reach `api.anthropic.com`, `github.com`, `registry.npmjs.org` | ✅                                                        |
+| Reach `example.com` / direct egress bypassing the proxy       | ❌ blocked (proxy terminates / firewall drops)            |
+| `claude -p` API call through the proxy                        | ✅                                                        |
+| Postgres role/db created by the entrypoint                    | ✅ `ftm_user` / `financial_transactions`                  |
+| `dev` can `sudo` or modify iptables                           | ❌ no sudo; `no-new-privileges`                           |
+| File written from container appears on host (bind-mount)      | ✅                                                        |
+| `git log`/`diff` (read-only)                                  | ✅                                                        |
+| `git commit` / `push` from inside the container               | ❌ `.git` is RO + no credential — commit/push on the host |
+| Host browser hits `http://localhost:8080`                     | ✅                                                        |
 
 ## Safety note
 
 The container runs as a non-root user (`dev`), so the CLI accepts
 `--dangerously-skip-permissions`. Anthropic still warns: a malicious
 project can exfiltrate anything inside the container, including the
-`~/.claude` credentials volume. Treat this as *"host is isolated from
-Claude,"* not *"Claude is isolated from a hostile repo."* Only enable
+`~/.claude` credentials volume. Treat this as _"host is isolated from
+Claude,"_ not _"Claude is isolated from a hostile repo."_ Only enable
 for trusted repositories.
 
 **Why `.devcontainer` is mounted read-only.** The repo is bind-mounted

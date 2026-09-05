@@ -518,9 +518,10 @@ jobs:
   # applies to this branch" and is readable with the workflow's own token, where
   # the rulesets admin endpoint is not.
   #
-  # Deliberately NOT wired into `ci-complete`: it reports on every PR but does
-  # not gate merges, so a false positive cannot block the queue while it beds in.
-  # Promote it once it has a track record.
+  # This is wired into `ci-complete` and fails closed. An unreadable rules API
+  # is an unverified protection state, not evidence that the merge gates still
+  # exist; accepting it would make the verifier advisory at the exact moment it
+  # is needed.
   # ─────────────────────────────────────────────────────────────────────────────
   verify-branch-protection:
     name: Verify Branch Protection
@@ -547,8 +548,8 @@ jobs:
           EXPECTED_SCANNERS=$'CodeQL'
 
           if ! RULES=$(gh api "repos/${REPO}/rules/branches/${DEFAULT_BRANCH}" 2>/dev/null); then
-            echo "::warning title=Branch protection unverified::Could not read branch rules for ${DEFAULT_BRANCH} (token access or API availability). Skipped rather than failed — verify by hand."
-            exit 0
+            echo "::error title=Branch protection unverified::Could not read branch rules for ${DEFAULT_BRANCH} (token access or API availability). Failing closed."
+            exit 1
           fi
 
           echo "Rule types active on ${DEFAULT_BRANCH}:"
@@ -918,6 +919,7 @@ jobs:
         changes,
         secrets-scan,
         quality-gate,
+        verify-branch-protection,
         trivy-scan,
         docker-verify,
         test-live-api-contracts,
@@ -941,6 +943,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           SECRETS_SCAN_RESULT: ${{ needs.secrets-scan.result }}
           QUALITY_GATE_RESULT: ${{ needs.quality-gate.result }}
+          BRANCH_PROTECTION_RESULT: ${{ needs.verify-branch-protection.result }}
           TRIVY_SCAN_RESULT: ${{ needs.trivy-scan.result }}
           DOCKER_VERIFY_RESULT: ${{ needs.docker-verify.result }}
           LIVE_CONTRACTS_RESULT: ${{ needs.test-live-api-contracts.result }}
@@ -950,6 +953,7 @@ jobs:
           echo "changes(code):           $CHANGES_RESULT (code=$CODE_CHANGED)"
           echo "secrets-scan:            $SECRETS_SCAN_RESULT"
           echo "quality-gate:            $QUALITY_GATE_RESULT"
+          echo "branch-protection:       $BRANCH_PROTECTION_RESULT"
 
           tolerate_cancelled=false
           if echo "$ALL_RESULTS" | grep -q '"cancelled"'; then
@@ -984,6 +988,7 @@ jobs:
           require changes "$CHANGES_RESULT"
           require secrets-scan "$SECRETS_SCAN_RESULT"
           require quality-gate "$QUALITY_GATE_RESULT"
+          require verify-branch-protection "$BRANCH_PROTECTION_RESULT"
 
           # Reachable only when the tolerance above accepted a cancelled
           # `changes`: the job never published its output, so the diff was never

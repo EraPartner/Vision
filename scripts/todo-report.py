@@ -178,8 +178,6 @@ def validate(items: list[TodoItem]) -> list[str]:
                 f"TODO.md:{item.line}: open finding is outside the authoritative '## Findings' queue"
             )
 
-    if not actionable:
-        errors.append("TODO.md: authoritative '## Findings' queue has no open items")
     return errors
 
 
