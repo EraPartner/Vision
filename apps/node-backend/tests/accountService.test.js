@@ -668,6 +668,9 @@ describe("accountService.remove", () => {
   it("returns the id on success", async () => {
     accountRepository.remove.mockResolvedValueOnce(7);
     await expect(accountService.remove(7)).resolves.toBe(7);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]);
   });
 });
 

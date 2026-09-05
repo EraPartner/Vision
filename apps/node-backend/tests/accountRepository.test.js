@@ -49,6 +49,18 @@ describe("accountRepository", () => {
     );
   });
 
+  it("maps a canceled funding-graph lock wait to a retryable service error", async () => {
+    query.mockRejectedValueOnce(
+      Object.assign(new Error("canceling statement due to statement timeout"), {
+        code: "57014",
+      }),
+    );
+
+    await expect(
+      accountRepository.lockFundingGraphForMutation(),
+    ).rejects.toMatchObject({ status: 503, code: "SERVICE_UNAVAILABLE" });
+  });
+
   describe("getAll", () => {
     it("returns database rows unchanged for service-layer shaping", async () => {
       const raw = {

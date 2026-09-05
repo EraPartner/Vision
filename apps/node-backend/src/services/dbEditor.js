@@ -30,6 +30,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "../middleware/errorHandler.js";
+import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 
@@ -745,6 +746,16 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
   try {
     await client.query("BEGIN");
     await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
+
+    // The editor deliberately bypasses account-domain validation, but it must
+    // still join the graph-wide lock protocol before taking any account row
+    // lock. Otherwise an admin edit can race a normal PATCH or merge, validate
+    // against stale graph state, or deadlock through opposite lock ordering.
+    if (safeTable === "accounts") {
+      await lockAccountFundingGraph((sql, params) =>
+        client.query(sql, [...params]),
+      );
+    }
 
     /** @type {Array<{ op: string, after: Record<string, unknown>|undefined }>} */
     const results = [];

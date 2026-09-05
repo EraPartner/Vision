@@ -113,10 +113,14 @@ account`.
   to 400 `funding_account_id does not reference an existing account` rather than surfacing as a
   raw 500.
 
-Create, PATCH, and merge operations that can change a funding edge take the same
+Create, PATCH, delete, and merge operations that can change a funding edge take the same
 transaction-scoped PostgreSQL advisory lock before validation. Validation and mutation therefore
 observe one serialized funding graph; a concurrent PATCH cannot apply a stale, previously valid
-edge after a merge repoints one of its ancestors.
+edge after a merge repoints one of its ancestors. The raw admin database editor takes this lock
+before any `accounts` row lock too. It still bypasses the validation rules above by design, so an
+administrator can create an invalid edge, but it cannot race an API mutation outside the shared
+write order. If a writer cannot acquire the lock before the database statement timeout, the API
+returns retryable `503 SERVICE_UNAVAILABLE` instead of a generic internal error.
 
 Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: false }` stamps
 `closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.

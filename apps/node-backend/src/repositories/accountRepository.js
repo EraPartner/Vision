@@ -21,6 +21,7 @@ import {
   buildLimitOffset,
 } from "../lib/sqlClauses.js";
 import { todayAppDateString } from "../lib/timezone.js";
+import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
 
 /** @typedef {import('../types/rows.js').AccountRow} AccountRow */
 /** @typedef {import('../types/rows.js').AccountBalanceQueryRow} AccountBalanceQueryRow */
@@ -206,14 +207,10 @@ export const accountRepository = {
    * graph is small, writes are rare, and partial row-lock protocols can miss a
    * dependent whose edge is repointed by an account merge.
    *
-   * The two-key advisory namespace spells "VISI" plus the funding-graph slot.
    * @returns {Promise<void>}
    */
   async lockFundingGraphForMutation() {
-    await query(
-      "SELECT pg_advisory_xact_lock($1::integer, $2::integer)",
-      [0x56495349, 1],
-    );
+    await lockAccountFundingGraph(query);
   },
 
   /**

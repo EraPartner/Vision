@@ -256,6 +256,12 @@ Tables that lack a primary key are **read-only** in the data editor — the Comm
 > [!warning] Raw writes bypass app-level domain logic
 > The data editor writes directly to PostgreSQL. It honors every _structural_ constraint Postgres enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
 
+Account-table writes are one narrow exception to the otherwise raw transaction protocol: before
+locking any `accounts` row, the editor takes the same transaction-scoped advisory lock used by
+account create, PATCH, and merge. This only serializes changes to the funding graph. It does not
+run the application-level `funding_account_id` existence or cycle checks, so the administrator
+remains responsible for preserving those invariants.
+
 ### Materialized-view auto-refresh
 
 After a successful commit to `transactions`, `recipients`, or `categories` (the base tables for the dashboard materialized views), the service calls the existing debounced `scheduleRefresh()` from `materializedViewService`. The commit response includes `refreshScheduled: true` when this happens. Edits to other tables skip the refresh.

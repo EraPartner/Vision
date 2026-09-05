@@ -23,7 +23,13 @@ import {
 
 // ── Catalog fixtures ────────────────────────────────────────────────────────
 
-const ALLOWED_TABLES = ["transactions", "recipients", "tags", "kv_settings"];
+const ALLOWED_TABLES = [
+  "transactions",
+  "recipients",
+  "tags",
+  "kv_settings",
+  "accounts",
+];
 
 const COLUMNS = {
   transactions: [
@@ -90,6 +96,28 @@ const COLUMNS = {
       ordinal_position: 2,
     },
   ],
+  accounts: [
+    {
+      column_name: "id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "NO",
+      column_default: "nextval('x')",
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 1,
+    },
+    {
+      column_name: "funding_account_id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "YES",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 2,
+    },
+  ],
   // A table with no primary key (read-only for writes).
   kv_settings: [
     {
@@ -118,6 +146,7 @@ const COLUMNS = {
 const PRIMARY_KEYS = {
   transactions: [{ column_name: "id" }],
   tags: [{ column_name: "id" }],
+  accounts: [{ column_name: "id" }],
   kv_settings: [],
 };
 
@@ -387,6 +416,44 @@ describe("applyMutations (dryRun)", () => {
 // ── Mutations — execution ───────────────────────────────────────────────────
 
 describe("applyMutations (execute)", () => {
+  it("takes the funding-graph lock before any account row lock", async () => {
+    query.mockImplementation(catalogRouter("accounts"));
+    const { client, calls } = makeClient([
+      ["pg_advisory_xact_lock", { rows: [{ pg_advisory_xact_lock: "" }] }],
+      [
+        "FOR UPDATE",
+        {
+          rowCount: 1,
+          rows: [{ id: 5, funding_account_id: null, __xmin: "500" }],
+        },
+      ],
+      ["UPDATE", { rows: [{ id: 5, funding_account_id: 8 }], rowCount: 1 }],
+      ["db_editor_audit", { rows: [], rowCount: 0 }],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await applyMutations("accounts", [
+      {
+        op: "update",
+        pk: { id: 5 },
+        xmin: "500",
+        set: { funding_account_id: 8 },
+      },
+    ]);
+
+    const graphLockIndex = calls.findIndex((call) =>
+      call.sql.includes("pg_advisory_xact_lock"),
+    );
+    const rowLockIndex = calls.findIndex((call) =>
+      call.sql.includes("FOR UPDATE"),
+    );
+    expect(graphLockIndex).toBeGreaterThan(
+      calls.findIndex((call) => call.sql.includes("statement_timeout")),
+    );
+    expect(rowLockIndex).toBeGreaterThan(graphLockIndex);
+    expect(calls[graphLockIndex].params).toEqual([0x56495349, 1]);
+  });
+
   it("locks, checks version, updates, audits, and schedules a view refresh", async () => {
     query.mockImplementation(catalogRouter("transactions"));
     const { client, calls } = makeClient([
@@ -422,6 +489,9 @@ describe("applyMutations (execute)", () => {
     expect(scheduleRefresh).toHaveBeenCalledOnce();
     expect(calls.some((c) => c.sql.includes("db_editor_audit"))).toBe(true);
     expect(calls.some((c) => c.sql === "COMMIT")).toBe(true);
+    expect(calls.some((c) => c.sql.includes("pg_advisory_xact_lock"))).toBe(
+      false,
+    );
   });
 
   it("returns a 409 conflict when the row version changed", async () => {

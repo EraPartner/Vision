@@ -74,6 +74,67 @@ afterEach(() => {
 });
 
 describe("account merge atomicity (ADR-088)", () => {
+  it("keeps hard-delete funding-edge cascades behind the graph lock", async () => {
+    const { client, pool } = await loadRealTransactionStack();
+    client.query.mockImplementation(async (sql) => {
+      if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.startsWith("DELETE FROM accounts")) {
+        return { rows: [{ id: 7 }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+
+    const { accountService } =
+      await import("../../src/services/accountService.js");
+    await expect(accountService.remove(7)).resolves.toBe(7);
+
+    const sqls = client.query.mock.calls.map(([sql]) => sql);
+    expect(sqls[0]).toBe("BEGIN");
+    expect(sqls[1]).toContain("pg_advisory_xact_lock");
+    expect(sqls[2]).toBe("DELETE FROM accounts WHERE id = $1 RETURNING id");
+    expect(sqls.at(-1)).toBe("COMMIT");
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it("keeps a funding PATCH lock and write inside one real transaction stack", async () => {
+    const { client, pool } = await loadRealTransactionStack();
+    client.query.mockImplementation(async (sql) => {
+      if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM accounts WHERE id = $1")) {
+        return { rows: [{ id: 2, funding_account_id: null }] };
+      }
+      if (sql.startsWith("UPDATE accounts SET")) {
+        throw new Error("late account update failure");
+      }
+      return { rows: [], rowCount: 1 };
+    });
+
+    const { accountService } =
+      await import("../../src/services/accountService.js");
+    await expect(
+      accountService.update(1, { funding_account_id: 2 }),
+    ).rejects.toThrow("late account update failure");
+
+    const sqls = expectRolledBackOnOneConnection(client, pool);
+    const graphLock = sqls.findIndex((sql) =>
+      sql.includes("pg_advisory_xact_lock"),
+    );
+    const validationRead = sqls.findIndex((sql) =>
+      sql.includes("FROM accounts WHERE id = $1"),
+    );
+    const update = sqls.findIndex((sql) =>
+      sql.startsWith("UPDATE accounts SET"),
+    );
+    expect(graphLock).toBe(1);
+    expect(validationRead).toBeGreaterThan(graphLock);
+    expect(update).toBeGreaterThan(validationRead);
+  });
+
   it("rolls back every repoint on one connection when the source DELETE fails", async () => {
     const { client, pool } = await loadRealTransactionStack();
     client.query.mockImplementation(async (sql) => {

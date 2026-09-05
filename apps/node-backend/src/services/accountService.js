@@ -574,19 +574,22 @@ const accountService = {
    */
   /** @param {number} id */
   async remove(id) {
-    let removed;
-    try {
-      removed = await accountRepository.remove(id);
-    } catch (err) {
-      if (err?.code === "23503") {
-        throw new ConflictError(
-          `Account ${id} still has activity referencing it and cannot be deleted. Close the account instead.`,
-        );
+    return withTransaction(async () => {
+      await accountRepository.lockFundingGraphForMutation();
+      let removed;
+      try {
+        removed = await accountRepository.remove(id);
+      } catch (err) {
+        if (err?.code === "23503") {
+          throw new ConflictError(
+            `Account ${id} still has activity referencing it and cannot be deleted. Close the account instead.`,
+          );
+        }
+        throw err;
       }
-      throw err;
-    }
-    if (!removed) throw new NotFoundError(`Account ${id} not found`);
-    return removed;
+      if (!removed) throw new NotFoundError(`Account ${id} not found`);
+      return removed;
+    });
   },
 };
 
