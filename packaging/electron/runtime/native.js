@@ -18,7 +18,11 @@ const LOOPBACK_HOST = "127.0.0.1";
 const RUNTIME_MANAGED_MATERIALIZED_VIEWS = Object.freeze([
   "mv_monthly_summary",
   "mv_category_totals",
-  "mv_cashflow_daily",
+]);
+const REQUIRED_POSTGRES_EXTENSIONS = Object.freeze([
+  "pg_trgm",
+  "pgcrypto",
+  "pg_stat_statements",
 ]);
 const NATIVE_APPLICATION_ENV_KEYS = Object.freeze([
   "TWELVE_DATA_API_KEY",
@@ -1092,8 +1096,40 @@ function createNativeRuntime(options) {
     return `'${String(value).replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
   }
 
+  async function ensureManagedPostgresConfig(dataDirectory) {
+    const visionConfig = path.join(dataDirectory, "vision.conf");
+    const desiredConfig = [
+      `listen_addresses = ${postgresConfigString(LOOPBACK_HOST)}`,
+      `port = ${postgresPort}`,
+      "unix_socket_directories = ''",
+      "password_encryption = 'scram-sha-256'",
+      "shared_preload_libraries = 'pg_stat_statements'",
+      "logging_collector = off",
+      "",
+    ].join("\n");
+    const currentConfig = await fs.promises
+      .readFile(visionConfig, "utf8")
+      .catch((error) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+    let changed = currentConfig !== desiredConfig;
+    if (changed) await writeAtomic(visionConfig, desiredConfig, 0o600);
+    const postgresConfig = path.join(dataDirectory, "postgresql.conf");
+    const baseConfig = await fs.promises.readFile(postgresConfig, "utf8");
+    if (!/^\s*include\s*=\s*'vision\.conf'\s*$/m.test(baseConfig)) {
+      await writeAtomic(
+        postgresConfig,
+        `${baseConfig.replace(/\n?$/, "\n")}include = 'vision.conf'\n`,
+        0o600,
+      );
+      changed = true;
+    }
+    return changed;
+  }
+
   async function ensureManagedPostgresCluster(config) {
-    if (!tools?.managed) return { status: "external" };
+    if (!tools?.managed) return { status: "external", configChanged: false };
     const versionPath = path.join(paths.postgresData, "PG_VERSION");
     const existingVersion = await fs.promises
       .readFile(versionPath, "utf8")
@@ -1111,7 +1147,14 @@ function createNativeRuntime(options) {
         throw error;
       }
       await fs.promises.chmod(paths.postgresData, 0o700);
-      return { status: "existing", dataDirectory: paths.postgresData };
+      const configChanged = await ensureManagedPostgresConfig(
+        paths.postgresData,
+      );
+      return {
+        status: "existing",
+        dataDirectory: paths.postgresData,
+        configChanged,
+      };
     }
 
     const liveStat = await fs.promises
@@ -1166,29 +1209,14 @@ function createNativeRuntime(options) {
           env: managedPostgresChildEnv(),
         },
       );
-      const visionConfig = path.join(staging, "vision.conf");
-      await fs.promises.writeFile(
-        visionConfig,
-        [
-          `listen_addresses = ${postgresConfigString(LOOPBACK_HOST)}`,
-          `port = ${postgresPort}`,
-          "unix_socket_directories = ''",
-          "password_encryption = 'scram-sha-256'",
-          "logging_collector = off",
-          "",
-        ].join("\n"),
-        { mode: 0o600 },
-      );
-      const postgresConfig = path.join(staging, "postgresql.conf");
-      const baseConfig = await fs.promises.readFile(postgresConfig, "utf8");
-      await writeAtomic(
-        postgresConfig,
-        `${baseConfig.replace(/\n?$/, "\n")}include = 'vision.conf'\n`,
-        0o600,
-      );
+      await ensureManagedPostgresConfig(staging);
       await fs.promises.chmod(staging, 0o700);
       await fs.promises.rename(staging, paths.postgresData);
-      return { status: "initialized", dataDirectory: paths.postgresData };
+      return {
+        status: "initialized",
+        dataDirectory: paths.postgresData,
+        configChanged: true,
+      };
     } catch (error) {
       const stagingExists = await fs.promises
         .access(staging)
@@ -1286,6 +1314,41 @@ function createNativeRuntime(options) {
     return { serverVersionNum, listenAddresses: addresses };
   }
 
+  async function assertExternalPostgresObservability() {
+    if (tools.managed) return;
+    const result = await runFile(
+      path.join(tools.binDir, "psql"),
+      [
+        "-h",
+        LOOPBACK_HOST,
+        "-p",
+        String(postgresPort),
+        "--dbname",
+        "postgres",
+        "--tuples-only",
+        "--no-align",
+        "--no-psqlrc",
+        "--set",
+        "ON_ERROR_STOP=1",
+        "--command",
+        "SHOW shared_preload_libraries;",
+      ],
+      { timeout: 10_000, env: safeChildEnv() },
+    );
+    const preloaded = result.stdout
+      .trim()
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (!preloaded.includes("pg_stat_statements")) {
+      const error = new Error(
+        "External PostgreSQL must preload pg_stat_statements. Install the PostgreSQL contrib package, add pg_stat_statements to shared_preload_libraries, and restart PostgreSQL.",
+      );
+      error.code = "POSTGRES_OBSERVABILITY_UNAVAILABLE";
+      throw error;
+    }
+  }
+
   async function startManagedPostgres(config) {
     if (!(await checkPortFree(postgresPort))) {
       const error = new Error(
@@ -1326,7 +1389,7 @@ function createNativeRuntime(options) {
   async function ensurePostgresReady({ startService = true } = {}) {
     if (!tools) await discover();
     const config = await ensureLayout();
-    await ensureManagedPostgresCluster(config);
+    const cluster = await ensureManagedPostgresCluster(config);
     const pgIsReady = path.join(tools.binDir, "pg_isready");
     const readyArgs = [
       "-h",
@@ -1340,8 +1403,9 @@ function createNativeRuntime(options) {
       .then(() => true)
       .catch(() => false);
     if (ready) {
+      let inspected;
       try {
-        return await inspectReadyPostgres(config);
+        inspected = await inspectReadyPostgres(config);
       } catch (error) {
         if (tools.managed && error.code !== "POSTGRES_WRONG_VERSION") {
           const collision = new Error(
@@ -1353,6 +1417,19 @@ function createNativeRuntime(options) {
         }
         throw error;
       }
+      if (!(tools.managed && cluster.configChanged)) {
+        await assertExternalPostgresObservability();
+        return inspected;
+      }
+      if (!startService) {
+        const error = new Error(
+          "Managed PostgreSQL configuration changed and requires a restart.",
+        );
+        error.code = "POSTGRES_RESTART_REQUIRED";
+        throw error;
+      }
+      await stopPostgres();
+      ready = false;
     }
     if (!ready && startService && tools.managed) {
       await startManagedPostgres(config);
@@ -1377,7 +1454,9 @@ function createNativeRuntime(options) {
       throw error;
     }
 
-    return inspectReadyPostgres(config);
+    const inspected = await inspectReadyPostgres(config);
+    await assertExternalPostgresObservability();
+    return inspected;
   }
 
   async function withPgPass(config, role, password, callback) {
@@ -1570,7 +1649,9 @@ function createNativeRuntime(options) {
             "ON_ERROR_STOP=1",
             "--no-psqlrc",
             "--command",
-            "CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+            REQUIRED_POSTGRES_EXTENSIONS.map(
+              (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
+            ).join(" "),
           ],
           { timeout: 30_000, env },
         );
@@ -2066,7 +2147,7 @@ function createNativeRuntime(options) {
       },
     );
     // A no-owner restore intentionally assigns restored objects to the
-    // migration role. These three materialized views are the narrow exception:
+    // migration role. These two materialized views are the narrow exception:
     // the runtime service creates, indexes, refreshes, and ANALYZEs them, so the
     // least-privilege application role must own only these derived objects.
     await adminDatabasePsql(
@@ -2524,6 +2605,7 @@ module.exports = {
   DEFAULT_POSTGRES_PORT,
   LOOPBACK_HOST,
   RUNTIME_MANAGED_MATERIALIZED_VIEWS,
+  REQUIRED_POSTGRES_EXTENSIONS,
   NATIVE_APPLICATION_ENV_KEYS,
   safeChildEnv,
   managedPostgresChildEnv,

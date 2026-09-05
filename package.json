@@ -53,7 +53,7 @@
     "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.js",
     "docker:dev": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
-    "docker:dev:rebuild": "npm run generate-locales-if-not-ci && POSTGRES_IMAGE=postgres:18-alpine && POSTGRES_PLATFORM=linux/amd64 && printf '[docker:dev:rebuild] Pulling and testing %s for %s\\n' \"$POSTGRES_IMAGE\" \"$POSTGRES_PLATFORM\" && docker pull --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" && docker run --rm --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" postgres --version && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:dev:rebuild": "npm run generate-locales-if-not-ci && POSTGRES_IMAGE=postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2 && POSTGRES_PLATFORM=linux/amd64 && printf '[docker:dev:rebuild] Pulling and testing %s for %s\\n' \"$POSTGRES_IMAGE\" \"$POSTGRES_PLATFORM\" && docker pull --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" && docker run --rm --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" postgres --version && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "docker:clean": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
     "docker:clean:down": "docker compose -f docker-compose.yml -f docker-compose.clean.yml down",
     "docker:clean:reset": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
@@ -76,10 +76,11 @@
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
     "check-endpoint-matrix": "node scripts/check-endpoint-matrix.js",
     "check-compose-sync": "node scripts/check-compose-sync.js",
+    "check-test-only-exports": "node scripts/check-test-only-exports.js",
     "todo:list": "python3 scripts/todo-report.py",
     "todo:check": "python3 scripts/todo-report.py --check",
     "check-todo-stamps": "python3 scripts/check-todo-stamps.py",
-    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-compose-sync && bun run todo:check && bun run db:check-destructive && bun run test:scripts && bun run test && bun run test:frontend && bun run test:electron"
+    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-compose-sync && bun run check-test-only-exports && bun run todo:check && bun run db:check-destructive && bun run test:scripts && bun run test && bun run test:frontend && bun run test:electron"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

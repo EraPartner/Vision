@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 // ── Docker / Compose orchestration ───────────────────────────────────────────
 // Extracted verbatim from main.js (TODO.md Wave W6). Owns the docker CLI env,
@@ -7,11 +7,11 @@
 // threaded in via init() getters so the live value is observed at call time,
 // exactly as when this code lived in main.js.
 
-const { app } = require('electron');
-const { execFile } = require('child_process');
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
+const { app } = require("electron");
+const { execFile } = require("child_process");
+const fs = require("fs");
+const http = require("http");
+const path = require("path");
 
 // Context threaded from main.js via init(): { appPort(), useRepoMode(), isDemo() }.
 let ctx = {};
@@ -25,17 +25,32 @@ function init(context) {
 // all of process.env leaks secrets (API keys, tokens, etc.) into every
 // spawned subprocess.
 const DOCKER_ENV_ALLOWLIST = [
-  'PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'TEMP', 'TMP',
-  'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE',
-  'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CERT_PATH', 'DOCKER_TLS_VERIFY',
-  'XDG_RUNTIME_DIR', 'SSH_AUTH_SOCK',
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "TERM",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "DOCKER_HOST",
+  "DOCKER_CONTEXT",
+  "DOCKER_CERT_PATH",
+  "DOCKER_TLS_VERIFY",
+  "XDG_RUNTIME_DIR",
+  "SSH_AUTH_SOCK",
 ];
 const dockerEnv = (() => {
   const env = {};
   for (const key of DOCKER_ENV_ALLOWLIST) {
     if (process.env[key] !== undefined) env[key] = process.env[key];
   }
-  env.PATH = [process.env.PATH, '/usr/local/bin', '/opt/homebrew/bin'].filter(Boolean).join(':');
+  env.PATH = [process.env.PATH, "/usr/local/bin", "/opt/homebrew/bin"]
+    .filter(Boolean)
+    .join(":");
   return env;
 })();
 
@@ -46,10 +61,15 @@ function run(bin, args, cwd, opts = {}) {
     // pg_dump bypasses run() and uses spawn() with stream-to-file — no in-memory
     // buffering. 10 MB is ample for all docker compose command outputs here.
     const maxBuffer = rest.maxBuffer ?? 10 * 1024 * 1024;
-    execFile(bin, args, { env, cwd, ...rest, maxBuffer }, (err, stdout, stderr) => {
-      if (err) return reject(stderr?.trim() || err.message || String(err));
-      resolve(stdout);
-    });
+    execFile(
+      bin,
+      args,
+      { env, cwd, ...rest, maxBuffer },
+      (err, stdout, stderr) => {
+        if (err) return reject(stderr?.trim() || err.message || String(err));
+        resolve(stdout);
+      },
+    );
   });
 }
 
@@ -63,27 +83,30 @@ function run(bin, args, cwd, opts = {}) {
 function pingDockerSocket(socketPath) {
   return new Promise((resolve, reject) => {
     const req = http.get(
-      { socketPath, path: '/_ping', timeout: 2000 },
+      { socketPath, path: "/_ping", timeout: 2000 },
       (res) => {
         res.resume();
         if (res.statusCode === 200) resolve();
         else reject(new Error(`/_ping status ${res.statusCode}`));
-      }
+      },
     );
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('socket timeout')); });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("socket timeout"));
+    });
   });
 }
 
 // Candidate Docker Unix-socket paths, most-specific first. Shared by the daemon
 // ping and the container-state probe below.
 function dockerSocketCandidates() {
-  const homeDir = process.env.HOME || '';
+  const homeDir = process.env.HOME || "";
   return [
-    process.env.DOCKER_HOST?.replace(/^unix:\/\//, ''),
-    path.join(homeDir, '.docker', 'run', 'docker.sock'),
-    path.join(homeDir, '.docker', 'desktop', 'docker.sock'),
-    '/var/run/docker.sock',
+    process.env.DOCKER_HOST?.replace(/^unix:\/\//, ""),
+    path.join(homeDir, ".docker", "run", "docker.sock"),
+    path.join(homeDir, ".docker", "desktop", "docker.sock"),
+    "/var/run/docker.sock",
   ].filter(Boolean);
 }
 
@@ -91,15 +114,32 @@ function dockerSocketCandidates() {
 // rejects otherwise (or on timeout). Same lightweight pattern as pingDockerSocket.
 function dockerSocketGetJson(socketPath, urlPath, timeoutMs = 1500) {
   return new Promise((resolve, reject) => {
-    const req = http.get({ socketPath, path: urlPath, timeout: timeoutMs }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`status ${res.statusCode}`)); }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+    const req = http.get(
+      { socketPath, path: urlPath, timeout: timeoutMs },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new Error(`status ${res.statusCode}`));
+        }
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (c) => {
+          body += c;
+        });
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("socket timeout"));
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('socket timeout')); });
   });
 }
 
@@ -116,20 +156,32 @@ async function isComposeAppRunning(projectName) {
   // project name (read from the compose file on disk) is deliberately NOT put
   // into the outbound request; it only filters the returned list in memory, so
   // no file-derived data reaches the network sink.
-  const filters = encodeURIComponent(JSON.stringify({
-    label: ['com.docker.compose.service=app'],
-    status: ['running'],
-  }));
+  const filters = encodeURIComponent(
+    JSON.stringify({
+      label: ["com.docker.compose.service=app"],
+      status: ["running"],
+    }),
+  );
   const urlPath = `/containers/json?filters=${filters}`;
   for (const socketPath of dockerSocketCandidates()) {
     try {
       await fs.promises.access(socketPath);
       const list = await dockerSocketGetJson(socketPath, urlPath);
-      if (Array.isArray(list) && list.some((c) => !projectName
-        || (c && c.Labels && c.Labels['com.docker.compose.project'] === projectName))) {
+      if (
+        Array.isArray(list) &&
+        list.some(
+          (c) =>
+            !projectName ||
+            (c &&
+              c.Labels &&
+              c.Labels["com.docker.compose.project"] === projectName),
+        )
+      ) {
         return true;
       }
-    } catch { /* try next candidate */ }
+    } catch {
+      /* try next candidate */
+    }
   }
   return false;
 }
@@ -140,10 +192,12 @@ async function isComposeAppRunning(projectName) {
 // read/parse miss (probe then matches by service label alone).
 function readComposeProjectName(cwd) {
   try {
-    const txt = fs.readFileSync(path.join(cwd, 'docker-compose.yml'), 'utf8');
+    const txt = fs.readFileSync(path.join(cwd, "docker-compose.yml"), "utf8");
     const m = txt.match(/^name:\s*(\S+)\s*$/m);
     if (m) return m[1];
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return undefined;
 }
 
@@ -157,11 +211,13 @@ async function checkDocker(cwd) {
   // saver idle) no longer stacks its full 2s timeout ahead of the live one, so
   // the wake path is bounded by the single slowest probe rather than their sum.
   try {
-    await Promise.any(socketCandidates.map(async (socketPath) => {
-      await fs.promises.access(socketPath);
-      await pingDockerSocket(socketPath);
-    }));
-    return 'ok';
+    await Promise.any(
+      socketCandidates.map(async (socketPath) => {
+        await fs.promises.access(socketPath);
+        await pingDockerSocket(socketPath);
+      }),
+    );
+    return "ok";
   } catch {
     // No candidate answered (all sockets missing / daemon not responding) —
     // fall through to the docker CLI probe below.
@@ -169,11 +225,12 @@ async function checkDocker(cwd) {
 
   // Fallback: docker info (distinguishes "not installed" from "not running")
   try {
-    await run('docker', ['info'], cwd, { timeout: 5000 });
-    return 'ok';
+    await run("docker", ["info"], cwd, { timeout: 5000 });
+    return "ok";
   } catch (err) {
-    if (/ENOENT|not found|no such file/i.test(String(err))) return 'not-installed';
-    return 'not-running';
+    if (/ENOENT|not found|no such file/i.test(String(err)))
+      return "not-installed";
+    return "not-running";
   }
 }
 
@@ -185,7 +242,8 @@ function publishedHostPort(service) {
   for (const p of Array.isArray(pubs) ? pubs : []) {
     const target = Number(p.TargetPort ?? p.targetPort);
     const published = Number(p.PublishedPort ?? p.publishedPort);
-    if (target === 3002 && Number.isInteger(published) && published > 0) return published;
+    if (target === 3002 && Number.isInteger(published) && published > 0)
+      return published;
   }
   return undefined;
 }
@@ -193,27 +251,27 @@ function publishedHostPort(service) {
 // ── Docker Compose actions ────────────────────────────────────────────────────
 function composeArgs(cwd, extraFiles = []) {
   // Build -f flags: always start with the base docker-compose.yml, then any overrides.
-  const files = [
-    path.join(cwd, 'docker-compose.yml'),
-    ...extraFiles,
-  ];
-  return files.flatMap(f => ['-f', f]);
+  const files = [path.join(cwd, "docker-compose.yml"), ...extraFiles];
+  return files.flatMap((f) => ["-f", f]);
 }
 
 function startContainers(cwd, extraFiles = [], skipBuild = false) {
   const args = [
-    'compose', ...composeArgs(cwd, extraFiles),
-    'up', '-d',
-    ...((app.isPackaged && !ctx.useRepoMode()) || skipBuild ? [] : ['--build']),
+    "compose",
+    ...composeArgs(cwd, extraFiles),
+    "up",
+    "-d",
+    ...((app.isPackaged && !ctx.useRepoMode()) || skipBuild ? [] : ["--build"]),
   ];
   // Inject the resolved port so docker-compose.yml's ${PORT:-3002} interpolation
   // maps the correct host port → container 3002.
   const env = { ...dockerEnv, PORT: String(ctx.appPort()) };
-  return run('docker', args, cwd, { timeout: 300000, env });
+  return run("docker", args, cwd, { timeout: 300000, env });
 }
 
-const POSTGRES_IMAGE = 'postgres:18-alpine';
-const POSTGRES_PLATFORM = 'linux/amd64';
+const POSTGRES_IMAGE =
+  "postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2";
+const POSTGRES_PLATFORM = "linux/amd64";
 
 // A broken postgres:18-alpine ARM64 image was published with empty entrypoint
 // scripts (docker-library/postgres#1378). Docker keeps that bad image in its
@@ -224,32 +282,32 @@ const POSTGRES_PLATFORM = 'linux/amd64';
 // db container is recreated from the refreshed image instead of being resumed.
 async function ensurePostgresImage(cwd, runner = run) {
   const smokeArgs = [
-    'run',
-    '--rm',
-    '--platform',
+    "run",
+    "--rm",
+    "--platform",
     POSTGRES_PLATFORM,
-    '--pull=never',
+    "--pull=never",
     POSTGRES_IMAGE,
-    'postgres',
-    '--version',
+    "postgres",
+    "--version",
   ];
   try {
-    await runner('docker', smokeArgs, cwd, { timeout: 30000 });
+    await runner("docker", smokeArgs, cwd, { timeout: 30000 });
     return false;
   } catch (err) {
     console.warn(
       `[postgres-image] cached ${POSTGRES_IMAGE} failed its startup check; pulling a replacement:`,
-      err
+      err,
     );
   }
 
   await runner(
-    'docker',
-    ['pull', '--platform', POSTGRES_PLATFORM, POSTGRES_IMAGE],
+    "docker",
+    ["pull", "--platform", POSTGRES_PLATFORM, POSTGRES_IMAGE],
     cwd,
-    { timeout: 300000 }
+    { timeout: 300000 },
   );
-  await runner('docker', smokeArgs, cwd, { timeout: 30000 });
+  await runner("docker", smokeArgs, cwd, { timeout: 30000 });
   return true;
 }
 
@@ -259,11 +317,22 @@ function parseComposePsOutput(out) {
   if (!out) return [];
   const trimmed = out.trim();
   if (!trimmed) return [];
-  if (trimmed.startsWith('[')) {
-    try { return JSON.parse(trimmed); } catch { return []; }
+  if (trimmed.startsWith("[")) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return [];
+    }
   }
-  return trimmed.split('\n')
-    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+  return trimmed
+    .split("\n")
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
     .filter(Boolean);
 }
 
@@ -277,9 +346,8 @@ function parseComposePsOutput(out) {
 async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
   // The demo uses a locally built, pre-seeded database image. It must never be
   // replaced by the production Postgres tag.
-  const databaseImageRefreshed = ctx.isDemo && ctx.isDemo()
-    ? false
-    : await ensurePostgresImage(cwd);
+  const databaseImageRefreshed =
+    ctx.isDemo && ctx.isDemo() ? false : await ensurePostgresImage(cwd);
 
   // `compose start` keeps the old image ID. After a repair pull, force the `up`
   // path so Compose recreates the db container while preserving its named data
@@ -291,43 +359,60 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
 
   try {
     const psOut = await run(
-      'docker',
-      ['compose', ...composeArgs(cwd, extraFiles), 'ps', '--all', '--format', 'json'],
+      "docker",
+      [
+        "compose",
+        ...composeArgs(cwd, extraFiles),
+        "ps",
+        "--all",
+        "--format",
+        "json",
+      ],
       cwd,
-      { timeout: 15000 }
+      { timeout: 15000 },
     );
     const services = parseComposePsOutput(psOut);
     if (services.length > 0) {
-      const getState = s => String(s?.State || s?.state || '').toLowerCase();
+      const getState = (s) => String(s?.State || s?.state || "").toLowerCase();
       // The `start` fast paths reuse the existing container AS-IS, and
       // `docker compose start` cannot remap a published port. If the existing app
       // container is published on a different host port than the one we resolved
       // (and will poll), reusing it would leave Electron polling a dead port and
       // hanging on "Almost ready…". Only take a fast path when the ports agree;
       // otherwise fall through to `up`, which recreates the container on appPort.
-      const appSvc = services.find(s => (s.Service || s.service) === 'app');
-      const portMatches = !appSvc || publishedHostPort(appSvc) === ctx.appPort();
+      const appSvc = services.find((s) => (s.Service || s.service) === "app");
+      const portMatches =
+        !appSvc || publishedHostPort(appSvc) === ctx.appPort();
       // All already running — skip if packaged (no build possible) or if the
       // skip-build cache confirmed the running image matches the current source.
       // In dev mode without a cache hit, fall through so `compose up --build`
       // can detect whether the running containers have stale code.
-      if (portMatches && services.every(s => getState(s) === 'running') && ((app.isPackaged && !ctx.useRepoMode()) || skipBuild)) return { built: false };
+      if (
+        portMatches &&
+        services.every((s) => getState(s) === "running") &&
+        ((app.isPackaged && !ctx.useRepoMode()) || skipBuild)
+      )
+        return { built: false };
       // All in a known stopped state + not a forced dev rebuild → compose start.
-      const knownStates = new Set(['running', 'exited', 'created', 'paused']);
+      const knownStates = new Set(["running", "exited", "created", "paused"]);
       const canUseStart = (app.isPackaged && !ctx.useRepoMode()) || skipBuild;
-      if (portMatches && canUseStart && services.every(s => knownStates.has(getState(s)))) {
+      if (
+        portMatches &&
+        canUseStart &&
+        services.every((s) => knownStates.has(getState(s)))
+      ) {
         const env = { ...dockerEnv, PORT: String(ctx.appPort()) };
         await run(
-          'docker',
-          ['compose', ...composeArgs(cwd, extraFiles), 'start'],
+          "docker",
+          ["compose", ...composeArgs(cwd, extraFiles), "start"],
           cwd,
-          { timeout: 60000, env }
+          { timeout: 60000, env },
         );
         return { built: false };
       }
     }
   } catch (err) {
-    console.warn('composeStartOrUp probe failed; falling back to up:', err);
+    console.warn("composeStartOrUp probe failed; falling back to up:", err);
   }
   await startContainers(cwd, extraFiles, skipBuild);
   return { built: !skipBuild && (!app.isPackaged || ctx.useRepoMode()) };
@@ -340,37 +425,49 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
 // `restart: unless-stopped` treats user-stopped containers as stopped, so
 // nothing auto-revives them when the Docker daemon restarts.
 function stopContainers(cwd, extraFiles = []) {
-  const args = ['compose', ...composeArgs(cwd, extraFiles), 'stop'];
-  return run('docker', args, cwd, { timeout: 60000 });
+  const args = ["compose", ...composeArgs(cwd, extraFiles), "stop"];
+  return run("docker", args, cwd, { timeout: 60000 });
 }
 
-// Pull the latest Docker image for both the app and db services (without
-// stopping the running containers). Includes `db` so packaged installs also
-// receive Postgres minor/security updates — the `postgres:18-alpine` tag pins
-// the major, so only in-place-compatible minor bumps are fetched.
+// Pull the latest application image without stopping running containers.
+// PostgreSQL is digest-pinned in Compose and changes only through a reviewed
+// app release, so the updater must not imply that it can float the database.
 // Returns true if a new image layer was pulled, false if already up to date.
 async function pullLatestImage(cwd, extraFiles = []) {
   try {
-    const output = await run('docker', ['compose', ...composeArgs(cwd, extraFiles), 'pull', 'app', 'db'], cwd, { timeout: 120000 });
+    const output = await run(
+      "docker",
+      ["compose", ...composeArgs(cwd, extraFiles), "pull", "app"],
+      cwd,
+      { timeout: 120000 },
+    );
     // docker compose pull outputs "Pulled" when a new layer was downloaded
     return /pulled/i.test(output);
   } catch (err) {
-    console.warn('docker compose pull failed (non-fatal):', err);
+    console.warn("docker compose pull failed (non-fatal):", err);
     return false;
   }
 }
 
 // Restart only the app container (not the db) to pick up the new image.
 async function restartAppContainer(cwd, extraFiles = []) {
-  const args = ['compose', ...composeArgs(cwd, extraFiles), 'up', '-d', '--no-deps', 'app'];
+  const args = [
+    "compose",
+    ...composeArgs(cwd, extraFiles),
+    "up",
+    "-d",
+    "--no-deps",
+    "app",
+  ];
   // Same PORT injection as every other compose start path: `up` recreates the
   // container, and without it compose falls back to ${PORT:-3002} — republishing
   // on 3002 (wrong CORS too) while Electron keeps polling the persisted appPort.
   const env = { ...dockerEnv, PORT: String(ctx.appPort()) };
-  await run('docker', args, cwd, { timeout: 120000, env });
+  await run("docker", args, cwd, { timeout: 120000, env });
 }
 
 module.exports = {
+  POSTGRES_IMAGE,
   init,
   dockerEnv,
   run,

@@ -196,6 +196,9 @@ const electronAPI = {
   /** Keep native menus and dialogs aligned with the persisted in-app language. */
   setLanguage: (language) => ipcRenderer.invoke("app:set-language", language),
 
+  /** Enable the macOS under-window material only for the effective enhanced tier. */
+  setVibrancy: (enabled) => ipcRenderer.invoke("app:set-vibrancy", enabled),
+
   /** macOS accent color as RRGGBBAA hex, or null when unavailable. */
   getAccentColor: () => ipcRenderer.invoke("app:get-accent-color"),
 

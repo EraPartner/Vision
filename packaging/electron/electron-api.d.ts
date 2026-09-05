@@ -60,8 +60,11 @@ export interface ElectronCsvFile {
 }
 
 export interface SplashThemeColors {
+  mode?: "light" | "dark";
   background: string;
   foreground: string;
+  surface?: string;
+  text?: string;
 }
 
 export interface RendererFailurePayload {
@@ -147,6 +150,10 @@ export interface ElectronInvokeContract {
     args: [language: "en" | "nl"];
     result: ElectronSuccessResult & { superseded?: boolean };
   };
+  "app:set-vibrancy": {
+    args: [enabled: boolean];
+    result: ElectronSuccessResult;
+  };
   "app:get-accent-color": { args: []; result: string | null };
   "theme:persist-splash": {
     args: [colors: SplashThemeColors];
@@ -203,6 +210,7 @@ export interface ElectronApiBridge {
   ready: ElectronInvoke<"app:renderer-ready">;
   setDockBadge: ElectronInvoke<"app:set-badge">;
   setLanguage?: ElectronInvoke<"app:set-language">;
+  setVibrancy?: ElectronInvoke<"app:set-vibrancy">;
   getAccentColor: ElectronInvoke<"app:get-accent-color">;
   persistSplashTheme?: ElectronInvoke<"theme:persist-splash">;
   onAccentColorChanged: ElectronSubscription<"app:accent-color-changed">;

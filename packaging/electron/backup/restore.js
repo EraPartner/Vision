@@ -22,7 +22,7 @@ const {
   openBundle,
   isBundleEncrypted,
 } = require("./bundle");
-const { dockerEnv, run, composeArgs } = require("../compose");
+const { POSTGRES_IMAGE, dockerEnv, run, composeArgs } = require("../compose");
 const {
   getBackupDeviceId,
   getBackupPassphrase,
@@ -620,7 +620,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
       .then((s) => s.trim())
       .catch(() => "");
 
-    let pgImageTag = "postgres:16";
+    let pgImageTag = POSTGRES_IMAGE;
     if (dbContainerName) {
       pgImageTag = await run(
         "docker",
@@ -629,7 +629,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
         { timeout: 10000 },
       )
         .then((s) => s.trim())
-        .catch(() => "postgres:16");
+        .catch(() => POSTGRES_IMAGE);
     }
 
     const networkName = await run(
@@ -951,7 +951,7 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
       { timeout: 15000 },
     )
       .then((s) => s.trim())
-      .catch(() => "postgres:16");
+      .catch(() => POSTGRES_IMAGE);
 
     // Resolve the actual image name (images --quiet gives the ID, we need the tag).
     // Fall back to inspecting the running container.
@@ -964,7 +964,7 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
       .then((s) => s.trim())
       .catch(() => "");
 
-    let pgImageTag = "postgres:16";
+    let pgImageTag = POSTGRES_IMAGE;
     if (dbContainerName) {
       pgImageTag = await run(
         "docker",
@@ -973,7 +973,7 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
         { timeout: 10000 },
       )
         .then((s) => s.trim())
-        .catch(() => "postgres:16");
+        .catch(() => POSTGRES_IMAGE);
     }
 
     // Get the internal Docker network so the throwaway container can reach the db service.

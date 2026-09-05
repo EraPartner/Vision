@@ -1,0 +1,7 @@
+{
+  "defaultHostPort": 3002,
+  "containerPort": 3002,
+  "bootstrapDatabaseUser": "ftm_user",
+  "applicationDatabaseUser": "ftm_app",
+  "databaseName": "financial_transactions"
+}

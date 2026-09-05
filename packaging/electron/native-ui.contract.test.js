@@ -29,6 +29,47 @@ test("native language bridge validates language and rebuilds menus", () => {
   );
 });
 
+test("launch starts loading the splash before native platform setup", () => {
+  const launchStart = main.indexOf("async function launch()");
+  const nativeStart = main.indexOf(
+    'if (runtimeMode === "native")',
+    launchStart,
+  );
+  const launchPrelude = main.slice(launchStart, nativeStart);
+
+  const initI18n = launchPrelude.indexOf(
+    "await initI18n(persistedSettings.nativeLanguage);",
+  );
+  const createWindow = launchPrelude.indexOf("createWindow();");
+  const loadSplash = launchPrelude.indexOf(
+    "mainWindow.loadURL(splashDataUrl());",
+  );
+  const applicationMenu = launchPrelude.indexOf("setupApplicationMenu();");
+  const dockMenu = launchPrelude.indexOf("setupDockMenu();");
+  const accentSubscription = launchPrelude.indexOf(
+    "subscribeAccentColorChanges();",
+  );
+
+  assert.ok(initI18n >= 0, "launch must initialize localized labels");
+  assert.ok(
+    createWindow > initI18n,
+    "window creation must follow localization",
+  );
+  assert.ok(loadSplash > createWindow, "the splash must load into the window");
+  assert.ok(
+    applicationMenu > loadSplash,
+    "application-menu setup must not block splash loading",
+  );
+  assert.ok(
+    dockMenu > loadSplash,
+    "dock-menu setup must not block splash loading",
+  );
+  assert.ok(
+    accentSubscription > loadSplash,
+    "accent-color subscription must not block splash loading",
+  );
+});
+
 test("planned-payment count reaches every desktop platform", () => {
   assert.match(main, /process\.platform === ["']win32["']/);
   assert.match(main, /setOverlayIcon\(/);
@@ -115,4 +156,25 @@ test("renderer boot is verified instead of leaving the static splash forever", (
   assert.match(main, /app:renderer-ready[\s\S]{0,300}stopRendererBootWatchdog/);
   assert.match(main, /did-fail-load/);
   assert.match(main, /render-process-gone/);
+});
+
+test("application URLs are derived from the single mutable app port", () => {
+  assert.match(main, /let appPort = DEFAULT_APP_PORT/);
+  assert.match(
+    main,
+    /const appUrl = \(\) => `http:\/\/localhost:\$\{appPort\}`/,
+  );
+  assert.match(main, /const healthUrl = \(\) => `\$\{appUrl\(\)\}\/health`/);
+  assert.doesNotMatch(main, /\b(?:APP_URL|HEALTH_URL)\b/);
+  assert.doesNotMatch(main, /appPort\s*=\s*port;\s*(?:APP_URL|HEALTH_URL)\s*=/);
+});
+
+test("macOS vibrancy is enabled only through the validated renderer request", () => {
+  assert.doesNotMatch(main, /vibrancy:\s*["']under-window["']/);
+  assert.match(main, /registerHandler\(\s*["']app:set-vibrancy["']/);
+  assert.match(main, /typeof enabled !== ["']boolean["']/);
+  assert.match(
+    main,
+    /mainWindow\.setVibrancy\(enabled \? ["']under-window["'] : null\)/,
+  );
 });

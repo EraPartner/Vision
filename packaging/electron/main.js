@@ -392,8 +392,8 @@ function registerSecurityHeaders() {
 
 // Resolved at launch by resolveAppPort() — a persisted random free port.
 let appPort = DEFAULT_APP_PORT;
-let APP_URL = `http://localhost:${appPort}`;
-let HEALTH_URL = `http://localhost:${appPort}/health`;
+const appUrl = () => `http://localhost:${appPort}`;
+const healthUrl = () => `${appUrl()}/health`;
 let runtimeMode = null;
 let activeRuntime = null;
 
@@ -526,7 +526,7 @@ updater.init({
 // ── Backend host-port resolution ───────────────────────────────────────────────
 // The backend container always listens on 3002 internally; we publish it on a
 // host port that Electron both maps (PORT injected into compose) and polls
-// (APP_URL/HEALTH_URL). Those two MUST agree or the splash hangs on "Almost
+// (appUrl()/healthUrl()). Those two MUST agree or the splash hangs on "Almost
 // ready…" forever. We pick a truly-random free port ONCE per app and persist it
 // (settings.appPort): random so the demo and the real app never collide on a
 // shared default; persisted so every relaunch reuses the same port, keeping the
@@ -595,13 +595,11 @@ function isPortConflictError(err) {
   );
 }
 
-// Pick a fresh free port, persist it, and re-derive the URLs polled during boot.
+// Pick a fresh free port and persist it. URL accessors derive from appPort.
 // Used to self-heal after a foreign process squats the persisted appPort.
 async function repickAppPort() {
   const port = await pickRandomFreePort();
   appPort = port;
-  APP_URL = `http://localhost:${appPort}`;
-  HEALTH_URL = `http://localhost:${appPort}/health`;
   try {
     await updateSettings((cur) => {
       cur.appPort = port;
@@ -1015,7 +1013,7 @@ async function pingHealth(timeoutMs = 1500) {
       .catch(() => false);
   }
   return new Promise((resolve) => {
-    const req = http.get(HEALTH_URL, { agent: healthAgent }, (res) => {
+    const req = http.get(healthUrl(), { agent: healthAgent }, (res) => {
       const ok = res.statusCode >= 200 && res.statusCode < 400;
       res.resume();
       resolve(ok);
@@ -1060,7 +1058,7 @@ function pollHealth(maxAttempts = HEALTH_POLL_ATTEMPTS) {
 function pingReady(timeoutMs = 2000) {
   return new Promise((resolve) => {
     const req = http.get(
-      `${APP_URL}/health/detailed`,
+      `${appUrl()}/health/detailed`,
       { agent: healthAgent },
       (res) => {
         const code = res.statusCode;
@@ -1128,6 +1126,7 @@ function loadErrorPage({ messageKey = "app.errorPageMessage" } = {}) {
   const theme = readSplashTheme();
   const palette = deriveSplashPalette(
     theme?.background || DEFAULT_BRAND_PRIMARY,
+    theme,
   );
   const params = new URLSearchParams({
     title: t("app.errorPageTitle"),
@@ -1307,7 +1306,7 @@ function isCurrentApplicationDocument() {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   try {
     const current = new URL(mainWindow.webContents.getURL());
-    const expected = new URL(APP_URL);
+    const expected = new URL(appUrl());
     return current.origin === expected.origin;
   } catch {
     return false;
@@ -1341,7 +1340,7 @@ async function loadApplicationPage() {
   stopRendererBootWatchdog({ resetRetry: true });
   rendererReady = false;
   try {
-    await mainWindow.loadURL(APP_URL);
+    await mainWindow.loadURL(appUrl());
   } catch (error) {
     console.error(
       "[renderer] application document failed to load:",
@@ -1390,7 +1389,7 @@ function pollAndLoad({ building = false } = {}) {
         buttons: [t("common.ok")],
         title: APP_NAME,
         message: t("app.startSlow"),
-        detail: t("app.startSlowDetail", { url: APP_URL }),
+        detail: t("app.startSlowDetail", { url: appUrl() }),
       });
     });
 }
@@ -1447,11 +1446,20 @@ function readSplashTheme() {
     if (
       !theme ||
       !isValidHslComponents(theme.background) ||
-      !isValidHslComponents(theme.foreground)
+      !isValidHslComponents(theme.foreground) ||
+      (theme.mode != null && theme.mode !== "light" && theme.mode !== "dark") ||
+      (theme.surface != null && !isValidHslComponents(theme.surface)) ||
+      (theme.text != null && !isValidHslComponents(theme.text))
     ) {
       return undefined;
     }
-    return { background: theme.background, foreground: theme.foreground };
+    return {
+      mode: theme.mode,
+      background: theme.background,
+      foreground: theme.foreground,
+      surface: theme.surface,
+      text: theme.text,
+    };
   } catch {
     return undefined;
   }
@@ -1464,12 +1472,19 @@ function readSplashTheme() {
 // logo ("pretty much black with a light emerald shine"). The persisted
 // `foreground` (primary-foreground, meant for ink *on* the bright accent) is
 // intentionally ignored — on a near-black fill we want light text.
-function deriveSplashPalette(primary) {
+function deriveSplashPalette(primary, theme) {
   const m =
     /^(\d{1,3}(?:\.\d+)?)\s+(\d{1,3}(?:\.\d+)?)%\s+\d{1,3}(?:\.\d+)?%$/.exec(
       primary,
     );
   if (!m) return undefined;
+  if (
+    theme?.mode === "light" &&
+    isValidHslComponents(theme.surface) &&
+    isValidHslComponents(theme.text)
+  ) {
+    return { base: theme.surface, glow: primary, foreground: theme.text };
+  }
   const hue = m[1];
   const sat = Number(m[2]);
   return {
@@ -1483,6 +1498,7 @@ function splashDataUrl() {
   const theme = readSplashTheme();
   const derived = deriveSplashPalette(
     theme?.background || DEFAULT_BRAND_PRIMARY,
+    theme,
   );
   const palette = `body {
     background:
@@ -1631,6 +1647,7 @@ function splashBackgroundColor() {
     const theme = readSplashTheme();
     const derived = deriveSplashPalette(
       theme?.background || DEFAULT_BRAND_PRIMARY,
+      theme,
     );
     if (derived) {
       const m =
@@ -1682,13 +1699,12 @@ function createWindow() {
     // macOS-native chrome: frameless content with inset traffic lights. The
     // renderer adds a drag region + left inset to its topbar when it detects
     // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
-    // Vibrancy is a no-op while the page paints opaque backgrounds — the
-    // renderer only goes translucent behind the enhancedEffects toggle.
+    // The renderer enables under-window vibrancy only for the effective
+    // enhanced tier, keeping the common reduced/standard window opaque.
     ...(process.platform === "darwin"
       ? {
           titleBarStyle: "hiddenInset",
           trafficLightPosition: { x: 20, y: 20 },
-          vibrancy: "under-window",
           visualEffectState: "followWindow",
         }
       : {}),
@@ -2463,7 +2479,7 @@ function sendToApp(channel, payload) {
     pendingAppMessages.push([channel, payload]);
     createWindow();
     // Same reopen-from-destroyed path as `activate`: show the splash and re-poll
-    // readiness rather than a bare loadURL(APP_URL), so a backend that died while
+    // readiness rather than a bare loadURL(appUrl()), so a backend that died while
     // the window was closed surfaces the error page instead of a blank/broken
     // window. The queued message flushes once the renderer signals ready.
     mainWindow.loadURL(splashDataUrl());
@@ -2797,6 +2813,18 @@ registerHandler(
   { senderFailure: { success: false } },
 );
 
+registerHandler(
+  "app:set-vibrancy",
+  (event, enabled) => {
+    if (typeof enabled !== "boolean") return { success: false };
+    if (process.platform !== "darwin") return { success: false };
+    if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
+    mainWindow.setVibrancy(enabled ? "under-window" : null);
+    return { success: true };
+  },
+  { senderFailure: { success: false } },
+);
+
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor() {
   if (process.platform !== "darwin") return null;
@@ -2825,15 +2853,23 @@ registerHandler(
     if (
       !colors ||
       !isValidHslComponents(colors.background) ||
-      !isValidHslComponents(colors.foreground)
+      !isValidHslComponents(colors.foreground) ||
+      (colors.mode != null &&
+        colors.mode !== "light" &&
+        colors.mode !== "dark") ||
+      (colors.surface != null && !isValidHslComponents(colors.surface)) ||
+      (colors.text != null && !isValidHslComponents(colors.text))
     ) {
       return { success: false };
     }
     try {
       await updateSettings((cur) => {
         cur[SPLASH_THEME_KEY] = {
+          mode: colors.mode,
           background: colors.background,
           foreground: colors.foreground,
+          surface: colors.surface,
+          text: colors.text,
         };
       });
       return { success: true };
@@ -2955,19 +2991,21 @@ async function launch() {
   await initI18n(persistedSettings.nativeLanguage);
   endI18n();
 
-  // 0a-bis. Native menu bar + dock menu need localized labels, so they follow
-  // initI18n. Accent-color push subscription is darwin-only and inert otherwise.
-  setupApplicationMenu();
-  setupDockMenu();
-  subscribeAccentColorChanges();
-
   // 0b. Open the loading window IMMEDIATELY so the user sees something straight
-  //    away — before runtime I/O, which can take seconds on a cold start. The
-  //    window will navigate to APP_URL once the backend is ready.
+  //    away — before menu/dock setup and runtime I/O. The native menus need
+  //    localized labels, so they still follow initI18n, but they do not need to
+  //    block the first splash frame. The window navigates to appUrl() once the
+  //    backend is ready.
   const endWindow = bootMark("create_window");
   createWindow();
   mainWindow.loadURL(splashDataUrl());
   endWindow();
+
+  // 0b-bis. Complete native platform integration after splash loading has
+  // started. Accent-color push subscription is darwin-only and inert otherwise.
+  setupApplicationMenu();
+  setupDockMenu();
+  subscribeAccentColorChanges();
 
   if (runtimeMode === "native") {
     const endNative = bootMark("native_runtime_start");
@@ -2982,8 +3020,6 @@ async function launch() {
     try {
       const port = await resolveAppPort();
       appPort = port;
-      APP_URL = `http://localhost:${appPort}`;
-      HEALTH_URL = `http://localhost:${appPort}/health`;
       activeRuntime = createRuntimeProvider("native", {
         native: {
           userDataDir: app.getPath("userData"),
@@ -3088,8 +3124,6 @@ async function launch() {
       const end = bootMark("find_free_port");
       return resolveAppPort().then((port) => {
         appPort = port;
-        APP_URL = `http://localhost:${appPort}`;
-        HEALTH_URL = `http://localhost:${appPort}/health`;
         end();
       });
     })(),
@@ -3687,7 +3721,7 @@ if (gotSingleInstanceLock) {
     // Window was actually destroyed (non-darwin, or a first-run edge): the app +
     // containers may still be warm, but the SPA has to boot from scratch. Show the
     // splash and re-poll readiness (reusing the boot handoff) instead of a bare
-    // loadURL(APP_URL) that would paint a blank window — or a connection error if
+    // loadURL(appUrl()) that would paint a blank window — or a connection error if
     // the backend isn't answering yet.
     if (mainWindow === null) {
       createWindow();

@@ -11,6 +11,9 @@
  *      is exactly the v1.0.2 data-loss bug
  *   3. the `db` service image and platform — a platform mismatch can select the
  *      broken ARM64 Postgres entrypoint instead of the validated amd64 image
+ *   4. the port, database name, and role identity recorded in
+ *      `config/stack-identity.json` — both Compose copies, Electron-generated
+ *      URLs, and backend development defaults must match this canonical record
  *
  * This replaces two byte-identical copies of an inline awk one-liner (ci.yml's
  * verify-compose-sync job and release.yml's verify job) that could drift from
@@ -36,6 +39,15 @@ const path = require("node:path");
 const REPO_ROOT = path.resolve(__dirname, "..");
 const ROOT_COMPOSE = "docker-compose.yml";
 const ELECTRON_COMPOSE = "packaging/electron/resources/docker-compose.yml";
+const STACK_IDENTITY_FILE = "config/stack-identity.json";
+const ELECTRON_MAIN = "packaging/electron/main.js";
+const ELECTRON_COMPOSE_MODULE = "packaging/electron/compose.js";
+const NATIVE_RUNTIME = "packaging/electron/runtime/native.js";
+const NATIVE_DEVELOPMENT = "packaging/electron/scripts/native-development.js";
+const NATIVE_DB_SMOKE = "packaging/electron/scripts/native-db-smoke.js";
+const NATIVE_RUNTIME_CLI = "packaging/electron/scripts/native-runtime-cli.js";
+const BACKEND_ENV = "apps/node-backend/src/config/env.js";
+const POSTGRES_INIT = "docker/postgres-init/01-app-role.sh";
 
 const KEY_RE = /^(\s*)([A-Za-z0-9_.-]+):(\s.*|)$/;
 // `key: |`, `key: >-`, `key: |+2` … everything after the indicator is a block
@@ -59,6 +71,259 @@ function unquote(value) {
     return value.slice(1, -1);
   }
   return value;
+}
+
+function readStackIdentity(text, label = STACK_IDENTITY_FILE) {
+  let identity;
+  try {
+    identity = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label}: invalid JSON: ${error.message}`);
+  }
+
+  const integerKeys = ["defaultHostPort", "containerPort"];
+  const stringKeys = [
+    "bootstrapDatabaseUser",
+    "applicationDatabaseUser",
+    "databaseName",
+  ];
+  for (const key of integerKeys) {
+    if (
+      !Number.isInteger(identity[key]) ||
+      identity[key] < 1 ||
+      identity[key] > 65535
+    ) {
+      throw new Error(
+        `${label}: '${key}' must be an integer port from 1 to 65535`,
+      );
+    }
+  }
+  for (const key of stringKeys) {
+    if (
+      typeof identity[key] !== "string" ||
+      !/^[a-z][a-z0-9_]*$/.test(identity[key])
+    ) {
+      throw new Error(`${label}: '${key}' must be a lowercase SQL identifier`);
+    }
+  }
+  if (identity.bootstrapDatabaseUser === identity.applicationDatabaseUser) {
+    throw new Error(
+      `${label}: bootstrapDatabaseUser and applicationDatabaseUser must differ`,
+    );
+  }
+  return identity;
+}
+
+function oneMatch(text, regex, label) {
+  const matches = [...text.matchAll(regex)];
+  if (matches.length !== 1) {
+    throw new Error(
+      `${label}: expected exactly one match, found ${matches.length}`,
+    );
+  }
+  return matches[0].slice(1);
+}
+
+function composeServiceBlock(text, serviceName, label) {
+  const lines = String(text).split(/\r?\n/);
+  const servicesIndex = lines.findIndex((line) =>
+    /^services:\s*(?:#.*)?$/.test(line),
+  );
+  if (servicesIndex === -1)
+    throw new Error(`${label}: no top-level services block`);
+
+  let serviceIndent;
+  let start = -1;
+  for (let index = servicesIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() === "" || line.trimStart().startsWith("#")) continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent === 0) break;
+    const match = KEY_RE.exec(line);
+    if (!match) continue;
+    if (serviceIndent === undefined) serviceIndent = indent;
+    if (indent === serviceIndent && match[2] === serviceName) {
+      start = index + 1;
+      break;
+    }
+  }
+  if (start === -1) throw new Error(`${label}: no '${serviceName}' service`);
+
+  let end = lines.length;
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() === "" || line.trimStart().startsWith("#")) continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent <= serviceIndent) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n");
+}
+
+function extractComposeIdentity(text, label) {
+  const db = composeServiceBlock(text, "db", label);
+  const appService = composeServiceBlock(text, "app", label);
+  const [bootstrapDatabaseUser] = oneMatch(
+    db,
+    /^\s+POSTGRES_USER:\s*["']?([a-z][a-z0-9_]*)["']?\s*$/gm,
+    `${label} POSTGRES_USER`,
+  );
+  const [databaseName] = oneMatch(
+    db,
+    /^\s+POSTGRES_DB:\s*["']?([a-z][a-z0-9_]*)["']?\s*$/gm,
+    `${label} POSTGRES_DB`,
+  );
+  const [healthUser, healthDatabase] = oneMatch(
+    db,
+    /pg_isready -U ([a-z][a-z0-9_]*) -d ([a-z][a-z0-9_]*)/g,
+    `${label} database healthcheck`,
+  );
+  const [defaultHostPort, containerPort] = oneMatch(
+    appService,
+    /127\.0\.0\.1:\$\{PORT:-([0-9]+)\}:([0-9]+)/g,
+    `${label} app port mapping`,
+  );
+  const [corsDefaultHostPort] = oneMatch(
+    appService,
+    /CORS_ORIGINS:\s*["']http:\/\/localhost:\$\{PORT:-([0-9]+)\}["']/g,
+    `${label} CORS port`,
+  );
+  return {
+    bootstrapDatabaseUser,
+    databaseName,
+    healthUser,
+    healthDatabase,
+    defaultHostPort: Number(defaultHostPort),
+    containerPort: Number(containerPort),
+    corsDefaultHostPort: Number(corsDefaultHostPort),
+  };
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function exactCodeLine(value) {
+  return new RegExp(`^\\s*${escapeRegExp(value)}\\s*$`, "gm");
+}
+
+function diffStackIdentity(identity, source) {
+  const problems = [];
+  for (const [label, text] of [
+    [ROOT_COMPOSE, source[ROOT_COMPOSE]],
+    [ELECTRON_COMPOSE, source[ELECTRON_COMPOSE]],
+  ]) {
+    let actual;
+    try {
+      actual = extractComposeIdentity(text, label);
+    } catch (error) {
+      problems.push(error.message);
+      continue;
+    }
+    for (const [actualKey, identityKey] of [
+      ["bootstrapDatabaseUser", "bootstrapDatabaseUser"],
+      ["databaseName", "databaseName"],
+      ["healthUser", "bootstrapDatabaseUser"],
+      ["healthDatabase", "databaseName"],
+      ["defaultHostPort", "defaultHostPort"],
+      ["containerPort", "containerPort"],
+      ["corsDefaultHostPort", "defaultHostPort"],
+    ]) {
+      if (actual[actualKey] !== identity[identityKey]) {
+        problems.push(
+          `${label} ${actualKey} '${actual[actualKey]}' does not match ` +
+            `${STACK_IDENTITY_FILE} ${identityKey} '${identity[identityKey]}'`,
+        );
+      }
+    }
+  }
+
+  const requiredSourceLines = [
+    [
+      ELECTRON_MAIN,
+      exactCodeLine(`const DEFAULT_APP_PORT = ${identity.defaultHostPort};`),
+      "default host port",
+    ],
+    [
+      ELECTRON_MAIN,
+      exactCodeLine(
+        `\`DATABASE_URL=postgresql://${identity.applicationDatabaseUser}:\${appPass}@db:5432/${identity.databaseName}\`,`,
+      ),
+      "application database URL",
+    ],
+    [
+      ELECTRON_MAIN,
+      exactCodeLine(
+        `\`DATABASE_URL_MIGRATIONS=postgresql://${identity.bootstrapDatabaseUser}:\${pgPass}@db:5432/${identity.databaseName}\`,`,
+      ),
+      "migration database URL",
+    ],
+    [
+      BACKEND_ENV,
+      exactCodeLine(
+        `"postgresql://${identity.bootstrapDatabaseUser}:ftm_password@localhost:5432/${identity.databaseName}";`,
+      ),
+      "development database URL",
+    ],
+    [
+      BACKEND_ENV,
+      exactCodeLine(`PORT: intEnv(${identity.containerPort}),`),
+      "container port default",
+    ],
+    [
+      ELECTRON_COMPOSE_MODULE,
+      exactCodeLine(
+        `if (target === ${identity.containerPort} && Number.isInteger(published) && published > 0)`,
+      ),
+      "published container port",
+    ],
+    [
+      NATIVE_RUNTIME,
+      exactCodeLine(`const DEFAULT_APP_PORT = ${identity.defaultHostPort};`),
+      "native runtime default port",
+    ],
+    [
+      NATIVE_DEVELOPMENT,
+      exactCodeLine(
+        `const appPort = parsePort(process.env.VISION_APP_PORT, ${identity.defaultHostPort});`,
+      ),
+      "native development default port",
+    ],
+    [
+      NATIVE_DB_SMOKE,
+      exactCodeLine(`appPort: ${identity.defaultHostPort},`),
+      "native database smoke port",
+    ],
+    [
+      NATIVE_RUNTIME_CLI,
+      exactCodeLine(
+        `let appPort = Number(args.port || ${identity.defaultHostPort});`,
+      ),
+      "native runtime CLI default port",
+    ],
+    [
+      POSTGRES_INIT,
+      exactCodeLine(
+        `CREATE ROLE ${identity.applicationDatabaseUser} LOGIN PASSWORD '\${POSTGRES_APP_PASSWORD}'`,
+      ),
+      "application role creation",
+    ],
+    [
+      POSTGRES_INIT,
+      exactCodeLine(`-v app_role=${identity.applicationDatabaseUser} \\`),
+      "application-role grants",
+    ],
+  ];
+  for (const [file, regex, description] of requiredSourceLines) {
+    try {
+      oneMatch(source[file], regex, `${file} ${description}`);
+    } catch (error) {
+      problems.push(`${error.message}; expected ${STACK_IDENTITY_FILE}`);
+    }
+  }
+  return problems;
 }
 
 /**
@@ -205,6 +470,17 @@ function diffCompose(root, electron) {
     }
   }
 
+  for (const [label, image] of [
+    ["root", root.dbImage],
+    ["electron", electron.dbImage],
+  ]) {
+    if (image && !/@sha256:[a-f0-9]{64}$/.test(image)) {
+      problems.push(
+        `${label} database image is not digest-pinned — got '${image}'.`,
+      );
+    }
+  }
+
   if (root.volumes === undefined || electron.volumes === undefined) {
     problems.push(
       "no top-level 'volumes:' block found — " +
@@ -244,10 +520,19 @@ const SELF_TEST_ROOT = `# comment
 name: vision
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     platform: linux/amd64
+    environment:
+      POSTGRES_USER: ftm_user
+      POSTGRES_DB: financial_transactions
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
   app:
     image: x
+    ports:
+      - "127.0.0.1:\${PORT:-3002}:3002"
+    environment:
+      CORS_ORIGINS: "http://localhost:\${PORT:-3002}"
     volumes:
       - attachments_data:/app/data/attachments
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
@@ -282,7 +567,9 @@ function selfTest() {
   );
   check(
     "parses the database image and platform",
-    root.dbImage === "postgres:18-alpine" && root.dbPlatform === "linux/amd64",
+    root.dbImage ===
+      "postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2" &&
+      root.dbPlatform === "linux/amd64",
     `got image=${JSON.stringify(root.dbImage)} platform=${JSON.stringify(root.dbPlatform)}`,
   );
 
@@ -313,6 +600,19 @@ function selfTest() {
     "identical files pass",
     diffCompose(root, parseCompose(SELF_TEST_ROOT, "x")).length === 0,
     "expected no problems",
+  );
+  check(
+    "a shared floating database tag is caught",
+    diffCompose(
+      parseCompose(
+        SELF_TEST_ROOT.replace(/@sha256:[a-f0-9]{64}/g, ""),
+        "floating root",
+      ),
+      parseCompose(
+        SELF_TEST_ROOT.replace(/@sha256:[a-f0-9]{64}/g, ""),
+        "floating electron",
+      ),
+    ).some((problem) => problem.includes("not digest-pinned")),
   );
 
   const missingVolume = parseCompose(
@@ -384,6 +684,138 @@ function selfTest() {
     JSON.stringify(diffCompose(root, noVolumes)),
   );
 
+  const identity = readStackIdentity(
+    JSON.stringify({
+      defaultHostPort: 3002,
+      containerPort: 3002,
+      bootstrapDatabaseUser: "ftm_user",
+      applicationDatabaseUser: "ftm_app",
+      databaseName: "financial_transactions",
+    }),
+    "self-test identity",
+  );
+  check(
+    "identical bootstrap and application roles are rejected",
+    (() => {
+      try {
+        readStackIdentity(
+          JSON.stringify({ ...identity, applicationDatabaseUser: "ftm_user" }),
+          "self-test equal roles",
+        );
+        return false;
+      } catch (error) {
+        return error.message.includes("must differ");
+      }
+    })(),
+  );
+  const electronMain = [
+    "const DEFAULT_APP_PORT = 3002;",
+    "`DATABASE_URL=postgresql://ftm_app:${appPass}@db:5432/financial_transactions`,",
+    "`DATABASE_URL_MIGRATIONS=postgresql://ftm_user:${pgPass}@db:5432/financial_transactions`,",
+  ].join("\n");
+  const backendEnv = [
+    '"postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions";',
+    "PORT: intEnv(3002),",
+  ].join("\n");
+  const stackProblems = (rootText, electronText, mainText, envText) =>
+    diffStackIdentity(identity, {
+      [ROOT_COMPOSE]: rootText,
+      [ELECTRON_COMPOSE]: electronText,
+      [ELECTRON_MAIN]: mainText,
+      [BACKEND_ENV]: envText,
+      [ELECTRON_COMPOSE_MODULE]:
+        "if (target === 3002 && Number.isInteger(published) && published > 0)",
+      [NATIVE_RUNTIME]: "const DEFAULT_APP_PORT = 3002;",
+      [NATIVE_DEVELOPMENT]:
+        "const appPort = parsePort(process.env.VISION_APP_PORT, 3002);",
+      [NATIVE_DB_SMOKE]: "appPort: 3002,",
+      [NATIVE_RUNTIME_CLI]: "let appPort = Number(args.port || 3002);",
+      [POSTGRES_INIT]: [
+        "CREATE ROLE ftm_app LOGIN PASSWORD '${POSTGRES_APP_PASSWORD}'",
+        "-v app_role=ftm_app \\",
+      ].join("\n"),
+    });
+  check(
+    "canonical stack identity passes",
+    stackProblems(SELF_TEST_ROOT, SELF_TEST_ROOT, electronMain, backendEnv)
+      .length === 0,
+  );
+  for (const [label, target, replacement] of [
+    [
+      "database name drift is caught",
+      "financial_transactions",
+      "other_database",
+    ],
+    ["bootstrap user drift is caught", "ftm_user", "other_user"],
+    ["host-port drift is caught", "${PORT:-3002}:3002", "${PORT:-3999}:3002"],
+    [
+      "container-port drift is caught",
+      "${PORT:-3002}:3002",
+      "${PORT:-3002}:3999",
+    ],
+  ]) {
+    const changed = SELF_TEST_ROOT.replace(target, replacement);
+    check(
+      label,
+      stackProblems(changed, SELF_TEST_ROOT, electronMain, backendEnv).length >
+        0,
+    );
+  }
+  check(
+    "Electron default-port drift is caught",
+    stackProblems(
+      SELF_TEST_ROOT,
+      SELF_TEST_ROOT,
+      electronMain.replace(
+        "DEFAULT_APP_PORT = 3002",
+        "DEFAULT_APP_PORT = 3999",
+      ),
+      backendEnv,
+    ).length > 0,
+  );
+  check(
+    "Electron database URL drift is caught",
+    stackProblems(
+      SELF_TEST_ROOT,
+      SELF_TEST_ROOT,
+      electronMain.replace("postgresql://ftm_app", "postgresql://other_app"),
+      backendEnv,
+    ).length > 0,
+  );
+  check(
+    "backend defaults drift is caught",
+    stackProblems(
+      SELF_TEST_ROOT,
+      SELF_TEST_ROOT,
+      electronMain,
+      backendEnv.replace("PORT: intEnv(3002)", "PORT: intEnv(3999)"),
+    ).length > 0,
+  );
+  const misleadingOtherService = SELF_TEST_ROOT.replace(
+    "      POSTGRES_USER: ftm_user",
+    "      POSTGRES_USER_REMOVED: ftm_user",
+  ).replace(
+    "  app:\n",
+    "  unrelated:\n    environment:\n      POSTGRES_USER: ftm_user\n  app:\n",
+  );
+  check(
+    "an unrelated service cannot satisfy the database identity",
+    stackProblems(
+      misleadingOtherService,
+      SELF_TEST_ROOT,
+      electronMain,
+      backendEnv,
+    ).length > 0,
+  );
+  const misleadingComment = electronMain
+    .replace("const DEFAULT_APP_PORT = 3002;", "const DEFAULT_APP_PORT = 3999;")
+    .concat("\n// const DEFAULT_APP_PORT = 3002;\n");
+  check(
+    "a comment cannot satisfy an Electron source check",
+    stackProblems(SELF_TEST_ROOT, SELF_TEST_ROOT, misleadingComment, backendEnv)
+      .length > 0,
+  );
+
   let failed = 0;
   for (const c of cases) {
     if (c.ok) {
@@ -410,9 +842,25 @@ function main() {
 
   const files = [ROOT_COMPOSE, ELECTRON_COMPOSE];
   let parsed;
+  let sources;
+  let identity;
   try {
-    parsed = files.map((rel) =>
-      parseCompose(readFileSync(path.join(REPO_ROOT, rel), "utf8"), rel),
+    sources = Object.fromEntries(
+      [
+        ...files,
+        ELECTRON_MAIN,
+        ELECTRON_COMPOSE_MODULE,
+        NATIVE_RUNTIME,
+        NATIVE_DEVELOPMENT,
+        NATIVE_DB_SMOKE,
+        NATIVE_RUNTIME_CLI,
+        BACKEND_ENV,
+        POSTGRES_INIT,
+      ].map((rel) => [rel, readFileSync(path.join(REPO_ROOT, rel), "utf8")]),
+    );
+    parsed = files.map((rel) => parseCompose(sources[rel], rel));
+    identity = readStackIdentity(
+      readFileSync(path.join(REPO_ROOT, STACK_IDENTITY_FILE), "utf8"),
     );
   } catch (err) {
     console.error(`[check-compose-sync] ${err.message}`);
@@ -430,7 +878,10 @@ function main() {
       `volumes=${(electron.volumes || []).join(" ")}`,
   );
 
-  const problems = diffCompose(root, electron);
+  const problems = [
+    ...diffCompose(root, electron),
+    ...diffStackIdentity(identity, sources),
+  ];
   if (problems.length > 0) {
     console.error(
       "[check-compose-sync] ERROR: the packaged compose file is out of sync with the root one:",
@@ -440,7 +891,7 @@ function main() {
   }
 
   console.log(
-    "[check-compose-sync] in sync: project name, database runtime, and named volumes match.",
+    "[check-compose-sync] in sync: project name, database runtime, stack identity, and named volumes match.",
   );
 }
 

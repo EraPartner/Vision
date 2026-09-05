@@ -13,8 +13,10 @@ test("desktop boot and recovery shells inherit the Vision palette", () => {
   assert.match(main, /const DEFAULT_BRAND_PRIMARY = ["']158 64% 52%["']/);
   assert.match(
     main,
-    /deriveSplashPalette\(\s*theme\?\.background \|\| DEFAULT_BRAND_PRIMARY,?\s*\)/,
+    /deriveSplashPalette\(\s*theme\?\.background \|\| DEFAULT_BRAND_PRIMARY,\s*theme,?\s*\)/,
   );
+  assert.match(main, /theme\?\.mode === "light"/);
+  assert.match(main, /base: theme\.surface/);
   assert.match(main, /paletteBase: palette\.base/);
   assert.match(main, /paletteGlow: palette\.glow/);
   assert.match(main, /paletteForeground: palette\.foreground/);

@@ -39,7 +39,7 @@ test("Docker preflight gives a safe database-only recovery when the service is s
   try {
     await fs.promises.writeFile(
       path.join(temp, "docker-compose.yml"),
-      "services:\n  db:\n    image: postgres:18-alpine\n",
+      "services:\n  db:\n    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2\n",
     );
     const source = createDockerSource({
       workDir: temp,

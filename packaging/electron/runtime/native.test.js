@@ -21,6 +21,7 @@ const {
   discoverPostgres18,
   runtimeNames,
   RUNTIME_MANAGED_MATERIALIZED_VIEWS,
+  REQUIRED_POSTGRES_EXTENSIONS,
   nativeEnvContents,
   materializedViewOwnershipSql,
   databaseConfigFromEnv,
@@ -310,6 +311,151 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       /listen_addresses = '127\.0\.0\.1'[\s\S]*port = 54329/,
     );
     assert.match(configContents, /unix_socket_directories = ''/);
+    assert.match(
+      configContents,
+      /shared_preload_libraries = 'pg_stat_statements'/,
+    );
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("native PostgreSQL bootstraps query-statistics observability", () => {
+  assert.deepEqual(REQUIRED_POSTGRES_EXTENSIONS, [
+    "pg_trgm",
+    "pgcrypto",
+    "pg_stat_statements",
+  ]);
+});
+
+test("managed PostgreSQL upgrades observability config for an existing cluster", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-pg-observability-upgrade-"),
+  );
+  try {
+    const fixture = await createBundledPostgresFixture(temp);
+    const runtime = createNativeRuntime({
+      userDataDir: path.join(temp, "user-data"),
+      repoRoot: path.resolve(__dirname, "..", "..", ".."),
+      runtimeRoot: path.resolve(__dirname, "..", "..", ".."),
+      postgresRuntimeRoot: fixture.runtimeRoot,
+      runtimeId: "vision_observability_upgrade",
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
+      runFile: postgresFixtureRunFile(),
+    });
+    await runtime.discover();
+    const config = await runtime.ensureLayout();
+    await fs.promises.mkdir(runtime.paths.postgresData, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "PG_VERSION"),
+      "18\n",
+    );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "postgresql.conf"),
+      "# existing cluster\ninclude = 'vision.conf'\n",
+    );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "vision.conf"),
+      "logging_collector = off\n",
+    );
+
+    const first = await runtime.ensureManagedPostgresCluster(config);
+    assert.equal(first.status, "existing");
+    assert.equal(first.configChanged, true);
+    const configContents = await fs.promises.readFile(
+      path.join(runtime.paths.postgresData, "vision.conf"),
+      "utf8",
+    );
+    assert.match(
+      configContents,
+      /shared_preload_libraries = 'pg_stat_statements'/,
+    );
+    const second = await runtime.ensureManagedPostgresCluster(config);
+    assert.equal(second.configChanged, false);
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("managed PostgreSQL restarts a warm cluster after observability config changes", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-pg-observability-restart-"),
+  );
+  const calls = [];
+  const child = new EventEmitter();
+  child.pid = 123_457;
+  child.exitCode = null;
+  child.unref = () => {};
+  try {
+    const fixture = await createBundledPostgresFixture(temp);
+    let spawned = false;
+    const runtime = createNativeRuntime({
+      userDataDir: path.join(temp, "user-data"),
+      repoRoot: path.resolve(__dirname, "..", "..", ".."),
+      runtimeRoot: path.resolve(__dirname, "..", "..", ".."),
+      postgresRuntimeRoot: fixture.runtimeRoot,
+      runtimeId: "vision_observability_restart",
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
+      isPortFree: async () => true,
+      spawnPostgresProcess: () => {
+        spawned = true;
+        return child;
+      },
+      runFile: async (executable, args) => {
+        const command = path.basename(executable);
+        calls.push({ executable: command, args: [...args] });
+        if (args[0] === "--version") {
+          return {
+            stdout: `${command} (PostgreSQL) 18.6`,
+            stderr: "",
+          };
+        }
+        if (command === "pg_isready") {
+          return { stdout: "accepting connections", stderr: "" };
+        }
+        if (command === "psql") {
+          return {
+            stdout: `180006\nlocalhost\n${runtime.paths.postgresData}\n`,
+            stderr: "",
+          };
+        }
+        return { stdout: "", stderr: "" };
+      },
+    });
+    await runtime.ensureLayout();
+    await fs.promises.mkdir(runtime.paths.postgresData, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "PG_VERSION"),
+      "18\n",
+    );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "postgresql.conf"),
+      "# existing cluster\ninclude = 'vision.conf'\n",
+    );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "vision.conf"),
+      "logging_collector = off\n",
+    );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "postmaster.pid"),
+      "999999\n",
+    );
+
+    await runtime.ensurePostgresReady();
+
+    const stopIndex = calls.findIndex(
+      ({ executable }) => executable === "pg_ctl",
+    );
+    assert.ok(stopIndex >= 0);
+    assert.equal(spawned, true);
+    assert.ok(
+      calls.slice(0, stopIndex).some(({ executable }) => executable === "psql"),
+      "the running server is inspected before it is stopped",
+    );
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
@@ -391,6 +537,10 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
       path.join(runtime.paths.postgresData, "PG_VERSION"),
       "18\n",
     );
+    await fs.promises.writeFile(
+      path.join(runtime.paths.postgresData, "postgresql.conf"),
+      "# existing cluster\ninclude = 'vision.conf'\n",
+    );
     await assert.rejects(
       runtime.ensurePostgresReady(),
       (error) => error.code === "POSTGRES_PORT_COLLISION",
@@ -461,6 +611,10 @@ test("generated native environment is loopback-only and separates owner/applicat
 });
 
 test("restore ownership handoff is limited to runtime-managed materialized views", () => {
+  assert.deepEqual(RUNTIME_MANAGED_MATERIALIZED_VIEWS, [
+    "mv_monthly_summary",
+    "mv_category_totals",
+  ]);
   const sql = materializedViewOwnershipSql("vision_test_app");
   for (const view of RUNTIME_MANAGED_MATERIALIZED_VIEWS) {
     assert.match(
@@ -470,6 +624,7 @@ test("restore ownership handoff is limited to runtime-managed materialized views
       ),
     );
   }
+  assert.doesNotMatch(sql, /mv_cashflow_daily/);
   assert.doesNotMatch(sql, /GRANT\s+.*ROLE|ALTER\s+TABLE/i);
   assert.throws(
     () => materializedViewOwnershipSql("unsafe; role"),
@@ -506,6 +661,9 @@ test("database activation applies materialized-view ownership inside the staging
       }
       if (command.includes("SHOW server_version_num")) {
         return { stdout: "180006\nlocalhost\n/external/data\n", stderr: "" };
+      }
+      if (command.includes("SHOW shared_preload_libraries")) {
+        return { stdout: "pg_stat_statements\n", stderr: "" };
       }
       if (
         command.includes("SELECT 1 FROM pg_roles") ||
@@ -602,6 +760,9 @@ test("native seed SQL is applied transactionally with an argument array", async 
             stdout: `180006\nlocalhost\n${postgresData}\n`,
             stderr: "",
           };
+        }
+        if (command.includes("SHOW shared_preload_libraries")) {
+          return { stdout: "pg_stat_statements\n", stderr: "" };
         }
         if (
           command.includes("SELECT 1 FROM pg_roles") ||
@@ -700,16 +861,74 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
         ) {
           return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
         }
+        if (args.includes("SHOW shared_preload_libraries;")) {
+          return { stdout: "pg_stat_statements\n", stderr: "" };
+        }
         throw new Error("Unexpected process call");
       },
     });
 
     await runtime.ensurePostgresReady({ startService: false });
     const probes = calls.filter(({ args }) => args[0] !== "--version");
-    assert.equal(probes.length, 2);
+    assert.equal(probes.length, 3);
     for (const { args } of probes) {
       assert.deepEqual(args.slice(0, 4), ["-h", "127.0.0.1", "-p", "55432"]);
     }
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("external PostgreSQL fails with an actionable observability prerequisite", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-pg-external-observability-"),
+  );
+  const binDir = path.join(temp, "bin");
+  try {
+    await fs.promises.mkdir(binDir);
+    for (const tool of POSTGRES_TOOLS) {
+      await fs.promises.writeFile(path.join(binDir, tool), "test", {
+        mode: 0o755,
+      });
+    }
+    const runtime = createNativeRuntime({
+      userDataDir: temp,
+      repoRoot: path.resolve(__dirname, "..", "..", ".."),
+      runtimeId: "vision_external_observability",
+      postgresBinDir: binDir,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
+      runFile: async (executable, args) => {
+        if (args[0] === "--version") {
+          return {
+            stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
+            stderr: "",
+          };
+        }
+        if (path.basename(executable) === "pg_isready") {
+          return { stdout: "accepting connections", stderr: "" };
+        }
+        if (
+          args.some((arg) =>
+            arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+          )
+        ) {
+          return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
+        }
+        if (args.includes("SHOW shared_preload_libraries;")) {
+          return { stdout: "auto_explain\n", stderr: "" };
+        }
+        throw new Error("Unexpected process call");
+      },
+    });
+
+    await assert.rejects(
+      runtime.ensurePostgresReady({ startService: false }),
+      (error) =>
+        error.code === "POSTGRES_OBSERVABILITY_UNAVAILABLE" &&
+        error.message.includes("restart PostgreSQL"),
+    );
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
@@ -818,6 +1037,9 @@ test("native first start persists and unreferences an argument-array backend chi
           )
         ) {
           return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
+        }
+        if (args.includes("SHOW shared_preload_libraries;")) {
+          return { stdout: "pg_stat_statements\n", stderr: "" };
         }
         if (
           args.some((arg) => arg.includes?.("SELECT 1 FROM pg_roles")) ||

@@ -35,7 +35,7 @@ test("main, preload, and the shared invoke contract expose the same channels", (
   const registered = matches(main, /registerHandler\(\s*"([^"]+)"/g);
   const invoked = matches(preload, /ipcRenderer\.invoke\("([^"]+)"/g);
 
-  assert.equal(declared.size, 24);
+  assert.equal(declared.size, 25);
   assert.deepEqual(registered, declared);
   assert.deepEqual(invoked, declared);
 });
