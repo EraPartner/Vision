@@ -3,7 +3,7 @@ title: Feature - Internal Transfers
 type: feature
 status: active
 date: 2026-06-18
-updated: 2026-06-25
+updated: 2026-09-04
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
 description: Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers.
 aliases: [internal transfers, transfer detection, transfer exclusion]
@@ -21,11 +21,11 @@ aliases: [internal transfers, transfer detection, transfer exclusion]
 
 Three columns on `transactions` (migration [[alembic/versions/0044_add_transfer_pairing.py|0044]]):
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `is_transfer` | BOOLEAN, default false | Excluded from cash-flow aggregates when true |
-| `transfer_peer_id` | INTEGER, self-FK `ON DELETE SET NULL` | The matched leg |
-| `transfer_source` | TEXT `auto` \| `manual` | `manual` marks are sticky (never overwritten by auto-detection) |
+| Field              | Type                                  | Meaning                                                         |
+| ------------------ | ------------------------------------- | --------------------------------------------------------------- |
+| `is_transfer`      | BOOLEAN, default false                | Excluded from cash-flow aggregates when true                    |
+| `transfer_peer_id` | INTEGER, self-FK `ON DELETE SET NULL` | The matched leg                                                 |
+| `transfer_source`  | TEXT `auto` \| `manual`               | `manual` marks are sticky (never overwritten by auto-detection) |
 
 Storing the peer link (not just a flag) makes matches explicit, reversible, and re-evaluable when a
 leg is edited or deleted.
@@ -54,9 +54,8 @@ mutations (the transactions route uses `scheduleReconcile`), and a one-time **ba
 
 Marked transfers are excluded from income/spending **everywhere by default**:
 
-- Materialized views `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily`
-  (`AND t.is_transfer = false`). **`mv_bank_balances` is NOT excluded** — account balances must
-  reflect the real money movement of a transfer.
+- Materialized views `mv_monthly_summary` and `mv_category_totals`
+  (`AND t.is_transfer = false`). Account balances are computed live and still reflect the real money movement of a transfer.
 - The `agg_recipient_totals` trigger (migration [[alembic/versions/0045_exclude_transfers_from_aggregations.py|0045]]) — a row counts only when `is_active AND NOT is_transfer`.
 - The base monthly / statistics / recipient queries.
 - The cash-flow forecast is **net-based**, so same-day transfer legs already net to zero — no change needed.
@@ -70,11 +69,11 @@ breakdown remain exclude-only.
 
 ## API
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/transactions/transfer-suggestions` | Ambiguous matches awaiting confirmation |
-| POST | `/api/transactions/transfers` | Manually confirm a pair `{ aId, bId }` |
-| DELETE | `/api/transactions/transfers/:id` | Clear a transfer mark (and its peer) |
+| Method | Path                                     | Purpose                                 |
+| ------ | ---------------------------------------- | --------------------------------------- |
+| GET    | `/api/transactions/transfer-suggestions` | Ambiguous matches awaiting confirmation |
+| POST   | `/api/transactions/transfers`            | Manually confirm a pair `{ aId, bId }`  |
+| DELETE | `/api/transactions/transfers/:id`        | Clear a transfer mark (and its peer)    |
 
 The toggle is read/written through the generic settings API (`includeTransfers` key).
 
@@ -83,12 +82,12 @@ The toggle is read/written through the generic settings API (`includeTransfers` 
 `transferReconciliationService.markTransfer(aId, bId)` now enforces the following before
 stamping either row:
 
-| Guard | Error if violated |
-|-------|------------------|
-| Both rows exist | 404 |
-| Both rows are active (`is_active = true`) | 422 |
-| Rows are on **different** accounts | 422 |
-| Rows have **opposite signs** (one ≥ 0, one < 0) | 422 |
+| Guard                                           | Error if violated |
+| ----------------------------------------------- | ----------------- |
+| Both rows exist                                 | 404               |
+| Both rows are active (`is_active = true`)       | 422               |
+| Rows are on **different** accounts              | 422               |
+| Rows have **opposite signs** (one ≥ 0, one < 0) | 422               |
 
 Note that equal/opposite amounts and matching currencies are **not** required for manual marks.
 Cross-currency and FX-fee transfers (which auto-detection rejects because it requires exact
@@ -120,6 +119,7 @@ transaction mutations).
 - **Never-imported counterpart** (only one bank tracked) — stays counted; manual marking requires a peer to avoid being released as an orphan.
 
 ## Related
+
 - [[docs/adr/083-internal-transfer-detection|ADR-083]] (including 2026-06-25 addendum)
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/features/import|Import Feature]]

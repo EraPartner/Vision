@@ -5,8 +5,15 @@ status: active
 date: 2026-04-25
 tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
-aliases: [state management, react query, context api, frontend state, data fetching]
-related_code: ["apps/frontend/src/hooks/", "apps/frontend/src/contexts/", "apps/frontend/src/lib/api.ts", "apps/frontend/src/App.tsx"]
+aliases:
+  [state management, react query, context api, frontend state, data fetching]
+related_code:
+  [
+    "apps/frontend/src/hooks/",
+    "apps/frontend/src/contexts/",
+    "apps/frontend/src/lib/api.ts",
+    "apps/frontend/src/App.tsx",
+  ]
 ---
 
 # State Management Deep Dive
@@ -35,12 +42,12 @@ Vision uses a **three-layer state management strategy** with no external state l
 
 ### Design Rationale
 
-| Decision | Why |
-|----------|-----|
-| No Redux/Zustand | App is single-user desktop; no need for complex global state |
-| React Query for server state | Built-in caching, deduplication, background refetch, optimistic updates |
-| React Context for global settings | Infrequently changing values consumed across the tree |
-| Local state for component-specific | Minimal scope, no cross-component sharing needed |
+| Decision                           | Why                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| No Redux/Zustand                   | App is single-user desktop; no need for complex global state            |
+| React Query for server state       | Built-in caching, deduplication, background refetch, optimistic updates |
+| React Context for global settings  | Infrequently changing values consumed across the tree                   |
+| Local state for component-specific | Minimal scope, no cross-component sharing needed                        |
 
 ---
 
@@ -54,10 +61,10 @@ Vision uses a **three-layer state management strategy** with no external state l
 
 ### QueryClient Configuration
 
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `staleTime` | 30,000ms (30s) | Data considered fresh for 30 seconds |
-| `gcTime` | 300,000ms (5min) | Garbage collection for unused cache entries |
+| Setting     | Value            | Purpose                                     |
+| ----------- | ---------------- | ------------------------------------------- |
+| `staleTime` | 30,000ms (30s)   | Data considered fresh for 30 seconds        |
+| `gcTime`    | 300,000ms (5min) | Garbage collection for unused cache entries |
 
 ### Query Key Patterns
 
@@ -106,31 +113,34 @@ All data-fetching hooks follow a consistent pattern:
 ```typescript
 // Query hook — reads data
 export function useTransactions(params?: UseTransactionsParams) {
-    return useQuery({
-        queryKey: ['transactions', params],
-        queryFn: () => apiClient.getTransactions(params),
-        staleTime: 30_000,
-        placeholderData: (prev) => prev, // Keep previous data during refetch
-    });
+  return useQuery({
+    queryKey: ["transactions", params],
+    queryFn: () => apiClient.getTransactions(params),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev, // Keep previous data during refetch
+  });
 }
 
 // Mutation hooks — write data
 export function useCreateTransaction() {
-    const queryClient = useQueryClient();
-    const { t } = useLanguage();
+  const queryClient = useQueryClient();
+  const { t } = useLanguage();
 
-    return useMutation({
-        mutationFn: (transaction: TransactionCreate) => apiClient.createTransaction(transaction),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['transactions'] });
-            queryClient.invalidateQueries({ queryKey: ['transactions-virtual'] });
-            queryClient.invalidateQueries({ queryKey: ['monthlySummary'] });
-            toast.success(t('transactions.created'));
-        },
-        onError: (error: Error) => {
-            toast.error(t('transactions.createFailedTitle'), { description: error.message });
-        },
-    });
+  return useMutation({
+    mutationFn: (transaction: TransactionCreate) =>
+      apiClient.createTransaction(transaction),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions-virtual"] });
+      queryClient.invalidateQueries({ queryKey: ["monthlySummary"] });
+      toast.success(t("transactions.created"));
+    },
+    onError: (error: Error) => {
+      toast.error(t("transactions.createFailedTitle"), {
+        description: error.message,
+      });
+    },
+  });
 }
 ```
 
@@ -138,14 +148,14 @@ export function useCreateTransaction() {
 
 Mutations invalidate related query keys to keep the UI in sync:
 
-| Mutation | Invalidated Keys |
-|----------|-----------------|
-| Create/Update/Delete Transaction | `['transactions']`, `['transactions-virtual']`, `['monthlySummary']` |
-| Create/Update/Delete Category | `['categories']` |
-| Create/Update/Delete Recipient | `['recipients']` |
-| Create/Update/Delete Planned Transaction | `['planned-transactions']` |
-| Create/Update/Delete Investment | `['investments']`, `['net-worth']` |
-| Split Payment/Settle | `['splits']`, `['splits', 'owed']` |
+| Mutation                                 | Invalidated Keys                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| Create/Update/Delete Transaction         | `['transactions']`, `['transactions-virtual']`, `['monthlySummary']` |
+| Create/Update/Delete Category            | `['categories']`                                                     |
+| Create/Update/Delete Recipient           | `['recipients']`                                                     |
+| Create/Update/Delete Planned Transaction | `['planned-transactions']`                                           |
+| Create/Update/Delete Investment          | `['investments']`, `['net-worth']`                                   |
+| Split Payment/Settle                     | `['splits']`, `['splits', 'owed']`                                   |
 
 ### Optimistic Updates
 
@@ -154,36 +164,39 @@ Vision currently uses **post-mutation invalidation** rather than optimistic upda
 ### Placeholder Data Pattern
 
 ```typescript
-placeholderData: (prev) => prev
+placeholderData: (prev) => prev;
 ```
 
 This keeps the previous query result displayed while a new fetch is in progress, preventing UI flicker during pagination.
 
 ---
 
-## Layer 2: Global State (React Context)
+## Layer 2: Global Client State
 
-Vision has **7 React contexts** providing global state across the application:
+Vision uses four actual React contexts under `contexts/`, four Zustand hydration bridges under
+`stores/hydration/`, and a route-derived workspace hook under `hooks/`.
 
-### Context Registry
+### Global State Registry
 
-| Context | File | Purpose | Consumer Hook |
-|---------|------|---------|---------------|
-| `AppSettingsContext` | [[apps/frontend/src/contexts/AppSettingsContext.tsx]] | Currency, date format, locale, page size | `useAppSettings()` |
-| `SettingsContext` | [[apps/frontend/src/contexts/SettingsContext.tsx]] | Settings management | `useSettings()` |
-| `SettingsPreloadContext` | [[apps/frontend/src/contexts/SettingsPreloadContext.tsx]] | Preloads settings before app renders | `usePreloadedSetting<T>(key)` |
-| `ThemeContext` | [[apps/frontend/src/contexts/ThemeContext.tsx]] | Light/dark theme toggle | `useTheme()` |
-| `LanguageContext` | [[apps/frontend/src/contexts/LanguageContext.tsx]] | i18n language (en/nl) | `useLanguage()` |
-| `BelgianTaxProfileContext` | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] | Belgian tax profile data | `useBelgianTaxProfile()` |
-| `WorkspaceContext` | [[apps/frontend/src/contexts/WorkspaceContext.tsx]] | Workspace state; persists to `sessionStorage` for admin route isolation | `useWorkspace()` |
+| Owner               | Kind                              | File                                                            | Purpose                                                 | Consumer Hook                 |
+| ------------------- | --------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------- |
+| App settings        | Zustand hydration bridge          | [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]] | Currency, date format, locale, page size                | `useAppSettings()`            |
+| Dashboard settings  | Zustand hydration bridge          | [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]]    | Settings management                                     | `useSettings()`               |
+| Settings preload    | React context                     | [[apps/frontend/src/contexts/SettingsPreloadContext.tsx]]       | Preloads settings before app renders                    | `usePreloadedSetting<T>(key)` |
+| Theme               | Zustand hydration bridge          | [[apps/frontend/src/stores/hydration/ThemeHydration.tsx]]       | Light/dark theme and DOM effects                        | `useTheme()`                  |
+| Language            | Zustand selector/hydration bridge | [[apps/frontend/src/stores/hydration/LanguageHydration.tsx]]    | Lazy locale dictionaries and language side effects      | `useLanguage()`               |
+| Belgian tax profile | React context                     | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]]     | Belgian tax profile data                                | `useBelgianTaxProfile()`      |
+| Page title          | React context                     | [[apps/frontend/src/contexts/PageTitleContext.tsx]]             | Current page title                                      | `usePageTitle()`              |
+| Unsaved changes     | React context                     | [[apps/frontend/src/contexts/UnsavedChangesContext.tsx]]        | Navigation protection                                   | `useUnsavedChanges()`         |
+| Workspace           | Router-backed hook                | [[apps/frontend/src/hooks/useWorkspace.ts]]                     | Route-derived workspace with admin-route session memory | `useWorkspace()`              |
 
-### AppSettingsContext — Detailed Analysis
+### App settings hydration — Detailed Analysis
 
 The most complex context, managing user preferences with auto-save:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│               AppSettingsContext                     │
+│               AppSettingsHydration                     │
 ├─────────────────────────────────────────────────────┤
 │ State:                                               │
 │   defaultCurrency: 'EUR'                            │
@@ -201,13 +214,14 @@ The most complex context, managing user preferences with auto-save:
 ```
 
 **Key Patterns:**
+
 - **Debounced Auto-Save:** Changes are batched with a 500ms debounce timer
 - **Preload Optimization:** Uses `SettingsPreloadContext` to avoid redundant fetches during app initialization
 - **First-Render Skip:** Skips save on initial mount to avoid unnecessary API calls
 
 ### SettingsPreloadContext — Race Condition Prevention
 
-This context performs a **single settings fetch** during app initialization that is consumed by `AppSettingsContext`. This prevents the "double fetch" problem where both contexts would independently request the same settings data.
+This context performs a **single settings fetch** during app initialization that is consumed by `AppSettingsHydration`. This prevents the "double fetch" problem where both contexts would independently request the same settings data.
 
 ---
 
@@ -217,35 +231,35 @@ Local state is managed with `useState` and `useReducer` within individual compon
 
 ### Common Patterns
 
-| Pattern | Hook | Example |
-|---------|------|---------|
-| Form input | `useState` | Dialog text fields, date pickers |
-| Dialog open/close | `useState<boolean>` | `SplitTransactionDialog`, `AddInvestmentDialog` |
-| Table pagination | `useState` | Page number, page size |
-| Search/filter | `useState` + `useDebounce` | Transaction search with 200ms debounce |
-| Confirmation | `useConfirmDialog` | Delete confirmations |
-| Toast notifications | `sonner/toast` | Success/error messages |
-| Mobile detection | `use-mobile` | Responsive breakpoints |
-| Widget visibility | `useWidgetVisibility` | Dashboard widget show/hide |
+| Pattern             | Hook                       | Example                                         |
+| ------------------- | -------------------------- | ----------------------------------------------- |
+| Form input          | `useState`                 | Dialog text fields, date pickers                |
+| Dialog open/close   | `useState<boolean>`        | `SplitTransactionDialog`, `AddInvestmentDialog` |
+| Table pagination    | `useState`                 | Page number, page size                          |
+| Search/filter       | `useState` + `useDebounce` | Transaction search with 200ms debounce          |
+| Confirmation        | `useConfirmDialog`         | Delete confirmations                            |
+| Toast notifications | `sonner/toast`             | Success/error messages                          |
+| Mobile detection    | `use-mobile`               | Responsive breakpoints                          |
+| Widget visibility   | `useWidgetVisibility`      | Dashboard widget show/hide                      |
 
 ### Custom Hooks Reference
 
-| Hook | File | Purpose |
-|------|------|---------|
-| `useTransactions` | [[apps/frontend/src/hooks/useTransactions.ts]] | Transaction CRUD via React Query |
-| `useCategories` | [[apps/frontend/src/hooks/useCategories.ts]] | Category CRUD |
-| `useRecipients` | [[apps/frontend/src/hooks/useRecipients.ts]] | Recipient CRUD + merge |
-| `usePortfolio` | [[apps/frontend/src/hooks/usePortfolio.ts]] | Investment data fetching |
-| `usePlannedPayments` | [[apps/frontend/src/hooks/usePlannedPayments.ts]] | Planned transaction CRUD |
-| `useStatistics` | [[apps/frontend/src/hooks/useStatistics.ts]] | Statistics data + processing |
-| `useSplits` | [[apps/frontend/src/hooks/useSplits.ts]] | Split transaction logic |
-| `useSavedCharts` | [[apps/frontend/src/hooks/useSavedCharts.ts]] | Saved chart persistence |
-| `useFilteredDashboardStats` | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]] | Dashboard stats with filter support |
-| `usePortfolioTaxAdjustments` | [[apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts]] | Portfolio tax adjustments |
-| `useWidgetVisibility` | [[apps/frontend/src/hooks/useWidgetVisibility.ts]] | Widget visibility state |
-| `useConfirmDialog` | [[apps/frontend/src/hooks/useConfirmDialog.tsx]] | Confirmation dialog state |
-| `useDebounce` | [[apps/frontend/src/hooks/useDebounce.ts]] | Generic debounce utility |
-| `use-mobile` | [[apps/frontend/src/hooks/use-mobile.tsx]] | Mobile breakpoint detection |
+| Hook                         | File                                                      | Purpose                             |
+| ---------------------------- | --------------------------------------------------------- | ----------------------------------- |
+| `useTransactions`            | [[apps/frontend/src/hooks/useTransactions.ts]]            | Transaction CRUD via React Query    |
+| `useCategories`              | [[apps/frontend/src/hooks/useCategories.ts]]              | Category CRUD                       |
+| `useRecipients`              | [[apps/frontend/src/hooks/useRecipients.ts]]              | Recipient CRUD + merge              |
+| `usePortfolio`               | [[apps/frontend/src/hooks/usePortfolio.ts]]               | Investment data fetching            |
+| `usePlannedPayments`         | [[apps/frontend/src/hooks/usePlannedPayments.ts]]         | Planned transaction CRUD            |
+| `useStatistics`              | [[apps/frontend/src/hooks/useStatistics.ts]]              | Statistics data + processing        |
+| `useSplits`                  | [[apps/frontend/src/hooks/useSplits.ts]]                  | Split transaction logic             |
+| `useSavedCharts`             | [[apps/frontend/src/hooks/useSavedCharts.ts]]             | Saved chart persistence             |
+| `useFilteredDashboardStats`  | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]]  | Dashboard stats with filter support |
+| `usePortfolioTaxAdjustments` | [[apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts]] | Portfolio tax adjustments           |
+| `useWidgetVisibility`        | [[apps/frontend/src/hooks/useWidgetVisibility.ts]]        | Widget visibility state             |
+| `useConfirmDialog`           | [[apps/frontend/src/hooks/useConfirmDialog.tsx]]          | Confirmation dialog state           |
+| `useDebounce`                | [[apps/frontend/src/hooks/useDebounce.ts]]                | Generic debounce utility            |
+| `use-mobile`                 | [[apps/frontend/src/hooks/use-mobile.tsx]]                | Mobile breakpoint detection         |
 
 ---
 
@@ -318,29 +332,29 @@ onSuccess callback
 
 ### React Query Optimizations
 
-| Technique | Implementation | Benefit |
-|-----------|---------------|---------|
-| **Stale Time** | 30s for lists, 60s for single items | Reduces redundant fetches |
-| **Placeholder Data** | `(prev) => prev` | Prevents UI flicker during refetch |
-| **Query Deduplication** | Same query key = single request | Eliminates duplicate API calls |
-| **Background Refetch** | Automatic on window focus | Keeps data fresh without blocking UI |
-| **Garbage Collection** | 5min for unused queries | Prevents memory leaks |
+| Technique               | Implementation                      | Benefit                              |
+| ----------------------- | ----------------------------------- | ------------------------------------ |
+| **Stale Time**          | 30s for lists, 60s for single items | Reduces redundant fetches            |
+| **Placeholder Data**    | `(prev) => prev`                    | Prevents UI flicker during refetch   |
+| **Query Deduplication** | Same query key = single request     | Eliminates duplicate API calls       |
+| **Background Refetch**  | Automatic on window focus           | Keeps data fresh without blocking UI |
+| **Garbage Collection**  | 5min for unused queries             | Prevents memory leaks                |
 
 ### Context Optimizations
 
-| Technique | Implementation | Benefit |
-|-----------|---------------|---------|
-| **Preload** | `SettingsPreloadContext` fetches once | Eliminates double-fetch race |
-| **Memoized Values** | `useCallback` for update functions | Prevents unnecessary re-renders |
-| **Selective Consumption** | Hooks read only needed values | Minimizes re-render scope |
+| Technique                 | Implementation                        | Benefit                         |
+| ------------------------- | ------------------------------------- | ------------------------------- |
+| **Preload**               | `SettingsPreloadContext` fetches once | Eliminates double-fetch race    |
+| **Memoized Values**       | `useCallback` for update functions    | Prevents unnecessary re-renders |
+| **Selective Consumption** | Hooks read only needed values         | Minimizes re-render scope       |
 
 ### Local State Optimizations
 
-| Technique | Implementation | Benefit |
-|-----------|---------------|---------|
-| **Debounce** | `useDebounce` for search (200ms) | Reduces API calls during typing |
-| **Deferred Rendering** | Virtual table renders visible rows only | Handles large datasets efficiently |
-| **AbortController** | Cancel in-flight requests on unmount | Prevents memory leaks and race conditions |
+| Technique              | Implementation                          | Benefit                                   |
+| ---------------------- | --------------------------------------- | ----------------------------------------- |
+| **Debounce**           | `useDebounce` for search (200ms)        | Reduces API calls during typing           |
+| **Deferred Rendering** | Virtual table renders visible rows only | Handles large datasets efficiently        |
+| **AbortController**    | Cancel in-flight requests on unmount    | Prevents memory leaks and race conditions |
 
 ---
 
@@ -353,7 +367,7 @@ onSuccess callback
 const { data, error, isLoading } = useTransactions(params);
 
 if (error) {
-    // Display error state in component
+  // Display error state in component
 }
 ```
 
@@ -362,13 +376,16 @@ if (error) {
 ```typescript
 // Mutations show toast on error
 onError: (error: Error) => {
-    toast.error(t('transactions.createFailedTitle'), { description: error.message });
-}
+  toast.error(t("transactions.createFailedTitle"), {
+    description: error.message,
+  });
+};
 ```
 
 ### API Client Error Handling
 
 The [[apps/frontend/src/lib/api.ts|API client]] handles:
+
 - **Timeouts:** 30-second default with AbortController
 - **Retries:** Up to 2 retries with exponential backoff for idempotent methods (GET, PUT, DELETE)
 - **Retryable Status Codes:** 408, 429, 502, 503, 504
@@ -381,16 +398,16 @@ The [[apps/frontend/src/lib/api.ts|API client]] handles:
 
 ### When to Use Each Layer
 
-| Scenario | Layer | Example |
-|----------|-------|---------|
-| Fetching data from API | React Query | `useTransactions()`, `usePortfolio()` |
-| Mutating data via API | React Query Mutation | `useCreateTransaction()` |
-| App-wide settings | Context | `useAppSettings()` |
-| Theme/language | Context | `useTheme()`, `useLanguage()` |
-| Form inputs | Local State | `useState` in dialog |
-| Dialog open/close | Local State | `useState<boolean>` |
-| Table pagination | Local State | `useState` for page/limit |
-| Search with debounce | Local State + Hook | `useState` + `useDebounce` |
+| Scenario               | Layer                | Example                               |
+| ---------------------- | -------------------- | ------------------------------------- |
+| Fetching data from API | React Query          | `useTransactions()`, `usePortfolio()` |
+| Mutating data via API  | React Query Mutation | `useCreateTransaction()`              |
+| App-wide settings      | Context              | `useAppSettings()`                    |
+| Theme/language         | Context              | `useTheme()`, `useLanguage()`         |
+| Form inputs            | Local State          | `useState` in dialog                  |
+| Dialog open/close      | Local State          | `useState<boolean>`                   |
+| Table pagination       | Local State          | `useState` for page/limit             |
+| Search with debounce   | Local State + Hook   | `useState` + `useDebounce`            |
 
 ### Adding a New Data-Fetching Hook
 

@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-08-27
+updated: 2026-09-04
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -77,6 +77,11 @@ _and_ carries no feature-specific domain logic — in which case it belongs in `
 - Feature-specific hooks and helpers remain beside their feature when they are not shared. A
   feature may use a `hooks/` subdirectory when several local hooks need grouping; a single local
   hook such as `features/imports/useAdapters.ts` may stay at the feature root.
+- Pages and components consume named server-state hooks. They do not call TanStack Query's
+  `useQuery`, `useInfiniteQuery`, or `useQueries` directly. Query definitions live in `hooks/`, a
+  feature `hooks/` directory, or a feature-local `use*.ts(x)` module. The
+  `vision-query/no-inline-server-query` ESLint rule enforces this boundary while allowing
+  `useQueryClient` for local mutation invalidation.
 
 Frontend API calls follow the same ownership signal: new narrow consumers import directly from
 `@/lib/api/<domain>`. The `@/lib/api` `apiClient` facade remains a compatibility and
@@ -204,11 +209,12 @@ Zustand for client state (settings) + React Context wrappers for hydration/persi
 
 ### Zustand Settings Store
 
-Unified store at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]` consolidates three previously separate contexts:
+Unified store at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]` consolidates four previously separate state owners:
 
-- AppSettingsContext (app settings)
-- SettingsContext (dashboard/exclusion settings)
-- ThemeContext (theme settings)
+- AppSettingsHydration (app settings)
+- SettingsHydration (dashboard/exclusion settings)
+- ThemeHydration (theme settings)
+- Belgian tax profile, snapshots, filing metadata, and viewed year (ADR-121)
 
 Context Providers still exist as thin wrappers for hydration and persistence side-effects.
 
@@ -224,9 +230,11 @@ package "Zustand Stores (Phase 4)" {
     +appSettings
     +dashboardSettings
     +theme, themeMode, themeSchedule, themeVariant
+    +profile, snapshots, snapshotMetas, viewedYear
     +updateAppSettings()
     +updateDashboardSettings()
     +setTheme(), toggleTheme()
+    +updateProfile(), updateSnapshot(), markYearAsFiled()
   }
 }
 
@@ -240,29 +248,30 @@ package "Context Providers" {
     +Passes to store
   }
 
-  class ThemeContext {
+  class ThemeHydration {
     +Wraps useSettingsStore theme slice
     +Handles DOM effects (CSS class, matchMedia)
     +Debounced persistence
   }
 
-  class SettingsContext {
+  class SettingsHydration {
     +Wraps useSettingsStore dashboard slice
     +Debounced persistence
   }
 
-  class AppSettingsContext {
+  class AppSettingsHydration {
     +Wraps useSettingsStore appSettings slice
     +useShallow() for performance
   }
 
-  class LanguageContext {
+  class LanguageHydration {
     +language
     +t(key)
   }
 
-  class BelgianTaxProfileContext {
-    +taxProfile
+  class BelgianTaxProfileHydration {
+    +Scope compatibility
+    +Hydration and debounced persistence
   }
 }
 
@@ -287,11 +296,12 @@ package "Utility Hooks" {
 
 QueryClientProvider --> SettingsPreloadContext
 SettingsPreloadContext --> useSettingsStore
-useSettingsStore --> ThemeContext
-useSettingsStore --> SettingsContext
-useSettingsStore --> AppSettingsContext
-AppSettingsContext --> LanguageContext
-LanguageContext --> BelgianTaxProfileContext
+useSettingsStore --> ThemeHydration
+useSettingsStore --> SettingsHydration
+useSettingsStore --> AppSettingsHydration
+AppSettingsHydration --> LanguageHydration
+useSettingsStore --> BelgianTaxProfileHydration
+LanguageHydration --> BelgianTaxProfileHydration
 
 useTransactions --> QueryClientProvider
 useCategories --> QueryClientProvider
@@ -511,9 +521,13 @@ See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full mater
 ### Typography
 
 - **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
-- **Body**: Inter (static weights: 400/500/600, latin subset) — copy, labels, form inputs
-- **Self-hosted**: Fonts loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files)
-- **Cold-load preloads**: the build injects hashed WOFF2 preloads for Inter 400 and Fraunces 600, the two weights needed for first body and display text. Other weights and legacy WOFF files remain normal CSS-discovered assets.
+- **Body**: Inter (static weights: 400/500/600/700 plus 400 italic, latin subset) — copy,
+  labels, form inputs, and monetary values
+- **Self-hosted**: WOFF2-only static faces loaded from `@fontsource/fraunces` + `@fontsource/inter`;
+  legacy WOFF fallbacks are not emitted
+- **Cold-load preloads**: the build injects hashed WOFF2 preloads for Inter 400 and Fraunces 600,
+  the two weights needed for first body and display text. Other WOFF2 weights remain
+  CSS-discovered assets.
 
 Previous variable fonts were superseded by static weight selection for performance; both token and Tailwind fallback stacks now start with the installed static family names.
 
@@ -530,7 +544,7 @@ Centralized in `apps/frontend/src/lib/motion.ts`:
 - **Dialog/alert-dialog**: `dialog-in` / `dialog-out` CSS keyframes with overshoot bezier (`cubic-bezier(0.34, 1.45, 0.64, 1)`); `motion-reduce` disables both. Fixes Tailwind v4 `translate`-property double-offset bug from the prior shadcn recipe.
 - **Sidebar active rail**: framer-motion `layoutId="active-rail"` (`ActiveRail` component) that glides between nav items on route change; instant under reduced motion.
 - **Chart animations**: Stagger + fade entry (extended to 12 children, was 8); gated by `useReducedMotion()`.
-- **Theme crossfade**: `ThemeContext` wraps the dark-class flip in `document.startViewTransition` (degrades gracefully on unsupported browsers / reduced-motion).
+- **Theme crossfade**: `ThemeHydration` wraps the dark-class flip in `document.startViewTransition` (degrades gracefully on unsupported browsers / reduced-motion).
 
 ### Charts
 
@@ -589,7 +603,8 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v
 
 `components/shared/CommandPalette.tsx` — new ⌘K / Ctrl+K palette (built on `cmdk`). Pure FX,
 arithmetic, and ticker-query logic plus the recent-route storage adapter live in
-`lib/commandPalette.ts` so the component owns only query orchestration and presentation:
+`lib/commandPalette.ts`, while server requests live in `hooks/useCommandPaletteQueries.ts`; the
+component owns presentation and navigation only:
 
 - Covers all budgeting and portfolio pages, admin pages (when enabled), theme and settings actions.
 - Mounted by `AppLayout` with a topbar `⌘K` trigger button.
@@ -700,11 +715,11 @@ App
 │   └── QueryClient
 ├── SettingsPreloadProvider
 │   └── ThemeProvider
-│       └── ThemeContext
+│       └── ThemeHydration
 │       └── SettingsProvider
 │           └── AppSettingsProvider
 │               └── BelgianTaxProfileProvider
-│                   └── LanguageBridge
+│                   └── LanguageHydration
 │                       └── TooltipProvider
 │                           └── ErrorBoundary
 │                               ├── Sonner
@@ -1098,11 +1113,14 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 
 ### FOUC Prevention
 
-`theme-flash.ts` runs before React mounts, reading user preferences from `localStorage` and applying the correct palette synchronously. This eliminates the flash of default theme on page load or refresh.
+The plain inline script in `index.html` selects light/dark and applies a validated three-token boot
+palette before first paint. `theme-flash.ts` then applies the complete palette before React mounts.
+`ThemeHydration` refreshes the boot cache whenever mode or variant changes. This prevents both a base
+theme flash and the former pre-mount re-tint of the static boot placeholder.
 
 ### Settings Integration
 
-`ThemeContext` in `contexts/ThemeContext.tsx` tracks current variant and mode, applies palette to DOM on change, and persists user preference to backend `theme_settings` via 500ms debounced API calls.
+`ThemeHydration` in `stores/hydration/ThemeHydration.tsx` tracks current variant and mode, applies palette to DOM on change, and persists user preference to backend `theme_settings` via 500ms debounced API calls. It is a Zustand hydration and effects bridge, not a React context.
 
 **Related Diagrams & Code**:
 
@@ -1110,7 +1128,7 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 - [[apps/frontend/src/styles/tokens.css|CSS Tokens]]
 - [[apps/frontend/src/styles/skin-v2.css|skin-v2 overrides]]
 - [[apps/frontend/tailwind.config.ts|Tailwind Config]]
-- [[apps/frontend/src/contexts/ThemeContext.tsx|ThemeContext Implementation]]
+- [[apps/frontend/src/stores/hydration/ThemeHydration.tsx|Theme hydration bridge]]
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]]
 - [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: skin-v2 / gain-loss tokens]]
 - [[docs/features/appearance|Appearance Feature]]

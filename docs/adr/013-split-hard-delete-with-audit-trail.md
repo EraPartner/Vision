@@ -25,6 +25,7 @@ Phase 4 of the non-portfolio refactor consolidates split/who-owes-you logic behi
 2. **Forensic trail.** Operators need to reconstruct "what happened to this split" after the fact — who created it, who recorded a payment, who settled it, who deleted it — independent of whether the row physically still exists.
 
 The data-model constraints already in place:
+
 - `transaction_splits` has a `is_settled BOOLEAN` flag (auto-flipped when payments cover the full amount, or manually toggled via `POST /api/splits/:id/settle`).
 - `split_payments` has no tombstone column and is only produced via `POST /api/splits/:id/pay`.
 - `agg_split_outstanding` is maintained by INSERT/UPDATE/DELETE triggers on both tables, so any soft-delete approach would also need to teach those triggers to treat `deleted_at IS NOT NULL` as a delete.
@@ -61,13 +62,13 @@ CREATE INDEX idx_split_audit_action_created
 
 Written by `routes/splits.js` via `splitRepository.writeAudit({ split_id, action, actor, payload })`:
 
-| action       | payload                                                              | emitted by                            |
-|--------------|----------------------------------------------------------------------|---------------------------------------|
-| `create`     | `{ transaction_id, recipient_id, amount, note, batch? }`             | `POST /api/splits`, `POST /api/splits/batch` |
-| `pay`        | `{ payment_id, amount, paid_at, note, auto_settled }`                | `POST /api/splits/:id/pay`            |
-| `settle`     | `{ manual: true }`                                                   | `POST /api/splits/:id/settle`         |
-| `settle_all` | `{ recipient_id, settled_count }` with `split_id = NULL`             | `POST /api/splits/owed/:id/settle-all` |
-| `delete`     | `{ split_id, transaction_id, recipient_id, amount }` with `split_id = NULL` | `DELETE /api/splits/:id`              |
+| action       | payload                                                                     | emitted by                                   |
+| ------------ | --------------------------------------------------------------------------- | -------------------------------------------- |
+| `create`     | `{ transaction_id, recipient_id, amount, note, batch? }`                    | `POST /api/splits`, `POST /api/splits/batch` |
+| `pay`        | `{ payment_id, amount, paid_at, note, auto_settled }`                       | `POST /api/splits/:id/pay`                   |
+| `settle`     | `{ manual: true }`                                                          | `POST /api/splits/:id/settle`                |
+| `settle_all` | `{ recipient_id, settled_count }` with `split_id = NULL`                    | `POST /api/splits/owed/:id/settle-all`       |
+| `delete`     | `{ split_id, transaction_id, recipient_id, amount }` with `split_id = NULL` | `DELETE /api/splits/:id`                     |
 
 ### Actor resolution
 
@@ -76,6 +77,7 @@ Routes resolve actor via the `x-actor` header, falling back to `req.user?.id`, f
 ### Defense in depth
 
 Overpayment protection ships in three layers:
+
 1. **Pure calc** — `validatePaymentAmount` in [[apps/node-backend/src/services/calculations/splits.js]] (route returns 400 before DB write).
 2. **DB trigger** — `fn_split_payment_overpayment_guard()` BEFORE INSERT/UPDATE on `split_payments` raises SQLSTATE `23514` when `SUM(payments) > split.amount + 0.005`.
 3. **Audit log** — every accepted payment is recorded in `split_audit`.
@@ -100,6 +102,8 @@ The guard ensures invariant `sum(split_payments.amount) ≤ transaction_splits.a
 
 Implementation note (2026-08-25): the unused `req.user?.id` fallback was removed because no middleware assigns `req.user`. Routes now read the caller-supplied `x-actor` header and otherwise store `null`; the trust model above is unchanged.
 
+Implementation note (2026-09-04): lifecycle orchestration moved from the route/repository boundary into `splitService`. The service now writes each audit row through `splitRepository.writeAudit()` inside the same database transaction as create, payment, settlement, settle-all, or delete. The accepted hard-delete and audit semantics are unchanged.
+
 ### Neutral
 
 - **Splits and split_payments remain separate tables** — no union, no discriminator column. Keeps the calc layer thin.
@@ -110,6 +114,7 @@ Implementation note (2026-08-25): the unused `req.user?.id` fallback was removed
 ### A. Soft-delete on both tables (rejected)
 
 Add `deleted_at TIMESTAMPTZ NULL` to `transaction_splits` and `split_payments`, filter everywhere, adjust triggers. Rejected because:
+
 - Touches every repository read path.
 - Requires UI affordances (restore, filter toggles).
 - Doubles the state space of the aggregation triggers.
@@ -129,6 +134,7 @@ Decouples the audit trail from the DB transaction. Acceptable for observability 
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Phase 1 Aggregation Strategy]] (`agg_split_outstanding` definition)
 - [[alembic/versions/0028_split_audit_overpayment_guard.py|Migration: 0028_split_audit_overpayment_guard]]
 - [[apps/node-backend/src/services/calculations/splits.js|Splits calc module]]
+- [[apps/node-backend/src/services/splitService.js|Split service]]
 - [[apps/node-backend/src/repositories/splitRepository.js|Split repository]]
 - [[apps/node-backend/src/routes/splits.js|Splits route]]
 - [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]]

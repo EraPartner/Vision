@@ -3,6 +3,7 @@ title: Schema Initialization Reference
 type: reference
 status: archived
 date: 2026-08-30
+updated: 2026-09-04
 tags:
   [
     reference,
@@ -47,10 +48,10 @@ All schema objects (tables, indexes, triggers, views) are defined in `alembic/ve
 
 ### Key Design Principles
 
-1. **Idempotent**: All operations use `IF NOT EXISTS` or `CREATE OR REPLACE`
-2. **Non-destructive**: Never drops or alters existing tables
-3. **Order-dependent**: Tables are created in dependency order (referenced tables first)
-4. **Compatibility**: Creates views for backward compatibility when column names change
+1. **Versioned**: Alembic revisions define every supported schema transition.
+2. **Guarded**: Destructive or shape-changing revisions validate their preconditions before writing.
+3. **Order-dependent**: Tables are created in dependency order (referenced tables first).
+4. **Canonical at head**: The migration chain converges every supported install on one schema shape.
 
 ## Table Creation Order
 
@@ -61,38 +62,38 @@ Tables are created in this order to respect foreign key dependencies:
 3. **recipient_bank_accounts** — References recipients
 4. **transactions** — References categories, recipients
 5. **planned_transactions** — References categories, recipients
-6. **investments_base** — Base table for inheritance
-7. **stocks_etfs_investments** — Inherits from investments_base
-8. **crypto_investments** — Inherits from investments_base
-9. **real_estate_investments** — Inherits from investments_base
-10. **savings_investments** — Inherits from investments_base
-11. **bonds_investments** — Inherits from investments_base
-12. **metals_investments** — Inherits from investments_base
-13. **portfolio_transactions** — References investments_base
-14. **asset_price_history** — References investments_base
-15. **watchlist** — Independent table
-16. **raw_transactions** (bank-specific tables) — For audit trail
-17. **manual_raw_transactions** — For manual transaction dedup
-18. **transaction_splits** — References transactions
-19. **split_payments** — References transaction_splits
-20. **saved_charts** — Independent table
-21. **settings** — JSONB key-value storage
-22. **exchange_rates** — Currency exchange rates
-23. **belgian_inflation_rates** — Belgian monthly inflation data
-24. **portfolio_performance_snapshots** — Daily portfolio snapshots
+6. **investments** — Canonical flat investment table for every asset class
+7. **portfolio_transactions** — Canonical flat lot and cash-event table; references investments
+8. **asset_price_history** — References investments by identifier
+9. **watchlist** — Independent table
+10. **raw_transactions** (bank-specific tables) — For audit trail
+11. **manual_raw_transactions** — For manual transaction dedup
+12. **transaction_splits** — References transactions
+13. **split_payments** — References transaction_splits
+14. **saved_charts** — Independent table
+15. **settings** — JSONB key-value storage
+16. **exchange_rates** — Currency exchange rates
+17. **belgian_inflation_rates** — Belgian monthly inflation data
+18. **portfolio_performance_snapshots** — Daily portfolio snapshots
+
+The exact head-schema inventory is authoritative in the Alembic migration chain. Migration 0087
+converts installations that previously used the ADR-004 inheritance shape to these flat tables.
 
 ## Trigger Setup
 
 Triggers are created/updated using `CREATE OR REPLACE FUNCTION` and `CREATE OR REPLACE TRIGGER`:
 
-| Trigger              | Table            | Purpose                                            |
-| -------------------- | ---------------- | -------------------------------------------------- |
-| `investments_update` | investments_base | Propagates updates to child tables via inheritance |
-| Various              | Multiple tables  | Auto-update `updated_at` timestamps                |
+| Trigger                         | Table           | Purpose                                      |
+| ------------------------------- | --------------- | -------------------------------------------- |
+| `update_investments_updated_at` | investments     | Auto-update the investment modification time |
+| Various                         | Multiple tables | Auto-update `updated_at` timestamps          |
 
-## Compatibility Views
+## Retired compatibility shape
 
-When column names change (e.g., `date` → `transaction_date`), compatibility views are created to maintain backward compatibility for older API clients.
+Migrations 0013 through 0022 contain historical support for an `investments` compatibility view
+over inheritance tables. Migration 0087 removes that runtime schema fork. The old relations may
+remain under `legacy_inh_*` names only as rollback copies until the operator runs the guarded
+cleanup in `alembic/manual/drop_adr109_legacy_relations/` after verifying a restorable backup.
 
 ## Index Strategy
 

@@ -3,9 +3,34 @@ title: "ADR-078: Portfolio CSV Import Architecture"
 type: adr
 status: Accepted
 date: 2026-06-15
-tags: [adr, portfolio, import, csv, instrument-matching, type-normalizer, saved-parsers, kind-discriminator, review-step, auto-commit, deduplication, migration-0040, migration-0041, adr-078]
+tags:
+  [
+    adr,
+    portfolio,
+    import,
+    csv,
+    instrument-matching,
+    type-normalizer,
+    saved-parsers,
+    kind-discriminator,
+    review-step,
+    auto-commit,
+    deduplication,
+    migration-0040,
+    migration-0041,
+    adr-078,
+  ]
 description: Records three key decisions for the Portfolio CSV Import feature — (a) a parallel pipeline over generalizing the recipient-centric budgeting import, (b) symbol→name exact matching with a mandatory review step for unresolved rows and conservative auto-commit, (c) reusing custom_parser_configs with a kind discriminator to separate transaction and portfolio parsers.
-related: [docs/features/portfolio-import, docs/api/portfolio-imports, docs/adr/066-saved-named-custom-csv-parsers, docs/adr/007-streaming-imports, docs/adr/046-import-review-category-assignment, docs/adr/074-fx-attribution-historical-rates, docs/reference/data-model]
+related:
+  [
+    docs/features/portfolio-import,
+    docs/api/portfolio-imports,
+    docs/adr/066-saved-named-custom-csv-parsers,
+    docs/adr/007-streaming-imports,
+    docs/adr/046-import-review-category-assignment,
+    docs/adr/074-fx-attribution-historical-rates,
+    docs/reference/data-model,
+  ]
 ---
 
 # ADR-078: Portfolio CSV Import Architecture
@@ -56,6 +81,7 @@ No ISIN lookup, no fuzzy/Levenshtein matching in this iteration. The review step
 **No silent auto-create**: An unresolved row never silently creates a new investment. The user must explicitly choose: link to an existing investment (`investment_id`) or request creation (`create_new: true`). This prevents phantom holdings from CSV typos or broker-specific symbol formats.
 
 **Auto-commit policy (conservative)**: The pipeline commits immediately (201/`complete`) only when:
+
 - All rows were matched (`unresolved == 0`), AND
 - There are zero row errors.
 
@@ -112,6 +138,10 @@ The old unique constraint `uq_custom_parser_configs_name` on `(name)` is replace
 - **Frontend components**: [[apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx]], [[apps/frontend/src/components/portfolio/InvestmentCombobox.tsx]]
 - **Frontend API/hooks**: [[apps/frontend/src/lib/api/portfolioImports.ts]], [[apps/frontend/src/hooks/usePortfolioParserConfigs.ts]]
 - **i18n**: `i18n/source/en.json`, `i18n/source/nl.json` — new `portfolioImport.*` keys
+
+## Implementation update (2026-09-04)
+
+The repository method names above record the accepted implementation at the time of this decision. The current implementation preserves the decision's shared-policy requirement through `portfolioTransactionService.create`: manual entry and portfolio import both use that service, while parameterized reads and writes remain in `portfolioTxRepo.*` ([[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
 
 ## Related
 

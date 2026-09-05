@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-08-31
-last_modified: 2026-08-31
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, mv-cashflow-daily, monetary-precision, migration-0088, adr-112]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables, plus the three live runtime materialized views (mv_monthly_summary, mv_category_totals, mv_cashflow_daily — NOT four; mv_bank_balances was dropped for good in migration 0082). 2026-08-19: migration 0088 aligns transaction-ledger money columns to NUMERIC(18,4) and removes the legacy-only split-payment overpayment trigger (ADR-112).
+updated: 2026-09-04
+last_modified: 2026-09-04
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, migration-0094, monetary-precision, migration-0088, adr-112]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables. Two runtime materialized views remain live: mv_monthly_summary and mv_category_totals; migrations 0038, 0082, and 0094 retired three zero-reader projections. 2026-08-19: migration 0088 aligns transaction-ledger money columns to NUMERIC(18,4) and removes the legacy-only split-payment overpayment trigger (ADR-112).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -50,7 +50,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 
 > [!warning] Pending migrations (AUTHORED, NOT YET APPLIED unless noted)
 >
-> - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionRepository.create`, `importPipeline/commit.js`).
+> - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionService.create`, `importPipeline/commit.js`).
 > - **0048**: changes `category_id` FK to `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
 > - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
 > - **0050** (ADR-088): creates the `accounts` table + nullable `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions, backfilled one account per distinct `bank_account` string.
@@ -66,31 +66,42 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 **Purpose:** The user's own account (ADR-088) — the spine tying budgeting cash, portfolio
 holdings, and liabilities together. Distinct from `recipient_bank_accounts` (counterparty IBANs).
 
-| Field                       | Type                    | Constraints                                        | Description                                                         |
-| --------------------------- | ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
-| `id`                        | SERIAL                  | PK                                                 | Unique identifier                                                   |
-| `name`                      | TEXT                    | NOT NULL, UNIQUE                                   | Canonical account name (backfilled from `bank_account`)             |
-| `display_name`              | TEXT                    | NULLABLE                                           | Friendly label                                                      |
-| `institution`               | TEXT                    | NULLABLE                                           | Bank / broker                                                       |
-| `currency`                  | VARCHAR(3)              | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`)      | ISO-4217 (ADR-086 convention)                                       |
-| `type`                      | account_type            | NOT NULL, DEFAULT 'checking'                       | checking/savings/brokerage/crypto_exchange/wallet/pension/liability |
-| `liquidity_class`           | account_liquidity_class | NOT NULL, DEFAULT 'liquid'                         | liquid/semi_liquid/illiquid                                         |
-| `spendable`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Spendable vs earmarked                                              |
-| `in_net_worth`              | BOOLEAN                 | NOT NULL, DEFAULT true                             | Counts toward net worth                                             |
-| `tax_wrapper`               | account_tax_wrapper     | NOT NULL, DEFAULT 'none'                           | none/pension/tax_advantaged                                         |
-| `owner`                     | account_owner           | NOT NULL, DEFAULT 'me'                             | me/partner/joint (feeds marital quotient)                           |
-| `multi_currency_cash`       | BOOLEAN                 | NOT NULL, DEFAULT false                            | Holds cash in multiple currencies                                   |
-| `has_cash_sleeve`           | BOOLEAN                 | NOT NULL, DEFAULT true                             | Holds a spendable cash balance (false for holding-only wallets)     |
-| `funding_account_id`        | INTEGER                 | FK → accounts ON DELETE SET NULL, NULLABLE         | Settlement account for sleeve-less trades                           |
-| `statement_balance`         | NUMERIC(18,4)           | NULLABLE                                           | Latest bank-statement reading; widened by migration 0088            |
-| `statement_balance_date`    | DATE                    | NULLABLE, required when `statement_balance` is set | Effective date of the statement reading                             |
-| `is_active`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Archived when false                                                 |
-| `created_at` / `updated_at` | TIMESTAMPTZ             | NOT NULL, DEFAULT NOW()                            | Timestamps (`updated_at` trigger)                                   |
+| Field                       | Type                    | Constraints                                        | Description                                                                                       |
+| --------------------------- | ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `id`                        | SERIAL                  | PK                                                 | Unique identifier                                                                                 |
+| `name`                      | TEXT                    | NOT NULL, UNIQUE                                   | Canonical account name (backfilled from `bank_account`)                                           |
+| `display_name`              | TEXT                    | NULLABLE                                           | Friendly label                                                                                    |
+| `institution`               | TEXT                    | NULLABLE                                           | Bank / broker                                                                                     |
+| `currency`                  | VARCHAR(3)              | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`)      | ISO-4217 (ADR-086 convention)                                                                     |
+| `type`                      | account_type            | NOT NULL, DEFAULT 'checking'                       | checking/savings/brokerage/crypto_exchange/wallet/pension/liability                               |
+| `liquidity_class`           | account_liquidity_class | NOT NULL, DEFAULT 'liquid'                         | liquid/semi_liquid/illiquid                                                                       |
+| `spendable`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Spendable vs earmarked                                                                            |
+| `in_net_worth`              | BOOLEAN                 | NOT NULL, DEFAULT true                             | Counts toward net worth                                                                           |
+| `tax_wrapper`               | account_tax_wrapper     | NOT NULL, DEFAULT 'none'                           | none/pension/tax_advantaged                                                                       |
+| `owner`                     | account_owner           | NOT NULL, DEFAULT 'me'                             | me/partner/joint (feeds marital quotient)                                                         |
+| `multi_currency_cash`       | BOOLEAN                 | NOT NULL, DEFAULT false                            | Holds cash in multiple currencies                                                                 |
+| `has_cash_sleeve`           | BOOLEAN                 | NOT NULL, DEFAULT true                             | Holds a spendable cash balance (false for holding-only wallets)                                   |
+| `funding_account_id`        | INTEGER                 | FK → accounts ON DELETE SET NULL, NULLABLE         | Settlement account for sleeve-less trades                                                         |
+| `statement_balance`         | NUMERIC(18,4)           | NULLABLE                                           | Declared-currency compatibility projection; authoritative data is in `account_statement_balances` |
+| `statement_balance_date`    | DATE                    | NULLABLE, required when `statement_balance` is set | Date of the compatibility projection                                                              |
+| `is_active`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Archived when false                                                                               |
+| `created_at` / `updated_at` | TIMESTAMPTZ             | NOT NULL, DEFAULT NOW()                            | Timestamps (`updated_at` trigger)                                                                 |
 
 The flag columns exist from migration 0050; their semantics are activated in ADR-089. Flag enum
 types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`.
 
 **Related:** [[docs/api/accounts|Accounts API]], [[docs/adr/088-account-entity|ADR-088]]
+
+### AccountStatementBalance
+
+**Table:** `account_statement_balances` (migration 0098, ADR-089 D2)
+
+| Field          | Type          | Constraints                         | Description                   |
+| -------------- | ------------- | ----------------------------------- | ----------------------------- |
+| `account_id`   | INTEGER       | PK, FK → accounts ON DELETE CASCADE | Owning account                |
+| `currency`     | VARCHAR(3)    | PK, CHECK (`^[A-Z]{3}$`)            | Native statement currency     |
+| `balance`      | NUMERIC(18,4) | NOT NULL                            | Bank-reported balance         |
+| `balance_date` | DATE          | NOT NULL                            | Effective date of the reading |
 
 ---
 
@@ -265,13 +276,14 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 ### Investment
 
 > [!info] Canonical shape is a single flat table (ADR-109)
-> Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Fresh installs get it from the `0001` baseline; legacy installs that carried the ADR-004 table-inheritance shape (base `investments_base` + 7 child tables + an `investments` VIEW) are converted by the one-time guarded migration `0087_flat_investments_conversion` (parity-checked copy, rename-based rollback — the old relations survive renamed `legacy_inh_*` until a later housekeeping drop). Asset-class-specific columns are simply NULL when not applicable.
+> Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Fresh installs get it from the `0001` baseline; legacy installs that carried the ADR-004 table-inheritance shape are converted by the guarded migration `0087_flat_investments_conversion`. Converted installs retain renamed `legacy_inh_*` rollback copies until an operator verifies a restorable logical backup and runs `alembic/manual/drop_adr109_legacy_relations/`. Asset-class-specific columns are NULL when not applicable.
 
 > [!note] Legacy delete-cascade completion
 > The inheritance schema could leave portfolio transactions behind after their investment was
 > deleted because its transaction children had no enforceable foreign key. During conversion,
 > 0087 warns with those transaction IDs and omits them from the flat copy to match the canonical
-> `ON DELETE CASCADE` contract. The original rows remain in `legacy_inh_*` for downgrade. See
+> `ON DELETE CASCADE` contract. The original rows remain in `legacy_inh_*` until the guarded
+> operator cleanup; after cleanup, rollback requires restoring the verified logical backup. See
 > [[docs/adr/111-complete-legacy-investment-delete-cascades|ADR-111]].
 
 **Purpose:** All investment holdings, one row per holding, discriminated by `asset_class`.
@@ -299,10 +311,11 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 **Purpose:** Side table that persists per-investment opt-out preferences for the Portfolio Overview ticker tape. An absent row means the holding is visible (default `true`); only explicit `false` rows need to be stored.
 
-| Field            | Type    | Constraints            | Description                                                                                                                                    |
-| ---------------- | ------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `investment_id`  | INTEGER | PRIMARY KEY            | References an investment by id (no FK — historical: `investments` was a view on legacy installs when 0061 shipped; orphaned rows are harmless) |
-| `show_in_ticker` | BOOLEAN | NOT NULL, DEFAULT true | `false` = excluded from ticker tape and not quoted from Yahoo. Absent row = `true`.                                                            |
+| Field            | Type        | Constraints             | Description                                                                                                                                    |
+| ---------------- | ----------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `investment_id`  | INTEGER     | PRIMARY KEY             | References an investment by id (no FK — historical: `investments` was a view on legacy installs when 0061 shipped; orphaned rows are harmless) |
+| `show_in_ticker` | BOOLEAN     | NOT NULL, DEFAULT true  | `false` = excluded from ticker tape and not quoted from Yahoo. Absent row = `true`.                                                            |
+| `updated_at`     | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last preference change; maintained by the shared trigger (migration 0092).                                                                     |
 
 > [!info] Migration 0061 creates this table
 > `investment_ticker_prefs` is created by migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. Apply with `bun run db:upgrade`.
@@ -323,20 +336,21 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 **Purpose:** Investment trades and cash events (lots), one flat `portfolio_transactions` table on every install (ADR-109; the legacy `portfolio_transactions_base` + child-table shape converts via migration 0087, which also makes the FKs below real on former legacy installs).
 
-| Field             | Type               | Constraints                                                | Description                                                                                                                                                                                                                                                                                     |
-| ----------------- | ------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | SERIAL             | PK                                                         | Unique identifier                                                                                                                                                                                                                                                                               |
-| `investment_id`   | INTEGER            | NOT NULL, FK → investments ON DELETE CASCADE               | Associated investment                                                                                                                                                                                                                                                                           |
-| `type`            | portfolio_txn_type | NOT NULL                                                   | Enum: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital                                                                                                                                                                       |
-| `date`            | DATE               | NOT NULL                                                   | Transaction date                                                                                                                                                                                                                                                                                |
-| `amount`          | NUMERIC(18,4)      | NOT NULL                                                   | Total amount                                                                                                                                                                                                                                                                                    |
-| `units`           | NUMERIC(18,8)      | NULLABLE                                                   | Units traded (unit-based asset classes)                                                                                                                                                                                                                                                         |
-| `price_per_unit`  | NUMERIC(18,6)      | NULLABLE                                                   | Unit price (unit-based asset classes)                                                                                                                                                                                                                                                           |
-| `fees` / `taxes`  | NUMERIC(18,4)      | DEFAULT 0                                                  | Transaction costs                                                                                                                                                                                                                                                                               |
-| `currency`        | VARCHAR(10)        | DEFAULT 'EUR'                                              | Currency                                                                                                                                                                                                                                                                                        |
-| `fx_rate_to_eur`  | NUMERIC(20,10)     | NULLABLE                                                   | FX rate to EUR                                                                                                                                                                                                                                                                                  |
-| `account_id`      | INTEGER            | FK → accounts ON DELETE RESTRICT, NULLABLE                 | Owning account for the lot (ADR-091, migration 0052)                                                                                                                                                                                                                                            |
-| `import_batch_id` | BIGINT             | FK → portfolio_import_batches ON DELETE SET NULL, NULLABLE | Portfolio import batch that created this lot (migration 0086); NULL for manual entries and for lots committed before 0086 applied. Lets rollback delete a batch in one statement, mirroring `transactions.import_batch_id` (migration 0003). Partial index `WHERE import_batch_id IS NOT NULL`. |
+| Field                        | Type               | Constraints                                                | Description                                                                                                                                                                                                                                                                                     |
+| ---------------------------- | ------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                         | SERIAL             | PK                                                         | Unique identifier                                                                                                                                                                                                                                                                               |
+| `investment_id`              | INTEGER            | NOT NULL, FK → investments ON DELETE CASCADE               | Associated investment                                                                                                                                                                                                                                                                           |
+| `type`                       | portfolio_txn_type | NOT NULL                                                   | Enum: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital                                                                                                                                                                       |
+| `date`                       | DATE               | NOT NULL                                                   | Transaction date                                                                                                                                                                                                                                                                                |
+| `amount`                     | NUMERIC(18,4)      | NOT NULL                                                   | Total amount                                                                                                                                                                                                                                                                                    |
+| `units`                      | NUMERIC(18,8)      | NULLABLE                                                   | Units traded (unit-based asset classes)                                                                                                                                                                                                                                                         |
+| `price_per_unit`             | NUMERIC(18,6)      | NULLABLE                                                   | Unit price (unit-based asset classes)                                                                                                                                                                                                                                                           |
+| `fees` / `taxes`             | NUMERIC(18,4)      | DEFAULT 0                                                  | Transaction costs                                                                                                                                                                                                                                                                               |
+| `dividend_amount_convention` | VARCHAR(7)         | NOT NULL, DEFAULT 'unknown', CHECK gross/net/unknown       | Whether a dividend `amount` is before or after withholding tax. Migration 0097 leaves existing and unclassified rows `unknown` (ADR-126).                                                                                                                                                       |
+| `currency`                   | VARCHAR(10)        | DEFAULT 'EUR'                                              | Currency                                                                                                                                                                                                                                                                                        |
+| `fx_rate_to_eur`             | NUMERIC(20,10)     | NULLABLE                                                   | FX rate to EUR                                                                                                                                                                                                                                                                                  |
+| `account_id`                 | INTEGER            | FK → accounts ON DELETE RESTRICT, NULLABLE                 | Owning account for the lot (ADR-091, migration 0052)                                                                                                                                                                                                                                            |
+| `import_batch_id`            | BIGINT             | FK → portfolio_import_batches ON DELETE SET NULL, NULLABLE | Portfolio import batch that created this lot (migration 0086); NULL for manual entries and for lots committed before 0086 applied. Lets rollback delete a batch in one statement, mirroring `transactions.import_batch_id` (migration 0003). Partial index `WHERE import_batch_id IS NOT NULL`. |
 
 ---
 
@@ -511,34 +525,35 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 **Purpose:** Holds a parsed transaction-import row while it is validated, matched, reviewed, and committed. The source row remains available for correction even when a previously resolved parent is deleted.
 
-| Field                        | Type          | Constraints                                                | Description                                                             |
-| ---------------------------- | ------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `id`                         | BIGSERIAL     | PK                                                         | Unique staging-row identifier                                           |
-| `batch_id`                   | BIGINT        | NOT NULL, FK → import_batches ON DELETE CASCADE            | Owning import batch                                                     |
-| `row_index`                  | INTEGER       | NOT NULL                                                   | Zero-based source-row position                                          |
-| `status`                     | TEXT          | NOT NULL                                                   | `pending`, `validated`, `matched`, `committed`, `duplicate`, or `error` |
-| `tx_date`                    | DATE          | NULLABLE                                                   | Parsed transaction date                                                 |
-| `bank_account`               | TEXT          | NULLABLE                                                   | Source account label                                                    |
-| `recipient_raw`              | TEXT          | NULLABLE                                                   | Source recipient text                                                   |
-| `memo`                       | TEXT          | NULLABLE                                                   | Parsed transaction memo                                                 |
-| `amount`                     | NUMERIC(20,4) | NULLABLE                                                   | Parsed transaction amount                                               |
-| `currency`                   | TEXT          | NULLABLE                                                   | Parsed source currency                                                  |
-| `balance`                    | NUMERIC(20,4) | NULLABLE                                                   | Parsed running balance                                                  |
-| `recipient_account`          | TEXT          | NULLABLE                                                   | Source recipient account identifier                                     |
-| `recipient_address`          | TEXT          | NULLABLE                                                   | Source recipient address                                                |
-| `recipient_bank_name`        | TEXT          | NULLABLE                                                   | Source recipient bank name                                              |
-| `comment`                    | TEXT          | NULLABLE                                                   | Parsed source comment                                                   |
-| `raw_data`                   | TEXT          | NULLABLE                                                   | Original serialized source row                                          |
-| `tx_hash`                    | TEXT          | NULLABLE                                                   | Candidate deduplication hash                                            |
-| `resolved_recipient_id`      | INTEGER       | FK → recipients ON DELETE SET NULL, NULLABLE               | Recipient chosen by automatic matching                                  |
-| `resolved_bank_account_id`   | INTEGER       | FK → recipient_bank_accounts ON DELETE SET NULL, NULLABLE  | Reserved resolution; currently dormant in runtime code                  |
-| `matched_pattern_id`         | INTEGER       | FK → recipient_match_patterns ON DELETE SET NULL, NULLABLE | Match pattern used for automatic resolution                             |
-| `match_source`               | TEXT          | NULLABLE                                                   | Match provenance                                                        |
-| `match_similarity`           | REAL          | NULLABLE                                                   | Similarity score for the automatic match                                |
-| `user_override_recipient_id` | INTEGER       | FK → recipients ON DELETE SET NULL, NULLABLE               | Recipient explicitly selected during review                             |
-| `override_category_id`       | INTEGER       | FK → categories ON DELETE SET NULL, NULLABLE               | Category explicitly selected during review                              |
-| `error_message`              | TEXT          | NULLABLE                                                   | Validation or commit failure detail                                     |
-| `created_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Staging timestamp                                                       |
+| Field                        | Type          | Constraints                                                | Description                                                               |
+| ---------------------------- | ------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `id`                         | BIGSERIAL     | PK                                                         | Unique staging-row identifier                                             |
+| `batch_id`                   | BIGINT        | NOT NULL, FK → import_batches ON DELETE CASCADE            | Owning import batch                                                       |
+| `row_index`                  | INTEGER       | NOT NULL                                                   | Zero-based source-row position                                            |
+| `status`                     | TEXT          | NOT NULL                                                   | `pending`, `validated`, `matched`, `committed`, `duplicate`, or `error`   |
+| `tx_date`                    | DATE          | NULLABLE                                                   | Parsed transaction date                                                   |
+| `bank_account`               | TEXT          | NULLABLE                                                   | Source account label                                                      |
+| `recipient_raw`              | TEXT          | NULLABLE                                                   | Source recipient text                                                     |
+| `memo`                       | TEXT          | NULLABLE                                                   | Parsed transaction memo                                                   |
+| `amount`                     | NUMERIC(20,4) | NULLABLE                                                   | Parsed transaction amount                                                 |
+| `currency`                   | TEXT          | NULLABLE                                                   | Parsed source currency                                                    |
+| `balance`                    | NUMERIC(20,4) | NULLABLE                                                   | Parsed running balance                                                    |
+| `recipient_account`          | TEXT          | NULLABLE                                                   | Source recipient account identifier                                       |
+| `recipient_address`          | TEXT          | NULLABLE                                                   | Source recipient address                                                  |
+| `recipient_bank_name`        | TEXT          | NULLABLE                                                   | Source recipient bank name                                                |
+| `comment`                    | TEXT          | NULLABLE                                                   | Parsed source comment                                                     |
+| `raw_data`                   | TEXT          | NULLABLE                                                   | Original serialized source row                                            |
+| `tx_hash`                    | TEXT          | NULLABLE                                                   | Candidate deduplication hash                                              |
+| `resolved_recipient_id`      | INTEGER       | FK → recipients ON DELETE SET NULL, NULLABLE               | Recipient chosen by automatic matching                                    |
+| `resolved_bank_account_id`   | INTEGER       | FK → recipient_bank_accounts ON DELETE SET NULL, NULLABLE  | Reserved resolution; currently dormant in runtime code                    |
+| `matched_pattern_id`         | INTEGER       | FK → recipient_match_patterns ON DELETE SET NULL, NULLABLE | Match pattern used for automatic resolution                               |
+| `match_source`               | TEXT          | NULLABLE                                                   | Match provenance                                                          |
+| `match_similarity`           | REAL          | NULLABLE                                                   | Similarity score for the automatic match                                  |
+| `user_override_recipient_id` | INTEGER       | FK → recipients ON DELETE SET NULL, NULLABLE               | Recipient explicitly selected during review                               |
+| `override_category_id`       | INTEGER       | FK → categories ON DELETE SET NULL, NULLABLE               | Category explicitly selected during review                                |
+| `error_message`              | TEXT          | NULLABLE                                                   | Validation or commit failure detail                                       |
+| `created_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Staging timestamp                                                         |
+| `updated_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Last matching, repair, or commit change; maintained by the shared trigger |
 
 Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds the two missing foreign keys, and adds partial covering indexes for non-null references. Parent deletion clears only the affected stored resolution. Clearing `resolved_recipient_id` returns the row to the unresolved review path unless `user_override_recipient_id` still supplies a recipient; `resolved_bank_account_id` remains a reserved, dormant field.
 
@@ -582,8 +597,8 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Indexes:** `idx_split_payments_split`
 
-> [!warning] Payment writes must use the repository path
-> The canonical schema has no split-payment overpayment trigger. `splitRepository.addPayment`
+> [!warning] Payment writes must use the service path
+> The canonical schema has no split-payment overpayment trigger. `splitService.addPayment`
 > enforces the exact four-decimal cap while holding a `SELECT ... FOR UPDATE` lock on the split.
 > Migration 0088 removes the weaker trigger left by pre-squash databases. Direct SQL can bypass
 > this cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
@@ -594,7 +609,7 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 ### SplitAudit
 
-**Purpose:** Audit log for split-related operations (`create`, `payment`, `settle`, `settle_all`, and `delete`). Written by `splitRepository.writeAudit()`.
+**Purpose:** Audit log for split-related operations (`create`, `payment`, `settle`, `settle_all`, and `delete`). `splitService` writes it through the repository's parameterized `writeAudit()` primitive in the mutation transaction.
 
 | Field        | Type        | Constraints                                          | Description                                        |
 | ------------ | ----------- | ---------------------------------------------------- | -------------------------------------------------- |
@@ -764,17 +779,17 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Purpose:** Per-method backtest accuracy persistence for the cash-flow forecast feature (Phase 10). Each nightly backtest run upserts one row per `(user_id, method_id, as_of_month)`; the ensemble method's inverse-MSE weighting reads from this table.
 
-| Field         | Type             | Constraints                     | Description                            |
-| ------------- | ---------------- | ------------------------------- | -------------------------------------- |
-| `id`          | SERIAL           | PK                              | Unique identifier                      |
-| `user_id`     | TEXT             | NOT NULL, DEFAULT `'anonymous'` | Owning user                            |
-| `method_id`   | TEXT             | NOT NULL                        | Forecast method identifier             |
-| `as_of_month` | TEXT             | NOT NULL                        | Month the backtest was evaluated as-of |
-| `mae`         | DOUBLE PRECISION | NULLABLE                        | Mean absolute error                    |
-| `rmse`        | DOUBLE PRECISION | NULLABLE                        | Root mean squared error                |
-| `mape`        | DOUBLE PRECISION | NULLABLE                        | Mean absolute percentage error         |
-| `sample_days` | INTEGER          | NULLABLE                        | Number of days in the backtest sample  |
-| `recorded_at` | TIMESTAMPTZ      | NOT NULL, DEFAULT NOW()         | When the row was recorded              |
+| Field         | Type             | Constraints                     | Description                                                                            |
+| ------------- | ---------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
+| `id`          | SERIAL           | PK                              | Unique identifier                                                                      |
+| `user_id`     | TEXT             | NOT NULL, DEFAULT `'anonymous'` | Logical cache namespace used by repositories and the nightly pre-warm job              |
+| `method_id`   | TEXT             | NOT NULL                        | Forecast method identifier                                                             |
+| `as_of_month` | DATE             | NOT NULL                        | First day of the month evaluated as-of; repository projects `YYYY-MM` (migration 0093) |
+| `mae`         | DOUBLE PRECISION | NULLABLE                        | Mean absolute error                                                                    |
+| `rmse`        | DOUBLE PRECISION | NULLABLE                        | Root mean squared error                                                                |
+| `mape`        | DOUBLE PRECISION | NULLABLE                        | Mean absolute percentage error                                                         |
+| `sample_days` | INTEGER          | NULLABLE                        | Number of days in the backtest sample                                                  |
+| `recorded_at` | TIMESTAMPTZ      | NOT NULL, DEFAULT NOW()         | When the row was recorded                                                              |
 
 **Constraint:** Unique `uq_cfa_user_method_month` on `(user_id, method_id, as_of_month)`
 
@@ -788,15 +803,15 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Purpose:** Nightly-precomputed (and lazy-cached) Monte Carlo + point-estimate forecast payloads keyed by `(user_id, month, filter_hash)`, so daytime requests can skip the expensive MC simulation. Rows are upserted on every fresh compute; expiry (~6 hours) is enforced by the application layer, not the DB.
 
-| Field         | Type        | Constraints                     | Description                             |
-| ------------- | ----------- | ------------------------------- | --------------------------------------- |
-| `id`          | SERIAL      | PK                              | Unique identifier                       |
-| `user_id`     | TEXT        | NOT NULL, DEFAULT `'anonymous'` | Owning user                             |
-| `month`       | TEXT        | NOT NULL                        | Forecast month                          |
-| `filter_hash` | TEXT        | NOT NULL                        | Hash of the request's filter parameters |
-| `mc_paths`    | INTEGER     | NOT NULL, DEFAULT 1000          | Number of Monte Carlo simulation paths  |
-| `payload`     | JSONB       | NOT NULL                        | Cached forecast response payload        |
-| `computed_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()         | When the payload was computed           |
+| Field         | Type        | Constraints                     | Description                                                                |
+| ------------- | ----------- | ------------------------------- | -------------------------------------------------------------------------- |
+| `id`          | SERIAL      | PK                              | Unique identifier                                                          |
+| `user_id`     | TEXT        | NOT NULL, DEFAULT `'anonymous'` | Logical cache namespace                                                    |
+| `month`       | DATE        | NOT NULL                        | First day of forecast month; repository accepts `YYYY-MM` (migration 0093) |
+| `filter_hash` | TEXT        | NOT NULL                        | Hash of the request's filter parameters                                    |
+| `mc_paths`    | INTEGER     | NOT NULL, DEFAULT 1000          | Number of Monte Carlo simulation paths                                     |
+| `payload`     | JSONB       | NOT NULL                        | Cached forecast response payload                                           |
+| `computed_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()         | When the payload was computed                                              |
 
 **Constraint:** `UNIQUE (user_id, month, filter_hash)` (unnamed/auto-generated — not touched by migration 0090's renaming pass)
 
@@ -810,17 +825,17 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Purpose:** Monte Carlo cache for the rolling-window forecast view (as opposed to the calendar-month view above), keyed by `(user_id, today_iso, days_back, days_forward, filter_hash)`. Row expires after ~6 hours (application-layer TTL).
 
-| Field          | Type        | Constraints                     | Description                                      |
-| -------------- | ----------- | ------------------------------- | ------------------------------------------------ |
-| `id`           | SERIAL      | PK                              | Unique identifier                                |
-| `user_id`      | TEXT        | NOT NULL, DEFAULT `'anonymous'` | Owning user                                      |
-| `today_iso`    | TEXT        | NOT NULL                        | The "today" the rolling window was computed from |
-| `days_back`    | INTEGER     | NOT NULL                        | Days of history included                         |
-| `days_forward` | INTEGER     | NOT NULL                        | Days of forecast included                        |
-| `filter_hash`  | TEXT        | NOT NULL                        | Hash of the request's filter parameters          |
-| `mc_paths`     | INTEGER     | NOT NULL, DEFAULT 1000          | Number of Monte Carlo simulation paths           |
-| `payload`      | JSONB       | NOT NULL                        | Cached forecast response payload                 |
-| `computed_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()         | When the payload was computed                    |
+| Field          | Type        | Constraints                     | Description                                                                                        |
+| -------------- | ----------- | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `id`           | SERIAL      | PK                              | Unique identifier                                                                                  |
+| `user_id`      | TEXT        | NOT NULL, DEFAULT `'anonymous'` | Logical cache namespace                                                                            |
+| `today_iso`    | DATE        | NOT NULL                        | The "today" the rolling window was computed from; repository accepts `YYYY-MM-DD` (migration 0093) |
+| `days_back`    | INTEGER     | NOT NULL                        | Days of history included                                                                           |
+| `days_forward` | INTEGER     | NOT NULL                        | Days of forecast included                                                                          |
+| `filter_hash`  | TEXT        | NOT NULL                        | Hash of the request's filter parameters                                                            |
+| `mc_paths`     | INTEGER     | NOT NULL, DEFAULT 1000          | Number of Monte Carlo simulation paths                                                             |
+| `payload`      | JSONB       | NOT NULL                        | Cached forecast response payload                                                                   |
+| `computed_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()         | When the payload was computed                                                                      |
 
 **Constraint:** `UNIQUE (user_id, today_iso, days_back, days_forward, filter_hash)` (unnamed/auto-generated)
 
@@ -879,7 +894,7 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 >
 > Migration 0035 (`add_recipient_aggregations`) added `mv_recipient_monthly` and `agg_recipient_totals`. **Both have since been dropped** — see the two sections below — because the recipient-insight endpoints run live scans instead. The only trigger-maintained aggregate still live is `agg_split_outstanding`.
 >
-> Separately, three **runtime-managed** materialized views — `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily` — predate migration 0035 (the `0001` baseline explicitly excludes them: "Materialized views — managed at runtime by `apps/node-backend/src/services/materializedViewService.js`"). No Alembic migration creates them; migrations 0045/0084/0085 instead **drop** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. A fourth, `mv_bank_balances`, existed on this same runtime-managed lifecycle but was dropped for good in migration 0082 (zero readers) and is no longer created by `materializedViewService.js` — **only three runtime MVs are live today**, not four. See the three sections below.
+> Separately, two **runtime-managed** materialized views — `mv_monthly_summary` and `mv_category_totals` — predate migration 0035 (the `0001` baseline explicitly excludes them: "Materialized views — managed at runtime by `apps/node-backend/src/services/materializedViewService.js`"). No Alembic migration creates them; migrations 0045/0084/0085 instead **drop** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. Three other runtime projections were removed after their last reader disappeared: `mv_recipient_monthly` in 0038, `mv_bank_balances` in 0082, and `mv_cashflow_daily` in 0094.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 
@@ -943,7 +958,9 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 - Respects `is_active` flag (inactive transactions excluded from totals)
 - Uses UPSERT semantics for idempotency
 
-**Call-site pattern:** No application code calls refresh; triggers keep this in sync.
+**Call-site pattern:** No application code calls refresh; triggers keep this in sync. Unlike ordinary
+mutable tables, its aggregate refresh function owns `updated_at` together with the derived values;
+ADR-119 records this as the explicit exception to the shared timestamp-trigger policy.
 
 **Related:** [[docs/adr/010-phase1-aggregation-strategy|ADR-010]]
 
@@ -971,7 +988,7 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Filter:** `t.is_active = true AND t.is_transfer = false AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'`
 
-**Indexes:** Unique `mv_monthly_summary_idx` on `(month_start, currency, category_id_key)` — required for `REFRESH ... CONCURRENTLY`. Runtime-created (not Alembic-managed DDL), so outside migration 0090's index-renaming pass — keeps the `_idx` suffix.
+**Indexes:** Unique `idx_mv_monthly_summary` on `(month_start, currency, category_id_key)` — required for `REFRESH ... CONCURRENTLY`. Runtime startup maintenance creates the canonical name before removing the legacy `mv_monthly_summary_idx` duplicate.
 
 **Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.js`. The 3-level effective-category definition dates from migration 0085 (drop-and-rebuild).
 
@@ -993,7 +1010,7 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 **Filter:** `t.is_active = true AND t.is_transfer = false`
 
-**Indexes:** Unique `mv_category_totals_idx` on `(category_id, currency)`. Runtime-created, outside migration 0090's index-renaming pass.
+**Indexes:** Unique `idx_mv_category_totals` on `(category_id, currency)`. Runtime startup maintenance creates the canonical name before removing the legacy `mv_category_totals_idx` duplicate.
 
 **Maintenance:** Same debounced-refresh orchestration as `mv_monthly_summary`. The 3-level effective-category definition dates from migration 0084 (drop-and-rebuild).
 
@@ -1001,25 +1018,10 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 
 ---
 
-### mv_cashflow_daily (Materialized View — live)
+### mv_cashflow_daily (Materialized View — DROPPED in 0094)
 
-**Purpose:** Daily net cashflow for spending-trend / cashflow charts. Same runtime-managed lifecycle as the two views above.
-
-**Scope:** Last 7 months (6 complete + current)
-
-| Field          | Type    | Description                           |
-| -------------- | ------- | ------------------------------------- |
-| `date`         | DATE    | Transaction date                      |
-| `day_of_month` | INTEGER | Day 1–31                              |
-| `month_start`  | DATE    | First day of the month                |
-| `currency`     | —       | Transaction currency                  |
-| `net`          | NUMERIC | Sum of amounts for that date/currency |
-
-**Filter:** `t.is_active = true AND t.is_transfer = false AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'`
-
-**Indexes:** Unique `mv_cashflow_daily_idx` on `(date, currency)`. Runtime-created, outside migration 0090's index-renaming pass.
-
-**Maintenance:** Same debounced-refresh orchestration; transfers excluded since migration 0045.
+> [!warning] Removed
+> Migration [[alembic/versions/0094_drop_mv_cashflow_daily.py|0094]] drops this seven-month daily projection because it had no application readers while every refresh still scanned and grouped `transactions`. Current cash-flow charts use live repository queries and the forecast cache tables. The downgrade restores the historical shape with no data for rollback only.
 
 **Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.js]]
 
@@ -1080,20 +1082,25 @@ Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds
 | `id`               | SERIAL                     | PK                                                     |
 | `name`             | TEXT                       | Chart name                                             |
 | `chart_type`       | TEXT (default `'line'`)    | Chart type                                             |
-| `category_ids`     | INTEGER[]                  | Associated categories                                  |
-| `recipient_ids`    | INTEGER[]                  | Associated recipients (migration 0017)                 |
 | `chart_variant`    | TEXT (default `'default'`) | Ranked/variant selector (migration 0017)               |
 | `time_bucket`      | TEXT (default `'monthly'`) | Aggregation bucket (migration 0017)                    |
 | `date_range_start` | DATE NULL                  | Optional custom range start (migration 0017)           |
 | `date_range_end`   | DATE NULL                  | Optional custom range end (migration 0017)             |
-| `tag_ids`          | INTEGER[]                  | Associated tags (migration 0063)                       |
 | `all_categories`   | BOOLEAN (default false)    | Dynamic all-categories mode (migration 0064)           |
 | `all_recipients`   | BOOLEAN (default false)    | Dynamic all-recipients mode (migration 0064)           |
 | `all_tags`         | BOOLEAN (default false)    | Dynamic all-tags mode (migration 0064)                 |
 | `created_at`       | TIMESTAMPTZ                | Creation timestamp                                     |
 | `updated_at`       | TIMESTAMPTZ                | Last modification (shared `update_updated_at` trigger) |
 
-**Related:** [[docs/features/saved-charts|Saved Charts]], [[docs/api/savedCharts|API]]
+Category, recipient, and tag selections are normalized by migration 0096. The
+`saved_chart_categories`, `saved_chart_recipients`, and `saved_chart_tags` tables each use
+`saved_chart_id` plus their category, recipient, or tag ID as a composite primary key. Both foreign
+keys use `ON DELETE CASCADE`,
+so deleting either the chart or a selected entity removes the membership. The repository aggregates
+these rows back into the existing sorted ID arrays at the API boundary.
+
+**Related:** [[docs/features/saved-charts|Saved Charts]], [[docs/api/savedCharts|API]],
+[[docs/adr/122-normalized-saved-chart-filters|ADR-122]]
 
 ---
 
@@ -1210,12 +1217,14 @@ All of them share these anchor columns; the remaining columns are the source's n
 | `status`                      | TEXT          | NOT NULL, DEFAULT `'pending'`                             | Row status: `pending`, `valid`, `duplicate`, `error`, `committed`                                                                                                    |
 | `error_detail`                | TEXT          | NULLABLE                                                  | Validation or commit error message                                                                                                                                   |
 | `committed_txn_id`            | INTEGER       | NULLABLE, FK → portfolio_transactions                     | ID of the created portfolio_transaction after commit                                                                                                                 |
+| `created_at`                  | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                   | Staging creation timestamp                                                                                                                                           |
+| `updated_at`                  | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                   | Last matching, repair, or commit change; maintained by the shared trigger (migration 0092)                                                                           |
 
 **Indexes:** `idx_portfolio_staging_batch_id`, `idx_portfolio_staging_status` (partial, non-terminal only)
 
 **Backup:** Included in `BACKUP_COVERED_TABLES`.
 
-**Migration:** [[alembic/versions/0040_add_portfolio_import_staging.py]]
+**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]], [[alembic/versions/0092_updated_at_policy.py|0092 updated-at policy]]
 
 **Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 

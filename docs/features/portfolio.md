@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-06-20
-last_modified: 2026-08-27
-updated: 2026-08-27
+date: 2026-09-04
+last_modified: 2026-09-04
+updated: 2026-09-04
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -39,11 +39,10 @@ recorded live update rather than the freshness lower bound of every holding in t
 
 Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
-Under the hood, portfolio storage now uses PostgreSQL inheritance:
-
-- `investments_base` holds shared fields and is specialized by `stock_investments`, `etf_investments`, `crypto_investments`, `real_estate_investments`, `savings_investments`, and `bond_investments`.
-- `portfolio_transactions_base` holds shared transaction fields and is specialized by matching per-asset transaction tables (including dedicated `metals_transactions` for metals, separate from `stock_transactions`).
-- Backward-compatible views (`investments`, `portfolio_transactions`) keep existing repository and route contracts stable.
+Under the hood, portfolio storage uses the canonical flat `investments` and
+`portfolio_transactions` tables. Migration 0087 converted the former base/child inheritance shape
+before the backend starts; those relations are retained only as operator-removable rollback copies
+on installations that were converted (ADR-109).
 
 ## Supported Asset Classes
 
@@ -131,10 +130,10 @@ Implementation notes:
 - Yahoo provider resolution now follows Market Lookup style symbol handling by accepting `price_provider_id` first and falling back to `symbol` when needed.
 - Kinesis provider now resolves symbol/timeframe/from-date through a shared helper for both live and historical paths, keeping lookup behavior consistent.
 - Kinesis refresh eligibility accepts either explicit `price_provider_id` or name/symbol mapping via Kinesis asset config.
-- Refresh price persistence updates inheritance storage tables directly (`investments_base` and asset-specific child tables), avoiding `UPDATE investments ...` against the compatibility view.
+- Refresh price persistence updates the canonical flat `investments` table directly.
 - Custom provider refresh can resolve latest quote either via explicit latest path, or from latest point in configured history payload when latest path is not provided.
 - New API endpoint `GET /api/investments/:id/price-history` serves provider-backed history (yahoo/custom) with read-through DB persistence in `asset_price_history`.
-- Legacy DB compatibility: if `investments` table/view does not yet contain new custom-provider columns, investment create automatically falls back to legacy provider fields (`price_provider_id`, `price_provider_url`) so custom latest-path setups still work during mixed-schema deployments.
+- Historical migrations 0017, 0018, 0021, and 0022 contain inheritance-aware upgrade logic for databases that pass through those revisions; this is not a runtime schema fork.
 - Migration dependency: `0017_investment_custom_provider_history` applies custom-provider latest/history columns to inheritance storage, conditionally patches legacy `investments` table only when relation kind is table/partition, creates `metals_investments` if missing, and refreshes the compatibility view/trigger for metals + new provider fields ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 - Migration dependency: `0021_update_price_provider_enum` migrates the `price_provider` enum from `coingecko`/`kraken` to `binance` by altering `investments_base.price_provider`, dropping the column default before enum type conversion and restoring `DEFAULT 'manual'` after conversion. To prevent dependency failures in PostgreSQL, it dynamically backs up and drops all dependent `public` views referencing `investments_base` (including column-level dependencies such as `price_provider`), recreates those views from captured definitions after the enum swap, and recreates the `update_investments_view_instead` trigger on `investments` when `investments_view_update_instead()` exists ([[alembic/versions/0021_update_price_provider_enum.py]]).
 - Migration dependency: `0018_metals_transactions_inheritance_split` introduces dedicated `metals_transactions`, migrates existing metals transaction rows out of `stock_transactions`, and refreshes `portfolio_transactions` compatibility view joins ([[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
@@ -174,10 +173,10 @@ POST /api/investments/:id/transactions
 - `fx_rate_to_eur` is optional and persisted per transaction to preserve the effective FX used at booking time.
 - **Auto-resolve (2026-06-11, ADR-074):** On `POST /api/investments/:id/transactions` and `PATCH /api/investments/transactions/:txnId`, when `currency ≠ EUR` and `fx_rate_to_eur` is not supplied, the backend resolves the on-or-before stored rate from `exchange_rates` (≤7-day lookback, DB-only — no outbound HTTP). On PATCH, a date or currency change also recomputes `fx_rate_to_eur` unless the field is explicitly provided in the request.
 - Add/Edit portfolio transaction dialogs now expose an optional `fx_rate_to_eur` input so users can lock a manual booking FX per transaction.
-- Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from investments route into `portfolioTransactionRepository.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
+- Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from the investment controller into `portfolioTransactionService.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
 - Investment live price refresh now applies bounded write concurrency (batched updates) instead of an unbounded all-at-once write fan-out, reducing pool contention risk while preserving refresh result payload semantics.
 - Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips, preserving filters, ordering, and response payloads while reducing DB calls ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
-- Portfolio transaction update now reuses `existing.asset_class` from the already-loaded transaction and falls back to a DB lookup only when missing, reducing redundant lookups while preserving validation and write behavior ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Portfolio transaction update now reuses `existing.asset_class` from the already-loaded transaction and falls back to a repository lookup only when missing, reducing redundant lookups while preserving validation and write behavior ([[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 
 ### Editing Portfolio Transactions
 
@@ -195,7 +194,7 @@ Rules:
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
-Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
 
 ## Holdings Calculation
 
@@ -258,9 +257,9 @@ The day-loop now processes `split` transaction types. A stock split resets the p
 
 **4. Buy/sell unit math uses Decimal**
 
-`repositories/portfolioTxRepo.common.js` buy/sell/gift calculations now use Decimal `roundMoney()`, `multiply()`, and `divide()` instead of `roundTo()` with native float arithmetic. This eliminates the remaining FP drift in portfolio transaction math.
+`services/portfolio/portfolioTransactionRules.js` buy/sell/gift calculations use Decimal `roundMoney()`, `multiply()`, and `divide()` instead of native float arithmetic. This keeps portfolio transaction policy above the repository layer and avoids floating-point drift.
 
-Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/src/repositories/portfolioTxRepo.common.js]], [[apps/frontend/src/lib/portfolioUnitMath.ts]]
+Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/frontend/src/lib/portfolioUnitMath.ts]]
 
 ### Portfolio Decimal Precision (May 2026 Audit)
 
@@ -326,7 +325,9 @@ Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/fronten
 - Investment repository adds metals child-table mapping, validation, and allowed-field handling.
 - Portfolio value computation includes metals in market-priced classes.
 - Yahoo provider docs/description explicitly include metals tickers such as `GC=F`.
-- Migration `0017_investment_custom_provider_history` ensures `metals_investments` exists and updates the `investments` compatibility view/trigger to include metals rows in mixed-schema deployments.
+- Historical migration `0017_investment_custom_provider_history` added metals to the retired
+  inheritance compatibility view. Migration 0087 later converted that shape to the canonical flat
+  table used by current repositories.
 
 Code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
@@ -367,6 +368,10 @@ Current behavior:
 - Net worth backend logs fallback paths and final computed summary metrics (currency, seed date, snapshot count, current totals) for easier debugging when users report zeroed dashboards.
 - Regression tests cover transactions-only (no investments) workspaces to keep non-zero liquid/net worth responses correct.
 - Regression tests cover isolated one-day unit investment spike sanitization in net worth snapshots ([[apps/node-backend/tests/infoRepository.test.js]]).
+- The newest Performance chart snapshot remains raw because spike detection requires points on
+  both sides. The API marks it `is_provisional`, and the page labels that status until a later
+  snapshot can confirm or reject an isolated spike
+  ([[docs/adr/125-provisional-latest-portfolio-snapshot|ADR-125]]).
 - Backend startup now triggers live price refresh after the API starts accepting requests, so startup remains non-blocking for users.
 - For Kinesis investments that already have a persisted `current_price`, startup uses that stored value immediately and defers the external Kinesis refresh to a background task.
 - If a Kinesis investment has no usable stored price, startup still includes it in the immediate refresh set to preserve first-load correctness.
@@ -747,7 +752,7 @@ Each investment can be individually included in or excluded from the ticker. The
 
 - Schema: `investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`.
 - Created by migration `0061_investments_show_in_ticker` (revision `0061_investments_show_in_ticker`, down_revision `0060_brokerage_import_routing`) via `CREATE TABLE IF NOT EXISTS`. Downgrade: `DROP TABLE IF EXISTS investment_ticker_prefs`.
-- No FK on `investment_id` — `investments` may be a VIEW on legacy inheritance-schema installs; an orphaned pref row is harmless (it simply never joins). There is **no `investments.show_in_ticker` column**.
+- The original side table has no FK on `investment_id` for historical upgrade compatibility. At head, `investments` is always a flat table; an orphaned pref row remains harmless because it never joins. There is **no `investments.show_in_ticker` column**.
 - An absent row means visible (`COALESCE(tp.show_in_ticker, true)`); only explicit opt-outs need storing — no backfill required for existing holdings.
 - **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
 - **Write path**: `investmentRepository.update()` peels `show_in_ticker` out of the PATCH body — it is **not** in `allowed` / `BASE_ALLOWED_FIELDS` — and UPSERTs it via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`, then returns the joined read.
@@ -798,6 +803,8 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 ```typescript
 {
   account_id: number | null,
+  assignment: "account" | "unassigned",
+  oversold: boolean,
   currentValue: number,
   totalInvested: number,   // gross buy cost, same grain as totals.totalInvested
   realizedGain: number,
@@ -806,15 +813,15 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 }
 ```
 
-For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries a `fullyAssigned` boolean; while an instrument still has unassigned lot rows (transition rule) its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values — read surfaces render "assign lots to see per-broker figures" instead of wrong partitions. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
+For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
 
-Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. The per-account availability replay applies splits investment-wide, mirroring the engine.
+Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. Create and update also replay the complete ordered unit-event history and reject any newly introduced or worsened broker deficit, including a later oversell caused by reassigning or redating an earlier lot. Existing invalid data remains editable when the deficit is unchanged or improved. Assignment state, availability, and projected deficits come from one database read.
 
-Two ADR-108 semantic edges on fully-assigned multi-broker instruments (adversarially verified 2026-08-10): under **weighted_avg**, a `return_of_capital` larger than one partition's basis share now floors per partition instead of against the pooled basis, so the global invested/unrealized headline can differ from the old flat replay (the partitioned figure matches what FIFO/LIFO already reported for the same rows); and a sell tagged to a broker holding fewer units than it sold clamps to that partition's lots (partition oversell), so re-tagging lots away from an account with sells changes global units/value rather than raiding another broker's lots — assign sells alongside their lots.
+Two ADR-108 semantic edges on fully-assigned multi-broker instruments matter: under **weighted_avg**, a `return_of_capital` larger than one partition's basis share floors per partition instead of against the pooled basis, so the global invested/unrealized headline can differ from the old flat replay (the partitioned figure matches what FIFO/LIFO report for the same rows). A legacy sell tagged to a broker holding fewer units than it sold clamps to that partition's lots rather than raiding another broker's lots; the resulting `oversold` warning is visible on portfolio read surfaces until the affected transactions are reassigned.
 
 Callers resolve names from the accounts list. See [[docs/api/portfolio-summary|Portfolio Summary API]] for the response shape and [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] for the model.
 
-Per-broker read surfaces (hub cards, net-worth by-account table, `InvestmentDetailDialog` holdings card) arrive in WP-C5; until then the frontend's client-side summaries (`usePortfolioSummaries.ts`) still run the flat core and can disagree with the API's partitioned figures on fully-assigned multi-broker instruments.
+The frontend fallback summaries (`usePortfolioSummaries.ts`) use the same partitioned shared core as the API, so holding-level values do not drift while the API query is loading. The portfolio table, overview, and `InvestmentDetailDialog` all render the shared oversold warning. Historical snapshot replay likewise tracks units and foreign-exchange-neutral basis per partition, so an account-local sell does not reduce an unrelated broker's holding.
 
 ### Edit-trade account picker
 
@@ -1026,4 +1033,6 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 - `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)
 - `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (**authored, not applied** — run `bun run db:upgrade`)
 - `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (**authored, not applied** — run `bun run db:upgrade`)
-- `0061_investments_show_in_ticker.py` — Creates the `investment_ticker_prefs` side table (`investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`). Enables per-investment opt-out from the portfolio ticker tape without touching the `investments` table/view (which may be a VIEW on legacy inheritance-schema installs). Absent row = visible. Downgrade drops the table. (**authored, not applied** — run `bun run db:upgrade`)
+- `0061_investments_show_in_ticker.py` — Historically created the `investment_ticker_prefs` side
+  table without altering the then-variable `investments` relation. The side table remains part of
+  the canonical schema after migration 0087. Absent row = visible; downgrade drops the table.

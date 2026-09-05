@@ -3,9 +3,25 @@ title: ADR-112 Retire the legacy split-payment overpayment trigger
 type: adr
 status: accepted
 date: 2026-08-19
-tags: [adr, database, migrations, splits, payments, concurrency, monetary-precision, adr-013, adr-060]
+tags:
+  [
+    adr,
+    database,
+    migrations,
+    splits,
+    payments,
+    concurrency,
+    monetary-precision,
+    adr-013,
+    adr-060,
+  ]
 description: Migration 0088 removes the pre-squash split-payment overpayment trigger before widening amount columns, converging upgraded databases on the fresh-install schema and keeping the locked repository transaction as the authoritative payment cap.
-aliases: [legacy split overpayment trigger, split payment guard, migration 0088 trigger cleanup]
+aliases:
+  [
+    legacy split overpayment trigger,
+    split payment guard,
+    migration 0088 trigger cleanup,
+  ]
 ---
 
 # ADR-112: Retire the legacy split-payment overpayment trigger
@@ -63,17 +79,19 @@ concurrency behavior explicitly.
 
 ## Consequences
 
+Implementation note (2026-09-04): the concurrency-safe application guard now lives in `splitService.addPayment()`. It uses transaction-client repository primitives for the row lock, paid-total read, insert, conditional settlement, and audit write. The trigger decision and four-decimal rule are unchanged.
+
 **Positive**
 
 - Databases that ran the old migration can pass 0088 instead of boot-looping.
 - Fresh and upgraded databases have the same trigger inventory.
 - Payment validation uses the same exact four-decimal rule as storage.
-- The repository lock closes the concurrent application-payment race.
+- The service-owned transaction and repository row lock close the concurrent application-payment race.
 
 **Negative**
 
 - Direct SQL writes to `split_payments` can bypass the payment cap. This was already true on fresh
-  consolidated-chain databases; callers must use the split API or repository path.
+  consolidated-chain databases; callers must use the split API or service path.
 - The legacy trigger is not restored by an 0088 downgrade.
 
 **Neutral**
@@ -101,3 +119,4 @@ separately reviewed migration rather than an install-shape-dependent downgrade s
 - [[docs/reference/database-triggers|Database Triggers Reference]]
 - [[alembic/versions/0088_money_precision_alignment.py|Migration 0088]]
 - [[apps/node-backend/src/repositories/splitRepository.js|Split repository]]
+- [[apps/node-backend/src/services/splitService.js|Split service]]

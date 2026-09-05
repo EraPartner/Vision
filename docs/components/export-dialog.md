@@ -160,7 +160,7 @@ Dropdown menu with 12 currencies:
 - EUR (default in most regions)
 - USD, GBP, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN, CZK
 
-Defaults to `appSettings.defaultCurrency` (from `AppSettingsContext`).
+Defaults to `appSettings.defaultCurrency` (from `AppSettingsHydration`).
 
 ## State Management
 

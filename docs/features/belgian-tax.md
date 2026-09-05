@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-31
+updated: 2026-09-04
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -78,7 +78,10 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 
 **Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
-The React provider [[apps/frontend/src/contexts/BelgianTaxProfileContext]] only owns persistence + state; it re-exports the public surface so existing consumers keep working.
+The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns profile, snapshot,
+audit, viewed-year, and calculation state. The compatibility provider in
+[[apps/frontend/src/contexts/BelgianTaxProfileContext]] only hydrates and persists that slice.
+Consumers use narrow selectors, and pure tax symbols come directly from `lib/belgianTax`.
 
 ## Sources of truth
 
@@ -215,14 +218,17 @@ The `BelgianTaxCalculation` result object includes:
 
 Shows four explicit values for dividend taxation:
 
-| Tile                      | Definition                                                                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dividend income tracked` | Sum of all `dividend` transaction amounts for the tax year                                                                                                      |
-| `WHT paid (gross)`        | Sum of all recorded WHT from `dividend` transactions — actual withheld amount, not estimated                                                                    |
-| `WHT reclaimable`         | `min(recordedWHT, min(totalDividendIncome + recordedWHT, €859) × 30%)` — capped by both recorded WHT and the exemption threshold applied to gross dividend base |
-| `Net WHT cost`            | `max(recordedWHT − reclaimable, 0)` — the unrecoverable portion                                                                                                 |
+| Tile                      | Definition                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `Dividend income tracked` | Sum of all `dividend` transaction amounts for the tax year                                                                         |
+| `WHT paid (gross)`        | Sum of all recorded WHT from `dividend` transactions — actual withheld amount, not estimated                                       |
+| `WHT reclaimable`         | `min(recordedWHT, min(grossDividendBase, €859) × 30%)` — available only when every included dividend has a known amount convention |
+| `Net WHT cost`            | `max(recordedWHT − reclaimable, 0)` — the unrecoverable portion                                                                    |
 
-The gross dividend base (`totalDividendIncome + recordedWHT`) works for both net-in-amount and gross-in-amount dividend recording conventions.
+Each dividend row explicitly records whether its amount is `gross`, `net`, or `unknown` (ADR-126).
+Gross rows contribute `amount`; net rows contribute `amount + recordedWHT`. Existing and
+unclassified rows are `unknown`. Recorded amounts and taxes still display, but convention-dependent
+reclaim and net-cost estimates are marked incomplete until every included row is classified.
 
 ### Cross-Currency Normalization
 
@@ -301,7 +307,7 @@ The Belgian Tax Overview and Portfolio Tax pages share a year switcher that lets
 - `belgian_tax_profile` — live, active profile (always represents the user's current income year).
 - `belgian_tax_profile_snapshots_v1` — JSONB `Record<incomeYear, BelgianTaxProfile>` of frozen snapshots. Created automatically when the live profile's `taxYear` advances; can also be seeded retroactively for years that show up in the year list only because of transaction data.
 
-### Provider surface (`BelgianTaxProfileContext`)
+### Store and compatibility hook surface
 
 | Member                         | Purpose                                                                                     |
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
@@ -372,7 +378,7 @@ type BelgianTaxProfileSnapshotMeta = {
 };
 ```
 
-### Provider surface additions (`BelgianTaxProfileContext`)
+### Store and compatibility hook additions
 
 | Member                                              | Purpose                                                                                                                    |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |

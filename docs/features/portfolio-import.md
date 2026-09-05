@@ -65,7 +65,7 @@ Key design points:
 - **Instrument matching by symbol then name** (exact, case-insensitive). No ISIN lookup, no fuzzy match.
 - **Conservative auto-commit**: only when every row matched exactly and there are zero errors/unresolved.
 - **Review step for mismatches**: unresolved rows go to `awaiting_review`; the user links each symbol/name to an existing investment or creates a new one.
-- **Reuses existing `portfolioTransactionRepository.create`**: 2-of-3 unit math, oversell prevention, asset-class routing.
+- **Reuses `portfolioTransactionService.create`**: 2-of-3 unit math, oversell prevention, and asset-class routing shared with manual entry.
 - **Saved parser configs**: reuses `custom_parser_configs` table with `kind = 'portfolio'` discriminator (ADR-041 migration 0041).
 
 ---
@@ -131,6 +131,13 @@ When a batch enters `awaiting_review`, the frontend navigates to `PortfolioImpor
 - **Create a new investment** → the same group endpoint with the complete `row_ids` and `{ create_new: true }`. It creates one investment from the first row's symbol/name/default_asset_class and links the full group atomically.
 
 When all rows are resolved, the user clicks **Commit** → `POST /api/portfolio/import/batches/:id/commit`.
+If a brokerage cash row previously failed because the batch account was missing, the review page
+requires an account selection and sends its `account_id` with the recommit. The backend resets only
+that exact missing-account cash error to `matched`, corrects the batch error counter, and drains the
+row in the same review flow. Account selection and commit run while holding the batch lock, so two
+concurrent recommits cannot swap the destination account between validation and insertion.
+Investment-override endpoints reject `route='cash'` rows because an
+instrument selection cannot repair them.
 
 ### 5. Commit
 
@@ -138,7 +145,7 @@ When all rows are resolved, the user clicks **Commit** → `POST /api/portfolio/
 
 For each valid, resolved staged row:
 
-- Calls `portfolioTransactionRepository.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
+- Calls `portfolioTransactionService.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
 - **Account assignment:** if the batch has `account_id` set (migration 0057), each committed `portfolio_transaction` inherits that `account_id` so all lots from this import belong to the specified brokerage account.
 - **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.js]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
 - **Occurrence-aware deduplication**: each trade identity includes `(investment, date, type, amount, units, account, currency)`. The i-th occurrence in the uploaded statement is paired with the i-th matching destination row. This preserves legitimate identical fills on first import, makes a complete reimport a no-op, and inserts only missing occurrences after a partial import.
@@ -155,7 +162,7 @@ Progress event: `{ phase: 'committing', current, total, imported, duplicates, er
 On an `is_brokerage` batch, `validate.js` stamps each row's `route` via
 `classifyBrokerageRow` ([[apps/node-backend/src/services/importPipeline/brokerageRouting.js]]):
 
-- **`route='cash'`** — external deposits/withdrawals, **and (D6, [[docs/adr/095-brokerage-account-import|ADR-095 addendum 2026-07-10]]) dividend/interest/fee/tax rows that carry no instrument reference at all** (no symbol, no name — sleeve interest, custody fees, account-level distributions). Each commits as ONE signed row in `transactions` on the batch's sleeve account: staging magnitudes are absolute, the sign comes from the row's canonical type (dividend/interest → `+`, fee/tax → `−`; deposits `+`, withdrawals `−`). D6 rows are auto-categorized by kind — `INCOME:DIVIDENDS`, `INCOME:INTEREST`, `INVESTMENTS:FEES`, `INVESTMENTS:TAXES` (created idempotently via `categoryRepository.createOrGet`); external deposits/withdrawals stay uncategorized (they are transfers, not income/expense). A kind whose category exists but is **soft-deleted** (`is_active = false`) is skipped and its row commits uncategorized too: `createOrGet`'s `ON CONFLICT DO NOTHING` hands the hidden row back unchanged and nothing reactivates it, so stamping it would file fresh ledger rows under a category every picker and list filters out. The payee is the broker (sleeve account `institution`, falling back to `name`).
+- **`route='cash'`** — external deposits/withdrawals, **and (D6, [[docs/adr/095-brokerage-account-import|ADR-095 addendum 2026-07-10]]) dividend/interest/fee/tax rows that carry no instrument reference at all** (no symbol, no name — sleeve interest, custody fees, account-level distributions). Each commits as ONE signed row in `transactions` on the batch's sleeve account: staging magnitudes are absolute, the sign comes from the row's canonical type (dividend/interest → `+`, fee/tax → `−`; deposits `+`, withdrawals `−`). The Behavior setting `brokerage_cash_category_ids` optionally maps each D6 kind to an active category ID. Import reads one mapping snapshot per commit, resolves active IDs only, and never creates or reactivates a category. An unset, missing, or inactive mapping commits the row uncategorized. External deposits/withdrawals always stay uncategorized because they are transfers, not income or expense. The payee is the broker (sleeve account `institution`, falling back to `name`).
 - **`route='portfolio'`** — buys/sells, and dividend/interest/fee/tax rows that DO name an instrument. These commit to `portfolio_transactions` only; an unresolved instrument on such a row is a correct blocking error, repairable in review (pick/create holding, then re-commit).
 
 The routing is deterministic from the row and decided at validate time; a statement row lands on **exactly one side, never both**.
@@ -170,7 +177,7 @@ The routing is deterministic from the row and decided at validate time; a statem
 
 **Rollback** treats D6 rows exactly like other cash rows: `route` travels with `committed_txn_id`, so `rollbackBatch` deletes them from `transactions` (never the portfolio table) and resets staging to `matched`.
 
-Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, signs, categories, rollback, non-brokerage unchanged), `tests/brokerageRouting.test.js` (D6 classification), `tests/portfolioImportCommit.test.js` (pinned cash INSERT SQL + D6 sign/category params).
+Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, signs, configured categories, rollback, non-brokerage unchanged), `tests/brokerageRouting.test.js` (D6 classification), `tests/portfolioImportCommit.test.js` (pinned cash INSERT SQL + D6 sign/configured-active-category params).
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: ADR-094 Balance Reconciliation & Drift Detection
 type: adr
-date: 2026-06-18
+date: 2026-09-04
 tags: [adr, accounts, reconciliation, drift, statement-balance, adr-088, balance-write-protection, import-pipeline-only]
 description: Store an authoritative statement balance per account and diff it against the computed ledger balance to surface drift ("drifted €12.40 — missing a transaction"), now that accounts have identity. 2026-06-25 addendum: transactions.balance is now write-protected — only the import pipeline may stamp it.
 aliases: [reconciliation, drift detection, statement balance]
@@ -175,6 +175,7 @@ server-side:
 | `date`                            | user-chosen; expected to precede the account's activity (warn when it doesn't — by anchor+delta semantics a _later_ stamped row always wins, so a mid-history anchor is inert against newer import stamps) |
 | `is_transfer` / `transfer_source` | `true` / `'opening'` — a new CHECK value following ADR-090's `'trade'` precedent, so the row is excluded from spending aggregations and from transfer reconciliation                                       |
 | `memo`                            | `'OPENING BALANCE'` — a fixed English server-side constant (`OPENING_MEMO`), stamped by the service, not i18n'd                                                                                            |
+| `recipient_id`                    | the inactive reserved `SYSTEM` recipient, resolved server-side; public recipient creation cannot create, adopt, or reactivate this identity                                                                |
 
 One anchor per `(account, currency)`; invoking the action again **updates** the existing row
 rather than adding a second. The generic `POST /api/transactions` / `PATCH` surface remains
@@ -199,3 +200,7 @@ detail/reconcile flow (rewrite Phase C/D).
   `transfer_source = 'opening'` rows — they are legitimately zero-amount.
 - Deleting the anchor row must be guarded the same way (only via the action / with a clear
   warning), or the account silently de-anchors.
+
+The opening-balance and reconcile services lock the account before resolving the `SYSTEM`
+recipient. Recipient-owned flows do not acquire an account lock after a recipient lock. This
+account-to-recipient order is the only permitted cross-table lock edge for these system rows.

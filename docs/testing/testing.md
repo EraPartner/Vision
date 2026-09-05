@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-09-03
-last-updated: 2026-09-03
-last_updated_timestamp: 2026-09-03T00:00:00Z
+updated: 2026-09-04
+last-updated: 2026-09-04
+last_updated_timestamp: 2026-09-04T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -188,7 +188,7 @@ apps/node-backend/tests/
 ├── deduplication.test.js       # Deduplication logic
 ├── recurringDetectionService.test.js
 ├── loanRepaymentService.test.js
-├── investmentRepository.test.js  # Investment inheritance + legacy view compatibility
+├── investmentRepository.test.js  # Canonical flat investment-table behavior
 ├── routes/
 │   ├── transactions.test.js
 │   ├── splits.test.js
@@ -369,12 +369,14 @@ Test custom React hooks in isolation using `renderHook` from React Testing Libra
    }
    ```
 
-5. **Mocking LanguageContext synchronously in async factory (2026-05-03):**
+5. **Mocking LanguageHydration synchronously in async factory (2026-05-03):**
    ```typescript
    // @vitest-environment jsdom
-   vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+   vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
      const actual =
-       await importOriginal<typeof import("@/contexts/LanguageContext")>();
+       await importOriginal<
+         typeof import("@/stores/hydration/LanguageHydration")
+       >();
      const { default: enDict } = await import("@/locales/en");
      return {
        ...actual,
@@ -475,9 +477,9 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
 
 - `apps/frontend/src/contexts/__tests__/BelgianTaxProfileContext.test.tsx` (8 tests)
 - `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx` (12 tests)
-- `apps/frontend/src/contexts/__tests__/LanguageContext.test.tsx` (6 tests)
+- `apps/frontend/src/stores/hydration/__tests__/LanguageHydration.test.tsx` (6 tests)
 - `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx` (5 tests)
-- `apps/frontend/src/contexts/__tests__/WorkspaceContext.test.tsx` (6 tests)
+- `apps/frontend/src/hooks/__tests__/useWorkspace.test.tsx` (6 tests)
 
 Total: 37 context tests, all passing.
 
@@ -925,7 +927,8 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
   - [[apps/node-backend/tests/routes/admin.test.js]] covers sanitized admin error responses and auth-related expectations.
   - [[apps/node-backend/tests/routes/info.test.js]] covers `/api/info/refresh-views` registration + limiter/security assertions.
 
-- `apps/node-backend/tests/investmentRepository.test.js` covers PostgreSQL inheritance-backed investment writes/reads through compatibility views.
+- `apps/node-backend/tests/investmentRepository.test.js` covers canonical flat-table investment
+  writes and reads, including asset-class-specific nullable fields.
 - `apps/node-backend/tests/routes/splits.test.js` validates split amount bounds, per-recipient settle-all behavior, and owed CSV export flows.
 - `apps/frontend/src/lib/dateUtils.test.ts` adds coverage for semantic month label helpers: `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)`.
 - `apps/frontend/src/hooks/useStatistics.test.ts` now covers category pivot metric mode aggregations (absolute, net, income-only, expense-only) and recipient yearly aggregation (`topRecipientsByYear`) used by year-filtered top-recipient statistics.
@@ -942,7 +945,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
 - `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
-Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
+Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
 Dependency remediation links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/package.json]], [[apps/frontend/package.json]], [[package.json]]
 
@@ -1537,10 +1540,10 @@ Added comprehensive component-integration test coverage for VirtualDataTable, Vi
 
 **Key Patterns Established:**
 
-- **Mock LanguageContext with async factory:** Import locale dictionary synchronously for test speed
+- **Mock LanguageHydration with async factory:** Import locale dictionary synchronously for test speed
 
   ```typescript
-  vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+  vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const { default: enDict } = await import("@/locales/en");
     return {
       ...actual,

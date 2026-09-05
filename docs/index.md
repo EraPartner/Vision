@@ -204,6 +204,14 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-09-04 — Balance-Provenance Lateral Naming (ADR-118)
+
+The account-level balance SQL export is now `BALANCE_PROVENANCE_LATERAL`, matching its actual `anchor_date` and `post_anchor_count` output. Per-currency helpers remain the source of numeric balances. See [[docs/adr/118-balance-provenance-lateral-naming|ADR-118]].
+
+### 2026-09-04 — On-Demand Electron Vibrancy (ADR-117)
+
+The macOS shell now allocates the native `under-window` material only while the effective visual-effects tier is enhanced. Standard, reduced, cleanup, and large-display auto-adapt states remove the material through a typed, capability-gated Electron bridge. This supersedes ADR-072's always-present material while preserving its renderer translucency and sandbox decisions. See [[docs/adr/117-on-demand-electron-vibrancy|ADR-117]].
+
 ### 2026-08-31 — Native Vision Demo (ADR-114)
 
 Vision Demo now packages the same native PostgreSQL, migration, backend, frontend, and report
@@ -232,8 +240,8 @@ runtime marker. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guid
 - **Dock menu + badge**: dock menu has New Transaction and Dashboard; badge driven by `UpcomingPaymentsNotification` (visible upcoming payment count).
 - **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
 - **`/transactions?new=1` deep link**: opens `AddTransactionDialog`, strips param on open (used by menu and dock).
-- **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeContext` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
-- **Vibrancy opt-in**: window always created with `vibrancy: 'under-window'`; `body` turns translucent (`/0.72`) only when the effective visual-effects tier is `enhanced` (ADR-075).
+- **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeHydration` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
+- **Vibrancy opt-in**: ADR-117 supersedes the original always-present native material; the effective enhanced tier now enables both `vibrancy: 'under-window'` and the translucent body, while other tiers remove both.
 - **`window.electronAPI` bridge**: new minimal contextBridge surface (`platform`, `ready()`, `setDockBadge`, `getAccentColor`, `onAccentColorChanged`, `onMenuAction`, `onCsvOpen`, `onFullScreenChange`). Sandbox posture unchanged.
 - **`ElectronBridge.tsx`**: side-effect component mounted in `AppLayout` — routes all of the above, attaches listeners via stable refs.
 - **i18n**: +11 keys (`menu.*`, `settings.appearance.systemAccent*`); source total: 2898 keys.

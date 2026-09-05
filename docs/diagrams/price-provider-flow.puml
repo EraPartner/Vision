@@ -129,10 +129,10 @@ note right of PriceProviderService
   and persisted with read-through
   cache behavior in asset_price_history.
 
-  Migration dependency:
+  Historical migration dependency:
   0017_investment_custom_provider_history
-  keeps compatibility view/trigger aligned
-  for metals + advanced provider fields.
+  kept the retired compatibility view/trigger aligned.
+  Migration 0087 converted it to the flat table.
 end note
 
 @enduml

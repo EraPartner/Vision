@@ -7,7 +7,7 @@ updated: 2026-08-31
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox, validate-locales, source-key-usage, placeholder-bug-fix, url-state, destructive-confirm]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). 2026-06-26 — validate-locales gains source key-usage checks (key-existence, dropped-vars, value-shape); closes 10 missing keys and fixes placeholder mismatches. 2026-08-10 (PR #156) adds 11 keys: txPage.loadMoreFailed/loadMoreFailedDesc/deleteAttachmentError (3), watchlist.removeTitle/removeDesc/removeConfirm (3), research.mapping.removeDesc, importReview.recipientPickerLabel, dbEditor.discardNewRow/nextPage/prevPage (3). Total key count last verified 2026-06-26 (3495); not re-verified since — run `bun run validate-locales` (see [[docs/reference/scripts|Scripts Reference]]) for a current count.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
-related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
+related_code: ["apps/frontend/src/locales", "apps/frontend/src/stores/hydration/LanguageHydration.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
 
 # Translations & i18n
@@ -51,7 +51,7 @@ The frontend imports from `apps/frontend/src/locales/` (generated).
 ### Basic Usage
 
 ```tsx
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 function MyComponent() {
   const { t, language, setLanguage } = useLanguage();
@@ -345,7 +345,7 @@ Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/f
 
 These keys back the Select in the new **Accessibility** `SettingsGroup` inside `AppearanceSection`. The setting it drives (`colorblindGainLoss`) toggles `.skin-v2` on `<html>` via `AppSettingsProvider`. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]] and [[docs/adr/104-skin-v2-dense-fintech-visual-redesign#addendum--2026-06-24-colorblind-palette-promoted-to-user-setting|ADR-104 addendum]].
 
-Code links: [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
+Code links: [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
 
 ---
 
@@ -734,7 +734,7 @@ return <h1>{t("myComponent.greeting")}</h1>;
 
 ## Language Context
 
-### LanguageContext API
+### LanguageHydration API
 
 ```typescript
 interface LanguageContextType {

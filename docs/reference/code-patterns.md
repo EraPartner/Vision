@@ -3,7 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-09-03
+updated: 2026-09-04
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
@@ -34,6 +34,27 @@ Pure logic that is needed on both the frontend and backend lives in this Bun wor
 Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies. Money keeps per-app re-export shims for compatibility. Use an explicit package subpath for modules exposed that way; `category` remains the root-barrel exception. Add new modules only when their logic is genuinely shared and pure; backend-only or frontend-only domain logic stays in its owning app.
 
 > [!important] Do not import from `apps/node-backend/src/lib/money.js` directly in the frontend, or vice-versa. Always import from `@vision/shared-utils/money` (or the per-app re-export shim at `src/lib/money.js` / `src/lib/money.ts`).
+
+## Backend test-only export convention
+
+A backend binding exported only so tests can exercise an internal seam uses a
+`__`-prefixed exported alias. Keep the implementation name unchanged so the
+runtime code stays readable:
+
+```js
+function resetCache() {
+  // ...
+}
+
+export { resetCache as __resetCache };
+```
+
+Tests may alias that export back to a descriptive local name. A binding can keep
+its public property name inside a default runtime object while its separate
+test-only named export uses the `__` alias. `bun run check-test-only-exports`
+parses static, namespace, and dynamic imports and enforces this boundary. Its
+closed allowlist preserves intentional public APIs and must not be widened
+merely to silence a new violation.
 
 This eliminates the prior frontend/backend money-rounding drift that was caused by each app carrying its own copy of `roundMoney`.
 
@@ -463,6 +484,15 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > Both are deliberate "miss" sentinels, not the "optional value" case — new code at these two
 > boundaries should keep returning `null` (test with `== null`). Everywhere else, prefer `undefined`.
 
+> [!important] Optional route filters use `undefined`
+> Route parsers represent an absent optional filter with `undefined`, including scalar IDs, dates,
+> search text, enum filters, and optional ID or slug list fields. Parsers whose public input model
+> deliberately uses an empty array as “select none” keep that collection contract. Reserve `null` for an explicit wire or
+> persistence value. The backend ESLint rule `vision-local/no-null-route-filter` guards the common
+> object-property and `*Filter` variable forms. Filter consumers may keep loose `!= null` checks
+> while older service and repository call sites are migrated, but new route models must not emit
+> `null` for absence.
+
 ```js
 import { query } from "../database/connection.js";
 
@@ -558,7 +588,7 @@ binding names, so it fires on a new repository importing a service, on a sanctio
 importing a _different_ service, and on a sanctioned repository _widening_ its binding list. The
 two lists must be edited together.
 
-> [!note] Accepted exception — eight read-repositories may import currency conversion
+> [!note] Accepted exception — seven read-repositories may import currency conversion
 > Every current repository→service import goes to
 > [[apps/node-backend/src/services/currency/currencyConversionService.js|currencyConversionService.js]]
 > and is a **sanctioned exception**, not a bug:
@@ -567,26 +597,15 @@ two lists must be edited together.
 >   `infoRepositoryAverageVsCurrent.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js`,
 >   `infoRepositoryPlanned.js`, `infoRepositoryRecipients.js`, `infoRepositoryStatistics.js`,
 >   `infoRepositoryTags.js`.
-> - [[apps/node-backend/src/repositories/accountRepository.js|accountRepository.js]] imports
->   `loadCurrentRates` + `convertWithRates` (added 2026-08 with the per-currency balance
->   partitions, ADR-094 / WP-A1; sanctioned retroactively 2026-08-11).
 >
 > **Rationale:** these "repositories" are effectively read-services — they aggregate rows and
-> currency-convert them as part of producing API-shaped results. `accountRepository.getAll` is the
-> same shape: it folds an account's per-currency `balance_parts` into the account currency to emit
-> `computed_balance`. Currency conversion is stateful (in-memory rate cache, ECB/er-api fetch, DB
+> currency-convert them as part of producing API-shaped results. Currency conversion is stateful (in-memory rate cache, ECB/er-api fetch, DB
 > fallback, provider-health recording), so it cannot move to `lib/` — and `convertWithRates`, the
 > pure half, cannot be split out usefully while its rate table still comes from `loadCurrentRates`.
 >
-> Lifting the fold up into `accountService.list` was considered and rejected: it would change the
-> return shape of `accountRepository.getAll`, which **25 call sites across four DB-backed test
-> files** (`multiCurrencyBalances.db.test.js`, `systemRecipientRows.db.test.js`,
-> `revolutMultiCurrency.db.test.js`, `portfolioImportInstrumentlessCash.db.test.js`) assert on
-> directly for `computed_balance` / `drift` / `reconcilable_balance`. Those files self-skip without
-> `TEST_DATABASE_URL`, so the rewrite could not be verified where it matters — a money path is the
-> wrong place to blind-edit assertions. Revisit only alongside a `bun run test:db` run: the lift
-> itself is small (the `result.rows.map` fold moves into `accountService.list`, which is
-> `getAll`'s only production caller), it is the test surface that carries the risk.
+> `accountRepository.getAll` returns raw native-currency `balance_parts`. `accountService.list`
+> loads one rate table and owns the fold into API fields such as `computed_balance`, `drift`, and
+> `reconcilable_balance`. This keeps the repository-to-service dependency direction intact.
 >
 > Do **not** extend this exception. Any other helper a repository needs belongs in `lib/`, or the
 > call belongs in the service that calls the repository.
@@ -974,6 +993,13 @@ Everything else in the import routers is snake_case (`auto_linked_count`); only 
 
 **Source:** [[apps/frontend/src/hooks/useTransactions.ts|useTransactions.ts]], [[apps/frontend/src/hooks/useCategories.ts|useCategories.ts]]
 
+Page and component modules must consume named query hooks. Define `useQuery`, `useInfiniteQuery`,
+and `useQueries` calls in `src/hooks/`, a feature `hooks/` directory, or a feature-local
+`use*.ts(x)` module. Keep query keys, request arguments, enablement, stale times, placeholder data,
+retry policy, polling, and selectors in that hook so the UI cannot create a second cache contract.
+`apps/frontend/eslint.config.js` enforces the boundary. `useQueryClient` may remain in a component
+when a local mutation needs targeted invalidation.
+
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -984,7 +1010,7 @@ import {
   updateRecipient as updateEntity,
 } from "@/lib/api/recipients";
 import { toast } from "sonner";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 // LIST query
@@ -1957,7 +1983,7 @@ scheduleMaterializedViewRefresh(); // Five-second trailing debounce, ten-second 
 **What it does:**
 
 - Keeps forecast cache invalidation synchronous with import completion
-- Schedules the three managed MVs without blocking the response
+- Schedules the two managed MVs without blocking the response
 - No-op for trigger-maintained tables (automatic updates)
 
 ### Debounced Refresh (Single-Row Mutations)
@@ -2094,7 +2120,7 @@ const outstanding = await query(
 
 **Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|infoRepositoryHelpers.js]]
 
-When querying PostgreSQL materialized views that may not exist or may be empty (e.g., after schema creation or migrations), use the `mvAvailable(viewName)` helper with allowlist validation and negative caching.
+When querying PostgreSQL materialized views that may not exist or may be empty (e.g., during post-listen creation or after migrations), use the `mvAvailable(viewName)` helper with allowlist validation and a short cache for both outcomes.
 
 ### Problem
 
@@ -2123,18 +2149,11 @@ if (isCategoryTotalsAvailable) {
 
 1. **Allowlist validation:** View names are pinned in `ALLOWED_MV_NAMES` set (e.g., `'mv_category_totals'`, `'mv_monthly_summary'`) to prevent SQL injection if names ever come from user input.
 
-2. **Positive caching (indefinite):** If a view exists and has rows, the result is cached in-process forever. View existence is a stable schema fact.
+2. **Positive caching (60s TTL):** If a view exists and has rows, the result is cached briefly. Expiry lets a runtime drop self-heal instead of routing every later request to a missing relation.
 
 3. **Negative caching (60s TTL):** If a view is missing or empty, the result is cached for 60 seconds. This avoids DB round-trips for missing views on every request, but recovers quickly when a view is created.
 
-4. **Cache clearing:** After bulk imports or migrations that recreate views, call `clearMvCache()` to force fresh checks:
-   ```js
-   import { clearMvCache } from "../repositories/infoRepositoryHelpers.js";
-
-   await bulkImportTransactions(rows);
-   await refreshAggregations();
-   clearMvCache(); // Views now exist; next mvAvailable() call hits DB
-   ```
+4. **Cache clearing:** `clearMvCache()` is a test-reset seam. Production callers rely on the bounded TTL; mutation refreshes clear statistics result caches, not the availability probe.
 
 ### When to Use
 
@@ -2943,7 +2962,7 @@ const aggregateResult = await client.query(
 
 Both queries execute within the same transaction, so atomicity is preserved: the lock acquired on the first query holds until `COMMIT`.
 
-**Used in:** [[apps/node-backend/src/repositories/splitRepository.js]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — lock the transaction row, then aggregate its splits in a separate query to validate allocation before insert.
+**Used in:** [[apps/node-backend/src/services/splitService.js]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — service orchestration asks the repository to lock the transaction row, then reads its split totals to validate allocation before insert.
 
 ---
 
@@ -3311,9 +3330,9 @@ Inside each chart, `useChartSync(syncId)` provides the shared hovered x-key and 
 
 ## Zustand Store Pattern (Frontend, Phase 4)
 
-**Source:** [[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]
+**Source:** [[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]], [[apps/frontend/src/stores/belgianTaxStore.ts|belgianTaxStore.ts]]
 
-Use Zustand for client state that spans multiple pages or contexts. Vision uses Zustand to unify settings state (app settings, dashboard settings, theme) that previously required three separate React contexts.
+Use Zustand for client state that spans multiple pages or contexts. Vision uses Zustand to unify settings state (app settings, dashboard settings, theme, and Belgian-tax settings) behind hydration and persistence bridges.
 
 ### Pattern
 
@@ -3364,13 +3383,18 @@ const slice = useAppStore(
 
 ### Key Rules
 
-| Rule                                       | Rationale                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| Store for cross-page state only            | Local component state → useState; UI state → Context                           |
-| Use `useShallow()` for multiple selections | Prevents unrelated updates from triggering re-renders                          |
-| Actions mutate immutably                   | Always spread objects: `{ ...state, field: value }`                            |
-| Split large stores into slices             | Keep each store <200 LOC; use multiple stores if needed                        |
-| Pair with Context wrappers                 | Zustand for state, Context Providers for side-effects (hydration, persistence) |
+| Rule                                        | Rationale                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| Store for cross-page state only             | Local component state → useState; UI state → Context                           |
+| Use `useShallow()` for multiple selections  | Prevents unrelated updates from triggering re-renders                          |
+| Actions mutate immutably                    | Always spread objects: `{ ...state, field: value }`                            |
+| Split large stores into slices              | Keep each store <200 LOC; use multiple stores if needed                        |
+| Pair with Context wrappers                  | Zustand for state, Context Providers for side-effects (hydration, persistence) |
+| Import pure domain symbols from their owner | Do not turn hydration modules into barrels for constants or types              |
+
+Belgian-tax consumers pass a narrow selector to `useBelgianTaxProfile`. Its compatibility
+provider carries only a stable scope marker. The current-year calculation is stored with the
+profile transition, while multi-year comparison calculations use a debounced profile input.
 
 ### When to Use
 
@@ -3767,7 +3791,7 @@ function HeadlineCard({ amount }: { amount: number }) {
 }
 ```
 
-`formatCompact` is bound to the current user locale and currency from `AppSettingsContext` — no need to pass currency/locale explicitly.
+`formatCompact` is bound to the current user locale and currency from `AppSettingsHydration` — no need to pass currency/locale explicitly.
 
 ### Render Pattern
 
@@ -4173,7 +4197,7 @@ useEffect(() => {
 
 ## Belgian Tax Freeze/Display Pattern (ADR-059, Phase 11, May 2026)
 
-**Source:** [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx|BelgianTaxProfileContext]], [[apps/frontend/src/lib/belgianTax/types.ts|belgianTax/types.ts]]
+**Source:** [[apps/frontend/src/stores/belgianTaxStore.ts|belgianTaxStore]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx|BelgianTaxProfile hydration boundary]], [[apps/frontend/src/lib/belgianTax/types.ts|belgianTax/types.ts]]
 
 When displaying calculated tax information (PIT, effective rates, etc.) for historical years, use `displayCalculationForYear(year)` instead of always recomputing from the live profile. This pattern solves engine-drift: a bug fix to `computeBelgianPIT` should not retroactively change filed years.
 
@@ -4181,8 +4205,12 @@ When displaying calculated tax information (PIT, effective rates, etc.) for hist
 
 ```typescript
 // In a read site (page, component, hook):
-const { displayCalculationForYear, isYearFiled } =
-  useBelgianTaxProfileContext();
+const { displayCalculationForYear, isYearFiled } = useBelgianTaxProfile(
+  (state) => ({
+    displayCalculationForYear: state.displayCalculationForYear,
+    isYearFiled: state.isYearFiled,
+  }),
+);
 
 // For the viewed year, use the display getter (not live recompute)
 const calculation = displayCalculationForYear(viewedYear);
@@ -4213,7 +4241,12 @@ const canEditFreely = !isYearFiled(viewedYear);
 ```typescript
 // Tax Overview page — yearly chart
 function YearlyChart({ viewedYear }) {
-  const { displayCalculationForYear, profileForYear, calculationForYear } = useBelgianTaxProfileContext();
+  const { displayCalculationForYear, profileForYear } = useBelgianTaxProfile(
+    (state) => ({
+      displayCalculationForYear: state.displayCalculationForYear,
+      profileForYear: state.profileForYear,
+    }),
+  );
 
   const calculation = displayCalculationForYear(viewedYear);
   const profile = profileForYear(viewedYear);
@@ -4233,7 +4266,9 @@ function YearlyChart({ viewedYear }) {
 ```typescript
 // Year Actions Menu — freeze button clicked
 async function handleFreezeYear(year) {
-  const { freezeCalculation } = useBelgianTaxProfileContext();
+  const freezeCalculation = useBelgianTaxProfile(
+    (state) => state.freezeCalculation,
+  );
 
   try {
     await freezeCalculation(year);
@@ -4495,7 +4530,19 @@ A modal Radix overlay (`modal={true}`, the default) sets `pointer-events: none` 
 
 ## Database Naming & Enum Discipline (August 2026, migrations 0089/0090)
 
-**Source of the rule:** migrations [[alembic/versions/0089_free_text_enum_checks.py]] and [[alembic/versions/0090_constraint_index_naming.py]].
+### Modification timestamps
+
+Every ordinary mutable table with an `updated_at` column must attach the shared
+`update_updated_at_column()` `BEFORE UPDATE` trigger. Application assignments are allowed for
+compatibility, but the trigger is authoritative. Add `updated_at` to mutable staging or preference
+tables when later changes must be operationally distinguishable from creation. See
+[[docs/adr/119-trigger-owned-updated-at-policy|ADR-119]].
+
+The exception is a trigger-maintained aggregate whose one refresh function writes both its values and
+timestamp. `agg_split_outstanding` follows that model; application code cannot update it directly.
+
+**Source of the rule:** migration [[alembic/versions/0092_updated_at_policy.py]] and
+[[docs/adr/119-trigger-owned-updated-at-policy|ADR-119]].
 
 ### Enum-like columns: TEXT + named CHECK
 

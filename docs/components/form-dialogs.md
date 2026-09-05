@@ -778,8 +778,8 @@ Resets all settings to defaults. Dialog remains open.
 
 ### Related Code
 
-- Settings Context: `[[apps/frontend/src/contexts/SettingsContext.tsx]]`
-- App Settings Context: `[[apps/frontend/src/contexts/AppSettingsContext.tsx]]`
+- Settings Context: `[[apps/frontend/src/stores/hydration/SettingsHydration.tsx]]`
+- App Settings Context: `[[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]`
 - Settings API: `[[apps/node-backend/src/routes/settings.js]]`
 
 ---

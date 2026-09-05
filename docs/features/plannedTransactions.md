@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-08-31
+updated: 2026-09-04
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/services/plannedTransactionService.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -122,7 +122,7 @@ Planned payment form currency defaults are now sourced from app settings consist
 - Form reset after create/edit reuses `appSettings.defaultCurrency`
 - Planned payment API mapping fallback currency uses configured defaults rather than hardcoded values
 
-Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]
 
 ### Execution Tracking
 
@@ -301,11 +301,11 @@ Useful for:
 
 ## Atomic Loan PATCH (2026-05-29)
 
-`PATCH /api/planned-transactions/:id` for loan-type planned transactions now applies the field update and the loan-schedule replacement in a **single database transaction** via `plannedTransactionRepository.updateWithLoanSchedule(id, fields, scheduleEntries)`.
+`PATCH /api/planned-transactions/:id` for loan-type planned transactions applies the field update and the loan-schedule replacement in a **single database transaction** via `plannedTransactionService.updateWithLoanSchedule(id, fields, scheduleEntries)`.
 
 **Before:** the route issued two separate calls — `repository.update()` followed by `repository.replaceLoanSchedule()`. A failure between the two left the row's header fields updated but the schedule stale (or vice versa), producing inconsistent amortization data.
 
-**After:** `updateWithLoanSchedule` wraps both operations in `withTransaction(client => …)`:
+**After:** the service wraps the repository's client-aware field, tag, and schedule primitives in `withTransaction(client => …)`. The same service owns create-with-tags/schedule, update-with-tags, standalone schedule replacement, and execute-and-advance transactions; the repository supplies parameterized persistence primitives:
 
 1. `UPDATE planned_transactions SET … WHERE id = $n RETURNING id`
 2. `DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1`
@@ -313,7 +313,7 @@ Useful for:
 
 All three steps commit or roll back together. If the row no longer exists, `null` is returned and no schedule mutation occurs.
 
-**Scope:** Only the PATCH path for loan-bearing rows uses this method. Non-loan PATCHes continue through the standard `repository.update()` path. The standalone `replaceLoanSchedule()` method remains for any direct schedule-reset calls.
+**Scope:** Only the PATCH path for loan-bearing rows uses this method. Non-loan PATCHes continue through `plannedTransactionService.update()`. The service's standalone `replaceLoanSchedule()` method remains for direct schedule-reset calls.
 
 ## Execution Atomicity and Idempotency (Phase 3)
 

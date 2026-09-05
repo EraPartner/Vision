@@ -429,7 +429,7 @@ interface ExportDialogProps {
 
 Dropdown of 12 currencies: EUR, USD, GBP, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN, CZK.
 
-Defaults to the user's app-wide `defaultCurrency` setting (from `AppSettingsContext`).
+Defaults to the user's app-wide `defaultCurrency` setting (from `AppSettingsHydration`).
 
 ### Loading and Error States
 

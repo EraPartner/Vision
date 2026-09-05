@@ -11,17 +11,19 @@ aliases: [adr-075, visual effects tiers, auto-adapt display, fx-reduced]
 # ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation
 
 ## Status
+
 Accepted
 
 ## Date
+
 2026-06-12
 
 ## Context
 
 The [[docs/adr/071-premium-v3-effects-toggle|ADR-071]] `enhancedEffects` boolean assumed one
-GPU budget per machine. In practice the budget is per *display*: on the MacBook Air M1
+GPU budget per machine. In practice the budget is per _display_: on the MacBook Air M1
 built-in panel (~4.3M physical px) the full enhanced stack runs at ~70% GPU; on a 4K TV
-(~8.3M physical px) even the *standard* look stutters, because the dominant costs scale
+(~8.3M physical px) even the _standard_ look stutters, because the dominant costs scale
 with physical pixels:
 
 1. **Backdrop-filter glass** (five tiers + the 16px topbar blur) re-blurs its backdrop
@@ -38,13 +40,15 @@ on every plug/unplug is friction the setting was supposed to remove.
 ## Decision
 
 ### Tier model (replaces the boolean)
+
 `AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` (default `standard`) +
 `AppSettings.autoAdaptDisplay: boolean` (default `true`), both in Settings → Appearance.
 
 - **reduced** — no backdrop-filter glass (near-opaque surfaces), liquid canvas hidden.
   Reuses the look of the pre-existing `prefers-reduced-transparency` fallback.
 - **standard** — CSS aurora blobs + glass materials (unchanged default look).
-- **enhanced** — adds the WebGL shader aurora and Electron vibrancy (unchanged).
+- **enhanced** — adds the WebGL shader aurora and Electron vibrancy. ADR-129 later makes native
+  vibrancy substitute for persistent web-surface blur on macOS instead of stacking both passes.
 
 **Effective tier** = `reduced` while `autoAdaptDisplay` is on and the window sits on a
 large display; otherwise the chosen tier (`resolveEffectiveTier`,
@@ -52,6 +56,7 @@ large display; otherwise the chosen tier (`resolveEffectiveTier`,
 effects" override.
 
 ### Large-display detection
+
 `screen.width × screen.height × devicePixelRatio² > 6,000,000` physical px
 (`isLargeDisplay`). The threshold deliberately sits between the built-in panel
 (1440×900 @2× ≈ 5.2M) and 4K outputs (8.3M in both 1× and HiDPI modes); 1080p/QHD
@@ -62,6 +67,7 @@ share one code path. (A future Electron `screen.getDisplayMatching` + `display.i
 IPC could replace the heuristic with exact per-display facts.)
 
 ### Application points
+
 - `VisualEffectsController` (renders null, in AppLayout) tags `<html>`:
   - `fx-reduced` — effective tier is reduced. `index.css` carries a class-selector
     mirror of the `prefers-reduced-transparency` block (kept in sync by comment; the
@@ -70,18 +76,23 @@ IPC could replace the heuristic with exact per-display facts.)
   - `fx-static-atmosphere` — large display but the user kept a higher tier: aurora
     blobs stop drifting (`animation: none`) so the compositor can idle.
 - `AppLayout` mounts `ShaderAurora` only at effective tier `enhanced`.
-- `ElectronBridge` gates vibrancy on the *effective* tier, so auto-adapt also drops
+- `ElectronBridge` gates vibrancy on the _effective_ tier, so auto-adapt also drops
   the translucent window on large displays.
+- ADR-129 removes web `backdrop-filter` from persistent cards, chrome, hero surfaces, the top bar,
+  and the full-window modal scrim only while native macOS vibrancy is active; thin and thick
+  transient materials retain it.
 - `ShaderAurora` backing store is now additionally capped at 640px wide
   (`MAX_CANVAS_WIDTH`) — on 1×-scaled 4K outputs, 0.25× alone was still ~0.5MP.
 
 ### Migration
+
 `migrateAppSettings` (settingsStore, applied at hydration): legacy
 `enhancedEffects: true → visualEffects: 'enhanced'`, `false → 'standard'`; an explicit
 stored `visualEffects` wins; the legacy key is stripped so the next debounced persist
 writes the new shape. No backend change — `app_settings` is an opaque JSON blob.
 
 ### Settings UI & i18n
+
 Appearance tab: tier `Select` + auto-adapt `Switch` (staged, applied on dialog Save).
 Keys `settings.appearance.visualEffects*` / `autoAdaptDisplay*` added (en + nl);
 `settings.general.enhancedEffects*` removed.
@@ -106,6 +117,7 @@ Keys `settings.appearance.visualEffects*` / `autoAdaptDisplay*` added (en + nl);
 - Untested on real hardware yet: actual GPU relief on a 4K TV (profiling follow-up).
 
 ## Related
+
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Enhanced-Effects Toggle]] (toggle superseded by this tier model)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]]
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]]
@@ -121,7 +133,7 @@ Same-day follow-up (user request). The Appearance-tab Select now shows the tier
 and the auto-adapt cap can be manually overridden with deliberately narrow scope
 (user-chosen semantics: local-only, reclaimed by auto mode on restart):
 
-- **`sessionTierOverride`** (settingsStore, *outside* `appSettings` so it is never
+- **`sessionTierOverride`** (settingsStore, _outside_ `appSettings` so it is never
   persisted): in-memory, this-device-only. `resolveEffectiveTier` gained it as an
   optional 4th parameter — the override **replaces the cap, not the preference**, so
   it only has effect while `autoAdaptDisplay && largeDisplay`; back on a small display

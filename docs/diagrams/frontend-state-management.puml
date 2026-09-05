@@ -6,8 +6,8 @@ skinparam linetype ortho
 skinparam nodesep 40
 skinparam ranksep 60
 
-package "React Contexts" {
-  class ThemeContext {
+package "Frontend State Providers and Hooks" {
+  class ThemeHydration {
     +theme: "light" | "dark" | "system" | "schedule"
     +scheduleStartTime: string
     +scheduleEndTime: string
@@ -22,13 +22,13 @@ package "React Contexts" {
     +isPreloaded: boolean
   }
 
-  class SettingsContext {
+  class SettingsHydration {
     +settings: UserSettings
     +updateSettings(updates): Promise<void>
     +isLoading: boolean
   }
 
-  class AppSettingsContext {
+  class AppSettingsHydration {
     +appSettings: AppSettings
     +updateAppSettings(updates): Promise<void>
     +language: Language
@@ -221,12 +221,12 @@ package "Utility Hooks" {
 ' Provider Hierarchy (React Context nesting)
 package "Provider Stack" {
   QueryClientProvider
-  ThemeContext
+  ThemeHydration
   SettingsPreloadContext
-  SettingsContext
-  AppSettingsContext
+  SettingsHydration
+  AppSettingsHydration
   BelgianTaxProfileContext
-  LanguageBridge
+  LanguageHydration
 }
 
 ' Hooks consume Query Client (dependency relationship)
@@ -249,8 +249,8 @@ usePortfolioTaxAdjustments ..> QueryClient : uses
 useFilteredDashboardStats ..> QueryClient : uses
 
 ' Some hooks consume Settings Context
-useStatistics ..> SettingsContext : uses
-useFilteredDashboardStats ..> SettingsContext : uses
+useStatistics ..> SettingsHydration : uses
+useFilteredDashboardStats ..> SettingsHydration : uses
 
 ' WorkspaceHook consumes router
 WorkspaceHook ..> BrowserRouter : uses

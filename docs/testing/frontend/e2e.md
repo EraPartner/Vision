@@ -47,6 +47,14 @@ The non-visual package script selects the project rather than naming spec files.
 `.github/workflows/e2e.yml`; it is deliberately outside pull-request CI and runs nightly or on
 manual dispatch against the Docker Compose stack.
 
+The non-visual suite includes two high-risk write journeys in
+`high-risk-journeys.spec.ts`: a synthetic Vision-format CSV is uploaded, reviewed, committed, and
+found in Transactions; and a transaction is created, edited, then deleted through the user
+interface. Unique fixture labels keep parallel and repeated runs independent. Backup/restore is an
+Electron-only journey: native smoke coverage exercises a real disposable PostgreSQL dump/restore
+and frontend component tests pin the UI-to-IPC flow, while browser Playwright cannot access that
+privileged bridge.
+
 Every spec imports `test` and `expect` from `e2e/fixtures.ts`. Its automatic fixture subscribes to
 `pageerror` before test code runs and fails teardown if any uncaught browser error occurred. This
 replaces per-test collectors and applies equally to non-visual and visual projects.

@@ -54,10 +54,10 @@ apps/frontend/src/
 
 ## Usage
 
-The frontend uses `LanguageContext` (`apps/frontend/src/contexts/LanguageContext.tsx`) to manage locale state.
+The frontend uses `LanguageHydration` (`apps/frontend/src/stores/hydration/LanguageHydration.tsx`) to manage locale state.
 
 ```tsx
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 function Component() {
   const { t, tc, language, setLanguage } = useLanguage();
@@ -77,7 +77,7 @@ function Component() {
 
 ### Plural-Aware `tc()` (June 2026)
 
-`LanguageContext` now exports `tc(key, count, vars?)` for count-dependent strings. It uses `Intl.PluralRules` with the current locale to select the correct plural category (`one` or `other`) and looks up `key.one` or `key.other` in the translation bundle.
+`LanguageHydration` now exports `tc(key, count, vars?)` for count-dependent strings. It uses `Intl.PluralRules` with the current locale to select the correct plural category (`one` or `other`) and looks up `key.one` or `key.other` in the translation bundle.
 
 ```tsx
 // Translation keys (en.json):
@@ -96,7 +96,7 @@ tc('table.items', 5)  // → "5 items"
 
 The deprecated key `performance.holdingsPlural` has been removed. Existing code using `t('performance.holdingsPlural')` must migrate to `tc('performance.holdings', count)`.
 
-Code link: [[apps/frontend/src/contexts/LanguageContext.tsx]]
+Code link: [[apps/frontend/src/stores/hydration/LanguageHydration.tsx]]
 
 ## Adding Translations
 

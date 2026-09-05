@@ -369,7 +369,7 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 ## Related Code
 
 - Settings Store: `[[apps/frontend/src/stores/settingsStore.ts]]`
-- Settings Context: `[[apps/frontend/src/contexts/SettingsContext.tsx]]`
-- App Settings Context: `[[apps/frontend/src/contexts/AppSettingsContext.tsx]]`
+- Settings Context: `[[apps/frontend/src/stores/hydration/SettingsHydration.tsx]]`
+- App Settings Context: `[[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]`
 - API Client: `[[apps/frontend/src/lib/api.ts]]`
 - Settings API: `[[apps/node-backend/src/routes/settings.js]]`

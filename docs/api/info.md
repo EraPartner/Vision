@@ -90,7 +90,7 @@ Get total number of transactions.
 
 ---
 
-### ~~GET /api/info/monthly-summary~~ *(removed — use `/api/aggregations/monthly-summary`)*
+### ~~GET /api/info/monthly-summary~~ _(removed — use `/api/aggregations/monthly-summary`)_
 
 > **Removed in Phase G.** Route deleted. Use [[docs/api/aggregations|`GET /api/aggregations/monthly-summary`]] instead.
 
@@ -98,11 +98,11 @@ Get monthly financial summary for the last 12 months.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `excluded_category_ids` | number[] | Categories to exclude |
-| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter               | Type     | Description                                                        |
+| ----------------------- | -------- | ------------------------------------------------------------------ |
+| `excluded_category_ids` | number[] | Categories to exclude                                              |
+| `currency`              | string   | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency`       | string   | Alias for `currency`                                               |
 
 **Response:** `200 OK`
 
@@ -111,20 +111,21 @@ Get monthly financial summary for the last 12 months.
   "months": [
     {
       "month": "2025-03",
-      "income": 5000.00,
-      "expenses": -3200.00,
-      "net": 1800.00
+      "income": 5000.0,
+      "expenses": -3200.0,
+      "net": 1800.0
     }
   ],
   "summary": {
-    "avg_income": 4800.00,
-    "avg_expenses": -3100.00,
-    "avg_net": 1700.00
+    "avg_income": 4800.0,
+    "avg_expenses": -3100.0,
+    "avg_net": 1700.0
   }
 }
 ```
 
 Notes:
+
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
 - Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.js` and `lib/dateKeys.js` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]).
@@ -139,21 +140,21 @@ Get planned expenses for next month.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter         | Type   | Description                                                        |
+| ----------------- | ------ | ------------------------------------------------------------------ |
+| `currency`        | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency`                                               |
 
 **Response:** `200 OK`
 
 ```json
 {
-  "total": 1200.00,
+  "total": 1200.0,
   "items": [
     {
       "id": 1,
       "recipient": "Rent",
-      "amount": 1000.00,
+      "amount": 1000.0,
       "planned_date": "2025-04-01"
     }
   ]
@@ -162,7 +163,7 @@ Get planned expenses for next month.
 
 ---
 
-### ~~GET /api/info/average-vs-current-spending~~ *(removed — use `/api/aggregations/average-vs-current`)*
+### ~~GET /api/info/average-vs-current-spending~~ _(removed — use `/api/aggregations/average-vs-current`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/average-vs-current`]] instead.
 
@@ -170,26 +171,26 @@ Compare current month spending to historical average.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter         | Type   | Description                                                        |
+| ----------------- | ------ | ------------------------------------------------------------------ |
+| `currency`        | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency`                                               |
 
 **Response:** `200 OK`
 
 ```json
 {
   "current_month": "2025-03",
-  "current_spending": 2500.00,
-  "average_spending": 2800.00,
-  "difference": -300.00,
+  "current_spending": 2500.0,
+  "average_spending": 2800.0,
+  "difference": -300.0,
   "percent_change": -10.7
 }
 ```
 
 ---
 
-### ~~GET /api/info/cashflow-comparison~~ *(removed — use `/api/aggregations/cashflow-comparison`)*
+### ~~GET /api/info/cashflow-comparison~~ _(removed — use `/api/aggregations/cashflow-comparison`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/cashflow-comparison`]] instead.
 
@@ -197,31 +198,32 @@ Compare cashflow between periods.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `excluded_category_ids` | number[] | Categories to exclude |
-| `excluded_recipient_ids` | number[] | Recipients to exclude |
-| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter                | Type     | Description                                                        |
+| ------------------------ | -------- | ------------------------------------------------------------------ |
+| `excluded_category_ids`  | number[] | Categories to exclude                                              |
+| `excluded_recipient_ids` | number[] | Recipients to exclude                                              |
+| `currency`               | string   | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency`        | string   | Alias for `currency`                                               |
 
 **Response:** `200 OK`
 
 ```json
 {
   "current_period": {
-    "income": 5000.00,
-    "expenses": -3200.00,
-    "net": 1800.00
+    "income": 5000.0,
+    "expenses": -3200.0,
+    "net": 1800.0
   },
   "previous_period": {
-    "income": 4500.00,
-    "expenses": -2800.00,
-    "net": 1700.00
+    "income": 4500.0,
+    "expenses": -2800.0,
+    "net": 1700.0
   }
 }
 ```
 
 Notes:
+
 - Historical and current transaction rows are converted with date-specific FX (`date` field).
 - Planned rows are converted with date-specific FX using `planned_date`.
 - This avoids retroactive movement of historical daily/average cashflow lines when latest exchange rates change.
@@ -229,7 +231,7 @@ Notes:
 
 ---
 
-### ~~GET /api/info/category-breakdown~~ *(removed — use `/api/aggregations/category-breakdown`)*
+### ~~GET /api/info/category-breakdown~~ _(removed — use `/api/aggregations/category-breakdown`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/category-breakdown`]] instead.
 
@@ -237,10 +239,10 @@ Get spending breakdown by category.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter         | Type   | Description                                                       |
+| ----------------- | ------ | ----------------------------------------------------------------- |
+| `currency`        | string | Target 3-letter currency code for converted totals (default: EUR) |
+| `target_currency` | string | Alias for `currency`                                              |
 
 **Response:** `200 OK`
 
@@ -250,7 +252,7 @@ Get spending breakdown by category.
     {
       "id": 1,
       "name": "FOOD:GROCERIES",
-      "total": -450.00,
+      "total": -450.0,
       "count": 15
     }
   ]
@@ -258,19 +260,21 @@ Get spending breakdown by category.
 ```
 
 Implementation notes:
+
 - Route calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
 - Category aggregation in MV-backed breakdown/statistics paths uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.js]]).
 - Phase 3.1: categorization logic is part of `statisticsRepository` domain module within composite `infoRepository` barrel ([[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]).
 
 ---
 
-### ~~GET /api/info/bank-balances~~ *(removed — use `/api/aggregations/bank-balances`)*
+### ~~GET /api/info/bank-balances~~ _(removed — use `/api/aggregations/bank-balances`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/bank-balances`]] instead.
 
 Get current and historical balances per bank account.
 
 Notes:
+
 - For non-EUR targets, conversion is date-aware for both the current account balances and monthly history rows.
 - Historical FX lookup uses each row `date` when converting bank-balance datasets.
 - If historical conversion fails for a row set, conversion retries with latest available rates so the endpoint still returns balance data.
@@ -278,10 +282,10 @@ Notes:
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted balances (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter         | Type   | Description                                                         |
+| ----------------- | ------ | ------------------------------------------------------------------- |
+| `currency`        | string | Target 3-letter currency code for converted balances (default: EUR) |
+| `target_currency` | string | Alias for `currency`                                                |
 
 **Response:** `200 OK`
 
@@ -290,7 +294,7 @@ Notes:
   "accounts": [
     {
       "bank_account": "Main Account",
-      "balance": 5000.00,
+      "balance": 5000.0,
       "first_transaction": "2024-01-15",
       "last_transaction": "2025-03-18",
       "transaction_count": 450
@@ -330,14 +334,15 @@ Get net worth combining bank balances + portfolio value.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted snapshots (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
-| `limit` | integer | Optional page size for `snapshots` (capped at 5000) |
-| `offset` | integer | Optional rows to skip in `snapshots` (default 0) |
+| Parameter         | Type    | Description                                                          |
+| ----------------- | ------- | -------------------------------------------------------------------- |
+| `currency`        | string  | Target 3-letter currency code for converted snapshots (default: EUR) |
+| `target_currency` | string  | Alias for `currency`                                                 |
+| `limit`           | integer | Optional page size for `snapshots` (capped at 5000)                  |
+| `offset`          | integer | Optional rows to skip in `snapshots` (default 0)                     |
 
 Notes:
+
 - Snapshot pagination is opt-in and reported in the **response body**: with neither
   `limit` nor `offset`, `snapshots` is the complete series and no pagination fields
   are emitted. With either, `snapshots` is a newest-first page and the body carries
@@ -387,7 +392,7 @@ Notes:
 
 ---
 
-### ~~GET /api/info/net-worth/by-account~~ *(removed 2026-07-22 — WP-C1 / ADR-108)*
+### ~~GET /api/info/net-worth/by-account~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
 
 > **Removed.** The Σ-accounts breakdown (ADR-100) was deleted with the per-account holdings
 > machinery: the snapshot builder no longer computes the `value_by_account` split, and the
@@ -397,7 +402,7 @@ Notes:
 
 ---
 
-### ~~GET /api/info/recipient-insights~~ *(removed — use `/api/aggregations/recipient-insights`)*
+### ~~GET /api/info/recipient-insights~~ _(removed — use `/api/aggregations/recipient-insights`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/recipient-insights`]] instead.
 
@@ -405,10 +410,10 @@ Get spending insights per recipient/merchant.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted spend metrics (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
+| Parameter         | Type   | Description                                                              |
+| ----------------- | ------ | ------------------------------------------------------------------------ |
+| `currency`        | string | Target 3-letter currency code for converted spend metrics (default: EUR) |
+| `target_currency` | string | Alias for `currency`                                                     |
 
 **Response:** `200 OK`
 
@@ -418,9 +423,9 @@ Get spending insights per recipient/merchant.
     {
       "id": 1,
       "name": "Supermarket",
-      "total_spent": -1200.00,
+      "total_spent": -1200.0,
       "transaction_count": 25,
-      "avg_transaction": -48.00,
+      "avg_transaction": -48.0,
       "last_transaction": "2025-03-15"
     }
   ]
@@ -434,6 +439,7 @@ Get spending insights per recipient/merchant.
 Get cached exchange rates from database.
 
 Notes:
+
 - Rates are fetched from ECB and supplemented with open.er-api for non-ECB currencies.
 - Stats endpoints can be requested in any valid 3-letter code (ISO-style), with EUR fallback when invalid.
 - Core tested currencies include EUR, USD, GBP, SAR, AED.
@@ -447,7 +453,12 @@ Notes:
 {
   "total_rates": 30,
   "rates": [
-    { "currency": "USD", "rate_to_eur": 0.92, "rate_date": "2025-03-18", "fetched_at": "2025-03-18T10:30:00Z" }
+    {
+      "currency": "USD",
+      "rate_to_eur": 0.92,
+      "rate_date": "2025-03-18",
+      "fetched_at": "2025-03-18T10:30:00Z"
+    }
   ],
   "fallback_rates": { "USD": 0.917, "GBP": 1.176 }
 }
@@ -474,6 +485,7 @@ Force refresh exchange rates from ECB API.
 Get Belgian monthly inflation rates used by portfolio real-return calculations.
 
 Notes:
+
 - Source data is fetched from Statbel with Eurostat HICP index as fallback and cached server-side.
 - Response `source` indicates where the response came from: `memory`, `database`, `statbel`, or `eurostat`.
 - Supports optional month filtering with `start_month` and `end_month` in `YYYY-MM` (or `YYYY-MM-DD`, month part is used).
@@ -485,11 +497,11 @@ Notes:
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `start_month` | string | Start month filter (`YYYY-MM`) |
-| `end_month` | string | End month filter (`YYYY-MM`) |
-| `db_only` | boolean | If `true`/`1`, return persisted DB rates only and do external refresh in background |
+| Parameter     | Type    | Description                                                                         |
+| ------------- | ------- | ----------------------------------------------------------------------------------- |
+| `start_month` | string  | Start month filter (`YYYY-MM`)                                                      |
+| `end_month`   | string  | End month filter (`YYYY-MM`)                                                        |
+| `db_only`     | boolean | If `true`/`1`, return persisted DB rates only and do external refresh in background |
 
 **Response:** `200 OK`
 
@@ -511,6 +523,7 @@ Notes:
 Force refresh Belgian inflation rates from Statbel.
 
 Notes:
+
 - Admin-limited endpoint (same admin limiter pattern as exchange-rate refresh).
 - Clears in-memory cache and repopulates persisted monthly rates.
 
@@ -532,13 +545,14 @@ Get pre-computed portfolio performance snapshots with enriched metrics, heatmap,
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `period` | string | `all` | Period filter: `5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all` |
-| `currency` | string | EUR | Target 3-letter currency code |
-| `target_currency` | string | EUR | Alias for `currency` |
+| Parameter         | Type   | Default | Description                                                 |
+| ----------------- | ------ | ------- | ----------------------------------------------------------- |
+| `period`          | string | `all`   | Period filter: `5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all` |
+| `currency`        | string | EUR     | Target 3-letter currency code                               |
+| `target_currency` | string | EUR     | Alias for `currency`                                        |
 
 Notes:
+
 - **Backend-computed response**: Metrics, heatmap, and per-investment breakdown are now computed server-side (no client-side computation). Client receives final aggregates ready to render.
 - **Period filtering**: `period` parameter controls which snapshots are returned for charting (5d/1m/3m/6m/1y/3y/all). Metrics and heatmap always use full historical data.
 - **Short-period (5d) support**: New 5d period enables daily data inspection. Frontend applies adaptive chart formatting for short periods (≤6m): x-axis shows day+month (e.g., "15 Jan"), y-axis uses `auto/auto` domain to zoom into data range.
@@ -553,6 +567,10 @@ Notes:
   again from the value actually served, so the three fields cannot contradict
   each other ([[apps/node-backend/src/services/info/performanceHelpers.js]],
   [[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
+- Every returned snapshot includes `is_provisional`. It is `true` only on the newest returned
+  point. That endpoint remains raw until a later snapshot supplies the right-hand neighbour needed
+  to decide whether it was an isolated price spike; the Performance page labels this state beside
+  the chart controls.
 - Includes per-class value/invested breakdowns (stocks+ETFs, crypto, metals) in metrics.
 - Route-level rate limited (`30 req / 60s`) to protect against excessive queries.
 - Caching behavior: shared cache/inflight utilities (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) now power both `/api/info/net-worth` and `/api/info/portfolio-performance` response caches for consistent TTL and concurrent-request deduplication ([[apps/node-backend/src/routes/info.js]]).
@@ -568,20 +586,21 @@ Notes:
   "snapshots": [
     {
       "date": "2026-04-01",
-      "invested": 50000.00,
-      "value": 52500.00,
-      "stocks_etfs_value": 30000.00,
-      "crypto_value": 10000.00,
-      "metals_value": 12500.00,
-      "stocks_etfs_invested": 28000.00,
-      "crypto_invested": 9500.00,
-      "metals_invested": 12500.00
+      "invested": 50000.0,
+      "value": 52500.0,
+      "stocks_etfs_value": 30000.0,
+      "crypto_value": 10000.0,
+      "metals_value": 12500.0,
+      "stocks_etfs_invested": 28000.0,
+      "crypto_invested": 9500.0,
+      "metals_invested": 12500.0,
+      "is_provisional": true
     }
   ],
   "metrics": {
-    "currentValue": 52500.00,
-    "totalInvested": 50000.00,
-    "totalGainLoss": 2500.00,
+    "currentValue": 52500.0,
+    "totalInvested": 50000.0,
+    "totalGainLoss": 2500.0,
     "totalReturnPct": 5.0,
     "annualizedReturn": 3.8,
     "realReturnPct": 2.1,
@@ -611,9 +630,9 @@ Notes:
       "symbol": "AAPL",
       "assetClass": "stock",
       "currency": "USD",
-      "currentValue": 15000.00,
-      "totalInvested": 12000.00,
-      "gainLoss": 3000.00,
+      "currentValue": 15000.0,
+      "totalInvested": 12000.0,
+      "gainLoss": 3000.0,
       "gainLossPercent": 25.0
     }
   ]
@@ -655,6 +674,7 @@ Manually refresh materialized views.
 ```
 
 Security/performance notes:
+
 - Endpoint now uses `adminRateLimiter` to protect materialized-view refresh from abuse bursts.
 - Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.js]].
 
@@ -698,6 +718,7 @@ The following endpoints were removed during Phase 9 cutover as they were superse
 ## Performance
 
 These endpoints are optimized using:
+
 - [[docs/performance/materialized-views]] - Pre-computed aggregations
 - [[docs/performance/caching-strategies]] - Cached exchange rates
 

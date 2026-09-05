@@ -179,25 +179,50 @@ package "Supporting" {
 }
 
 package "Thin Route Seams (ADR-067, June 2026)" {
-  note "14 new thin seam services created to enforce\nroute→service boundary (no-repo-direct-from-route ERROR).\nEach delegates to the matching repository; exists to\nprovide a stable extension point." as SeamNote
-  class CategoryService { +list() +create() +update() +delete() }
-  class TransactionService { +list() +create() +update() +delete() }
-  class RecipientService { +list() +create() +update() +merge() }
-  class RecipientBankAccountService { +list() +create() +delete() }
-  class SavedChartsService { +list() +create() +update() +delete() }
-  class InfoService { +getSummary() +getNetWorth() +getMonthly() }
-  class PlannedTransactionService { +list() +create() +update() +execute() }
-  class SettingsService { +get() +set() }
-  class SplitService { +list() +create() +settle() }
-  class WatchlistService { +list() +create() +update() +delete() }
-  class AttachmentRecordService { +list() +delete() }
-  class ImportBatchService { +listBatches() +getBatch() +getImportBatchPreview() +rollbackBatch() }
-  class ImportBatchRoutes { +registerImportBatchRoutes(router, options) }
-  class CustomParserConfigService { +list(kind) +create(kind) +update() +delete() }
-  class PortfolioTxService { +create() +update() +delete() }
-  class PortfolioImportPipelineService <<ADR-078>> { +runPortfolioImportPipeline(opts) +commitPortfolioImport(batchId, accountId?) }
-  class PortfolioImportBatchService <<ADR-078>> { +listBatches() +getBatch() +getPortfolioImportBatchPreview() +overrideInvestment() +resolveInvestmentRows() +rollbackBatch() }
-  class FxResolveService <<ADR-074, ADR-078>> { +resolveRate(currency, date): Promise<number> }
+  note as SeamNote
+    Thin seam services enforce the route-to-service boundary.
+    Each provides a stable orchestration point above repositories.
+  end note
+  class CategoryService
+  class TransactionService
+  class RecipientService
+  class RecipientBankAccountService
+  class SavedChartsService
+  class InfoService
+  class PlannedTransactionService {
+    +create(input): Promise<PlannedTransaction>
+    +update(id, fields): Promise<PlannedTransaction>
+    +updateWithLoanSchedule(id, fields, schedule): Promise<PlannedTransaction>
+    +replaceLoanSchedule(id, schedule): Promise<void>
+    +executeAndAdvance(plannedId, transactionId, date, fields, tags): Promise<Result>
+  }
+  class SettingsService
+  class SplitService {
+    +createSplitAtomic(input): Promise<Split>
+    +createSplitsBatchAtomic(input): Promise<Split[]>
+    +getOwedSummary(): Promise<OwedSummary[]>
+    +getOwedByRecipient(id, page): Promise<OwedData>
+    +addPayment(input): Promise<Payment>
+    +settleSplit(id, actor): Promise<Split>
+    +settleAllByRecipient(id, actor): Promise<Count>
+    +deleteSplit(id, actor): Promise<boolean>
+  }
+  class WatchlistService
+  class AttachmentRecordService
+  class ImportBatchService
+  class ImportBatchRoutes
+  class CustomParserConfigService
+  class "portfolio/portfolioTransactionService" as PortfolioTransactionService {
+    +create(input)
+    +update(id, fields)
+  }
+  class "portfolio/portfolioTransactionRules" as PortfolioTransactionRules {
+    +normalizeTransactionPayload(input, assetClass)
+    +validateSellUnitsAvailability(input)
+  }
+  class PortfolioImportPipelineService <<ADR-078>>
+  class PortfolioImportBatchService <<ADR-078>>
+  class FxResolveService <<ADR-074, ADR-078>>
   class PortfolioSummaryService <<ADR-044, ADR-091, ADR-100>> {
     +getPortfolioSummary(currency): Promise<Summary>
     ' Returns totals + summaries[] + byAccount[] (per-account holdings, parity-locked)
@@ -211,7 +236,7 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +commitBrokerageFanout(plan, db): Promise<CommitResult>
     ' Core built; parser/staging/review UI not yet wired
   }
-  class AccountMergeService <<ADR-088>> { +merge(survivorId, sourceIds): Promise<MergeResult> }
+  class AccountMergeService <<ADR-088>>
 }
 
 ' Relationships
@@ -258,6 +283,10 @@ TransactionExport --> FilterBuilder
 
 BulkSelection --> TransactionRepository
 BulkSelection --> FilterBuilder
+
+PortfolioTransactionService --> PortfolioTransactionRules
+PortfolioTransactionService --> PortfolioTransactionRepository
+PortfolioImportPipelineService --> PortfolioTransactionService
 
 AiChatService --> AiChatRepository
 AiChatService --> "Ollama client"

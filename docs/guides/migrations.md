@@ -3,7 +3,7 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-08-30
-updated: 2026-09-03
+updated: 2026-09-04
 tags:
   [
     guide,
@@ -224,6 +224,9 @@ with op.get_context().autocommit_block():
 
 **Building an index.** A plain `CREATE INDEX` scans the heap under a `SHARE` lock that blocks writes for the duration — true even for a tiny partial index, because the _heap_ scan is what costs (`0036`, `0044`, `0053` all pay this). Use `CREATE INDEX CONCURRENTLY` inside an `autocommit_block()`. Note the caveat `IF NOT EXISTS` does not cover: an interrupted concurrent build leaves an **INVALID** index behind that `IF NOT EXISTS` would happily keep forever. Copy `_create_index_concurrently()` from `0050_add_accounts_entity`, which checks `pg_index.indisvalid`, keeps a valid index, drops an invalid one, and only then rebuilds. Also: build indexes _after_ a backfill, never before — otherwise every batch pays index maintenance.
 
+> [!warning] Immutable validated-check counterexamples
+> Migrations `0044` and `0053` drop and recreate transaction CHECK constraints in their validated form. Unlike the check-violation-tolerant guard in `0049`, legacy rows that violate the widened constraint can still abort an upgrade before the Electron app becomes ready. These applied migrations are immutable, so operators must correct violating legacy data before retrying. Do not copy this shape: add future CHECK constraints as `NOT VALID`, repair data explicitly, and validate in a separate controlled step.
+
 **Changing a column type.** `ALTER COLUMN ... TYPE` rewrites the table _and_ every index on it under `ACCESS EXCLUSIVE`, and drops dependent views first (`0025_fix_numeric_precision` retypes `transactions.amount` and has to drop and recreate the materialized views around it). There is no cheap in-place variant. If the change is avoidable, avoid it; if it is not, expect the rewrite and `ANALYZE` afterwards.
 
 **Materialized views.** Do not rebuild them from a migration. `DROP MATERIALIZED VIEW` alone is metadata-only; the runtime service (`materializedViewService.js`) recreates and populates any missing view from the **post-listen** warmup, off the boot critical path, and reads fall back to live queries in the meantime. `0084` and `0085` are the pattern: drop only, let the app rebuild. A migration that recreates a view instead puts a full aggregation scan of `transactions` back in front of `/health`.
@@ -291,7 +294,9 @@ The `0001_initial_database_schema` baseline includes the complete foundational s
 - **Core transaction tables:** categories, recipients, transactions, planned_transactions, transaction_raw_references
 - **Planned transaction support:** planned_transaction_executions, planned_transaction_loan_schedule
 - **Raw bank import tables:** belfius, revolut, kbc, sabb, wise, vision, custom, manual (PostgreSQL table inheritance hierarchy)
-- **Portfolio & investment:** investments (base table with stock, etf, metals, crypto, real_estate, bond, savings child tables via inheritance), asset_price_history, portfolio_transactions, watchlist
+- **Portfolio & investment:** canonical flat `investments` and `portfolio_transactions` tables,
+  `asset_price_history`, and `watchlist`. Migration 0087 converts the historical ADR-004
+  inheritance layout on upgraded installations.
 - **Financial data:** exchange_rates, belgian_inflation_rates
 - **User configuration:** user_settings, saved_charts
 - **AI conversation:** ai_conversations, ai_messages

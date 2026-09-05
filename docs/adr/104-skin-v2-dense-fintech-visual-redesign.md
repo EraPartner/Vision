@@ -121,7 +121,7 @@ Phase 3 is the first phase that touches component code. Each skin-v2 branch must
 **What changed:** The colorblind-safe gain/loss palette (`.skin-v2` class, green gain / orange loss) was previously controlled exclusively by the `VITE_SKIN_V2` build flag with a `localStorage` dev override. As of 2026-06-24, it is additionally exposed as a **persisted user setting** (`colorblindGainLoss: boolean`, default `true`) in `AppSettings`.
 
 **Mechanism:**
-- `AppSettingsProvider` (`contexts/AppSettingsContext.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. This means the stored setting governs the `.skin-v2` class for logged-in users, regardless of the build flag.
+- `AppSettingsProvider` (`stores/hydration/AppSettingsHydration.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. This means the stored setting governs the `.skin-v2` class for logged-in users, regardless of the build flag.
 - Default is `true` — the colorblind-safe palette is on by default for all users, even when `VITE_SKIN_V2=false` at build time. Users who prefer the classic gold/red palette can switch via **Settings → Appearance → Accessibility → Gain & loss colors → Classic (red loss)**.
 - The build flag retains its role as the pre-React FOUC-prevention default (applied synchronously in `main.tsx` before first render). Once settings hydrate, the stored `colorblindGainLoss` value takes over.
 

@@ -5,11 +5,11 @@ method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
 date: 2026-04-23
-updated: 2026-08-11
+updated: 2026-09-04
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
-related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[apps/node-backend/src/services/plannedMatchService.js]], [[apps/node-backend/src/services/plannedExecutionService.js]]
+related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/services/plannedTransactionService.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[apps/node-backend/src/services/plannedMatchService.js]], [[apps/node-backend/src/services/plannedExecutionService.js]]
 ---
 
 # Planned Transactions API
@@ -29,29 +29,30 @@ Retrieve planned transactions.
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| limit | integer | 50 | Max items (max 5000) |
-| offset | integer | 0 | Items to skip |
-| start_date | string | null | Filter start date |
-| end_date | string | null | Filter end date |
-| bank_account | string | null | Filter by bank account |
-| category_id | integer | null | Filter by category |
-| recipient_id | integer | null | Filter by recipient |
-| is_recurring | boolean | null | Filter recurring |
-| is_executed | boolean | null | Filter executed |
-| active | boolean | true | Filter active |
-| search | string | null | Search in memo |
+| Parameter    | Type    | Default | Description            |
+| ------------ | ------- | ------- | ---------------------- |
+| limit        | integer | 50      | Max items (max 5000)   |
+| offset       | integer | 0       | Items to skip          |
+| start_date   | string  | null    | Filter start date      |
+| end_date     | string  | null    | Filter end date        |
+| bank_account | string  | null    | Filter by bank account |
+| category_id  | integer | null    | Filter by category     |
+| recipient_id | integer | null    | Filter by recipient    |
+| is_recurring | boolean | null    | Filter recurring       |
+| is_executed  | boolean | null    | Filter executed        |
+| active       | boolean | true    | Filter active          |
+| search       | string  | null    | Search in memo         |
 
 > [!warning] `category_id` / `recipient_id` are strict ids (changed 2026-08-11, breaking for malformed ids)
 > Both accept only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
 > `1e3`, `0x10`, `-4`, `0`, ` 5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty
-> (`?category_id=`) still mean *no filter* and answer `200`. These were `parseInt`, verbatim the
+> (`?category_id=`) still mean _no filter_ and answer `200`. These were `parseInt`, verbatim the
 > pattern removed from the transactions list endpoint: `?category_id=12abc` listed the planned
 > transactions of category **12**, and a `NaN` reached Postgres as a `22P02` 500. See
 > [[docs/security/input-validation#Optional id query params on the remaining list endpoints|Input Validation]].
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -62,7 +63,7 @@ Retrieve planned transactions.
       "recipient_id": 1,
       "recipient_name": "Electric Company",
       "memo": "Monthly electricity",
-      "amount": -85.00,
+      "amount": -85.0,
       "currency": "EUR",
       "category_id": 10,
       "category_name": "UTILITIES:ELECTRICITY",
@@ -103,12 +104,13 @@ Retrieve planned transactions.
 Create a planned transaction.
 
 **Simple Transaction Request:**
+
 ```json
 {
   "planned_date": "2026-02-01",
   "bank_account": "BE12 3456...",
   "recipient_id": 1,
-  "amount": -85.00,
+  "amount": -85.0,
   "memo": "Monthly electricity",
   "currency": "EUR",
   "category_id": 10,
@@ -119,6 +121,7 @@ Create a planned transaction.
 ```
 
 **Loan Transaction Request:**
+
 ```json
 {
   "bank_account": "BE12 3456...",
@@ -126,7 +129,7 @@ Create a planned transaction.
   "memo": "Car loan",
   "is_loan": true,
   "loan_type": "fixed_rate",
-  "loan_principal": 25000.00,
+  "loan_principal": 25000.0,
   "loan_annual_interest_rate": 4.5,
   "loan_term_months": 60,
   "loan_start_date": "2026-02-01",
@@ -135,11 +138,13 @@ Create a planned transaction.
 ```
 
 **Required Fields:**
+
 - bank_account
 - planned_date (non-loan)
 - amount (non-loan)
 
 **Loan Fields:**
+
 - `is_loan`: true
 - `loan_type`: fixed_rate, variable_rate
 - `loan_principal`: Principal amount
@@ -159,6 +164,7 @@ Get a single planned transaction.
 Update a planned transaction.
 
 **Supports name resolution:**
+
 - `recipient_name`: Resolves to recipient_id
 - `category_name`: Resolves to category_id (format: "GENERAL:DETAIL")
 
@@ -167,11 +173,13 @@ Update a planned transaction.
 **Rate Limited:** 30 requests per minute
 
 Implementation notes:
+
 - Internal route refactor extracted shared helpers for PATCH flow (`parseRouteId`, `removePatchOnlyReadOnlyFields`, `resolveRecipientIdFromName`, `resolveCategoryIdFromName`, `applyLoanPatchDefaults`).
 - Refactor preserves existing behavior: unresolved `recipient_name` / `category_name` does not introduce new validation errors, and loan schedule regeneration/clearing semantics remain unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 - Follow-up refactor extracted shared write-path error handling (`handlePlannedTransactionWriteError`) for POST/PATCH and isolated PATCH loan schedule persistence branching in `updateLoanScheduleForPatch`; response shapes and status-code behavior remain unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 - List-path optimization now computes `total` from the main paginated query via `COUNT(*) OVER()` and only runs a fallback count query when the returned page is empty; list response semantics are preserved while reducing round-trips for non-empty pages. The list also removes a redundant `exec_counts` join and derives `execution_count` from the already batched executions fetch ([[apps/node-backend/src/repositories/plannedTransactionRepository.js]]).
 - Update-path optimization now returns the enriched updated row via single CTE query (`WITH updated ... SELECT ...`) before attaching executions/loan schedule, removing update+base-refetch overhead while preserving response fields and null/not-found behavior ([[apps/node-backend/src/repositories/plannedTransactionRepository.js]]).
+- Loan PATCHes delegate to `plannedTransactionService.updateWithLoanSchedule()`, which applies the parent update, optional tag replacement, and loan-schedule replacement through client-aware repository primitives in one transaction.
 - Name-resolution helpers and recurring execute-date calculation now use module-scoped imports (`dbQuery`, `calculateNextDate`) rather than per-request dynamic imports; endpoint behavior is unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 - PATCH name-resolution lookups for `recipient_name` and `category_name` now run concurrently via `Promise.all`, preserving current unresolved-name behavior while reducing avoidable sequential latency when both are provided ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 
@@ -180,6 +188,7 @@ Implementation notes:
 Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 
 **Request Body:**
+
 ```json
 {
   "executed_transaction_id": 123,
@@ -188,31 +197,35 @@ Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 ```
 
 **Behavior:**
+
 - For recurring: Calculates next occurrence and resets `is_executed = false` to re-arm for next cycle
 - For one-time: Sets `is_executed = true`
 - Records execution in `planned_transaction_executions` table
 - **Idempotency:** Database UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)` prevents duplicate execution rows. A duplicate execution request (same planned ID + transaction ID) returns 200 OK with the current planned state + `Idempotent-Replay: true` header instead of creating a duplicate row or error.
 
 **Response Headers (Phase 3):**
-| Header | Value | Meaning |
-|--------|-------|---------|
+
+| Header              | Value  | Meaning                                                                                                                   |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
 | `Idempotent-Replay` | `true` | This response is a replay of an already-executed execution (unique violation caught). Safe to ignore; row already exists. |
 
 **Response Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Execution recorded or replayed (idempotent) |
-| 400 | Missing `executed_transaction_id` |
-| 404 | Planned transaction not found |
-| 500 | Database or calculation error |
+
+| Code | Condition                                   |
+| ---- | ------------------------------------------- |
+| 200  | Execution recorded or replayed (idempotent) |
+| 400  | Missing `executed_transaction_id`           |
+| 404  | Planned transaction not found               |
+| 500  | Database or calculation error               |
 
 **Idempotency Guarantee:**
 The endpoint is safe to retry without risk of creating duplicate rows. Multiple requests with the same `(planned_id, executed_transaction_id)` pair always return the same result.
 
 Implementation note (Phase 3 — verified Phase 5):
-- Repository method `executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {})` wraps the insert-execution + update-parent pair in a single `BEGIN/COMMIT` transaction.
-- Signature supports optional `updateFields` for planned transaction updates (e.g., advancing recurring next-date) in the same atomic call.
-- On unique violation (Postgres 23505), transaction rolls back and returns `{ duplicate: true }` to the route.
+
+- Service method `executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null)` wraps the insert-execution, parent advance, and inherited-tag writes in one transaction using client-aware repository primitives.
+- The optional `updateFields` advances recurring state in the same atomic call; optional tag IDs are copied to the executed transaction before commit.
+- The execution insert uses `ON CONFLICT DO NOTHING`; an existing pair returns `{ duplicate: true }` without advancing the parent or copying tags.
 - Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.
 - Internal route refactor also uses shared `getCurrentDateString()` fallback helper for `execution_date` defaulting; response/side-effect behavior remains unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 - Test suite ([[apps/node-backend/tests/routes/plannedTransactions.test.js]]) verifies atomic execution via mocked `getById` chained calls (pre-exec + post-exec for response envelope) and `is_executed` advancement assertions from `executeAndAdvance.mock.calls` inspection.
@@ -234,6 +247,7 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
 **Query Parameters:** none
 
 **Response:** canonical collection body `{ items, total }` (unpaginated — `total` is the row count).
+
 ```json
 {
   "items": [
@@ -241,7 +255,7 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
       "planned": {
         "id": 42,
         "memo": "Rent",
-        "amount": -950.00,
+        "amount": -950.0,
         "planned_date": "2026-06-01",
         "recipient_id": 7,
         "recipient_name": "Landlord BV"
@@ -249,7 +263,7 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
       "candidates": [
         {
           "transaction_id": 1234,
-          "amount": -940.50,
+          "amount": -940.5,
           "date": "2026-06-03",
           "recipient_name": "Landlord BV"
         }
@@ -260,6 +274,7 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
 ```
 
 **Behavior:**
+
 - Only active, unexecuted planned payments are considered.
 - Transaction lookback is 45 days (sourced from `transactionRepository.listRecentUnlinked({ sinceDate })`).
 - Loan-type planned payments (`is_loan = true`) are excluded.
@@ -267,10 +282,11 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
 - Recipient cluster roots are resolved via `recipientRepository.getClusterRootMap` so clustered aliases are compared correctly.
 
 **Response Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Success (may be empty array) |
-| 500 | Database error |
+
+| Code | Condition                    |
+| ---- | ---------------------------- |
+| 200  | Success (may be empty array) |
+| 500  | Database error               |
 
 See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Feature: Auto-Link on Ingest]] for the full matching spec and tolerance rules.
 
@@ -284,7 +300,7 @@ When creating/updating a loan, the system generates an amortization schedule:
     {
       "installment_number": 1,
       "due_date": "2026-02-01",
-      "payment_amount": 466.50,
+      "payment_amount": 466.5,
       "principal_amount": 373.25,
       "interest_amount": 93.25,
       "remaining_principal": 24626.75
@@ -301,6 +317,7 @@ When creating/updating a loan, the system generates an amortization schedule:
 ## Testing Coverage Note (2026-04-16 Phase 5)
 
 Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]] verifies:
+
 - execute endpoint atomic idempotent behavior via `executeAndAdvance()` with duplicate detection (UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)`)
 - loan term bounds validation
 - patch `recipient_name`/`category_name` name-to-id resolution
@@ -309,5 +326,6 @@ Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]
 - response envelope construction from `getById` calls before and after execution
 
 Golden-fixture test suites added in Phase 3:
+
 - [[apps/node-backend/tests/services/loanSchedule.golden.test.js]] — Loan amortization schedule generation (amortizing, fixed_principal, interest_only types with edge cases)
 - [[apps/node-backend/tests/services/recurrence.golden.test.js]] — Recurring payment date calculation (all built-in patterns + edge cases like Jan 31 clamping, Feb 29 leap-year rollover)

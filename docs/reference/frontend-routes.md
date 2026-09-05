@@ -127,7 +127,7 @@ Routes are defined in [[apps/frontend/src/App.tsx\|App.tsx]] using React Router 
 
 ## Workspace Switching
 
-Workspace switching is handled by the [[apps/frontend/src/contexts/WorkspaceContext.tsx\|useWorkspace]] hook, which derives the workspace from the current route path:
+Workspace switching is handled by the [[apps/frontend/src/hooks/useWorkspace.ts\|useWorkspace]] hook, which derives the workspace from the current route path:
 
 - `/portfolio/*` → `"portfolio"` workspace
 - `/admin/*` → preserves the last active workspace from `sessionStorage` (workspace-agnostic routes)

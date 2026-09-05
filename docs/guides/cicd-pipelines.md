@@ -599,7 +599,7 @@ quality-gate:
 
 #### 17. **ci-complete** — Docker-Tier Aggregation
 
-Final aggregation gate that combines all Docker-intensive CI stages (image scanning, container health, live API contracts). This job should be set as the **single required status check** in GitHub branch protection settings.
+Final aggregation gate that combines all Docker-intensive CI stages (image scanning, container health, live API contracts) and the live branch-protection verifier. This job should be set as the **single required status check** in GitHub branch protection settings.
 
 ```yaml
 ci-complete:
@@ -609,6 +609,7 @@ ci-complete:
       changes,
       secrets-scan,
       quality-gate,
+      verify-branch-protection,
       trivy-scan,
       docker-verify,
       test-live-api-contracts,
@@ -632,15 +633,16 @@ ci-complete:
 1. **trivy-scan** — Container image CVE report
 2. **docker-verify** — Image builds + backend health check
 3. **test-live-api-contracts** — API contracts validated against live backend
+4. **verify-branch-protection** — Current default-branch rules still require `CI Complete` and CodeQL
 
 **Setting as required check:**
 
-1. Go to GitHub repository → Settings → Branches
-2. Under "Branch protection rules", edit rule for "main"
-3. Set "ci-complete" as the single required status check
-4. Remove individual job names if previously set (ci-complete is the sufficient check)
+1. Go to GitHub repository → Settings → Rules → Rulesets
+2. Edit the active `Protect main` ruleset
+3. Set `CI Complete` as the single required status-check context
+4. Remove individual job names if previously set (`CI Complete` is the aggregate check)
 
-Both aggregation jobs use the same tested cancellation policy. A dependency cancellation is accepted only when the GitHub API reports that the pull request now points at a different head SHA. A cancellation on the current head can therefore never manufacture a green required check.
+Both aggregation jobs use the same tested cancellation policy. A dependency cancellation is accepted only when the GitHub API reports that the pull request now points at a different head SHA. A cancellation on the current head can therefore never manufacture a green required check. The branch-protection verifier also fails closed when GitHub's applicable-rules endpoint cannot be read; an unavailable rule state cannot be treated as protected.
 
 The policy truth table and the workflow wiring contract live in `scripts/tests/ci-cancellation-policy.test.js`. `bun run test:scripts` runs that suite with the other repository-script tests locally and in the required `verify-generated` CI job.
 
@@ -654,6 +656,12 @@ The repository enables GitHub native auto-merge and permits squash merges. The a
 ruleset requires a current branch, the `CI Complete` status check, and its configured code-quality
 and code-scanning conditions. Native auto-merge is therefore a server-side queue: after it is
 enabled for an eligible non-draft pull request, GitHub merges only when those rules pass.
+
+The ruleset retains the Repository admin `always allow` actor as an explicitly accepted
+break-glass exception (decision confirmed 2026-09-04). Normal automation must not use that bypass.
+The live verifier checks the `CI Complete` and CodeQL subset required by the repository backlog
+contract. It intentionally does not reject this exception or claim to verify every other ruleset
+property.
 
 There are two callers:
 

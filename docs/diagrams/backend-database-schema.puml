@@ -133,10 +133,13 @@ entity "split_payments" as split_payments {
   created_at : timestamptz
 }
 
-' Investment Tables (PostgreSQL inheritance)
-entity "investments_base" as investments_base {
+' Investment Tables (canonical flat schema, ADR-109)
+entity "investments" as investments {
   * id : serial <<PK>>
   * name : varchar(200)
+  * asset_class : asset_class
+  symbol : varchar(20)
+  current_price : numeric(18,6)
   * currency : varchar(10)
   notes : text
   is_active : boolean
@@ -152,60 +155,22 @@ entity "investments_base" as investments_base {
   price_updated_at : timestamptz
   created_at : timestamptz
   updated_at : timestamptz
-}
-
-entity "stock_investments" as stock_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "etf_investments" as etf_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "crypto_investments" as crypto_investments {
-  * id : integer <<PK>>
-  symbol : varchar(50)
-  current_price : numeric(18,6)
-}
-
-entity "metals_investments" as metals_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "real_estate_investments" as real_estate_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
   location : varchar(300)
   municipality : varchar(200)
   cadastral_income : numeric(12,2)
   municipality_tax_rate : numeric(8,4)
-}
-
-entity "savings_investments" as savings_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
-  interest_rate : numeric(8,4)
-}
-
-entity "bond_investments" as bond_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
   interest_rate : numeric(8,4)
   maturity_date : date
 }
 
-entity "portfolio_transactions_base" as portfolio_transactions_base {
+entity "portfolio_transactions" as portfolio_transactions {
   * id : serial <<PK>>
-  * investment_id : integer
+  * investment_id : integer <<FK>>
   * type : portfolio_txn_type
   * date : date
   * amount : numeric(18,4)
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
   fees : numeric(18,4)
   taxes : numeric(18,4)
   * currency : varchar(10)
@@ -216,49 +181,6 @@ entity "portfolio_transactions_base" as portfolio_transactions_base {
   recurrence_end_date : date
   * created_at : timestamptz
   * updated_at : timestamptz
-}
-
-entity "stock_transactions" as stock_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-  price_per_unit : numeric(18,6)
-}
-
-entity "etf_transactions" as etf_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-  price_per_unit : numeric(18,6)
-}
-
-entity "crypto_transactions" as crypto_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-  price_per_unit : numeric(18,6)
-}
-
-entity "metals_transactions" as metals_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-  price_per_unit : numeric(18,6)
-}
-
-entity "real_estate_transactions" as real_estate_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-}
-
-entity "savings_transactions" as savings_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-}
-
-entity "bond_transactions" as bond_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
 }
 
 entity "watchlist" as watchlist {
@@ -445,31 +367,8 @@ pte }o--|| planned_transactions
 pte }o--|| transactions
 ptls }o--|| planned_transactions
 
-investments_base ||--|| stock_investments : inherits
-investments_base ||--|| etf_investments : inherits
-investments_base ||--|| crypto_investments : inherits
-investments_base ||--|| metals_investments : inherits
-investments_base ||--|| real_estate_investments : inherits
-investments_base ||--|| savings_investments : inherits
-investments_base ||--|| bond_investments : inherits
-
-portfolio_transactions_base ||--|| stock_transactions : inherits
-portfolio_transactions_base ||--|| etf_transactions : inherits
-portfolio_transactions_base ||--|| crypto_transactions : inherits
-portfolio_transactions_base ||--|| metals_transactions : inherits
-portfolio_transactions_base ||--|| real_estate_transactions : inherits
-portfolio_transactions_base ||--|| savings_transactions : inherits
-portfolio_transactions_base ||--|| bond_transactions : inherits
-
-stock_investments ||--o{ stock_transactions
-etf_investments ||--o{ etf_transactions
-crypto_investments ||--o{ crypto_transactions
-metals_investments ||--o{ metals_transactions
-real_estate_investments ||--o{ real_estate_transactions
-savings_investments ||--o{ savings_transactions
-bond_investments ||--o{ bond_transactions
-
-asset_price_history }o--|| investments_base : investment_id
+investments ||--o{ portfolio_transactions : investment_id
+asset_price_history }o--|| investments : investment_id
 
 transaction_splits }o--|| transactions
 transaction_splits }o--|| recipients
@@ -709,9 +608,10 @@ note as MV_NOTE
   Materialized views (refreshed by materializedViewService):
    - mv_monthly_summary
    - mv_category_totals
-   - mv_cashflow_daily
-   - mv_bank_balances
-   - mv_recipient_monthly
+  Retired zero-reader projections:
+   - mv_cashflow_daily (0094)
+   - mv_bank_balances (0082)
+   - mv_recipient_monthly (0038)
 end note
 
 attachments }o--|| transactions

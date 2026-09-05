@@ -4,7 +4,17 @@ type: algorithm-doc
 status: active
 date: 2026-04-02
 updated: 2026-08-26
-tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
+tags:
+  [
+    algorithms,
+    computer-science,
+    performance,
+    data-structures,
+    snapshot-valuation,
+    fixed-income,
+    real-estate,
+    accrued-interest,
+  ]
 description: Formal documentation of Vision algorithms — deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and historical LTTB context
 aliases: [algorithms, data structures, CS, computational methods]
 ---
@@ -27,6 +37,7 @@ aliases: [algorithms, data structures, CS, computational methods]
 ### Problem Statement
 
 Time-series charts can contain tens of thousands of data points. Rendering all points causes:
+
 1. **DOM overload** — too many SVG/Canvas elements
 2. **Memory pressure** — large arrays in JavaScript heap
 3. **Interactivity degradation** — laggy pan/zoom
@@ -38,10 +49,12 @@ The goal is to reduce N points to a configurable threshold T while preserving th
 LTTB is a perceptually-motivated downsampling algorithm that selects points maximizing the **triangle area** formed by consecutive buckets.
 
 #### Input
+
 - `data`: Array of `{x: number, y: number}` points, sorted by x
 - `threshold`: Target number of output points (T)
 
 #### Output
+
 - Array of T points preserving visual shape
 
 #### Steps
@@ -83,15 +96,16 @@ This is the **cross product** magnitude, proportional to the area of the triangl
 
 #### Why LTTB?
 
-| Algorithm | Shape Preservation | Speed | Visual Quality |
-|-----------|-------------------|-------|----------------|
-| Random sampling | Poor | O(N) | Bad |
-| Uniform sampling | Poor | O(N) | Bad (aliasing) |
-| Min-Max | Good | O(N) | Moderate |
-| **LTTB** | **Excellent** | **O(N)** | **Excellent** |
-| Douglas-Peucker | Excellent | O(N log N) | Excellent |
+| Algorithm        | Shape Preservation | Speed      | Visual Quality |
+| ---------------- | ------------------ | ---------- | -------------- |
+| Random sampling  | Poor               | O(N)       | Bad            |
+| Uniform sampling | Poor               | O(N)       | Bad (aliasing) |
+| Min-Max          | Good               | O(N)       | Moderate       |
+| **LTTB**         | **Excellent**      | **O(N)**   | **Excellent**  |
+| Douglas-Peucker  | Excellent          | O(N log N) | Excellent      |
 
 LTTB is preferred because it:
+
 - Runs in linear time (unlike Douglas-Peucker)
 - Preserves peaks and troughs better than uniform sampling
 - Is perceptually motivated (maximizes visual deviation)
@@ -102,7 +116,7 @@ LTTB is preferred because it:
 // Key optimization: use squared area to avoid sqrt
 const area = Math.abs(
   (pointX - prevSelectedX) * (nextAvgY - prevSelectedY) -
-  (pointY - prevSelectedY) * (nextAvgX - prevSelectedX)
+    (pointY - prevSelectedY) * (nextAvgX - prevSelectedX),
 );
 ```
 
@@ -132,6 +146,7 @@ hash_input = normalize(date) + "|" + normalize(amount) + "|" + normalize(memo) +
 ```
 
 Where `normalize()` applies:
+
 1. **Date:** ISO 8601 format (YYYY-MM-DD)
 2. **Amount:** Fixed precision (2 decimal places)
 3. **Memo:** Lowercase, trimmed, whitespace-normalized
@@ -140,8 +155,8 @@ Where `normalize()` applies:
 #### Hash Computation
 
 ```javascript
-import { createHash } from 'crypto';
-const hash = createHash('sha256').update(normalizedInput).digest('hex');
+import { createHash } from "crypto";
+const hash = createHash("sha256").update(normalizedInput).digest("hex");
 ```
 
 #### Collision Analysis
@@ -153,6 +168,7 @@ const hash = createHash('sha256').update(normalizedInput).digest('hex');
 #### False Positive Mitigation
 
 The hash is used as a **unique constraint** in the database. If a hash collision occurs (extremely unlikely), the transaction is rejected as a duplicate. This is acceptable because:
+
 1. SHA-256 collision probability is astronomically low
 2. The cost of a false positive (missed duplicate) is higher than a false negative (rejected unique transaction)
 
@@ -181,6 +197,7 @@ Automatically identify recurring transactions (subscriptions, rent, utilities) f
 The algorithm uses **temporal pattern analysis** on transaction sequences.
 
 #### Input
+
 - List of transactions for a given recipient
 - Configurable parameters:
   - `minOccurrences`: Minimum number of transactions to detect a pattern (default: 3)
@@ -213,13 +230,13 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 
 #### Pattern Classification
 
-| Interval (days) | Pattern | Tolerance |
-|-----------------|---------|-----------|
-| 6-8 | Weekly | ±2 days |
-| 12-16 | Bi-weekly | ±2 days |
-| 28-32 | Monthly | ±2 days |
-| 88-92 | Quarterly | ±2 days |
-| 363-367 | Yearly | ±2 days |
+| Interval (days) | Pattern   | Tolerance |
+| --------------- | --------- | --------- |
+| 6-8             | Weekly    | ±2 days   |
+| 12-16           | Bi-weekly | ±2 days   |
+| 28-32           | Monthly   | ±2 days   |
+| 88-92           | Quarterly | ±2 days   |
+| 363-367         | Yearly    | ±2 days   |
 
 #### Complexity
 
@@ -282,8 +299,8 @@ For converting multiple rows (e.g., bank balances by date):
 ```javascript
 convertRowsToEur(rows, targetCurrency, {
   useHistoricalRatesByDate: true,
-  dateField: 'date'
-})
+  dateField: "date",
+});
 ```
 
 This performs a **single pass** over rows, building a rate lookup map to avoid repeated database queries.
@@ -435,7 +452,7 @@ of the legs rather than to `geometric_mean(value[i-1], value[i+1])`.
 the ledger plus deterministic interest accrual rather than from a daily price
 series, so it does not carry price-feed needles and is passed through untouched.
 Smoothing it would invent a balance the user never held, and because detection
-runs on the *total*, a genuine one-day cash transit (deposit in, withdrawal out)
+runs on the _total_, a genuine one-day cash transit (deposit in, withdrawal out)
 trips the needle rule; preserving the cash leg makes that day reconcile back to
 its real total instead of persisting a loss that never happened.
 
@@ -449,7 +466,7 @@ invent a balance.)
 #### FX-neutral parallel total
 
 `value_fx_neutral` is not a leg of the sum — it is the same portfolio valued at
-purchase-date FX, and it shares the *identical* `cash_value` figure (the day walk
+purchase-date FX, and it shares the _identical_ `cash_value` figure (the day walk
 adds `fixedIncomeValue` to both totals). It is declared as a `parallelTotal` with
 `sharedFields: ['cash_value']` and rebuilt from the reconciled `value` at the FX
 ratio its neighbors show:
@@ -462,7 +479,7 @@ new_fxn  = (reconciled_value - cash) × ratio + cash
 
 This matters because an all-EUR portfolio has `value_fx_neutral == value` on
 every day by construction, and `PerformancePage` lights up the FX-attribution
-line when *any* day's two totals differ by more than 0.01. Reconciling `value`
+line when _any_ day's two totals differ by more than 0.01. Reconciling `value`
 while leaving `value_fx_neutral` on its own geometric mean would show a currency
 effect to a user holding no foreign currency. A price needle scales a position's
 converted and FX-neutral values by the same factor, so the ratio itself never
@@ -481,6 +498,12 @@ fields at the response boundary so every served row keeps
 `gain_loss == value - invested` and the matching return percentage. The removed
 second pass used only the total `value`; it could flatten a real one-day cash
 movement while leaving `cash_value` and `value_fx_neutral` untouched.
+
+The first and newest rows cannot be classified by this two-sided rule. Both stay
+raw. The performance response marks only the newest returned row with
+`is_provisional: true`, and the Performance page explains that it may be
+stabilized after the next snapshot supplies a right-hand neighbour. See
+[[docs/adr/125-provisional-latest-portfolio-snapshot|ADR-125]].
 
 #### Parity Invariant (2026-05-18)
 
@@ -557,18 +580,19 @@ CAGR = (currentValue / investedCapital)^(1/years) - 1
 
 ## Summary of Algorithm Complexities
 
-| Algorithm | Time | Space | Key Property |
-|-----------|------|-------|--------------|
-| LTTB Downsampling | O(N) | O(T) | Perceptually optimal |
-| SHA-256 Deduplication | O(L) | O(1) | Cryptographic collision resistance |
-| Recurring Detection | O(N log N) | O(N) | Tolerance-based pattern matching |
-| Currency Conversion | O(1) cached | O(N) map | Historical rate support |
-| Text Normalization | O(L) | O(L) | Multi-pass pipeline |
-| Net Worth Snapshots | O(D × A) | O(D + A) | Parity-invariant valuation + spike sanitization |
-| Modified Dietz Return | O(M) | O(M) | Contribution-adjusted |
-| CAGR | O(1) | O(1) | Geometric mean |
+| Algorithm             | Time        | Space    | Key Property                                    |
+| --------------------- | ----------- | -------- | ----------------------------------------------- |
+| LTTB Downsampling     | O(N)        | O(T)     | Perceptually optimal                            |
+| SHA-256 Deduplication | O(L)        | O(1)     | Cryptographic collision resistance              |
+| Recurring Detection   | O(N log N)  | O(N)     | Tolerance-based pattern matching                |
+| Currency Conversion   | O(1) cached | O(N) map | Historical rate support                         |
+| Text Normalization    | O(L)        | O(L)     | Multi-pass pipeline                             |
+| Net Worth Snapshots   | O(D × A)    | O(D + A) | Parity-invariant valuation + spike sanitization |
+| Modified Dietz Return | O(M)        | O(M)     | Contribution-adjusted                           |
+| CAGR                  | O(1)        | O(1)     | Geometric mean                                  |
 
 Where:
+
 - N = number of data points
 - T = threshold (downsampling target)
 - L = string length

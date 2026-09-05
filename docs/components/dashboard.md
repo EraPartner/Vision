@@ -420,7 +420,7 @@ interface CashFlowForecastDiagnosticsProps {
   - Helps identify best-performing forecasting method for your data
 
 - **Data loading (Phase D + H v2)** — Sheet-open triggered lazy loading
-  - Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` when open
+  - Fetches persisted accuracy history through `useCashflowForecastAccuracy` when open; `useDashboardQueries.ts` owns the query definition
   - staleTime 10 minutes to avoid excessive refetch
   - Falls back to current session backtest if Postgres table is missing (error code 42P01)
   - **Mode detection (H v2):** Detects active forecast mode (month vs. rolling) and selects appropriate data source
@@ -710,6 +710,12 @@ function Dashboard() {
 ## Performance Optimizations (April 2026)
 
 Dashboard Page (`DashboardPage.tsx`) uses `useMemo` to stabilize frequently-recomputed values and prevent unnecessary child re-renders:
+
+The boot-time category preload is intentionally unconditional. Gating it from a local settings copy
+would create a second settings authority; users who disable hidden-category exclusions may pay one
+unused request, while all other users avoid a serial settings-to-categories round trip. Queries whose
+keys contain the resolved exclusion arrays wait for `useExcludedIds().isReady`. The unfiltered monthly
+summary is enabled only when exclusions do not apply or a graph explicitly selects “ignore filters.”
 
 | Value                      | Dependencies                                  | Purpose                                                                                                       |
 | -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |

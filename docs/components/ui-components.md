@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-09-03
+updated: 2026-09-04
 tags:
   [
     components,
@@ -249,7 +249,8 @@ Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/fronte
 - **Mono**: SF Mono / JetBrains Mono fallback stack — identifiers and code such as tickers, IBANs, SQL, and API paths; never monetary amounts. `<Money>` owns the canonical Inter/body tabular treatment for currency.
 - **Dense microcopy**: `text-2xs` (11px/14px) is the named minimum for chart labels, compact badges, and developer chrome. Do not mint arbitrary `text-[10px]` or `text-[11px]` utilities.
 - **Eyebrow labels**: `.eyebrow` owns the uppercase 11px/14px, medium-weight, 0.12em-tracking muted label role. Semantic color utilities may override its muted default; do not rebuild the typography recipe per file.
-- **Self-hosted**: Font files loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files, no preload needed)
+- **Self-hosted**: WOFF2-only static faces loaded from `@fontsource/fraunces` +
+  `@fontsource/inter`; the build injects hashed preloads for Inter 400 and Fraunces 600
 
 Previous: Variable font ranges (`@fontsource-variable/*`) superseded by static weight selection (5kb savings, faster download).
 

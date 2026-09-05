@@ -13,30 +13,31 @@ related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService
 # Portfolio Summary API
 
 > [!abstract] Overview
-> Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's *current* investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
+> Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's _current_ investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
 >
 > **2026-06-11 (ADR-074) — FX attribution semantics change.** `totalInvested` / `totalBuyCost` / `gainLoss` / `realizedGain` / `unrealizedGain` / `avgCostBasis` / fees / taxes / income are now converted at **transaction-date** FX rates (invested is locked at purchase-date rates; it no longer drifts with today's FX). `gainLoss` **includes** the FX component and equals `assetGain + fxGain`. New additive fields carry the decomposition.
 
 ## Endpoint Details
 
-| Property | Value |
-|----------|-------|
-| **Path** | `/api/info/portfolio-summary` |
-| **Method** | GET |
-| **Authentication** | Session (required) |
-| **Rate Limit** | 60 req/min |
-| **Cache TTL** | 60 seconds (in-memory) |
-| **Invalidation** | On any investment or transaction write |
+| Property           | Value                                  |
+| ------------------ | -------------------------------------- |
+| **Path**           | `/api/info/portfolio-summary`          |
+| **Method**         | GET                                    |
+| **Authentication** | Session (required)                     |
+| **Rate Limit**     | 60 req/min                             |
+| **Cache TTL**      | 60 seconds (in-memory)                 |
+| **Invalidation**   | On any investment or transaction write |
 
 ## Request
 
 ### Query Parameters
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `currency` | string | No | EUR | Target 3-letter currency code for FX conversion (e.g., `USD`, `GBP`, `CHF`) |
+| Parameter  | Type   | Required | Default | Description                                                                 |
+| ---------- | ------ | -------- | ------- | --------------------------------------------------------------------------- |
+| `currency` | string | No       | EUR     | Target 3-letter currency code for FX conversion (e.g., `USD`, `GBP`, `CHF`) |
 
 **Examples:**
+
 - `/api/info/portfolio-summary` — Totals in EUR (default)
 - `/api/info/portfolio-summary?currency=USD` — Totals in USD
 - `/api/info/portfolio-summary?currency=GBP` — Totals in GBP
@@ -56,59 +57,86 @@ Content-Type: application/json
   "currency": "EUR",
   "computed_at": "2026-06-11T12:34:56.000Z",
   "totals": {
-    "currentValue": 125000.00,
-    "totalInvested": 100000.00,
-    "totalGainLoss": 25000.00,
-    "totalAssetGain": 22000.00,
-    "totalFxGain": 3000.00,
-    "realized": 5000.00,
-    "unrealized": 20000.00,
-    "fees": 0.00,
-    "taxes": 0.00,
-    "income": 0.00,
+    "currentValue": 125000.0,
+    "totalInvested": 100000.0,
+    "totalGainLoss": 25000.0,
+    "totalAssetGain": 22000.0,
+    "totalFxGain": 3000.0,
+    "realized": 5000.0,
+    "unrealized": 20000.0,
+    "fees": 0.0,
+    "taxes": 0.0,
+    "income": 0.0,
     "totalReturnPct": 25.0,
     "usedFallbackRate": false
   },
   "summaries": [
     {
       "asset_class": "stock",
-      "currentValue": 80000.00,
-      "invested": 60000.00,
-      "gainLoss": 20000.00,
-      "assetGain": 17500.00,
-      "fxGain": 2500.00,
-      "nativeCurrentValue": 87000.00,
-      "realized": 3000.00,
-      "unrealized": 17000.00,
-      "fees": 0.00,
-      "taxes": 0.00,
-      "income": 0.00,
+      "currentValue": 80000.0,
+      "invested": 60000.0,
+      "gainLoss": 20000.0,
+      "assetGain": 17500.0,
+      "fxGain": 2500.0,
+      "nativeCurrentValue": 87000.0,
+      "realized": 3000.0,
+      "unrealized": 17000.0,
+      "fees": 0.0,
+      "taxes": 0.0,
+      "income": 0.0,
       "returnPct": 33.33,
       "count": 5,
       "usedFallbackRate": false
     },
     {
       "asset_class": "crypto",
-      "currentValue": 45000.00,
-      "invested": 40000.00,
-      "gainLoss": 5000.00,
-      "assetGain": 4500.00,
-      "fxGain": 500.00,
-      "nativeCurrentValue": 45000.00,
-      "realized": 2000.00,
-      "unrealized": 3000.00,
-      "fees": 0.00,
-      "taxes": 0.00,
-      "income": 0.00,
-      "returnPct": 12.50,
+      "currentValue": 45000.0,
+      "invested": 40000.0,
+      "gainLoss": 5000.0,
+      "assetGain": 4500.0,
+      "fxGain": 500.0,
+      "nativeCurrentValue": 45000.0,
+      "realized": 2000.0,
+      "unrealized": 3000.0,
+      "fees": 0.0,
+      "taxes": 0.0,
+      "income": 0.0,
+      "returnPct": 12.5,
       "count": 3,
       "usedFallbackRate": false
     }
   ],
   "byAccount": [
-    { "account_id": 3, "currentValue": 90000.00, "totalInvested": 72000.00, "realizedGain": 4000.00, "unrealizedGain": 14000.00, "gainLoss": 18000.00 },
-    { "account_id": 7, "currentValue": 35000.00, "totalInvested": 28000.00, "realizedGain": 1000.00, "unrealizedGain": 6000.00, "gainLoss": 7000.00 },
-    { "account_id": null, "currentValue": 0.00, "totalInvested": 0.00, "realizedGain": 0.00, "unrealizedGain": 0.00, "gainLoss": 0.00 }
+    {
+      "account_id": 3,
+      "assignment": "account",
+      "oversold": false,
+      "currentValue": 90000.0,
+      "totalInvested": 72000.0,
+      "realizedGain": 4000.0,
+      "unrealizedGain": 14000.0,
+      "gainLoss": 18000.0
+    },
+    {
+      "account_id": 7,
+      "assignment": "account",
+      "oversold": false,
+      "currentValue": 35000.0,
+      "totalInvested": 28000.0,
+      "realizedGain": 1000.0,
+      "unrealizedGain": 6000.0,
+      "gainLoss": 7000.0
+    },
+    {
+      "account_id": null,
+      "assignment": "unassigned",
+      "oversold": false,
+      "currentValue": 0.0,
+      "totalInvested": 0.0,
+      "realizedGain": 0.0,
+      "unrealizedGain": 0.0,
+      "gainLoss": 0.0
+    }
   ]
 }
 ```
@@ -116,28 +144,32 @@ Content-Type: application/json
 ### Response Fields
 
 **Top-level:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `currency` | string | Echo of requested currency (default EUR) |
-| `computed_at` | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation |
-| `totals` | object | Aggregate portfolio metrics across all assets |
-| `summaries` | array | Per-asset-class breakdown with individual metrics |
-| `byAccount` | array | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
+
+| Field         | Type              | Description                                                                                                                                                                                                                                                                            |
+| ------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency`    | string            | Echo of requested currency (default EUR)                                                                                                                                                                                                                                               |
+| `computed_at` | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation                                                                                                                                                                                                             |
+| `totals`      | object            | Aggregate portfolio metrics across all assets                                                                                                                                                                                                                                          |
+| `summaries`   | array             | Per-asset-class breakdown with individual metrics                                                                                                                                                                                                                                      |
+| `byAccount`   | array             | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
 
 **byAccount[] object (one per account that holds at least one lot, plus one `null` entry for unassigned lots / instruments still in the ADR-108 transition):**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `account_id` | `number \| null` | Account identifier; `null` = unassigned |
-| `currentValue` | number | Holdings market value for this account in target currency |
-| `totalInvested` | number | Gross buy cost for this account at transaction-date FX rates (same grain as `totals.totalInvested`) |
-| `realizedGain` | number | **New (ADR-108).** Realized P&L from this account's own lots |
-| `unrealizedGain` | number | **New (ADR-108).** Open-position P&L for this account |
-| `gainLoss` | number | Total gain for this account (incl. income minus fee/tax rows) |
+| Field            | Type                        | Description                                                                                                    |
+| ---------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `account_id`     | `number \| null`            | Account identifier; `null` = unassigned                                                                        |
+| `assignment`     | `"account" \| "unassigned"` | Stable machine-readable identity; clients localize the Unassigned label                                        |
+| `oversold`       | boolean                     | True when any contributing investment sold more units in this account partition than its assigned lots provide |
+| `currentValue`   | number                      | Holdings market value for this account in target currency                                                      |
+| `totalInvested`  | number                      | Gross buy cost for this account at transaction-date FX rates (same grain as `totals.totalInvested`)            |
+| `realizedGain`   | number                      | **New (ADR-108).** Realized P&L from this account's own lots                                                   |
+| `unrealizedGain` | number                      | **New (ADR-108).** Open-position P&L for this account                                                          |
+| `gainLoss`       | number                      | Total gain for this account (incl. income minus fee/tax rows)                                                  |
 
-Each `summaries[]` entry additionally carries `fullyAssigned: boolean` (ADR-108 transition flag). While an instrument has broker-unassigned lots, its **entire** figures sit on the `account_id: null` row — read surfaces render an "assign lots" nudge instead of wrong partitions — and its global math stays the flat replay.
+Each `summaries[]` entry additionally carries `fullyAssigned: boolean` (ADR-108 transition flag) and `oversold: boolean`. While an instrument has broker-unassigned lots, its **entire** figures sit on the Unassigned row and its global math stays the flat replay. A legacy partition deficit remains readable with `oversold: true`; writes reject a new or worsened deficit but allow unchanged or improving repair edits.
 
 **Parity invariant (locked by `tests/portfolioSummaryPartitionParity.db.test.js` under weighted_avg/fifo/lifo, per ADR-061 discipline):**
+
 ```
 Σ byAccount[].currentValue    === totals.totalPortfolioValue
 Σ byAccount[].totalInvested   === totals.totalInvested
@@ -147,44 +179,47 @@ Each `summaries[]` entry additionally carries `fullyAssigned: boolean` (ADR-108 
 ```
 
 > [!note] ADR-108 headline semantics on fully-assigned multi-broker instruments
-> Because the investment core **is** the partition aggregate, the global headline is not purely re-attributed in two edge data states (adversarially verified 2026-08-10): a **weighted_avg** `return_of_capital` exceeding one partition's basis share floors per partition (the flat replay floored one pooled basis; the partitioned figure matches FIFO/LIFO for the same rows), and a sell tagged to a broker holding fewer units than sold clamps to that partition's lots, so global units/value follow the tags. Assign sells alongside their lots when re-tagging.
+> Because the investment core **is** the partition aggregate, the global headline is not purely re-attributed in two edge data states: a **weighted_avg** `return_of_capital` exceeding one partition's basis share floors per partition (the flat replay floored one pooled basis; the partitioned figure matches FIFO/LIFO for the same rows), and a legacy sell tagged to a broker holding fewer units than sold clamps to that partition's lots. The latter is emitted as `oversold` and shown as a repair warning.
 
 **totals object:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `currentValue` | number | Sum of all investments' current market value in target currency (today's FX) |
-| `totalInvested` | number | Sum of all cost basis at **transaction-date** FX rates (does not drift with today's FX) |
-| `totalGainLoss` | number | `currentValue − totalInvested`; includes both asset and FX components (`= totalAssetGain + totalFxGain`) |
-| `totalAssetGain` | number | **New (ADR-074).** Pure asset-performance component: native-currency gain × today's rate |
-| `totalFxGain` | number | **New (ADR-074).** Currency-movement component: `totalGainLoss − totalAssetGain` |
-| `realized` | number | Realized gains/losses from closed positions (converted at transaction-date rates) |
-| `unrealized` | number | Unrealized gains/losses from open positions (current − cost basis at purchase-date rates) |
-| `fees` | number | Cumulative fees paid (converted at transaction-date rates) |
-| `taxes` | number | Cumulative taxes paid (converted at transaction-date rates) |
-| `income` | number | Cumulative dividends/interest/yield received (converted at transaction-date rates) |
-| `totalReturnPct` | number | Total return percentage: `(totalGainLoss / totalInvested) × 100` |
+
+| Field              | Type    | Description                                                                                                                            |
+| ------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `currentValue`     | number  | Sum of all investments' current market value in target currency (today's FX)                                                           |
+| `totalInvested`    | number  | Sum of all cost basis at **transaction-date** FX rates (does not drift with today's FX)                                                |
+| `totalGainLoss`    | number  | `currentValue − totalInvested`; includes both asset and FX components (`= totalAssetGain + totalFxGain`)                               |
+| `totalAssetGain`   | number  | **New (ADR-074).** Pure asset-performance component: native-currency gain × today's rate                                               |
+| `totalFxGain`      | number  | **New (ADR-074).** Currency-movement component: `totalGainLoss − totalAssetGain`                                                       |
+| `realized`         | number  | Realized gains/losses from closed positions (converted at transaction-date rates)                                                      |
+| `unrealized`       | number  | Unrealized gains/losses from open positions (current − cost basis at purchase-date rates)                                              |
+| `fees`             | number  | Cumulative fees paid (converted at transaction-date rates)                                                                             |
+| `taxes`            | number  | Cumulative taxes paid (converted at transaction-date rates)                                                                            |
+| `income`           | number  | Cumulative dividends/interest/yield received (converted at transaction-date rates)                                                     |
+| `totalReturnPct`   | number  | Total return percentage: `(totalGainLoss / totalInvested) × 100`                                                                       |
 | `usedFallbackRate` | boolean | **New (ADR-074).** `true` if any investment lacked a transaction-date rate and fell back to today's rate; a disclosure flag for the UI |
 
 **summaries[] object (one per asset class):**
-| Field | Type | Description |
-|-------|------|-------------|
-| `asset_class` | string | Asset class: `stock`, `etf`, `crypto`, `metals`, `real_estate`, `savings`, or `bonds` |
-| `currentValue` | number | Current market value in target currency (today's FX) |
-| `invested` | number | Cost basis at transaction-date FX rates |
-| `gainLoss` | number | `currentValue − invested` (= `assetGain + fxGain`) |
-| `assetGain` | number | **New (ADR-074).** Pure asset-performance component for this class |
-| `fxGain` | number | **New (ADR-074).** Currency-movement component for this class |
-| `nativeCurrentValue` | number | **New (ADR-074).** Current market value in the investment's native currency (before FX conversion) |
-| `realized` | number | Realized gains for this class |
-| `unrealized` | number | Unrealized gains for this class |
-| `fees` | number | Fees for this class |
-| `taxes` | number | Taxes for this class |
-| `income` | number | Income for this class |
-| `returnPct` | number | Return % for this class |
-| `count` | integer | Number of investments in this class |
-| `usedFallbackRate` | boolean | **New (ADR-074).** `true` if any transaction in this class used a fallback (non-historical) rate |
+
+| Field                | Type    | Description                                                                                        |
+| -------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `asset_class`        | string  | Asset class: `stock`, `etf`, `crypto`, `metals`, `real_estate`, `savings`, or `bonds`              |
+| `currentValue`       | number  | Current market value in target currency (today's FX)                                               |
+| `invested`           | number  | Cost basis at transaction-date FX rates                                                            |
+| `gainLoss`           | number  | `currentValue − invested` (= `assetGain + fxGain`)                                                 |
+| `assetGain`          | number  | **New (ADR-074).** Pure asset-performance component for this class                                 |
+| `fxGain`             | number  | **New (ADR-074).** Currency-movement component for this class                                      |
+| `nativeCurrentValue` | number  | **New (ADR-074).** Current market value in the investment's native currency (before FX conversion) |
+| `realized`           | number  | Realized gains for this class                                                                      |
+| `unrealized`         | number  | Unrealized gains for this class                                                                    |
+| `fees`               | number  | Fees for this class                                                                                |
+| `taxes`              | number  | Taxes for this class                                                                               |
+| `income`             | number  | Income for this class                                                                              |
+| `returnPct`          | number  | Return % for this class                                                                            |
+| `count`              | integer | Number of investments in this class                                                                |
+| `usedFallbackRate`   | boolean | **New (ADR-074).** `true` if any transaction in this class used a fallback (non-historical) rate   |
 
 **Reconciliation invariants (verified by test):**
+
 ```
 sum(summaries[].currentValue) === totals.currentValue
 sum(summaries[].invested)     === totals.totalInvested
@@ -197,12 +232,12 @@ gainLoss === assetGain + fxGain   (per-investment AND in totals)
 
 ### Error Responses
 
-| Status | Description | Example |
-|--------|-------------|---------|
-| 400 | Invalid currency code | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unsupported currency: XYZ" } }` |
-| 401 | Not authenticated | User session expired |
-| 429 | Rate limited | User exceeded 60 req/min quota |
-| 500 | Server error | Database or conversion service unavailable |
+| Status | Description           | Example                                                                                     |
+| ------ | --------------------- | ------------------------------------------------------------------------------------------- |
+| 400    | Invalid currency code | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unsupported currency: XYZ" } }` |
+| 401    | Not authenticated     | User session expired                                                                        |
+| 429    | Rate limited          | User exceeded 60 req/min quota                                                              |
+| 500    | Server error          | Database or conversion service unavailable                                                  |
 
 ```json
 { "ok": false, "error": { "code": "APP_ERROR", "message": "Error message" } }
@@ -211,10 +246,12 @@ gainLoss === assetGain + fxGain   (per-investment AND in totals)
 ## Caching Strategy
 
 **TTL:** 60 seconds
+
 - Balances freshness (price refreshes run on 5-min intervals) with low latency
 - Most dashboard renders hit cache; cold-start time is ~200-400ms
 
 **Invalidation:** Atomic on write
+
 - `POST /api/investments` → clears cache
 - `PATCH /api/investments/:id` → clears cache
 - `DELETE /api/investments/:id` → clears cache
@@ -269,7 +306,10 @@ const { data } = usePortfolioSummaryQuery(displayCurrency);
 Performance page headline metrics (updated 2026-04-29):
 
 ```typescript
-const { data: performance } = usePortfolioPerformanceQuery(displayCurrency, period);
+const { data: performance } = usePortfolioPerformanceQuery(
+  displayCurrency,
+  period,
+);
 
 // Override snapshot-era totals with realtime values
 const metricsBlock = {
@@ -283,14 +323,14 @@ const metricsBlock = {
 
 ### Net Worth Current-Point Overlay (2026-05-31)
 
-The `GET /api/info/net-worth` endpoint now overlays its *current* investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/routes/info/_liveSummary.js` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
+The `GET /api/info/net-worth` endpoint now overlays its _current_ investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/routes/info/_liveSummary.js` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 
 ### Per-Asset-Class Breakdown
 
 Portfolio composition chart uses `summaries`:
 
 ```typescript
-const chartData = data?.summaries.map(s => ({
+const chartData = data?.summaries.map((s) => ({
   asset_class: s.asset_class,
   value: s.currentValue,
   invested: s.invested,
@@ -315,9 +355,9 @@ curl -X GET "http://localhost:3002/api/info/portfolio-summary?currency=USD" \
 ### JavaScript (Fetch)
 
 ```javascript
-const response = await fetch('/api/info/portfolio-summary?currency=EUR', {
-  method: 'GET',
-  credentials: 'include', // Include session cookie
+const response = await fetch("/api/info/portfolio-summary?currency=EUR", {
+  method: "GET",
+  credentials: "include", // Include session cookie
 });
 const data = await response.json();
 console.log(`Total: ${data.totals.currentValue}`);

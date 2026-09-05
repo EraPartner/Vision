@@ -24,6 +24,7 @@ aliases:
 description: API endpoints for transaction splitting and debt tracking between recipients. Phase Q+ adds automatic recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) for consistency with merge semantics.
 related_code:
   - apps/node-backend/src/routes/splits.js
+  - apps/node-backend/src/services/splitService.js
   - apps/node-backend/src/repositories/splitRepository.js
 ---
 
@@ -56,12 +57,13 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 - Payment amounts must be **positive numbers**.
 - Sum of payments on a split cannot exceed the split's amount.
 - Validation uses `validatePaymentAmount` from the pure calc module.
-- The route returns 400 early. `splitRepository.addPayment` then locks the split row with `SELECT ... FOR UPDATE`, recomputes the total, and repeats the exact four-decimal cap before insert. This locked repository transaction is authoritative and serializes concurrent payment requests.
+- The route rejects malformed input early. `splitService.addPayment` then locks the split row through a repository primitive, recomputes the total, and repeats the exact four-decimal cap before insert. This locked service transaction is authoritative and serializes concurrent payment requests.
 - There is no canonical DB-level overpayment trigger. Migration 0088 removes the weaker pre-squash trigger from upgraded databases; direct SQL can bypass the cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 ### Audit Trail
 
-All split lifecycle events are recorded in `split_audit` table via `splitRepository.writeAudit()`:
+All split lifecycle events are recorded in `split_audit`. `splitService` calls the repository's parameterized `writeAudit()` primitive inside the same transaction as each mutation:
+
 - **create**: triggered by POST `/api/splits` or POST `/api/splits/batch`
 - **pay**: triggered by POST `/api/splits/:id/pay`
 - **settle**: triggered by POST `/api/splits/:id/settle`
@@ -102,9 +104,9 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
     {
       "recipient_id": 1,
       "recipient_name": "John Doe",
-      "total_owed": 150.00,
-      "total_paid": 40.00,
-      "remaining": 110.00,
+      "total_owed": 150.0,
+      "total_paid": 40.0,
+      "remaining": 110.0,
       "split_count": 3
     }
   ]
@@ -112,6 +114,7 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
 ```
 
 Implementation note:
+
 - Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
@@ -122,9 +125,9 @@ Get detailed splits owed by a specific recipient.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
+| Field | Type   | Description                                                           |
+| ----- | ------ | --------------------------------------------------------------------- |
+| `id`  | number | Recipient ID (positive integer) — can be a primary or alias recipient |
 
 **Recipient Alias Grouping (Phase Q+):**
 If the provided `id` is an alias (has a `primary_recipient_id`), the endpoint expands the query to include all splits from the entire alias group: the alias itself, its primary, and all sibling aliases. If the provided `id` is a primary recipient, it returns splits from the primary and all aliases pointing at it.
@@ -140,14 +143,14 @@ This ensures that viewing splits for a recipient shows the complete history even
       "id": 1,
       "transaction_id": 100,
       "recipient_id": 2,
-      "amount": 50.00,
+      "amount": 50.0,
       "transaction_recipient_name": "CARD PAYMENT - CURRENT",
       "transaction_memo": "Dinner split",
       "transaction_currency": "EUR",
       "bank_account": "BE12 3456 7890 1234",
       "note": "Dinner split",
-      "amount_paid": 10.00,
-      "remaining": 40.00,
+      "amount_paid": 10.0,
+      "remaining": 40.0,
       "is_settled": false,
       "created_at": "2025-01-15T10:00:00Z"
     }
@@ -158,6 +161,7 @@ This ensures that viewing splits for a recipient shows the complete history even
 `transaction_recipient_name` and `transaction_memo` are returned so clients can present the split source using both fields (for example in the Owes detail list).
 
 Implementation note:
+
 - Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
@@ -177,9 +181,9 @@ Important behavior:
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
+| Field | Type   | Description                                                           |
+| ----- | ------ | --------------------------------------------------------------------- |
+| `id`  | number | Recipient ID (positive integer) — can be a primary or alias recipient |
 
 **Response:** `200 OK`
 
@@ -191,6 +195,7 @@ Important behavior:
 - `404 Not Found` when no unsettled owed transactions exist for that recipient (or the recipient group).
 
 Implementation notes:
+
 - Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
@@ -201,9 +206,9 @@ Get all splits for a specific transaction.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Transaction ID (positive integer) |
+| Field | Type   | Description                       |
+| ----- | ------ | --------------------------------- |
+| `id`  | number | Transaction ID (positive integer) |
 
 **Response:** `200 OK`
 
@@ -214,7 +219,7 @@ Get all splits for a specific transaction.
       "id": 1,
       "transaction_id": 100,
       "recipient_id": 2,
-      "amount": 50.00,
+      "amount": 50.0,
       "note": "Lunch",
       "is_settled": false
     }
@@ -232,12 +237,12 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `transaction_id` | number | Yes | ID of the transaction to split |
-| `recipient_id` | number | Yes | ID of the recipient who owes |
-| `amount` | number | Yes | Amount owed (positive number) |
-| `note` | string | No | Optional note |
+| Field            | Type   | Required | Description                    |
+| ---------------- | ------ | -------- | ------------------------------ |
+| `transaction_id` | number | Yes      | ID of the transaction to split |
+| `recipient_id`   | number | Yes      | ID of the recipient who owes   |
+| `amount`         | number | Yes      | Amount owed (positive number)  |
+| `note`           | string | No       | Optional note                  |
 
 **Response:** `201 Created`
 
@@ -246,7 +251,7 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
   "id": 1,
   "transaction_id": 100,
   "recipient_id": 2,
-  "amount": 50.00,
+  "amount": 50.0,
   "note": "Dinner split",
   "is_settled": false,
   "created_at": "2025-01-15T10:00:00Z"
@@ -256,22 +261,38 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required fields: transaction_id, recipient_id, amount" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Missing required fields: transaction_id, recipient_id, amount"
+  }
+}
 ```
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split amount exceeds transaction total" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Split amount exceeds transaction total"
+  }
+}
 ```
 
 **Error Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Transaction not found" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Transaction not found" }
+}
 ```
 
 Implementation notes:
+
 - Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
-- Audit trail written via `splitRepository.writeAudit()` with action='create' and request actor resolved from headers ([[apps/node-backend/src/routes/splits.js]]).
+- `splitService.createSplitAtomic()` owns allocation validation, insertion, and the action='create' audit in one transaction. The route supplies the actor resolved from headers.
 
 ---
 
@@ -283,26 +304,26 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `transaction_id` | number | Yes | ID of the transaction to split |
-| `splits` | array | Yes | Array of split objects (non-empty) |
+| Field            | Type   | Required | Description                        |
+| ---------------- | ------ | -------- | ---------------------------------- |
+| `transaction_id` | number | Yes      | ID of the transaction to split     |
+| `splits`         | array  | Yes      | Array of split objects (non-empty) |
 
 **Split Object:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `recipient_id` | number | Yes | ID of the recipient |
-| `amount` | number | Yes | Amount owed (positive number) |
-| `note` | string | No | Optional note |
+| Field          | Type   | Required | Description                   |
+| -------------- | ------ | -------- | ----------------------------- |
+| `recipient_id` | number | Yes      | ID of the recipient           |
+| `amount`       | number | Yes      | Amount owed (positive number) |
+| `note`         | string | No       | Optional note                 |
 
 **Response:** `201 Created`
 
 ```json
 {
   "items": [
-    { "id": 1, "transaction_id": 100, "recipient_id": 2, "amount": 25.00 },
-    { "id": 2, "transaction_id": 100, "recipient_id": 3, "amount": 25.00 }
+    { "id": 1, "transaction_id": 100, "recipient_id": 2, "amount": 25.0 },
+    { "id": 2, "transaction_id": 100, "recipient_id": 3, "amount": 25.0 }
   ]
 }
 ```
@@ -310,24 +331,39 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required fields: transaction_id, splits[]" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Missing required fields: transaction_id, splits[]"
+  }
+}
 ```
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split amount exceeds transaction total" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Split amount exceeds transaction total"
+  }
+}
 ```
 
 **Error Response:** `404 Not Found`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Transaction not found" } }
+{
+  "ok": false,
+  "error": { "code": "APP_ERROR", "message": "Transaction not found" }
+}
 ```
 
 Implementation notes:
+
 - Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
 - Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
-- Persists all splits via bulk insert `createSplitsBatch()` after validation ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Audit trail: one row per split with action='create' and `batch: true` in payload ([[apps/node-backend/src/routes/splits.js]]).
+- `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
 
 ---
 
@@ -339,17 +375,17 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Split ID (positive integer) |
+| Field | Type   | Description                 |
+| ----- | ------ | --------------------------- |
+| `id`  | number | Split ID (positive integer) |
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | number | Yes | Payment amount (positive number) |
-| `note` | string | No | Optional note |
-| `paid_at` | string | No | Payment date (ISO 8601) |
+| Field     | Type   | Required | Description                      |
+| --------- | ------ | -------- | -------------------------------- |
+| `amount`  | number | Yes      | Payment amount (positive number) |
+| `note`    | string | No       | Optional note                    |
+| `paid_at` | string | No       | Payment date (ISO 8601)          |
 
 **Response:** `201 Created`
 
@@ -357,7 +393,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 {
   "id": 1,
   "split_id": 1,
-  "amount": 25.00,
+  "amount": 25.0,
   "note": "Partial payment",
   "paid_at": "2025-01-20"
 }
@@ -372,19 +408,29 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Payment would exceed split outstanding balance" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Payment would exceed split outstanding balance"
+  }
+}
 ```
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Payment amount must be a positive number" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Payment amount must be a positive number"
+  }
+}
 ```
 
 Implementation notes:
-- Fetches split via `getSplitById(splitId)` and returns 404 if missing ([[apps/node-backend/src/routes/splits.js]]).
-- Gets already-paid amount via `getAlreadyPaid(splitId)` ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Validates payment amount via `validatePaymentAmount({ paymentAmount, splitAmount, alreadyPaid })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
-- `addPayment()` repeats the cap check under a split-row lock, then inserts the payment, conditionally auto-settles, and writes the audit row in one DB transaction ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Actor is propagated to the audit trail via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
+
+- `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.js]]).
+- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -394,9 +440,9 @@ Get all payments for a specific split.
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Split ID (positive integer) |
+| Field | Type   | Description                 |
+| ----- | ------ | --------------------------- |
+| `id`  | number | Split ID (positive integer) |
 
 **Response:** `200 OK`
 
@@ -406,7 +452,7 @@ Get all payments for a specific split.
     {
       "id": 1,
       "split_id": 1,
-      "amount": 25.00,
+      "amount": 25.0,
       "note": "Payment 1",
       "paid_at": "2025-01-20T00:00:00Z"
     }
@@ -424,9 +470,9 @@ This is a manual settlement operation (not triggered by payment reaching the ful
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Split ID (positive integer) |
+| Field | Type   | Description                 |
+| ----- | ------ | --------------------------- |
+| `id`  | number | Split ID (positive integer) |
 
 **Response:** `200 OK` — the full `SplitItem` shape, with the real payment
 aggregate (`amount_paid` is the sum of recorded payments, not a fabricated `0`)
@@ -438,8 +484,8 @@ and the recipient's name:
   "transaction_id": 100,
   "recipient_id": 2,
   "recipient_name": "Alice",
-  "amount": 50.00,
-  "amount_paid": 30.00,
+  "amount": 50.0,
+  "amount_paid": 30.0,
   "note": null,
   "is_settled": true,
   "created_at": "2026-03-01T10:00:00.000Z",
@@ -454,9 +500,9 @@ and the recipient's name:
 ```
 
 Implementation notes:
-- Settles split via `settleSplit(splitId)` and returns 404 if missing ([[apps/node-backend/src/repositories/splitRepository.js]]).
+
+- Settles the split and writes the action='settle' audit atomically via `splitService.settleSplit(splitId, actor)`; the route returns 404 if missing.
 - `settleSplit` re-selects the updated row through `recipients` and a per-split `split_payments` aggregate (same CTE re-select idiom as `createSplitAtomic`), so `recipient_name`/`amount_paid` in the response are real values — the bare `RETURNING *` it used before fabricated `recipient_name: null` / `amount_paid: 0`.
-- Records audit trail via `writeAudit()` with action='settle' and payload `{ manual: true }` ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -471,9 +517,9 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
+| Field | Type   | Description                                                           |
+| ----- | ------ | --------------------------------------------------------------------- |
+| `id`  | number | Recipient ID (positive integer) — can be a primary or alias recipient |
 
 **Response:** `200 OK`
 
@@ -486,12 +532,19 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 **Error Response:** `500 Internal Server Error`
 
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error settling all splits for recipient" } }
+{
+  "ok": false,
+  "error": {
+    "code": "APP_ERROR",
+    "message": "Error settling all splits for recipient"
+  }
+}
 ```
 
 Implementation notes:
+
 - Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Audit trail written only if `settled_count > 0`, with action='settle_all' and payload containing recipient_id and settled_count ([[apps/node-backend/src/routes/splits.js]]).
+- `splitService.settleAllByRecipient()` runs the update and, only when `settled_count > 0`, its action='settle_all' audit in one transaction.
 
 ---
 
@@ -503,9 +556,9 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 
 **Parameters:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Split ID (positive integer) |
+| Field | Type   | Description                 |
+| ----- | ------ | --------------------------- |
+| `id`  | number | Split ID (positive integer) |
 
 **Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
@@ -516,9 +569,8 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 ```
 
 Implementation notes:
-- Fetches split via `getSplitById(splitId)` for pre-delete snapshot; returns 404 if missing ([[apps/node-backend/src/routes/splits.js]]).
-- Hard-deletes via `deleteSplit(splitId)`, which cascades to split_payments via ON DELETE CASCADE ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Audit trail written via `writeAudit()` with action='delete', split_id=null (since split is deleted), and payload containing the snapshot ([[apps/node-backend/src/routes/splits.js]]).
+
+- `splitService.deleteSplit()` fetches the pre-delete snapshot, hard-deletes the split through the repository (cascading to `split_payments`), and writes the action='delete' audit in one transaction. It returns false when the row is missing or cannot be deleted.
 - Split audit rows survive deletion via `ON DELETE SET NULL` on split_id FK, enabling forensic reconstruction ([[docs/adr/013-split-hard-delete-with-audit-trail]]).
 
 ## TypeScript Types

@@ -75,14 +75,16 @@ Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], 
 interface NetWorthResponse {
   current: {
     liquid: number; // Current bank balances
+    liabilities: number; // Current liability-account balances
     investments: number; // Current portfolio value (all asset classes)
-    netWorth: number; // liquid + investments
+    netWorth: number; // liquid + liabilities + investments
   };
   monthlyChange: number;
   monthlyChangePercent: number;
   snapshots: Array<{
     date: string; // YYYY-MM-DD
     liquid: number;
+    liabilities: number;
     investments: number;
     netWorth: number;
   }>;
@@ -94,7 +96,18 @@ interface NetWorthResponse {
 The net worth is computed by `infoRepositoryNetWorth.getNetWorthFromSnapshots(targetCurrency, { liveInvestments })` in the backend, which combines:
 
 - **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND non-unit assets: real estate, savings, bonds). The snapshot builder mirrors `portfolioSummaryService` formulas exactly — see valuation formulas below. The **latest snapshot row's** `investments` value is then overlaid with the live summary total at read time (see "Live overlay" below).
-- **Liquid**: Daily bank account balances derived from the transactions table (latest balance per account per day via lateral join, with fallback to cumulative transaction flow)
+- **Liquid and liabilities**: Daily per-currency account balances derived with the shared statement-anchor-plus-delta rule, with a cumulative transaction-flow fallback when rows are unattributed
+
+Both the liquid history and current point apply the effective-date boundary from
+[[docs/adr/123-effective-date-current-balances|ADR-123]]. Future ledger rows neither leak backward
+into history nor change today's liquid value; they enter the cash-flow forecast instead.
+An in-net-worth account with no active balance partitions contributes no current-point override,
+so it cannot erase a transaction-flow fallback derived from unattributed ledger rows.
+
+The history span starts only from an active transaction that its answering path can value, or from
+an investment snapshot ([[docs/adr/124-net-worth-active-source-span|ADR-124]]). Inactive-only
+ledgers therefore return an empty snapshot series instead of a run of zero-value days measured out
+by archived activity.
 
 Key architectural property: historical days are **snapshot-backed** (no network calls for past data). The _current_ point is overlaid live (see below).
 

@@ -3,7 +3,7 @@ title: Portfolio Tax Feature
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-26
+updated: 2026-09-04
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
@@ -68,15 +68,15 @@ Located at `[[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]]`.
 
 Uses `useWidgetVisibility` with 7 configurable widgets:
 
-| Widget ID | Label Key | Default | Description |
-|-----------|-----------|---------|-------------|
-| `summaryCards` | `tax.widget.summaryCards` | Visible | 6 KPI cards (taxes, fees, costs, effective rate, total with PIT, manual adjustments) |
-| `taxByAssetClass` | `tax.widget.taxByAssetClass` | Visible | Bar chart of taxes/fees by asset class |
-| `taxTypes` | `tax.widget.taxTypes` | Visible | Breakdown by tax type (capital gains, dividend withholding, transaction tax, other) |
-| `yearlyTaxFeeTrend` | `tax.widget.yearlyTaxFeeTrend` | Visible | Monthly stacked bar chart of taxes + fees |
-| `investmentBreakdown` | `tax.widget.investmentBreakdown` | Visible | Per-investment detail cards |
-| `profileInputs` | `tax.widget.profileInputs` | Visible | Current Belgian tax profile inputs |
-| `belgianRules` | `tax.widget.belgianRules` | Visible | Belgian-specific tax rules and estimates |
+| Widget ID             | Label Key                        | Default | Description                                                                          |
+| --------------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `summaryCards`        | `tax.widget.summaryCards`        | Visible | 6 KPI cards (taxes, fees, costs, effective rate, total with PIT, manual adjustments) |
+| `taxByAssetClass`     | `tax.widget.taxByAssetClass`     | Visible | Bar chart of taxes/fees by asset class                                               |
+| `taxTypes`            | `tax.widget.taxTypes`            | Visible | Breakdown by tax type (capital gains, dividend withholding, transaction tax, other)  |
+| `yearlyTaxFeeTrend`   | `tax.widget.yearlyTaxFeeTrend`   | Visible | Monthly stacked bar chart of taxes + fees                                            |
+| `investmentBreakdown` | `tax.widget.investmentBreakdown` | Visible | Per-investment detail cards                                                          |
+| `profileInputs`       | `tax.widget.profileInputs`       | Visible | Current Belgian tax profile inputs                                                   |
+| `belgianRules`        | `tax.widget.belgianRules`        | Visible | Belgian-specific tax rules and estimates                                             |
 
 ### Summary Cards
 
@@ -91,11 +91,11 @@ Uses `useWidgetVisibility` with 7 configurable widgets:
 
 Per-investment tax classification metadata is now persisted via `usePortfolioTaxClassifications` hook:
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `etfStructure` | `'accumulating' \| 'distributing'` | Determines TOB rate (1.32% for accumulating, 0.12% for distributing). Default: `'accumulating'` (May 2026: flipped from distributing to match 80%+ retail market). |
-| `subjectToReynders` | `boolean \| undefined` | Explicit override. `true` → bond / mixed-bond fund (Reynders applies). `false` → direct bond (exempt pre-2026; subject to 10% CGT from IY 2026 onwards). `undefined` → fall back to assetClass-based default. |
-| `reyndersInterestPortion` | `number \| undefined` | Share of realised gain attributable to interest (0–1), taxed at 30% under Reynders. Default 1.0 (pure accumulating bond fund). Remainder routes to 10% CGT from IY 2026 onwards. Stored only when ≠ 1.0 to keep persisted state tidy. |
+| Field                     | Type                               | Purpose                                                                                                                                                                                                                               |
+| ------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `etfStructure`            | `'accumulating' \| 'distributing'` | Determines TOB rate (1.32% for accumulating, 0.12% for distributing). Default: `'accumulating'` (May 2026: flipped from distributing to match 80%+ retail market).                                                                    |
+| `subjectToReynders`       | `boolean \| undefined`             | Explicit override. `true` → bond / mixed-bond fund (Reynders applies). `false` → direct bond (exempt pre-2026; subject to 10% CGT from IY 2026 onwards). `undefined` → fall back to assetClass-based default.                         |
+| `reyndersInterestPortion` | `number \| undefined`              | Share of realised gain attributable to interest (0–1), taxed at 30% under Reynders. Default 1.0 (pure accumulating bond fund). Remainder routes to 10% CGT from IY 2026 onwards. Stored only when ≠ 1.0 to keep persisted state tidy. |
 
 Storage: Settings API key `portfolio_tax_classifications_v1` (JSONB).
 
@@ -112,6 +112,7 @@ type PortfolioTaxAdjustmentMap = Record<string, AdjustmentEntry>;
 ```
 
 **API**:
+
 - `getAdjustment(taxYear, investmentId)` — Get adjustment for a specific investment/year
 - `setAdjustment(taxYear, investmentId, entry)` — Set a single adjustment
 - `setManyForYear(taxYear, values)` — Set multiple adjustments for a year
@@ -138,28 +139,33 @@ The page integrates with the `BelgianTaxProfileContext` to:
 
 Shows the year-aware dividend WHT picture (using the active year's `dividendExemption` and `dividendWHTRate` from `getTaxTable`):
 
-| Field | Calculation |
-|-------|---------|
-| Dividend income tracked | Sum of all `dividend` transaction `amount` fields for the tax year, currency-converted |
-| WHT paid (gross) | Sum of all `dividend` transaction `taxes` fields for the tax year (actual recorded WHT, not estimated) |
-| Gross dividend base | `totalDividendIncome + dividendWhtRecorded` — works for both net-in-amount and gross-in-amount recording conventions |
-| WHT reclaimable | `min(dividendWhtRecorded, min(grossDividendBase, €859) × 30%)` — capped by both recorded WHT and the exemption threshold |
-| Net WHT cost | `max(grossDividendWht − dividendWhtReclaim, 0)` — after reclaim |
+| Field                   | Calculation                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Dividend income tracked | Sum of all `dividend` transaction `amount` fields for the tax year, currency-converted                             |
+| WHT paid (gross)        | Sum of all `dividend` transaction `taxes` fields for the tax year (actual recorded WHT, not estimated)             |
+| Gross dividend base     | Gross rows contribute `amount`; net rows contribute `amount + recorded WHT`                                        |
+| WHT reclaimable         | `min(dividendWhtRecorded, min(grossDividendBase, €859) × 30%)` when every included dividend has a known convention |
+| Net WHT cost            | `max(grossDividendWht − dividendWhtReclaim, 0)` when every included dividend has a known convention                |
+
+Each dividend records `dividend_amount_convention` as `gross`, `net`, or `unknown` (ADR-126).
+Existing rows are `unknown`. Recorded amounts and taxes remain visible, but reclaim and net-cost
+estimates display **Incomplete** while any included row is unknown.
 
 Plus:
+
 - Total TOB recorded from buy-transaction taxes (currency-converted).
 
 ### Capital Gains Estimation (Arizona Reform / CGT)
 
 The portfolio tax page estimates two types of modern capital gains taxation:
 
-1. **Reynders tax (30%)** — Applied to the *interest-attributable* portion of gains on bond and mixed-bond funds. Resolution order: explicit `subjectToReynders` override, else `assetClass === 'bond'` falls back to true (bond-fund proxy). The interest share is configured per-investment via `reyndersInterestPortion` (range 0–1, default 1.0). For IY 2026+, the *non-interest remainder* (1 − portion) is taxed at 10% under the Arizona CGT — see point 2.
+1. **Reynders tax (30%)** — Applied to the _interest-attributable_ portion of gains on bond and mixed-bond funds. Resolution order: explicit `subjectToReynders` override, else `assetClass === 'bond'` falls back to true (bond-fund proxy). The interest share is configured per-investment via `reyndersInterestPortion` (range 0–1, default 1.0). For IY 2026+, the _non-interest remainder_ (1 − portion) is taxed at 10% under the Arizona CGT — see point 2.
 
 2. **Arizona CGT (10%)** — Applied to:
    - Equity and equity-ETF realised gains,
    - Reynders non-interest remainder (post-2026 split, per EY guidance),
    - **Direct bonds** when held in IY 2026+ (pre-2026 they remain exempt under normal-management private estate).
-   
+
    Annual exemptions: €10,000 (single) / €20,000 (married).
 
 > [!warning] CGT Modeling Limitations
@@ -169,17 +175,18 @@ The portfolio tax page estimates two types of modern capital gains taxation:
 
 TOB is rate-banded with statutory per-transaction caps:
 
-| Rate | Instrument | Cap per tx |
-|------|------------|-----------|
-| 0.12% | Bonds, distributing funds | €1,300 |
-| 0.35% | Shares / other equities | €1,600 |
-| 1.32% | Accumulating funds | €4,000 |
+| Rate  | Instrument                | Cap per tx |
+| ----- | ------------------------- | ---------- |
+| 0.12% | Bonds, distributing funds | €1,300     |
+| 0.35% | Shares / other equities   | €1,600     |
+| 1.32% | Accumulating funds        | €4,000     |
 
 The cap is a function of the rate, not the instrument. A €1M share buy at 0.35% caps at **€1,600**, not €3,500.
 
 ## Tax Breakdown Categories
 
 ### Tax Types
+
 - **Capital Gains Tax**: From sell transactions with taxes
 - **Dividend Withholding**: From dividend transactions with taxes
 - **Transaction Tax (TOB)**: From buy transactions with taxes
@@ -187,6 +194,7 @@ The cap is a function of the rate, not the instrument. A €1M share buy at 0.35
 - **Manual Tax Adjustments**: User-entered overrides
 
 ### Fee Types
+
 - **Broker Fees**: From buy/sell transaction fees
 - **Management Fees**: From explicit fee-type transactions
 - **Other Fees**: Other recorded fees
@@ -210,10 +218,10 @@ function convertToTarget(amount: number, fromCurrency?: string) {
 
 ```typescript
 useQuery({
-  queryKey: ['exchange-rates', targetCurrency],
-  queryFn: () => apiClient.request('/api/info/exchange-rates'),
+  queryKey: ["exchange-rates", targetCurrency],
+  queryFn: () => apiClient.request("/api/info/exchange-rates"),
   staleTime: 60_000,
-})
+});
 ```
 
 The page relies on `usePortfolio()` for investment summaries rather than a dedicated API endpoint.

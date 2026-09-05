@@ -60,31 +60,31 @@ SORT title ASC
 
 ## Quick Reference
 
-| Topic | Description |
-|-------|-------------|
-| [[docs/testing/testing\|Testing Guide]] | Comprehensive testing guide with patterns and best practices |
-| [[docs/testing/frontend-component-integration\|Component-Integration Tests]] | RTL + MSW: render full pages, mock at the network boundary, drive with userEvent |
-| [[docs/testing/frontend/api-client-unit\|API Client Unit Tests (E10)]] | 46 tests covering apiRequest retry, error parsing, envelope handling, query building |
-| [[docs/testing/testing#frontend-phase-e11-virtualdatatable-component-integration-tests-2026-05-01\|VirtualDataTable Tests (E11)]] | 23 tests for rendering, search, sort, inline editing, and clear-all functionality |
+| Topic                                                                                                                                               | Description                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [[docs/testing/testing\|Testing Guide]]                                                                                                             | Comprehensive testing guide with patterns and best practices                                       |
+| [[docs/testing/frontend-component-integration\|Component-Integration Tests]]                                                                        | RTL + MSW: render full pages, mock at the network boundary, drive with userEvent                   |
+| [[docs/testing/frontend/api-client-unit\|API Client Unit Tests (E10)]]                                                                              | 46 tests covering apiRequest retry, error parsing, envelope handling, query building               |
+| [[docs/testing/testing#frontend-phase-e11-virtualdatatable-component-integration-tests-2026-05-01\|VirtualDataTable Tests (E11)]]                   | 23 tests for rendering, search, sort, inline editing, and clear-all functionality                  |
 | [[docs/testing/testing#frontend-phase-e15-onboarding-notifications-ai-chat-backup-and-import-tests-2026-05-01\|Onboarding/Chat/Backup Tests (E15)]] | 54 tests for wizards, notifications, AI chat, Electron backups, imports with three new conventions |
-| [[docs/testing/frontend-component-integration#msw--rtl-advanced-patterns-2026-04-30\|MSW & RTL Advanced Patterns]] | Handler ordering, stale elements, multiple elements, role-based assertions (2026-05-01) |
-| [[docs/testing/frontend-component-integration#error-state-tests-account-for-apirequest-retry-backoff\|apiRequest Retry Timeout Pattern]] | 5000ms timeout for error-state tests accounting for ~1500ms internal retry backoff (2026-05-02) |
-| [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical\|Mock Isolation Gotcha]] | Bun/Vitest v1.3.13 mock bleed issue — CRITICAL |
-| [[docs/testing/testing#property-test-pattern-phase-8\|Property Test Pattern]] | Deterministic seeded-PRNG invariant testing (Phase 8) |
-| [[docs/testing/test-inventory\|Test Inventory]] | Current test coverage status and gaps |
-| [[apps/node-backend/tests/golden/INVENTORY\|Calculation Inventory]] | G/P/S coverage matrix — merge-gate source-of-truth |
+| [[docs/testing/frontend-component-integration#msw--rtl-advanced-patterns-2026-04-30\|MSW & RTL Advanced Patterns]]                                  | Handler ordering, stale elements, multiple elements, role-based assertions (2026-05-01)            |
+| [[docs/testing/frontend-component-integration#error-state-tests-account-for-apirequest-retry-backoff\|apiRequest Retry Timeout Pattern]]            | 5000ms timeout for error-state tests accounting for ~1500ms internal retry backoff (2026-05-02)    |
+| [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical\|Mock Isolation Gotcha]]                                                    | Bun/Vitest v1.3.13 mock bleed issue — CRITICAL                                                     |
+| [[docs/testing/testing#property-test-pattern-phase-8\|Property Test Pattern]]                                                                       | Deterministic seeded-PRNG invariant testing (Phase 8)                                              |
+| [[docs/testing/test-inventory\|Test Inventory]]                                                                                                     | Current test coverage status and gaps                                                              |
+| [[apps/node-backend/tests/golden/INVENTORY\|Calculation Inventory]]                                                                                 | G/P/S coverage matrix — merge-gate source-of-truth                                                 |
 
 ## Test Types
 
-| Type | Scope | Framework |
-|------|-------|-----------|
-| **Unit Tests** | Individual functions/services | Vitest |
-| **Integration Tests** | API endpoints | Vitest + Supertest |
-| **Component Tests** | Frontend UI atoms | React Testing Library |
-| **Component-Integration Tests** | Frontend pages w/ network mocked | Vitest + RTL + MSW (see [[docs/testing/frontend-component-integration\|guide]]) |
-| **E2E Tests** | Critical user flows w/ real backend | Playwright (see [[docs/testing/frontend/e2e\|guide]]) |
-| **Property Tests** | Pure-calc invariants (Phase 8) | Vitest + mulberry32 seeded PRNG |
-| **Golden Fixtures** | Pure-calc regression lock | Vitest + JSON snapshots (`UPDATE_GOLDENS=1`) |
+| Type                            | Scope                               | Framework                                                                       |
+| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
+| **Unit Tests**                  | Individual functions/services       | Vitest                                                                          |
+| **Integration Tests**           | API endpoints                       | Vitest + Supertest                                                              |
+| **Component Tests**             | Frontend UI atoms                   | React Testing Library                                                           |
+| **Component-Integration Tests** | Frontend pages w/ network mocked    | Vitest + RTL + MSW (see [[docs/testing/frontend-component-integration\|guide]]) |
+| **E2E Tests**                   | Critical user flows w/ real backend | Playwright (see [[docs/testing/frontend/e2e\|guide]])                           |
+| **Property Tests**              | Pure-calc invariants (Phase 8)      | Vitest + mulberry32 seeded PRNG                                                 |
+| **Golden Fixtures**             | Pure-calc regression lock           | Vitest + JSON snapshots (`UPDATE_GOLDENS=1`)                                    |
 
 ## Test Coverage Areas
 
@@ -94,7 +94,7 @@ SORT title ASC
 - API routes
 - Security hardening regressions (sanitized errors, auth middleware, CSV export safety)
 - Split route validation and CSV export responses
-- Investment repository inheritance compatibility tests
+- Investment repository flat-schema read/write tests
 - React components
 
 ## Tools
@@ -121,6 +121,7 @@ bun vitest run src/path/to/test.test.js
 ## Coverage Goals
 
 > [!tip] Testing Guidelines
+>
 > - All new features require tests
 > - Focus on user-facing behavior
 > - Test error handling and edge cases
@@ -152,6 +153,7 @@ bun vitest run src/path/to/test.test.js
 **Test count delta:** 1147 → **1204 vitest tests** (+57 contract-level). +24 live-API. +9 Playwright specs (3 files total).
 
 **How drift is caught:**
+
 - Field renamed/type changed → MSW contract test + live-API contract test fire
 - Endpoint removed → Live-API `404` or `ok=false`
 - Page crashes from undefined data → `critical-flows.spec.ts` `pageerror` listener
@@ -208,6 +210,7 @@ bun vitest run src/path/to/test.test.js
 **Status: COMPLETE** — Push browser-only edges (real backdrop, real focus trap, network drift, a11y scanning) to Playwright E2E. Vitest covers unit/component layer; Playwright closes the loop on real-browser signals.
 
 **What's new (3 new e2e specs, 32 new tests):**
+
 - `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant)
 - `e2e/a11y.spec.ts` — Originally 9 page scans; the current shared catalog has 11, including Tax (zero critical or serious violations required)
 - `e2e/network-drift.spec.ts` — Originally 10 page checks; it now consumes the same 11-page catalog and catches frontend → backend route mismatches
@@ -222,6 +225,7 @@ bun vitest run src/path/to/test.test.js
 **Status: COMPLETE** — Cover invariants (parser round-trips, envelope passthrough) and verify UI survives transient backend faults via random fault injection.
 
 **What's new (3 new files, 14 new vitest tests):**
+
 - `src/test/property/currency.property.test.ts` — 8 fast-check properties for `parseLocaleNumber` (round-trips, null/empty, stripping, never-throws)
 - `src/test/property/envelope.property.test.ts` — 4 properties for `unwrapEnvelope` per ADR-026 (ok:true passthrough, non-envelope passthrough, never-throws)
 - `src/test/property/chaos-resilience.test.tsx` — 2 chaos tests wrapping endpoints with random latency + 503 errors
@@ -233,9 +237,10 @@ bun vitest run src/path/to/test.test.js
 
 ## Phase F6: Mutation Testing Harness (2026-05-02)
 
-**Status: COMPLETE** — Wire Stryker mutation testing framework to measure test *quality* (do tests catch realistic faults?) beyond *coverage*.
+**Status: COMPLETE** — Wire Stryker mutation testing framework to measure test _quality_ (do tests catch realistic faults?) beyond _coverage_.
 
 **What's new:**
+
 - `stryker.config.json` — Vitest runner, TypeScript checker, `coverageAnalysis: perTest`; scope: `src/utils/currency.ts` + `src/lib/api/client.ts`; HTML report to `reports/mutation/mutation.html`
 - `package.json` script: `"test:mutation": "stryker run"` (opt-in, not in CI yet)
 - Dev deps: `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker`
@@ -261,7 +266,6 @@ bun vitest run src/path/to/test.test.js
 > [!note] Schema initialization test archived
 > Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-
 ### Coverage update addendum (2026-04-11, adapters/raw import)
 
 > [!info] Phase C Update (April 2026)
@@ -271,7 +275,6 @@ bun vitest run src/path/to/test.test.js
 - Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.js]] (Phase C)
 - Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
-
 
 ### Coverage update addendum (2026-04-11, info route dependency branches)
 
@@ -327,18 +330,20 @@ Added automated accessibility checks (axe-core) and visual regression testing to
 
 4. **NPM Scripts** — `apps/frontend/package.json` adds `"test:e2e:visual": "playwright test e2e/visual.spec.ts --update-snapshots"` and `"test:e2e:update-snapshots": "playwright test --update-snapshots"`. Root `package.json` adds `"test:e2e:visual"` workspace script.
 
-5. **CI/CD Jobs** — 
+5. **CI/CD Jobs** —
    - Existing `test-e2e` job (smoke + a11y) unchanged: runs on all pushes/PRs.
    - New `test-e2e-visual` job: runs on main branch pushes only (`if: github.event_name == 'push'`), automatically updates baselines with `--update-snapshots`, uploads artifacts with 30-day retention.
 
 6. **Baseline Storage** — `apps/frontend/e2e/__screenshots__/` holds baseline PNG snapshots.
 
 **Running locally (smoke + a11y):**
+
 ```bash
 bun run test:e2e  # Auto-boots dev server
 ```
 
 **Running locally (visual regression with update):**
+
 ```bash
 bun run test:e2e:visual  # Updates baselines
 ```
@@ -363,6 +368,7 @@ Introduced Playwright E2E layer to test critical user flows against a real backe
 4. **CI/CD Job** — `.github/workflows/ci.yml` new `test-e2e` job: builds Docker image, starts Compose stack, waits for `/health`, installs Playwright, runs tests with `CI=true` and `PLAYWRIGHT_BASE_URL=http://localhost:3002`, uploads artifact, tears down. Skipped for draft PRs.
 
 **Running locally:**
+
 ```bash
 bun run test:e2e  # Auto-boots dev server
 # OR
@@ -393,6 +399,7 @@ Added comprehensive unit test coverage for the frontend API client layer.
 **Test Results:** 46 tests, all passing, <2 seconds execution (node environment, no jsdom overhead)
 
 **Key Patterns:**
+
 - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` for backoff delay testing
 - `vi.stubGlobal()` for testing crypto fallback
 - MSW `server.use()` per-test overrides for HTTP interception
@@ -448,11 +455,13 @@ Locked coverage thresholds at current actual levels and added comprehensive cont
    - Error envelope per ADR-026
 
 **Test Results (2026-05-02):**
+
 - Backend: 871 tests across 54 files, all passing
 - Frontend: 421 tests (376 phase A + 40 contract + 5 smoke/visual), all passing
 - Coverage: statements 17% | branches 11% | functions 10% | lines 18%
 
 **When to maintain contracts:**
+
 - Backend schema changes → update corresponding Zod schema in E1 before shipping; never weaken schema
 - New boot-time endpoint → add default handler + E1/E2 contract tests
 - New mutation endpoint → add POST/PATCH/DELETE handlers + E2 tests + stub fixture
@@ -501,6 +510,7 @@ Vitest run, not this historical list. Infrastructure: Vitest + React Testing Lib
 `renderWithApp`, per-test `server.use()` overrides, and `ok()`/`err()` envelope helpers.
 
 **Key Gotchas Documented:**
+
 - TaxOverviewPage dialog duplication → use `findAllByRole` + index first
 - Radix Select accessible name → locate by `textContent` traversal
 - Recipient category regex → use anchored pattern `/^employee/i`
@@ -515,29 +525,31 @@ Reference: [[docs/testing/frontend-component-integration|Component-Integration T
 
 Five hook unit test files added covering utility, data-fetching, and portfolio hooks:
 
-| Hook Module | Tests | Coverage |
-|-------------|-------|----------|
-| useUtilityHooks | 13 | `useDebounce` (delay reset on rapid changes), `useCountUp` (RAF animation), `useOnlineStatus` (window events), `useIsMobile` (matchMedia mock) |
-| useChartCurrencyFormatter | 5 | Pure Zustand-backed hook: currency formatting state and computation |
-| usePlannedPayments | 8 | Fetch hook with apiClient: loading, error, add/delete/update/refetch paths |
-| useQueryHooks | 13 | TanStack Query hooks: accounts, saved charts (queries + mutations), Ollama status/models, currency converter |
+| Hook Module                     | Tests  | Coverage                                                                                                                                                                                        |
+| ------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| useUtilityHooks                 | 13     | `useDebounce` (delay reset on rapid changes), `useCountUp` (RAF animation), `useOnlineStatus` (window events), `useIsMobile` (matchMedia mock)                                                  |
+| useChartCurrencyFormatter       | 5      | Pure Zustand-backed hook: currency formatting state and computation                                                                                                                             |
+| usePlannedPayments              | 8      | Fetch hook with apiClient: loading, error, add/delete/update/refetch paths                                                                                                                      |
+| useQueryHooks                   | 13     | TanStack Query hooks: accounts, saved charts (queries + mutations), Ollama status/models, currency converter                                                                                    |
 | **useInvestments (2026-05-03)** | **25** | **NEW: `useInvestmentsQuery` (3), `usePortfolioTransactionsQuery` (5), `useInvestmentMutations` (17)** — investment CRUD, portfolio transaction queries, price refresh with toast notifications |
 
 **Total:** 5 files, **64 new tests**, all passing
 
 **Key patterns:**
+
 - Fake timers (`vi.useFakeTimers()`) for `useDebounce` and timing-sensitive hooks
 - `renderHook` + `act` + `waitFor` for async hook state management
 - MSW mocking for API-dependent hooks (`usePlannedPayments`, `useQueryHooks`)
 - Provider wrapper stacking for TanStack Query and language context dependencies
 - Per-file `// @vitest-environment jsdom` for DOM-dependent hooks
-- **NEW (2026-05-03):** Async factory mock for `LanguageContext` with synchronous locale dictionary import (avoids Vitest module-loading complexity)
+- **NEW (2026-05-03):** Async factory mock for `LanguageHydration` with synchronous locale dictionary import (avoids Vitest module-loading complexity)
 
 **Test execution:** <5 seconds
 
 **New Pattern (useInvestments, 2026-05-03):**
-- Mocks `LanguageContext` via async factory importing `@/locales/en` synchronously for `t()` translations
-- `makeWrapper()` returns `QueryClientProvider` only (LanguageContext mocked, no provider needed)
+
+- Mocks `LanguageHydration` via async factory importing `@/locales/en` synchronously for `t()` translations
+- `makeWrapper()` returns `QueryClientProvider` only (LanguageHydration mocked, no provider needed)
 - `act(() => {...})` for fire-and-forget `.mutate()` calls
 - `await act(async () => {...})` for `.mutateAsync()` calls
 - Spies on `toast.success`, `toast.warning`, `toast.error` for async toast verification
@@ -550,17 +562,18 @@ Five hook unit test files added covering utility, data-fetching, and portfolio h
 
 Five context unit test files added to test React Context hooks and providers:
 
-| Context | Tests | Coverage |
-|---------|-------|----------|
-| BelgianTaxProfileContext | 8 | Hook guard, loading state, settings fetch, profile mutations, error handling |
-| SettingsContexts | 12 | useAppSettings (4), useSettings (4), useTheme (4) with Zustand store mutations |
-| LanguageContext | 6 | Hook guard, initial state, language switching behavior |
-| SettingsPreloadContext | 5 | API fetch integration, loading state, settings load, MSW mocking |
-| WorkspaceContext | 6 | Hook guard, workspace state, switching behavior |
+| Context                  | Tests | Coverage                                                                       |
+| ------------------------ | ----- | ------------------------------------------------------------------------------ |
+| BelgianTaxProfileContext | 8     | Hook guard, loading state, settings fetch, profile mutations, error handling   |
+| SettingsContexts         | 12    | useAppSettings (4), useSettings (4), useTheme (4) with Zustand store mutations |
+| LanguageHydration        | 6     | Hook guard, initial state, language switching behavior                         |
+| SettingsPreloadContext   | 5     | API fetch integration, loading state, settings load, MSW mocking               |
+| useWorkspace             | 6     | Hook guard, workspace state, switching behavior                                |
 
 **Total:** 5 files, 37 tests, all passing
 
 **Key techniques:**
+
 - `renderHook` + `waitFor` for async context state
 - MSW HTTP mocking for contexts with API calls
 - Zustand store reset in `beforeEach` for direct store testing
@@ -574,6 +587,7 @@ Five context unit test files added to test React Context hooks and providers:
 Three new dialog component integration test files test modal interactions with full provider stack:
 
 **New Test Files:**
+
 - `apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx` — 11 tests covering create/edit modes, form validation, uppercase normalization, **422 validation error handling** (2026-05-03)
 - `apps/frontend/src/features/recipients/__tests__/AddRecipientDialog.test.tsx` — 8 tests covering trigger, dialog open, form validation, submission, **422 validation error handling** (2026-05-03)
 - `apps/frontend/src/components/shared/__tests__/WidgetVisibilityDialog.test.tsx` — 8 tests covering fully prop-driven widget visibility toggles and bulk actions
@@ -582,12 +596,14 @@ Three new dialog component integration test files test modal interactions with f
 
 **422 Error Handling Tests (2026-05-03):**
 All three dialogs now include tests for server-side 422 validation errors:
+
 - Test pattern: `vi.spyOn(toast, "error")` + `server.use(http.post(..., () => err(422, "message")))`
 - Verify error toast displays with pattern like `"failed to create [resource]"` (AddCategoryDialog, AddRecipientDialog)
 - Verify transaction dialog also tests 422 validation error path in AddTransactionDialog.integration.test.tsx
 - Ensures user-facing error messages are shown for validation failures returned by backend
 
 **Key patterns demonstrated:**
+
 1. **Trigger-Driven Create Mode** (AddCategoryDialog create, AddRecipientDialog) — Dialog opens from trigger button, closes after submission or cancel
 2. **Callback-Driven Edit Mode** (AddCategoryDialog edit) — Dialog controlled via props, parent owns open/close state via callbacks
 3. **Fully Presentational Props** (WidgetVisibilityDialog) — No internal state, all behavior via callbacks; parent is state owner
@@ -601,6 +617,7 @@ All three dialogs now include tests for server-side 422 validation errors:
 Three dialog component integration test files now include comprehensive tests for HTTP 422 validation error handling from the backend:
 
 **Pattern (all three dialogs):**
+
 1. `vi.spyOn(toast, "error")` to capture error toast calls
 2. `server.use(http.post(..., () => err(422, "validation message")))` to simulate backend validation failure
 3. User submits form with valid client-side form data
@@ -608,6 +625,7 @@ Three dialog component integration test files now include comprehensive tests fo
 5. Use 5000ms timeout in `waitFor` to account for apiRequest retry backoff (~1500ms internal retry)
 
 **Test files:**
+
 - **AddCategoryDialog** — "shows error toast when server returns 422 validation error" (line 70-88)
   - Simulates `category already exists` validation failure
   - Verifies toast message matches `/failed to create category/i`
@@ -626,10 +644,12 @@ At the Phase A snapshot, the then-current 20-page inventory was declared complet
 closures added export endpoint tests:
 
 **TransactionsPage export JSON (2 new tests):**
+
 - Export JSON shows success toast when download succeeds
 - Export JSON shows error toast when download fails
 
 **OwesPage export CSV (2 new tests):**
+
 - Export CSV shows success toast when download succeeds (recipient detail view)
 - Export CSV shows error toast when download fails (recipient detail view)
 
@@ -637,6 +657,7 @@ closures added export endpoint tests:
 current whole-tree total.
 
 **Coverage matrix:**
+
 - Core CRUD: Transactions, Categories, Recipients, Planned Payments ✓
 - Portfolio: Investments, Performance, Net Worth ✓
 - Exports: JSON (transactions), CSV (owes/splits) ✓

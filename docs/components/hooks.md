@@ -12,18 +12,21 @@ related_code: ["apps/frontend/src/hooks"]
 
 # Custom Hooks
 
-Vision uses custom hooks for data fetching, state management, and reusable logic.
+Vision uses custom hooks for data fetching, state management, and reusable logic. Production pages
+and components do not define TanStack server queries inline. They consume named query hooks from
+the shared `hooks/` tree or feature-local `use*.ts(x)` modules; ESLint rejects direct `useQuery`,
+`useInfiniteQuery`, and `useQueries` calls outside those modules.
 
 ## Hook List
 
 ### Settings & State Store Hooks (Phase 4)
 
-| Hook                 | Description                               | File                                                                          |
-| -------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
-| `useSettingsStore()` | Zustand store access (full state)         | [[apps/frontend/src/stores/settingsStore.ts\|settingsStore.ts]]               |
-| `useAppSettings()`   | App settings slice with shallow selection | [[apps/frontend/src/contexts/AppSettingsContext.tsx\|AppSettingsContext.tsx]] |
-| `useSettings()`      | Dashboard/exclusion settings slice        | [[apps/frontend/src/contexts/SettingsContext.tsx\|SettingsContext.tsx]]       |
-| `useTheme()`         | Theme settings slice                      | [[apps/frontend/src/contexts/ThemeContext.tsx\|ThemeContext.tsx]]             |
+| Hook                 | Description                               | File                                                                                      |
+| -------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `useSettingsStore()` | Zustand store access (full state)         | [[apps/frontend/src/stores/settingsStore.ts\|settingsStore.ts]]                           |
+| `useAppSettings()`   | App settings slice with shallow selection | [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx\|AppSettingsHydration.tsx]] |
+| `useSettings()`      | Dashboard/exclusion settings slice        | [[apps/frontend/src/stores/hydration/SettingsHydration.tsx\|SettingsHydration.tsx]]       |
+| `useTheme()`         | Theme settings slice                      | [[apps/frontend/src/stores/hydration/ThemeHydration.tsx\|ThemeHydration.tsx]]             |
 
 ### Data Fetching Hooks
 
@@ -40,6 +43,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useStatistics()`              | Analytics data                                                                                                                                                                            | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]]                           |
 | `useSplits()`                  | Debt tracking                                                                                                                                                                             | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]]                                   |
 | `useSavedCharts()`             | Saved chart configs                                                                                                                                                                       | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]]                         |
+| Domain query hook families     | Dashboard, admin, portfolio, research, settings, import, tax-profile, command-palette, and attachment server queries extracted from UI modules                                            | Feature-local `use*Queries.ts` modules and `src/hooks/`                                  |
 
 ### UI State Hooks
 
@@ -266,7 +270,7 @@ Hook for planned/scheduled transactions.
 - All state updates check `if (mountedRef.current)` before calling `setData()` etc.
 - Impact: Prevents stale state updates on unmounted instances; ensures clean teardown
 
-Code links: [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]
 
 ### API
 
@@ -773,8 +777,8 @@ const {
 
 ### Features
 
-- Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
-- Derives locale from `AppSettingsContext.numberFormat`
+- Derives currency from `AppSettingsHydration.defaultCurrency` (default: "EUR")
+- Derives locale from `AppSettingsHydration.numberFormat`
 - Returns `formatCurrency()` function formatted with user's decimal place preference
 - Returns compact headline and bounded axis-label formatters bound to the same settings; `formatCompact(value, true)` signs both compact and full text
 - Respects app-wide currency and locale settings
@@ -939,7 +943,7 @@ interface SettingsStore {
 
 ### Internal Hydration (Provider-only)
 
-The AppSettingsContext, SettingsContext, and ThemeContext Providers call store hydration actions once preloaded data arrives. Components should never call `_hydrateAppSettings()`, etc. directly.
+The AppSettingsHydration, SettingsHydration, and ThemeHydration Providers call store hydration actions once preloaded data arrives. Components should never call `_hydrateAppSettings()`, etc. directly.
 
 ---
 

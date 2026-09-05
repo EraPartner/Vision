@@ -55,11 +55,15 @@ package "Repositories" {
   class PlannedTransactionRepository {
     +getAll(opts): Promise<{items, total}>
     +getById(id): Promise<PlannedTransaction | null>
-    +create(data): Promise<PlannedTransaction>
-    +update(id, fields): Promise<PlannedTransaction>
     +hardDelete(id): Promise<boolean>
     +addExecution(plannedTransactionId, txId, date): Promise<void>
-    +replaceLoanSchedule(id, schedule): Promise<void>
+    +insertPlannedTransactionInTransaction(client, data): Promise<number>
+    +applyPlannedFieldUpdate(client, id, fields): Promise<boolean>
+    +updatePlannedFields(id, fields): Promise<PlannedTransaction>
+    +setPlannedTransactionTags(client, id, tags): Promise<void>
+    +replaceLoanScheduleInTransaction(client, id, schedule): Promise<void>
+    +insertExecutionInTransaction(client, plannedId, txId, date): Promise<boolean>
+    +inheritTransactionTagsInTransaction(client, txId, tags): Promise<void>
   }
 
   class RecipientBankAccountRepository {
@@ -83,10 +87,11 @@ package "Repositories" {
   class PortfolioTransactionRepository {
     +getAll(opts): Promise<PortfolioTransaction[]>
     +getById(id): Promise<PortfolioTransaction | null>
-    +getByInvestment(investmentId): Promise<PortfolioTransaction[]>
-    +create(data): Promise<PortfolioTransaction>
-    +update(id, fields): Promise<PortfolioTransaction>
+    +getAllByInvestmentIds(opts): Promise<PortfolioTransaction[]>
+    +insert(data): Promise<PortfolioTransaction>
+    +updateFields(id, fields): Promise<PortfolioTransaction>
     +hardDelete(id): Promise<boolean>
+    note bottom: Parameterized SQL only;\ntransaction policy lives in services/portfolio/.
   }
 
   class WatchlistRepository {
@@ -99,16 +104,17 @@ package "Repositories" {
 
   class SplitRepository {
     +getTransactionSplitTotals(transactionId): Promise<{ transaction_total, current_split_total } | null>
-    +createSplit({ transaction_id, recipient_id, amount, note }): Promise<Split>
     +getSplitsByTransaction(transactionId): Promise<Split[]>
-    +getOwedSummary(): Promise<OwedSummary[]>
-    +getOwedByRecipient(recipientId): Promise<OwedData>
+    +getOwedSummaryRows(): Promise<Row[]>
+    +getOwedByRecipientRows(recipientId): Promise<Row[]>
     +getOwedExportRowsByRecipient(recipientId): Promise<OwedExportRow[]>
-    +addPayment({ split_id, amount, note, paid_at }): Promise<Payment>
     +getPayments(splitId): Promise<Payment[]>
     +settleSplit(splitId): Promise<Split>
     +settleAllByRecipient(recipientId): Promise<{ settled_count: number }>
     +deleteSplit(splitId): Promise<boolean>
+    +insertSplitInTransaction(client, input): Promise<Split>
+    +insertPaymentInTransaction(client, input): Promise<Payment>
+    +writeAudit(input): Promise<AuditRow>
   }
 
   class SettingsRepository {

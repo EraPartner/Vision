@@ -338,7 +338,7 @@ Returns staging rows grouped by investment (or by distinct raw symbol/name for u
 
 ### POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override
 
-Resolve an unmatched staging row by linking it to an existing investment or requesting that a new investment be created.
+Resolve an unmatched non-cash staging row by linking it to an existing investment or requesting that a new investment be created. Rows with `route='cash'` return `404`; assigning an investment would be a silent no-op at commit.
 
 **Request Body:**
 
@@ -387,7 +387,7 @@ or:
 - Existing-investment mode verifies the investment before changing staging rows.
 - Create-new mode creates one holding from the first requested row, then links the complete set to it.
 - The batch and complete row set are locked before holding lookup or creation; the set-based update shares the same database transaction.
-- If any row is missing, belongs to another batch, or is no longer in `matched` or `error` status, the request returns `404` and changes no row. A failed create-new request also rolls back the holding creation.
+- If any row is missing, belongs to another batch, has `route='cash'`, or is no longer in `matched` or `error` status, the request returns `404` and changes no row. A failed create-new request also rolls back the holding creation.
 - A non-reviewable batch or create-new retry whose row set already has a user override returns `400` before creating a holding.
 - Error rows that are successfully assigned return to `matched`, clear their error message, and decrement the batch error count once per repaired row.
 
@@ -423,10 +423,21 @@ Commit a reviewed batch. Honours all investment overrides. Runs FX resolution fo
 
 When `account_id` is provided, all committed `portfolio_transactions` inherit it — they belong to
 the specified brokerage account. Omit (or send `null`) to leave lots unassigned (legacy behaviour).
+On a recommit, providing an account also resets cash rows whose exact stored error is
+`brokerage cash row requires a batch account` to `matched` and decrements `rows_error`; other cash
+errors are not cleared. The review page requires this account selection when it displays that
+repairable error. The service holds the batch row lock from account selection through commit, so
+concurrent recommits cannot change the selected account between validation and insertion.
 Because the whole batch inherits it, the value is validated with `validateId` before the account
 existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
 existence check and stamp every committed lot with it. Malformed values now return **400**.
 Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not yet applied).
+
+Instrument-free dividend, interest, fee, and tax cash rows use the current
+`brokerage_cash_category_ids` Settings mapping. The commit resolves only configured active IDs,
+once per drain. It creates no category and leaves a row uncategorized when its mapping is null,
+missing, deleted, or inactive. Changing Settings affects rows committed after the change; already
+committed rows are not recategorized.
 
 > [!warning] Unresolved rows are skipped
 > Any row still unresolved at commit time is recorded as an error row and is not inserted into `portfolio_transactions`. The batch completes with non-zero `rows_error`.

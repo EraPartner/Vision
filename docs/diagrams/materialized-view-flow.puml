@@ -23,13 +23,11 @@ database "PostgreSQL" as DB {
   node "Materialized Views" as MatViews {
     view "mv_monthly_summary"
     view "mv_category_totals"
-    view "mv_cashflow_daily"
   }
 
   node "Indexes" as Indexes {
     idx_mv_monthly_summary
     idx_mv_category_totals
-    idx_mv_cashflow_daily
   }
 }
 
@@ -39,14 +37,12 @@ package "External" as External {
 }
 
 ' Startup refresh
-External --> SchemaInit : App startup
-SchemaInit --> MaterializedViewService : check version
-alt Schema version match
-  MaterializedViewService --> MatViews : REFRESH MATERIALIZED VIEW
-else Schema changed
-  MaterializedViewService --> MatViews : CREATE MATERIALIZED VIEW
-  MaterializedViewService --> Indexes : CREATE INDEX
-end
+External --> SchemaInit : App startup and migrations
+SchemaInit --> External : Express begins listening
+External --> MaterializedViewService : Post-listen warmup
+MaterializedViewService --> MatViews : CREATE IF NOT EXISTS
+MaterializedViewService --> Indexes : CREATE INDEX IF NOT EXISTS
+MaterializedViewService --> MatViews : REFRESH MATERIALIZED VIEW
 
 MatViews --> DB : refreshed
 
@@ -58,7 +54,6 @@ note right of MaterializedViewService
   Views:
   - mv_monthly_summary
   - mv_category_totals
-  - mv_cashflow_daily
    
   CONCURRENTLY option for
   non-locking refresh
@@ -69,7 +64,8 @@ note right of MaterializedViewService
     10s burst cap)
   
   Coalesces rapid calls
-  (refreshInFlight flag)
+  (shared in-flight promise plus
+   one queued follow-up)
 end note
 
 @enduml

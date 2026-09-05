@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-08-31
-updated: 2026-08-31
+date: 2026-09-04
+updated: 2026-09-04
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -97,6 +97,15 @@ create-or-get endpoint: it returns `201` with `created: true` for a new row and 
 **Required Fields:** name
 
 **Behavior:** Automatically normalizes the name for matching (lowercase, trimmed).
+
+`SYSTEM` is reserved for server-generated opening and reconciliation rows. A public create or
+rename whose normalized name is `system` returns `400 VALIDATION_ERROR`; it cannot adopt or reactivate the
+inactive system recipient. Concurrent create-or-get misses use a conflict-safe upsert that returns
+the winning row, so a committed conflict cannot be followed by a transient “not found” response.
+
+Server flows that need the system recipient follow one lock order: account first, then recipient.
+No recipient-owned flow acquires an account lock after locking a recipient. This prevents a reverse
+accounts-to-recipients lock edge from forming a deadlock cycle.
 
 The response data includes the recipient fields plus `created` and `links`.
 

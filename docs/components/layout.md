@@ -94,7 +94,7 @@ function App() {
 - **Responsive sidebar integration**: Full collapsible sidebar with workspace switching.
 - **Workspace context provider**: Workspace detection via route path.
 - **Notification system integration**: Sonner toast notifications.
-- **Dark/light theme support**: Full theme switching via `ThemeContext` + `document.startViewTransition`.
+- **Dark/light theme support**: Full theme switching via `ThemeHydration` + `document.startViewTransition`.
 - **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element (flush 2px bar, sole active indicator). Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
 - **Keyboard structure**: A focus-visible skip link is the first shell control and moves focus to `main#main`. Route changes also focus that main landmark. The shared desktop/mobile sidebar menu is a localized `<nav>` landmark, and its trigger and rail use the localized sidebar-toggle name.
 
@@ -297,7 +297,7 @@ function useWorkspace(): {
 ### Usage
 
 ```tsx
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 function WorkspaceSwitcher() {
   const { workspace, setWorkspace } = useWorkspace();
@@ -316,12 +316,12 @@ function WorkspaceSwitcher() {
 
 ### Design Notes
 
-- **No Context Provider**: Unlike other contexts in the app, `WorkspaceContext` does not export a React Context or Provider. It uses `useLocation` and `useNavigate` from React Router directly, treating the router as the state container.
+- **No Context Provider**: `useWorkspace` uses `useLocation` and `useNavigate` from React Router directly, treating the router as the state container.
 - **Route-derived**: The workspace is determined by whether the current path starts with `/portfolio` (portfolio), or defaults to budgeting. For `/admin/*` routes, which are workspace-agnostic, the last active workspace is restored from `sessionStorage` (key: `vision_workspace`).
 - **Admin Routes**: When navigating to `/admin/*` pages from portfolio context, the sidebar retains the portfolio workspace instead of snapping to budgeting. Workspace switcher tabs still work — clicking "portfolio" navigates to `/portfolio`, clicking "budgeting" navigates to `/`.
 - **Used by**: `AppSidebar` (see [[docs/components/layout|Layout Components]]) for workspace switching in the navigation.
 
-**Code**: [[apps/frontend/src/contexts/WorkspaceContext.tsx]]
+**Code**: [[apps/frontend/src/hooks/useWorkspace.ts]]
 
 ---
 
@@ -371,14 +371,14 @@ Code links: [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[apps/f
 
 **Responsibilities:**
 
-| Responsibility        | Detail                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Ready handshake       | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main                                                                                         |
-| Menu action routing   | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
-| CSV drag-drop         | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors                                                                  |
-| CSV open-with         | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import`                                                    |
-| Fullscreen class      | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>`                                                                                       |
-| html class management | Adds `electron-mac` on mount; adds/removes `vibrancy` when the effective ADR-075 visual-effects tier is `enhanced`                                                       |
+| Responsibility                 | Detail                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ready handshake                | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main                                                                                         |
+| Menu action routing            | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
+| CSV drag-drop                  | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors                                                                  |
+| CSV open-with                  | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import`                                                    |
+| Fullscreen class               | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>`                                                                                       |
+| html/native effects management | Adds `electron-mac` on mount; adds/removes the `vibrancy` class and mirrors the same effective ADR-075 tier to the native Electron window material                       |
 
 All IPC subscriptions are attached via stable refs (`useRef`) so React re-renders do not tear down and re-attach listeners. Unsubscribe functions are called in the effect cleanup.
 

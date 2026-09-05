@@ -38,7 +38,7 @@ related_code: ["apps/frontend/src/components/", "apps/frontend/src/hooks/", "app
 ```tsx
 // apps/frontend/src/components/<feature>/<ComponentName>.tsx
 import { useState } from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 

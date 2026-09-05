@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-08-26
+updated: 2026-09-04
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -25,8 +25,9 @@ During the dual-write phase a database trigger (migration 0051) keeps `transacti
 and `planned_transactions.account_id` in sync with the `bank_account` string; writers therefore
 don't have to set `account_id` directly yet. The orthogonal flag columns
 (`type` / `liquidity_class` / `spendable` / `in_net_worth` / `tax_wrapper` / `owner` /
-`multi_currency_cash` / `has_cash_sleeve`) exist from migration 0050; their behaviour is
-activated in ADR-089.
+`multi_currency_cash` / `has_cash_sleeve`) exist from migration 0050. Revolut imports now set
+`multi_currency_cash` as a sticky capability, and migration 0098 stores statement readings in
+`account_statement_balances`, keyed by account and currency (ADR-089 D2).
 
 ## Endpoints
 
@@ -75,7 +76,21 @@ Partial update (`AccountUpdate`). `404` if not found, `409` on (normalized) name
 Explicit `null` **clears** a nullable field (`display_name`, `institution`,
 `funding_account_id`, `statement_balance`, `statement_balance_date`); an omitted key leaves the
 field untouched. The statement-balance/date pairing is validated on the merged state: setting a
-balance while the stored date is `NULL`, or clearing only the date, both return 400.
+balance while the stored date is `NULL`, or clearing only the date, both return 400. These scalar
+fields are a compatibility projection for the account's declared currency. New clients should use
+the per-currency statement-balance endpoints below.
+
+### PUT /api/accounts/:id/statement-balances/:currency
+
+Create or replace one authoritative statement reading. The body is
+`{ balance: number, date: "YYYY-MM-DD" }`; `currency` must be an uppercase ISO code. The account's
+declared-currency row is also mirrored into the legacy scalar fields during the compatibility
+window.
+
+### DELETE /api/accounts/:id/statement-balances/:currency
+
+Delete one currency's statement reading. This does not delete ledger entries or another
+currency's reading.
 
 **`funding_account_id` validation** (`assertFundingAccountValid`,
 `apps/node-backend/src/services/accountService.js`), all 400:
@@ -149,7 +164,7 @@ became the integer 12 and **merged and deleted account 12** — an irreversible 
 caller never named.) In one transaction (`accountMergeService`), every reference to a
 source is repointed to the survivor — `transactions.account_id` + `bank_account` (set to the
 survivor's name so the dual-write trigger keeps it merged), `planned_transactions`, portfolio lots
-(`portfolio_transactions_base.account_id`, cascading to child tables, or the flat table), and any
+(`portfolio_transactions.account_id`), and any
 `accounts.funding_account_id` — then the sources are deleted. Returns
 `{ into, merged, reassigned: { transactions, planned, portfolio, funding }, stampsInterleaved }`.
 `404` if the survivor or any source is missing. Irreversible (the source rows are gone; identity
@@ -183,6 +198,9 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
   },
   "projectedBalance": 1234.5,
   "projectedBalanceCurrency": "EUR",
+  "balanceParts": [{ "currency": "EUR", "balance": 1234.5 }],
+  "projectedBalanceIncomplete": false,
+  "unconvertedCurrencies": [],
   "stampsInterleaved": true
 }
 ```
@@ -195,6 +213,9 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
   partition then converted at its own current rate into the survivor's native currency
   (`projectedBalanceCurrency`). It therefore equals the `computed_balance` the hub reports for
   the survivor once the merge lands.
+- `balanceParts` preserves every native partition. When a required source or target exchange rate
+  is unavailable, that partition is excluded from `projectedBalance`, its code appears in
+  `unconvertedCurrencies`, and `projectedBalanceIncomplete` is true. No 1:1 rate is invented.
 - `stampsInterleaved` — the same detection the merge guard uses: would the merge interleave
   stamped balance histories (and therefore clear the survivor's statement anchor)?
 
@@ -213,9 +234,18 @@ Each account card in `AccountsPage` (`apps/frontend/src/pages/AccountsPage.tsx`)
 the field is present in the API response. The balance label carries a `title` tooltip
 (i18n key `accounts.balanceTooltip`).
 
+The list response also carries `balance_parts`, `balance_incomplete`, and
+`unconverted_currencies`. A missing exchange rate excludes that native partition from
+`computed_balance` instead of applying a synthetic 1:1 conversion. The card shows the excluded
+native amount, and the card, group subtotal, and net-cash total are marked incomplete
+([[docs/adr/127-no-synthetic-fx-for-account-totals|ADR-127]]).
+
 ### Drift badge — signed, currency-formatted, dated, age-aware
 
-When `statement_balance` is set and `drift` is non-zero, the drift badge on the account card
+The list response exposes `statement_balances` as the authoritative per-currency series. It also
+projects the selected reconciliation currency into `statement_balance`, `statement_balance_date`,
+and `drift` for existing consumers. When that projected statement is set and `drift` is non-zero,
+the drift badge on the account card
 displays a signed, currency-formatted amount with the statement's as-of date -- for example
 "Drift +€15,50 · statement 03/06/2026". A reading **older than 45 days** renders the badge in
 warning (amber) tone rather than destructive, with its own tooltip (i18n key
@@ -230,8 +260,10 @@ FX-converted reporting `computed_balance`. The reconciliation base uses the decl
 currency partition whenever it exists, including at exactly zero. Zero and sub-cent partitions
 are filtered only for the fallback when the declared partition is absent: one remaining funded
 foreign partition is treated as a mislabelled single-currency account; otherwise the base is zero
-in the declared currency. `POST /api/accounts/:id/reconcile` accepts that base or creates an
-adjustment in its `reconcilable_currency`, leaving all other currency partitions unchanged.
+in the declared currency. `POST /api/accounts/:id/reconcile` accepts an optional `currency`, then
+accepts that exact partition or creates an adjustment in it, leaving every other native currency
+partition and statement reading unchanged. The Reconcile dialog shows a currency selector for
+accounts marked `multi_currency_cash`.
 
 ### AddAccountDialog — name-required guard
 

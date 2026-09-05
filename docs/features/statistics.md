@@ -150,7 +150,7 @@ interface StatisticsData {
 
 The exclusion system is one of the most sophisticated features:
 
-1. **Global exclusions**: Defined in `SettingsContext` (`excludedCategoryIds`, `excludedRecipientIds`, `excludeHiddenCategories`).
+1. **Global exclusions**: Defined in `SettingsHydration` (`excludedCategoryIds`, `excludedRecipientIds`, `excludeHiddenCategories`).
 2. **Exclusion scope**: Controlled by `settings.exclusionScope` — can be `'everywhere'`, `'statistics'`, or `'nowhere'`.
 3. **Per-graph override**: Each chart has an independent toggle (`graphExclusions[graphKey]`) to show/hide exclusions for that specific chart.
 4. **Dual computation**: When exclusions apply globally, both filtered and unfiltered stats are computed. `getGraphData(key)` returns the appropriate view based on per-graph toggle state.

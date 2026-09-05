@@ -738,7 +738,10 @@ See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] for details.
 
 ### Cash Flow Forecast (Rolling Window — Phase H)
 
-N-day rolling-window projection of income and expenses from actual transactions + planned transactions, with configurable window (30/60/90/180 days). Supports walk-forward backtest diagnostics via optional `include_backtest` parameter and uses 6-hour TTL MC rolling cache.
+N-day rolling-window projection of income and expenses from actual-to-date, future-dated ledger
+transactions, and optional planned transactions, with a configurable window (30/60/90/180 days).
+Supports walk-forward backtest diagnostics via optional `include_backtest` and uses a six-hour
+Monte Carlo rolling cache.
 
 **Path:** `GET /api/aggregations/cashflow-forecast-rolling`
 
@@ -808,6 +811,7 @@ N-day rolling-window projection of income and expenses from actual transactions 
     { "date": "2026-05-01", "net": -1200 },
     { "date": "2026-05-15", "net": 3500 }
   ],
+  "scheduled_actual": [{ "date": "2026-05-10", "net": -85 }],
   "diagnostics": {
     "history_months": 36,
     "backtest": [
@@ -840,6 +844,7 @@ N-day rolling-window projection of income and expenses from actual transactions 
 | `actual[].date`                    | string         | ISO date (YYYY-MM-DD)                                                                                                                              |
 | `actual[].net`                     | number         | Daily net amount                                                                                                                                   |
 | `actual[].cumulative`              | number         | Cumulative from window start through date                                                                                                          |
+| `scheduled_actual[]`               | array          | Future-dated ledger rows in the window; always applied to cumulative forecasts on their effective date                                             |
 | `methods[]`                        | array          | Array of 8 forecasting methods (5 point + 2 MC + 1 ensemble); same structure as month-mode forecast                                                |
 | `methods[].id`                     | string         | Method identifier (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap) |
 | `methods[].label`                  | string         | Human-readable method name                                                                                                                         |
@@ -1005,6 +1010,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
     { "date": "2026-04-02", "net": -25.0, "cumulative": 125.5 },
     { "date": "2026-04-03", "net": null, "cumulative": null }
   ],
+  "scheduled_actual": [{ "date": "2026-04-28", "net": -85.0 }],
   "planned": [
     { "date": "2026-04-25", "net": -1200.0 },
     { "date": "2026-04-30", "net": 3500.0 }
@@ -1112,6 +1118,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 | `actual[].date`                      | string         | ISO date (YYYY-MM-DD)                                                                                                                            |
 | `actual[].net`                       | number \| null | Daily net (null for future dates)                                                                                                                |
 | `actual[].cumulative`                | number \| null | Cumulative through date (null for future)                                                                                                        |
+| `scheduled_actual[]`                 | array          | Future-dated ledger rows; always applied to cumulative forecasts and never used as training history                                              |
 | `planned[]`                          | array          | Pending planned transaction dates (if `include_planned=true`)                                                                                    |
 | `planned[].date`                     | string         | Planned date                                                                                                                                     |
 | `planned[].net`                      | number         | Planned net amount                                                                                                                               |
@@ -1154,7 +1161,9 @@ Each Monte Carlo method uses a seeded PRNG derived from `hash(userId | yyyymm | 
 
 - Same user, same month, same filters → identical samples across requests
 - Enables ensemble combination and cross-session caching
-- `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
+- `filterHash` includes currency, exclusions, `include_planned`, transfer policy, and the effective
+  `APP_TIMEZONE` date, so a cached monthly payload cannot cross midnight with stale
+  actual-versus-scheduled classification
 
 See [[apps/node-backend/src/services/calculations/forecast/index.js|Forecast Service]] for implementation details.
 

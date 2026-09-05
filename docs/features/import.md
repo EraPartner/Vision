@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-09-03
-last_modified: 2026-09-03
+updated: 2026-09-04
+last_modified: 2026-09-04
 tags:
   [
     feature,
@@ -361,7 +361,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 #### 5. **Aggregation Refresh** (post-pipeline)
 
 - After canonical rows are durable and transfer reconciliation has been attempted, the pipeline awaits invalidation of both six-hour forecast Monte Carlo caches.
-- It then schedules one coalesced refresh of the three managed materialized views. The import response does not wait for those full-table scans.
+- It then schedules one coalesced refresh of the two managed materialized views. The import response does not wait for those full-table scans.
 - The materialized-view scheduler uses a five-second trailing delay with a ten-second maximum wait for a continuous mutation burst. Refresh duration and any wait behind an in-flight refresh are additional.
 - Canonical transaction reads are immediately consistent. MV-backed monthly and category projections are eventually consistent and may return the previous snapshot until the scheduled refresh completes.
 - Refresh failures remain non-fatal to the durable import and are logged. A later mutation, explicit maintenance refresh, or startup warmup provides another refresh opportunity.

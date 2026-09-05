@@ -4,10 +4,27 @@ type: reference
 status: active
 date: 2026-04-21
 updated: 2026-08-26
-tags: [database, postgresql, queries, optimization, performance, indexes, phase-1, group-by-currency, per-currency-aggregation]
+tags:
+  [
+    database,
+    postgresql,
+    queries,
+    optimization,
+    performance,
+    indexes,
+    phase-1,
+    group-by-currency,
+    per-currency-aggregation,
+  ]
 description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision. June 2026 adds multi-currency GROUP BY aggregation pattern.
-aliases: [db optimization, query patterns, postgresql performance, indexing strategy]
-related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/database/", "alembic/versions/"]
+aliases:
+  [db optimization, query patterns, postgresql performance, indexing strategy]
+related_code:
+  [
+    "apps/node-backend/src/repositories/",
+    "apps/node-backend/src/database/",
+    "alembic/versions/",
+  ]
 ---
 
 # Database Query Patterns & Optimization
@@ -39,11 +56,11 @@ related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/dat
 
 ### Connection Pool Configuration
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `max` | 20 | Maximum pool size |
-| `idleTimeoutMillis` | 30000 | Close idle connections after 30s |
-| `connectionTimeoutMillis` | 2000 | Fail fast if no connection available |
+| Parameter                 | Default | Purpose                              |
+| ------------------------- | ------- | ------------------------------------ |
+| `max`                     | 20      | Maximum pool size                    |
+| `idleTimeoutMillis`       | 30000   | Close idle connections after 30s     |
+| `connectionTimeoutMillis` | 2000    | Fail fast if no connection available |
 
 ---
 
@@ -139,59 +156,45 @@ SELECT value->>'defaultCurrency' FROM settings WHERE key = 'app_settings'
 
 ### Core Indexes
 
-| Table | Index | Type | Purpose |
-|-------|-------|------|---------|
-| `transactions` | `(transaction_date DESC)` | B-tree | Date-range queries, sorting |
-| `transactions` | `(recipient_id)` | B-tree | Recipient filtering |
-| `transactions` | `(category_id)` | B-tree | Category filtering |
-| `transactions` | `(bank_account)` | B-tree | Bank account filtering |
-| `recipients` | `(normalized_name)` | B-tree (UNIQUE) | Deduplication, fast lookup |
-| `categories` | `(general, detail)` | B-tree (UNIQUE) | Category uniqueness |
-| `planned_transactions` | `(next_due_date)` | B-tree | Upcoming payment queries |
-| `investments` | `(asset_class)` | B-tree | Asset class filtering |
-| `asset_price_history` | `(investment_id, timestamp)` | B-tree | Price history lookups |
-| `portfolio_performance_snapshots` | `(snapshot_date)` | B-tree (UNIQUE) | Daily snapshot lookup |
+| Table                             | Index                        | Type            | Purpose                     |
+| --------------------------------- | ---------------------------- | --------------- | --------------------------- |
+| `transactions`                    | `(transaction_date DESC)`    | B-tree          | Date-range queries, sorting |
+| `transactions`                    | `(recipient_id)`             | B-tree          | Recipient filtering         |
+| `transactions`                    | `(category_id)`              | B-tree          | Category filtering          |
+| `transactions`                    | `(bank_account)`             | B-tree          | Bank account filtering      |
+| `recipients`                      | `(normalized_name)`          | B-tree (UNIQUE) | Deduplication, fast lookup  |
+| `categories`                      | `(general, detail)`          | B-tree (UNIQUE) | Category uniqueness         |
+| `planned_transactions`            | `(next_due_date)`            | B-tree          | Upcoming payment queries    |
+| `investments`                     | `(asset_class)`              | B-tree          | Asset class filtering       |
+| `asset_price_history`             | `(investment_id, timestamp)` | B-tree          | Price history lookups       |
+| `portfolio_performance_snapshots` | `(snapshot_date)`            | B-tree (UNIQUE) | Daily snapshot lookup       |
 
 ### Composite Indexes
 
-| Table | Index | Purpose |
-|-------|-------|---------|
-| `transactions` | `(transaction_date, category_id)` | Filtered date range queries |
-| `transactions` | `(transaction_date, recipient_id)` | Recipient history queries |
-| `asset_price_history` | `(investment_id, timestamp DESC)` | Latest price per investment |
+| Table                 | Index                              | Purpose                     |
+| --------------------- | ---------------------------------- | --------------------------- |
+| `transactions`        | `(transaction_date, category_id)`  | Filtered date range queries |
+| `transactions`        | `(transaction_date, recipient_id)` | Recipient history queries   |
+| `asset_price_history` | `(investment_id, timestamp DESC)`  | Latest price per investment |
 
 ### Materialized View Indexes
 
-| View | Index | Purpose |
-|------|-------|---------|
-| `mv_monthly_summary` | `(month)` (UNIQUE) | Enables CONCURRENTLY refresh |
+| View                 | Index                           | Purpose                      |
+| -------------------- | ------------------------------- | ---------------------------- |
+| `mv_monthly_summary` | `(month)` (UNIQUE)              | Enables CONCURRENTLY refresh |
 | `mv_category_totals` | `(category_id, month)` (UNIQUE) | Enables CONCURRENTLY refresh |
-| `mv_daily_cashflow` | `(date)` (UNIQUE) | Enables CONCURRENTLY refresh |
-| `mv_bank_balances` | `(bank_account)` (UNIQUE) | Enables CONCURRENTLY refresh |
+| `mv_daily_cashflow`  | `(date)` (UNIQUE)               | Enables CONCURRENTLY refresh |
+| `mv_bank_balances`   | `(bank_account)` (UNIQUE)       | Enables CONCURRENTLY refresh |
 
 ---
 
-## Table Inheritance
+## Flat investment tables
 
-**Migration:** [[alembic/versions/0013_investment_inheritance.py]]
-
-```
-investments_base (parent table)
-├── investments (view — compatibility layer)
-├── stocks_investments
-├── crypto_investments
-├── real_estate_investments
-├── savings_investments
-├── bonds_investments
-└── metals_investments
-```
-
-**Benefits:**
-- Each child table has only relevant columns
-- Queries against parent see all investments
-- Child-specific queries are faster (smaller tables)
-
-**See:** [[docs/adr/004-postgresql-table-inheritance|ADR-004: PostgreSQL Table Inheritance]]
+The supported head schema uses one `investments` table and one `portfolio_transactions` table.
+Repositories query those relations directly; they do not probe for alternate schema shapes.
+Asset-specific fields are nullable when they do not apply. Migration 0087 converted the retired
+ADR-004 inheritance layout, as specified by
+[[docs/adr/109-flat-investments-schema-canonical|ADR-109]].
 
 ---
 
@@ -199,14 +202,15 @@ investments_base (parent table)
 
 **Service:** [[apps/node-backend/src/services/materializedViewService.js]]
 
-| View | Query Complexity | Refresh Strategy |
-|------|-----------------|-----------------|
+| View            | Query Complexity                    | Refresh Strategy           |
+| --------------- | ----------------------------------- | -------------------------- |
 | Monthly Summary | Aggregation across all transactions | CONCURRENTLY, debounced 1s |
-| Category Totals | GROUP BY category + month | CONCURRENTLY, debounced 1s |
-| Daily Cashflow | Day-level income vs expense | CONCURRENTLY, debounced 1s |
-| Bank Balances | Per-account balance calculation | CONCURRENTLY, debounced 1s |
+| Category Totals | GROUP BY category + month           | CONCURRENTLY, debounced 1s |
+| Daily Cashflow  | Day-level income vs expense         | CONCURRENTLY, debounced 1s |
+| Bank Balances   | Per-account balance calculation     | CONCURRENTLY, debounced 1s |
 
 **Call Coalescing:**
+
 ```
 refreshMaterializedViews() called
     ├── refreshInFlight = true
@@ -223,10 +227,10 @@ refreshMaterializedViews() called
 
 **Reference:** [[docs/reference/database-triggers|Database Triggers Reference]]
 
-| Trigger | Table | Event | Purpose |
-|---------|-------|-------|---------|
-| `update_investments_view` | `investments` (view) | INSTEAD OF INSERT/UPDATE/DELETE | Routes writes to correct child table |
-| `refresh_materialized_views` | `transactions` | AFTER INSERT/UPDATE/DELETE | Schedules debounced view refresh |
+| Trigger                      | Table                | Event                           | Purpose                              |
+| ---------------------------- | -------------------- | ------------------------------- | ------------------------------------ |
+| `update_investments_view`    | `investments` (view) | INSTEAD OF INSERT/UPDATE/DELETE | Routes writes to correct child table |
+| `refresh_materialized_views` | `transactions`       | AFTER INSERT/UPDATE/DELETE      | Schedules debounced view refresh     |
 
 ---
 
@@ -315,14 +319,14 @@ def downgrade():
 
 ## Performance Benchmarks
 
-| Operation | Typical Time | Notes |
-|-----------|-------------|-------|
-| Single transaction INSERT | < 5ms | Parameterized query |
-| Batch INSERT (250 rows) | 10-50ms | Single statement |
-| Transaction list (paginated, 50 rows) | 5-20ms | With indexes |
-| Materialized view refresh | 100-500ms | Depends on transaction count |
-| Recipient resolution (normalized match) | < 2ms | Index on normalized_name |
-| Price history lookup | 1-10ms | Index on (investment_id, timestamp) |
+| Operation                               | Typical Time | Notes                               |
+| --------------------------------------- | ------------ | ----------------------------------- |
+| Single transaction INSERT               | < 5ms        | Parameterized query                 |
+| Batch INSERT (250 rows)                 | 10-50ms      | Single statement                    |
+| Transaction list (paginated, 50 rows)   | 5-20ms       | With indexes                        |
+| Materialized view refresh               | 100-500ms    | Depends on transaction count        |
+| Recipient resolution (normalized match) | < 2ms        | Index on normalized_name            |
+| Price history lookup                    | 1-10ms       | Index on (investment_id, timestamp) |
 
 ---
 
@@ -355,6 +359,7 @@ The same pattern is applied in `infoRepo.monthly.js` for the all-time live path:
 ### Currency Integrity (migration 0046)
 
 `transactions.currency` and `planned_transactions.currency` are now:
+
 - `NOT NULL` (backed by backfill — NULL rows set to `'EUR'`)
 - `DEFAULT 'EUR'`
 - `CHECK (currency ~ '^[A-Z]{3}$') NOT VALID` — enforced for new/updated rows; legacy rows may be validated retroactively with `VALIDATE CONSTRAINT` in a follow-up
@@ -392,15 +397,15 @@ FKs that protect financial history (e.g. `transactions.recipient_id`) are delibe
 
 ## Anti-Patterns to Avoid
 
-| Anti-Pattern | Why Bad | Solution |
-|-------------|---------|----------|
-| Dynamic SQL without parameters | SQL injection risk | Always use `$1, $2` parameters |
-| SELECT * in application code | Breaks on schema change | Explicit column lists |
-| Missing WHERE clause on UPDATE/DELETE | Accidental data loss | Always include WHERE |
-| Unbounded queries | Memory exhaustion | Always use LIMIT |
-| Dropping columns without migration | Data loss | Add → backfill → drop in separate migrations |
-| Returning raw pg NUMERIC as-is | Leaks strings where `number` is declared | Use `numericColumn()` / `coerceNumericFields()` at the repo read boundary |
-| Nullable currency without DEFAULT | Forces implicit EUR assumptions in read layer | Add `DEFAULT 'EUR' NOT NULL` + ISO CHECK (migration 0046 pattern) |
+| Anti-Pattern                          | Why Bad                                       | Solution                                                                  |
+| ------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
+| Dynamic SQL without parameters        | SQL injection risk                            | Always use `$1, $2` parameters                                            |
+| SELECT * in application code          | Breaks on schema change                       | Explicit column lists                                                     |
+| Missing WHERE clause on UPDATE/DELETE | Accidental data loss                          | Always include WHERE                                                      |
+| Unbounded queries                     | Memory exhaustion                             | Always use LIMIT                                                          |
+| Dropping columns without migration    | Data loss                                     | Add → backfill → drop in separate migrations                              |
+| Returning raw pg NUMERIC as-is        | Leaks strings where `number` is declared      | Use `numericColumn()` / `coerceNumericFields()` at the repo read boundary |
+| Nullable currency without DEFAULT     | Forces implicit EUR assumptions in read layer | Add `DEFAULT 'EUR' NOT NULL` + ISO CHECK (migration 0046 pattern)         |
 
 ---
 

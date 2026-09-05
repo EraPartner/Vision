@@ -2,34 +2,48 @@
 title: ADR-089 Account-Typed Model & Owner Dimension
 type: adr
 date: 2026-06-18
-tags: [adr, accounts, account-type, liquidity, in-net-worth, tax-wrapper, owner, marital-quotient, adr-088]
+tags:
+  [
+    adr,
+    accounts,
+    account-type,
+    liquidity,
+    in-net-worth,
+    tax-wrapper,
+    owner,
+    marital-quotient,
+    adr-088,
+  ]
 description: Activate the orthogonal account flag columns (type, liquidity class, spendable, in-net-worth, tax wrapper, owner, multi-currency cash, cash sleeve) shipped in ADR-088 as meaningful attributes, and introduce the me/partner/joint owner dimension that feeds Belgian marital tax allocation.
-aliases: [account types, account flags, owner dimension, liquidity class, in net worth]
+aliases:
+  [account types, account flags, owner dimension, liquidity class, in net worth]
 ---
 
 # ADR-089: Account-Typed Model & Owner Dimension
 
 ## Status
+
 Proposed
 
 ## Date
+
 2026-06-18
 
 ## Context
 
-ADR-088 created the `accounts` table with a set of flag columns but left their *semantics*
+ADR-088 created the `accounts` table with a set of flag columns but left their _semantics_
 dormant (every backfilled account got safe defaults: `type='checking'`, `in_net_worth=true`,
 `has_cash_sleeve=true`, `owner='me'`). Real accounts are not all the same: a brokerage account
-holds cash *and* holdings; a pensioensparen account is locked, tax-deductible and illiquid; a
+holds cash _and_ holdings; a pensioensparen account is locked, tax-deductible and illiquid; a
 crypto wallet holds only holdings (no cash sleeve); a mortgage is a negative, illiquid liability.
 A single boolean ("is it a bank account?") cannot express these — but a **small set of orthogonal
 flags** can, without a subtype explosion.
 
-The flags must also be *meaningful*, not decorative: net worth should be able to exclude a
+The flags must also be _meaningful_, not decorative: net worth should be able to exclude a
 "tracking-only" account; downstream features (FIRE coverage, cash-aware rebalancing) need to know
 which balances are liquid and spendable; the cash sleeve (ADR-090) needs `has_cash_sleeve`; and
-the Belgian marital quotient needs to know whether an account's income/gains belong to *me*, a
-*partner*, or *jointly*.
+the Belgian marital quotient needs to know whether an account's income/gains belong to _me_, a
+_partner_, or _jointly_.
 
 ## Decision
 
@@ -63,13 +77,13 @@ defaults so the common case stays one-line. Selecting a `type` pre-suggests matc
 
 **Stress-test combinations that must all be expressible:**
 
-| Account | type | liquidity | spendable | in_net_worth | tax_wrapper | has_cash_sleeve |
-|---|---|---|---|---|---|---|
-| Checking | checking | liquid | true | true | none | true |
-| Brokerage | brokerage | semi_liquid | false | true | none | true |
-| Pensioensparen | pension | illiquid | false | true | pension | false |
-| Crypto wallet | wallet | semi_liquid | false | true | none | **false** |
-| Mortgage | liability | illiquid | false | true | none | false |
+| Account        | type      | liquidity   | spendable | in_net_worth | tax_wrapper | has_cash_sleeve |
+| -------------- | --------- | ----------- | --------- | ------------ | ----------- | --------------- |
+| Checking       | checking  | liquid      | true      | true         | none        | true            |
+| Brokerage      | brokerage | semi_liquid | false     | true         | none        | true            |
+| Pensioensparen | pension   | illiquid    | false     | true         | pension     | false           |
+| Crypto wallet  | wallet    | semi_liquid | false     | true         | none        | **false**       |
+| Mortgage       | liability | illiquid    | false     | true         | none        | false           |
 
 No migration is required — the columns and enum types already exist (migration 0050). This ADR
 activates behavior and UI only.
@@ -77,22 +91,26 @@ activates behavior and UI only.
 ## Consequences
 
 **Positive**
+
 - One entity expresses every account shape via flag combinations; no subtype table explosion.
 - `in_net_worth` immediately lets users keep tracking-only accounts out of net worth.
 - The owner dimension is captured now, unblocking marital-quotient tax allocation later without
   another migration.
 
 **Negative / cost**
+
 - More controls in the account editor (mitigated by progressive disclosure + type-driven
   defaults).
 - Flags are only as correct as the user sets them; type-driven suggestions reduce the burden.
 
 **Risks / mitigations**
+
 - Over-exposing rarely-changed flags → hide behind "Advanced"; default from `type`.
 - Partial activation (some flags descriptive until later milestones) → documented per-flag above
   so consumers know what is live.
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]] (ships the columns)
 - [[docs/reference/data-model|Data Model Reference]] (Account entity)
@@ -138,19 +156,21 @@ currency)`**:
   its currency (this replaces the filed fix of minting `REVOLUT <CURRENCY>` accounts). Wise's
   existing one-account-per-currency split remains valid — both models are allowed; the invariant
   is that a row's currency is always honored, never collapsed into another currency's series.
-- **`accounts.currency`** is reinterpreted as the account's *primary/reporting* currency (the
+- **`accounts.currency`** is reinterpreted as the account's _primary/reporting_ currency (the
   default for rows that don't specify one, and the only currency for single-currency accounts) —
   no longer an assumed invariant on the rows.
 
 ### Consequences
 
 **Positive**
+
 - One real-world account = one `accounts` row, matching how Revolut/Wise present themselves.
 - The two filed currency bugs (Revolut collapse, FX-blind sleeve sums) are fixed structurally
   rather than patched.
 - Per-currency drift makes reconciliation meaningful for multi-currency users.
 
 **Negative / cost**
+
 - This touches every balance consumer — it is deliberately sequenced inside the accounts
   rewrite's balance-engine phase (Phase C in TODO.md), **not** shippable piecemeal.
 - A new side table + backfill migration (rollback: copy the primary-currency row back into the
@@ -160,3 +180,12 @@ currency)`**:
 
 **Superseded within this ADR:** the main body's note that `multi_currency_cash` is merely a
 "cash-sleeve input" — it is now an activated, behavior-bearing flag.
+
+### Implementation note (2026-09-04)
+
+Migration 0098 adds and backfills `account_statement_balances`. The account list exposes the full
+per-currency series, the reconciliation endpoint accepts an explicit currency, and the Reconcile
+dialog selects among native partitions. Revolut's adapter capability makes
+`multi_currency_cash=true` sticky when it resolves or creates an account. The original scalar
+columns remain only as a declared-currency compatibility projection during the API transition;
+new statement writes use the currency-keyed endpoint and side table.

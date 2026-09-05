@@ -3,7 +3,7 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-08-31
+updated: 2026-09-04
 last_modified: 2026-08-31
 tags:
   [
@@ -122,7 +122,8 @@ Shared contract
 | `ChatMessageList`             | Frontend Component    | Renders ordered messages; shows thinking indicator when streaming w/no content yet; retains and labels stopped/interrupted/timed-out drafts with Retry; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble`                  | Frontend Component    | User vs assistant styling                                                                                                                                                                                                                                                                                                                |
 | `ChatComposer`                | Frontend Component    | Textarea, send, model selector, tools toggle (wrench icon)                                                                                                                                                                                                                                                                               |
-| `ToolResultCard`              | Frontend Component    | Renders tool payload as table or Recharts (line/bar/pie) with semantic, tabular numeric axis labels                                                                                                                                                                                                                                      |
+| `ToolResultCard`              | Frontend Component    | Renders table, JSON, and error payloads directly; lazy-loads `ToolResultChart` only for line/bar/pie results                                                                                                                                                                                                                             |
+| `ToolResultChart`             | Frontend Component    | Recharts-backed line/bar/pie renderer behind a nested lazy boundary, so ordinary chat and non-chart tool results do not download Recharts                                                                                                                                                                                                |
 | `OllamaStatusBanner`          | Frontend Component    | Unreachable warning + setup guide link                                                                                                                                                                                                                                                                                                   |
 | `aiChatStreamStore`           | Frontend Store        | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount                                                                                                                                                                                                                                    |
 | `useAIChat`                   | Frontend Hooks        | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useStreamingConversationIds`                                                                                                                                                                    |

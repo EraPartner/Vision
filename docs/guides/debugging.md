@@ -5,8 +5,14 @@ status: active
 date: 2026-04-26
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
-aliases: [debugging, error handling, troubleshooting, debugging guide, error codes]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/frontend/src/components/shared/ErrorBoundary.tsx", "apps/frontend/src/lib/api.ts"]
+aliases:
+  [debugging, error handling, troubleshooting, debugging guide, error codes]
+related_code:
+  [
+    "apps/node-backend/src/middleware/validation.js",
+    "apps/frontend/src/components/shared/ErrorBoundary.tsx",
+    "apps/frontend/src/lib/api.ts",
+  ]
 ---
 
 # Error Handling & Debugging Guide
@@ -48,12 +54,12 @@ User Action → Hook Mutation → API Client → Express Route
 
 Validates request parameters before they reach route handlers:
 
-| Check | Validation | Error Response |
-|-------|-----------|----------------|
-| ID parameters | Positive integer | 400 Bad Request |
-| Date parameters | Valid date format | 400 Bad Request |
-| Amount parameters | Valid number | 400 Bad Request |
-| Required fields | Non-null, non-empty | 400 Bad Request |
+| Check             | Validation          | Error Response  |
+| ----------------- | ------------------- | --------------- |
+| ID parameters     | Positive integer    | 400 Bad Request |
+| Date parameters   | Valid date format   | 400 Bad Request |
+| Amount parameters | Valid number        | 400 Bad Request |
+| Required fields   | Non-null, non-empty | 400 Bad Request |
 
 ### Error Response Format
 
@@ -67,14 +73,14 @@ Validates request parameters before they reach route handlers:
 
 ### Common Backend Errors
 
-| Status | Cause | Resolution |
-|--------|-------|------------|
-| 400 | Invalid input | Check request body/query params |
-| 404 | Resource not found | Verify ID exists |
-| 409 | Conflict (duplicate) | Check for existing records |
-| 422 | Validation error | Review error.detail array |
-| 429 | Rate limit exceeded | Wait and retry |
-| 500 | Internal server error | Check backend logs |
+| Status | Cause                 | Resolution                      |
+| ------ | --------------------- | ------------------------------- |
+| 400    | Invalid input         | Check request body/query params |
+| 404    | Resource not found    | Verify ID exists                |
+| 409    | Conflict (duplicate)  | Check for existing records      |
+| 422    | Validation error      | Review error.detail array       |
+| 429    | Rate limit exceeded   | Wait and retry                  |
+| 500    | Internal server error | Check backend logs              |
 
 ---
 
@@ -97,13 +103,13 @@ ErrorBoundary
 
 **File:** [[apps/frontend/src/lib/api.ts]]
 
-| Error Type | Handling |
-|------------|----------|
-| Timeout (30s) | AbortController + retry |
-| Network failure | Retry with exponential backoff |
-| 422 Validation | Parse error.detail array, show field-level messages |
-| 429 Rate Limit | Show retry_after message |
-| 5xx Server Error | Retry up to 2 times (idempotent methods only) |
+| Error Type       | Handling                                            |
+| ---------------- | --------------------------------------------------- |
+| Timeout (30s)    | AbortController + retry                             |
+| Network failure  | Retry with exponential backoff                      |
+| 422 Validation   | Parse error.detail array, show field-level messages |
+| 429 Rate Limit   | Show retry_after message                            |
+| 5xx Server Error | Retry up to 2 times (idempotent methods only)       |
 
 ### Retry Logic
 
@@ -136,7 +142,7 @@ bun run dev
 
 ```javascript
 // In connection.js consumers, log database errors from caught query failures
-logger.error('Database error', { error: err.message });
+logger.error("Database error", { error: err.message });
 ```
 
 #### 3. Test Individual Services
@@ -155,6 +161,20 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 # Verify connection
 psql -h localhost -p 5432 -U ftm_user -d financial_transactions
 ```
+
+Managed Docker and native PostgreSQL runtimes preload and install
+`pg_stat_statements`. For a query-level performance sample, run this as a
+database owner or another role allowed to inspect the statistics view:
+
+```sql
+SELECT calls, total_exec_time, mean_exec_time, rows, query
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 20;
+```
+
+The view contains normalized statement text and aggregate timings since the
+last statistics reset. Treat it as diagnostic evidence, not application data.
 
 ### Frontend Debugging
 
@@ -182,7 +202,7 @@ psql -h localhost -p 5432 -U ftm_user -d financial_transactions
 ```typescript
 // In any component, log context values
 const settings = useAppSettings();
-console.log('AppSettings:', settings);
+console.log("AppSettings:", settings);
 ```
 
 ### Electron Debugging
@@ -205,8 +225,8 @@ console.log('AppSettings:', settings);
 
 ```javascript
 // Check IPC messages in main process
-ipcMain.on('channel-name', (event, data) => {
-    console.log('IPC received:', data);
+ipcMain.on("channel-name", (event, data) => {
+  console.log("IPC received:", data);
 });
 ```
 
@@ -217,15 +237,18 @@ ipcMain.on('channel-name', (event, data) => {
 ### 1. Database Connection Failures
 
 **Symptoms:**
+
 - Backend fails to start
 - "Connection refused" errors in logs
 
 **Causes:**
+
 - PostgreSQL not running
 - Wrong connection credentials in `.env.local`
 - Port conflict
 
 **Resolution:**
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 # Verify: psql -h localhost -p 5432 -U ftm_user -d financial_transactions
@@ -234,15 +257,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 ### 2. Import Failures
 
 **Symptoms:**
+
 - Import shows 0 imported, many errors
 - Progress stalls
 
 **Causes:**
+
 - Wrong bank adapter selected
 - CSV format mismatch
 - Encoding issues
 
 **Resolution:**
+
 - Verify bank adapter matches CSV format
 - Check CSV encoding (UTF-8 recommended)
 - Use custom adapter with column mapping if needed
@@ -250,15 +276,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 ### 3. Price Provider Failures
 
 **Symptoms:**
+
 - Portfolio prices show as stale or zero
 - "Failed to fetch prices" errors
 
 **Causes:**
+
 - API rate limits (Yahoo Finance, Binance)
 - Invalid symbol configuration
 - Network connectivity issues
 
 **Resolution:**
+
 - Check provider configuration in investment settings
 - Verify symbol format (e.g., `AAPL` for Yahoo, `BTCUSDT` for Binance)
 - Wait for rate limit cooldown
@@ -266,14 +295,17 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 ### 4. Materialized View Staleness
 
 **Symptoms:**
+
 - Dashboard shows outdated totals
 - Charts don't reflect recent transactions
 
 **Causes:**
+
 - View refresh failed or was skipped
 - CONCURRENTLY refresh blocked
 
 **Resolution:**
+
 ```bash
 # Manual refresh via API
 curl -X POST http://localhost:3002/api/info/refresh-views
@@ -282,14 +314,17 @@ curl -X POST http://localhost:3002/api/info/refresh-views
 ### 5. React Query Cache Issues
 
 **Symptoms:**
+
 - UI shows stale data after mutation
 - Data doesn't update after create/edit/delete
 
 **Causes:**
+
 - Missing `invalidateQueries` call in mutation
 - Wrong query key in invalidation
 
 **Resolution:**
+
 - Verify mutation's `onSuccess` invalidates correct keys
 - Check query key consistency between hook and invalidation
 
@@ -301,11 +336,11 @@ curl -X POST http://localhost:3002/api/info/refresh-views
 
 **File:** [[apps/node-backend/src/config/logger.js]]
 
-| Level | Usage |
-|-------|-------|
-| `error` | Unrecoverable errors, API failures |
-| `warn` | Recoverable errors, fallback usage |
-| `info` | Significant operations (imports, refreshes, critical state changes) |
+| Level   | Usage                                                                      |
+| ------- | -------------------------------------------------------------------------- |
+| `error` | Unrecoverable errors, API failures                                         |
+| `warn`  | Recoverable errors, fallback usage                                         |
+| `info`  | Significant operations (imports, refreshes, critical state changes)        |
 | `debug` | Detailed diagnostic tracing, high-frequency operations, external API calls |
 
 **Note:** The logger supports both traditional `(message, extra)` and pino-style `(bindings, message)` calling conventions. The format is auto-detected based on argument types.
@@ -314,12 +349,12 @@ curl -X POST http://localhost:3002/api/info/refresh-views
 
 **File:** [[apps/frontend/src/lib/logger.ts]]
 
-| Level | Usage |
-|-------|-------|
-| `error` | API failures, render errors |
-| `warn` | Deprecated usage, fallback behavior |
-| `info` | Significant user actions |
-| `debug` | Development tracing |
+| Level   | Usage                               |
+| ------- | ----------------------------------- |
+| `error` | API failures, render errors         |
+| `warn`  | Deprecated usage, fallback behavior |
+| `info`  | Significant user actions            |
+| `debug` | Development tracing                 |
 
 ---
 

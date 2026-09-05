@@ -3,22 +3,51 @@ title: ADR 002 - Database Schema
 type: adr
 status: Accepted
 date: 2026-04-21
-updated: 2026-05-05
-tags: [architecture, database, schema, postgresql, phase-1, phase-6, audit-trail, updated-at, corrective-migration]
-description: Complete database schema design with all tables, columns, enums, indexes, and PostgreSQL table inheritance for investments. Phase 6.1 corrective migration (0022) fixes missing NOT NULL DEFAULT NOW() constraints on updated_at columns across 11 tables.
-aliases: [database schema, ERD, tables, postgresql schema, migrations, updated-at audit trail]
+updated: 2026-09-04
+tags:
+  [
+    architecture,
+    database,
+    schema,
+    postgresql,
+    phase-1,
+    phase-6,
+    audit-trail,
+    updated-at,
+    corrective-migration,
+  ]
+description: Historical foundational database schema decision. Its investment-inheritance section is superseded by ADR-109; current schema details live in the data-model reference and Alembic chain.
+aliases:
+  [
+    database schema,
+    ERD,
+    tables,
+    postgresql schema,
+    migrations,
+    updated-at audit trail,
+  ]
 ---
 
 # ADR-002: Database Schema Design
 
 ## Status
+
 Accepted
 
+> [!important] Partial supersession — 2026-09-04
+> The general PostgreSQL and domain-schema decision remains accepted. The investment and portfolio
+> transaction inheritance design in this record was superseded by
+> [[docs/adr/109-flat-investments-schema-canonical|ADR-109]]. The supported head schema uses flat
+> `investments` and `portfolio_transactions` tables; migration 0087 converts the historical shape.
+
 ## Date
+
 2026-03-18
 
 ## Context
+
 Vision requires a comprehensive PostgreSQL database schema to store financial transactions, investments, categories, recipients, and supporting data. The schema must support:
+
 - Core transaction tracking with categories and recipients
 - Planned/scheduled transactions with recurrence
 - Investment portfolio management (stocks, crypto, real estate, savings)
@@ -31,83 +60,90 @@ Vision requires a comprehensive PostgreSQL database schema to store financial tr
 ### Core Tables
 
 #### Categories (`categories`)
+
 Organizational labels for transactions using "GENERAL:DETAIL" format (e.g., "FOOD:GROCERIES").
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| general | TEXT | NOT NULL | General category (e.g., FOOD, TRANSPORT) |
-| detail | TEXT | NOT NULL | Detail category (e.g., GROCERIES, GAS) |
-| description | TEXT | NULLABLE | Optional description |
-| is_active | BOOLEAN | DEFAULT true | Soft delete flag |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column      | Type        | Constraints   | Description                              |
+| ----------- | ----------- | ------------- | ---------------------------------------- |
+| id          | SERIAL      | PRIMARY KEY   | Unique identifier                        |
+| general     | TEXT        | NOT NULL      | General category (e.g., FOOD, TRANSPORT) |
+| detail      | TEXT        | NOT NULL      | Detail category (e.g., GROCERIES, GAS)   |
+| description | TEXT        | NULLABLE      | Optional description                     |
+| is_active   | BOOLEAN     | DEFAULT true  | Soft delete flag                         |
+| created_at  | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp                       |
+| updated_at  | TIMESTAMPTZ | NULLABLE      | Last update timestamp                    |
 
 **Constraints**: UNIQUE(general, detail)
 
 **Indexes**:
+
 - `idx_categories_general` on general
 - `idx_categories_detail` on detail
 - `update_categories_updated_at` trigger
 
 #### Recipients (`recipients`)
+
 Payees/payers associated with transactions.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| name | TEXT | NOT NULL | Display name |
-| normalized_name | TEXT | NOT NULL UNIQUE | Normalized for matching |
-| default_category_id | INTEGER | REFERENCES categories(id) | Default category |
-| primary_recipient_id | INTEGER | REFERENCES recipients(id) | For merged recipients |
-| notes | TEXT | NULLABLE | Optional notes |
-| is_active | BOOLEAN | DEFAULT true | Soft delete flag |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column               | Type        | Constraints               | Description             |
+| -------------------- | ----------- | ------------------------- | ----------------------- |
+| id                   | SERIAL      | PRIMARY KEY               | Unique identifier       |
+| name                 | TEXT        | NOT NULL                  | Display name            |
+| normalized_name      | TEXT        | NOT NULL UNIQUE           | Normalized for matching |
+| default_category_id  | INTEGER     | REFERENCES categories(id) | Default category        |
+| primary_recipient_id | INTEGER     | REFERENCES recipients(id) | For merged recipients   |
+| notes                | TEXT        | NULLABLE                  | Optional notes          |
+| is_active            | BOOLEAN     | DEFAULT true              | Soft delete flag        |
+| created_at           | TIMESTAMPTZ | DEFAULT NOW()             | Creation timestamp      |
+| updated_at           | TIMESTAMPTZ | NULLABLE                  | Last update timestamp   |
 
 **Indexes**:
+
 - `idx_recipients_name` on name
 - `idx_recipients_primary_recipient_id` on primary_recipient_id
 - `idx_recipients_default_category_id` on default_category_id
 - `idx_recipients_name_trgm` GIN trigram index for ILIKE search
 
 #### Recipient Bank Accounts (`recipient_bank_accounts`)
+
 Bank accounts associated with recipients.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| recipient_id | INTEGER | REFERENCES recipients(id) | Associated recipient |
-| account_number | VARCHAR(34) | NOT NULL UNIQUE | IBAN/account number |
-| bank_name | TEXT | NULLABLE | Bank name |
-| account_label | TEXT | NULLABLE | Account label |
-| address | TEXT | NULLABLE | Account address |
-| is_primary | BOOLEAN | DEFAULT false | Primary account flag |
-| is_active | BOOLEAN | DEFAULT true | Soft delete flag |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column         | Type        | Constraints               | Description           |
+| -------------- | ----------- | ------------------------- | --------------------- |
+| id             | SERIAL      | PRIMARY KEY               | Unique identifier     |
+| recipient_id   | INTEGER     | REFERENCES recipients(id) | Associated recipient  |
+| account_number | VARCHAR(34) | NOT NULL UNIQUE           | IBAN/account number   |
+| bank_name      | TEXT        | NULLABLE                  | Bank name             |
+| account_label  | TEXT        | NULLABLE                  | Account label         |
+| address        | TEXT        | NULLABLE                  | Account address       |
+| is_primary     | BOOLEAN     | DEFAULT false             | Primary account flag  |
+| is_active      | BOOLEAN     | DEFAULT true              | Soft delete flag      |
+| created_at     | TIMESTAMPTZ | DEFAULT NOW()             | Creation timestamp    |
+| updated_at     | TIMESTAMPTZ | NULLABLE                  | Last update timestamp |
 
 #### Transactions (`transactions`)
+
 Core financial transactions (income/expense records).
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| date | DATE | NOT NULL | Transaction date |
-| amount | NUMERIC(15,2) | NOT NULL | Transaction amount |
-| currency | VARCHAR(3) | NULLABLE | Currency code (ISO 4217) |
-| balance | NUMERIC(15,2) | NULLABLE | Account balance after |
-| memo | TEXT | NULLABLE | Transaction description |
-| comment | TEXT | NULLABLE | User comment |
-| bank_account | TEXT | NULLABLE | Source bank account |
-| recipient_id | INTEGER | NOT NULL REFERENCES recipients(id) | Associated recipient |
-| recipient_bank_account_id | INTEGER | REFERENCES recipient_bank_accounts(id) | Target account |
-| category_id | INTEGER | REFERENCES categories(id) | Category |
-| is_active | BOOLEAN | DEFAULT true | Soft delete flag |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column                    | Type          | Constraints                            | Description              |
+| ------------------------- | ------------- | -------------------------------------- | ------------------------ |
+| id                        | SERIAL        | PRIMARY KEY                            | Unique identifier        |
+| date                      | DATE          | NOT NULL                               | Transaction date         |
+| amount                    | NUMERIC(15,2) | NOT NULL                               | Transaction amount       |
+| currency                  | VARCHAR(3)    | NULLABLE                               | Currency code (ISO 4217) |
+| balance                   | NUMERIC(15,2) | NULLABLE                               | Account balance after    |
+| memo                      | TEXT          | NULLABLE                               | Transaction description  |
+| comment                   | TEXT          | NULLABLE                               | User comment             |
+| bank_account              | TEXT          | NULLABLE                               | Source bank account      |
+| recipient_id              | INTEGER       | NOT NULL REFERENCES recipients(id)     | Associated recipient     |
+| recipient_bank_account_id | INTEGER       | REFERENCES recipient_bank_accounts(id) | Target account           |
+| category_id               | INTEGER       | REFERENCES categories(id)              | Category                 |
+| is_active                 | BOOLEAN       | DEFAULT true                           | Soft delete flag         |
+| created_at                | TIMESTAMPTZ   | DEFAULT NOW()                          | Creation timestamp       |
+| updated_at                | TIMESTAMPTZ   | NULLABLE                               | Last update timestamp    |
 
 **Indexes**:
+
 - `idx_transactions_date` on date
 - `idx_transactions_recipient_id` on recipient_id
 - `idx_transactions_category_id` on category_id
@@ -123,38 +159,40 @@ Core financial transactions (income/expense records).
 - `idx_transactions_comment_trgm` GIN trigram on comment
 
 #### Planned Transactions (`planned_transactions`)
+
 Scheduled and recurring future transactions.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| planned_date | DATE | NOT NULL | Scheduled date |
-| amount | NUMERIC(15,2) | NOT NULL | Planned amount |
-| currency | VARCHAR(3) | NULLABLE | Currency code |
-| memo | TEXT | NULLABLE | Description |
-| comment | TEXT | NULLABLE | User comment |
-| url | TEXT | NULLABLE | Payment URL |
-| bank_account | TEXT | NULLABLE | Source account |
-| recipient_id | INTEGER | REFERENCES recipients(id) | Associated recipient |
-| category_id | INTEGER | REFERENCES categories(id) | Category |
-| is_recurring | BOOLEAN | DEFAULT false | Recurring flag |
-| recurrence_pattern | TEXT | NULLABLE | Recurrence pattern |
-| is_loan | BOOLEAN | DEFAULT false | Loan flag |
-| loan_type | TEXT | NULLABLE | Loan type |
-| loan_principal | NUMERIC(15,2) | NULLABLE | Principal amount |
-| loan_annual_interest_rate | NUMERIC(8,4) | NULLABLE | Annual interest rate |
-| loan_term_months | INTEGER | NULLABLE | Term in months |
-| loan_start_date | DATE | NULLABLE | Start date |
-| loan_payment_day | INTEGER | NULLABLE | Day of month for payment |
-| loan_regular_payment_amount | NUMERIC(15,2) | NULLABLE | Regular payment |
-| loan_first_payment_date | DATE | NULLABLE | First payment date |
-| is_executed | BOOLEAN | DEFAULT false | Executed flag |
-| last_executed_date | DATE | NULLABLE | Last execution date |
-| is_active | BOOLEAN | DEFAULT true | Soft delete flag |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column                      | Type          | Constraints               | Description              |
+| --------------------------- | ------------- | ------------------------- | ------------------------ |
+| id                          | SERIAL        | PRIMARY KEY               | Unique identifier        |
+| planned_date                | DATE          | NOT NULL                  | Scheduled date           |
+| amount                      | NUMERIC(15,2) | NOT NULL                  | Planned amount           |
+| currency                    | VARCHAR(3)    | NULLABLE                  | Currency code            |
+| memo                        | TEXT          | NULLABLE                  | Description              |
+| comment                     | TEXT          | NULLABLE                  | User comment             |
+| url                         | TEXT          | NULLABLE                  | Payment URL              |
+| bank_account                | TEXT          | NULLABLE                  | Source account           |
+| recipient_id                | INTEGER       | REFERENCES recipients(id) | Associated recipient     |
+| category_id                 | INTEGER       | REFERENCES categories(id) | Category                 |
+| is_recurring                | BOOLEAN       | DEFAULT false             | Recurring flag           |
+| recurrence_pattern          | TEXT          | NULLABLE                  | Recurrence pattern       |
+| is_loan                     | BOOLEAN       | DEFAULT false             | Loan flag                |
+| loan_type                   | TEXT          | NULLABLE                  | Loan type                |
+| loan_principal              | NUMERIC(15,2) | NULLABLE                  | Principal amount         |
+| loan_annual_interest_rate   | NUMERIC(8,4)  | NULLABLE                  | Annual interest rate     |
+| loan_term_months            | INTEGER       | NULLABLE                  | Term in months           |
+| loan_start_date             | DATE          | NULLABLE                  | Start date               |
+| loan_payment_day            | INTEGER       | NULLABLE                  | Day of month for payment |
+| loan_regular_payment_amount | NUMERIC(15,2) | NULLABLE                  | Regular payment          |
+| loan_first_payment_date     | DATE          | NULLABLE                  | First payment date       |
+| is_executed                 | BOOLEAN       | DEFAULT false             | Executed flag            |
+| last_executed_date          | DATE          | NULLABLE                  | Last execution date      |
+| is_active                   | BOOLEAN       | DEFAULT true              | Soft delete flag         |
+| created_at                  | TIMESTAMPTZ   | DEFAULT NOW()             | Creation timestamp       |
+| updated_at                  | TIMESTAMPTZ   | NULLABLE                  | Last update timestamp    |
 
 **Indexes**:
+
 - `idx_pt_planned_date` on planned_date
 - `idx_pt_bank_account` on bank_account
 - `idx_pt_recipient_id` on recipient_id
@@ -165,58 +203,65 @@ Scheduled and recurring future transactions.
 - `idx_pt_is_loan` on is_loan
 
 #### Planned Transaction Executions (`planned_transaction_executions`)
+
 Links planned transactions to executed transactions.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| planned_transaction_id | INTEGER | NOT NULL REFERENCES planned_transactions(id) | Planned transaction |
-| executed_transaction_id | INTEGER | NOT NULL REFERENCES transactions(id) | Executed transaction |
-| execution_date | DATE | NOT NULL | Execution date |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+| Column                  | Type        | Constraints                                  | Description          |
+| ----------------------- | ----------- | -------------------------------------------- | -------------------- |
+| id                      | SERIAL      | PRIMARY KEY                                  | Unique identifier    |
+| planned_transaction_id  | INTEGER     | NOT NULL REFERENCES planned_transactions(id) | Planned transaction  |
+| executed_transaction_id | INTEGER     | NOT NULL REFERENCES transactions(id)         | Executed transaction |
+| execution_date          | DATE        | NOT NULL                                     | Execution date       |
+| created_at              | TIMESTAMPTZ | DEFAULT NOW()                                | Creation timestamp   |
 
 **Indexes**:
+
 - `idx_pte_planned_id` on planned_transaction_id
 - `idx_pte_executed_tx_id` on executed_transaction_id
 
 #### Planned Transaction Loan Schedule (`planned_transaction_loan_schedule`)
+
 Amortization schedule for loans.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| planned_transaction_id | INTEGER | NOT NULL REFERENCES planned_transactions(id) | Loan planned transaction |
-| installment_number | INTEGER | NOT NULL | Installment number |
-| due_date | DATE | NOT NULL | Due date |
-| payment_amount | NUMERIC(15,2) | NOT NULL | Payment amount |
-| principal_amount | NUMERIC(15,2) | NOT NULL | Principal portion |
-| interest_amount | NUMERIC(15,2) | NOT NULL | Interest portion |
-| remaining_principal | NUMERIC(15,2) | NOT NULL | Remaining principal |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update timestamp |
+| Column                 | Type          | Constraints                                  | Description              |
+| ---------------------- | ------------- | -------------------------------------------- | ------------------------ |
+| id                     | SERIAL        | PRIMARY KEY                                  | Unique identifier        |
+| planned_transaction_id | INTEGER       | NOT NULL REFERENCES planned_transactions(id) | Loan planned transaction |
+| installment_number     | INTEGER       | NOT NULL                                     | Installment number       |
+| due_date               | DATE          | NOT NULL                                     | Due date                 |
+| payment_amount         | NUMERIC(15,2) | NOT NULL                                     | Payment amount           |
+| principal_amount       | NUMERIC(15,2) | NOT NULL                                     | Principal portion        |
+| interest_amount        | NUMERIC(15,2) | NOT NULL                                     | Interest portion         |
+| remaining_principal    | NUMERIC(15,2) | NOT NULL                                     | Remaining principal      |
+| created_at             | TIMESTAMPTZ   | DEFAULT NOW()                                | Creation timestamp       |
+| updated_at             | TIMESTAMPTZ   | NULLABLE                                     | Last update timestamp    |
 
 **Constraints**: UNIQUE(planned_transaction_id, installment_number)
 
 ### Raw Transaction Tables
+
 Bank-specific raw transaction storage for deduplication:
 
 #### Supported Banks
-| Table | Purpose | Description |
-|-------|---------|-------------|
-| `belfius_raw_transactions` | Belfius Bank | Parses Belfius CSV format |
-| `revolut_raw_transactions` | Revolut | Parses Revolut CSV export |
-| `kbc_raw_transactions` | KBC Bank | Parses KBC CSV statements |
-| `sabb_raw_transactions` | SABB | Saudi Arabian British Bank |
-| `wise_raw_transactions` | Wise | Parses Wise transaction exports |
-| `vision_raw_transactions` | Vision | Parses Vision bank format |
-| `manual_raw_transactions` | Manual Entry | Deduplication for manually entered transactions |
+
+| Table                      | Purpose      | Description                                     |
+| -------------------------- | ------------ | ----------------------------------------------- |
+| `belfius_raw_transactions` | Belfius Bank | Parses Belfius CSV format                       |
+| `revolut_raw_transactions` | Revolut      | Parses Revolut CSV export                       |
+| `kbc_raw_transactions`     | KBC Bank     | Parses KBC CSV statements                       |
+| `sabb_raw_transactions`    | SABB         | Saudi Arabian British Bank                      |
+| `wise_raw_transactions`    | Wise         | Parses Wise transaction exports                 |
+| `vision_raw_transactions`  | Vision       | Parses Vision bank format                       |
+| `manual_raw_transactions`  | Manual Entry | Deduplication for manually entered transactions |
 
 > **Note:** `custom_raw_transactions` was dropped by migration [[alembic/versions/0008_drop_custom_raw_transactions.py]]. Custom CSV imports now use the generic import path without a dedicated raw table.
 
 #### Manual Entry Deduplication (`manual_raw_transactions`)
+
 The `manual_raw_transactions` table stores manually entered transaction data **before** creating the actual transaction. This enables hash-based deduplication to prevent duplicate entries when users manually add transactions that may already exist in imported data.
 
 All raw tables include:
+
 - `deduplication_hash` - Unique hash for deduplication (UNIQUE)
 - `created_at` - Import timestamp
 - `raw_csv_line` - Original CSV line for audit
@@ -224,36 +269,38 @@ All raw tables include:
 ### Investment Tables
 
 #### Investments (`investments`)
+
 Investment holdings (stocks, ETFs, crypto, real estate, savings, bonds).
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| name | VARCHAR(200) | NOT NULL | Investment name |
-| symbol | VARCHAR(20) | NULLABLE | Ticker symbol |
-| asset_class | asset_class | NOT NULL | Asset type |
-| currency | VARCHAR(10) | DEFAULT 'EUR' | Currency |
-| current_price | NUMERIC(18,6) | NULLABLE | Current price |
-| interest_rate | NUMERIC(8,4) | NULLABLE | For savings/bonds |
-| maturity_date | DATE | NULLABLE | For bonds |
-| location | VARCHAR(300) | NULLABLE | For real estate |
-| municipality | VARCHAR(200) | NULLABLE | Belgian municipality |
-| cadastral_income | NUMERIC(12,2) | NULLABLE | Belgian cadastral income |
-| municipality_tax_rate | NUMERIC(8,4) | NULLABLE | Municipal tax rate |
-| notes | TEXT | NULLABLE | Notes |
-| is_active | BOOLEAN | DEFAULT true | Soft delete |
-| price_provider | price_provider | DEFAULT 'manual' | Price source |
-| price_provider_id | VARCHAR(200) | NULLABLE | Provider identifier |
-| price_provider_url | VARCHAR(500) | NULLABLE | Provider URL |
-| price_updated_at | TIMESTAMPTZ | NULLABLE | Last price update |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column                | Type           | Constraints      | Description              |
+| --------------------- | -------------- | ---------------- | ------------------------ |
+| id                    | SERIAL         | PRIMARY KEY      | Unique identifier        |
+| name                  | VARCHAR(200)   | NOT NULL         | Investment name          |
+| symbol                | VARCHAR(20)    | NULLABLE         | Ticker symbol            |
+| asset_class           | asset_class    | NOT NULL         | Asset type               |
+| currency              | VARCHAR(10)    | DEFAULT 'EUR'    | Currency                 |
+| current_price         | NUMERIC(18,6)  | NULLABLE         | Current price            |
+| interest_rate         | NUMERIC(8,4)   | NULLABLE         | For savings/bonds        |
+| maturity_date         | DATE           | NULLABLE         | For bonds                |
+| location              | VARCHAR(300)   | NULLABLE         | For real estate          |
+| municipality          | VARCHAR(200)   | NULLABLE         | Belgian municipality     |
+| cadastral_income      | NUMERIC(12,2)  | NULLABLE         | Belgian cadastral income |
+| municipality_tax_rate | NUMERIC(8,4)   | NULLABLE         | Municipal tax rate       |
+| notes                 | TEXT           | NULLABLE         | Notes                    |
+| is_active             | BOOLEAN        | DEFAULT true     | Soft delete              |
+| price_provider        | price_provider | DEFAULT 'manual' | Price source             |
+| price_provider_id     | VARCHAR(200)   | NULLABLE         | Provider identifier      |
+| price_provider_url    | VARCHAR(500)   | NULLABLE         | Provider URL             |
+| price_updated_at      | TIMESTAMPTZ    | NULLABLE         | Last price update        |
+| created_at            | TIMESTAMPTZ    | DEFAULT NOW()    | Creation timestamp       |
+| updated_at            | TIMESTAMPTZ    | DEFAULT NOW()    | Last update              |
 
 **Asset Class Enum**: stock, etf, crypto, real_estate, savings, bond, metals
 
 **Price Provider Enum**: manual, binance, yahoo, kinesis, custom
 
-Migration references:
+Historical migration references for the superseded inheritance phase:
+
 - Price provider enum `kinesis` was added via [[alembic/versions/0022_add_kinesis_price_provider_enum.py]].
 - Price provider enum `custom` was added via [[alembic/versions/0021_update_price_provider_enum.py]].
 - Custom provider history fields and metals view/trigger wiring via [[alembic/versions/0017_investment_custom_provider_history.py]].
@@ -261,241 +308,267 @@ Migration references:
 - Asset price history cache table via [[alembic/versions/0019_asset_price_history_cache.py]].
 
 **Indexes**:
+
 - `idx_investments_asset_class` on asset_class
 - `idx_investments_is_active` on is_active
 - `update_investments_updated_at` trigger
 
 #### Portfolio Transactions (`portfolio_transactions`)
+
 Buy/sell/dividend transactions for investments.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| investment_id | INTEGER | NOT NULL REFERENCES investments(id) | Investment |
-| type | portfolio_txn_type | NOT NULL | Transaction type |
-| date | DATE | NOT NULL | Transaction date |
-| amount | NUMERIC(18,4) | NOT NULL | Total amount |
-| units | NUMERIC(18,8) | NULLABLE | Number of units |
-| price_per_unit | NUMERIC(18,6) | NULLABLE | Price per unit |
-| fees | NUMERIC(18,4) | DEFAULT 0 | Transaction fees |
-| taxes | NUMERIC(18,4) | DEFAULT 0 | Taxes paid |
-| currency | VARCHAR(10) | DEFAULT 'EUR' | Currency |
-| note | TEXT | NULLABLE | Notes |
-| is_recurring | BOOLEAN | DEFAULT false | Recurring flag |
-| recurrence_interval | recurrence_interval | NULLABLE | Recurrence interval |
-| recurrence_end_date | DATE | NULLABLE | End date for recurrence |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column              | Type                | Constraints                         | Description             |
+| ------------------- | ------------------- | ----------------------------------- | ----------------------- |
+| id                  | SERIAL              | PRIMARY KEY                         | Unique identifier       |
+| investment_id       | INTEGER             | NOT NULL REFERENCES investments(id) | Investment              |
+| type                | portfolio_txn_type  | NOT NULL                            | Transaction type        |
+| date                | DATE                | NOT NULL                            | Transaction date        |
+| amount              | NUMERIC(18,4)       | NOT NULL                            | Total amount            |
+| units               | NUMERIC(18,8)       | NULLABLE                            | Number of units         |
+| price_per_unit      | NUMERIC(18,6)       | NULLABLE                            | Price per unit          |
+| fees                | NUMERIC(18,4)       | DEFAULT 0                           | Transaction fees        |
+| taxes               | NUMERIC(18,4)       | DEFAULT 0                           | Taxes paid              |
+| currency            | VARCHAR(10)         | DEFAULT 'EUR'                       | Currency                |
+| note                | TEXT                | NULLABLE                            | Notes                   |
+| is_recurring        | BOOLEAN             | DEFAULT false                       | Recurring flag          |
+| recurrence_interval | recurrence_interval | NULLABLE                            | Recurrence interval     |
+| recurrence_end_date | DATE                | NULLABLE                            | End date for recurrence |
+| created_at          | TIMESTAMPTZ         | DEFAULT NOW()                       | Creation timestamp      |
+| updated_at          | TIMESTAMPTZ         | DEFAULT NOW()                       | Last update             |
 
 **Transaction Type Enum**: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift
 
 **Recurrence Interval Enum**: daily, weekly, bi-weekly, monthly, quarterly, yearly
 
 Migration references:
+
 - `gift` transaction type added via [[alembic/versions/0015_add_gift_portfolio_txn_type.py]].
 - FX rate column added via [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]].
-- Portfolio inheritance tables via [[alembic/versions/0013_investment_inheritance.py]] and [[alembic/versions/0014_investments_view_update_trigger.py]].
+- Portfolio inheritance tables were introduced by the legacy 0013/0014 migrations. Migration 0087
+  replaces that layout with the canonical flat schema; see
+  [[docs/adr/109-flat-investments-schema-canonical|ADR-109]].
 
 **Indexes**:
+
 - `idx_portfolio_txn_investment_id` on investment_id
 - `idx_portfolio_txn_date` on date
 - `idx_portfolio_txn_type` on type
 
 #### Watchlist (`watchlist`)
+
 Investment watchlist for tracking.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| name | VARCHAR(200) | NOT NULL | Watchlist name |
-| symbol | VARCHAR(20) | NULLABLE | Ticker symbol |
-| asset_class | asset_class | NOT NULL | Asset type |
-| target_price | NUMERIC(18,6) | NOT NULL | Target price |
-| currency | VARCHAR(10) | DEFAULT 'EUR' | Currency |
-| notes | TEXT | NULLABLE | Notes |
-| price_provider_id | VARCHAR(200) | NULLABLE | Provider ID |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column            | Type          | Constraints   | Description        |
+| ----------------- | ------------- | ------------- | ------------------ |
+| id                | SERIAL        | PRIMARY KEY   | Unique identifier  |
+| name              | VARCHAR(200)  | NOT NULL      | Watchlist name     |
+| symbol            | VARCHAR(20)   | NULLABLE      | Ticker symbol      |
+| asset_class       | asset_class   | NOT NULL      | Asset type         |
+| target_price      | NUMERIC(18,6) | NOT NULL      | Target price       |
+| currency          | VARCHAR(10)   | DEFAULT 'EUR' | Currency           |
+| notes             | TEXT          | NULLABLE      | Notes              |
+| price_provider_id | VARCHAR(200)  | NULLABLE      | Provider ID        |
+| created_at        | TIMESTAMPTZ   | DEFAULT NOW() | Creation timestamp |
+| updated_at        | TIMESTAMPTZ   | DEFAULT NOW() | Last update        |
 
 #### Asset Price History (`asset_price_history`)
+
 Cached historical price data for investments, used to avoid repeated API calls to price providers.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| investment_id | INTEGER | NOT NULL | Investment reference |
-| price_date | DATE | NOT NULL | Price date |
-| close_price | NUMERIC(18,6) | NOT NULL | Closing price |
-| source | VARCHAR(50) | DEFAULT 'provider' | Price source |
-| fetched_at | TIMESTAMPTZ | DEFAULT NOW() | Fetch timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update |
+| Column        | Type          | Constraints        | Description          |
+| ------------- | ------------- | ------------------ | -------------------- |
+| id            | SERIAL        | PRIMARY KEY        | Unique identifier    |
+| investment_id | INTEGER       | NOT NULL           | Investment reference |
+| price_date    | DATE          | NOT NULL           | Price date           |
+| close_price   | NUMERIC(18,6) | NOT NULL           | Closing price        |
+| source        | VARCHAR(50)   | DEFAULT 'provider' | Price source         |
+| fetched_at    | TIMESTAMPTZ   | DEFAULT NOW()      | Fetch timestamp      |
+| updated_at    | TIMESTAMPTZ   | NULLABLE           | Last update          |
 
 **Constraints**: UNIQUE(investment_id, price_date)
 
 **Indexes**:
+
 - `idx_asset_price_history_investment_date` on (investment_id, price_date)
 - `idx_asset_price_history_date` on price_date
 
 Migration references:
+
 - Table created via [[alembic/versions/0019_asset_price_history_cache.py]].
 - Foreign key constraint dropped via [[alembic/versions/0020_drop_asset_price_history_fk.py]] for flexibility.
 
 #### Portfolio Performance Snapshots (`portfolio_performance_snapshots`)
+
 Daily pre-computed portfolio performance data for fast chart rendering.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| snapshot_date | DATE | NOT NULL UNIQUE | Snapshot date |
-| invested | NUMERIC(18,6) | NOT NULL | Total invested amount |
-| value | NUMERIC(18,6) | NOT NULL | Total portfolio value |
-| stocks_etfs_value | NUMERIC(18,6) | NULLABLE | Stocks/ETFs value |
-| crypto_value | NUMERIC(18,6) | NULLABLE | Crypto value |
-| metals_value | NUMERIC(18,6) | NULLABLE | Metals value |
-| cash_value | NUMERIC(18,6) | NULLABLE | Cash value |
-| gain_loss | NUMERIC(18,6) | NULLABLE | Total gain/loss |
-| return_pct | NUMERIC(10,4) | NULLABLE | Return percentage |
-| inflation_adjusted_value | NUMERIC(18,6) | NULLABLE | Inflation-adjusted value |
-| cumulative_inflation | NUMERIC(10,4) | NULLABLE | Cumulative inflation rate |
-| real_return_pct | NUMERIC(10,4) | NULLABLE | Real return percentage |
-| currency | VARCHAR(3) | NOT NULL | Currency code |
-| computed_at | TIMESTAMPTZ | NULLABLE | Computation timestamp |
-| stocks_etfs_invested | NUMERIC(18,6) | NULLABLE | Stocks/ETFs invested |
-| crypto_invested | NUMERIC(18,6) | NULLABLE | Crypto invested |
-| metals_invested | NUMERIC(18,6) | NULLABLE | Metals invested |
+| Column                   | Type          | Constraints     | Description               |
+| ------------------------ | ------------- | --------------- | ------------------------- |
+| id                       | SERIAL        | PRIMARY KEY     | Unique identifier         |
+| snapshot_date            | DATE          | NOT NULL UNIQUE | Snapshot date             |
+| invested                 | NUMERIC(18,6) | NOT NULL        | Total invested amount     |
+| value                    | NUMERIC(18,6) | NOT NULL        | Total portfolio value     |
+| stocks_etfs_value        | NUMERIC(18,6) | NULLABLE        | Stocks/ETFs value         |
+| crypto_value             | NUMERIC(18,6) | NULLABLE        | Crypto value              |
+| metals_value             | NUMERIC(18,6) | NULLABLE        | Metals value              |
+| cash_value               | NUMERIC(18,6) | NULLABLE        | Cash value                |
+| gain_loss                | NUMERIC(18,6) | NULLABLE        | Total gain/loss           |
+| return_pct               | NUMERIC(10,4) | NULLABLE        | Return percentage         |
+| inflation_adjusted_value | NUMERIC(18,6) | NULLABLE        | Inflation-adjusted value  |
+| cumulative_inflation     | NUMERIC(10,4) | NULLABLE        | Cumulative inflation rate |
+| real_return_pct          | NUMERIC(10,4) | NULLABLE        | Real return percentage    |
+| currency                 | VARCHAR(3)    | NOT NULL        | Currency code             |
+| computed_at              | TIMESTAMPTZ   | NULLABLE        | Computation timestamp     |
+| stocks_etfs_invested     | NUMERIC(18,6) | NULLABLE        | Stocks/ETFs invested      |
+| crypto_invested          | NUMERIC(18,6) | NULLABLE        | Crypto invested           |
+| metals_invested          | NUMERIC(18,6) | NULLABLE        | Metals invested           |
 
 **Indexes**:
+
 - `idx_portfolio_performance_snapshots_date` on snapshot_date
 - `idx_portfolio_performance_snapshots_currency` on currency
 
 Migration references:
+
 - Table created via [[alembic/versions/0023_portfolio_performance_snapshots.py]].
 - Per-class invested columns added via [[alembic/versions/0024_per_class_invested_columns.py]].
 
 ### Transaction Splits Tables
 
 #### Transaction Splits (`transaction_splits`)
+
 Split transactions among multiple recipients.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| transaction_id | INTEGER | NOT NULL REFERENCES transactions(id) | Parent transaction |
-| recipient_id | INTEGER | NOT NULL REFERENCES recipients(id) | Split recipient |
-| amount | NUMERIC(15,2) | NOT NULL | Split amount |
-| currency | VARCHAR(10) | DEFAULT 'EUR' | Currency |
-| is_settled | BOOLEAN | DEFAULT false | Settlement status |
-| settled_at | TIMESTAMPTZ | NULLABLE | Settlement timestamp |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column         | Type          | Constraints                          | Description          |
+| -------------- | ------------- | ------------------------------------ | -------------------- |
+| id             | SERIAL        | PRIMARY KEY                          | Unique identifier    |
+| transaction_id | INTEGER       | NOT NULL REFERENCES transactions(id) | Parent transaction   |
+| recipient_id   | INTEGER       | NOT NULL REFERENCES recipients(id)   | Split recipient      |
+| amount         | NUMERIC(15,2) | NOT NULL                             | Split amount         |
+| currency       | VARCHAR(10)   | DEFAULT 'EUR'                        | Currency             |
+| is_settled     | BOOLEAN       | DEFAULT false                        | Settlement status    |
+| settled_at     | TIMESTAMPTZ   | NULLABLE                             | Settlement timestamp |
+| created_at     | TIMESTAMPTZ   | DEFAULT NOW()                        | Creation timestamp   |
+| updated_at     | TIMESTAMPTZ   | DEFAULT NOW()                        | Last update          |
 
 **Indexes**:
+
 - `idx_splits_transaction` on transaction_id
 - `idx_splits_recipient` on recipient_id
 - `idx_splits_unsettled` (partial) on (transaction_id, recipient_id) WHERE is_settled = false
 
 Migration references:
+
 - Table created via [[alembic/versions/0009_transaction_splits.py]].
 
 #### Split Payments (`split_payments`)
+
 Payment records tracking settlement of transaction splits.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| split_id | INTEGER | NOT NULL REFERENCES transaction_splits(id) | Split reference |
-| amount | NUMERIC(15,2) | NOT NULL | Payment amount |
-| paid_at | DATE | NOT NULL DEFAULT CURRENT_DATE | Payment date |
-| note | TEXT | NULLABLE | Payment note |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+| Column     | Type          | Constraints                                | Description        |
+| ---------- | ------------- | ------------------------------------------ | ------------------ |
+| id         | SERIAL        | PRIMARY KEY                                | Unique identifier  |
+| split_id   | INTEGER       | NOT NULL REFERENCES transaction_splits(id) | Split reference    |
+| amount     | NUMERIC(15,2) | NOT NULL                                   | Payment amount     |
+| paid_at    | DATE          | NOT NULL DEFAULT CURRENT_DATE              | Payment date       |
+| note       | TEXT          | NULLABLE                                   | Payment note       |
+| created_at | TIMESTAMPTZ   | DEFAULT NOW()                              | Creation timestamp |
 
 **Indexes**:
+
 - `idx_split_payments_split` on split_id
 
 Migration references:
+
 - Table created via [[alembic/versions/0009_transaction_splits.py]].
 
 ### Belgian Inflation Rates
 
 #### Belgian Inflation Rates (`belgian_inflation_rates`)
+
 Monthly Belgian inflation data from Statbel/Eurostat for inflation-adjusted portfolio returns.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| month_date | DATE | NOT NULL UNIQUE | Month date (first of month) |
-| monthly_rate | NUMERIC(10,8) | NOT NULL | Monthly inflation rate |
-| source | VARCHAR(50) | DEFAULT 'statbel' | Data source (statbel/eurostat) |
-| fetched_at | TIMESTAMPTZ | DEFAULT NOW() | Fetch timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update |
+| Column       | Type          | Constraints       | Description                    |
+| ------------ | ------------- | ----------------- | ------------------------------ |
+| id           | SERIAL        | PRIMARY KEY       | Unique identifier              |
+| month_date   | DATE          | NOT NULL UNIQUE   | Month date (first of month)    |
+| monthly_rate | NUMERIC(10,8) | NOT NULL          | Monthly inflation rate         |
+| source       | VARCHAR(50)   | DEFAULT 'statbel' | Data source (statbel/eurostat) |
+| fetched_at   | TIMESTAMPTZ   | DEFAULT NOW()     | Fetch timestamp                |
+| updated_at   | TIMESTAMPTZ   | NULLABLE          | Last update                    |
 
 **Indexes**:
+
 - `idx_belgian_inflation_month_date` on month_date
 
 ### Supporting Tables
 
 #### Exchange Rates (`exchange_rates`)
+
 Currency exchange rates to EUR.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| currency_code | VARCHAR(3) | NOT NULL | ISO currency code |
-| rate_to_eur | NUMERIC(20,10) | NOT NULL | Rate to EUR |
-| rate_date | DATE | NOT NULL | Rate date |
-| is_latest | BOOLEAN | DEFAULT false | Latest flag |
-| fetched_at | TIMESTAMPTZ | DEFAULT NOW() | Fetch timestamp |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last update |
+| Column        | Type           | Constraints   | Description       |
+| ------------- | -------------- | ------------- | ----------------- |
+| id            | SERIAL         | PRIMARY KEY   | Unique identifier |
+| currency_code | VARCHAR(3)     | NOT NULL      | ISO currency code |
+| rate_to_eur   | NUMERIC(20,10) | NOT NULL      | Rate to EUR       |
+| rate_date     | DATE           | NOT NULL      | Rate date         |
+| is_latest     | BOOLEAN        | DEFAULT false | Latest flag       |
+| fetched_at    | TIMESTAMPTZ    | DEFAULT NOW() | Fetch timestamp   |
+| updated_at    | TIMESTAMPTZ    | NULLABLE      | Last update       |
 
 **Constraints**: UNIQUE(currency_code, rate_date)
 
 #### User Settings (`user_settings`)
+
 Key-value user preferences.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| key | TEXT | PRIMARY KEY | Setting key |
-| value | JSONB | DEFAULT '{}' | Setting value |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column     | Type        | Constraints   | Description   |
+| ---------- | ----------- | ------------- | ------------- |
+| key        | TEXT        | PRIMARY KEY   | Setting key   |
+| value      | JSONB       | DEFAULT '{}'  | Setting value |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update   |
 
 #### Saved Charts (`saved_charts`)
+
 Saved chart configurations.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| name | TEXT | NOT NULL | Chart name |
-| chart_type | TEXT | DEFAULT 'line' | Chart type |
-| category_ids | INTEGER[] | DEFAULT '{}' | Category filter |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+| Column       | Type        | Constraints    | Description        |
+| ------------ | ----------- | -------------- | ------------------ |
+| id           | SERIAL      | PRIMARY KEY    | Unique identifier  |
+| name         | TEXT        | NOT NULL       | Chart name         |
+| chart_type   | TEXT        | DEFAULT 'line' | Chart type         |
+| category_ids | INTEGER[]   | DEFAULT '{}'   | Category filter    |
+| created_at   | TIMESTAMPTZ | DEFAULT NOW()  | Creation timestamp |
+| updated_at   | TIMESTAMPTZ | DEFAULT NOW()  | Last update        |
 
 #### Transaction Raw References (`transaction_raw_references`)
+
 Links transactions to their raw source.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Unique identifier |
-| transaction_id | INTEGER | NOT NULL UNIQUE REFERENCES transactions(id) | Transaction |
-| raw_source_type | VARCHAR(20) | NOT NULL | Source bank type |
-| raw_source_id | INTEGER | NOT NULL | Source record ID |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+| Column          | Type        | Constraints                                 | Description        |
+| --------------- | ----------- | ------------------------------------------- | ------------------ |
+| id              | SERIAL      | PRIMARY KEY                                 | Unique identifier  |
+| transaction_id  | INTEGER     | NOT NULL UNIQUE REFERENCES transactions(id) | Transaction        |
+| raw_source_type | VARCHAR(20) | NOT NULL                                    | Source bank type   |
+| raw_source_id   | INTEGER     | NOT NULL                                    | Source record ID   |
+| created_at      | TIMESTAMPTZ | DEFAULT NOW()                               | Creation timestamp |
 
 ### Enum Types
 
-| Enum Name | Values |
-|-----------|--------|
-| asset_class | stock, etf, crypto, metals, real_estate, savings, bond |
-| portfolio_txn_type | buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift |
-| recurrence_interval | daily, weekly, bi-weekly, monthly, quarterly, yearly |
-| price_provider | manual, binance, yahoo, kinesis, custom |
-| revolut_state | COMPLETED, PENDING, REVERTED, DECLINED |
+| Enum Name           | Values                                                                   |
+| ------------------- | ------------------------------------------------------------------------ |
+| asset_class         | stock, etf, crypto, metals, real_estate, savings, bond                   |
+| portfolio_txn_type  | buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift |
+| recurrence_interval | daily, weekly, bi-weekly, monthly, quarterly, yearly                     |
+| price_provider      | manual, binance, yahoo, kinesis, custom                                  |
+| revolut_state       | COMPLETED, PENDING, REVERTED, DECLINED                                   |
 
 ### Enum Types
 
 ## Consequences
 
 ### Positive
+
 - Comprehensive data model supports all required features
 - Proper foreign key constraints maintain data integrity
 - Indexing strategy optimizes common query patterns
@@ -504,6 +577,7 @@ Links transactions to their raw source.
 - Soft delete pattern preserves historical data
 
 ### Negative
+
 - Complex schema benefits from automated migrations in Docker (docker-entrypoint.sh waits for DB, fixes alembic_version column, runs Alembic on startup)
 - Multiple raw transaction tables require maintenance
 - Materialized view refresh adds startup overhead
@@ -513,6 +587,7 @@ Links transactions to their raw source.
 During the bug hunt phase, a schema audit found that 11 core tables had been created with `updated_at TIMESTAMPTZ` columns but **without** `NOT NULL DEFAULT NOW()` constraints (as shown in the schema above with `NULLABLE` keyword):
 
 **Affected tables:**
+
 - categories, recipients, recipient_bank_accounts
 - transactions, planned_transactions, planned_transaction_loan_schedule
 - exchange_rates, belgian_inflation_rates, asset_price_history
@@ -521,6 +596,7 @@ During the bug hunt phase, a schema audit found that 11 core tables had been cre
 **Root cause:** These columns were nullable and unguarded at the application layer, violating the audit-trail contract that every row should track its last modification time.
 
 **Resolution:** Alembic migration `0022_updated_at_not_null_defaults.py` (after 0021_split_audit):
+
 1. Backfills NULL values from `created_at` (always set) using `COALESCE(created_at, NOW())`
 2. Sets `NOT NULL DEFAULT NOW()` constraints via `ALTER TABLE`
 3. Downgradeable for rollback testing
@@ -528,6 +604,7 @@ During the bug hunt phase, a schema audit found that 11 core tables had been cre
 See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full details.
 
 ## Related
+
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Corrective migration and Electron hardening
 - [[docs/adr/001-technology-stack|ADR-001: Technology Stack]]
 - [[docs/api/transactions|API: Transactions]]

@@ -44,10 +44,10 @@ related_code:
   - apps/frontend/src/features/settings/sections/BackupSection.tsx
   - apps/frontend/src/features/settings/sections/AboutSection.tsx
   - apps/frontend/src/features/settings/AIChatSettingsSection.tsx
-  - apps/frontend/src/contexts/AppSettingsContext.tsx
-  - apps/frontend/src/contexts/SettingsContext.tsx
+  - apps/frontend/src/stores/hydration/AppSettingsHydration.tsx
+  - apps/frontend/src/stores/hydration/SettingsHydration.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
-  - apps/frontend/src/contexts/ThemeContext.tsx
+  - apps/frontend/src/stores/hydration/ThemeHydration.tsx
   - apps/node-backend/src/routes/settings.js
   - apps/node-backend/src/repositories/settingsRepository.js
 ---
@@ -56,7 +56,7 @@ related_code:
 
 ## Overview
 
-The Settings system manages all application preferences, from display formatting (currency, date format, number format) to behavioral settings (exclusions, pagination defaults, widget visibility). It uses a three-layer context architecture for optimal loading performance and a JSONB-backed storage system.
+The Settings system manages all application preferences, from display formatting (currency, date format, number format) to behavioral settings (exclusions, pagination defaults, widget visibility). It uses a unified Zustand store, three hydration bridges, a preload context, and a JSONB-backed storage system.
 
 The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into a **sidebar-navigated, instant-apply** surface. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
 
@@ -64,24 +64,24 @@ The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into
 
 ### Zustand Settings Store (Phase 4)
 
-All application settings are managed by a unified **Zustand store** located at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`. This store consolidates three previously separate React contexts:
+All application settings are managed by a unified **Zustand store** located at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`. Three hydration and effects bridges retain the established consumer hooks:
 
-- **AppSettingsContext** (app_settings key)
-- **SettingsContext** (dashboard_settings key)
-- **ThemeContext** (theme_settings key)
+- **AppSettingsHydration** (`app_settings` key)
+- **SettingsHydration** (`dashboard_settings` key)
+- **ThemeHydration** (`theme_settings` key)
 
-The Provider components in each context file still exist as thin wrappers to handle:
+The provider components in each hydration bridge handle:
 
 - Hydration from SettingsPreloadContext
 - Debounced persistence back to the API (500 ms)
-- DOM side-effects (ThemeContext: CSS class, matchMedia, interval)
+- DOM side-effects (ThemeHydration: CSS class, matchMedia, interval)
 
 Consumer hooks (`useAppSettings`, `useSettings`, `useTheme`) use `useShallow()` to select only the slice they need, preventing unnecessary re-renders when unrelated slices change.
 
-**Three-Layer Context System (now wrapping Zustand)**
+**Three-layer settings system**
 
 ```
-SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
+SettingsPreloadContext → SettingsHydration/AppSettingsHydration/ThemeHydration
      (preload)                 (wrapper providers)
           ↓
         useSettingsStore (Zustand)
@@ -95,7 +95,7 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
    - Actions: `updateAppSettings`, `updateDashboardSettings`, `setThemeMode`, `setTheme`, `toggleTheme`, etc.
    - Slices: `appSettings`, `dashboardSettings`, `theme`, `themeMode`, `themeSchedule`, `themeVariant`
 
-3. **Context Wrappers** (AppSettingsContext, SettingsContext, ThemeContext): Provide convenience hooks that use `useShallow()` to subscribe to store slices. Example:
+3. **Hydration Bridges** (AppSettingsHydration, SettingsHydration, ThemeHydration): Provide convenience hooks that use `useShallow()` to subscribe to store slices. Example:
    ```typescript
    export const useAppSettings = () => {
      return useSettingsStore(
@@ -160,6 +160,8 @@ type StartupSection = "budgeting" | "portfolio" | "research" | "ai-chat";
 **Redirect behavior** is handled by `[[apps/frontend/src/components/shared/StartupRedirect.tsx]]`, mounted inside `<BrowserRouter>` in `App.tsx`. It fires once, after settings hydrate, and only when the app opened at the root path `/`. It calls `navigate(..., { replace: true })` so the redirect does not create a history entry. Deep links (any non-`/` initial path) and later in-app navigation back to `/` are unaffected.
 
 **UI:** a "Open app on" Select is located in the **Behavior** section of `DashboardSettingsDialog` (`[[apps/frontend/src/features/settings/sections/BehaviorSection.tsx]]`). The option labels reuse `nav.*` i18n keys. Two i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
+
+The same section contains four active-category pickers for instrument-free brokerage cash rows: dividend, interest, fee, and tax. They hydrate and save one complete `brokerage_cash_category_ids` object. Controls are disabled while saving, and a failed save restores the last server value and shows an error toast. Clearing a picker stores `null`.
 
 ## Backend Storage
 
@@ -322,7 +324,7 @@ each tab controls the active tab panel, and Arrow keys plus Home/End move focus 
 | General             | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                                 |
 | Appearance          | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic)     |
 | Statistics          | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                         |
-| Behavior            | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, reset recurring dismissals                                                                                       |
+| Behavior            | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                     |
 | AI & Research       | `sections/AiSection.tsx`         | Ollama AI chat model, research provider keys (composes `AIChatSettingsSection` + `ResearchKeysSection`)                                                                  |
 | Backup              | `sections/BackupSection.tsx`     | Directory, backup-on-quit, passphrase, run/restore (Electron only)                                                                                                       |
 | About & Maintenance | `sections/AboutSection.tsx`      | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates, restart onboarding, developer/admin mode, reset-all (danger zone) |

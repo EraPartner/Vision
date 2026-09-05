@@ -22,7 +22,7 @@ Create the page file in `apps/frontend/src/pages/`:
 
 ```tsx
 // apps/frontend/src/pages/<Feature>Page.tsx
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { PageShell } from '@/components/shared/PageShell';
@@ -156,7 +156,7 @@ describe('<Feature>Page', () => {
 
 ```tsx
 // apps/frontend/src/pages/ReportsPage.tsx
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";

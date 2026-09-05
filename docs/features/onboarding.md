@@ -127,4 +127,4 @@ This provides a seamless UX for first-time users who may have encrypted backups 
 - [[docs/features/backup-coverage-audit]] — Backup system and encryption details
 - [[docs/features/settings#backup--restore-with-encryption-phase-2-ux]] — Backup/restore in Settings
 - [[docs/i18n/translations#recent-keys-added]] — Translation keys including passphrase modal keys
-- [[apps/frontend/src/contexts/AppSettingsContext.tsx]] — App settings context
+- [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]] — App settings context

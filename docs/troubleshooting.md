@@ -3,7 +3,7 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-04
 tags:
   [
     troubleshooting,
@@ -75,7 +75,9 @@ database may be recreated only when its exact synthetic data boundary is known.
 **Symptoms:** The database logs `docker-entrypoint.sh: exec format error`, or the app logs
 `/bin/sh: can't open '/entrypoint.sh': Permission denied`.
 
-The current official `postgres:18-alpine` ARM64 image can contain empty entrypoint scripts,
+The reviewed `postgres:18-alpine` digest currently runs under amd64 emulation because an earlier
+official ARM64 image could contain empty entrypoint scripts. Updating the digest is an explicit
+release change; it must pass the same startup probe before the pin moves.
 producing the database error; see
 [docker-library/postgres#1378](https://github.com/docker-library/postgres/issues/1378).
 
@@ -142,8 +144,8 @@ as unknown corruption and stopped the upgrade.
 1. Keep or create a database backup before upgrading.
 2. Update or rebuild the Vision app image so it contains the patched migration 0087.
 3. Restart the app. The migration warns with the affected transaction IDs, omits those detached
-   rows from the canonical flat table, and keeps the originals in the renamed legacy rollback
-   tables.
+   rows from the canonical flat table, and keeps the originals in renamed legacy rollback tables
+   unless an operator has already completed the verified-backup cleanup.
 4. Confirm that Alembic reaches the current head and `/health` answers.
 
 Do not delete the database volume or manually remove the listed rows to make startup pass. If a
@@ -175,7 +177,7 @@ PostgreSQL records the trigger's `UPDATE OF amount` dependency and refuses to wi
 
 Do not delete the database volume or manually change the trigger while the app is boot-looping.
 The failed attempt is transactionally rolled back. The canonical payment cap is the locked,
-four-decimal validation in `splitRepository.addPayment`; see
+four-decimal validation in `splitService.addPayment`; see
 [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 ### Port already in use
@@ -204,12 +206,13 @@ four-decimal validation in `splitRepository.addPayment`; see
 
 ### Sequence drift on portfolio transactions
 
-**Symptom:** Duplicate key error on `portfolio_transactions_base_id_seq`.
+**Symptom:** Duplicate key error on `portfolio_transactions_id_seq`.
 
 **Solutions:**
 
-1. The repository auto-heals this by resyncing the sequence
-2. If it persists: `SELECT setval('portfolio_transactions_base_id_seq', (SELECT MAX(id) FROM portfolio_transactions_base) + 1);`
+1. The repository retries once after resynchronizing the canonical flat-table sequence.
+2. If it persists, stop writes and inspect the current sequence and maximum ID. Do not modify a
+   production sequence manually without a verified backup and a reviewed recovery plan.
 
 ## Frontend
 

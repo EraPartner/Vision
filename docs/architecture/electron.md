@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-08-31
-updated: 2026-09-03
+updated: 2026-09-04
 tags:
   [
     architecture,
@@ -317,6 +317,8 @@ Migration is non-fatal; any error is logged and app continues.
    - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at
      head. The version-table preflight uses the owner connection in split-role mode, while the
      application pool remains least-privilege.
+   - **Materialized-view warmup** — Post-listen create, index, and refresh for `mv_monthly_summary`
+     and `mv_category_totals`; boot trace keeps the three phases separate.
    - **FX cache warmup** — Exchange rate and portfolio historical rate refresh (parallel promises)
    - **Snapshot computation** — Portfolio snapshots computed after FX data is available
    - **Info caches** — Net-worth and portfolio-performance caches warmed
@@ -545,12 +547,12 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 
 `createWindow()` applies these options only on macOS:
 
-| Option                 | Value            | Effect                                                |
-| ---------------------- | ---------------- | ----------------------------------------------------- |
-| `titleBarStyle`        | `'hiddenInset'`  | Hides the title bar; traffic lights stay in the frame |
-| `trafficLightPosition` | `{x:20, y:20}`   | Centers traffic lights in the 56px topbar             |
-| `vibrancy`             | `'under-window'` | NSVisualEffectView behind the window content          |
-| `visualEffectState`    | `'followWindow'` | Active/inactive vibrancy follows window focus         |
+| Option                 | Value              | Effect                                                           |
+| ---------------------- | ------------------ | ---------------------------------------------------------------- |
+| `titleBarStyle`        | `'hiddenInset'`    | Hides the title bar; traffic lights stay in the frame            |
+| `trafficLightPosition` | `{x:20, y:20}`     | Centers traffic lights in the 56px topbar                        |
+| `vibrancy`             | Enhanced tier only | Renderer-controlled NSVisualEffectView behind the window content |
+| `visualEffectState`    | `'followWindow'`   | Active/inactive vibrancy follows window focus                    |
 
 `enter-full-screen` and `leave-full-screen` Electron events push a boolean over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
 
@@ -609,16 +611,16 @@ The system accent is a **runtime token overlay**, not a sixth theme variant, so 
 - `settingsStore.ts` adds `themeSystemAccent: boolean` + `setThemeSystemAccent` + hydration support.
 - `theme_settings` JSONB gains an optional `systemAccent` key; older payloads hydrate fine.
 - Switch rendered in `AppearanceTab` only when `isElectronMac()` returns true.
-- When enabled, `ThemeContext` calls `applyThemePalette` (resets all tokens) then overrides `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` with the converted accent.
+- When enabled, `ThemeHydration` calls `applyThemePalette` (resets all tokens) then overrides `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` with the converted accent.
 - `lib/accentColor.ts`: `hexToHslComponents` converts Electron's RRGGBBAA hex to `"h s% l%"`; `accentForegroundComponents` picks WCAG-contrast foreground (ink for yellow/green accents, white for blue/purple).
-- Live updates arrive via `onAccentColorChanged`. An **epoch counter** in `ThemeContext` discards stale async applies that arrive out-of-order.
+- Live updates arrive via `onAccentColorChanged`. An **epoch counter** in `ThemeHydration` discards stale async applies that arrive out-of-order.
 - Toggling off self-heals: `applyThemePalette` resets every token back to the variant default.
 
 #### Under-Window Vibrancy
 
-The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`. While the page paints opaque pixels the glass effect is invisible — default rendering is unchanged.
+The window keeps `visualEffectState: 'followWindow'`, but it does not allocate a vibrancy material at creation. `ElectronBridge` calls the capability-gated `app:set-vibrancy` IPC whenever the effective visual-effects tier changes. The main process applies `setVibrancy('under-window')` only for the enhanced tier and clears it with `setVibrancy(null)` for standard, reduced, cleanup, and auto-adapt downgrades.
 
-Only when `AppSettings.enhancedEffects` (ADR-071) is `true` does `ElectronBridge` add the `vibrancy` html class. One CSS rule in `index.css` then makes `body` translucent (`hsl(var(--background) / 0.72)`). Since body background propagates to the root canvas, a single rule controls the entire backdrop.
+Only when the effective tier is `enhanced` does `ElectronBridge` enable the native material and add the `vibrancy` html class. CSS then makes `body` translucent (`hsl(var(--background) / 0.72)`). Since body background propagates to the root canvas, this exposes the native material across the backdrop. ADR-129 also disables web `backdrop-filter` on persistent cards, chrome, hero surfaces, the app top bar, and the full-window modal scrim while that native material is active. Thin navigation and thick dialog or popover materials retain local blur, so dialog panels keep depth over the flat scrim.
 
 > [!warning] Requires visual pass on-device
 > The 0.72 alpha and traffic-light/topbar geometry are tuned without a display. The user must validate contrast and positioning in the built `.app` before shipping.
@@ -632,7 +634,7 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 - Calls `electronAPI.ready()` on mount (drains the send queue).
 - Attaches `onMenuAction`, `onCsvOpen`, `onFullScreenChange` listeners via stable refs so React re-renders never tear down IPC subscriptions.
 - Routes menu actions: `navigate` → React Router; `open-settings` / `open-shortcuts` / `toggle-sidebar` → dispatch to UI state; `new-transaction` → navigate to `/transactions?new=1`.
-- Manages `electron-mac`, `electron-fullscreen`, and `vibrancy` html classes.
+- Manages `electron-mac`, `electron-fullscreen`, and `vibrancy` html classes, and mirrors the effective vibrancy state to the native window through IPC.
 - Attaches window-level `dragover`/`drop` for CSV handoff (exempts `[data-dropzone]` ancestors).
 
 ---
@@ -988,7 +990,9 @@ the image build after the third attempt.
 The `will-quit` handler delegates shutdown to the selected runtime provider. Native mode sends a
 clean termination signal to the verified backend and Vision-managed PostgreSQL children, waits for
 shutdown, and uses a bounded force fallback. An explicitly configured external PostgreSQL service
-is never stopped. Docker mode runs `docker compose stop` (not `down`) to stop containers on quit.
+is never stopped. External PostgreSQL must preload `pg_stat_statements`; native readiness validates
+that operator-owned prerequisite and fails without changing the server when it is absent. Docker
+mode runs `docker compose stop` (not `down`) to stop containers on quit.
 
 When the user enables `keepServicesOnQuit`, the shutdown call is skipped for either provider. In
 native mode this keeps both the verified Bun backend and Vision-managed PostgreSQL child alive for
@@ -1021,7 +1025,8 @@ This is baseline macOS window-state behavior and removes the most visible "not a
 The boot splash (`setSplashStatus()`) is now:
 
 - **Localized** — uses the `splash.*` i18n keys loaded at startup via `initI18n()` (available before the window opens).
-- **Theme-aware** — derives the near-black base, glow, and foreground from the persisted primary palette. First launch uses the canonical emerald primary instead of the previous generic slate fallback.
+- **First-frame prioritized** — after localization, the shell creates the window and starts loading the splash before it builds the native application menu, dock menu, and accent subscription. Those integrations remain ready before runtime startup but no longer block the first app-controlled frame.
+- **Theme-aware** — persists the resolved mode, surface, text, and primary colors. Dark mode derives its near-black tinted surface; light mode uses the real light surface and text instead of showing a dark splash before a light first frame. First launch uses the canonical emerald dark fallback.
 - **Branded** — the Vision mark appears above the spinner. The backend recovery page uses the same validated palette variables plus the champagne accent, so startup and failure states share one identity without weakening the error page Content Security Policy.
 - **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
   - `splash.checkingDocker` — explicit Docker provider socket probe

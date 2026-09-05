@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069).
 date: 2026-04-23
-last_modified: 2026-08-26
+last_modified: 2026-09-04
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -20,6 +20,7 @@ This document contains UML diagrams for the Node.js backend application.
 ### Database Connection (2026-04-27)
 
 Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node-backend/src/main.js`:
+
 - **40 attempts** with exponential backoff (50ms → 1s)
 - Non-blocking: Bun process starts immediately instead of blocking behind entrypoint
 - On cold boots, this allows Bun initialization to overlap with postgres data-dir creation (~1s saved)
@@ -31,16 +32,17 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
 2. **Database migrations** — Alembic schema upgrade via JS runner
-3. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.js]]
+3. **Materialized-view warmup** — after Express starts listening, create, index, and refresh the two runtime-managed views. Each phase has its own boot trace mark; failures degrade `/health/detailed` and reads fall back to live SQL.
+4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.js]]
    - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
    - Result cached for 30s; concurrent callers share in-flight promise
    - If offline: skips all external data fetches; snapshots/info use DB/cache only
    - If online: proceeds with external warmups as normal
-4. **Exchange rate cache warmup** — `warmExchangeRateCache()` (online only; captured as promise)
-5. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise)
-6. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
-7. **Live price refresh** — Investment prices refreshed after snapshots (online only)
-8. **Info caches** — `warmInfoCaches` runs after snapshot completion
+5. **Exchange rate cache warmup** — `warmExchangeRateCache()` (online only; captured as promise)
+6. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise)
+7. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
+8. **Live price refresh** — Investment prices refreshed after snapshots (online only)
+9. **Info caches** — `warmInfoCaches` runs after snapshot completion
 
 **Prior issue (2026-04-25):** FX cache and backfill were fire-and-forget, causing snapshot/cache work to run before historical FX was available, producing "Historical FX missing" warnings during startup.
 
@@ -59,7 +61,7 @@ New module: [[apps/node-backend/src/lib/network.js]] — detects internet connec
 **Implementation:**
 
 ```javascript
-isInternetReachable({ 
+isInternetReachable({
   force?: boolean,      // Bypass cache and probe immediately
   host?: string,        // Probe target (default 1.1.1.1)
   port?: number,        // Probe port (default 443)
@@ -88,18 +90,19 @@ Users see no errors; data is simply older.
 `apps/node-backend/src/main.js` now registers process-level handlers for unhandled async and synchronous errors. Previously only `SIGINT`/`SIGTERM` were caught; unhandled rejections and thrown exceptions caused silent Docker container restarts with no log trace.
 
 ```javascript
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error({ reason, requestId: reason?.requestId }, 'Unhandled rejection');
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error({ reason, requestId: reason?.requestId }, "Unhandled rejection");
   process.exit(1);
 });
 
-process.on('uncaughtException', (err) => {
-  logger.error({ err, stack: err.stack }, 'Uncaught exception');
+process.on("uncaughtException", (err) => {
+  logger.error({ err, stack: err.stack }, "Uncaught exception");
   process.exit(1);
 });
 ```
 
 **Behavior:**
+
 - Both handlers log via the structured logger (message + stack + `requestId` when attached to the error object) before exiting non-zero.
 - Non-zero exit triggers Docker's restart policy, so the container recovers automatically.
 - The structured log entry is captured by the container log collector, making the crash traceable from `docker logs` or the admin observability hub.
@@ -290,13 +293,13 @@ Source diagram: [[docs/diagrams/backend-api-layer.puml]]
 
 Transactions and planned transactions support orthogonal freeform tagging via a second classification dimension (see [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]). Three new entities:
 
-| Entity | Purpose |
-|--------|---------|
-| `Tag` | Global tag registry: `id`, `slug` (unique), `color`, `is_active`, timestamps |
-| `TransactionTag` | Junction: `(transaction_id, tag_id)` composite PK, CASCADE on delete |
-| `PlannedTransactionTag` | Junction for planned transactions, same structure |
+| Entity                  | Purpose                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `Tag`                   | Global tag registry: `id`, `slug` (unique), `color`, `is_active`, timestamps |
+| `TransactionTag`        | Junction: `(transaction_id, tag_id)` composite PK, CASCADE on delete         |
+| `PlannedTransactionTag` | Junction for planned transactions, same structure                            |
 
-Slugs are globally unique (not partial-on-active) so junction rows survive soft-delete and reactivation. Read path uses batched second query after main transaction fetch. Filter semantics: OR (transaction matches if it has *any* selected tags). Bulk-tag endpoint operates in single DB transaction for all-or-nothing atomicity. Planned transaction tags are inherited by executed copies inside the same transaction block.
+Slugs are globally unique (not partial-on-active) so junction rows survive soft-delete and reactivation. Read path uses batched second query after main transaction fetch. Filter semantics: OR (transaction matches if it has _any_ selected tags). Bulk-tag endpoint operates in single DB transaction for all-or-nothing atomicity. Planned transaction tags are inherited by executed copies inside the same transaction block.
 
 ## Repository Layer
 
@@ -369,7 +372,7 @@ package "Repositories" {
   class SettingsRepository
   class SavedChartsRepository
   class RawTransactionRepository
-  
+
   package "infoRepository (Phase 3: Composite)" {
     class InfoBarrel {
       +export all sub-repos
@@ -438,6 +441,7 @@ RecipientsRepo <.. Helpers
 ```
 
 **Phase 3 Refactoring Note (2026-04-23):**
+
 - Original `infoRepository.js` monolith (1445 lines) was split into 7 domain-specific sub-modules
 - Barrel re-export in main `infoRepository.js` (37 lines) maintains backward compatibility
 - All 9 consumer files import unchanged; internal organization is transparent to callers
@@ -549,9 +553,9 @@ Backpressure-aware Server-Sent Events utilities for streaming responses (AI chat
 
 **Exports:**
 
-| Export | Purpose |
-|--------|---------|
-| `drainIfNeeded(res)` | Returns resolved promise immediately if `res.writableNeedDrain` is false; otherwise awaits `res.once('drain', ...)` to pause writes until buffer drains |
+| Export                      | Purpose                                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drainIfNeeded(res)`        | Returns resolved promise immediately if `res.writableNeedDrain` is false; otherwise awaits `res.once('drain', ...)` to pause writes until buffer drains                     |
 | `createSseWriter(req, res)` | Factory returning `{ closed, write(event, data), end() }`. `write()` is async and calls `drainIfNeeded()` after each frame to propagate backpressure into the caller's loop |
 
 **Why it matters:**
@@ -580,20 +584,21 @@ All aggregation endpoints return:
 ```
 
 **Source Heuristic:**
+
 - `'mv'` — Unfiltered request served from materialized view (fast, stale)
 - `'live'` — Exclusions force dynamic transaction scan (slower, current)
 
 **Modules:**
 
-| Module | Function | Endpoint |
-|--------|----------|----------|
-| `_envelope.js` | `buildEnvelope(data, { source, computedAt })` | All endpoints |
-| `monthly.js` | `computeMonthlySummary({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/monthly-summary` |
-| `category.js` | `computeCategoryBreakdown({ targetCurrency })` | `/category-breakdown` |
-| `recipient.js` | `computeRecipientInsights({ targetCurrency })` | `/recipient-insights` |
-| `cashflow.js` | `computeCashflowComparison({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/cashflow-comparison` |
-| `averageVsCurrent.js` | `computeAverageVsCurrent({ targetCurrency })` | `/average-vs-current` (always live) |
-| `bankBalances.js` | `computeBankBalances({ targetCurrency })` | `/bank-balances` |
+| Module                | Function                                                                                   | Endpoint                            |
+| --------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `_envelope.js`        | `buildEnvelope(data, { source, computedAt })`                                              | All endpoints                       |
+| `monthly.js`          | `computeMonthlySummary({ targetCurrency, excludedCategoryIds, excludedRecipientIds })`     | `/monthly-summary`                  |
+| `category.js`         | `computeCategoryBreakdown({ targetCurrency })`                                             | `/category-breakdown`               |
+| `recipient.js`        | `computeRecipientInsights({ targetCurrency })`                                             | `/recipient-insights`               |
+| `cashflow.js`         | `computeCashflowComparison({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/cashflow-comparison`              |
+| `averageVsCurrent.js` | `computeAverageVsCurrent({ targetCurrency })`                                              | `/average-vs-current` (always live) |
+| `bankBalances.js`     | `computeBankBalances({ targetCurrency })`                                                  | `/bank-balances`                    |
 
 **Repository Integration:**
 
@@ -668,6 +673,7 @@ InvestmentsRouter --> IR
 ```
 
 Recent update note (2026-04-10):
+
 - Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/config/config.js]]).
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.js]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/importRoutes.js]], [[apps/node-backend/src/routes/transactions.js]]).
@@ -746,106 +752,32 @@ entity "planned_transaction_executions" as pte {
   * execution_date : date
 }
 
-entity "investments_base" as investments_base {
+entity "investments" as investments {
   * id : serial <<PK>>
   * name : varchar(200)
+  * asset_class : asset_class
+  symbol : varchar(20)
+  current_price : numeric(18,6)
   currency : varchar(10)
   is_active : boolean
-}
-
-entity "stock_investments" as stock_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "etf_investments" as etf_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "crypto_investments" as crypto_investments {
-  * id : integer <<PK>>
-  symbol : varchar(50)
-  current_price : numeric(18,6)
-}
-
-entity "metals_investments" as metals_investments {
-  * id : integer <<PK>>
-  symbol : varchar(20)
-  current_price : numeric(18,6)
-}
-
-entity "real_estate_investments" as real_estate_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
   location : varchar(300)
   municipality : varchar(200)
   cadastral_income : numeric(12,2)
   municipality_tax_rate : numeric(8,4)
-}
-
-entity "savings_investments" as savings_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
-  interest_rate : numeric(8,4)
-}
-
-entity "bond_investments" as bond_investments {
-  * id : integer <<PK>>
-  current_price : numeric(18,6)
   interest_rate : numeric(8,4)
   maturity_date : date
 }
 
-entity "portfolio_transactions_base" as portfolio_transactions_base {
+entity "portfolio_transactions" as portfolio_transactions {
   * id : serial <<PK>>
-  * investment_id : integer
+  * investment_id : integer <<FK>>
   * type : portfolio_txn_type
   * date : date
   * amount : numeric(18,4)
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
   currency : varchar(10)
   fx_rate_to_eur : numeric(20,10)
-}
-
-entity "stock_transactions" as stock_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-}
-
-entity "etf_transactions" as etf_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-}
-
-entity "crypto_transactions" as crypto_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-}
-
-entity "metals_transactions" as metals_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-  units : numeric(18,8)
-}
-
-entity "real_estate_transactions" as real_estate_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-}
-
-entity "savings_transactions" as savings_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
-}
-
-entity "bond_transactions" as bond_transactions {
-  * id : integer <<PK>>
-  * investment_id : integer
 }
 
 entity "watchlist" as watchlist {
@@ -875,29 +807,7 @@ pt }|---|| recipients
 pt }|---|| categories
 pte }|--|| pt
 pte }|--|| transactions
-investments_base ||--|| stock_investments : inherits
-investments_base ||--|| etf_investments : inherits
-investments_base ||--|| crypto_investments : inherits
-investments_base ||--|| metals_investments : inherits
-investments_base ||--|| real_estate_investments : inherits
-investments_base ||--|| savings_investments : inherits
-investments_base ||--|| bond_investments : inherits
-
-portfolio_transactions_base ||--|| stock_transactions : inherits
-portfolio_transactions_base ||--|| etf_transactions : inherits
-portfolio_transactions_base ||--|| crypto_transactions : inherits
-portfolio_transactions_base ||--|| metals_transactions : inherits
-portfolio_transactions_base ||--|| real_estate_transactions : inherits
-portfolio_transactions_base ||--|| savings_transactions : inherits
-portfolio_transactions_base ||--|| bond_transactions : inherits
-
-stock_investments ||--o{ stock_transactions
-etf_investments ||--o{ etf_transactions
-crypto_investments ||--o{ crypto_transactions
-metals_investments ||--o{ metals_transactions
-real_estate_investments ||--o{ real_estate_transactions
-savings_investments ||--o{ savings_transactions
-bond_investments ||--o{ bond_transactions
+investments ||--o{ portfolio_transactions : investment_id
 
 @enduml
 ```
@@ -1147,7 +1057,10 @@ TransactionPage --> User : display
 Automatic price updates for investments from external providers.
 
 Migration compatibility note:
-- `0017_investment_custom_provider_history` updates inheritance compatibility for custom-provider latest/history fields and metals view/trigger wiring ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+
+- Historical migration `0017_investment_custom_provider_history` updated the retired inheritance
+  compatibility view for custom-provider fields and metals. Migration 0087 later converged those
+  installations on the flat schema ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
 - `0019_asset_price_history_cache` adds persisted historical quote cache (`asset_price_history`) used by read-through provider history fetches and startup backfill for held assets ([[alembic/versions/0019_asset_price_history_cache.py]]).
 
 ```plantuml
@@ -1197,6 +1110,7 @@ end
 Source diagram: [[docs/diagrams/price-provider-flow.puml]]
 
 Database addition note:
+
 - Historical quote persistence table: `asset_price_history` (`investment_id`, `price_date`, `close_price`, `source`, `fetched_at`, `updated_at`) created by schema init and Alembic migration.
 
 ## Recurring Detection Flow
@@ -1313,7 +1227,7 @@ alt Cache Read (not nightly)
   CacheRepo -> DB : SELECT payload, computed_at
   DB -> CacheRepo : cache row
   deactivate CacheRepo
-  
+
   alt Fresh cache (<6h) AND diagnostics OK
     Service -> Service : return cached payload
     Service -> Router : {source: 'cache'}
@@ -1444,6 +1358,7 @@ end note
 The raw PlantUML source files are stored in `docs/diagrams/`:
 
 **Backend Architecture:**
+
 - `backend-domain-model.puml` - Core domain entities
 - `backend-repository-layer.puml` - Data access layer
 - `backend-service-layer.puml` - Business logic services
@@ -1451,6 +1366,7 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `backend-database-schema.puml` - Database ERD
 
 **Import & Processing:**
+
 - `import-pipeline.puml` - CSV import flow
 - `import-sequence.puml` - Detailed import sequence
 - `currency-conversion-flow.puml` - Exchange rate conversion
@@ -1460,11 +1376,13 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `cashflow-forecast-materialization.puml` - Phase E forecast cache with nightly job
 
 **Sequence & State Diagrams:**
+
 - `recipient-merge-sequence.puml` - Recipient merge workflow
 - `planned-transaction-state.puml` - PlannedTransaction lifecycle
 - `cashflow-forecast-cache-sequence.puml` - Phase E cache logic and nightly flow
 
 **System-Wide:**
+
 - `system-architecture.puml` - Full system overview
 - `deployment-architecture.puml` - Deployment diagram
 - `api-communication.puml` - Frontend to Backend communication
@@ -1482,6 +1400,7 @@ To regenerate these diagrams after code changes:
 ---
 
 **Related Documentation**
+
 - [[docs/api/index|API Documentation]] - API endpoint details
 - [[docs/adr/002-database-schema|Database Schema]] - Detailed schema documentation
 - [[docs/features/index|Features Overview]] - Feature descriptions

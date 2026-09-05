@@ -33,7 +33,8 @@ related_code:
   - alembic/versions/0017_saved_charts_recipients_variants.py
   - alembic/versions/0063_saved_charts_tag_ids.py
   - alembic/versions/0064_saved_charts_all_source_flags.py
-updated: 2026-08-26
+  - alembic/versions/0096_normalize_saved_chart_filters.py
+updated: 2026-09-04
 ---
 
 # Saved Charts Feature
@@ -89,25 +90,32 @@ interface SavedChartCreate {
 
 ### Database Table: `saved_charts`
 
-| Column             | Type      | Default     | Description                                                               |
-| ------------------ | --------- | ----------- | ------------------------------------------------------------------------- |
-| `id`               | SERIAL    | —           | Primary key                                                               |
-| `name`             | VARCHAR   | —           | User-defined chart name                                                   |
-| `chart_type`       | VARCHAR   | `'line'`    | `'line'`, `'bar'`, or `'area'`                                            |
-| `chart_variant`    | VARCHAR   | `'default'` | `'default'`, `'stacked'`, `'grouped'`, or `'ranked'`                      |
-| `time_bucket`      | VARCHAR   | `'monthly'` | `'monthly'` or `'yearly'` (ignored when `chart_variant = 'ranked'`)       |
-| `category_ids`     | INTEGER[] | `'{}'`      | Category IDs to include as series (ignored when `all_categories = true`)  |
-| `recipient_ids`    | INTEGER[] | `'{}'`      | Recipient IDs to include as series (ignored when `all_recipients = true`) |
-| `tag_ids`          | INTEGER[] | `'{}'`      | Tag IDs to include as series (ignored when `all_tags = true`)             |
-| `all_categories`   | BOOLEAN   | `false`     | When `true`, chart all categories dynamically (ignores `category_ids`)    |
-| `all_recipients`   | BOOLEAN   | `false`     | When `true`, chart all recipients dynamically (ignores `recipient_ids`)   |
-| `all_tags`         | BOOLEAN   | `false`     | When `true`, chart all tags dynamically (ignores `tag_ids`)               |
-| `date_range_start` | DATE      | NULL        | Filter periods from this date (inclusive)                                 |
-| `date_range_end`   | DATE      | NULL        | Filter periods to this date (inclusive)                                   |
-| `created_at`       | TIMESTAMP | —           | Creation timestamp                                                        |
-| `updated_at`       | TIMESTAMP | —           | Last update timestamp                                                     |
+| Column             | Type      | Default     | Description                                                             |
+| ------------------ | --------- | ----------- | ----------------------------------------------------------------------- |
+| `id`               | SERIAL    | —           | Primary key                                                             |
+| `name`             | VARCHAR   | —           | User-defined chart name                                                 |
+| `chart_type`       | VARCHAR   | `'line'`    | `'line'`, `'bar'`, or `'area'`                                          |
+| `chart_variant`    | VARCHAR   | `'default'` | `'default'`, `'stacked'`, `'grouped'`, or `'ranked'`                    |
+| `time_bucket`      | VARCHAR   | `'monthly'` | `'monthly'` or `'yearly'` (ignored when `chart_variant = 'ranked'`)     |
+| `all_categories`   | BOOLEAN   | `false`     | When `true`, chart all categories dynamically (ignores `category_ids`)  |
+| `all_recipients`   | BOOLEAN   | `false`     | When `true`, chart all recipients dynamically (ignores `recipient_ids`) |
+| `all_tags`         | BOOLEAN   | `false`     | When `true`, chart all tags dynamically (ignores `tag_ids`)             |
+| `date_range_start` | DATE      | NULL        | Filter periods from this date (inclusive)                               |
+| `date_range_end`   | DATE      | NULL        | Filter periods to this date (inclusive)                                 |
+| `created_at`       | TIMESTAMP | —           | Creation timestamp                                                      |
+| `updated_at`       | TIMESTAMP | —           | Last update timestamp                                                   |
 
-Migrations: `alembic/versions/0017_saved_charts_recipients_variants.py` (categories + recipients, safe defaults) · `alembic/versions/0063_saved_charts_tag_ids.py` (`tag_ids INTEGER[] NOT NULL DEFAULT '{}'`, additive) · `alembic/versions/0064_saved_charts_all_source_flags.py` (`all_categories`, `all_recipients`, `all_tags BOOLEAN NOT NULL DEFAULT false`, additive).
+Migration 0096 moves the three filter lists into `saved_chart_categories`,
+`saved_chart_recipients`, and `saved_chart_tags`. Each membership table has cascading foreign keys
+to its chart and entity. Reads still return sorted `category_ids`, `recipient_ids`, and `tag_ids`
+arrays, so the frontend contract does not change. Chart writes replace only the supplied membership
+sets inside the same transaction as the chart write. Duplicate IDs collapse, and deleting a
+category or recipient removes its membership automatically. Soft-deleted tags remain selected
+because their rows still exist.
+
+Earlier migrations introduced the array-shaped contract and all-source flags: 0017 added recipient
+filters and variants, 0063 added tag filters, and 0064 added `all_categories`, `all_recipients`, and
+`all_tags`. See [[docs/adr/122-normalized-saved-chart-filters|ADR-122]].
 
 ### Valid (chart_type, chart_variant) Combinations
 

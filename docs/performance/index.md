@@ -3,7 +3,7 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-last_modified: 2026-08-31
+last_modified: 2026-09-04
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -25,9 +25,17 @@ SORT title ASC
 
 ## Recent Optimizations
 
+**2026-09-04: WOFF2-only faces and nested AI tool charts** — Vision now declares its eight static
+Inter/Fraunces faces in one WOFF2-only stylesheet, so production builds no longer emit unused
+legacy WOFF copies. The existing build plugin still injects hashed preloads for Inter 400 and
+Fraunces 600. `ToolResultCard` now lazy-loads the Recharts-backed `ToolResultChart` only for
+line, bar, or pie results; ordinary AI chat, table, JSON, and error messages do not download the
+chart renderer. Runtime Zod validation and the application-wide Belgian tax profile remain in the
+boot graph by explicit product decision.
+
 **2026-08-31: route-only Radix packages removed from the boot vendor chunk** — `[[apps/frontend/vite.config.ts]]` now assigns the 15 primitives used by the application shell or preloaded Dashboard route to the stable `radix-ui` chunk. Seven route-only primitives follow Rollup's route-level splitting instead of being hoisted solely because they share the `@radix-ui` namespace. Back-to-back production builds of the same tree measured 435.02 to 428.62 KiB gzip for the boot graph. Total compressed assets increased from 961.09 to 963.26 KiB because natural splitting adds small chunk overhead; this measured trade-off keeps 6.40 KiB off the critical boot path. The existing Lucide icon chunk remains because removing it increased both fragmentation and total asset size. The broader worktree still exceeds the 420/940 KiB guards, so those regressions remain visible rather than being hidden by a budget increase.
 
-**2026-08-25: default Dashboard route and critical fonts preloaded at build time** — `[[apps/frontend/src/build-support/defaultRoutePreload.ts]]` walks the production chunk graph and injects only the Dashboard's static closure not already covered by the entry graph. The same build-bundle pass resolves the hashed Inter 400 and Fraunces 600 WOFF2 assets and emits font preloads with the deployment base; other weights and WOFF fallbacks remain CSS-discovered. This removes serial route and critical-font discovery round trips on a cold web visit. Dynamic locale, AI chat, and motion-feature chunks stay lazy. Fresh root and `/vision/` production builds measured a 399.76 KiB gzip boot graph and 914.35/914.30 KiB gzip total JavaScript/CSS assets; the 420 KiB preload and 940 KiB total guards both pass. The latency benefit is primarily for remote web deployments; it is smaller on Electron or a local-area network.
+**2026-08-25: default Dashboard route and critical fonts preloaded at build time** — `[[apps/frontend/src/build-support/defaultRoutePreload.ts]]` walks the production chunk graph and injects only the Dashboard's static closure not already covered by the entry graph. The same build-bundle pass resolves the hashed Inter 400 and Fraunces 600 WOFF2 assets and emits font preloads with the deployment base. At that time, other weights and WOFF fallbacks remained CSS-discovered; the 2026-09-04 optimization above later removed every WOFF fallback. This removes serial route and critical-font discovery round trips on a cold web visit. Dynamic locale, AI chat, and motion-feature chunks stay lazy. Fresh root and `/vision/` production builds measured a 399.76 KiB gzip boot graph and 914.35/914.30 KiB gzip total JavaScript/CSS assets; the 420 KiB preload and 940 KiB total guards both pass. The latency benefit is primarily for remote web deployments; it is smaller on Electron or a local-area network.
 
 **2026-05-29: recharts no longer eagerly preloaded** — Removed the `recharts → 'charts'` `manualChunks` rule from `[[apps/frontend/vite.config.ts]]`. Previously, forcing recharts into a named chunk caused Rollup to drag it (114 kB gzip) into the initial `modulepreload` graph via a shared module imported by `AppSettingsContext`. Recharts is used exclusively by `ToolResultCard.tsx`, which is only reachable through the lazy-loaded `AIChatPage`. Without the manual chunk rule, Rollup keeps recharts inside the `AIChatPage` async bundle and it no longer appears in `dist/index.html` as a `modulepreload`. Verified via production build. Remediates [[docs/reference/codebase-audit-2026-05#performance.5|performance.5]].
 
@@ -86,21 +94,19 @@ semantics until production measurements justify extra complexity:
   benchmark shows a 250 ms p95 for one of those sorts, or non-date ordering
   exceeds 5% of transaction-list calls. Date/id ordering remains the indexed
   default.
-- The cold Electron splash keeps the current menu and dock setup ahead of
-  window creation. Live measurements put a typical first splash near 340 ms,
-  of which no more than about 150 ms is application-controlled; moving the
-  setup would save at most about 100 ms while making platform integration race
-  the first window. Revisit only if a supported macOS build records a median
-  spawn-to-first-paint above 500 ms or more than 200 ms inside Vision-owned
-  startup marks. Electron framework initialization remains outside this budget.
-- The frontend keeps Recharts inside the already-lazy AI chat route instead of
-  adding a second fallback boundary around individual tool-result charts. The
-  critical Inter and Fraunces fonts are preloaded by the production build, and
+- The cold Electron splash starts loading immediately after settings, runtime
+  selection, and localized strings are ready. Native application-menu, dock-menu,
+  and accent subscription setup follows the splash request, so platform integration
+  no longer delays the first app-controlled frame. The pre-change installed Demo
+  trace recorded 20 ms for initialization, 90 ms for window creation, and about
+  198 ms from main-process logger startup through splash-load completion. Electron
+  framework initialization remains outside the app-owned timing marks.
+- The frontend keeps Recharts behind a nested lazy boundary inside the already-lazy AI chat route,
+  so only chart-shaped tool results download it. The critical Inter and Fraunces fonts are
+  preloaded by the production build, legacy WOFF copies are not emitted, and
   runtime Zod validation plus the application-wide Belgian tax profile stay in
-  the boot graph because they enforce shared contracts and settings. Revisit a
-  nested chart split or provider deferral if the AI chat route exceeds 125 KiB
-  gzip, its post-fetch interaction p95 exceeds 500 ms on a supported machine,
-  or the existing boot-graph budget fails because of either dependency.
+  the boot graph because they enforce shared contracts and settings. Revisit provider deferral if
+  the existing boot-graph budget fails because of either retained dependency.
 - The desktop package retains `archiver` for backup creation. Its former
   redundant direct transitive dependencies have already been removed; replacing
   the mature writer solely to reduce an ASAR index of roughly 2,100 files would

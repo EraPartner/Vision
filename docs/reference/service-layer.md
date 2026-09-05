@@ -3,9 +3,9 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-08-30
-last_modified: 2026-08-31
+last_modified: 2026-09-04
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
-description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the eight sanctioned currency-conversion importers.
+description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -370,10 +370,10 @@ retains its adapter selection and domain-specific staging INSERT.
 
 | Function                        | Signature             | Returns                              |
 | ------------------------------- | --------------------- | ------------------------------------ |
-| `createMaterializedViews`       | `() => Promise<void>` | Creates 4 views with unique indexes  |
+| `createMaterializedViews`       | `() => Promise<void>` | Creates 2 views with unique indexes  |
 | `ensureMaterializedViewIndexes` | `() => Promise<void>` | Retroactively ensures unique indexes |
 | `refreshMaterializedViews`      | `() => Promise<void>` | Refreshes all views CONCURRENTLY     |
-| `scheduleRefresh`               | `() => void`          | Debounced refresh (1s delay)         |
+| `scheduleRefresh`               | `() => void`          | Debounced refresh (5s, 10s max wait) |
 
 ### Materialized Views
 
@@ -381,15 +381,13 @@ retains its adapter selection and domain-specific staging INSERT.
 | ----------------- | ----------------------------------- |
 | Monthly summaries | Aggregated income/expense per month |
 | Category totals   | Spending per category per period    |
-| Daily cashflow    | Day-level income vs expense         |
-| Bank balances     | Current bank account balances       |
 
 ### Key Algorithms
 
 - **CONCURRENTLY Refresh:** Allows reads during refresh (requires unique indexes)
-- **Call Coalescing:** `refreshInFlight`/`refreshQueued` flags prevent redundant concurrent refreshes
-- **Debounced Scheduling:** 1-second debounce timer coalesces rapid changes
-- **Fallback:** If CONCURRENTLY fails, falls back to standard refresh
+- **Call Coalescing:** concurrent callers await the active refresh; one deferred follow-up captures mutations that arrive while it runs
+- **Debounced Scheduling:** a 5-second trailing delay with a 10-second burst cap coalesces rapid changes
+- **Fallback:** If CONCURRENTLY is unavailable for a known recoverable reason, refresh falls back to the standard form; other failures reject the caller
 
 ### Dependencies
 
@@ -781,16 +779,18 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ### Exported Functions
 
-| Function                          | Signature             | Returns                                                |
-| --------------------------------- | --------------------- | ------------------------------------------------------ |
-| `scheduleAggregationRefresh`      | `() => void`          | Debounced refresh trigger (1s delay, `.unref()` timer) |
-| `refreshPhase1Views`              | `() => Promise<void>` | Runs materialized view refresh + logs                  |
-| `cancelPendingAggregationRefresh` | `() => void`          | Clears pending debounce timer (new in 2026-04-29)      |
+| Function                          | Signature             | Returns                                                        |
+| --------------------------------- | --------------------- | -------------------------------------------------------------- |
+| `refreshAggregations`             | `() => Promise<void>` | Awaits both materialized-view refresh and forecast-cache clear |
+| `clearForecastMcCaches`           | `() => Promise<void>` | Awaits both forecast-cache invalidation attempts               |
+| `scheduleAggregationRefresh`      | `() => void`          | Schedules MV refresh and a separate 1s forecast-cache clear    |
+| `scheduleMaterializedViewRefresh` | `() => void`          | Schedules only the 5s/10s materialized-view refresh            |
+| `cancelPendingAggregationRefresh` | `() => void`          | Clears the pending forecast-cache timer                        |
 
 ### Key Behavior
 
-- **Debounced scheduling** via module-level `setTimeout` with 1s delay (`.unref()`-ed to not block process exit)
-- **Deferred refresh timing** in `refreshPhase1Views` uses `.unref()`-ed timer for background refresh scheduling
+- **Independent debounce windows:** forecast cache invalidation uses a 1-second timer; materialized views use the service's 5-second trailing delay and 10-second maximum wait
+- **Deferred refresh timing:** both timers are `.unref()`-ed so background scheduling does not hold the process open
 - **Graceful shutdown** — `main.js` calls `cancelPendingAggregationRefresh()` during shutdown to clear pending timers before exit
 - **No blocking:** All timers are `.unref()`-ed, so SIGTERM exits cleanly even with pending aggregation work
 
@@ -942,26 +942,30 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 
 14 new thin service files were added to complete the boundary. Each is a pass-through delegation layer that owns orchestration, validation helpers, and future expansion points:
 
-| Service Module                   | Route it covers            | Scope                                                                                                           |
-| -------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `categoryService.js`             | `categories.js`            | CRUD + merge delegation                                                                                         |
-| `transactionService.js`          | `transactions.js`          | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
-| `recipientService.js`            | `recipients.js`            | CRUD + cluster/merge delegation                                                                                 |
-| `recipientBankAccountService.js` | `recipientBankAccounts.js` | Bank account CRUD                                                                                               |
-| `savedChartsService.js`          | `savedCharts.js`           | Chart config persistence                                                                                        |
-| `infoService.js`                 | `info/` route group        | Summary/net-worth/monthly delegation                                                                            |
-| `plannedTransactionService.js`   | `plannedTransactions.js`   | Planned CRUD + execution                                                                                        |
-| `settingsService.js`             | `settings.js`              | Settings read/write                                                                                             |
-| `splitService.js`                | `splits.js`                | Split lifecycle + payment                                                                                       |
-| `watchlistService.js`            | `watchlist.js`             | Watchlist CRUD                                                                                                  |
-| `attachmentRecordService.js`     | `attachments.js`           | Attachment metadata (complements `attachmentService.js`)                                                        |
-| `importBatchService.js`          | `importRoutes.js`          | Batch management plus transaction-preview grouping and totals                                                   |
-| `portfolioImportBatchService.js` | `portfolioImportRoutes.js` | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
-| `routes/importBatchRoutes.js`    | Both import routers        | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
-| `customParserConfigService.js`   | `importRoutes.js`          | Named parser CRUD                                                                                               |
-| `portfolioTxService.js`          | (reused existing)          | Portfolio transaction coordination                                                                              |
+| Service Module                             | Route it covers                                     | Scope                                                                                                           |
+| ------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `categoryService.js`                       | `categories.js`                                     | CRUD + merge delegation                                                                                         |
+| `transactionService.js`                    | `transactions.js`                                   | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
+| `recipientService.js`                      | `recipients.js`                                     | CRUD + cluster/merge delegation                                                                                 |
+| `recipientBankAccountService.js`           | `recipientBankAccounts.js`                          | Bank account CRUD                                                                                               |
+| `savedChartsService.js`                    | `savedCharts.js`                                    | Chart config persistence                                                                                        |
+| `infoService.js`                           | `info/` route group                                 | Summary/net-worth/monthly delegation                                                                            |
+| `plannedTransactionService.js`             | `plannedTransactions.js`                            | Planned CRUD delegation plus atomic parent/tag/loan-schedule update orchestration                               |
+| `settingsService.js`                       | `settings.js`                                       | Settings read/write                                                                                             |
+| `splitService.js`                          | `splits.js`                                         | Split allocation/payment validation, owed projections, lifecycle transactions, and atomic audit orchestration   |
+| `watchlistService.js`                      | `watchlist.js`                                      | Watchlist CRUD                                                                                                  |
+| `attachmentRecordService.js`               | `attachments.js`                                    | Attachment metadata (complements `attachmentService.js`)                                                        |
+| `importBatchService.js`                    | `importRoutes.js`                                   | Batch management plus transaction-preview grouping and totals                                                   |
+| `portfolioImportBatchService.js`           | `portfolioImportRoutes.js`                          | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
+| `routes/importBatchRoutes.js`              | Both import routers                                 | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
+| `customParserConfigService.js`             | `importRoutes.js`                                   | Named parser CRUD                                                                                               |
+| `portfolio/portfolioTransactionService.js` | Investment controller and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
 
 **Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
+
+Portfolio transaction domain rules are kept beside the orchestrator in [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]]. This module owns payload normalization, buy/sell unit math, recurrence validation, and account-aware unit-history policy. One ordered unit-event read supplies assignment state, sell availability, and before/after partition-deficit comparison. New or worsened oversells are rejected; unchanged or improving legacy-invalid histories remain editable for repair. Repository modules expose only parameterized reads and writes needed to apply those rules.
+
+`plannedTransactionService` owns input normalization and the transaction boundaries for create-with-tags/schedule, update-with-tags, loan schedule replacement, and idempotent execute-and-advance. `splitService` owns split allocation and payment policy, maps raw owed rows to API projections, and writes each lifecycle audit record in the same transaction as its mutation. The corresponding repositories expose parameterized reads/writes and transaction-client primitives only.
 
 ### What the Rule Enforces
 
@@ -989,7 +993,7 @@ The inverse edge is now guarded too. `vision-local/no-service-import-from-repo` 
 import { convertToCurrency } from "../services/currency/currencyConversionService.js";
 ```
 
-The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a _different_ service or _widens_ its import. The eight sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
+The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a _different_ service or _widens_ its import. The seven sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
 
 ---
 

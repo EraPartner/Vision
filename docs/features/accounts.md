@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-08-31
+updated: 2026-09-04
 tags:
   [
     feature,
@@ -48,7 +48,12 @@ The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088
 | Overview | Grouped accounts hub                                                      | `/accounts`     |
 | Ledger   | Per-account detail with running-balance ledger                            | `/accounts/:id` |
 
-All three render the **same balance definition**: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped), served by `accountBalanceSql.js`'s lateral on the accounts list endpoint.
+All three render the **same balance definition**: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped). Numeric balances come from `accountBalanceSql.js`'s per-currency lateral helpers; `BALANCE_PROVENANCE_LATERAL` separately supplies the shared statement anchor and post-anchor row count (ADR-118).
+
+The definition is also date-bounded ([[docs/adr/123-effective-date-current-balances|ADR-123]]).
+A future-dated transaction stays visible in the ledger, but it does not affect the current balance,
+provenance, drift, merge preview, or cross-workspace cash until its `APP_TIMEZONE` date. An account
+or currency with only future rows remains visible with a zero current balance.
 
 ## The hub (`/accounts`)
 
@@ -76,14 +81,17 @@ Lazy-loaded like every page (`routePreload.ts` → `App.tsx`). Content:
 The ledger queries `GET /api/transactions?account_id=<id>&include_balance=true&sort_by=date&sort_dir=desc`. `include_balance=true` makes the repository add
 
 ```sql
-SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance
+SUM(t.amount) OVER (
+  PARTITION BY t.account_id, COALESCE(t.currency, 'EUR')
+  ORDER BY t.date ASC, t.id ASC
+) AS running_balance
 ```
 
-- The window is **partitioned by account** (a running balance is a per-account figure) and **always ordered chronologically**, independent of the display sort — each row's `running_balance` is the balance _after_ that transaction.
+- The window is **partitioned by account and currency**. Unlike currencies are never added. A NULL legacy currency belongs to the EUR partition. It is **always ordered chronologically**, independent of display sort — each row's `running_balance` is the balance _after_ that transaction.
 - It is evaluated over the full filtered set **before** LIMIT/OFFSET, so values stay correct across pages.
 - Because the window only sees WHERE-filtered rows, the route never applies a server-side date filter to the ledger — a `start_date` would restate history from zero. The `?since=` narrowing (below) is client-side for exactly this reason.
 - The wire field is `running_balance` (present only under `include_balance=true`); it is distinct from the row's stored `balance` column, which is import-pipeline-only (see [[docs/features/transactions|Transactions]]).
-- This route is the first frontend consumer of `include_balance` on the JSON list endpoint; the flag previously fed only the CSV export.
+- The header sparkline uses only rows in the account's declared currency because one line cannot compare distinct currency balances. The ledger still exposes every row with its own currency and balance.
 
 The full-prefix window and OFFSET pagination are retained deliberately. A
 page-local or simple keyset query cannot calculate the same balance without a
@@ -117,14 +125,20 @@ fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Show
 
 The drift badge/chip (`statement_balance − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
 
+If a current exchange rate is missing, `computed_balance` is a partial converted total: the
+unsupported partition is excluded, its native amount remains visible on the account card, and the
+account, group, and net-cash totals are marked incomplete. Merge previews use the same rule. Vision never
+treats an unavailable rate as 1:1 for these account surfaces
+([[docs/adr/127-no-synthetic-fx-for-account-totals|ADR-127]]).
+
 The dialog:
 
-- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − reconcilable balance`, rounded to cents half-away-from-zero for display while `statement_balance` stores `NUMERIC(18,4)` after migration 0088). _Save reading_ PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
+- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − reconcilable balance`, rounded to cents half-away-from-zero for display while each reading stores `NUMERIC(18,4)`). _Save reading_ PUTs the selected currency to `/api/accounts/:id/statement-balances/:currency`; the legacy scalar account fields remain an atomic compatibility projection of the declared-currency row. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) and calendar-invalid ISO dates can never reach PostgreSQL. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
 - **Accept computed balance** — rewrite the stored statement figure to the native reconciliation base (`reconcilable_balance`; no transaction created).
 - **Add adjustment transaction** — keep the statement as truth; the server stamps one balancing ledger row.
 - **Show transactions since {date}** — deep-links to `/accounts/:id?since={statement date}` (the fresh reading's date when one is entered, else the stored anchor's).
 
-When a fresh reading is entered, both resolutions PATCH it first so the resolved drift equals the preview; a reading that already matches the ledger (inside the server's half-cent epsilon) is saved without a reconcile call. Resolutions go through `POST /api/accounts/:id/reconcile` and collapse the drift to 0. On new accounts the statement fields no longer appear in the create dialog — a starting figure is recorded via the opening-balance field; invalid non-empty amounts block account creation with localized feedback instead of silently dropping the opening entry. Later statements arrive through Reconcile (edit-Advanced keeps the raw fields).
+When a fresh reading is entered, both resolutions PUT that currency's reading first so the resolved drift equals the preview; a reading that already matches the ledger (inside the server's half-cent epsilon) is saved without a reconcile call. Resolutions go through `POST /api/accounts/:id/reconcile` and collapse the selected currency's drift to 0. Multi-currency accounts expose Reconcile even when the declared-currency drift is zero, so another currency's reading remains reachable. On new accounts the statement fields no longer appear in the create dialog — a starting figure is recorded via the opening-balance field; invalid non-empty amounts block account creation with localized feedback instead of silently dropping the opening entry. Later statements arrive through Reconcile (edit-Advanced keeps the raw compatibility fields).
 
 ## Lifecycle: edit · opening balance · merge · close · archive · delete
 
@@ -138,7 +152,7 @@ All from the detail route's header menu (WP-B4):
 
 ## Transactions-page account filter
 
-The Transactions page's actions bar has an **Account** combobox (`AccountFilterCombobox`) that sets the `account_id` query filter (FK-exact, ADR-088) plus a human-readable `filter_label` for the filter banner; "All accounts" clears it. Archived accounts are listed (their history stays reachable). This replaced the interim idea of a running-balance column on the Transactions page — running balance lives on the account ledger route only.
+The Transactions page's actions bar has an **Account** combobox (`AccountFilterCombobox`) that sets the `account_id` query filter (FK-exact, ADR-088) plus a human-readable `filter_label` for the filter banner; "All accounts" clears it. Archived accounts are listed (their history stays reachable). The page requests `include_balance=true` and shows explicit **Currency** and **Running balance** columns. Balances stay independent per account and currency even in an all-account list.
 
 ## Testing
 

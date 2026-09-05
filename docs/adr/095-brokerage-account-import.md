@@ -2,7 +2,19 @@
 title: ADR-095 Brokerage Account Import
 type: adr
 date: 2026-06-18
-tags: [adr, import, brokerage, portfolio, cash-sleeve, dedup, leg-linking, adr-078, adr-090, adr-091]
+tags:
+  [
+    adr,
+    import,
+    brokerage,
+    portfolio,
+    cash-sleeve,
+    dedup,
+    leg-linking,
+    adr-078,
+    adr-090,
+    adr-091,
+  ]
 description: A unified importer that splits one brokerage statement into cash transactions and portfolio trades, links each trade to its auto-created cash leg, and dedups both sides — building on the ADR-078 portfolio import pipeline and the ADR-090 cash-sleeve plumbing.
 aliases: [brokerage import, unified statement import, trade + cash import]
 ---
@@ -10,11 +22,13 @@ aliases: [brokerage import, unified statement import, trade + cash import]
 # ADR-095: Brokerage Account Import
 
 ## Status
+
 Implemented — 2026-06-19 (fan-out core + mixed-row staging + review UI all built and tested; see the
 2026-06-19 update at the end of "Implementation status"). Originally logged Partially implemented
 2026-06-18.
 
 ## Date
+
 2026-06-18
 
 ## Context
@@ -53,20 +67,23 @@ A brokerage importer that, for a chosen brokerage **account**, splits one parsed
 ## Consequences
 
 **Positive**
+
 - One import keeps cash and holdings consistent; a buy debits the sleeve by exactly its cost.
 - Re-import is idempotent (dedup both sides); review prevents silent mis-routing.
 
 **Negative / cost**
+
 - The commit fan-out (trade + leg + cash rows) must be transactional and idempotent — the highest
   data-integrity bar in the epic.
 - Per-broker parsing/classification rules; the review step is essential, not optional.
 
 **Risks / mitigations** (this is the flagged danger area)
-- *Double-counting a buy's cash* → the cash debit is the trade's **leg only**; the importer never
+
+- _Double-counting a buy's cash_ → the cash debit is the trade's **leg only**; the importer never
   also emits a standalone cash row for a trade. Verified by a balance test on a sample statement.
-- *Mis-routing* (a fee read as a trade) → staged review; unresolved rows block commit.
-- *Duplicate on re-import* → `tx_hash` (cash) + trade dedup key; both checked at commit.
-- *Partial commit* → fan-out in one DB transaction; all-or-nothing per row group.
+- _Mis-routing_ (a fee read as a trade) → staged review; unresolved rows block commit.
+- _Duplicate on re-import_ → `tx_hash` (cash) + trade dedup key; both checked at commit.
+- _Partial commit_ → fan-out in one DB transaction; all-or-nothing per row group.
 
 ## Implementation status (2026-06-18)
 
@@ -80,6 +97,7 @@ movement is its leg; no standalone cash row is emitted for a buy).
 brokerage account through to committed lots.
 
 **Not yet built (remaining surface):**
+
 - The brokerage **parser kind** — the mixed-row CSV parser that classifies rows as cash vs trade
 - **Mixed-row staging** — the staging schema changes to hold both row kinds in one batch
 - **Review UI integration** — the portfolio import review page does not yet show per-row cash/trade routing choices
@@ -110,6 +128,7 @@ read-only (it is deterministic from the row kind; unknown kinds error and block 
 no user-facing override to flip a row's route. That would be a separate, optional enhancement.
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import]] (pipeline reused)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090: Trade cash legs]]
@@ -131,18 +150,18 @@ path**: `brokerageRouting.js` routes them `'portfolio'` and `commit.js` errors e
 "unresolved instrument", so a real brokerage statement can never fully import (filed finding;
 prerequisite 7 of the [[docs/adr/103-per-account-holdings-ui-flag|ADR-103 addendum]] gate).
 Decision 2026-07-10 (accounts-rewrite round 2): **signed cash row**, per this ADR's own routing
-philosophy — an instrument-less money movement *is* a cash movement.
+philosophy — an instrument-less money movement _is_ a cash movement.
 
 ### Decision
 
 Rows classified dividend/interest/fee/tax that resolve **no instrument** route `'cash'` instead
 of `'portfolio'`: one signed `transactions` row on the batch's sleeve account (positive for
-interest/distributions, negative for fees/taxes), auto-categorized by row kind (interest income /
-investment fees), deduplicated by the existing cash-side `tx_hash` path. Rows that *do* resolve
+interest/distributions, negative for fees/taxes), optionally categorized from the configured
+active-ID mapping described below, and deduplicated by the existing cash-side `tx_hash` path. Rows that _do_ resolve
 an instrument keep today's trade + ADR-090 cash-leg path unchanged — this addendum only gives the
 instrument-less remainder somewhere to go.
 
-**Accepted trade-off:** these amounts live in the *ledger*, not in portfolio analytics — an
+**Accepted trade-off:** these amounts live in the _ledger_, not in portfolio analytics — an
 account-level distribution won't count toward per-instrument dividend-income surfaces
 (ADR-096). Category-based reporting covers them. If per-account cash yield reporting is ever
 wanted inside portfolio analytics, that's a separate enhancement, not a rerouting.
@@ -150,7 +169,17 @@ wanted inside portfolio analytics, that's a separate enhancement, not a reroutin
 ### Consequences
 
 - Brokerage statements import completely; the "unresolved instrument" error remains only for
-  rows that *should* have matched (true trade rows), where it is a correct signal.
+  rows that _should_ have matched (true trade rows), where it is a correct signal.
 - The review UI's read-only routing display gains a third visible outcome
   (cash-from-instrument-less) — still deterministic from the row, still no user override.
 - No schema change; ships inside the accounts-rewrite Phase E work.
+
+### Category mapping addendum (2026-09-04)
+
+The category IDs for instrument-free dividend, interest, fee, and tax rows are user-configurable
+through the `brokerage_cash_category_ids` Settings object. The importer resolves configured active
+IDs once per commit invocation. It does not look up hardcoded category names, create categories, or
+reactivate hidden categories. A null, stale, missing, or inactive ID leaves the row uncategorized.
+This preserves the signed cash movement even when category organization changes and avoids hidden
+side effects in an import. A retry uses the then-current Settings snapshot; rows already committed
+are not recategorized.

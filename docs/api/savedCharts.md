@@ -3,7 +3,7 @@ title: Saved Charts API
 type: endpoint
 status: active
 date: 2026-06-26
-updated: 2026-08-11
+updated: 2026-09-04
 tags:
   - api
   - charts
@@ -11,7 +11,7 @@ tags:
   - tags
   - ranked-chart
   - all-sources
-description: API endpoints for saving and managing custom chart configurations (recipients, variants, time buckets, date filters added 2026-04-28; tag_ids added 2026-06-26; ranked variant + all_categories/all_recipients/all_tags dynamic source flags added 2026-06-26)
+description: API endpoints for saving and managing custom chart configurations with foreign-keyed category, recipient, and tag membership storage behind a stable array-shaped contract
 aliases:
   - saved-charts-api
   - custom-charts
@@ -20,9 +20,15 @@ aliases:
 related_code:
   - apps/node-backend/src/routes/savedCharts.js
   - apps/node-backend/src/repositories/savedChartsRepository.js
+  - alembic/versions/0096_normalize_saved_chart_filters.py
 ---
 
 # Saved Charts API
+
+`categoryIds`, `recipientIds`, and `tagIds` remain array fields in the HTTP contract. Their storage
+is normalized and foreign-keyed. Duplicate IDs are collapsed, deleted entities disappear from
+future responses, and a create or update that races an entity deletion returns
+`VALIDATION_ERROR` rather than storing a dangling filter.
 
 Endpoints for saving and managing custom chart configurations for analytics.
 
@@ -78,30 +84,37 @@ Create a new saved chart configuration.
 
 **Request Body:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Chart name (non-empty, max 500 chars) |
-| `chartType` | string | No | `line`, `bar`, or `area` (default: `line`) |
-| `chartVariant` | string | No | `default`, `stacked`, `grouped`, or `ranked` (default: `default`) |
-| `timeBucket` | string | No | `monthly` or `yearly` (default: `monthly`; ignored when `chartVariant='ranked'`) |
-| `categoryIds` | number[] | No | Category IDs (ignored when `allCategories=true`) |
-| `recipientIds` | number[] | No | Recipient IDs (ignored when `allRecipients=true`) |
-| `tagIds` | number[] | No | Tag IDs (references `tags.id`; drives `GET /api/aggregations/tag-pivot` series; ignored when `allTags=true`) |
-| `allCategories` | boolean | No | When `true`, dynamically chart all categories; ignores `categoryIds` (default: `false`) |
-| `allRecipients` | boolean | No | When `true`, dynamically chart all recipients; ignores `recipientIds` (default: `false`) |
-| `allTags` | boolean | No | When `true`, dynamically chart all tags; ignores `tagIds` (default: `false`) |
-| `dateRangeStart` | string\|null | No | ISO date start filter |
-| `dateRangeEnd` | string\|null | No | ISO date end filter |
+| Field            | Type         | Required | Description                                                                                                  |
+| ---------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `name`           | string       | Yes      | Chart name (non-empty, max 500 chars)                                                                        |
+| `chartType`      | string       | No       | `line`, `bar`, or `area` (default: `line`)                                                                   |
+| `chartVariant`   | string       | No       | `default`, `stacked`, `grouped`, or `ranked` (default: `default`)                                            |
+| `timeBucket`     | string       | No       | `monthly` or `yearly` (default: `monthly`; ignored when `chartVariant='ranked'`)                             |
+| `categoryIds`    | number[]     | No       | Category IDs (ignored when `allCategories=true`)                                                             |
+| `recipientIds`   | number[]     | No       | Recipient IDs (ignored when `allRecipients=true`)                                                            |
+| `tagIds`         | number[]     | No       | Tag IDs (references `tags.id`; drives `GET /api/aggregations/tag-pivot` series; ignored when `allTags=true`) |
+| `allCategories`  | boolean      | No       | When `true`, dynamically chart all categories; ignores `categoryIds` (default: `false`)                      |
+| `allRecipients`  | boolean      | No       | When `true`, dynamically chart all recipients; ignores `recipientIds` (default: `false`)                     |
+| `allTags`        | boolean      | No       | When `true`, dynamically chart all tags; ignores `tagIds` (default: `false`)                                 |
+| `dateRangeStart` | string\|null | No       | ISO date start filter                                                                                        |
+| `dateRangeEnd`   | string\|null | No       | ISO date end filter                                                                                          |
 
 **Response:** `201 Created` — same shape as GET item.
 
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "Missing or invalid \"name\"" } }
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Missing or invalid \"name\""
+  }
+}
 ```
 
 Invalid `(chartType, chartVariant)` combinations also return `400`:
+
 - `(line, stacked)`, `(line, grouped)`, `(area, grouped)`, `(line, ranked)`, `(area, ranked)`
 
 ---
@@ -115,6 +128,7 @@ Update an existing saved chart. All body fields are optional — only provided f
 **Response:** `200 OK` — updated chart object.
 
 **Error Responses:**
+
 - `400 Bad Request` — invalid parameters or invalid type/variant combination
 - `404 Not Found` — chart not found
 
@@ -127,6 +141,7 @@ Delete a saved chart configuration.
 **Response:** `204 No Content`
 
 **Error Responses:**
+
 - `400 Bad Request` — invalid ID
 - `404 Not Found` — chart not found
 

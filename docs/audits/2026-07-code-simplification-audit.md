@@ -196,7 +196,7 @@ Same pg-`Date`→`YYYY-MM-DD` helper in `node-backend/src/utils/portfolioMath.js
 
 ### SIMP-09 — `prefersReducedMotion()` duplicated ×4 — ~15 lines
 
-Identical inline `matchMedia("(prefers-reduced-motion)")` check in `hooks/useCountUp.ts:29`, `components/shared/RollingNumber.tsx:6`, `components/layout/ShaderAurora.tsx`, and `contexts/ThemeContext.tsx` (all four re-confirmed on #84). **Fix:** one util, or framer-motion's `useReducedMotion` (already used in charts) where hook context allows.
+Identical inline `matchMedia("(prefers-reduced-motion)")` check in `hooks/useCountUp.ts:29`, `components/shared/RollingNumber.tsx:6`, `components/layout/ShaderAurora.tsx`, and `stores/hydration/ThemeHydration.tsx` (all four re-confirmed on #84). **Fix:** one util, or framer-motion's `useReducedMotion` (already used in charts) where hook context allows.
 
 ### SIMP-10 — CSV escaping mirrored frontend/backend — ~30 lines
 

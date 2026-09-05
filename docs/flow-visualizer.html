@@ -1283,7 +1283,7 @@
             "sub": "services/portfolioImportPipeline",
             "kind": "service",
             "path": "apps/node-backend/src/services/portfolioImportPipeline/",
-            "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Reuses portfolioTransactionRepository.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
+            "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Reuses portfolioTransactionService.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
             "x": 40,
             "y": 740
           },
@@ -1295,6 +1295,16 @@
             "path": "apps/node-backend/src/services/research/",
             "desc": "Provider-agnostic research surface (ADR-079 + ADR-081 + ADR-082). Capability map routes (dataType, assetClass) to ordered provider preference chains; quota governor token-buckets guard free-tier limits; type-aware TTL cache. Fundamentals: merged FMP+Yahoo in parallel. Macro vertical (ADR-082): searchMacro() fans out across FRED+Eurostat in parallel; fetchMacroSeries() is provider-pinned. All research data in-memory only, never persisted to asset_price_history.",
             "x": 220,
+            "y": 740
+          },
+          {
+            "id": "sv.transactiondomains",
+            "label": "Transaction domain services",
+            "sub": "splitService · plannedTransactionService · portfolioTransactionService",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/",
+            "desc": "Owns split lifecycle validation, owed projections, transactional audit writes, atomic planned parent/tag/loan-schedule updates, and portfolio transaction domain rules. Repositories provide parameterized persistence and transaction-client primitives.",
+            "x": 400,
             "y": 740
           },
           {
@@ -1338,8 +1348,10 @@
           ["be.routes", "sv.backup"],
           ["be.routes", "sv.aichat"],
           ["be.routes", "sv.reports"],
+          ["be.routes", "sv.transactiondomains"],
           ["sv.import", "be.bankadapters"],
           ["sv.import", "be.repos"],
+          ["sv.transactiondomains", "be.repos"],
           ["sv.price", "ex.yahoo"],
           ["sv.price", "ex.binance"],
           ["sv.price", "ex.kinesis"],
@@ -2740,13 +2752,13 @@
                 "from": "fe.apiclient",
                 "to": "sv.portfolioimport",
                 "payload": "POST /api/portfolio/import/batches/:id/commit",
-                "annotation": "commitPortfolioImport() in services/portfolioImportPipeline/index.js iterates resolved staging rows, calls portfolioTransactionRepository.create() per row (2-of-3 unit math, oversell check), calls fxResolve (services/portfolio/fxResolve.js) for non-EUR rows without an explicit rate, and records per-row errors without aborting."
+                "annotation": "commitBatch() in services/portfolioImportPipeline/commit.js iterates resolved staging rows, calls portfolioTransactionService.create() per row (2-of-3 unit math, oversell check), calls fxResolve (services/portfolio/fxResolve.js) for non-EUR rows without an explicit rate, and records per-row errors without aborting."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
-                "payload": "INSERT INTO portfolio_transactions_base (via portfolioTransactionRepository.create)",
-                "annotation": "Commit reuses the same repository path as manual portfolio transaction entry, ensuring 2-of-3 math (units \u00d7 price \u2248 amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
+                "payload": "INSERT INTO portfolio_transactions (via portfolioTransactionService.create)",
+                "annotation": "Commit reuses the same service path as manual portfolio transaction entry, ensuring 2-of-3 math (units \u00d7 price \u2248 amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
               }
             ]
           },

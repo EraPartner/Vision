@@ -9,7 +9,7 @@ description: Per-user theme variant selection with five color palettes, light/da
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
-  - apps/frontend/src/contexts/ThemeContext.tsx
+  - apps/frontend/src/stores/hydration/ThemeHydration.tsx
   - apps/frontend/src/features/settings/sections/AppearanceSection.tsx
   - apps/frontend/src/lib/accentColor.ts
   - apps/frontend/src/stores/settingsStore.ts
@@ -312,7 +312,7 @@ Meets WCAG AAA accessibility standards:
 
 ### Theme Crossfade (June 2026)
 
-`ThemeContext` now wraps the dark-class flip in `document.startViewTransition` (where supported by the browser) to produce a smooth crossfade between light and dark mode. Falls back to instant flip on unsupported browsers and when `prefers-reduced-motion: reduce` is active.
+`ThemeHydration` now wraps the dark-class flip in `document.startViewTransition` (where supported by the browser) to produce a smooth crossfade between light and dark mode. Falls back to instant flip on unsupported browsers and when `prefers-reduced-motion: reduce` is active.
 
 ### Reduced Motion
 
@@ -334,7 +334,7 @@ All theme transitions respect `prefers-reduced-motion`:
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `reduced`  | No backdrop-filter glass (near-opaque surfaces), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
 | `standard` | CSS aurora blobs + glass materials. Unchanged default look.                                                                                   |
-| `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy.                                                                                                |
+| `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy. On macOS, native vibrancy substitutes for persistent web-surface blur.                         |
 
 **Effective tier**: `reduced` while `autoAdaptDisplay` is on and the window sits on a large display; otherwise the chosen tier. Turning `autoAdaptDisplay` off is the explicit "don't touch my effects" override.
 
@@ -371,7 +371,7 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 **`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`, passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then `enhanced`).
 
-**`ElectronBridge`** — gates the `vibrancy` html class on the _effective_ tier (so vibrancy also drops on large displays when auto-adapt is on).
+**`ElectronBridge`** — gates both the `vibrancy` html class and the native Electron window material on the _effective_ tier (so vibrancy also drops on large displays when auto-adapt is on).
 
 **`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor. Draw-loop decisions are centralised in the pure `resolveAuroraMode` (`components/layout/shaderAuroraMode.ts`): lost context → stopped (CSS blobs are the fallback and keep animating); reduced-motion or `staticAtmosphere` → single held frame (static outranks the idle pause); window blurred / tab hidden → stopped keeping the last frame; otherwise loop. A `staticAtmosphere` prop change re-runs the decision without tearing down the GL context, so dragging the window between displays freezes/resumes the canvas in place.
 
@@ -389,7 +389,7 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 ### Migration from enhancedEffects boolean
 
-`migrateAppSettings` (applied at hydration in `AppSettingsContext`) converts legacy stored blobs: `enhancedEffects: true → visualEffects: 'enhanced'`; `enhancedEffects: false → visualEffects: 'standard'`. An explicitly stored `visualEffects` value wins without remapping. The legacy key is stripped so the next debounced persist writes the new shape. No backend change — `app_settings` is an opaque JSON blob.
+`migrateAppSettings` (applied at hydration in `AppSettingsHydration`) converts legacy stored blobs: `enhancedEffects: true → visualEffects: 'enhanced'`; `enhancedEffects: false → visualEffects: 'standard'`. An explicitly stored `visualEffects` value wins without remapping. The legacy key is stripped so the next debounced persist writes the new shape. No backend change — `app_settings` is an opaque JSON blob.
 
 ### ShaderAurora technical details
 
@@ -412,7 +412,13 @@ See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|C
 
 **Liquid-glass sidebar**: `.glass-chrome` background alphas were lowered to 0.55→0.72 (light) / 0.55→0.74 (dark), allowing the aurora and Electron vibrancy to glow through the sidebar blur. A `@supports not (backdrop-filter)` rule keeps a near-opaque fallback for browsers without blur support. See [[docs/components/ui-components#glass-chrome-sidebar-transparency-june-2026|glass-chrome entry]] for token values.
 
-**Vibrancy gate**: `ElectronBridge` gates the `vibrancy` html class on the _effective_ tier. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`; body becomes translucent (`hsl(var(--background) / 0.72)`) only when the effective tier is `enhanced`. This means vibrancy is automatically disabled on large displays even if the chosen tier is `enhanced`. See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
+**Vibrancy gate**: `ElectronBridge` gates both the `vibrancy` html class and the native `under-window` material on the _effective_ tier. The window keeps `visualEffectState: 'followWindow'`, while a capability-gated IPC enables the material only for `enhanced` and removes it for standard/reduced tiers and cleanup. This means the compositor does not maintain the native blur on large displays when auto-adapt lowers the tier. See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
+
+**Native blur substitution (ADR-129)**: while the macOS Electron window has live native vibrancy,
+persistent default/regular, chrome, elevated/hero, and top-bar surfaces keep their translucent fills
+and edge treatment but disable web `backdrop-filter`. The viewport-sized modal scrim is also a flat
+dim. Thin navigation and thick transient dialog or popover panels retain local blur. Browser
+rendering and lower tiers are unchanged.
 
 **i18n keys** (en + nl):
 
@@ -431,7 +437,7 @@ Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hook
 
 ### What it does
 
-When enabled, `ThemeContext` re-applies `applyThemePalette` (resets all variant tokens) and then **overlays** the macOS system accent color onto five CSS custom properties:
+When enabled, `ThemeHydration` re-applies `applyThemePalette` (resets all variant tokens) and then **overlays** the macOS system accent color onto five CSS custom properties:
 
 | Property                                             | Role                              |
 | ---------------------------------------------------- | --------------------------------- |
@@ -446,7 +452,7 @@ Because `applyThemePalette` runs first, the overlay **composes with all five the
 
 - **`lib/accentColor.ts`** — `hexToHslComponents(rrggbbaa)` converts Electron's RRGGBBAA hex string to `"h s% l%"` component form. `accentForegroundComponents(h, s, l)` picks a WCAG-contrast foreground: ink for yellow/green accents, white for blue/purple.
 - **`settingsStore.ts`** — adds `themeSystemAccent: boolean` + `setThemeSystemAccent` with hydration support. The flag is persisted inside the existing `theme_settings` blob under the key `systemAccent`.
-- **`ThemeContext.tsx`** — An **epoch counter** ensures that stale async accent-color fetches arriving out-of-order do not overwrite a more recent apply. Live re-tint on `AppleColorPreferencesChangedNotification` (pushed via `electronAPI.onAccentColorChanged`).
+- **`ThemeHydration.tsx`** — An **epoch counter** ensures that stale async accent-color fetches arriving out-of-order do not overwrite a more recent apply. Live re-tint on `AppleColorPreferencesChangedNotification` (pushed via `electronAPI.onAccentColorChanged`).
 - Toggling off self-heals: `applyThemePalette` resets every token back to the active variant's values.
 
 ### Degradation
@@ -456,7 +462,7 @@ Because `applyThemePalette` runs first, the overlay **composes with all five the
 
 **i18n keys**: `settings.appearance.systemAccent`, `settings.appearance.systemAccentHint` (en + nl, +2 keys from ADR-072).
 
-Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]]
+Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/stores/hydration/ThemeHydration.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]]
 
 ---
 
@@ -474,7 +480,7 @@ Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contex
 | `false` (default) | Classic: gold gain (`--accent`), red loss (`--destructive`)                       | `.skin-v2` absent     |
 | `true`            | Okabe-Ito colorblind-safe: green gain `#009E73`, orange/vermillion loss `#D55E00` | `.skin-v2` applied    |
 
-`AppSettingsProvider` (`contexts/AppSettingsContext.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` immediately on settings hydration and again whenever the value changes, keeping the DOM class in sync with the stored preference.
+`AppSettingsProvider` (`stores/hydration/AppSettingsHydration.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` immediately on settings hydration and again whenever the value changes, keeping the DOM class in sync with the stored preference.
 
 ### Settings UI
 
@@ -554,7 +560,7 @@ This enables opacity-aware utilities that follow the toggle automatically:
 ### Implementation
 
 - `settingsStore.ts` — `colorblindGainLoss` field on `AppSettings`, default `false`.
-- `AppSettingsContext.tsx` — calls `setSkinV2(appSettings.colorblindGainLoss)` in a `useEffect` on `[appSettings.colorblindGainLoss]`.
+- `AppSettingsHydration.tsx` — calls `setSkinV2(appSettings.colorblindGainLoss)` in a `useEffect` on `[appSettings.colorblindGainLoss]`.
 - `lib/skin.ts` — `setSkinV2(flag: boolean)` toggles `.skin-v2` on `document.documentElement`; unchanged in behavior.
 - `AppearanceSection.tsx` — new `SettingsGroup` with `id="accessibility"`, containing a `SettingRow` stack wrapping a Select.
 - `styles/tokens.css` — adds `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` (always-defined legacy values).
@@ -584,7 +590,7 @@ Stored colorblindGainLoss setting (post-hydration)
 | `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)"              |
 | `settings.appearance.gainLossColors.classic`    | "Classic (red loss)"                         |
 
-Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
+Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
 
 ---
 
@@ -593,6 +599,7 @@ Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/c
 - [[docs/features/settings|Settings Feature]] — Settings system overview
 - [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: skin-v2 / colorblind gain-loss palette]] — colorblind gain/loss encoding design decision and 2026-06-24 addendum
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] — Tier model + large-display heuristic (2026-06-12)
+- [[docs/adr/129-native-vibrancy-substitutes-persistent-web-blur|ADR-129: Native Vibrancy Substitutes Persistent Web Blur]] — Native material replaces persistent web blur in enhanced macOS mode (2026-09-04)
 - [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — System accent overlay, vibrancy opt-in (June 2026)
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — Original effects toggle + full Premium v3 batch; enhancedEffects boolean superseded by ADR-075 (June 2026)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — Theme crossfade via `startViewTransition` (June 2026)

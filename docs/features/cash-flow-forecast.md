@@ -80,7 +80,7 @@ Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 bas
   - Backtest accuracy table (MAE/RMSE/MAPE per method, sorted by MAE with rank badge)
   - Per-method MAE sparkline for quick visual comparison
   - Suggested ensemble weights preview (inverse-MSE bar chart, read-only)
-- **Self-contained data loading** — Component manages its own useQuery; accepts filters (`excludedCategoryIds`, `excludedRecipientIds`, `currency`) as props
+- **Named-hook data loading** — The component owns its display state and passes filters (`excludedCategoryIds`, `excludedRecipientIds`, `currency`) to `useCashflowForecastQueries`; the hook owns the React Query definitions
 - **Responsive design** — Adapts to mobile/tablet/desktop viewports
 
 **Related Components:**
@@ -141,7 +141,9 @@ Each Monte Carlo method uses a seeded PRNG (`fnv1a_hash(userId | yyyymm | filter
 
 - Same user, same month, same filters → identical samples across requests
 - Enables caching and ensemble combination in Phase D
-- `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
+- `filterHash` includes currency, exclusions, `include_planned`, transfer policy, and the effective
+  `APP_TIMEZONE` date. The date prevents a six-hour month-cache entry from crossing midnight with
+  stale actual-versus-scheduled classification.
 
 ### Decimal Precision & Accumulation (May 2026 Audit)
 
@@ -610,10 +612,12 @@ Modular forecast orchestrator with 7 pluggable methods:
 **Data flow:**
 
 1. Route handler parses query params (currency, exclusions, history_months, mc_paths, mc_percentiles, include_planned, include_backtest)
-2. Orchestrator calls `infoRepository.getCashflowForecastData()` to fetch actual + planned for current month + history
+2. Orchestrator calls `infoRepository.getCashflowForecastData()` to fetch history, actual-to-date,
+   scheduled future ledger rows, and pending planned rows
 3. All 7 methods run in parallel (5 point forecasts + 2 MC methods)
 4. If `include_backtest=true`, walk-forward validation runs: for each historical month, refit all methods and score against actuals
-5. Daily forecasts folded into cumulative series; actual-to-date prepended; optional planned overlay applied
+5. Daily forecasts fold into cumulative series; actual-to-date is prepended; scheduled ledger rows
+   are always applied on their effective dates; the planned overlay remains optional
 6. Response wrapped in aggregation envelope with `source: 'live'` and `computedAt` timestamp
 
 **Computational complexity:**
@@ -625,11 +629,12 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **Determinism & Caching:**
 
-- Seeded PRNG (`fnv1a_hash(userId | yyyymm | filterHash)`) ensures identical Monte Carlo samples across requests
+- Seeded PRNG (`fnv1a_hash(userId | yyyymm | filterHash)`) ensures identical Monte Carlo samples
+  across requests on the same effective date
 - Enables Phase D ensemble weighting + Phase F caching without loss of reproducibility
 - No external state; methods are pure functions of history + config
 
-**Repository method:** `infoRepository.getCashflowForecastData(historyMonths, excludedCategoryIds, excludedRecipientIds, targetCurrency)` — Fetches realized transactions (actual + history) + pending planned transactions for current month.
+**Repository method:** `infoRepository.getCashflowForecastData(historyMonths, excludedCategoryIds, excludedRecipientIds, targetCurrency)` — Fetches historical and current realized transactions, future ledger rows as `scheduledActual`, and pending planned transactions for the current month. Scheduled rows do not train the model and are distinct from optional plans ([[docs/adr/123-effective-date-current-balances|ADR-123]]).
 
 **Error handling:** If any method throws, it returns zeros for that method's series with `error: 'forecast_failed'`; other methods unaffected. Frontend can display partial results or skip errored methods.
 
@@ -637,7 +642,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **New Table:** `cashflow_forecast_accuracy` (created by Alembic migration 0012)
 
-- Columns: id (serial PK), user_id (text, default 'anonymous'), method_id (text), as_of_month (text, YYYY-MM), mae (DOUBLE), rmse (DOUBLE), mape (DOUBLE), sample_days (int), recorded_at (timestamptz)
+- Columns: id (serial PK), user_id (text, default 'anonymous'), method_id (text), as_of_month (DATE, projected as YYYY-MM), mae (DOUBLE), rmse (DOUBLE), mape (DOUBLE), sample_days (int), recorded_at (timestamptz)
 - Unique constraint on (user_id, method_id, as_of_month)
 - Indexes on (user_id, method_id) and (as_of_month)
 - Stores monthly backtest results from nightly batch jobs or manual updates
@@ -666,7 +671,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **Updated Frontend Diagnostics Component:**
 
-- Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` when sheet opens
+- Fetches persisted accuracy history through `useCashflowForecastAccuracy` when the sheet opens
 - staleTime 10 minutes (avoid excessive refetch)
 - Prioritizes DB history for longer trend visibility; falls back to current session backtest if unavailable
 - Sparkline chart per method shows MAE trend across 24 months
@@ -675,10 +680,11 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **New Table:** `cashflow_forecast_mc` (created by Alembic migration 0013)
 
-- Columns: id (serial PK), user_id (text, default 'anonymous'), month (text, YYYY-MM), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
+- Columns: id (serial PK), user_id (text, default 'anonymous'), month (DATE, accepted as YYYY-MM), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
 - Unique constraint on (user_id, month, filter_hash)
 - Index on (user_id, month) for nightly job queries
-- Stores precomputed forecast payloads: methods, actual, planned, diagnostics
+- Stores precomputed forecast payloads: methods, actual-to-date, scheduled actual, planned, and
+  diagnostics
 
 **New Repository:** `cashflowForecastMcRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRepository.js`)
 
@@ -843,7 +849,7 @@ Additionally, the diagnostics section includes ensemble weights:
   - Cumulative sum when view = cumulative
   - Planned transaction dates as vertical markers (if includePlanned = true)
   - Method legend with color swatch and label
-- Self-contained `useQuery(getCashflowForecastMethods)` with params derived from props and local state
+- Calls `useCashflowForecastQueries` with parameters derived from props and local state; the named hook owns the query definitions
 
 **CashFlowForecastDiagnostics** (`apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx`):
 
@@ -851,7 +857,7 @@ Additionally, the diagnostics section includes ensemble weights:
 - Props: `diagnostics` (from chart parent), `open` boolean, `onOpenChange` callback
 - Data loading:
   - Enabled only when sheet is open (lazy)
-  - Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` with staleTime 10 minutes
+  - Fetches persisted accuracy history through `useCashflowForecastAccuracy` with staleTime 10 minutes
   - Falls back to current backtest data if table is missing or Postgres is unreachable (error codes: 42P01, ECONNREFUSED, ENOTFOUND, ETIMEDOUT)
 - Renders:
   - Accuracy table (MAE/RMSE/MAPE, sorted by MAE ascending) — displays latest DB history per method
@@ -940,7 +946,7 @@ Same-day calls with identical params return identical bands (deterministic). Day
 
 ### Caching omitted (v1)
 
-The `cashflow_forecast_mc` table key is `(user_id, month, filter_hash)` — a month string. Overloading it for rolling windows would break that schema. v1 ships without rolling cache; React Query `staleTime: 60_000` on the frontend absorbs interactive churn. If perf budgets are missed, a separate `cashflow_forecast_mc_rolling` table keyed by `(user_id, today, days_back, days_forward, filter_hash)` is the planned escape hatch.
+The `cashflow_forecast_mc` table key is `(user_id, month, filter_hash)` — a calendar month stored as the first-day `DATE`. Overloading it for rolling windows would break that schema. v1 ships without rolling cache; React Query `staleTime: 60_000` on the frontend absorbs interactive churn. If perf budgets are missed, a separate `cashflow_forecast_mc_rolling` table keyed by `(user_id, today, days_back, days_forward, filter_hash)` is the planned escape hatch.
 
 ### Diagnostics omitted (v1)
 
@@ -952,7 +958,7 @@ Walk-forward backtest is per-calendar-month: it iterates historical months and m
 
 ### Frontend wiring
 
-- `apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, branches between two `useQuery` calls (one enabled at a time), and renders either `ForecastInner` or `ForecastInnerRolling`.
+- `apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, passes it to `useCashflowForecastQueries` (which enables the matching query), and renders either `ForecastInner` or `ForecastInnerRolling`.
 - `apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PerformancePage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
 - `apps/frontend/src/utils/forecastMerge.ts` exports `mergeForViewRolling` that produces date-keyed `MergedDayDate[]` rows (with `t: Date`) instead of dayNum-keyed rows.
 - `apps/frontend/src/components/charts/LineChart.tsx` extends `LineReferenceLine` to support an optional `x: Date | number` field for vertical reference lines (backwards-compatible with existing `y` references).
@@ -972,7 +978,7 @@ The rolling forecast endpoint now uses a dedicated materialized cache table:
 
 **New Table:** `cashflow_forecast_mc_rolling` (created by Alembic migration 0016)
 
-- Columns: id (serial PK), user_id (text, default 'anonymous'), today_iso (text, YYYY-MM-DD), days_back (int), days_forward (int), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
+- Columns: id (serial PK), user_id (text, default 'anonymous'), today_iso (DATE, accepted as YYYY-MM-DD), days_back (int), days_forward (int), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
 - Unique constraint on `(user_id, today_iso, days_back, days_forward, filter_hash)` ensures idempotent cache writes
 - Index on `(user_id, today_iso)` for cache freshness lookups by user and date
 

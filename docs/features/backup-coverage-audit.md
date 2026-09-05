@@ -3,8 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-08-30
-updated: 2026-09-03
-last_modified: 2026-09-03
+updated: 2026-09-04
+last_modified: 2026-09-04
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -35,7 +35,7 @@ related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.j
 
 ### 1. Postgres Database Tables
 
-All 44 user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
+All user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
 
 **Source of truth:** `apps/node-backend/src/backup/coverage.js` → `BACKUP_COVERED_TABLES`
 
@@ -102,6 +102,9 @@ All 44 user-data tables are included in the `pg_dump` SQL artifact inside every 
 | `recipients`                 | Recipients   | ✅ Included |                        |
 | `revolut_raw_transactions`   | Import       | ✅ Included |                        |
 | `sabb_raw_transactions`      | Import       | ✅ Included |                        |
+| `saved_chart_categories`     | Charts       | ✅ Included | Category memberships   |
+| `saved_chart_recipients`     | Charts       | ✅ Included | Recipient memberships  |
+| `saved_chart_tags`           | Charts       | ✅ Included | Tag memberships        |
 | `saved_charts`               | Charts       | ✅ Included | Chart configurations   |
 | `split_audit`                | Splits       | ✅ Included | Split change audit log |
 | `split_payments`             | Splits       | ✅ Included |                        |
@@ -159,7 +162,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | `dismissed_recurring_patterns`                | Dismissed recurring-pattern keys                | ✅ Included                                                                                                 |
 | `vision.onboarding.draft.v1`                  | Resumable onboarding draft (no file bytes)      | ✅ Included                                                                                                 |
 | `vision.research.chartBuilder.layouts.v2`     | Chart Builder draft and named layouts           | ✅ Included                                                                                                 |
-| `vision_dashboardSettings`                    | Legacy dashboard layout                         | ❌ Excluded — SettingsContext migrates to DB and removes on read; no live value to back up                  |
+| `vision_dashboardSettings`                    | Legacy dashboard layout                         | ❌ Excluded — SettingsHydration migrates to DB and removes on read; no live value to back up                |
 | `vision.palette.recents`                      | Command palette recent routes (last ~5 visited) | ❌ Excluded — Ephemeral navigation state; registered in `LOCAL_STORAGE_EXCLUDED_KEYS` (Premium v3, ADR-071) |
 
 ---

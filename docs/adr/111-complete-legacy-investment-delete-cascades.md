@@ -3,7 +3,17 @@ title: ADR-111 Complete legacy investment delete cascades during flat-schema con
 type: adr
 status: accepted
 date: 2026-08-19
-tags: [adr, database, migrations, investments, portfolio, data-repair, rollback, adr-109]
+tags:
+  [
+    adr,
+    database,
+    migrations,
+    investments,
+    portfolio,
+    data-repair,
+    rollback,
+    adr-109,
+  ]
 description: Completes the cascade left unenforced by the legacy inheritance schema by omitting orphan portfolio transactions from migration 0087's flat copy, warning with their IDs, and retaining the original rows in the rollback tables.
 aliases: [legacy investment delete cascades, ADR-109 orphan transaction repair]
 ---
@@ -61,8 +71,9 @@ The new flat foreign key then enforces `ON DELETE CASCADE` for every future inve
 
 - Orphan transactions are not present in the canonical table after upgrade. They were already
   detached from any existing investment, and the migration warning makes the cleanup explicit.
-- A later migration that drops the `legacy_inh_*` rollback tables will make that omission
-  permanent and must account for the same blast radius.
+- The operator-gated cleanup in `alembic/manual/drop_adr109_legacy_relations/` makes that omission
+  permanent. It therefore requires a verified restorable logical backup and an explicit
+  acknowledgement before dropping the rollback relations.
 
 **Neutral**
 
@@ -71,10 +82,15 @@ The new flat foreign key then enforces `ON DELETE CASCADE` for every future inve
 
 ## Rollback
 
-Downgrading to `0086_portfolio_transactions_import_batch_id` drops the converted flat tables and
-restores the renamed inheritance relations. The omitted orphan transactions therefore reappear in
-the legacy `portfolio_transactions` view. As before, rows written after conversion are lost by a
-downgrade.
+Before the operator cleanup, downgrading to `0086_portfolio_transactions_import_batch_id` drops
+the converted flat tables and restores the renamed inheritance relations. The omitted orphan
+transactions therefore reappear in the legacy `portfolio_transactions` view. As before, rows
+written after conversion are lost by a downgrade.
+
+After `alembic/manual/drop_adr109_legacy_relations/` runs, migration 0087 detects the durable
+cleanup marker and refuses to downgrade. The only supported rollback is restoring the verified
+pre-cleanup logical backup. This prevents Alembic from recording 0086 while the flat 0087 schema
+remains installed.
 
 ## Related
 

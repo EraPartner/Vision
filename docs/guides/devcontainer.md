@@ -4,9 +4,20 @@ type: guide
 status: active
 date: 2026-08-13
 updated: 2026-08-27
-tags: [guide, devcontainer, apple-container, security, claude-code, development, postgres, egress]
+tags:
+  [
+    guide,
+    devcontainer,
+    apple-container,
+    security,
+    claude-code,
+    development,
+    postgres,
+    egress,
+  ]
 description: How to use the Vision devcontainer (Apple's container runtime) for isolated development with Claude Code --dangerously-skip-permissions mode. Covers the vision-claude launcher, squid SNI egress policy, persistence, and known limitations.
-aliases: [devcontainer-guide, devcontainer, dev-container, claude-code-container]
+aliases:
+  [devcontainer-guide, devcontainer, dev-container, claude-code-container]
 ---
 
 # Devcontainer Guide
@@ -23,13 +34,13 @@ The sandbox runs on **Apple's `container` runtime** (`apple/container`), not Doc
 
 ## What runs inside
 
-| Component | Runtime | Port |
-|---|---|---|
-| PostgreSQL 18 (apt, native) | entrypoint-managed cluster | `5432` (in-container) |
-| Backend (bun + Express) | `bun run dev` | `3002` (published to `127.0.0.1`) |
-| Frontend (Vite) | `bun run dev` | `8080` (published to `127.0.0.1`) |
-| Alembic migrations | Python venv at `./venv` | — |
-| Claude Code | installed into the image | — |
+| Component                   | Runtime                    | Port                              |
+| --------------------------- | -------------------------- | --------------------------------- |
+| PostgreSQL 18 (apt, native) | entrypoint-managed cluster | `5432` (in-container)             |
+| Backend (bun + Express)     | `bun run dev`              | `3002` (published to `127.0.0.1`) |
+| Frontend (Vite)             | `bun run dev`              | `8080` (published to `127.0.0.1`) |
+| Alembic migrations          | Python venv at `./venv`    | —                                 |
+| Claude Code                 | installed into the image   | —                                 |
 
 The base image is plain `debian:bookworm-slim`. The container user is `dev` (UID 1000) and has **no sudo** — privilege-sensitive setup runs in the root entrypoint before the session drops to `dev`.
 
@@ -99,7 +110,7 @@ VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 
 Egress is enforced by an in-container **squid** proxy running as a peek-and-splice SNI filter, backed by an iptables egress lock — both applied by the root entrypoint on every start (fail-closed: if squid is down, egress stays denied).
 
-- **squid SNI filter** (`127.0.0.1:3128`). All outbound HTTP(S) must traverse squid. It peeks the TLS **SNI hostname** and *splices* allowed hosts (tunnels without decrypting — end-to-end TLS is preserved, no MITM) and terminates everything else. Because enforcement is on the **hostname**, an exfil endpoint sharing an allowed CDN IP can't sneak through, and `CONNECT`-host ≠ SNI domain-fronting is defeated.
+- **squid SNI filter** (`127.0.0.1:3128`). All outbound HTTP(S) must traverse squid. It peeks the TLS **SNI hostname** and _splices_ allowed hosts (tunnels without decrypting — end-to-end TLS is preserved, no MITM) and terminates everything else. Because enforcement is on the **hostname**, an exfil endpoint sharing an allowed CDN IP can't sneak through, and `CONNECT`-host ≠ SNI domain-fronting is defeated.
 - **iptables egress lock**. Only the proxy UID may originate outbound packets; everything else is dropped. IPv6 is default-deny.
 
 `HTTP(S)_PROXY` is set in the container and `NODE_USE_ENV_PROXY=1` makes Node ≥24's global `fetch` honor it too, so `claude`, `bun`, `npm`, `git`, `gh`, `pip`, and app `fetch` all egress through squid.
@@ -128,14 +139,14 @@ There is no `--security-opt no-new-privileges` flag (apple/container doesn't pro
 
 Named `apple/container` volumes preserve state across container rebuilds:
 
-| Volume | Mount path | Contains |
-|---|---|---|
-| `vision-claude` | `/home/dev/.claude` | Claude Code config + session history |
-| `vision-pgdata` | `/var/lib/postgresql` | Postgres data directory |
-| `vision-venv` | `/workspaces/Vision/venv` | Container's Python venv (alembic) |
-| `vision-nm-root` | `/workspaces/Vision/node_modules` | Container's JS dependencies (root) |
-| `vision-nm-frontend`, `vision-nm-backend`, `vision-nm-shared`, `vision-nm-types` | `<workspace>/node_modules` | Container's JS dependencies (per bun workspace) |
-| `vision-nm-electron` | `/workspaces/Vision/packaging/electron/node_modules` | Shields the host's Electron deps (never installed in-container) |
+| Volume                                                                           | Mount path                                           | Contains                                                        |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------- |
+| `vision-claude`                                                                  | `/home/dev/.claude`                                  | Claude Code config + session history                            |
+| `vision-pgdata`                                                                  | `/var/lib/postgresql`                                | Postgres data directory                                         |
+| `vision-venv`                                                                    | `/workspaces/Vision/venv`                            | Container's Python venv (alembic)                               |
+| `vision-nm-root`                                                                 | `/workspaces/Vision/node_modules`                    | Container's JS dependencies (root)                              |
+| `vision-nm-frontend`, `vision-nm-backend`, `vision-nm-shared`, `vision-nm-types` | `<workspace>/node_modules`                           | Container's JS dependencies (per bun workspace)                 |
+| `vision-nm-electron`                                                             | `/workspaces/Vision/packaging/electron/node_modules` | Shields the host's Electron deps (never installed in-container) |
 
 ### Dependency isolation (`node_modules/` + `./venv`)
 
@@ -144,6 +155,11 @@ Named `apple/container` volumes preserve state across container rebuilds:
 Because the trees are separate, **dependency changes do not cross the boundary**: after a host-side `bun install` (or a `git pull` that moves `bun.lock`), run `bun install` inside the container too — `post-start.sh` warns when `bun.lock` is newer than the container's `node_modules`. The volumes survive `VISION_REBUILD=1`; reset instructions are in [`.devcontainer/README.md`](../../.devcontainer/README.md).
 
 The workspace directory (`/workspaces/Vision`) is a bind mount, so edits appear on the host immediately. The repo's `.git` is bind-mounted **read-only** and no git credential is forwarded, so git inside the container is read-only — commit and push from your host (see [Git](#git-read-only-inside)).
+
+The launcher injects runtime database and application settings as environment
+variables. Setup does not create or update a repository `.env`; because the
+workspace is bind-mounted, doing so would leak container defaults into host-side
+commands. Host and container may therefore keep independent environment setup.
 
 ## Claude config sync (host ↔ container)
 
@@ -158,7 +174,7 @@ The container's `~/.claude` and `~/.claude.json` are an **isolated copy**, not a
 >
 > Repo-level config (`CLAUDE.md`, `.claude/skills/`, `.claude/agents/`) lives in the mounted workspace and needs **no** sync.
 
-The `vision-claude-sync` fish function also supports `pull` (refresh container from host) and `status` (show what differs). Both directions use `rsync --update` (newer-wins) and a `jq` merge for `.claude.json`; no deletes.
+The `vision-claude-sync` fish function also supports `pull` (refresh container from host) and `status` (show what differs). Both directions use `rsync --update` (newer-wins) and a `jq` merge for `.claude.json`; no deletes. Host values win key conflicts on pull, while container values win on push and host-only keys remain intact. Pull failures are surfaced through a non-zero exit instead of being reported as successful.
 
 ## Authentication
 

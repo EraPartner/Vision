@@ -2,8 +2,20 @@
 title: ADR-109 Flat investments schema is canonical — one-time legacy-install conversion
 type: adr
 status: accepted
-date: 2026-07-10
-tags: [adr, database, migrations, investments, portfolio, table-inheritance, adr-004, adr-052, accounts, schema]
+date: 2026-09-04
+tags:
+  [
+    adr,
+    database,
+    migrations,
+    investments,
+    portfolio,
+    table-inheritance,
+    adr-004,
+    adr-052,
+    accounts,
+    schema,
+  ]
 description: Declares the flat investments/portfolio_transactions shape (what fresh installs get from 0001) the single canonical schema and specifies a guarded one-time conversion migration for legacy inheritance-shape installs (base + 7 children + view), ending runtime shape-probing, conditionally-absent FKs, and the side-table idiom for new columns. Supersedes ADR-004's inheritance decision.
 aliases: [flat investments schema, inheritance conversion, adr-109]
 ---
@@ -11,6 +23,7 @@ aliases: [flat investments schema, inheritance conversion, adr-109]
 # ADR-109: Flat investments schema is canonical — one-time legacy-install conversion
 
 ## Status
+
 Accepted — 2026-07-10. Supersedes the schema-shape portion of
 [[docs/adr/004-postgresql-table-inheritance|ADR-004]].
 
@@ -19,8 +32,8 @@ Accepted — 2026-07-10. Supersedes the schema-shape portion of
 `main.js` run `alembic upgrade head` before the backend listens). Because conversion is
 therefore guaranteed before any newer code serves requests, the runtime `to_regclass`
 shape-probing and inheritance-aware branching were removed from the backend in the same
-change. The renamed `legacy_inh_*` relations remain as the rollback until a later
-housekeeping revision drops them.
+change. The renamed `legacy_inh_*` relations remain as the rollback until the operator-gated
+`alembic/manual/drop_adr109_legacy_relations/` cleanup runs after a verified logical backup.
 
 ## Context
 
@@ -69,6 +82,7 @@ brings legacy installs onto it:
    commits; any mismatch aborts the transaction.
 
 After conversion ships and soaks:
+
 - Remove the `to_regclass` shape-probing branches from the backend (≥11 files) and
   `accountMergeService`'s dual UPDATE targets.
 - New investments columns are ordinary `ALTER TABLE` — the side-table idiom retires.
@@ -77,12 +91,14 @@ After conversion ships and soaks:
 ## Consequences
 
 **Positive**
+
 - One schema everywhere: FKs enforceable on all installs (including `account_id` on lots before
   the ADR-103 flip), migrations stop branching, an entire class of workarounds retires.
 - The unenforced-FK risk to per-account holdings (accounts-rewrite Phase E) is closed at the
   root instead of being revalidated per feature.
 
 **Negative / cost**
+
 - A data-copying migration on legacy installs — the heaviest migration this project has shipped.
   It lives in the auto-applied chain, so it runs **unattended at boot** (docker-entrypoint /
   main.js run `alembic upgrade head` before the backend listens) — there is no operator in the
@@ -94,11 +110,23 @@ After conversion ships and soaks:
   the offending rows and the fix) — refusing loudly beats guessing or truncating portfolio data.
 - Disk briefly doubles for the copied tables until the legacy renames are dropped.
 
+## Housekeeping (2026-09-04)
+
+The soak-period cleanup is deliberately not an auto-applied revision. The manual script verifies
+the canonical relations are flat tables and requires an explicit verified-backup acknowledgement
+before dropping the old views, inheritance tables, snapshots, indexes, constraints, and inert
+foreign keys. Because those relations contain the only rename-based downgrade state, rollback is a
+logical restore from that backup; no empty-table reconstruction is presented as recovery. The
+rollback copies are outside the head-schema backup coverage registry, but the required full
+`pg_dump` captures them before removal.
+
 **Neutral**
+
 - Fresh installs are untouched (guard no-ops).
 - ADR-004 remains as history; its Status should be updated to "Superseded by ADR-109".
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/004-postgresql-table-inheritance|ADR-004: PostgreSQL table inheritance]] (superseded)
 - [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]] · [[docs/adr/091-per-account-positioning|ADR-091]] (carriers of the conditional-FK branch)

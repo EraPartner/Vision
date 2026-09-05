@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-08-31
-updated: 2026-08-31
+last_modified: 2026-09-04
+updated: 2026-09-04
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -22,7 +22,9 @@ related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backe
 
 The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, metals, real estate, savings, and bonds. It supports live price feeds from multiple providers.
 
-The storage layer uses PostgreSQL inheritance (`investments_base` + asset-specific child tables, and `portfolio_transactions_base` + transaction child tables) while preserving API compatibility via legacy views (`investments`, `portfolio_transactions`).
+The storage layer uses the canonical flat `investments` and `portfolio_transactions` tables.
+Migration 0087 converted former PostgreSQL-inheritance installations before the runtime starts;
+the old base/child/view shape is historical only (ADR-109).
 
 > [!info] Monetary Precision (Phase 9)
 > All monetary values in responses (amounts, valuations, costs, prices) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
@@ -179,9 +181,9 @@ Additional refresh behavior:
 - Yahoo refresh accepts either `price_provider_id` **or** investment `symbol` (symbol fallback), matching Market Lookup symbol handling.
 - Kinesis refresh/history resolution uses shared config resolution (`_resolveKinesisConfig`) so live and historical paths use the same symbol/timeframe mapping.
 - Route-level live-refresh eligibility for `kinesis` accepts either explicit `price_provider_id` or asset-name/symbol mapping via `getKinesisAssetConfig`, so mapped metals can refresh even when `provider_id` is empty.
-- Price writes are persisted through inheritance tables (`investments_base` + asset child table) to avoid direct updates on the non-updatable `investments` compatibility view.
+- Price writes target the canonical flat `investments` table.
 
-Compatibility safeguard:
+Historical migration notes (not current runtime behavior):
 
 - A DB migration adds an `INSTEAD OF UPDATE` trigger on the `investments` view, so legacy `UPDATE investments ...` statements are redirected to inheritance tables and no longer error.
 - Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
@@ -260,11 +262,10 @@ trimmed and normalized to uppercase. Explicit `null` or empty values return
 PATCH applies the same validation and does not allow the investment currency to
 be cleared.
 
-Create-path compatibility:
+Create-path contract:
 
-- `create()` auto-detects inheritance schema by checking `investments_base`; when present, it inserts into the asset-specific child table (`stock_investments`, `etf_investments`, `crypto_investments`, `metals_investments`, `real_estate_investments`, `savings_investments`, `bond_investments`) and then reads the created row from the `investments` compatibility view.
-- In legacy schema mode, `create()` still performs `INSERT INTO investments ...`; if that path fails with `cannot insert into view "investments"`, it falls back to inheritance-table insert and caches inheritance mode for subsequent creates ([[apps/node-backend/src/repositories/investmentRepository.js]]).
-- In inheritance mode, if child-table insert fails with duplicate-id primary key violation (`23505`, `<child_table>_pkey`, `Key (id)`), `create()` self-heals by resyncing the `investments_base` sequence (`setval(..., COALESCE(MAX(id), 0) + 1, false)`) and retries the insert once ([[apps/node-backend/src/repositories/investmentRepository.js]]).
+- `create()` writes the canonical flat `investments` table. The controller rejects symbols longer
+  than the table's `VARCHAR(20)` boundary before repository access, including API/import callers.
 
 ### GET /api/investments/:id
 
@@ -296,10 +297,7 @@ Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend
 
 Delete an investment (hard delete).
 
-Delete-path compatibility:
-
-- `hardDelete()` now detects inheritance schema and deletes through `investments_base` when needed.
-- If legacy `DELETE FROM investments ...` fails with a non-updatable view error, the repository falls back to base-table delete and caches inheritance mode for subsequent deletes ([[apps/node-backend/src/repositories/investmentRepository.js]]).
+Delete-path contract: `hardDelete()` targets the canonical flat `investments` table.
 
 ### GET /api/investments/:id/transactions
 
@@ -399,6 +397,7 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
   "price_per_unit": 185.5,
   "fees": 5.0,
   "taxes": 0.0,
+  "dividend_amount_convention": "unknown",
   "currency": "USD",
   "fx_rate_to_eur": 0.92,
   "note": "Initial purchase",
@@ -410,22 +409,23 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
 
 **Request Body Fields:**
 
-| Field               | Type            | Required | Description                                                                                                                                     |
-| ------------------- | --------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| type                | string          | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
-| date                | string          | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                   |
-| amount              | number          | No       | Total amount (auto-computed if missing for unit-based types)                                                                                    |
-| units               | number          | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                               |
-| price_per_unit      | number          | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                  |
-| fees                | number          | No       | Transaction fees                                                                                                                                |
-| taxes               | number          | No       | Transaction taxes (supported for dividend transactions)                                                                                         |
-| currency            | string          | No       | Currency code (defaults to investment currency)                                                                                                 |
-| fx_rate_to_eur      | number          | No       | FX rate to EUR at transaction date                                                                                                              |
-| note                | string          | No       | Transaction note                                                                                                                                |
-| is_recurring        | boolean         | No       | Whether this transaction is recurring                                                                                                           |
-| recurrence_interval | string          | No       | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly                                                                        |
-| account_id          | integer \| null | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11            |
-| recurrence_end_date | string          | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                |
+| Field                      | Type                    | Required | Description                                                                                                                                     |
+| -------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| type                       | string                  | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
+| date                       | string                  | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                   |
+| amount                     | number                  | No       | Total amount (auto-computed if missing for unit-based types)                                                                                    |
+| units                      | number                  | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                               |
+| price_per_unit             | number                  | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                  |
+| fees                       | number                  | No       | Transaction fees                                                                                                                                |
+| taxes                      | number                  | No       | Transaction taxes (supported for dividend transactions)                                                                                         |
+| dividend_amount_convention | gross \| net \| unknown | No       | Whether a dividend amount is before or after withholding tax; defaults to `unknown` (ADR-126)                                                   |
+| currency                   | string                  | No       | Currency code (defaults to investment currency)                                                                                                 |
+| fx_rate_to_eur             | number                  | No       | FX rate to EUR at transaction date                                                                                                              |
+| note                       | string                  | No       | Transaction note                                                                                                                                |
+| is_recurring               | boolean                 | No       | Whether this transaction is recurring                                                                                                           |
+| recurrence_interval        | string                  | No       | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly                                                                        |
+| account_id                 | integer \| null         | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11            |
+| recurrence_end_date        | string                  | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                |
 
 **Required Fields:** type, date (additional type-specific validation below)
 
@@ -440,6 +440,8 @@ Unit-based buy/sell behavior (asset classes: stock, etf, crypto, metals):
 Dividend behavior:
 
 - `dividend` transactions support optional `fees` and `taxes`.
+- `dividend_amount_convention` records whether `amount` is gross, net, or unknown. A non-dividend
+  row may only use `unknown`. Existing rows default to `unknown` after migration 0097.
 
 Gift behavior (unit-based assets):
 
@@ -449,12 +451,10 @@ Gift behavior (unit-based assets):
 
 Create-path compatibility:
 
-- `create()` now supports inheritance schema for portfolio transactions; if `portfolio_transactions` is a non-updatable compatibility view, it inserts into the asset-specific child transaction table based on the investment `asset_class`.
-- Before inherited child-table insert, `create()` proactively resyncs the `portfolio_transactions_base` sequence to reduce sequence drift failures; if insert still hits duplicate id (`23505`), it self-heals by resyncing again and retries once ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
-- Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
-- Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]]).
-- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
-- `POST /api/investments/:id/transactions` now forwards preloaded investment `asset_class` from route lookup into repository create (`preloaded_asset_class`) so repository can skip a duplicate investment metadata query; validation and response behavior remain unchanged ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- `portfolio_transactions` is one flat table on every supported install. Migration 0087 converts the former inheritance layout before the backend starts accepting requests ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
+- The controller validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/controllers/investmentController.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
+- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/controllers/investmentController.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
+- `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/controllers/investmentController.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
@@ -485,33 +485,32 @@ Update endpoint notes:
 
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
 - The shared POST/PATCH body parser validates common field shapes at the controller boundary;
-  repository normalization remains defense in depth for type-specific unit math, oversell checks,
-  and recurrence-window rules.
-- Repository update logic keeps inheritance compatibility fallback behavior for non-updatable `portfolio_transactions` views ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+  `portfolioTransactionService.update` and `portfolioTransactionRules` enforce type-specific unit
+  math, oversell checks, and recurrence-window rules before a parameterized repository update.
 - Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
+- A dividend's `dividend_amount_convention` can be changed between `gross`, `net`, and `unknown`;
+  this is the repair path for legacy rows whose tax estimates are incomplete (ADR-126).
 - **Account reassignment:** `account_id` (integer) or `null` can be included in the PATCH body to reassign or unassign a lot's account without changing any other fields. An absent key leaves the column alone. This is how `EditPortfolioTxnDialog`'s account selector persists its change.
 - Unit-based buy/sell updates enforce the same 2-of-3 pricing rule as create: when changing pricing fields, client must send at least 2 of `amount`, `units`, `price_per_unit`, and backend computes the missing value.
 - If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
 - Optional `fx_rate_to_eur` is supported on update payloads as well; `null` clears a stored rate,
   while an absent key leaves it unchanged. This includes the UI edit flow
   ([[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]],
-  [[apps/node-backend/src/routes/investments.js]],
-  [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+  [[apps/node-backend/src/controllers/investmentController.js]],
+  [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 - `null` clears `recurrence_interval` and `recurrence_end_date`; absent keys leave them unchanged.
 - Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.
 
 Update-path compatibility:
 
-- For repository-level transaction update paths (PATCH), if `UPDATE portfolio_transactions ...` fails because `portfolio_transactions` is a non-updatable compatibility view, the repository falls back to updating `portfolio_transactions_base` plus the asset-specific child transaction table ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
-- Migration safety: alembic migration `0016_add_fx_rate_to_portfolio_transactions` runs `ALTER TABLE` only when `portfolio_transactions` is a table/partitioned table (`relkind in ('r','p')`), so startup no longer attempts `ALTER TABLE` on a compatibility view ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
+- Updates target the canonical flat `portfolio_transactions` table. Migration 0087 owns conversion from the retired inheritance layout; runtime schema-shape fallbacks are no longer part of the supported write path ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]], [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js]]).
+- Migration `0016_add_fx_rate_to_portfolio_transactions` retains its relation-kind guard for historical upgrade ordering, while current installs reach the flat-table runtime contract through the full migration chain ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
 
 ### DELETE /api/investments/transactions/:txnId
 
 Delete a portfolio transaction.
 
-Delete-path compatibility:
-
-- `hardDelete()` supports inheritance schema by falling back from `portfolio_transactions` view delete to `portfolio_transactions_base` delete when needed ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+Delete-path contract: `hardDelete()` targets the canonical flat `portfolio_transactions` table.
 
 ### GET /api/investments/:id/summary
 

@@ -735,8 +735,8 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter;
 
 **Behavior:**
 
-- Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
-- Derives locale from `AppSettingsContext.numberFormat`
+- Derives currency from `AppSettingsHydration.defaultCurrency` (default: "EUR")
+- Derives locale from `AppSettingsHydration.numberFormat`
 - Returns `formatCurrency()` function formatted with decimal places from settings
 - Returns `formatCompact()` — uses length-based threshold (>9 chars) to abbreviate large values via `Intl.NumberFormat({ notation: 'compact' })`; always returns `full` string for tooltip; falls back to full when compact is not shorter
 - Returns `formatAxisCompact()` — always-bounded `k/M/B/T` axis labels with locale-aware decimal separators and currency ordering, including locales where `Intl` does not compact ordinary thousands

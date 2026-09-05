@@ -190,6 +190,11 @@ backend, and the backend then:
    - On an existing DB: pending migrations are applied in sequence
 3. Starts the backend application
 
+The managed PostgreSQL command also preloads `pg_stat_statements`; migration
+0095 creates the extension idempotently. Keep the root and packaged Compose
+commands synchronized so query-level performance evidence is available in both
+Docker and native deployments.
+
 **Note:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been removed.
 
 If you need to run migrations manually (e.g., for troubleshooting):
@@ -204,9 +209,16 @@ Never use a bare Alembic write against Vision. The runner preflights
 
 Note: migration `0002_add_url_to_planned_transactions` is idempotent and safely skips `url` creation when the column already exists.
 
-Migration caveat: `0016_add_fx_rate_to_portfolio_transactions` is now safe on inherited-schema deployments where `portfolio_transactions` is a compatibility view. It only runs `ALTER TABLE` when relation kind is table/partitioned table (`relkind in ('r','p')`) and keeps the view recreation path when relation kind is view (`relkind='v'`). During view recreation, `fx_rate_to_eur` stays at the end of the `SELECT` list to preserve existing column order and avoid PostgreSQL `CREATE OR REPLACE VIEW` column-rename errors ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/api/investments|API: Investments]]).
+Historical migration caveat: `0016_add_fx_rate_to_portfolio_transactions` supported installations
+that still had the retired `portfolio_transactions` compatibility view at that point in the
+upgrade chain. It guarded `ALTER TABLE` by relation kind and preserved column order while
+recreating the view. Migration 0087 later converges every supported install on the flat table
+([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/api/investments|API: Investments]]).
 
-Migration caveat: `0021_update_price_provider_enum` updates enum type `price_provider` by swapping provider values (`coingecko`/`kraken` -> `binance`) on `investments_base.price_provider`. For PostgreSQL dependency safety during enum type conversion, it temporarily drops the column default, dynamically captures and drops all dependent `public` views that reference `investments_base` (including `price_provider` dependencies), performs the type swap and value mapping, restores `DEFAULT 'manual'`, then recreates the captured views. If `investments` is among recreated views and function `investments_view_update_instead()` exists, trigger `update_investments_view_instead` is recreated as well ([[alembic/versions/0021_update_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
+Historical migration caveat: `0021_update_price_provider_enum` swapped provider enum values on the
+then-current `investments_base` relation and temporarily recreated dependent compatibility views
+and their update trigger. This describes an intermediate upgrade step, not the current runtime
+schema ([[alembic/versions/0021_update_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
 
 Migration caveat: `0022_add_kinesis_price_provider_enum` adds enum value `kinesis` to `price_provider`. Its downgrade remaps `kinesis` to `manual`, then rebuilds the enum without `kinesis` while handling dependent `public` views and `investments` update trigger recreation using the same safety pattern as prior enum migrations ([[alembic/versions/0022_add_kinesis_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
 

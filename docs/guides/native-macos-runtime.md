@@ -3,7 +3,7 @@ title: Native macOS Runtime Guide
 type: guide
 status: active
 date: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-04
 tags:
   [
     guide,
@@ -75,14 +75,14 @@ The cluster-administrator role is used only for cluster bootstrap, database repl
 narrow post-restore ownership handoff described below. The owner/migration role owns the database,
 schema objects, and tables; it runs migrations and analyzes all ordinary tables in Vision's
 `public` schema. The application role
-receives runtime data privileges and owns only the three derived materialized views that the
+receives runtime data privileges and owns only the two derived materialized views that the
 runtime service must create, index, refresh, and analyze. PostgreSQL binds to `127.0.0.1:54329` by
 default, and the backend also binds to loopback. Vision fails closed if the configured PostgreSQL
 port belongs to another server.
 
 On every split-role startup, the privileged bootstrap grants current ordinary tables and views to
 the application role one relation at a time. Relations already owned by the application role are
-skipped, including the three runtime-managed materialized views. This prevents PostgreSQL from
+skipped, including the two runtime-managed materialized views. This prevents PostgreSQL from
 rejecting all ordinary-table grants merely because those derived views have already completed their
 ownership handoff. Owner-role default privileges continue to cover tables and sequences created by
 later migrations.
@@ -105,6 +105,10 @@ creates the three roles and a database from `template0`, installs required exten
 repository migration runner, and waits for readiness. An interrupted first start can be resumed.
 Subsequent starts reuse the same private database. A port collision fails with a diagnostic; Vision
 does not choose an unknown PostgreSQL service or silently change the database endpoint.
+
+The managed configuration preloads `pg_stat_statements`, and migration 0095 installs its extension
+alongside `pg_trgm` and `pgcrypto`. Existing private clusters receive the managed preload setting
+before PostgreSQL restarts, so the same query-level timing view is available after upgrade.
 
 `bun run electron:dev` starts the Electron source shell against the same prepared payload and the
 same isolated `Vision Development/native/vision_dev` database. It cannot acquire the packaged
@@ -192,6 +196,12 @@ Every PostgreSQL readiness, role, database creation, migration, dump, and restor
 to the configured `127.0.0.1` port. Vision does not fall back to another PostgreSQL instance through
 a default Unix socket. The managed server disables Unix sockets explicitly, which also avoids the
 macOS Unix-socket path-length limit when Vision's application-data path is long.
+
+An explicitly configured external PostgreSQL 18 server must provide the `pg_trgm`, `pgcrypto`, and
+`pg_stat_statements` extension files. It must also list `pg_stat_statements` in
+`shared_preload_libraries` and be restarted after that setting changes. Vision verifies the preload
+before running database bootstrap or migrations and reports an operator action instead of trying to
+rewrite or restart an external server.
 
 The Settings option to keep services running on quit applies to the selected provider. In native
 mode it keeps both the verified Bun backend and Vision-managed PostgreSQL running. Otherwise

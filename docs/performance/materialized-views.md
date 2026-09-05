@@ -3,7 +3,7 @@ title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
 date: 2026-08-25
-updated: 2026-08-31
+updated: 2026-09-04
 tags:
   [
     performance,
@@ -16,9 +16,10 @@ tags:
     migration-0038,
     migration-0080,
     migration-0082,
+    migration-0094,
     adr-068,
   ]
-description: Current PostgreSQL materialized views and trigger-maintained tables for dashboard aggregation, including the retired recipient and bank-balance caches.
+description: Current PostgreSQL materialized views and trigger-maintained tables for dashboard aggregation, including the retired recipient, bank-balance, and daily-cashflow caches.
 aliases:
   [
     materialized views,
@@ -35,6 +36,7 @@ related_code:
     "alembic/versions/0038_drop_mv_recipient_monthly.py",
     "alembic/versions/0080_drop_agg_recipient_totals.py",
     "alembic/versions/0082_drop_mv_bank_balances.py",
+    "alembic/versions/0094_drop_mv_cashflow_daily.py",
   ]
 ---
 
@@ -48,10 +50,10 @@ See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the full architectu
 
 ### Two Maintenance Strategies
 
-| Strategy                      | Use Case                                                             | Maintenance                       | Latency   | Examples                                                                                                                                                      |
-| ----------------------------- | -------------------------------------------------------------------- | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Materialized Views**        | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily` (`mv_recipient_monthly` was dropped in 0038; `mv_bank_balances` was dropped for good in 0082) |
-| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables        | Automatic via row-level triggers  | <1ms      | `agg_split_outstanding` (`agg_recipient_totals` was dropped in 0080)                                                                                          |
+| Strategy                      | Use Case                                                             | Maintenance                       | Latency   | Examples                                                                                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------- | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Materialized Views**        | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_category_totals` (`mv_recipient_monthly`, `mv_bank_balances`, and `mv_cashflow_daily` were dropped after their last readers disappeared) |
+| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables        | Automatic via row-level triggers  | <1ms      | `agg_split_outstanding` (`agg_recipient_totals` was dropped in 0080)                                                                                               |
 
 ## Materialized Views in Vision
 
@@ -101,12 +103,12 @@ All-time category totals for quick category breakdowns.
 
 ---
 
-### mv_cashflow_daily
+### mv_cashflow_daily — DROPPED (September 2026, migration 0094)
 
-Daily cashflow for the last 7 months (6 complete + current).
+> [!warning] Removed
+> `mv_cashflow_daily` was dropped by migration `0094_drop_mv_cashflow_daily.py`. **Do not reference this view in new code.**
 
-**Data retained:** 6 months + current month  
-**Use case:** Daily spending trends and cashflow charts
+The seven-month daily projection had no application readers, but was still created, indexed, analyzed, and refreshed after every relevant mutation. Current cash-flow charts use live repository queries and the dedicated forecast cache tables. The downgrade recreates the historical view with no data for rollback only.
 
 ---
 
@@ -189,12 +191,12 @@ import { refreshAggregations } from "./services/aggregationRefresh.js";
 
 // Explicit maintenance operation:
 await refreshAggregations();
-// Refreshes the three managed MVs, then clears forecast caches.
+// Refreshes the two managed MVs, then clears forecast caches.
 ```
 
 **What it does:**
 
-- Delegates legacy views (`mv_monthly_summary`, `mv_category_totals`, etc.) to `materializedViewService.refreshMaterializedViews()`
+- Delegates the two current views (`mv_monthly_summary`, `mv_category_totals`) to `materializedViewService.refreshMaterializedViews()`
 - `mv_recipient_monthly` is no longer refreshed — it was dropped in migration `0038` (June 2026, ADR-068)
 - No-op for trigger-maintained tables (they update automatically)
 
@@ -203,6 +205,8 @@ await refreshAggregations();
 An import does not await the full materialized-view scans. After transfer reconciliation, it awaits both attempts made by `clearForecastMcCaches()` and calls `scheduleMaterializedViewRefresh()` once. Each invalidation failure is logged and non-fatal, so the response confirms durable canonical rows and attempted forecast-cache invalidation, while MV-backed monthly and category projections remain eventually consistent until the scheduled refresh completes.
 
 The materialized-view scheduler uses a five-second trailing debounce and a ten-second maximum wait for a continuous burst. Refresh execution time and a possible wait behind an in-flight refresh are additional. A successful refresh clears the process statistics cache again after the views switch snapshots, preventing a request during refresh from preserving the old projection.
+
+Startup runs create, index, and refresh after Express begins listening. The boot trace records these separately as `materialized_views_create`, `materialized_views_indexes`, and `materialized_views_refresh`; `/health/detailed` reports the combined warmup result.
 
 ### Debounced Refresh (Single-Row Mutations)
 
@@ -259,13 +263,13 @@ The orchestrator prevents refresh storms during concurrent user activity:
 // Result: 1 refresh at the end of the coalescing window (not 10)
 
 // Behind the scenes:
-let refreshInFlight = false;
+let refreshInFlight = null; // Shared Promise while a refresh is active
 let refreshQueued = false;
 
 // First call:
-refreshInFlight = true; // Lock acquired
+refreshInFlight = refreshPromise; // All callers observe the same work
 // ... refresh runs ...
-refreshInFlight = false; // Lock released
+refreshInFlight = null; // Work settled
 
 // If calls arrived during refresh:
 if (refreshQueued) {
@@ -280,14 +284,13 @@ if (refreshQueued) {
 | --------------- | ---------- | ------- |
 | Monthly summary | ~500ms     | ~5ms    |
 | Category totals | ~800ms     | ~3ms    |
-| Daily cashflow  | ~400ms     | ~4ms    |
 
 ## Indexes
 
 Each view has a unique index for concurrent refresh support:
 
 ```sql
-CREATE UNIQUE INDEX mv_monthly_summary_idx
+CREATE UNIQUE INDEX idx_mv_monthly_summary
 ON mv_monthly_summary (month_start, currency, category_id_key);
 ```
 
@@ -348,7 +351,7 @@ setInterval(
 3. **Use unique indexes** — Required for concurrent refresh; prevents duplicate rows
 4. **Monitor refresh times** — Long refreshes may indicate need for indexing on source tables
 5. **Set scope appropriately** — e.g., `mv_monthly_summary` retains recent months, while all-time requests use live SQL
-6. **Understand scope limitations** — `mv_monthly_summary` and `mv_cashflow_daily` retain bounded recent windows, while `mv_category_totals` is all-time. Queries requesting `allTime=true` bypass the bounded monthly-summary fast path and use live SQL.
+6. **Understand scope limitations** — `mv_monthly_summary` retains a bounded recent window, while `mv_category_totals` is all-time. Queries requesting `allTime=true` bypass the bounded monthly-summary fast path and use live SQL.
 
 ### For Trigger-Maintained Tables
 

@@ -118,7 +118,7 @@ import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
   `GET /api/investments/providers`; localized hints cover known providers, and a local fallback keeps
   the form usable while the catalog is loading or unavailable.
 
-Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ### Custom Provider Advanced Fields
 
@@ -133,8 +133,11 @@ When `price_provider = custom`, the add/edit dialogs support advanced provider c
 
 Compatibility note:
 
-- legacy `price_provider_url` / `price_provider_id` remain accepted by backend and are still mapped in UI payloads.
-- full compatibility for advanced latest/history fields in inheritance + legacy-schema bridge paths is provided by migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- Legacy `price_provider_url` / `price_provider_id` request fields remain accepted by the backend
+  and are still mapped in UI payloads.
+- Migration 0017 historically extended the retired inheritance/view layout with advanced provider
+  fields. Migration 0087 later converted every supported install to the canonical flat
+  `investments` table ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
 
 ---
 
@@ -324,7 +327,7 @@ Manage tax adjustments for investment holdings.
 
 - Currency amounts in adjustments follow app decimal precision (`appSettings.showDecimalPlaces`)
 
-Code links: [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]
 
 ### Usage
 

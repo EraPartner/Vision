@@ -43,7 +43,7 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 | Coverage gate | `apps/frontend/vite.config.ts` (`test.coverage`) |
 
 `renderWithApp` mirrors the provider tree in `apps/frontend/src/App.tsx`:
-`QueryClientProvider` → `SettingsPreloadProvider` → `ThemeProvider` → `SettingsProvider` → `AppSettingsProvider` → `BelgianTaxProfileProvider` → `LanguageBridge` → `TooltipProvider` → `MemoryRouter`. The QueryClient is a fresh per-test instance with `retry: false` and `staleTime: 0`.
+`QueryClientProvider` → `SettingsPreloadProvider` → `ThemeProvider` → `SettingsProvider` → `AppSettingsProvider` → `BelgianTaxProfileProvider` → `LanguageHydration` → `TooltipProvider` → `MemoryRouter`. The QueryClient is a fresh per-test instance with `retry: false` and `staleTime: 0`.
 
 ## Why MSW (and not `vi.mock(...)`)
 
