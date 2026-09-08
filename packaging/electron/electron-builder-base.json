@@ -12,7 +12,6 @@
   "files": [
     "main.js",
     "badge-image.js",
-    "compose.js",
     "runtime/**/*",
     "updater.js",
     "native-update-installer.js",

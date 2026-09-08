@@ -93,11 +93,10 @@ test("Vision Demo uses a valid, distinct badged macOS icon", () => {
   ]);
 });
 
-test("Vision Demo is packaged and installed without a Docker dependency", () => {
+test("Vision Demo packages its native runtime without an external service dependency", () => {
   const installer = fs.readFileSync(path.join(root, "install-demo.sh"), "utf8");
   const config = JSON.parse(read("electron-builder-demo.json"));
-  assert.doesNotMatch(installer, /^\s*(?:docker|command -v docker)\b/im);
-  assert.doesNotMatch(installer, /wait_for_docker_daemon|docker compose/i);
+  assert.doesNotMatch(installer, /command -v (?:podman|colima)\b/im);
   assert.match(installer, /build-native-package\.js --demo/);
   assert.deepEqual(
     config.extraResources.map((entry) => entry.to),

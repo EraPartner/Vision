@@ -135,7 +135,6 @@ test("source updates preserve the generated native service payload", async () =>
     const script = await fs.promises.readFile(scriptPath, "utf8");
     assert.match(script, /--exclude "packaging\/electron\/native-runtime"/);
     assert.equal(script.match(/--filter="merge \$PROTECT_FILE"/g)?.length, 2);
-    assert.doesNotMatch(script, /docker compose|open -a Docker/);
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }

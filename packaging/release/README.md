@@ -1,8 +1,8 @@
 # Vision **VERSION** — macOS
 
 Vision is a self-hosted financial transaction manager. The native macOS application keeps its
-database and attachments on your Mac. Normal installation and daily use do not require Docker,
-Homebrew, Postgres.app, Python, or a separately installed Chrome.
+database and attachments on your Mac. Normal installation and daily use do not require Homebrew,
+Postgres.app, Python, or a separately installed Chrome.
 
 ## What's in this release
 
@@ -66,20 +66,12 @@ Vision verifies its packaged runtime before it creates data. It then:
 An interrupted first launch is resumable. If the private PostgreSQL port is already occupied,
 Vision fails closed and records a diagnostic instead of connecting to the unknown server.
 
-## Existing Docker installation
+## Existing legacy installation
 
-Vision does not automatically point a native installation at an empty database when Docker data is
-present. Use the documented opt-in Docker-to-native importer only after creating a final logical
-dump and attachment export. It verifies schema, table counts, attachment hashes, health, settings,
-reports, and representative workflows before writing the native cutover marker.
-
-The importer stops the old application writer but preserves the stopped Docker services and
-volumes as a rollback source. Never run `docker compose down -v`, remove the database or attachment
-volumes, or run a database reset during migration. After the first native write, the Docker copy is
-stale and a data-preserving rollback requires a reverse logical migration.
-
-See the repository's Native macOS Runtime Guide for the exact preflight, cutover, and rollback
-commands.
+This release no longer imports data from the retired container-backed runtime. Before installing
+it over such an installation, use Vision 1.0.2 to complete the native cutover, verify the native
+database and attachments, and create a `.visionbak` backup. This release fails closed when it sees
+a legacy runtime marker so it cannot silently open an empty database.
 
 ## Daily use
 
@@ -92,7 +84,7 @@ faster next launch.
 
 Use Vision's update action or replace `Vision.app` with the application from the new DMG. Native
 updates verify and stage the new application, stop the native backend, atomically replace the app,
-and retain a rollback copy until the new version opens. They do not pull a Docker image.
+and retain a rollback copy until the new version opens.
 
 The durable application-data directory remains in place across updates. Do not delete it as part of
 an application update.
@@ -107,8 +99,6 @@ an application update.
 | `~/Library/Application Support/Vision/native/vision/logs/`              | Backend and PostgreSQL logs                       |
 | `~/Library/Application Support/Vision/native/vision/runtime-state.json` | Active provider and cutover marker                |
 
-The original Docker volumes remain separate when an installation was migrated.
-
 ## Backup and restore
 
 Use the in-app backup controls to create a `.visionbak` file. Native mode preserves the existing
@@ -121,13 +111,13 @@ performing a rollback.
 
 ## Troubleshooting
 
-| Symptom                                                              | Action                                                                                                                               |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                                                    |
-| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.                                        |
-| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override.                                   |
-| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.                                              |
-| **A Docker-to-native import was interrupted**                        | Keep both application writers stopped and rerun the documented cutover command so its persisted recovery state can roll back safely. |
+| Symptom                                                              | Action                                                                                                      |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                           |
+| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.               |
+| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override.          |
+| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.                     |
+| **Vision reports a legacy runtime marker**                           | Reinstall Vision 1.0.2, complete and verify its native cutover, create a backup, then install this release. |
 
 ## Uninstall
 
@@ -136,15 +126,7 @@ Trash. This leaves the application-data directory intact so the database and att
 recoverable.
 
 Deleting `~/Library/Application Support/Vision` permanently deletes the native database,
-attachments, logs, and migration state. Do that only after verifying a restorable backup. Removing
-Vision does not remove or modify preserved Docker volumes.
-
-## Optional Docker provider
-
-Docker Compose remains available for explicit server, continuous-integration, and local container
-deployments. It is a separate runtime provider, not a dependency of the native package. Vision
-Demo also uses the bundled native runtime and does not use this provider. Do not activate Docker
-and native writers against the same real Vision data at the same time.
+attachments, logs, and migration state. Do that only after verifying a restorable backup.
 
 ## Source code and issues
 

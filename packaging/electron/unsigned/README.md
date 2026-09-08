@@ -29,9 +29,6 @@ Requirements
 - Python with the pinned packages in `config/requirements.txt` and
   PyInstaller 6.22.2 for the one-time migration-runner build
 
-Docker Desktop is optional and is used only when `VISION_RUNTIME_MODE=docker`
-is selected deliberately.
-
 Security note
 
 - This setup intentionally avoids Apple signing/notarization. Distribute only

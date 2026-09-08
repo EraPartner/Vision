@@ -56,24 +56,19 @@ window.addEventListener("unhandledrejection", (event) => {
 /**
  * Expose a minimal, safe update API to the renderer via contextBridge.
  * The renderer (React app running at localhost:3002 inside the Electron shell)
- * can call these to apply provider-specific updates or check for new releases.
+ * can call these to install native updates or check for new releases.
  */
 /** @type {import("./electron-api").ElectronUpdaterBridge} */
 const electronUpdater = {
   /**
-   * Pull the latest Docker image for the explicit Docker provider.
-   */
-  pullImage: () => ipcRenderer.invoke("update:pull-image"),
-
-  /**
    * Query and (if needed) pre-download the latest shell update from GitHub.
-   * Response includes `update_mode: 'source' | 'docker' | 'native' | 'dev'`.
+   * Response includes `update_mode: 'native' | 'dev'`.
    */
   checkRelease: () => ipcRenderer.invoke("update:check-github"),
 
   /**
    * Install a previously prepared shell update and restart the app.
-   * Only valid when update_mode is 'source'. Returns an error in embedded mode.
+   * The native updater replaces the packaged application after verification.
    */
   installShellUpdate: () => ipcRenderer.invoke("update:install-shell"),
 
@@ -161,8 +156,7 @@ const electronServices = {
   /**
    * Persist the keep-services-running-on-quit toggle to Electron settings.json
    * (and, via the main-process handler, the database).
-   * When enabled, quitting leaves the Docker containers up so the next launch
-   * takes the hot path.
+   * When enabled, quitting leaves the native services up for a faster relaunch.
    */
   saveSettings: (settings) =>
     ipcRenderer.invoke("services:save-settings", settings),

@@ -25,22 +25,11 @@ grep -Fqx 'export CODEX_SESSION_ENV=cloud' "$HOME/.bashrc" || \
 command -v python3 >/dev/null || { printf '%s\n' 'Python 3 is required.' >&2; exit 1; }
 
 cd "$repo_root"
-cloud_log 'Checking for an existing Docker daemon (8s deadline).'
-if cloud_docker_daemon_available; then
-  use_native_postgres=0
-  cloud_log 'Docker daemon available; bun run test:db will use a disposable Postgres container.'
-else
-  use_native_postgres=1
-  cloud_log 'No usable Docker daemon; installing native PostgreSQL 18 packages before project dependencies.'
-  bash "$script_dir/provision-test-db.sh" --install-packages-only
-fi
-
+cloud_log 'Installing native PostgreSQL 18 packages before project dependencies.'
+bash "$script_dir/provision-test-db.sh" --install-packages-only
 bash "$script_dir/install-dependencies.sh"
-
-if (( use_native_postgres )); then
-  cloud_log 'Provisioning the native PostgreSQL 18 test database.'
-  bash "$script_dir/provision-test-db.sh"
-fi
+cloud_log 'Provisioning the native PostgreSQL 18 test database.'
+bash "$script_dir/provision-test-db.sh"
 
 if [[ -f "$cloud_env" ]]; then
   cloud_log "Native test database environment persisted at $cloud_env."

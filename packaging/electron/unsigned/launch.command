@@ -105,7 +105,7 @@ fi
 # Prepare them on first use or after an explicit local cleanup. This validates
 # PostgreSQL 18.6, creates the standalone Alembic executable, and installs the
 # pinned Chrome Headless Shell used for PDF reports. It never starts Homebrew's
-# PostgreSQL service and it does not invoke Docker.
+# PostgreSQL service; the application uses its bundled native runtime.
 if [ ! -x "$ROOT_DIR/packaging/electron/native-runtime/vision-alembic" ] ||
    [ ! -f "$ROOT_DIR/packaging/electron/native-runtime/postgres/runtime.json" ] ||
    [ ! -f "$ROOT_DIR/packaging/electron/native-runtime/chromium/runtime.json" ]; then

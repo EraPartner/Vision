@@ -7,10 +7,10 @@
 # Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 / SKIP_DB_TESTS=1 git push
 #
 # Checks: frontend typecheck . backend typecheck (+ noImplicitAny ratchet) .
-#         endpoint-matrix . locales . compose sync . TODO.md stamps .
+#         endpoint-matrix . locales . TODO.md stamps .
 #         backend tests .
 #         DB-backed backend tests (only when the push touches that surface, and
-#         only when docker + alembic are here -- otherwise it warns and passes)
+#         only when PostgreSQL 18 + Alembic are here -- otherwise it warns and passes)
 #
 # Output is ASCII-only on purpose (see the note in pre-commit).
 
@@ -72,11 +72,6 @@ fi
 
 run "endpoint matrix" node scripts/check-endpoint-matrix.js
 run "validate locales" node scripts/validate-locales.js
-# Same checker CI (verify-compose-sync) and release.yml's verify job run. The
-# v1.0.2 data-loss class of bug is a named-volume that exists in the root compose
-# file but not in the packaged one -- catch it here, not after a push.
-run "compose sync" node scripts/check-compose-sync.js
-
 if [ "${SKIP_TESTS:-}" != "1" ]; then
   run "backend tests" sh -c 'cd apps/node-backend && bun vitest run'
 fi
@@ -88,7 +83,7 @@ fi
 # the throwaway PostgreSQL database `bun run test:db` spins up.
 #
 # This must never turn "no database here" into a failed push: without native
-# PostgreSQL 18 or Docker, or without the Alembic toolchain, it degrades to a
+# PostgreSQL 18, or without the Alembic toolchain, it degrades to a
 # loud warning and lets the push through.
 # Skip it outright with SKIP_DB_TESTS=1.
 
@@ -129,11 +124,11 @@ if [ "${SKIP_TESTS:-}" != "1" ] && [ "${SKIP_DB_TESTS:-}" != "1" ]; then
       else
         echo ""
         echo "[pre-push] WARNING: this push changes DB-backed test surface, but the"
-        echo "[pre-push]          DB-backed cases were SKIPPED -- neither PostgreSQL 18 nor"
-        echo "[pre-push]          Docker is usable, and/or the Alembic toolchain is unavailable."
+        echo "[pre-push]          DB-backed cases were SKIPPED -- PostgreSQL 18"
+        echo "[pre-push]          and/or the Alembic toolchain is unavailable."
         echo "[pre-push]          Therefore 'bun run test:db'"
         echo "[pre-push]          cannot run. CI WILL run them. Exercise them on a machine"
-        echo "[pre-push]          with PostgreSQL 18 or Docker before trusting this push."
+        echo "[pre-push]          with PostgreSQL 18 before trusting this push."
         echo ""
       fi
     fi

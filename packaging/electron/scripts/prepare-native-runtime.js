@@ -164,17 +164,12 @@ function run() {
       path.join(repoRoot, "config", "alembic.ini"),
       path.join(stagingRoot, "config", "alembic.ini"),
     );
-    fs.mkdirSync(path.join(stagingRoot, "docker", "postgres-init"), {
+    fs.mkdirSync(path.join(stagingRoot, "config", "postgres"), {
       recursive: true,
     });
     fs.copyFileSync(
-      path.join(repoRoot, "docker", "postgres-init", "app-role-grants.sql.tpl"),
-      path.join(
-        stagingRoot,
-        "docker",
-        "postgres-init",
-        "app-role-grants.sql.tpl",
-      ),
+      path.join(repoRoot, "config", "postgres", "app-role-grants.sql.tpl"),
+      path.join(stagingRoot, "config", "postgres", "app-role-grants.sql.tpl"),
     );
     preparePostgresRuntime({
       sourceBin: process.env.VISION_POSTGRES_SOURCE_BIN,

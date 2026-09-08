@@ -55,11 +55,12 @@ exploitability in Vision.
 
 The codebase ships defense-in-depth that is documented and worth reading before reporting:
 
-- **Supply chain:** gitleaks (CI + pre-commit), `bun audit`, `pip-audit`, Trivy image scan,
+- **Supply chain:** gitleaks (CI + pre-commit), `bun audit`, `pip-audit`, Trivy filesystem scan,
   CodeQL SAST, Electron release builds with `--ignore-scripts`
   ([ADR-050](docs/adr/050-ci-supply-chain-security-tooling.md)).
 - **Runtime:** input validation (Zod + server-side), rate limiting, SSRF guard, strict CSP,
   admin token-or-open auth + CSRF guard ([ADR-063](docs/adr/063-admin-auth-csrf-guard.md)).
-- **Containers:** non-root user, dropped capabilities, read-only filesystem, resource limits.
+- **Native runtime:** loopback-only defaults, least-privilege database roles, and isolated
+  PostgreSQL data directories.
 
 Full details: [`docs/security/index.md`](docs/security/index.md).

@@ -328,6 +328,104 @@ test("native PostgreSQL bootstraps query-statistics observability", () => {
   ]);
 });
 
+test("managed PostgreSQL installs required extensions as cluster administrator", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-pg-extension-bootstrap-"),
+  );
+  const calls = [];
+  try {
+    const { runtimeRoot } = await createBundledPostgresFixture(temp);
+    const runtimeId = "vision_extension_bootstrap";
+    const postgresData = path.join(
+      temp,
+      "user-data",
+      "native",
+      runtimeId,
+      "postgres",
+      "data",
+    );
+    const runFile = async (executable, args) => {
+      calls.push({ executable: path.basename(executable), args: [...args] });
+      if (args[0] === "--version") {
+        return {
+          stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
+          stderr: "",
+        };
+      }
+      if (path.basename(executable) === "pg_isready") {
+        return { stdout: "accepting connections", stderr: "" };
+      }
+      const command = args[args.indexOf("--command") + 1] || "";
+      if (command.includes("SHOW server_version_num")) {
+        return {
+          stdout: `180006\nlocalhost\n${postgresData}\n`,
+          stderr: "",
+        };
+      }
+      if (
+        command.includes("SELECT 1 FROM pg_roles") ||
+        command.includes("SELECT 1 FROM pg_database")
+      ) {
+        return { stdout: "1\n", stderr: "" };
+      }
+      return { stdout: "", stderr: "" };
+    };
+    const runtime = createNativeRuntime({
+      userDataDir: path.join(temp, "user-data"),
+      repoRoot: path.resolve(__dirname, "..", "..", ".."),
+      runtimeRoot: path.resolve(__dirname, "..", "..", ".."),
+      postgresRuntimeRoot: runtimeRoot,
+      runtimeId,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
+      runFile,
+    });
+    await runtime.ensureLayout();
+    await runtime.discover();
+    await fs.promises.mkdir(postgresData, { recursive: true });
+    await fs.promises.writeFile(path.join(postgresData, "PG_VERSION"), "18\n");
+    await fs.promises.writeFile(
+      path.join(postgresData, "postgresql.conf"),
+      "# fixture\ninclude = 'vision.conf'\n",
+    );
+    await fs.promises.writeFile(
+      path.join(postgresData, "vision.conf"),
+      [
+        "listen_addresses = '127.0.0.1'",
+        "port = 54329",
+        "unix_socket_directories = ''",
+        "password_encryption = 'scram-sha-256'",
+        "shared_preload_libraries = 'pg_stat_statements'",
+        "logging_collector = off",
+        "",
+      ].join("\n"),
+    );
+
+    await runtime.bootstrapDatabase();
+
+    const extensionCall = calls.find(({ executable, args }) => {
+      const command = args[args.indexOf("--command") + 1] || "";
+      return executable === "psql" && command.includes("CREATE EXTENSION");
+    });
+    assert.ok(extensionCall);
+    assert.equal(
+      extensionCall.args[extensionCall.args.indexOf("-U") + 1],
+      `${runtimeId}_admin`,
+    );
+    assert.equal(
+      extensionCall.args[extensionCall.args.indexOf("-d") + 1],
+      runtimeId,
+    );
+    assert.match(
+      extensionCall.args[extensionCall.args.indexOf("--command") + 1],
+      /CREATE EXTENSION IF NOT EXISTS pg_stat_statements;/,
+    );
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
 test("managed PostgreSQL upgrades observability config for an existing cluster", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-observability-upgrade-"),
@@ -707,6 +805,17 @@ test("database activation applies materialized-view ownership inside the staging
     assert.ok(ownershipIndex > restoreIndex);
     const restoreTarget =
       calls[restoreIndex].args[calls[restoreIndex].args.indexOf("-d") + 1];
+    const stagingExtensionIndex = calls.findIndex(({ executable, args }) => {
+      const command = args[args.indexOf("--command") + 1] || "";
+      return (
+        executable === "psql" &&
+        args[args.indexOf("-d") + 1] === restoreTarget &&
+        command.includes("CREATE EXTENSION")
+      );
+    });
+    assert.ok(stagingExtensionIndex >= 0);
+    assert.ok(stagingExtensionIndex < restoreIndex);
+    assert.ok(calls[restoreIndex].args.includes("--no-comments"));
     const ownershipCall = calls[ownershipIndex];
     assert.equal(
       ownershipCall.args[ownershipCall.args.indexOf("--dbname") + 1],
@@ -1205,7 +1314,7 @@ test("detailed readiness requires the backend database connection", () => {
   assert.equal(isDetailedHealthReady({ database: true }), false);
 });
 
-test("native activation guard blocks an existing Docker installation without a cutover marker", async () => {
+test("native activation guard blocks a legacy installation without a cutover marker", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-guard-"),
   );

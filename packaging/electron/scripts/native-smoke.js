@@ -14,9 +14,11 @@ const {
   directoryFingerprint,
 } = require("../runtime/native");
 const {
-  assertStatsEqual,
-  assertLiveStatsEqual,
-} = require("../runtime/importer");
+  assertDatabaseStatsEqual,
+  assertStableDatabaseStatsEqual,
+} = require("../runtime/database-stats");
+const { createBundle, encryptBundle, openBundle } = require("../backup/bundle");
+const { restoreNativeBundle } = require("../backup/native-transport");
 const { resolveNativePayloadRoot } = require("./resolve-native-payload");
 
 function reservePort() {
@@ -234,7 +236,6 @@ async function main() {
     appPort: () => port,
     postgresPort: Number(process.env.VISION_POSTGRES_PORT || 54329),
   });
-  let databaseSwitch;
   let failure;
   try {
     await runtime.start();
@@ -251,55 +252,171 @@ async function main() {
     if (readBack?.data?.value?.keepServicesOnQuit !== false)
       throw new Error("Native API write/read round trip failed");
 
+    const syntheticAccountName = "Native smoke account";
+    const syntheticAccount = await requestJson(port, "POST", "/api/accounts", {
+      name: syntheticAccountName,
+      display_name: "Native smoke original",
+      currency: "EUR",
+    });
+    const accountId = syntheticAccount?.data?.id;
+    if (!Number.isInteger(accountId))
+      throw new Error("Native smoke account creation failed");
+    const syntheticRecipient = await requestJson(
+      port,
+      "POST",
+      "/api/recipients",
+      { name: "Native smoke recipient" },
+    );
+    const recipientId = syntheticRecipient?.data?.id;
+    if (!Number.isInteger(recipientId))
+      throw new Error("Native smoke recipient creation failed");
+    const syntheticTransaction = await requestJson(
+      port,
+      "POST",
+      "/api/transactions",
+      {
+        transaction_date: "2026-01-15",
+        bank_account: syntheticAccountName,
+        recipient_id: recipientId,
+        amount: -42.5,
+        currency: "EUR",
+        memo: "Native smoke original transaction",
+      },
+    );
+    const transactionId = syntheticTransaction?.data?.id;
+    if (!Number.isInteger(transactionId))
+      throw new Error("Native smoke transaction creation failed");
+    const originalTransactionMemo = syntheticTransaction?.data?.memo;
+    if (typeof originalTransactionMemo !== "string")
+      throw new Error("Native smoke transaction readback failed");
+
     const attachment = path.join(runtime.paths.attachments, "smoke.txt");
     await fs.promises.writeFile(
       attachment,
       "synthetic native smoke attachment",
     );
-    const attachmentBefore = await directoryFingerprint(
-      runtime.paths.attachments,
-    );
-    // Freeze the only synthetic writer before measuring and dumping. The
+    const frontendState = {
+      keys: {
+        "vision.language": "nl",
+        "vision.theme": "dark",
+      },
+    };
+    // Freeze the only synthetic writer before creating the bundle. The
     // restore proof must compare one stable source snapshot, not race startup
     // cache refreshes such as exchange_rates.
     await runtime.stop({ keepPostgres: true });
     const before = await runtime.getDatabaseStats();
-    const dumpPath = path.join(userDataDir, "smoke.dump");
-    await runtime.dumpDatabase(dumpPath, { format: "custom" });
-    await runtime.validateCustomDump(dumpPath);
-
-    databaseSwitch = await runtime.activateRestoredDatabase(dumpPath, {
-      format: "custom",
-      expectedSchemaHead: before.schema,
+    const bundleInputDir = path.join(userDataDir, "bundle-input");
+    const bundleOutputDir = path.join(userDataDir, "backups");
+    const dbSqlPath = path.join(bundleInputDir, "db.sql");
+    const attachmentsDir = path.join(bundleInputDir, "attachments");
+    await fs.promises.mkdir(bundleInputDir, { recursive: true, mode: 0o700 });
+    await runtime.dumpDatabase(dbSqlPath, { format: "plain" });
+    await runtime.exportAttachments(attachmentsDir);
+    const { bundlePath } = await createBundle({
+      destDir: bundleOutputDir,
+      deviceId: "native-smoke",
+      schemaHead: before.schema,
+      appVersion: "native-smoke",
+      dbSqlPath,
+      attachmentsDir,
+      frontendState,
     });
-    const restored = await runtime.getDatabaseStats();
-    assertStatsEqual(before, restored);
+    const passphrase = crypto.randomBytes(24).toString("base64url");
+    const { encPath } = await encryptBundle(bundlePath, passphrase);
+
+    // Prove restore replaces changed state rather than merely accepting an
+    // already-identical database and attachment tree.
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
+    await requestJson(port, "PUT", "/api/settings/services_settings", {
+      value: { keepServicesOnQuit: true },
+    });
+    await requestJson(port, "PATCH", `/api/accounts/${accountId}`, {
+      display_name: "Native smoke mutated",
+    });
+    await requestJson(port, "PATCH", `/api/transactions/${transactionId}`, {
+      memo: "Native smoke mutated transaction",
+    });
+    await fs.promises.writeFile(attachment, "post-backup mutation");
+    await runtime.stop({ keepPostgres: true });
+
+    const opened = await openBundle(encPath, { passphrase });
+    try {
+      if (opened.metadata.schemaHead !== before.schema)
+        throw new Error("Native bundle schema revision changed");
+      if (
+        JSON.stringify(opened.frontendState) !== JSON.stringify(frontendState)
+      )
+        throw new Error("Native bundle frontend state changed");
+      await restoreNativeBundle(runtime, {
+        dbSqlPath: opened.dbSqlPath,
+        attachmentsDir: opened.attachmentsDir,
+        expectedSchemaHead: opened.metadata.schemaHead,
+      });
+    } finally {
+      opened.cleanup();
+    }
+
     const after = await runtime.getDatabaseStats();
-    assertLiveStatsEqual(before, after);
+    assertDatabaseStatsEqual(before, after);
+    assertStableDatabaseStatsEqual(before, after);
+    const restoredSettings = await requestJson(
+      port,
+      "GET",
+      "/api/settings/services_settings",
+    );
+    if (restoredSettings?.data?.value?.keepServicesOnQuit !== false)
+      throw new Error("Native bundle database state was not restored");
+    const restoredAccount = await requestJson(
+      port,
+      "GET",
+      `/api/accounts/${accountId}`,
+    );
+    if (
+      restoredAccount?.data?.name !== syntheticAccountName ||
+      restoredAccount?.data?.display_name !== "Native smoke original" ||
+      restoredAccount?.data?.currency !== "EUR"
+    )
+      throw new Error("Native bundle account state was not restored");
+    const restoredTransaction = await requestJson(
+      port,
+      "GET",
+      `/api/transactions/${transactionId}`,
+    );
+    if (
+      restoredTransaction?.data?.transaction_date !== "2026-01-15" ||
+      restoredTransaction?.data?.bank_account !== syntheticAccountName ||
+      restoredTransaction?.data?.recipient_id !== recipientId ||
+      restoredTransaction?.data?.amount !== -42.5 ||
+      restoredTransaction?.data?.currency !== "EUR" ||
+      restoredTransaction?.data?.memo !== originalTransactionMemo
+    )
+      throw new Error(
+        `Native bundle transaction state was not restored: ${JSON.stringify({
+          transaction_date: restoredTransaction?.data?.transaction_date,
+          bank_account: restoredTransaction?.data?.bank_account,
+          recipient_id: restoredTransaction?.data?.recipient_id,
+          amount: restoredTransaction?.data?.amount,
+          currency: restoredTransaction?.data?.currency,
+          memo: restoredTransaction?.data?.memo,
+        })}`,
+      );
     const attachmentAfter = await directoryFingerprint(
       runtime.paths.attachments,
     );
+    const restoredAttachment = await fs.promises.readFile(attachment, "utf8");
     if (
-      attachmentAfter.count !== attachmentBefore.count ||
-      attachmentAfter.digest !== attachmentBefore.digest
-    ) {
-      throw new Error(
-        "Native attachment fingerprint changed during database restore",
-      );
-    }
-    await runtime.finalizeDatabaseSwitch(databaseSwitch.switchToken);
+      attachmentAfter.count !== 1 ||
+      restoredAttachment !== "synthetic native smoke attachment"
+    )
+      throw new Error("Native bundle attachment state was not restored");
     console.log(
       cleanup
         ? `Native PostgreSQL 18 smoke passed on loopback port ${port}. Synthetic data was removed.`
         : `Native PostgreSQL 18 smoke passed on loopback port ${port}. Synthetic database ${runtimeId} was preserved for inspection.`,
     );
   } catch (error) {
-    if (databaseSwitch)
-      await runtime
-        .rollbackDatabaseSwitch(databaseSwitch.switchToken)
-        .catch(() => {});
     failure = error;
   } finally {
     await runtime.stop().catch(() => {});

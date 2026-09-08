@@ -13,25 +13,10 @@ const {
   systemPreferences,
   nativeImage,
 } = require("electron");
-const { spawn } = require("child_process");
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const { isBundleEncrypted } = require("./backup/bundle");
-const composeMod = require("./compose");
-const {
-  dockerEnv,
-  run,
-  checkDocker,
-  readComposeProjectName,
-  isComposeAppRunning,
-  composeArgs,
-  composeStartOrUp,
-  stopContainers,
-  pullLatestImage,
-  restartAppContainer,
-} = composeMod;
 const backupCrypto = require("./backup/crypto");
 const {
   getDefaultICloudBackupDir,
@@ -61,7 +46,6 @@ const {
   GITHUB_REPO,
   getUpdateMode,
   checkForShellUpdate,
-  resolveReleaseImageDigest,
   installPreparedShellUpdate,
   setupManualShellUpdater,
 } = updater;
@@ -137,10 +121,7 @@ function t(key, vars, fallback) {
 //      other apps" prompt, because Vision.app reads/writes a userData folder
 //      whose name doesn't match its bundle.
 //   2. Each rename/reinstall lands in a different userData dir, generating a
-//      fresh .env with a new POSTGRES_PASSWORD while the docker volume
-//      `embedded_compose_db_data` (project name = basename of workDir =
-//      "embedded_compose") is shared and keeps the OLD password — backend
-//      auth fails, frontend loads empty.
+//      a second local runtime and makes existing settings appear to disappear.
 // MUST run before any `app.getPath('userData')` (e.g. settingsPath below).
 //
 // Demo builds ship a `resources/DEMO` marker (electron-builder-demo.json). When
@@ -247,10 +228,8 @@ if (gotSingleInstanceLock)
   })();
 
 // One-shot migration from the legacy "vision-desktop" userData dir to the
-// canonical "Vision" dir. Preserves existing settings.json + embedded_compose
-// (and its .env with the original POSTGRES_PASSWORD) so the shared docker
-// volume keeps authenticating after the rename. Skipped for a second instance
-// (it doesn't hold the lock and is about to quit).
+// canonical "Vision" dir. Preserves existing settings and native runtime data.
+// Skipped for a second instance (it doesn't hold the lock and is about to quit).
 if (gotSingleInstanceLock)
   (function migrateLegacyUserData() {
     try {
@@ -303,31 +282,14 @@ const HEALTH_POLL_ATTEMPTS =
   Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200; // 200 × 300ms = 60s max
 const HEALTH_POLL_INTERVAL_MS =
   Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
-// After a cold/dev build the image finishes building, then the backend still has to
-// boot from scratch (deps + migrations + server) — that routinely overshoots the
-// warm-boot budget above. Give the post-build poll a much larger budget so a first
-// launch or `docker:dev:rebuild` doesn't trip the slow-start warning. 600 × 300ms ≈ 3 min.
+// A cold native start may initialize PostgreSQL and run migrations. Give that
+// path a larger budget than a warm restart. 600 × 300ms ≈ 3 min.
 const HEALTH_POLL_BUILD_ATTEMPTS =
   Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
 const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
 const RENDERER_READY_TIMEOUT_MS =
   Number(process.env.VISION_RENDERER_READY_TIMEOUT_MS) || 12_000;
-
-// Repo paths that affect the Docker image. Changes to these trigger a rebuild;
-// changes to everything else (docs, packaging/electron, etc.) do not.
-const DOCKER_PATHS = [
-  "Dockerfile",
-  "package.json",
-  "bun.lock",
-  "apps/node-backend/src/",
-  "apps/frontend/src/",
-  "apps/frontend/public/",
-  "apps/frontend/index.html",
-  "packages/",
-  "i18n/",
-  "scripts/generate-locales.js",
-];
 
 // ── Startup instrumentation ───────────────────────────────────────────────────
 // Phase 1 of startup-speedup plan. Emits structured JSON marks to stderr so
@@ -394,7 +356,6 @@ function registerSecurityHeaders() {
 let appPort = DEFAULT_APP_PORT;
 const appUrl = () => `http://localhost:${appPort}`;
 const healthUrl = () => `${appUrl()}/health`;
-let runtimeMode = null;
 let activeRuntime = null;
 
 // ── Settings (persisted across launches) ─────────────────────────────────────
@@ -477,16 +438,9 @@ function updateSettings(mutate) {
 }
 
 // ── Extracted-module wiring ──────────────────────────────────────────────────
-// Threads main.js globals/singletons into the extracted modules (compose.js,
-// backup/crypto.js, backup/restore.js, updater.js). Mutable state (appPort,
-// workDir, overrideFiles, useRepoMode, isQuitting) is passed as getters/
-// callbacks so the modules always observe the live value at call time, exactly
-// as the code did when it lived in this file.
-composeMod.init({
-  appPort: () => appPort,
-  useRepoMode: () => useRepoMode,
-  isDemo: () => __IS_DEMO,
-});
+// Threads main.js globals/singletons into the extracted backup and update
+// modules. Mutable state is passed as getters/callbacks so those modules always
+// observe the live value.
 backupCrypto.init({
   APP_NAME,
   loadSettings,
@@ -494,7 +448,6 @@ backupCrypto.init({
 });
 backupRestore.init({
   workDir: () => workDir,
-  overrideFiles: () => overrideFiles,
   appPort: () => appPort,
   repoRootFallback: path.resolve(__dirname, "..", ".."),
   pollHealth,
@@ -507,8 +460,6 @@ updater.init({
   t,
   notify,
   workDir: () => workDir,
-  useRepoMode: () => useRepoMode,
-  runtimeMode: () => runtimeMode,
   stopRuntime: async () => {
     if (activeRuntime?.mode === "native") await activeRuntime.stop();
   },
@@ -524,19 +475,11 @@ updater.init({
 });
 
 // ── Backend host-port resolution ───────────────────────────────────────────────
-// The backend container always listens on 3002 internally; we publish it on a
-// host port that Electron both maps (PORT injected into compose) and polls
-// (appUrl()/healthUrl()). Those two MUST agree or the splash hangs on "Almost
-// ready…" forever. We pick a truly-random free port ONCE per app and persist it
-// (settings.appPort): random so the demo and the real app never collide on a
-// shared default; persisted so every relaunch reuses the same port, keeping the
-// running container's published port valid (and the warm `compose start` fast
-// path correct). composeStartOrUp() recreates the container if its published
-// port ever drifts from this value.
+// The native backend listens on a random loopback port chosen once per app and
+// persisted in settings. The demo and real app therefore cannot collide.
 
 // Resolve true if `port` can be bound on loopback right now (i.e. nothing else
-// holds it). A port held by our own *running* container reads as not-free, which
-// is fine: we never re-pick a persisted port, only validate freshly-chosen ones.
+// holds it). Persisted ports are not re-picked until startup reports a collision.
 function isPortFree(port) {
   return new Promise((resolve) => {
     const net = require("net");
@@ -580,21 +523,6 @@ async function resolveAppPort() {
   return port;
 }
 
-// A persisted appPort is reused unconditionally (so the running container's
-// published port stays valid). But if an unrelated process bound that port
-// while Vision was down, `compose up`/`start` can't publish the app container
-// on it and fails with a host-port collision — which, unrecovered, bricks every
-// relaunch until the user hand-edits settings.json. Detect that specific failure
-// so the caller can pick a fresh port and recreate. The message wording varies
-// by platform/daemon, hence the several alternatives. run() rejects with the
-// raw stderr string, so match against that.
-function isPortConflictError(err) {
-  const msg = String(err && err.message ? err.message : err).toLowerCase();
-  return /already allocated|address already in use|bind for [^\n]*failed|ports are not available|failed to bind host port/.test(
-    msg,
-  );
-}
-
 // Pick a fresh free port and persist it. URL accessors derive from appPort.
 // Used to self-heal after a foreign process squats the persisted appPort.
 async function repickAppPort() {
@@ -612,383 +540,6 @@ async function repickAppPort() {
   }
   return port;
 }
-
-// ── Repo/workDir resolution ───────────────────────────────────────────────────
-// In dev (electron . from packaging/electron/): resolve two levels up.
-// In packaged .app with repoPath setting, source-update mode may use the local
-// clone. Native runtime resources still come from the packaged application.
-// Docker mode uses the embedded Compose file only when selected explicitly.
-async function resolveWorkDir() {
-  if (!app.isPackaged) {
-    return path.resolve(__dirname, "..", "..");
-  }
-
-  const settings = await loadSettings();
-
-  // Repo mode: if settings.repoPath points to a valid clone, use it and build
-  // from local source exactly like dev mode — no GHCR image needed.
-  if (settings.repoPath && typeof settings.repoPath === "string") {
-    let canonicalRepoPath = null;
-    try {
-      // Resolve to absolute, then canonicalise to defeat ../ traversal and
-      // symlink shenanigans before trusting the directory.
-      const resolved = path.resolve(settings.repoPath);
-      canonicalRepoPath = await fs.promises.realpath(resolved);
-    } catch {
-      canonicalRepoPath = null;
-    }
-    if (canonicalRepoPath) {
-      const repoCompose = path.join(canonicalRepoPath, "docker-compose.yml");
-      const valid = await fs.promises
-        .access(repoCompose)
-        .then(() => true)
-        .catch(() => false);
-      if (valid) {
-        useRepoMode = true;
-        return canonicalRepoPath;
-      }
-    }
-  }
-
-  // Ensure the generated i18n is present in the packaged app resources
-  try {
-    const packagedI18n = path.join(process.resourcesPath, "i18n");
-    const packagedI18nExists = await fs.promises
-      .access(packagedI18n)
-      .then(() => true)
-      .catch(() => false);
-    if (!packagedI18nExists) {
-      // If it's missing, attempt to copy from the repo i18n/source (best effort).
-      // __dirname is packaging/electron, so the repo masters live two levels up
-      // under i18n/source — the previous `../i18n` (packaging/i18n) never existed,
-      // making this whole branch dead code.
-      const repoI18n = path.join(__dirname, "..", "..", "i18n", "source");
-      const repoI18nExists = await fs.promises
-        .access(repoI18n)
-        .then(() => true)
-        .catch(() => false);
-      if (repoI18nExists) {
-        await fs.promises.mkdir(packagedI18n, { recursive: true });
-        const files = await fs.promises.readdir(repoI18n);
-        await Promise.all(
-          files.map(async (f) => {
-            const src = path.join(repoI18n, f);
-            const dst = path.join(packagedI18n, f);
-            try {
-              await fs.promises.copyFile(src, dst);
-            } catch (e) {
-              /* ignore */
-            }
-          }),
-        );
-      }
-    }
-  } catch (e) {
-    // Non-fatal — packaged app should include i18n via build step. If not,
-    // dialogs will fallback to internal defaults.
-  }
-
-  const embeddedSrc = path.join(
-    process.resourcesPath,
-    "resources",
-    "docker-compose.yml",
-  );
-
-  // If we've already set up the embedded compose, reuse it — but refresh the
-  // compose file from the packaged resources first. Without this, a compose
-  // change shipped in a new app version (new named volume, healthcheck,
-  // security opt) never reaches upgraded installs, only fresh ones — the
-  // v1.0.2 data-loss channel. .env stays untouched: it carries the install's
-  // generated secrets.
-  const embeddedCompose =
-    settings.embeddedDir &&
-    path.join(settings.embeddedDir, "docker-compose.yml");
-  const hasEmbedded =
-    embeddedCompose &&
-    (await fs.promises
-      .access(embeddedCompose)
-      .then(() => true)
-      .catch(() => false));
-  if (hasEmbedded) {
-    try {
-      const [current, packaged] = await Promise.all([
-        fs.promises.readFile(embeddedCompose, "utf8"),
-        fs.promises.readFile(embeddedSrc, "utf8"),
-      ]);
-      if (current !== packaged) {
-        await fs.promises.copyFile(embeddedSrc, embeddedCompose);
-      }
-    } catch (err) {
-      // Non-fatal: a launch with the existing (stale) compose beats no launch.
-      console.warn(
-        "Embedded compose refresh failed (non-fatal):",
-        err?.message || err,
-      );
-    }
-    return settings.embeddedDir;
-  }
-
-  // Copy embedded compose from resources to a writable app data folder.
-  const embeddedDir = path.join(app.getPath("userData"), "embedded_compose");
-  try {
-    await fs.promises.mkdir(embeddedDir, { recursive: true });
-    const dest = path.join(embeddedDir, "docker-compose.yml");
-    // Overwrite if exists to allow updates on new app versions
-    await fs.promises.copyFile(embeddedSrc, dest);
-    await updateSettings((cur) => {
-      cur.embeddedDir = embeddedDir;
-    });
-    return embeddedDir;
-  } catch (err) {
-    await dialog.showMessageBox({
-      type: "error",
-      buttons: [t("common.ok")],
-      title: APP_NAME,
-      message: t("app.failedPrepareEmbedded"),
-      detail: String(err),
-    });
-    app.quit();
-    return null;
-  }
-}
-
-// ── .env generation ───────────────────────────────────────────────────────────
-// Canonical .env lives in the userData embedded_compose dir. Both packaged
-// Vision.app (workDir = embeddedDir) and electron:dev (workDir = repo root)
-// mirror from this single file, so POSTGRES_PASSWORD stays in sync across
-// stacks. Without this, dev's repo .env and Vision.app's embeddedDir/.env
-// drift, and whichever stack didn't initialize the postgres volume hits
-// "password authentication failed" on connect.
-function canonicalEnvPath() {
-  return path.join(app.getPath("userData"), "embedded_compose", ".env");
-}
-
-function generateFreshEnvContents() {
-  // Least-privilege by default (three-variable setup, see .env.example):
-  // the runtime pool connects as the non-superuser ftm_app role, while the
-  // Postgres bootstrap superuser ftm_user is kept for Alembic DDL only
-  // (DATABASE_URL_MIGRATIONS). The backend creates ftm_app itself on first
-  // boot (src/database/roleBootstrap.js) — the packaged compose has no
-  // postgres-init mount, and this also covers volumes initialised before the
-  // role existed. Both secrets are hex (no URL/SQL-hostile characters) and
-  // live only in this 0o600 .env, matching the existing POSTGRES_PASSWORD
-  // handling.
-  const pgPass = crypto.randomBytes(32).toString("hex");
-  const appPass = crypto.randomBytes(32).toString("hex");
-  return (
-    [
-      "# Auto-generated by Vision on first launch. Do not commit this file.",
-      `POSTGRES_PASSWORD=${pgPass}`,
-      `POSTGRES_APP_PASSWORD=${appPass}`,
-      `DATABASE_URL=postgresql://ftm_app:${appPass}@db:5432/financial_transactions`,
-      `DATABASE_URL_MIGRATIONS=postgresql://ftm_user:${pgPass}@db:5432/financial_transactions`,
-    ].join("\n") + "\n"
-  );
-}
-
-// Research provider API keys (ADR-079) are not part of the generated baseline, but
-// the embedded stack (Vision.app) should pick up the same keys configured for dev
-// or Docker (which live in the repo-root .env per ADR-080). These helpers merge any
-// such keys into the canonical .env so `env_file: .env` injects them into the app
-// container — without that, the desktop app's keyed providers stay unconfigured.
-// MUST stay in sync with ENV_VAR_BY_PROVIDER in
-// apps/node-backend/src/services/research/providerKeys.js. A key missing here is
-// not merged into the canonical .env AND is stripped from the repo-root .env on
-// the write-back below — so an unlisted key silently disappears on every launch.
-const PROVIDER_KEY_VARS = [
-  "TWELVE_DATA_API_KEY",
-  "FINNHUB_API_KEY",
-  "FMP_API_KEY",
-  "ALPHA_VANTAGE_API_KEY",
-  "FRED_API_KEY", // macro vertical (ADR-082)
-];
-
-function parseEnvKeys(contents) {
-  const map = new Map();
-  for (const line of (contents || "").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    map.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
-  }
-  return map;
-}
-
-// Write (or replace) a single key in an .env body, preserving every other line
-// and the file's ordering. Unlike mergeProviderKeys this DOES overwrite: the
-// image reference is meant to move when a newer digest is resolved.
-function upsertEnvKey(contents, key, value) {
-  const line = `${key}=${value}`;
-  const lines = (contents || "").split("\n");
-  let replaced = false;
-  const next = lines.map((raw) => {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith("#")) return raw;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1 || trimmed.slice(0, eq).trim() !== key) return raw;
-    replaced = true;
-    return line;
-  });
-  if (replaced) return next.join("\n");
-  const body = contents || "";
-  return `${body}${body.endsWith("\n") || body === "" ? "" : "\n"}${line}\n`;
-}
-
-const HEX_DIGITS = "0123456789abcdef";
-const DIGEST_HEX_LENGTH = 64;
-
-/**
- * Rebuild a hex string from a trusted alphabet.
- *
- * Every character of the result is taken from `HEX_DIGITS`, a module-level
- * literal; the input is used only to pick an index. So the returned string
- * shares no data with the caller's — which is the point, because this value
- * ends up in a file and then in the compose `image:` reference. A regex test
- * would prove the same thing to a human but not to static analysis, which
- * reported the write as network-data-to-file-system; this is the same
- * lookup-through-a-trusted-source indirection dbEditor uses for SQL
- * identifiers, and it makes the guarantee structural rather than incidental.
- *
- * @param {string} value
- * @returns {string|null} null if any character is not a lowercase hex digit
- */
-function rebuildHex(value) {
-  let out = "";
-  for (const char of value) {
-    const index = HEX_DIGITS.indexOf(char);
-    if (index === -1) return null;
-    out += HEX_DIGITS[index];
-  }
-  return out;
-}
-
-/**
- * Pin the app image to `digest` by writing APP_IMAGE_REF into the .env files
- * compose reads. Both copies are updated so the canonical .env and the work-dir
- * .env cannot disagree about which image the stack runs.
- *
- * The value is validated here as well as at the source: it is interpolated
- * straight into the compose `image:` reference, so nothing but an exact sha256
- * digest may reach it.
- *
- * @param {string} workDir
- * @param {string} digest e.g. `sha256:abc…`
- * @returns {Promise<boolean>} true when the pin was written
- */
-async function pinImageDigest(workDir, digest) {
-  const match = /^sha256:([0-9a-f]{64})$/.exec(String(digest || ""));
-  if (!match) return false;
-  const hex = rebuildHex(match[1]);
-  if (hex === null || hex.length !== DIGEST_HEX_LENGTH) return false;
-  const reference = `@sha256:${hex}`;
-  const targets = [canonicalEnvPath(), path.join(workDir, ".env")];
-  const seen = new Set();
-  let wrote = false;
-  for (const file of targets) {
-    const resolved = path.resolve(file);
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-    const current = await fs.promises
-      .readFile(resolved, "utf8")
-      .catch(() => null);
-    if (current === null) continue;
-    const updated = upsertEnvKey(current, "APP_IMAGE_REF", reference);
-    if (updated === current) {
-      wrote = true;
-      continue;
-    }
-    // codeql[js/http-to-file-access]: retained as documentation, not as the
-    // control — rebuildHex above is what actually severs the flow. The digest
-    // comes from the GitHub release API, is matched against
-    // ^sha256:[0-9a-f]{64}$, and is then rebuilt character-by-character from a
-    // literal alphabet, so the bytes written share no data with the response.
-    // The target is the app's own 0600 .env.
-    await fs.promises.writeFile(resolved, updated, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    wrote = true;
-  }
-  return wrote;
-}
-
-// Append provider keys present in `workContents` (e.g. the repo-root .env) or, as a
-// fallback, process.env — but only those not already in `truth`. Existing values are
-// never overwritten, so a key set in the canonical .env is stable across launches.
-function mergeProviderKeys(truth, workContents) {
-  const present = parseEnvKeys(truth);
-  const fromWork = parseEnvKeys(workContents);
-  const additions = [];
-  for (const key of PROVIDER_KEY_VARS) {
-    if (present.has(key)) continue;
-    const value = fromWork.get(key) ?? process.env[key];
-    if (value !== undefined && value !== "") additions.push(`${key}=${value}`);
-  }
-  if (additions.length === 0) return truth;
-  return `${truth}${truth.endsWith("\n") ? "" : "\n"}${additions.join("\n")}\n`;
-}
-
-async function ensureEnv(workDir) {
-  const canonicalEnv = canonicalEnvPath();
-  const workEnv = path.join(workDir, ".env");
-  await fs.promises.mkdir(path.dirname(canonicalEnv), { recursive: true });
-
-  const canonicalContents = await fs.promises
-    .readFile(canonicalEnv, "utf8")
-    .catch(() => null);
-  const workContents = await fs.promises
-    .readFile(workEnv, "utf8")
-    .catch(() => null);
-
-  // Pick the source of truth: prefer canonical; if missing, promote workEnv;
-  // if neither exists, generate a fresh one. This handles first-run in any
-  // mode and migration from pre-canonical setups where only the repo .env
-  // existed.
-  let truth = canonicalContents;
-  if (truth === null && workContents !== null) {
-    truth = workContents;
-  }
-  if (truth === null) {
-    truth = generateFreshEnvContents();
-  }
-
-  // Carry research provider API keys (ADR-079/080) into the embedded stack so the
-  // desktop app gets the same keys as dev/Docker. Merged from the work .env (dev's
-  // repo-root .env) or process.env; never overwrites values already in the .env.
-  truth = mergeProviderKeys(truth, workContents);
-
-  // EXISTING installs deliberately stay single-role: their .env already works,
-  // and rewriting DATABASE_URL to ftm_app here would gamble the boot on the
-  // running app image containing the runtime role bootstrap (pull_policy:
-  // missing keeps old images around; updates go through the manual shell
-  // updater). Least surprise: leave the working setup alone and log a pointer.
-  // Fresh installs (generateFreshEnvContents above) default to least-privilege.
-  if (!parseEnvKeys(truth).has("DATABASE_URL_MIGRATIONS")) {
-    console.log(
-      "[env] single-role database setup detected (no DATABASE_URL_MIGRATIONS) — kept as-is. " +
-        "See .env.example for the opt-in least-privilege (ftm_app) upgrade.",
-    );
-  }
-
-  if (canonicalContents !== truth) {
-    await fs.promises.writeFile(canonicalEnv, truth, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-  }
-  if (
-    path.resolve(workEnv) !== path.resolve(canonicalEnv) &&
-    workContents !== truth
-  ) {
-    await fs.promises.writeFile(workEnv, truth, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function notify(body) {
   if (Notification.isSupported()) {
@@ -1141,12 +692,8 @@ function loadErrorPage({ messageKey = "app.errorPageMessage" } = {}) {
   mainWindow.loadURL(pageUrl);
 }
 
-// `docker compose up -d` only proves that Docker accepted the start request. A
-// backend that exits during its database preflight still makes that command
-// succeed, leaving the splash to time out with no useful evidence in
-// userData/logs/main.log. Capture a small, redacted snapshot at that exact
-// point so startup failures can be diagnosed without asking the user to find
-// and run Docker commands in a separate terminal.
+// Capture a small, redacted backend-log snapshot when readiness polling fails
+// so startup errors can be diagnosed from userData/logs/main.log.
 function redactStartupDiagnostics(value) {
   return String(value || "")
     .replace(/(postgres(?:ql)?:\/\/[^:\s/@]+:)[^@\s/]+(@)/gi, "$1***$2")
@@ -1154,54 +701,19 @@ function redactStartupDiagnostics(value) {
 }
 
 async function logStartupDiagnostics() {
-  if (activeRuntime?.mode === "native") {
-    try {
-      const log = await fs.promises.readFile(
-        activeRuntime.paths.backendLog,
-        "utf8",
-      );
-      const tail = log.split("\n").slice(-200).join("\n");
-      console.error(
-        `[startup-diagnostics] native backend log\n${redactStartupDiagnostics(tail)}`,
-      );
-    } catch (error) {
-      console.error(
-        "[startup-diagnostics] native backend log unavailable:",
-        error && error.message ? error.message : error,
-      );
-    }
-    return;
-  }
-  if (!workDir) return;
-  const commands = [
-    {
-      label: "compose ps",
-      args: ["compose", ...composeArgs(workDir, overrideFiles), "ps", "--all"],
-    },
-    {
-      label: "compose logs",
-      args: [
-        "compose",
-        ...composeArgs(workDir, overrideFiles),
-        "logs",
-        "--no-color",
-        "--tail",
-        "200",
-        "app",
-        "db",
-      ],
-    },
-  ];
-  const results = await Promise.allSettled(
-    commands.map(({ args }) =>
-      run("docker", args, workDir, { timeout: 15000, env: dockerEnv }),
-    ),
-  );
-  for (let i = 0; i < results.length; i += 1) {
-    const result = results[i];
-    const raw = result.status === "fulfilled" ? result.value : result.reason;
+  try {
+    const log = await fs.promises.readFile(
+      activeRuntime.paths.backendLog,
+      "utf8",
+    );
+    const tail = log.split("\n").slice(-200).join("\n");
     console.error(
-      `[startup-diagnostics] ${commands[i].label}\n${redactStartupDiagnostics(raw)}`,
+      `[startup-diagnostics] native backend log\n${redactStartupDiagnostics(tail)}`,
+    );
+  } catch (error) {
+    console.error(
+      "[startup-diagnostics] native backend log unavailable:",
+      error && error.message ? error.message : error,
     );
   }
 }
@@ -1394,35 +906,16 @@ function pollAndLoad({ building = false } = {}) {
     });
 }
 
-// After opening Docker Desktop, poll the daemon until it answers. Docker rarely
-// autostarts after a reboot and takes ~20–45s to come up cold, so rather than
-// quitting and making the user relaunch (and risk hitting the same dialog if
-// they relaunch too early), we keep the splash up and wait. Resolves 'ok' as
-// soon as the daemon responds, or 'not-running' after the budget elapses. The
-// user can still abort with ⌘Q, which reaches the will-quit handler.
-async function waitForDockerDaemon(
-  cwd,
-  { budgetMs = 90000, intervalMs = 1000 } = {},
-) {
-  const deadline = Date.now() + budgetMs;
-  for (;;) {
-    if (mainWindow && mainWindow.isDestroyed()) return "not-running";
-    if ((await checkDocker(cwd)) === "ok") return "ok";
-    if (Date.now() >= deadline) return "not-running";
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-}
-
 // ── Main window ───────────────────────────────────────────────────────────────
 let mainWindow = null;
 
 // ── Boot splash ───────────────────────────────────────────────────────────────
-// Localized, theme-aware splash shown before any Docker I/O. The renderer mirrors
+// Localized, theme-aware splash shown before native runtime I/O. The renderer mirrors
 // the active palette's primary colors into settings.json (theme:persist-splash),
 // so the splash paints in the chosen theme (emerald on default, purple on
 // dracula, …). Falls back to neutral slate (light/dark via prefers-color-scheme)
 // when nothing has been persisted yet — e.g. the very first launch.
-// setSplashStatus() narrates the slow boot phases (image pull, service start).
+// setSplashStatus() narrates the slow service-start phases.
 const SPLASH_THEME_KEY = "splashTheme";
 const DEFAULT_BRAND_PRIMARY = "158 64% 52%";
 
@@ -1555,29 +1048,6 @@ function setSplashStatus(key) {
     .catch(() => {
       /* splash already navigated away */
     });
-}
-
-// The compose `up`/`start` phase is the dominant span of a warm boot, and
-// "Starting services…" would otherwise sit frozen through all of it. Advance the
-// splash to the next honest, already-localized status ("Almost ready…") once the
-// phase has run long enough that it's fair, so the line visibly progresses
-// instead of freezing. Pure setSplashStatus work — its data:-URL guard keeps it
-// safe once the splash navigates away — and uses existing i18n keys only.
-let splashProgressTimer = null;
-function startComposeSplashProgress() {
-  stopComposeSplashProgress();
-  splashProgressTimer = setTimeout(() => {
-    splashProgressTimer = null;
-    setSplashStatus("splash.waitingApp");
-  }, 6000);
-  if (splashProgressTimer && splashProgressTimer.unref)
-    splashProgressTimer.unref();
-}
-function stopComposeSplashProgress() {
-  if (splashProgressTimer) {
-    clearTimeout(splashProgressTimer);
-    splashProgressTimer = null;
-  }
 }
 
 // ── Window-state persistence ──────────────────────────────────────────────────
@@ -1935,7 +1405,7 @@ function httpPut(url, payload) {
 //     bridge (electron.ts), so divergent channels pass their own. Channels
 //     whose contract has no failure shape (pure reads) pass REJECT_SENDER,
 //     which rejects the invoke promise instead of inventing a return value.
-//   • requireWorkDir — precondition for handlers that shell out to Docker.
+//   • requireWorkDir — precondition for handlers that need the runtime root.
 //   • wrapErrors — uniform catch → { success: false, error: String(err) }.
 // Nothing currently opts out: the app has exactly one BrowserWindow, new
 // windows are denied (setWindowOpenHandler), and the splash + error pages load
@@ -1983,48 +1453,6 @@ function registerHandler(
   });
 }
 
-// ── IPC: renderer can request a Docker image update ──────────────────────────
-registerHandler(
-  "update:pull-image",
-  async () => {
-    if (runtimeMode === "native") {
-      return {
-        success: false,
-        wasNew: false,
-        error: "Docker image updates are unavailable in native runtime mode.",
-      };
-    }
-    // Pin to the digest the release published BEFORE pulling, so the pull fetches
-    // immutable content rather than whatever the tag currently points at. A failed
-    // lookup returns null and leaves the previous reference in place, so the update
-    // proceeds exactly as it did before rather than being blocked on GitHub.
-    const digest = await resolveReleaseImageDigest();
-    if (digest) {
-      const pinned = await pinImageDigest(workDir, digest);
-      console.log(
-        pinned
-          ? `[update] pinned app image to ${digest}`
-          : `[update] could not write image pin for ${digest} — continuing with the existing reference`,
-      );
-    }
-    const wasNew = await pullLatestImage(workDir);
-    if (wasNew) {
-      await restartAppContainer(workDir, overrideFiles);
-      await pollHealth().catch(() => {});
-    }
-    return { success: true, wasNew };
-  },
-  {
-    requireWorkDir: true,
-    wrapErrors: true,
-    senderFailure: {
-      success: false,
-      wasNew: false,
-      error: "Unauthorized sender",
-    },
-  },
-);
-
 registerHandler(
   "update:check-github",
   async () => await checkForShellUpdate(),
@@ -2033,16 +1461,7 @@ registerHandler(
 
 registerHandler(
   "update:install-shell",
-  async () => {
-    if (app.isPackaged && !useRepoMode && runtimeMode !== "native") {
-      return {
-        success: false,
-        error:
-          "Shell update not available in embedded mode — use Docker image update instead.",
-      };
-    }
-    return await installPreparedShellUpdate();
-  },
+  async () => await installPreparedShellUpdate(),
   { wrapErrors: true },
 );
 
@@ -2051,7 +1470,6 @@ registerHandler(
   () => ({
     mode: getUpdateMode(),
     is_packaged: app.isPackaged,
-    use_repo_mode: useRepoMode,
   }),
   { senderFailure: REJECT_SENDER },
 );
@@ -2207,8 +1625,7 @@ registerHandler(
     const passphrase =
       opts && typeof opts === "object" ? opts.passphrase : undefined;
 
-    // Pause the health watchdog so it cannot restart containers while the restore
-    // is in progress (stop + drop + recreate DB).
+    // Pause health monitoring while restore stops and recreates the database.
     stopHealthWatchdog();
     try {
       // Route .visionbak / .visionbak.enc through the new bundle restore path;
@@ -2221,21 +1638,6 @@ registerHandler(
         : await runRestore(resolved, { passphrase });
       return result;
     } catch (err) {
-      // Restore the writer for the selected provider only. Starting Docker here
-      // after a native restore failure would create split-brain operation.
-      if (activeRuntime?.mode !== "native") {
-        const composeFileArgs = composeArgs(workDir, overrideFiles);
-        const env = { ...dockerEnv, PORT: String(appPort) };
-        run(
-          "docker",
-          ["compose", ...composeFileArgs, "start", "app"],
-          workDir,
-          {
-            timeout: 120000,
-            env,
-          },
-        ).catch(() => {});
-      }
       return { success: false, error: String(err) };
     } finally {
       startHealthWatchdog();
@@ -2385,9 +1787,8 @@ registerHandler(
 );
 
 // ── Services (keep-running-on-quit) settings ─────────────────────────────────
-// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
-// next launch takes the hot path (S1-measured 0.6-1.1s) instead of a warm
-// restart (~2-2.5s). Same dual DB + settings.json mirror as backup settings
+// Opt-in toggle: when enabled, quit leaves the native services running so the
+// next launch can take the hot path. Same dual DB + settings.json mirror as backup settings
 // above — the will-quit handler needs a value even if the backend already
 // stopped responding.
 registerHandler(
@@ -2936,26 +2337,8 @@ app.on("open-file", (event, filePath) => {
   }
 });
 
-// ── Compose override (dev modes) ─────────────────────────────────────────────
-// Set VISION_COMPOSE_OVERRIDE to a filename (relative to workDir) to layer an
-// additional compose file on top of the base — e.g. docker-compose.dev.yml.
-// Used by the electron:dev and electron:clean root package.json scripts.
-function resolveOverrideFiles(workDir) {
-  const override = process.env.VISION_COMPOSE_OVERRIDE;
-  if (!override || (app.isPackaged && !useRepoMode)) return [];
-  // Accept absolute paths too, but the common case is a repo-root filename.
-  const resolved = path.isAbsolute(override)
-    ? override
-    : path.join(workDir, override);
-  return fs.existsSync(resolved) ? [resolved] : [];
-}
-
 // ── Launch flow ───────────────────────────────────────────────────────────────
 let workDir = null;
-let overrideFiles = [];
-// True when packaged .app is using a local repo clone instead of GHCR image.
-// Set by resolveWorkDir() when settings.repoPath points to a valid repo.
-let useRepoMode = false;
 
 async function launch() {
   const endLaunch = bootMark("launch");
@@ -2972,7 +2355,7 @@ async function launch() {
       app.getPath("userData"),
       NATIVE_RUNTIME_ID,
     );
-    runtimeMode = resolveRuntimeMode({
+    resolveRuntimeMode({
       settings: persistedSettings,
       runtimeState,
       isDemo: __IS_DEMO,
@@ -3007,7 +2390,7 @@ async function launch() {
   setupDockMenu();
   subscribeAccentColorChanges();
 
-  if (runtimeMode === "native") {
+  {
     const endNative = bootMark("native_runtime_start");
     const repoRoot = path.resolve(__dirname, "..", "..");
     const runtimeRoot = app.isPackaged
@@ -3087,8 +2470,8 @@ async function launch() {
         buttons: [t("common.ok", null, "OK")],
         title: APP_NAME,
         message:
-          error?.code === "NATIVE_CUTOVER_REQUIRED"
-            ? "Existing Vision data requires an explicit native migration."
+          error?.code === "LEGACY_RUNTIME_MIGRATION_REQUIRED"
+            ? "Existing Vision data requires migration with Vision 1.0.2."
             : t("app.failedStart", null, "Vision could not start."),
         detail: error && error.message ? error.message : String(error),
       });
@@ -3097,499 +2480,9 @@ async function launch() {
     }
   }
 
-  // 1. Resolve project folder
-  const endWorkDir = bootMark("resolve_work_dir");
-  workDir = await resolveWorkDir();
-  endWorkDir();
-  if (!workDir) return;
-
-  // 1b. Resolve any compose override requested via env var (dev flows only)
-  overrideFiles = resolveOverrideFiles(workDir);
-
-  // 1c–2. Find a free port, generate .env, check Docker health, and (in dev) check
-  //        if the app image already exists — all are independent so run in parallel.
-  let skipBuild = false;
-  let dockerStatus = "ok";
-  // Set when the pre-pull step actually downloaded the app image (first run, or
-  // an updated tag) — such a boot then runs alembic migrations before /health
-  // goes green, so it earns the extended poll budget (see pollAndLoad below).
-  let imageWasPulled = false;
-  const composeProject = readComposeProjectName(workDir);
-  setSplashStatus("splash.checkingDocker");
-  const endParallelInit = bootMark("parallel_init");
-  await Promise.all([
-    // Resolve the backend host port: a random free port chosen once per app and
-    // persisted, so the demo and real app never fight over a shared default.
-    (() => {
-      const end = bootMark("find_free_port");
-      return resolveAppPort().then((port) => {
-        appPort = port;
-        end();
-      });
-    })(),
-
-    // First run: generate .env if missing
-    (() => {
-      const end = bootMark("ensure_env");
-      return ensureEnv(workDir).then(end);
-    })(),
-
-    // Check Docker is installed and running — overlaps with port scan and env init
-    (() => {
-      const end = bootMark("check_docker");
-      return checkDocker(workDir).then((status) => {
-        dockerStatus = status;
-        end();
-      });
-    })(),
-
-    // Packaged mode: pre-pull the app image ONLY if it's missing locally.
-    // Without this, compose's `pull_policy: missing` pulls inline during `up`,
-    // blocking the entire startup behind a ~2GB download on first launch.
-    // Pulling here moves that download into parallel_init so it overlaps with
-    // port/env/docker checks. We deliberately skip pull when the image is
-    // already present — the manual shell updater (setupManualShellUpdater)
-    // owns the upgrade path; we don't want silent :latest churn on every boot.
-    // Failures are non-fatal — `up` falls back to inline pull.
-    app.isPackaged && !useRepoMode
-      ? (async () => {
-          const end = bootMark("pre_pull_image");
-          try {
-            // Warm boot: if the app container is already running its image is
-            // present, so skip the `docker compose images` CLI spawn entirely
-            // (the slowest member of this phase) via a cheap Docker-socket probe.
-            if (await isComposeAppRunning(composeProject)) {
-              return;
-            }
-            const ids = await run(
-              "docker",
-              [
-                "compose",
-                ...composeArgs(workDir, overrideFiles),
-                "images",
-                "-q",
-                "app",
-              ],
-              workDir,
-              { timeout: 10000, env: dockerEnv },
-            )
-              .then((r) => r.trim())
-              .catch(() => "");
-            if (ids) {
-              return;
-            }
-            setSplashStatus("splash.downloading");
-            await run(
-              "docker",
-              [
-                "compose",
-                ...composeArgs(workDir, overrideFiles),
-                "pull",
-                "--quiet",
-                "app",
-                "db",
-              ],
-              workDir,
-              { timeout: 600000, env: dockerEnv },
-            );
-            imageWasPulled = true;
-          } catch (err) {
-            console.warn(
-              "pre-pull failed (non-fatal, compose up will retry):",
-              err.message || err,
-            );
-          } finally {
-            end();
-          }
-        })()
-      : Promise.resolve(),
-
-    // In dev, decide whether to skip --build. Strategy:
-    //   1. Get current image ID from compose.
-    //   2. Load .vision-cache/docker-build.json written after the last build.
-    //   3. If imageId matches AND git status of Docker-relevant paths matches
-    //      the cached snapshot AND no new commits touched those paths since the
-    //      cache was written → skip. Otherwise rebuild and write a fresh cache.
-    //
-    // Checking only Docker-relevant paths (not the whole repo) means edits to
-    // packaging/electron/, docs/, etc. never trigger a needless image rebuild.
-    !app.isPackaged || useRepoMode
-      ? (async () => {
-          const end = bootMark("decide_skip_build");
-          const dockerSkipCacheFile = path.join(
-            workDir,
-            ".vision-cache",
-            "docker-build.json",
-          );
-          try {
-            // Phase A: image ID + cache read + docker-path porcelain — all independent.
-            const [imageIds, cacheRaw, porcelain] = await Promise.all([
-              run(
-                "docker",
-                [
-                  "compose",
-                  ...composeArgs(workDir, overrideFiles),
-                  "images",
-                  "-q",
-                  "app",
-                ],
-                workDir,
-                { timeout: 10000 },
-              )
-                .then((r) => r.trim())
-                .catch(() => ""),
-              fs.promises
-                .readFile(dockerSkipCacheFile, "utf8")
-                .catch(() => null),
-              run(
-                "git",
-                ["status", "--porcelain", "--", ...DOCKER_PATHS],
-                workDir,
-              )
-                .then((r) => r.trim())
-                .catch(() => null),
-            ]);
-            if (!imageIds) {
-              skipBuild = false;
-              return;
-            }
-            if (porcelain === null) {
-              skipBuild = false;
-              return;
-            }
-            const imageId = imageIds.split(/\s+/)[0];
-            if (cacheRaw) {
-              const cache = JSON.parse(cacheRaw);
-              if (cache.imageId === imageId && cache.porcelain === porcelain) {
-                // Cache hit on image + worktree state. Also verify no new commits
-                // touched docker paths since the cache was written.
-                const newCommits = (
-                  await run(
-                    "git",
-                    [
-                      "log",
-                      `--since=${cache.writtenAt}`,
-                      "--oneline",
-                      "--",
-                      ...DOCKER_PATHS,
-                    ],
-                    workDir,
-                  ).catch(() => "x")
-                ).trim();
-                if (!newCommits) {
-                  skipBuild = true;
-                  return;
-                }
-              }
-            }
-            skipBuild = false;
-          } catch {
-            skipBuild = false;
-          } finally {
-            end();
-          }
-        })()
-      : Promise.resolve(),
-  ]);
-  endParallelInit();
-
-  activeRuntime = createRuntimeProvider("docker", {
-    docker: {
-      compose: { checkDocker, composeStartOrUp, stopContainers },
-      workDir: () => workDir,
-      overrideFiles: () => overrideFiles,
-      appPort: () => appPort,
-    },
-  });
-
-  // 3. Handle Docker not being available
-  if (dockerStatus === "not-installed") {
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: [t("app.openDockerSite"), t("common.cancel")],
-      defaultId: 0,
-      title: APP_NAME,
-      message: t("app.dockerRequired"),
-      detail: t("app.dockerRequiredDetail"),
-    });
-    if (response === 0)
-      shell.openExternal("https://www.docker.com/products/docker-desktop/");
-    app.quit();
-    return;
-  }
-  if (dockerStatus === "not-running") {
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: [t("app.openDockerApp"), t("common.cancel")],
-      defaultId: 0,
-      title: APP_NAME,
-      message: t("app.dockerNotRunning"),
-      detail: t("app.dockerNotRunningDetail"),
-    });
-    if (response !== 0) {
-      app.quit();
-      return;
-    }
-    // User chose to open Docker: launch Docker Desktop and wait for the daemon
-    // to come up, then continue launch() automatically instead of quitting and
-    // forcing a manual relaunch. The splash stays up during the wait.
-    shell.openPath("/Applications/Docker.app");
-    setSplashStatus("splash.checkingDocker");
-    dockerStatus = await waitForDockerDaemon(workDir);
-    if (dockerStatus !== "ok") {
-      await dialog.showMessageBox({
-        type: "warning",
-        buttons: [t("common.ok")],
-        title: APP_NAME,
-        message: t("app.dockerNotRunning"),
-        detail: t("app.dockerNotRunningDetail"),
-      });
-      app.quit();
-      return;
-    }
-    // Daemon is up — fall through and continue the normal launch path.
-  }
-
-  // 5. If running in clean mode, wipe the clean volume so every run starts fresh.
-  const isCleanRun = overrideFiles.some(
-    (f) => path.basename(f) === "docker-compose.clean.yml",
-  );
-  if (isCleanRun) {
-    // Bring down any leftover containers from a previous clean run first,
-    // then remove the volume — Docker won't delete a volume that's still in use.
-    await run(
-      "docker",
-      ["compose", ...composeArgs(workDir, overrideFiles), "down", "--volumes"],
-      workDir,
-      { timeout: 60000 },
-    ).catch(() => {});
-  }
-
-  // 7. docker compose start (fast path) or up (cold/dev rebuild)
-  setSplashStatus("splash.startingServices");
-  // Progress the otherwise-frozen status line through this dominant phase.
-  startComposeSplashProgress();
-  const endComposeUp = bootMark("compose_up");
-  let composeDidBuild = false;
-  try {
-    let result;
-    try {
-      result = await activeRuntime.start({ skipBuild });
-    } catch (err) {
-      // A foreign process squatting the persisted appPort makes compose fail to
-      // publish the app container. Re-pick a fresh port and recreate once —
-      // `up` republishes on the new port, self-healing what would otherwise be
-      // a permanent "port is already allocated" brick on every relaunch.
-      if (isPortConflictError(err)) {
-        console.warn(
-          `[port] appPort ${appPort} is held by another process; picking a fresh port and recreating`,
-        );
-        await repickAppPort();
-        result = await activeRuntime.start({ skipBuild });
-      } else {
-        throw err;
-      }
-    }
-    composeDidBuild = result.built;
-    stopComposeSplashProgress();
-    endComposeUp();
-  } catch (err) {
-    stopComposeSplashProgress();
-    endComposeUp();
-    await dialog.showMessageBox({
-      type: "error",
-      buttons: [t("common.ok")],
-      title: APP_NAME,
-      message: t("app.failedStart"),
-      detail: `${t("app.checkDockerLogs")}\n\n${String(err)}`,
-    });
-    app.quit();
-    return;
-  }
-
-  // After a dev build, snapshot the image ID + docker-path porcelain so the
-  // NEXT launch can skip the rebuild if nothing relevant has changed.
-  if (composeDidBuild) {
-    const dockerSkipCacheFile = path.join(
-      workDir,
-      ".vision-cache",
-      "docker-build.json",
-    );
-    (async () => {
-      try {
-        const [imageIds, porcelain] = await Promise.all([
-          run(
-            "docker",
-            [
-              "compose",
-              ...composeArgs(workDir, overrideFiles),
-              "images",
-              "-q",
-              "app",
-            ],
-            workDir,
-            { timeout: 10000 },
-          )
-            .then((r) => r.trim())
-            .catch(() => ""),
-          run("git", ["status", "--porcelain", "--", ...DOCKER_PATHS], workDir)
-            .then((r) => r.trim())
-            .catch(() => null),
-        ]);
-        if (!imageIds || porcelain === null) return;
-        const imageId = imageIds.split(/\s+/)[0];
-        await fs.promises.mkdir(path.dirname(dockerSkipCacheFile), {
-          recursive: true,
-        });
-        await fs.promises.writeFile(
-          dockerSkipCacheFile,
-          JSON.stringify({
-            imageId,
-            porcelain,
-            writtenAt: new Date().toISOString(),
-          }) + "\n",
-        );
-      } catch (e) {
-        console.warn("docker-build cache write failed (non-fatal):", e.message);
-      }
-    })();
-  }
-
-  // 8. Backend is being polled — poll /health in the background; navigate once ready.
-  //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
-  //    slow-start modal, since first-launch boot is expected to be slow.
-  setSplashStatus("splash.waitingApp");
-  // A cold build OR a freshly-pulled packaged image both run migrations before
-  // the backend listens, so both need the extended poll budget — otherwise a
-  // long alembic migration trips the 60s timeout mid-migration and drops to the
-  // error page. (renavigateWhenReady() then covers migrations that outlast even
-  // this budget.)
-  pollAndLoad({ building: composeDidBuild || imageWasPulled });
-
-  // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
-  if (!app.isPackaged || useRepoMode) {
-    setupManualShellUpdater();
-  }
-
-  // Dev-mode: watch source files and trigger a docker rebuild+restart when
-  // local sources change. This ensures the electron dev wrapper picks up
-  // code edits without requiring manual docker-compose rebuilds.
-  if ((!app.isPackaged || useRepoMode) && overrideFiles.length > 0) {
-    try {
-      let fileChangeTimer = null;
-      let activeBuildChild = null;
-      // Keep in sync with DOCKER_PATHS: anything that triggers a rebuild on the
-      // next launch should also hot-rebuild while the dev shell is running.
-      const watchTargets = [
-        "apps/frontend",
-        "apps/node-backend",
-        "packages",
-        "i18n/source",
-        "package.json",
-        "bun.lock",
-        "bun.lockb",
-      ];
-
-      // Paths whose churn is not source changes: dependency installs, build
-      // output, VCS/dot dirs. Without this, any `bun install` fires a rebuild.
-      const isIgnoredWatchPath = (fname) =>
-        fname
-          .split(path.sep)
-          .some(
-            (seg) =>
-              seg === "node_modules" || seg === "dist" || seg.startsWith("."),
-          );
-
-      const runCancellableBuild = () =>
-        new Promise((resolve, reject) => {
-          const args = [
-            "compose",
-            ...composeArgs(workDir, overrideFiles),
-            "build",
-            "app",
-          ];
-          const child = spawn("docker", args, { cwd: workDir, env: dockerEnv });
-          activeBuildChild = child;
-          let stderrBuf = "";
-          if (child.stderr)
-            child.stderr.on("data", (d) => {
-              stderrBuf += d.toString();
-            });
-          child.on("error", (err) => {
-            if (activeBuildChild === child) activeBuildChild = null;
-            reject(err);
-          });
-          child.on("exit", (code, signal) => {
-            if (activeBuildChild === child) activeBuildChild = null;
-            if (signal === "SIGTERM" || signal === "SIGKILL") {
-              const cancelErr = new Error("build_cancelled");
-              cancelErr.cancelled = true;
-              return reject(cancelErr);
-            }
-            if (code === 0) return resolve();
-            const err = new Error(
-              stderrBuf.trim() || `docker build exited ${code}`,
-            );
-            reject(err);
-          });
-        });
-
-      const scheduleRebuild = () => {
-        if (fileChangeTimer) clearTimeout(fileChangeTimer);
-        if (activeBuildChild) {
-          try {
-            activeBuildChild.kill("SIGTERM");
-          } catch (_) {}
-        }
-        fileChangeTimer = setTimeout(async () => {
-          fileChangeTimer = null;
-          notify("Rebuilding app image (dev)...");
-          try {
-            await runCancellableBuild();
-            await restartAppContainer(workDir, overrideFiles);
-            await pollHealth().catch(() => {});
-            notify("Rebuild complete");
-          } catch (err) {
-            if (err && err.cancelled) {
-              // Expected cancellation — a newer edit superseded this build.
-              return;
-            }
-            console.warn("Dev rebuild failed:", err);
-            notify("Rebuild failed — check logs");
-          }
-        }, 1500);
-      };
-
-      watchTargets.forEach((p) => {
-        const full = path.join(workDir, p);
-        if (!fs.existsSync(full)) return;
-        try {
-          const w = fs.watch(full, { recursive: true }, (evt, fname) => {
-            // Ignore temporary editor swap files
-            if (fname && /(~$|\.swp$|\.swx$)/.test(fname)) return;
-            // Ignore dependency/build/dot-dir churn (covers nested paths,
-            // which the old `^\.` anchor missed).
-            if (fname && isIgnoredWatchPath(fname)) return;
-            scheduleRebuild();
-          });
-          // Do not keep the watcher references — they live for the app lifetime
-        } catch (e) {
-          // fs.watch may throw on some filesystems; ignore and continue
-        }
-      });
-    } catch (e) {
-      console.warn("Failed to set up dev rebuild watcher:", e);
-    }
-  }
-
-  // Launch orchestration is complete: the window is up, background health
-  // polling is running, and dev watchers (if any) are registered. Close the
-  // top-level launch mark. Reached only on the success path — every failure
-  // branch above returns after app.quit() without closing this mark.
-  endLaunch();
+  // ── Shutdown flow ─────────────────────────────────────────────────────────────
 }
 
-// ── Shutdown flow ─────────────────────────────────────────────────────────────
 let isQuitting = false;
 
 // Distinct from isQuitting (will-quit's re-entrancy guard): this flips on the
@@ -3607,8 +2500,8 @@ app.on("will-quit", (e) => {
   e.preventDefault();
   isQuitting = true;
 
-  // Hard-kill safeguard: if backup + docker compose down haven't finished in
-  // 45 seconds, force-exit so the app never hangs forever on quit.
+  // Hard-kill safeguard: if backup and native service shutdown have not
+  // finished in 45 seconds, force-exit so the app never hangs forever on quit.
   const forceQuitTimer = setTimeout(() => {
     console.warn("will-quit: hard timeout reached — forcing exit");
     app.exit(0);
@@ -3635,8 +2528,7 @@ app.on("will-quit", (e) => {
   // Opt-in "keep services running on quit": leave the selected provider up so
   // the next launch takes the hot path instead of a warm restart. Same dual
   // DB + settings.json read as resolveBackupSettings above (the backend may
-  // already be shutting down by the time this runs). compose's
-  // `restart: unless-stopped` policy governs reboot behaviour.
+  // already be shutting down by the time this runs).
   async function resolveKeepServicesOnQuit() {
     try {
       const body = await httpGet(

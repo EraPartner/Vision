@@ -1,18 +1,18 @@
 ---
 paths:
   - "packaging/**"
-  - "docker-compose*.yml"
   - "package.json"
+  - "install.sh"
+  - "install-demo.sh"
 ---
 
-# Packaging / Electron / compose rules (caused real data loss before)
+# Packaging / Electron rules
 
-- **`packaging/electron/resources/docker-compose.yml` MUST mirror the root `docker-compose.yml`.**
-  Any named volume added to root must be added there too — omitting the attachments volume caused
-  the v1.0.2 data-loss bug. The project `name:` must match for the same reason (volumes are created
-  as `<project>_<volume>`). Don't eyeball it: run `bun run check-compose-sync`
-  (`scripts/check-compose-sync.js`) on EVERY compose edit. The same script gates CI
-  (`verify-compose-sync`), the release `verify` job, and `.githooks/pre-push`.
-- **Version bump touches two files:** root `package.json` and `packaging/electron/package.json`
-  must match.
-- **Electron security posture:** keep `contextIsolation` on, `nodeIntegration` off, `sandbox` on.
+- Vision desktop packages only the native PostgreSQL 18 runtime.
+- Keep native database and attachment paths inside the application data directory.
+- Treat PostgreSQL major version, libc family, collation provider, and data-directory format as
+  persistence contracts. Require a verified backup and explicit migration plan before changing
+  them.
+- Keep root and Electron package versions identical.
+- Preserve Electron isolation: `contextIsolation` on, `nodeIntegration` off, and `sandbox` on.
+- Run the release skill checks before claiming that an artifact is ready.

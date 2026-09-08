@@ -192,11 +192,6 @@ cloud_run_step() {
   fi
 }
 
-cloud_docker_daemon_available() {
-  command -v docker >/dev/null 2>&1 || return 1
-  cloud_run_with_timeout 8s docker info >/dev/null 2>&1
-}
-
 cloud_hash_stream() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum | awk '{ print $1 }'

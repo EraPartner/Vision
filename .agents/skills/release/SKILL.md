@@ -5,21 +5,18 @@ description: Prepare, build, or verify Vision Electron releases and version chan
 
 # Vision release workflow
 
-Vision ships an Apple Silicon Electron `.dmg` and uses `ghcr.io/erapartner/vision` for its app
-image.
+Vision ships an Apple Silicon Electron `.dmg` with a bundled native runtime.
 
 ```bash
 npm run dist
 bun run electron:dev
 bun run electron:prod
-bun run electron:clean
-bun run docker:dev
-bun run docker:clean
-bun run docker:logs
+bun run test:electron
+bun run native:smoke
 ```
 
-- Keep `packaging/electron/resources/docker-compose.yml` aligned with root
-  `docker-compose.yml`, including every named volume.
+- Verify the bundled PostgreSQL runtime, migration runner, frontend, backend, and PDF browser.
+- Keep native database and attachment paths inside the application data directory.
 - Keep versions in root and packaging `package.json` files identical.
 - Preserve `contextIsolation`, disabled `nodeIntegration`, and Electron sandboxing.
 - Run the full release build before claiming the release artifact works. If signing, publication,

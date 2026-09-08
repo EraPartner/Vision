@@ -1629,35 +1629,46 @@ function createNativeRuntime(options) {
       { timeout: 10_000 },
     );
 
-    await withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        await runFile(
-          psql,
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            config.database,
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--no-psqlrc",
-            "--command",
-            REQUIRED_POSTGRES_EXTENSIONS.map(
-              (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
-            ).join(" "),
-          ],
-          { timeout: 30_000, env },
-        );
-      },
-    );
+    await installRequiredExtensions(config.database, config);
     return config;
+  }
+
+  async function installRequiredExtensions(database, config) {
+    const target = validateIdentifier(database, "database name");
+    const psql = path.join(tools.binDir, "psql");
+    const extensionArgs = (roleArgs) => [
+      "-h",
+      LOOPBACK_HOST,
+      "-p",
+      String(config.port),
+      ...roleArgs,
+      "-d",
+      target,
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--no-psqlrc",
+      "--command",
+      REQUIRED_POSTGRES_EXTENSIONS.map(
+        (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
+      ).join(" "),
+    ];
+    if (tools.managed) {
+      // pg_stat_statements is not trusted, so only the private cluster
+      // administrator can install it. The migration owner stays non-superuser.
+      await runAsClusterAdmin(
+        config,
+        psql,
+        extensionArgs(clusterAdminArgs(config)),
+        { timeout: 30_000 },
+      );
+    } else {
+      await withPgPass(config, config.ownerRole, config.ownerPassword, (env) =>
+        runFile(psql, extensionArgs(["-U", config.ownerRole]), {
+          timeout: 30_000,
+          env,
+        }),
+      );
+    }
   }
 
   async function readState() {
@@ -1680,7 +1691,7 @@ function createNativeRuntime(options) {
     if (allowUncutover) return state;
     if (state?.activeRuntime === "docker") {
       const error = new Error(
-        "Runtime marker selects Docker; native startup is blocked to prevent split-brain writes.",
+        "A legacy runtime marker is active. Migrate with Vision 1.0.2 before installing this release.",
       );
       error.code = "RUNTIME_SPLIT_BRAIN_GUARD";
       throw error;
@@ -1693,7 +1704,7 @@ function createNativeRuntime(options) {
       .catch(() => false);
     if (legacyInstall) {
       const error = new Error(
-        "Existing Docker-backed Vision data was detected. Run the opt-in native importer before native startup.",
+        "Legacy Vision data was detected. Migrate with Vision 1.0.2 before installing this release.",
       );
       error.code = "NATIVE_CUTOVER_REQUIRED";
       throw error;
@@ -2095,6 +2106,10 @@ function createNativeRuntime(options) {
     if (!stat.isFile() || stat.size <= 0)
       throw new Error("PostgreSQL restore source is empty or not a file");
     const target = validateIdentifier(database, "database name");
+    // A staging database is created from template0, so it does not inherit the
+    // extensions installed in the live database. Install them with the same
+    // least-privilege boundary before replaying application-owned objects.
+    await installRequiredExtensions(target, config);
     await withPgPass(
       config,
       config.ownerRole,
@@ -2108,6 +2123,7 @@ function createNativeRuntime(options) {
               "--single-transaction",
               "--no-owner",
               "--no-acl",
+              "--no-comments",
               "-h",
               LOOPBACK_HOST,
               "-p",
@@ -2498,6 +2514,11 @@ function createNativeRuntime(options) {
             database || config.database,
             "--no-owner",
             "--no-acl",
+            "--no-comments",
+            ...REQUIRED_POSTGRES_EXTENSIONS.flatMap((extension) => [
+              "--exclude-extension",
+              extension,
+            ]),
             ...(format === "custom" ? ["--format=custom"] : ["--format=plain"]),
             "--file",
             partialPath,

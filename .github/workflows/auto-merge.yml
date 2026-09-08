@@ -10,7 +10,7 @@ jobs:
     name: Auto-merge patch/minor
     runs-on: ubuntu-24.04
     # Long enough for the checks-gate step below to watch a full CI run to
-    # completion (the Docker tier alone can take ~30 min). --fail-fast still
+    # completion (native runtime and security tiers can take several minutes). --fail-fast still
     # exits early the moment a required check fails.
     timeout-minutes: 90
     if: github.actor == 'dependabot[bot]'

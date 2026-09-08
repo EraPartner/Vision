@@ -3,8 +3,8 @@
 // ── Manual shell updater (.zip-only, no blockmaps) ───────────────────────────
 // Extracted verbatim from main.js (TODO.md Wave W6). We intentionally avoid
 // electron-updater metadata (latest-mac.yml / blockmaps) and install from the
-// unsigned GitHub release ZIP. Mutable main.js state (workDir, useRepoMode,
-// isQuitting) plus the localized-dialog/notification seams (t, notify) are
+// unsigned GitHub release ZIP. Mutable main.js state plus the localized
+// dialog/notification seams (t, notify) are
 // threaded in via init() so the live values are observed at call time, exactly
 // as when this code lived in main.js.
 
@@ -15,10 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
-const { dockerEnv, run } = require("./compose");
 
 // Context threaded from main.js via init():
-//   { APP_NAME, IS_DEMO, t, notify, workDir(), useRepoMode(), markQuitting() }
+//   { APP_NAME, IS_DEMO, t, notify, workDir(), markQuitting() }
 // markQuitting flips main.js's isQuitting flag so the will-quit handler knows
 // the installer-driven quit is already underway.
 let ctx = {};
@@ -56,6 +55,52 @@ function updaterChildEnv(overrides = {}) {
     if (process.env[key] !== undefined) env[key] = process.env[key];
   }
   return { ...env, ...overrides };
+}
+
+function runCommand(command, args, cwd, { timeout = 120_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: updaterChildEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error(`${command} timed out`));
+    }, timeout);
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("exit", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(
+        new Error(
+          stderr.trim() ||
+            `${command} exited ${code === null ? `after ${signal}` : code}`,
+        ),
+      );
+    });
+  });
 }
 
 function waitForSpawnedChild(child) {
@@ -161,7 +206,7 @@ function comparePreRelease(prea, preb) {
 
 function getCurrentVersionTag() {
   // Read from the Electron package.json (accurate in dev and packaged modes).
-  // workDir may be a native payload or a Docker/Compose root. Its package.json
+  // workDir may be a native payload or source root. Its package.json
   // is not the Electron app, so do not use it for version detection.
   try {
     const pkg = JSON.parse(
@@ -183,9 +228,7 @@ function shellEscape(value) {
 
 function getUpdateMode() {
   if (!app.isPackaged) return "dev";
-  if (ctx.runtimeMode && ctx.runtimeMode() === "native") return "native";
-  if (ctx.useRepoMode()) return "source";
-  return "docker";
+  return "native";
 }
 
 function writeInstallerScript({
@@ -342,55 +385,6 @@ async function fetchUrlBody(url) {
   return await res.text();
 }
 
-// ── Container image digest (supply chain) ────────────────────────────────────
-// The desktop stack pulls ghcr.io/erapartner/vision by TAG, which a registry can
-// repoint at any time. The release pipeline publishes the digest of the image it
-// actually pushed as a release asset, so the desktop app can pin to immutable
-// content instead. The digest arrives over the GitHub API — a different system
-// from the registry — so a compromised registry alone cannot substitute an image.
-const IMAGE_METADATA_ASSET = "docker-image-tag.txt";
-
-// Anchored and length-bounded on purpose: this value is written into .env and
-// from there into the compose `image:` reference, so anything other than an
-// exact sha256 digest must be rejected rather than interpolated.
-const IMAGE_DIGEST_PATTERN = /^digest=(sha256:[0-9a-f]{64})\s*$/m;
-
-function pickImageMetadataAsset(release) {
-  const assets = Array.isArray(release?.assets) ? release.assets : [];
-  return (
-    assets.find(
-      (a) => (a?.name || "").toLowerCase() === IMAGE_METADATA_ASSET,
-    ) || null
-  );
-}
-
-/**
- * Resolve the image digest published alongside the latest release.
- *
- * Returns `null` for every failure mode — no release, no asset (every release
- * published before the pipeline started emitting it), a malformed body, or a
- * network error. Callers must treat null as "keep the reference you already
- * have", so a lookup failure never blocks an update or changes what runs.
- *
- * @returns {Promise<string|null>} e.g. `sha256:abc…` (64 hex chars) or null
- */
-async function resolveReleaseImageDigest() {
-  try {
-    const release = await readGitHubRelease();
-    const asset = pickImageMetadataAsset(release);
-    if (!asset?.browser_download_url) return null;
-    const body = await fetchUrlBody(asset.browser_download_url);
-    const match = IMAGE_DIGEST_PATTERN.exec(body);
-    return match ? match[1] : null;
-  } catch (err) {
-    console.warn(
-      "Image digest lookup failed (non-fatal):",
-      err?.message || err,
-    );
-    return null;
-  }
-}
-
 function computeFileSha256(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha256");
@@ -487,9 +481,7 @@ async function prepareShellUpdateInstaller() {
 
     // Validate ZIP entry paths before extraction to prevent path traversal attacks.
     // zipinfo -1 lists one path per line; any entry escaping extractDir is rejected.
-    const zipEntries = await run("zipinfo", ["-1", zipPath], tempRoot, {
-      env: dockerEnv,
-    }).catch(() => "");
+    const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
     for (const entry of zipEntries.split("\n")) {
       const trimmed = entry.trim();
       if (!trimmed) continue;
@@ -499,9 +491,7 @@ async function prepareShellUpdateInstaller() {
       }
     }
 
-    await run("ditto", ["-x", "-k", zipPath, extractDir], tempRoot, {
-      env: dockerEnv,
-    });
+    await runCommand("ditto", ["-x", "-k", zipPath, extractDir], tempRoot);
 
     const sourceDir = path.join(extractDir, "unsigned", "Vision");
     const sourceLaunchPath = path.join(
@@ -594,9 +584,7 @@ async function prepareNativeUpdateInstaller() {
     if (actual !== expected)
       throw new Error("Checksum mismatch — native update was not installed");
 
-    const zipEntries = await run("zipinfo", ["-1", zipPath], tempRoot, {
-      env: dockerEnv,
-    });
+    const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
     for (const entry of zipEntries.split("\n")) {
       const trimmed = entry.trim();
       if (!trimmed) continue;
@@ -604,9 +592,7 @@ async function prepareNativeUpdateInstaller() {
       if (normalized.startsWith("..") || path.isAbsolute(normalized))
         throw new Error(`Unsafe path in native update ZIP: ${trimmed}`);
     }
-    await run("ditto", ["-x", "-k", zipPath, extractDir], tempRoot, {
-      env: dockerEnv,
-    });
+    await runCommand("ditto", ["-x", "-k", zipPath, extractDir], tempRoot);
     const sourceAppPath = findVisionApp(extractDir);
     if (!sourceAppPath)
       throw new Error("Downloaded native update does not contain Vision.app");
@@ -849,7 +835,6 @@ module.exports = {
   checkForShellUpdate,
   installPreparedShellUpdate,
   setupManualShellUpdater,
-  resolveReleaseImageDigest,
   pickNativeAppZip,
   updaterChildEnv,
   launchPreparedNativeInstaller,

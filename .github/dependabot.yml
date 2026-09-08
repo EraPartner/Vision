@@ -39,47 +39,11 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      docker-deps:
-        patterns: ["*"]
-
-  # Base image for the dev container (debian:bookworm-slim).
+  # Base image used by the unchanged Apple Container developer sandbox.
   - package-ecosystem: "docker"
     directory: "/.devcontainer"
     schedule:
       interval: "weekly"
     groups:
       devcontainer-deps:
-        patterns: ["*"]
-
-  # Packaged-app embedded compose: postgres + the GHCR app image.
-  - package-ecosystem: "docker"
-    directory: "/packaging/electron/resources"
-    schedule:
-      interval: "weekly"
-    groups:
-      packaged-compose-deps:
-        patterns: ["*"]
-
-  # docker-compose.yml image pins (postgres) — the `docker` ecosystem above only
-  # scans Dockerfiles, not compose files, so this is a separate ecosystem.
-  - package-ecosystem: "docker-compose"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      compose-image-deps:
-        patterns: ["*"]
-
-  # Packaged-app embedded compose.yml image pins (postgres + the GHCR app image).
-  - package-ecosystem: "docker-compose"
-    directory: "/packaging/electron/resources"
-    schedule:
-      interval: "weekly"
-    groups:
-      packaged-compose-image-deps:
         patterns: ["*"]

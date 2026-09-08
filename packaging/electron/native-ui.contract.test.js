@@ -32,7 +32,7 @@ test("native language bridge validates language and rebuilds menus", () => {
 test("launch starts loading the splash before native platform setup", () => {
   const launchStart = main.indexOf("async function launch()");
   const nativeStart = main.indexOf(
-    'if (runtimeMode === "native")',
+    'const endNative = bootMark("native_runtime_start")',
     launchStart,
   );
   const launchPrelude = main.slice(launchStart, nativeStart);
@@ -104,20 +104,10 @@ test("About metadata and a non-macOS Help item are present", () => {
   assert.match(main, /click: \(\) => app\.showAboutPanel\(\)/);
 });
 
-test("native mode never starts a Docker writer from update or restore recovery", () => {
-  assert.match(
-    main,
-    /update:pull-image[\s\S]{0,500}runtimeMode === ["']native["'][\s\S]{0,300}Docker image updates are unavailable/,
-  );
-  assert.match(
-    main,
-    /activeRuntime\?\.mode !== ["']native["'][\s\S]{0,500}["']docker["'][\s\S]{0,200}["']start["']/,
-  );
-  assert.ok(
-    main.indexOf('if (runtimeMode === "native")') <
-      main.indexOf("Check Docker is installed and running"),
-    "native launch must return before the first Docker availability check",
-  );
+test("desktop update and restore recovery expose only the native writer", () => {
+  assert.doesNotMatch(main, /update:[a-z-]+image/);
+  assert.match(main, /createRuntimeProvider\(["']native["']/);
+  assert.match(main, /await activeRuntime\.start\(\)/);
 });
 
 test("Electron development cannot reuse packaged Vision data", () => {

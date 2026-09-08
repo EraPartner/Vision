@@ -10,7 +10,7 @@ const {
   createNativeRuntime,
   directoryFingerprint,
 } = require("../runtime/native");
-const { assertStatsEqual } = require("../runtime/importer");
+const { assertDatabaseStatsEqual } = require("../runtime/database-stats");
 const { resolveNativePayloadRoot } = require("./resolve-native-payload");
 
 async function main() {
@@ -56,7 +56,7 @@ async function main() {
     });
     await runtime.migrateDatabase();
     const after = await runtime.getDatabaseStats();
-    assertStatsEqual(before, after);
+    assertDatabaseStatsEqual(before, after);
     const attachmentAfter = await directoryFingerprint(
       runtime.paths.attachments,
     );

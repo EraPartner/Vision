@@ -52,12 +52,23 @@ jobs:
         run: |
           python3 scripts/check-agent-instructions.py
           python3 scripts/tests/ci-classify.test.py
+      - name: Check LockBox vendored files against canonical main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          repository: EraPartner/Lockbox
+          ref: main
+          path: .lockbox-canonical
+          persist-credentials: false
+      - name: Reject LockBox fleet drift
+        run: |
+          CODE_ROOT="${GITHUB_WORKSPACE%/*}" \
+            .lockbox-canonical/sync.sh --check --target="$GITHUB_WORKSPACE/.devcontainer"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range
   # ─────────────────────────────────────────────────────────────────────────────
   # ─────────────────────────────────────────────────────────────────────────────
-  # Detect Changes — classifies the diff so the code/Docker tiers can be skipped
+  # Detect Changes — classifies the diff so the code tiers can be skipped
   # on documentation-only changes WITHOUT stranding the required "CI Complete"
   # check (see the note on the triggers above).
   #
@@ -341,7 +352,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -392,15 +403,14 @@ jobs:
           json-final-path: apps/frontend/coverage/coverage-final.json
 
   # Backend vitest runs in exactly ONE job (this one) — `quality-gate` is a pure
-  # results aggregator and runs no tests — so the real-Postgres service is wired
-  # here and nowhere else. Duplicating it into another job would only pay the
-  # migration cost twice for the same assertions.
+  # results aggregator and runs no tests. The suite uses an isolated native
+  # PostgreSQL 18 cluster so DB-backed cases cannot silently skip.
   #
-  # The service turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
+  # The cluster turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
   # `describe.skipIf(!hasTestDatabase())` execute for real instead of silently
   # skipping. TEST_DATABASE_URL and DATABASE_URL point at the SAME database on
   # purpose — DB-backed suites seed through the test pool (TEST_DATABASE_URL) but
-  # the service under test queries through the app pool (DATABASE_URL), so they
+  # the code under test queries through the app pool (DATABASE_URL), so they
   # must be the same database or the seed is invisible to the code being tested.
   #
   # This database is disposable and exclusive to this job — suites may wipe any
@@ -410,33 +420,10 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
-    services:
-      postgres:
-        # Kept in step with the `db` service in docker-compose.yml — testing
-        # against a different major than production defeats the point of using a
-        # real engine (partial indexes, trigger semantics, MV behaviour).
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: vision_test
-          POSTGRES_PASSWORD: vision_test
-          POSTGRES_DB: vision_test
-        ports:
-          - 5432:5432
-        # Steps must not start before the cluster accepts connections: the
-        # migration step is the first thing to touch it and has no retry loop of
-        # its own (unlike the app's boot-time checkConnection backoff).
-        options: >-
-          --health-cmd "pg_isready -U vision_test -d vision_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-    env:
-      DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
-      TEST_DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
@@ -453,11 +440,8 @@ jobs:
       - name: Install Alembic toolchain
         run: pip install -r config/requirements.txt
 
-      # Runs the SAME migration path the app runs on boot (src/database/migrate.js),
-      # not a bare `alembic upgrade head` — see the header of db-migrate.js for why
-      # a bare invocation cannot migrate a fresh database in this repo.
-      - name: Migrate the test database to head
-        run: bun run apps/node-backend/scripts/db-migrate.js
+      - name: Install native PostgreSQL 18
+        run: bash .github/scripts/install-postgres-18.sh
 
       - name: Cache electron Bun dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
@@ -473,7 +457,7 @@ jobs:
         run: bun run test:electron
 
       - name: Run backend tests with coverage
-        run: cd apps/node-backend && bun vitest run --coverage
+        run: scripts/with-test-db.sh --coverage
 
       - name: Report backend coverage on PR
         if: always()
@@ -574,33 +558,7 @@ jobs:
           echo "Branch protection OK — every expected gate is enforced."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Compose sync — the database runtime and named volumes in docker-compose.yml
-  # must match packaging/electron/resources/docker-compose.yml. Divergence can
-  # start the wrong database image against user data; catch it early in CI.
-  # ─────────────────────────────────────────────────────────────────────────────
-  verify-compose-sync:
-    name: Verify Compose Volume Sync
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-
-      # No setup-toolchain step on purpose: the checker is Node-stdlib-only and
-      # ubuntu-24.04 ships node, so this stays as dependency-free as the awk it
-      # replaced — and the same file backs release.yml's verify job and
-      # .githooks/pre-push, so the three copies cannot drift.
-      - name: Self-test the checker
-        run: node scripts/check-compose-sync.js --self-test
-
-      - name: Check database runtime and named volumes match between compose files
-        run: node scripts/check-compose-sync.js
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Destructive migrations — native and Docker startup use the guarded migration
+  # Destructive migrations — native startup uses the guarded migration
   # runner before accepting requests, so a DROP in alembic/versions/ reaches every
   # installation on its next start. That is exactly how 0055 dropped bank_account
   # ahead of its coupled code and crashed startup (ADR-088; 0055 neutered, 0056
@@ -620,8 +578,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
       # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
-      # ubuntu-24.04 ships python3, so this stays as dependency-free as the awk in
-      # verify-compose-sync above.
+      # ubuntu-24.04 ships python3, so this stays dependency-free.
       - name: Self-test the checker
         run: python3 scripts/check-destructive-migrations.py --self-test
 
@@ -629,8 +586,8 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Quality Gate — all quality checks must pass before Docker builds run.
-  # Prevents wasting expensive Docker build time on broken commits.
+  # Quality Gate — all static and unit-level quality checks must pass before the
+  # native production-process checks run.
   # ─────────────────────────────────────────────────────────────────────────────
   quality-gate:
     name: Quality Gate
@@ -653,7 +610,6 @@ jobs:
       - build-frontend
       - test-frontend
       - test-backend
-      - verify-compose-sync
       - verify-destructive-migrations
     if: always()
     steps:
@@ -695,72 +651,25 @@ jobs:
           echo "All quality gates passed."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build Docker image once — the expensive `docker build` happens here and the
-  # Docker-tier jobs below re-materialise the result from the GHA build cache.
-  # Only runs after all quality gates pass.
-  #
-  # The hand-off is a CACHE, not an artifact. This job used to export
-  # `type=docker,dest=/tmp/vision-ci.tar` and upload the ~1 GB tarball, which
-  # every downstream job downloaded. That upload is what hit the Actions
-  # artifact-storage quota, and a quota failure failed `build-image` — taking
-  # the whole Docker tier ('skipped') with it. Now nothing is uploaded: this job
-  # only exports layers with `cache-to: type=gha,mode=max`, and each consumer
-  # runs the identical build with `load: true`, which is a full cache hit.
-  #
-  # Worst case (GHA's 10 GB cache eviction drops the entries mid-run) a consumer
-  # rebuilds from scratch: slow, but correct — and no worse than the uncached
-  # rebuild `docker-verify` silently did on every single run before this change.
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-image:
-    name: Build Docker Image
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    needs: [changes, quality-gate]
-    if: needs.changes.outputs.code == 'true'
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-
-      # The producer: builds with no image export at all (`load: false`, no
-      # `outputs:`) — its only product is the cache the consumers read. The
-      # build itself is defined once, in the action, so producer and consumers
-      # cannot drift into different cache keys. See that file's header.
-      - name: Build Docker image (exports layers to the GHA cache)
-        uses: ./.github/actions/build-ci-image
-        with:
-          cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Trivy — container image CVE scan (HIGH/CRITICAL)
+  # Trivy — repository filesystem dependency and configuration scan.
   # ─────────────────────────────────────────────────────────────────────────────
   trivy-scan:
     name: Trivy Scan
     runs-on: ubuntu-24.04
-    # Headroom for the documented worst case: if the GHA cache entries were
-    # evicted between build-image and here, the restore step is a genuine cold
-    # build (~10 min) rather than a materialisation, and the old 15 min would
-    # have turned "slow" into a red required check.
-    timeout-minutes: 25
-    needs: [build-image]
+    timeout-minutes: 15
+    needs: [changes, quality-gate]
+    if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
       security-events: write # required to upload SARIF to GitHub Security
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      # Cache-hit rebuild of the image `build-image` just exported — same build
-      # inputs, so this is a materialisation, not a real build. Leaves
-      # `vision:ci` in the local image store for the scans below.
-      - name: Restore vision:ci from the build cache
-        uses: ./.github/actions/build-ci-image
-        with:
-          load: "true"
-
       - name: Run Trivy vulnerability scan (table — fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: vision:ci
+          scan-type: fs
+          scan-ref: .
           format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
@@ -770,7 +679,8 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: vision:ci
+          scan-type: fs
+          scan-ref: .
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
@@ -785,60 +695,40 @@ jobs:
           category: trivy
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Docker verify — spin up compose, hit /health
+  # Native runtime verify — migrate an isolated PostgreSQL 18 database, start
+  # the production backend, hit /health, and round-trip the latest migration.
   # ─────────────────────────────────────────────────────────────────────────────
-  docker-verify:
-    name: Docker Verify
+  native-runtime-verify:
+    name: Native Runtime Verify
     runs-on: ubuntu-24.04
-    # +10 for a possible cold rebuild in the restore step — see trivy-scan.
-    timeout-minutes: 25
-    needs: [build-image]
+    timeout-minutes: 20
+    needs: [changes, quality-gate]
+    if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
-    # Isolate this stack from the `vision` project (default from the repo dir
-    # basename) so the `down -v` teardown below can never remove the real app's
-    # vision_postgres_data volume when these steps are run locally.
-    env:
-      COMPOSE_PROJECT_NAME: vision_ci
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      # Cache-hit rebuild of the image `build-image` exported; `vision-image`
-      # below is what makes compose consume this exact image instead of
-      # rebuilding the app from source itself.
-      - name: Restore vision:ci from the build cache
-        uses: ./.github/actions/build-ci-image
-        with:
-          load: "true"
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
 
-      - name: Bring up the compose stack
-        uses: ./.github/actions/compose-up
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
         with:
-          vision-image: vision:ci
+          python-version: "3.12"
 
-      # The release path bakes alembic into the image and runs migrations on
-      # boot — by the time /health is green, the schema is at HEAD. Round-trip
-      # one revision down and back up to catch non-reversible migrations *now*,
-      # not at release time. Same class of bug as the v1.0.2 named-volume miss.
-      #
-      # Same `-f` pair as the bring-up in ./.github/actions/compose-up — the
-      # stack was created from both files, so every later invocation must name
-      # both or compose resolves a different service definition.
-      - name: Verify migration reversibility (downgrade -1, upgrade head)
+      - name: Install native runtime dependencies
         run: |
-          set -e
-          COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.ci.yml)
-          echo "Current revision before round-trip:"
-          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
-          echo "Downgrading one revision..."
-          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js downgrade -1
-          echo "Re-upgrading to head..."
-          "${COMPOSE[@]}" exec -T app bun run apps/node-backend/scripts/db-migrate.js upgrade head
-          echo "Round-trip OK."
+          pip install -r config/requirements.txt
+          bash .github/scripts/install-postgres-18.sh
 
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+      - name: Build production frontend
+        run: CI=1 bun run build
+
+      - name: Verify production health and migration reversibility
+        env:
+          VISION_NATIVE_VERIFY_MIGRATIONS: "1"
+        run: bash .github/scripts/with-native-stack.sh curl -fsS http://127.0.0.1:3002/health
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Live API contracts — run MSW fixture schemas against the real backend.
@@ -848,50 +738,39 @@ jobs:
   test-live-api-contracts:
     name: Test (Live API Contracts)
     runs-on: ubuntu-24.04
-    # +10 for a possible cold rebuild in the restore step — see trivy-scan.
-    timeout-minutes: 30
-    needs: [build-image]
-    if: ${{ !github.event.pull_request.draft }}
+    timeout-minutes: 20
+    needs: [changes, quality-gate]
+    if: needs.changes.outputs.code == 'true' && !github.event.pull_request.draft
     permissions:
       contents: read
-    # Isolate from the real `vision` project so the `down -v` teardown can never
-    # remove vision_postgres_data when run locally (see docker-verify above).
-    env:
-      COMPOSE_PROJECT_NAME: vision_ci
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-
-      # See docker-verify above — cache-hit rebuild, then compose consumes the
-      # loaded `vision:ci` via docker-compose.ci.yml.
-      - name: Restore vision:ci from the build cache
-        uses: ./.github/actions/build-ci-image
-        with:
-          load: "true"
-
-      - name: Bring up the compose stack
-        uses: ./.github/actions/compose-up
-        with:
-          vision-image: vision:ci
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      - name: Generate locales
-        run: CI=1 bun run generate-locales
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install native runtime dependencies
+        run: |
+          pip install -r config/requirements.txt
+          bash .github/scripts/install-postgres-18.sh
+
+      - name: Build production frontend
+        run: CI=1 bun run build
 
       - name: Run live API contract tests
-        run: cd apps/frontend && bun run vitest run src/test/live-contracts/live-contracts.test.ts
         env:
           LIVE_API_BASE: http://localhost:3002
-
-      # Both `-f` files, as in docker-verify — the stack was created from both.
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+          VISION_NATIVE_COMMAND_DIR: apps/frontend
+        run: bash .github/scripts/with-native-stack.sh bun run vitest run src/test/live-contracts/live-contracts.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # CI Complete — aggregates the Docker-tier results so branch protection has a
-  # single required-status-check that covers the full pipeline.
+  # CI Complete — aggregates the full pipeline so branch protection has one
+  # required status check.
   # Set "CI Complete" as the required check in branch protection settings.
   # ─────────────────────────────────────────────────────────────────────────────
   ci-complete:
@@ -908,14 +787,14 @@ jobs:
         quality-gate,
         verify-branch-protection,
         trivy-scan,
-        docker-verify,
+        native-runtime-verify,
         test-live-api-contracts,
       ]
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Check Docker-tier stages passed
+      - name: Check all CI stages passed
         # Values reach the script through env, never via ${{ }} interpolation
         # into `run:` — same convention as the rest of this workflow.
         env:
@@ -932,7 +811,7 @@ jobs:
           QUALITY_GATE_RESULT: ${{ needs.quality-gate.result }}
           BRANCH_PROTECTION_RESULT: ${{ needs.verify-branch-protection.result }}
           TRIVY_SCAN_RESULT: ${{ needs.trivy-scan.result }}
-          DOCKER_VERIFY_RESULT: ${{ needs.docker-verify.result }}
+          NATIVE_RUNTIME_RESULT: ${{ needs.native-runtime-verify.result }}
           LIVE_CONTRACTS_RESULT: ${{ needs.test-live-api-contracts.result }}
         run: |
           set -euo pipefail
@@ -953,9 +832,7 @@ jobs:
           # 'success' always passes; extra allowed results are per-job (only
           # test-live-api-contracts gets one, 'skipped', for draft PRs).
           # 'cancelled' passes only under the tolerance computed above.
-          # Everything else — crucially 'skipped' for trivy-scan/docker-verify,
-          # which means the Docker tier was silently bypassed rather than run —
-          # is fatal.
+          # Everything else is fatal.
           require() {
             job=$1; result=$2; shift 2
             if [ "$result" = "success" ]; then return 0; fi
@@ -987,29 +864,28 @@ jobs:
             exit 0
           fi
 
-          # Documentation-only diff: the code and Docker tiers are intentionally
+          # Documentation-only diff: the code tiers are intentionally
           # skipped, so there is nothing further to assert — this early exit is
-          # why the trivy-scan/docker-verify assertions below never see the
+          # why the Trivy/native-runtime assertions below never see the
           # 'skipped' they would (correctly) reject on a docs-only run. This job
           # still runs and reports, which is the whole point — "CI Complete" is
           # the required check and must never be left pending.
           if [ "$CODE_CHANGED" != "true" ]; then
-            echo "Documentation/instruction diff — code and Docker tiers intentionally skipped."
+            echo "Documentation/instruction diff — code tiers intentionally skipped."
             echo "All CI stages complete (documentation/instructions)."
             exit 0
           fi
 
           echo "trivy-scan:              $TRIVY_SCAN_RESULT"
-          echo "docker-verify:           $DOCKER_VERIFY_RESULT"
+          echo "native-runtime-verify:   $NATIVE_RUNTIME_RESULT"
           echo "test-live-api-contracts: $LIVE_CONTRACTS_RESULT"
-          # trivy-scan and docker-verify MUST run and succeed. A 'skipped' here
-          # means the Docker tier was silently bypassed (e.g. quality-gate or
-          # build-image failed upstream) — treat that as a failure, not a pass.
+          # Trivy and native runtime verification MUST run and succeed. A
+          # 'skipped' result means a required tier was bypassed.
           # A plain failure grep would let a skipped required job slip through
           # green; `require` allows no extra results for these two, so only
           # 'success' (or a tolerated supersede-cancel) passes.
           require trivy-scan "$TRIVY_SCAN_RESULT"
-          require docker-verify "$DOCKER_VERIFY_RESULT"
+          require native-runtime-verify "$NATIVE_RUNTIME_RESULT"
           # test-live-api-contracts is INTENTIONALLY skipped on draft PRs
           # (if: !github.event.pull_request.draft), so 'skipped' is allowed here.
           require test-live-api-contracts "$LIVE_CONTRACTS_RESULT" skipped

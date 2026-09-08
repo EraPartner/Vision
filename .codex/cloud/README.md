@@ -49,11 +49,8 @@ already declares `archiver` and `yauzl`, so its backup round-trip tests resolve 
 the root workspace without a separate `packaging/electron` install. Puppeteer's code is installed
 without downloading Chrome or `chrome-headless-shell`.
 
-Before dependency setup, an eight-second `docker info` probe detects an already usable daemon. The
-script does not install a Docker client or Compose merely to discover that no daemon exists. When a
-daemon is available, `bun run test:db` keeps using its disposable `postgres:18-alpine` container.
-Otherwise setup installs the native PostgreSQL 18 packages before the Python and Bun dependencies,
-so the bounded system-package phase receives the cloud startup budget first. Package installation
+Before dependency setup, the script installs native PostgreSQL 18 packages before the Python and
+Bun dependencies, so the bounded system-package phase receives the cloud startup budget first. Package installation
 disables `dpkg` pseudo-terminal progress, emits a heartbeat every 30 seconds, and does not create a
 cluster from the package maintainer script. After project dependencies are ready, setup explicitly
 creates and starts the cluster, then creates only a disposable `vision_test` role and database. The
@@ -71,8 +68,8 @@ fixed connection variables to `~/.codex/vision-cloud-test-db.env`, drops and reb
 disposable schema, and migrates it through the same runner used by CI and application startup.
 
 On a cached resume, maintenance installs only dependency layers whose fingerprints changed. If the
-native database environment file already exists, maintenance resets that database directly and
-does not repeat the Docker probe. `bun run test:db` also resets this one fixed managed database
+native database environment file already exists, maintenance resets that database directly.
+`bun run test:db` also resets this one fixed managed database
 before every suite, so rows from an interrupted or prior task cannot survive into the next run.
 Caller-supplied database URLs remain caller-managed and are never reset. Database migrations use a
 persistent head cache under
@@ -86,8 +83,8 @@ PostgreSQL cluster creation and server startup are separate lifecycle steps. Bef
 `pg_ctlcluster` daemonizes the server, its launch wrapper closes every inherited file descriptor
 above standard input, output, and error. The running server therefore cannot retain a private
 Codex setup descriptor and keep the completed setup session open.
-Dependency-fingerprint writes are explicit lifecycle steps. Docker probes, downloads, package
-operations, PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
+Dependency-fingerprint writes are explicit lifecycle steps. Downloads, package operations,
+PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
 installation is non-interactive and network calls have bounded retries. The package-index step
 stops after two minutes. PostgreSQL package-support and PostgreSQL 18 installation each stop after
 five minutes. These deadlines reserve startup time for project dependency installation instead of
@@ -106,10 +103,8 @@ The setup does not create a repository `.env`. Never add production database cre
 cloud environment. If you override `DATABASE_URL` or `TEST_DATABASE_URL`, use only a disposable,
 already-migrated test database; `bun run test:db` treats a pre-set URL as caller-managed.
 
-Run `docker info` in a cloud task to see which path is active. A working response means Docker-based
-database tests are available. A daemon connection or permission error is expected on runtimes that
-use the native PostgreSQL fallback; `bun run test:db` still runs the database-backed suite because
-`TEST_DATABASE_URL` is set for later Bash sessions.
+Run `bun run test:db` to exercise the database-backed suite. Cloud setup exports a disposable
+native PostgreSQL 18 `TEST_DATABASE_URL` for later Bash sessions; it never points at user data.
 
 The dependency cache behavior has a focused offline test:
 

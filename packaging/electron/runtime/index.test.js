@@ -12,45 +12,7 @@ test("native is the default runtime for normal Vision", () => {
   assert.equal(resolveRuntimeMode({ env: {}, settings: {} }), "native");
 });
 
-test("Docker remains an explicit runtime option", () => {
-  assert.equal(
-    resolveRuntimeMode({ env: { VISION_RUNTIME_MODE: "docker" } }),
-    "docker",
-  );
-  assert.equal(
-    resolveRuntimeMode({ env: {}, settings: { runtimeMode: "docker" } }),
-    "docker",
-  );
-  assert.equal(
-    resolveRuntimeMode({
-      env: {},
-      settings: {},
-      runtimeState: { activeRuntime: "docker" },
-    }),
-    "docker",
-  );
-});
-
-test("the cutover marker takes precedence over stale explicit configuration", () => {
-  assert.equal(
-    resolveRuntimeMode({
-      env: { VISION_RUNTIME_MODE: "native" },
-      settings: {},
-      runtimeState: { activeRuntime: "docker" },
-    }),
-    "docker",
-  );
-  assert.equal(
-    resolveRuntimeMode({
-      env: { VISION_RUNTIME_MODE: "docker" },
-      settings: { runtimeMode: "docker" },
-      runtimeState: { activeRuntime: "native" },
-    }),
-    "native",
-  );
-});
-
-test("the seeded Demo defaults to native and ignores stale Docker settings", () => {
+test("the seeded Demo always uses its isolated native runtime", () => {
   assert.equal(
     resolveRuntimeMode({ env: {}, settings: {}, isDemo: true }),
     "native",
@@ -58,18 +20,18 @@ test("the seeded Demo defaults to native and ignores stale Docker settings", () 
   assert.equal(
     resolveRuntimeMode({
       env: {},
-      settings: { runtimeMode: "docker" },
-      runtimeState: { activeRuntime: "docker" },
+      settings: { runtimeMode: "legacy" },
+      runtimeState: { activeRuntime: "legacy" },
       isDemo: true,
     }),
     "native",
   );
 });
 
-test("the Demo ignores Docker overrides to keep one synthetic data owner", () => {
+test("the Demo ignores runtime overrides to keep one synthetic data owner", () => {
   assert.equal(
     resolveRuntimeMode({
-      env: { VISION_RUNTIME_MODE: "docker" },
+      env: { VISION_RUNTIME_MODE: "legacy" },
       settings: {},
       isDemo: true,
     }),
@@ -89,7 +51,7 @@ test("invalid runtime modes fail closed", () => {
         settings: {},
         runtimeState: { activeRuntime: "sqlite" },
       }),
-    (error) => error.code === "INVALID_RUNTIME_STATE",
+    (error) => error.code === "LEGACY_RUNTIME_MIGRATION_REQUIRED",
   );
 });
 
@@ -100,7 +62,7 @@ test("Electron startup fails closed while cutover recovery is pending", () => {
         env: {},
         settings: {},
         runtimeState: {
-          activeRuntime: "docker",
+          activeRuntime: "legacy",
           cutoverInProgress: true,
         },
       }),
@@ -117,9 +79,9 @@ test("runtime selection state is read from the durable native marker", async (t)
   await fs.promises.mkdir(markerDir, { recursive: true });
   await fs.promises.writeFile(
     path.join(markerDir, "runtime-state.json"),
-    JSON.stringify({ activeRuntime: "docker" }),
+    JSON.stringify({ activeRuntime: "native" }),
   );
   assert.deepEqual(await readRuntimeSelectionState(root), {
-    activeRuntime: "docker",
+    activeRuntime: "native",
   });
 });

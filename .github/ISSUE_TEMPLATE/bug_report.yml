@@ -51,7 +51,7 @@ body:
       label: How are you running Vision?
       options:
         - Electron desktop app
-        - Docker Compose (self-hosted)
+        - Native self-hosted
         - Local dev (bun run dev)
         - Other
     validations:

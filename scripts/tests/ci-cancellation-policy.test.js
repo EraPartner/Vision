@@ -9,6 +9,16 @@ const { evaluateCancellation } = require("../ci-cancellation-policy.js");
 const eventHeadSha = "a".repeat(40);
 const newerHeadSha = "b".repeat(40);
 
+function workflowJob(workflow, name) {
+  const block = workflow.match(
+    new RegExp(
+      `(?:^|\\n)  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-z][a-z0-9-]*:\\n|$)`,
+    ),
+  )?.[1];
+  assert.ok(block, `${name} job block must be present`);
+  return block;
+}
+
 test("passes without consulting GitHub when no dependency was cancelled", () => {
   let called = false;
   const verdict = evaluateCancellation({
@@ -107,12 +117,9 @@ test("both workflow aggregation gates call the shared policy with read-only PR a
     path.join(__dirname, "../../.github/workflows/ci.yml"),
     "utf8",
   );
-  const qualityGate = workflow.match(
-    /  quality-gate:\n([\s\S]*?)\n  # ─+\n  # Build Docker image/,
-  )?.[1];
-  const ciComplete = workflow.match(/  ci-complete:\n([\s\S]*?)$/)?.[1];
+  const qualityGate = workflowJob(workflow, "quality-gate");
+  const ciComplete = workflowJob(workflow, "ci-complete");
   for (const gate of [qualityGate, ciComplete]) {
-    assert.ok(gate, "gate block must be present");
     assert.match(gate, /pull-requests: read/);
     assert.match(gate, /node scripts\/ci-cancellation-policy\.js/);
     assert.match(gate, /EVENT_PR_HEAD_SHA:/);
@@ -125,19 +132,15 @@ test("CI Complete requires the fail-closed branch-protection verifier", () => {
     path.join(__dirname, "../../.github/workflows/ci.yml"),
     "utf8",
   );
-  const verifier = workflow.match(
-    /  verify-branch-protection:\n([\s\S]*?)\n  # ─+\n  # Compose sync/,
-  )?.[1];
-  const ciComplete = workflow.match(/  ci-complete:\n([\s\S]*?)$/)?.[1];
+  const verifier = workflowJob(workflow, "verify-branch-protection");
+  const ciComplete = workflowJob(workflow, "ci-complete");
 
-  assert.ok(verifier, "branch-protection verifier block must be present");
   assert.match(verifier, /Could not read branch rules[\s\S]*Failing closed/);
   assert.doesNotMatch(
     verifier,
     /Could not read branch rules[\s\S]{0,300}exit 0/,
   );
 
-  assert.ok(ciComplete, "CI Complete block must be present");
   assert.match(ciComplete, /verify-branch-protection/);
   assert.match(
     ciComplete,
@@ -147,4 +150,22 @@ test("CI Complete requires the fail-closed branch-protection verifier", () => {
     ciComplete,
     /require verify-branch-protection "\$BRANCH_PROTECTION_RESULT"/,
   );
+});
+
+test("CI Complete requires native production and filesystem security gates", () => {
+  const workflow = fs.readFileSync(
+    path.join(__dirname, "../../.github/workflows/ci.yml"),
+    "utf8",
+  );
+  const ciComplete = workflowJob(workflow, "ci-complete");
+
+  assert.match(
+    ciComplete,
+    /NATIVE_RUNTIME_RESULT: \$\{\{ needs\.native-runtime-verify\.result \}\}/,
+  );
+  assert.match(
+    ciComplete,
+    /require native-runtime-verify "\$NATIVE_RUNTIME_RESULT"/,
+  );
+  assert.match(ciComplete, /require trivy-scan "\$TRIVY_SCAN_RESULT"/);
 });

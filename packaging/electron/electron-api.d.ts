@@ -1,4 +1,4 @@
-export type ElectronUpdateMode = "source" | "docker" | "native" | "dev";
+export type ElectronUpdateMode = "native" | "dev";
 
 export interface ElectronSuccessResult {
   success: boolean;
@@ -13,12 +13,8 @@ export interface UpdateCheckStatus {
   release_notes?: string;
   html_url?: string;
   error?: string;
-  update_mode: ElectronUpdateMode | "docker-compose";
+  update_mode: ElectronUpdateMode;
   source_launcher_available?: boolean;
-}
-
-export interface PullImageResult extends ElectronSuccessResult {
-  wasNew?: boolean;
 }
 
 export interface InstallUpdateResult extends ElectronSuccessResult {
@@ -75,10 +71,6 @@ export interface RendererFailurePayload {
 }
 
 export interface ElectronInvokeContract {
-  "update:pull-image": {
-    args: [];
-    result: PullImageResult;
-  };
   "update:check-github": { args: []; result: UpdateCheckStatus };
   "update:install-shell": {
     args: [];
@@ -89,7 +81,6 @@ export interface ElectronInvokeContract {
     result: {
       mode: ElectronUpdateMode;
       is_packaged: boolean;
-      use_repo_mode: boolean;
     };
   };
   "update:pre-update-backup": { args: []; result: BackupResult };
@@ -181,7 +172,6 @@ export type ElectronSubscription<C extends ElectronEventChannel> = (
 ) => () => void;
 
 export interface ElectronUpdaterBridge {
-  pullImage: ElectronInvoke<"update:pull-image">;
   checkRelease?: ElectronInvoke<"update:check-github">;
   installShellUpdate?: ElectronInvoke<"update:install-shell">;
   getMode?: ElectronInvoke<"update:get-mode">;

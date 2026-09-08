@@ -2,12 +2,11 @@
 #
 # These Playwright suites are deliberately NOT part of ci.yml (they would add
 # minutes to every PR for flows that change rarely). Instead they run nightly
-# and on demand against the real Docker stack, so regressions in critical user
+# and on demand against the native production stack, so regressions in critical user
 # journeys and a11y are still caught — just off the PR critical path.
 #
-# This workflow is modeled on ci.yml's docker-verify / test-live-api-contracts
-# jobs and shares their compose bring-up via .github/actions/compose-up (stub
-# .env + plain `docker compose up -d` + /health poll).
+# It uses an isolated PostgreSQL 18 cluster and the same production backend
+# entry point exercised by the desktop application.
 name: E2E (scheduled)
 
 on:
@@ -29,17 +28,21 @@ jobs:
     name: E2E + a11y (Playwright)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # Isolate this stack from the real `vision` compose project (the default from
-    # the repo dir basename). Without this, running these steps locally shares the
-    # vision_postgres_data volume with the packaged app and dev stack — a teardown
-    # or reset would wipe real financial data. Distinct project ⇒ distinct volumes.
-    env:
-      COMPOSE_PROJECT_NAME: vision_e2e
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install native runtime dependencies
+        run: |
+          pip install -r config/requirements.txt
+          bash .github/scripts/install-postgres-18.sh
 
       - name: Generate locales
         run: CI=1 bun run generate-locales
@@ -47,28 +50,22 @@ jobs:
       - name: Install Playwright browser (chromium)
         run: cd apps/frontend && bunx playwright install --with-deps chromium
 
-      # No image artifact here — compose builds the `app` image implicitly
-      # (fresh runner → no cached image), so current source runs.
-      #
       # VISION_DEV=true enables the app's sanctioned dev/test bypass (skips
       # rate limiting) so the suite's rapid full-page navigation across every
       # route doesn't trip the 30/min per-route limiters (e.g. exchange-rates)
       # and surface as false "network drift" 429s. Test-env only — production
       # defaults are untouched; this suite exercises UI/a11y/contracts, not
       # rate limiting.
-      - name: Bring up the compose stack
-        uses: ./.github/actions/compose-up
-        with:
-          extra-env: |
-            VISION_DEV=true
-          health-attempts: "60"
-          health-interval: "2"
+      - name: Build production frontend
+        run: CI=1 bun run build
 
       - name: Run E2E + a11y suites
-        run: cd apps/frontend && bun run test:e2e
         env:
           CI: "1"
           PLAYWRIGHT_BASE_URL: http://localhost:3002
+          VISION_DEV: "true"
+          VISION_NATIVE_COMMAND_DIR: apps/frontend
+        run: bash .github/scripts/with-native-stack.sh bun run test:e2e
 
       - name: Upload Playwright report
         if: always()
@@ -77,10 +74,6 @@ jobs:
           name: playwright-report
           path: apps/frontend/playwright-report/
           retention-days: 14
-
-      - name: Dump compose logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.yml logs --no-color | tail -200
 
       # A nightly failure would otherwise only email the workflow file's last
       # editor and gate nothing. Open (or comment on) a single tracking issue so
