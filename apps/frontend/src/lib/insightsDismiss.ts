@@ -25,9 +25,9 @@ import type {
     InsightsDigestResponse,
     SubscriptionCreepNew,
     SubscriptionCreepPriceChange,
-} from '@/lib/api/info';
+} from "@/lib/api/info";
 
-export const DISMISSED_INSIGHTS_STORAGE_KEY = 'dismissed_insights_v1';
+export const DISMISSED_INSIGHTS_STORAGE_KEY = "dismissed_insights_v1";
 
 /** Days a dismissed category outlier stays hidden (mirrors the backend service). */
 export const OUTLIER_SUPPRESSION_DAYS = 14;
@@ -36,7 +36,7 @@ export const OUTLIER_REALERT_MARGIN = 0.5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type SubscriptionFindingType = 'new' | 'priceChange';
+export type SubscriptionFindingType = "new" | "priceChange";
 
 export interface SubscriptionDismissal {
     recipientId: number;
@@ -77,23 +77,25 @@ function getStorage(): Storage | null {
     }
 }
 
-function isSubscriptionDismissal(value: unknown): value is SubscriptionDismissal {
-    if (typeof value !== 'object' || value === null) return false;
+function isSubscriptionDismissal(
+    value: unknown,
+): value is SubscriptionDismissal {
+    if (typeof value !== "object" || value === null) return false;
     const v = value as Record<string, unknown>;
     return (
-        typeof v.recipientId === 'number' &&
-        (v.findingType === 'new' || v.findingType === 'priceChange')
+        typeof v.recipientId === "number" &&
+        (v.findingType === "new" || v.findingType === "priceChange")
     );
 }
 
 function isOutlierDismissal(value: unknown): value is OutlierDismissal {
-    if (typeof value !== 'object' || value === null) return false;
+    if (typeof value !== "object" || value === null) return false;
     const v = value as Record<string, unknown>;
     return (
-        typeof v.categoryId === 'number' &&
-        typeof v.monthKey === 'string' &&
-        typeof v.dismissedAt === 'string' &&
-        typeof v.deviationAtDismiss === 'number'
+        typeof v.categoryId === "number" &&
+        typeof v.monthKey === "string" &&
+        typeof v.dismissedAt === "string" &&
+        typeof v.deviationAtDismiss === "number"
     );
 }
 
@@ -103,7 +105,7 @@ export function loadDismissState(): InsightsDismissState {
         const raw = getStorage()?.getItem(DISMISSED_INSIGHTS_STORAGE_KEY);
         if (!raw) return emptyState();
         const parsed: unknown = JSON.parse(raw);
-        if (typeof parsed !== 'object' || parsed === null) return emptyState();
+        if (typeof parsed !== "object" || parsed === null) return emptyState();
         const p = parsed as Record<string, unknown>;
         return {
             subscriptions: Array.isArray(p.subscriptions)
@@ -119,12 +121,33 @@ export function loadDismissState(): InsightsDismissState {
     }
 }
 
+/** Remove the legacy browser-only store after every record reaches the server. */
+export function clearDismissState(): void {
+    try {
+        getStorage()?.removeItem(DISMISSED_INSIGHTS_STORAGE_KEY);
+    } catch {
+        // Retry on the next Statistics visit when storage becomes available.
+    }
+}
+
 function persist(state: InsightsDismissState): void {
     try {
-        getStorage()?.setItem(DISMISSED_INSIGHTS_STORAGE_KEY, JSON.stringify(state));
+        getStorage()?.setItem(
+            DISMISSED_INSIGHTS_STORAGE_KEY,
+            JSON.stringify(state),
+        );
     } catch {
         // Storage full/denied — dismissal still applies for this session via state.
     }
+}
+
+/** Replace the legacy store with only the records that still need migration. */
+export function replaceDismissState(state: InsightsDismissState): void {
+    if (state.subscriptions.length === 0 && state.outliers.length === 0) {
+        clearDismissState();
+        return;
+    }
+    persist(state);
 }
 
 type DismissListener = (state: InsightsDismissState) => void;
@@ -162,7 +185,10 @@ export function dismissSubscription(
 }
 
 /** Dismiss a category outlier for OUTLIER_SUPPRESSION_DAYS (re-alerts early if it worsens). */
-export function dismissOutlier(outlier: CategoryOutlier, now: Date = new Date()): InsightsDismissState {
+export function dismissOutlier(
+    outlier: CategoryOutlier,
+    now: Date = new Date(),
+): InsightsDismissState {
     const state = loadDismissState();
     const record: OutlierDismissal = {
         categoryId: outlier.categoryId,
@@ -174,7 +200,11 @@ export function dismissOutlier(outlier: CategoryOutlier, now: Date = new Date())
         ...state,
         outliers: [
             ...state.outliers.filter(
-                (o) => !(o.categoryId === outlier.categoryId && o.monthKey === outlier.monthKey),
+                (o) =>
+                    !(
+                        o.categoryId === outlier.categoryId &&
+                        o.monthKey === outlier.monthKey
+                    ),
             ),
             record,
         ],
@@ -197,11 +227,14 @@ function isOutlierSuppressed(
     now: Date,
 ): boolean {
     const record = state.outliers.find(
-        (o) => o.categoryId === outlier.categoryId && o.monthKey === outlier.monthKey,
+        (o) =>
+            o.categoryId === outlier.categoryId &&
+            o.monthKey === outlier.monthKey,
     );
     if (!record) return false;
     // Worsened past the margin → re-alert regardless of the window.
-    if (outlier.deviation > record.deviationAtDismiss + OUTLIER_REALERT_MARGIN) return false;
+    if (outlier.deviation > record.deviationAtDismiss + OUTLIER_REALERT_MARGIN)
+        return false;
     const dismissedAt = Date.parse(record.dismissedAt);
     if (Number.isNaN(dismissedAt)) return false;
     return now.getTime() - dismissedAt < OUTLIER_SUPPRESSION_DAYS * DAY_MS;
@@ -214,14 +247,20 @@ export function filterDigest(
     now: Date = new Date(),
 ): FilteredDigest {
     if (!digest) {
-        return { newSubscriptions: [], priceChanges: [], categoryOutliers: [], cashForecast: null };
+        return {
+            newSubscriptions: [],
+            priceChanges: [],
+            categoryOutliers: [],
+            cashForecast: null,
+        };
     }
     return {
         newSubscriptions: digest.subscriptionCreep.new.filter(
-            (f) => !isSubscriptionSuppressed(state, f.recipientId, 'new'),
+            (f) => !isSubscriptionSuppressed(state, f.recipientId, "new"),
         ),
         priceChanges: digest.subscriptionCreep.priceChanges.filter(
-            (f) => !isSubscriptionSuppressed(state, f.recipientId, 'priceChange'),
+            (f) =>
+                !isSubscriptionSuppressed(state, f.recipientId, "priceChange"),
         ),
         categoryOutliers: digest.categoryOutliers.filter(
             (o) => !isOutlierSuppressed(o, state, now),
@@ -244,6 +283,6 @@ export function countUndismissed(
         filtered.newSubscriptions.length +
         filtered.priceChanges.length +
         filtered.categoryOutliers.length +
-        (filtered.cashForecast?.prominence === 'alert' ? 1 : 0)
+        (filtered.cashForecast?.prominence === "alert" ? 1 : 0)
     );
 }

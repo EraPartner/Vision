@@ -3,200 +3,285 @@
  * Pure TanStack Query layer — no calculations.
  */
 
-import { useCallback } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import { invalidateInvestmentData, portfolioKeys } from '@/lib/queryKeys';
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import {
+    accountKeys,
+    invalidateInvestmentData,
+    portfolioKeys,
+} from "@/lib/queryKeys";
 import type {
-  InvestmentCreate,
-  InvestmentUpdate,
-  PortfolioTransactionCreate,
-  PortfolioTransactionUpdate,
-} from '@/types/api';
-import { toast } from 'sonner';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
+    InvestmentCreate,
+    InvestmentUpdate,
+    PortfolioTransactionCreate,
+    PortfolioTransaction,
+    PortfolioTransactionUpdate,
+} from "@/types/api";
+import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export function useInvestmentsQuery() {
-  return useQuery({
-    queryKey: portfolioKeys.investments,
-    queryFn: () => apiClient.getInvestments({ limit: 500, active: false }),
-    staleTime: 2 * 60_000,
-    gcTime: 10 * 60_000,
-  });
+    return useQuery({
+        queryKey: portfolioKeys.investments,
+        queryFn: () => apiClient.getInvestments({ limit: 500, active: false }),
+        staleTime: 2 * 60_000,
+        gcTime: 10 * 60_000,
+    });
 }
 
 export function usePortfolioTransactionsQuery(investmentIds: number[]) {
-  return useQuery({
-    queryKey: portfolioKeys.transactions(investmentIds.join(',')),
-    queryFn: async () => {
-      if (investmentIds.length === 0) return [];
-      try {
-        const bulk = await apiClient.getPortfolioTransactionsBulk({
-          investment_ids: investmentIds.join(','),
-          per_investment_limit: 1000,
-        });
-        return bulk.items;
-      } catch {
-        const results = await Promise.all(
-          investmentIds.map((id) => apiClient.getPortfolioTransactions(id, { limit: 1000 }))
-        );
-        return results.flatMap((r) => r.items);
-      }
-    },
-    enabled: investmentIds.length > 0,
-    staleTime: 2 * 60_000,
-    gcTime: 10 * 60_000,
-  });
+    return useQuery({
+        queryKey: portfolioKeys.transactions(investmentIds.join(",")),
+        queryFn: async () => {
+            if (investmentIds.length === 0) return [];
+            try {
+                const bulk = await apiClient.getPortfolioTransactionsBulk({
+                    investment_ids: investmentIds.join(","),
+                    per_investment_limit: 1000,
+                });
+                return bulk.items;
+            } catch {
+                const results = await Promise.all(
+                    investmentIds.map((id) =>
+                        apiClient.getPortfolioTransactions(id, { limit: 1000 }),
+                    ),
+                );
+                return results.flatMap((r) => r.items);
+            }
+        },
+        enabled: investmentIds.length > 0,
+        staleTime: 2 * 60_000,
+        gcTime: 10 * 60_000,
+    });
+}
+
+export function useAllPortfolioTransactionsQuery(investmentId: number) {
+    return useQuery({
+        queryKey: portfolioKeys.allTransactionsForInvestment(investmentId),
+        queryFn: async () => {
+            const pageSize = 1000;
+            const items: PortfolioTransaction[] = [];
+            let offset = 0;
+            let total = Number.POSITIVE_INFINITY;
+            while (items.length < total) {
+                const page = await apiClient.getPortfolioTransactions(
+                    investmentId,
+                    { limit: pageSize, offset },
+                );
+                total = page.total;
+                items.push(...page.items);
+                if (page.items.length === 0 && items.length < total) {
+                    throw new Error(
+                        "Portfolio transaction pagination stopped before the complete history was loaded",
+                    );
+                }
+                offset += page.items.length;
+            }
+            return items;
+        },
+        staleTime: 2 * 60_000,
+        gcTime: 10 * 60_000,
+    });
 }
 
 export function useInvestmentMutations() {
-  const queryClient = useQueryClient();
-  const { t } = useLanguage();
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
-  const invalidateAll = useCallback(() => {
-    invalidateInvestmentData(queryClient);
-  }, [queryClient]);
+    const invalidateAll = useCallback(() => {
+        invalidateInvestmentData(queryClient);
+    }, [queryClient]);
 
-  const addInvestmentMutation = useMutation({
-    mutationFn: (data: InvestmentCreate) => apiClient.createInvestment(data),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.createInvestmentFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const addInvestmentMutation = useMutation({
+        mutationFn: (data: InvestmentCreate) =>
+            apiClient.createInvestment(data),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.createInvestmentFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const updateInvestmentMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: InvestmentUpdate }) =>
-      apiClient.updateInvestment(id, data),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.updateInvestmentFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const updateInvestmentMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: InvestmentUpdate }) =>
+            apiClient.updateInvestment(id, data),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.updateInvestmentFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const deleteInvestmentMutation = useMutation({
-    mutationFn: (id: number) => apiClient.deleteInvestment(id),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.deleteInvestmentFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const deleteInvestmentMutation = useMutation({
+        mutationFn: (id: number) => apiClient.deleteInvestment(id),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.deleteInvestmentFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const addTxnMutation = useMutation({
-    mutationFn: ({
-      investmentId,
-      data,
-    }: {
-      investmentId: number;
-      data: PortfolioTransactionCreate;
-    }) => apiClient.createPortfolioTransaction(investmentId, data),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.recordTxnFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const addTxnMutation = useMutation({
+        mutationFn: ({
+            investmentId,
+            data,
+        }: {
+            investmentId: number;
+            data: PortfolioTransactionCreate;
+        }) => apiClient.createPortfolioTransaction(investmentId, data),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.recordTxnFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const deleteTxnMutation = useMutation({
-    mutationFn: (id: number) => apiClient.deletePortfolioTransaction(id),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.deleteTxnFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const deleteTxnMutation = useMutation({
+        mutationFn: (id: number) => apiClient.deletePortfolioTransaction(id),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.deleteTxnFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const updateTxnMutation = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: PortfolioTransactionUpdate;
-    }) => apiClient.updatePortfolioTransaction(id, data),
-    onSuccess: invalidateAll,
-    onError: (err: Error) =>
-      toast.error(t('portfolio.recordTxnFailedTitle'), { description: apiErrorToMessage(err, t) }),
-  });
+    const updateTxnMutation = useMutation({
+        mutationFn: ({
+            id,
+            data,
+        }: {
+            id: number;
+            data: PortfolioTransactionUpdate;
+        }) => apiClient.updatePortfolioTransaction(id, data),
+        onSuccess: invalidateAll,
+        onError: (err: Error) =>
+            toast.error(t("portfolio.recordTxnFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const refreshPricesMutation = useMutation({
-    mutationFn: () => apiClient.refreshInvestmentPrices(),
-    onSuccess: (data) => {
-      invalidateAll();
-      const sources = Object.values(data.priceSources ?? {});
-      const staleCount = sources.filter(
-        (s) => s === 'historical_fallback' || s === 'cached',
-      ).length;
-      // Stable id => Sonner replaces, never stacks duplicates on rapid re-clicks.
-      if (staleCount > 0) {
-        toast.warning(t('portfolio.refreshedPrices', { n: String(data.total) }), {
-          id: 'portfolio-refresh-prices',
-          description: t('portfolio.refreshedPricesStale', {
-            n: String(staleCount),
-            total: String(data.total),
-          }),
-        });
-      } else {
-        toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }), {
-          id: 'portfolio-refresh-prices',
-        });
-      }
-    },
-    onError: (err: Error) => {
-      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      toast.error(t('portfolio.refreshPricesFailedTitle'), {
-        id: 'portfolio-refresh-prices',
-        description: isOffline ? t('portfolio.refreshPricesOffline') : apiErrorToMessage(err, t),
-      });
-    },
-  });
+    const bulkRetagMutation = useMutation({
+        mutationFn: (
+            data: Parameters<
+                typeof apiClient.bulkRetagPortfolioTransactions
+            >[0],
+        ) => apiClient.bulkRetagPortfolioTransactions(data),
+        onSuccess: () => {
+            invalidateAll();
+            queryClient.invalidateQueries({ queryKey: accountKeys.all });
+        },
+        onError: (err: Error) =>
+            toast.error(t("portfolio.assignLotsFailedTitle"), {
+                description: apiErrorToMessage(err, t),
+            }),
+    });
 
-  const addInvestment = useCallback(
-    (data: InvestmentCreate) => addInvestmentMutation.mutateAsync(data),
-    [addInvestmentMutation]
-  );
+    const refreshPricesMutation = useMutation({
+        mutationFn: () => apiClient.refreshInvestmentPrices(),
+        onSuccess: (data) => {
+            invalidateAll();
+            const sources = Object.values(data.priceSources ?? {});
+            const staleCount = sources.filter(
+                (s) => s === "historical_fallback" || s === "cached",
+            ).length;
+            // Stable id => Sonner replaces, never stacks duplicates on rapid re-clicks.
+            if (staleCount > 0) {
+                toast.warning(
+                    t("portfolio.refreshedPrices", { n: String(data.total) }),
+                    {
+                        id: "portfolio-refresh-prices",
+                        description: t("portfolio.refreshedPricesStale", {
+                            n: String(staleCount),
+                            total: String(data.total),
+                        }),
+                    },
+                );
+            } else {
+                toast.success(
+                    t("portfolio.refreshedPrices", { n: String(data.total) }),
+                    {
+                        id: "portfolio-refresh-prices",
+                    },
+                );
+            }
+        },
+        onError: (err: Error) => {
+            const isOffline =
+                typeof navigator !== "undefined" && navigator.onLine === false;
+            toast.error(t("portfolio.refreshPricesFailedTitle"), {
+                id: "portfolio-refresh-prices",
+                description: isOffline
+                    ? t("portfolio.refreshPricesOffline")
+                    : apiErrorToMessage(err, t),
+            });
+        },
+    });
 
-  const updateInvestment = useCallback(
-    (id: number, data: InvestmentUpdate) =>
-      updateInvestmentMutation.mutateAsync({ id, data }),
-    [updateInvestmentMutation]
-  );
+    const addInvestment = useCallback(
+        (data: InvestmentCreate) => addInvestmentMutation.mutateAsync(data),
+        [addInvestmentMutation],
+    );
 
-  const deleteInvestment = useCallback(
-    (id: number) => deleteInvestmentMutation.mutate(id),
-    [deleteInvestmentMutation]
-  );
+    const updateInvestment = useCallback(
+        (id: number, data: InvestmentUpdate) =>
+            updateInvestmentMutation.mutateAsync({ id, data }),
+        [updateInvestmentMutation],
+    );
 
-  const addTransaction = useCallback(
-    (data: { investmentId: number } & PortfolioTransactionCreate) => {
-      const { investmentId, ...txnData } = data;
-      return addTxnMutation.mutateAsync({ investmentId, data: txnData });
-    },
-    [addTxnMutation]
-  );
+    const deleteInvestment = useCallback(
+        (id: number) => deleteInvestmentMutation.mutate(id),
+        [deleteInvestmentMutation],
+    );
 
-  const deleteTransaction = useCallback(
-    (id: number) => deleteTxnMutation.mutate(id),
-    [deleteTxnMutation]
-  );
+    const addTransaction = useCallback(
+        (data: { investmentId: number } & PortfolioTransactionCreate) => {
+            const { investmentId, ...txnData } = data;
+            return addTxnMutation.mutateAsync({ investmentId, data: txnData });
+        },
+        [addTxnMutation],
+    );
 
-  const updateTransaction = useCallback(
-    (id: number, data: PortfolioTransactionUpdate) =>
-      updateTxnMutation.mutateAsync({ id, data }),
-    [updateTxnMutation]
-  );
+    const deleteTransaction = useCallback(
+        (id: number) => deleteTxnMutation.mutate(id),
+        [deleteTxnMutation],
+    );
 
-  const refreshPrices = useCallback(
-    () => refreshPricesMutation.mutate(),
-    [refreshPricesMutation]
-  );
+    const updateTransaction = useCallback(
+        (id: number, data: PortfolioTransactionUpdate) =>
+            updateTxnMutation.mutateAsync({ id, data }),
+        [updateTxnMutation],
+    );
 
-  return {
-    addInvestment,
-    updateInvestment,
-    deleteInvestment,
-    addTransaction,
-    deleteTransaction,
-    updateTransaction,
-    refreshPrices,
-    isRefreshingPrices: refreshPricesMutation.isPending,
-    isAddingInvestment: addInvestmentMutation.isPending,
-    isUpdatingInvestment: updateInvestmentMutation.isPending,
-    isAddingTransaction: addTxnMutation.isPending,
-    isUpdatingTransaction: updateTxnMutation.isPending,
-  };
+    const refreshPrices = useCallback(
+        () => refreshPricesMutation.mutate(),
+        [refreshPricesMutation],
+    );
+
+    const bulkRetagTransactions = useCallback(
+        (
+            data: Parameters<
+                typeof apiClient.bulkRetagPortfolioTransactions
+            >[0],
+        ) => bulkRetagMutation.mutateAsync(data),
+        [bulkRetagMutation],
+    );
+
+    return {
+        addInvestment,
+        updateInvestment,
+        deleteInvestment,
+        addTransaction,
+        deleteTransaction,
+        updateTransaction,
+        bulkRetagTransactions,
+        refreshPrices,
+        isRefreshingPrices: refreshPricesMutation.isPending,
+        isAddingInvestment: addInvestmentMutation.isPending,
+        isUpdatingInvestment: updateInvestmentMutation.isPending,
+        isAddingTransaction: addTxnMutation.isPending,
+        isUpdatingTransaction: updateTxnMutation.isPending,
+        isRetaggingTransactions: bulkRetagMutation.isPending,
+    };
 }

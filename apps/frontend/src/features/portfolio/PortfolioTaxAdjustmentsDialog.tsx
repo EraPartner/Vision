@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/select";
 import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatEditableNumber } from "@/utils/currency";
 
 type ReyndersChoice = "auto" | "yes" | "no";
 
@@ -54,6 +56,7 @@ interface Props {
 
 export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const profile = useBelgianTaxProfile((state) => state.profile);
     const { getAdjustment, saveManyForYear, isLoading } =
         usePortfolioTaxAdjustments();
@@ -89,8 +92,18 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
         sorted.forEach((inv) => {
             const current = getAdjustment(profile.taxYear, inv.id);
             next[inv.id] = {
-                taxes: current.taxes ? String(current.taxes) : "",
-                fees: current.fees ? String(current.fees) : "",
+                taxes: current.taxes
+                    ? formatEditableNumber(
+                          current.taxes,
+                          appSettings.numberFormat,
+                      )
+                    : "",
+                fees: current.fees
+                    ? formatEditableNumber(
+                          current.fees,
+                          appSettings.numberFormat,
+                      )
+                    : "",
             };
             const cls = getClassification(inv.id);
             nextClass[inv.id] = {
@@ -104,9 +117,19 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
         });
         setDraft(next);
         setClassDraft(nextClass);
-    }, [open, sorted, getAdjustment, getClassification, profile.taxYear]);
+    }, [
+        appSettings.numberFormat,
+        open,
+        sorted,
+        getAdjustment,
+        getClassification,
+        profile.taxYear,
+    ]);
 
-    const parseNumber = (v?: string) => parseDecimal(v, 0);
+    const parseNumber = useCallback(
+        (v?: string) => parseDecimal(v, appSettings.numberFormat, 0),
+        [appSettings.numberFormat],
+    );
 
     const draftTotals = useMemo(() => {
         return sorted.reduce(
@@ -118,7 +141,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
             },
             { taxes: 0, fees: 0 },
         );
-    }, [sorted, draft]);
+    }, [sorted, draft, parseNumber]);
 
     // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
     const fmt = useCurrencyFormatter();
@@ -256,9 +279,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                             </Label>
                                             <Input
                                                 id={`taxes-${inv.id}`}
-                                                type="number"
-                                                min={0}
-                                                step={0.01}
+                                                type="text"
+                                                inputMode="decimal"
                                                 value={
                                                     draft[inv.id]?.taxes ?? ""
                                                 }
@@ -289,9 +311,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                             </Label>
                                             <Input
                                                 id={`fees-${inv.id}`}
-                                                type="number"
-                                                min={0}
-                                                step={0.01}
+                                                type="text"
+                                                inputMode="decimal"
                                                 value={
                                                     draft[inv.id]?.fees ?? ""
                                                 }

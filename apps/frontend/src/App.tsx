@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -31,64 +32,30 @@ import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { PageLoader } from "@/components/shared/PageLoader";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
+import { LegacyInsightDismissalMigrationGate } from "@/components/shared/LegacyInsightDismissalMigrationGate";
 
 import { useSettingsStore } from "@/stores/settingsStore";
 
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
-import { routeLoaders } from "@/lib/routePreload";
+import { appRouteManifest } from "@/lib/routePreload";
 import { loadMotionFeatures } from "@/lib/motionFeatures";
 import { UnsavedChangesProvider } from "@/contexts/UnsavedChangesContext";
 
-const TaxOverviewPage = lazy(routeLoaders["/tax"]);
-const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
-const RebalancePage = lazy(routeLoaders["/portfolio/rebalance"]);
-const DashboardPage = lazy(routeLoaders["/"]);
-const TransactionsPage = lazy(routeLoaders["/transactions"]);
-const CategoriesPage = lazy(routeLoaders["/categories"]);
-const AccountsPage = lazy(routeLoaders["/accounts"]);
-const AccountDetailPage = lazy(routeLoaders["/accounts/:id"]);
-const RecipientsPage = lazy(routeLoaders["/recipients"]);
-const ImportPage = lazy(routeLoaders["/import"]);
-const ImportReviewPage = lazy(routeLoaders["/import/:batchId/review"]);
-const PlannedPaymentsPage = lazy(routeLoaders["/planned"]);
-const StatisticsPage = lazy(routeLoaders["/statistics"]);
-const OwesPage = lazy(routeLoaders["/owes"]);
-const PortfolioOverviewPage = lazy(routeLoaders["/portfolio"]);
-const StocksPage = lazy(routeLoaders["/portfolio/stocks"]);
-const CryptoPage = lazy(routeLoaders["/portfolio/crypto"]);
-const MetalsPage = lazy(routeLoaders["/portfolio/metals"]);
-const RealEstatePage = lazy(routeLoaders["/portfolio/real-estate"]);
-const SavingsPage = lazy(routeLoaders["/portfolio/savings"]);
-const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
-const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
-const ExchangeRatesPage = lazy(routeLoaders["/admin/exchange-rates"]);
-const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
-const PortfolioImportReviewPage = lazy(
-    routeLoaders["/portfolio/import/:batchId/review"],
-);
-const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
-const TableDataEditorPage = lazy(routeLoaders["/admin/db/:table"]);
-const AdminOverviewPage = lazy(routeLoaders["/admin"]);
-const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
-const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
-const AIChatPage = lazy(routeLoaders["/ai-chat"]);
-const ResearchHomePage = lazy(routeLoaders["/research"]);
-const MarketOverviewPage = lazy(routeLoaders["/research/markets"]);
-const MarketLookupPage = lazy(routeLoaders["/research/market"]);
-const WatchlistPage = lazy(routeLoaders["/research/watchlist"]);
-const ResearchComparePage = lazy(routeLoaders["/research/compare"]);
-const PortfolioForecastPage = lazy(routeLoaders["/research/forecast"]);
-const ChartBuilderPage = lazy(routeLoaders["/research/charts"]);
+const lazyAppRoutes = appRouteManifest.map(({ path, loader, admin }) => ({
+    path,
+    admin,
+    Component: lazy(loader),
+}));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Devtools (API Inspector). Lazily loaded as a separate chunk that is only
 // fetched when actually rendered, so it costs normal users nothing on load.
 // Shown when ANY of:
 //   • local Vite dev server (import.meta.env.DEV), or
-//   • Docker dev build (VITE_DEVTOOLS=true via docker-compose.dev.yml), or
+//   • an explicit VITE_DEVTOOLS=true source build, or
 //   • the user enables Admin Mode at runtime — which is the only path that
-//     works in the packaged Electron app and public release image, since those
+//     works in the packaged Electron app and public release, since those
 //     run a normally-built bundle with no VITE_DEVTOOLS build arg.
 const isDevtoolsBuildEnabled =
     import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === "true";
@@ -114,7 +81,7 @@ function DevtoolsGate() {
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            staleTime: 30_000, // 30s before data considered stale
+            staleTime: QUERY_STALE_TIME_MS.DEFAULT, // 30s before data considered stale
             gcTime: 5 * 60_000, // 5min garbage collection
             refetchOnWindowFocus: false,
             retry: 1,
@@ -160,128 +127,21 @@ function RouterSurface() {
                 <RoutedErrorBoundary>
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
-                            {/* Budgeting */}
-                            <Route path="/" element={<DashboardPage />} />
-                            <Route
-                                path="/transactions"
-                                element={<TransactionsPage />}
-                            />
-                            <Route
-                                path="/categories"
-                                element={<CategoriesPage />}
-                            />
-                            <Route
-                                path="/accounts"
-                                element={<AccountsPage />}
-                            />
-                            <Route
-                                path="/accounts/:id"
-                                element={<AccountDetailPage />}
-                            />
-                            <Route
-                                path="/recipients"
-                                element={<RecipientsPage />}
-                            />
-                            <Route
-                                path="/planned"
-                                element={<PlannedPaymentsPage />}
-                            />
-                            <Route
-                                path="/statistics"
-                                element={<StatisticsPage />}
-                            />
-                            <Route path="/import" element={<ImportPage />} />
-                            <Route
-                                path="/import/:batchId/review"
-                                element={<ImportReviewPage />}
-                            />
-                            <Route path="/owes" element={<OwesPage />} />
-                            <Route path="/tax" element={<TaxOverviewPage />} />
-                            <Route
-                                path="/admin"
-                                element={
-                                    <RequireAdmin>
-                                        <AdminOverviewPage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            <Route
-                                path="/admin/db"
-                                element={
-                                    <RequireAdmin>
-                                        <DbMaintenancePage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            <Route
-                                path="/admin/db/:table"
-                                element={
-                                    <RequireAdmin>
-                                        <TableDataEditorPage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            <Route
-                                path="/admin/providers"
-                                element={
-                                    <RequireAdmin>
-                                        <ProviderHealthPage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            <Route
-                                path="/admin/endpoints"
-                                element={
-                                    <RequireAdmin>
-                                        <EndpointLivenessPage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            <Route
-                                path="/admin/exchange-rates"
-                                element={
-                                    <RequireAdmin>
-                                        <ExchangeRatesPage />
-                                    </RequireAdmin>
-                                }
-                            />
-                            {/* Portfolio */}
-                            <Route
-                                path="/portfolio"
-                                element={<PortfolioOverviewPage />}
-                            />
-                            <Route
-                                path="/portfolio/stocks"
-                                element={<StocksPage />}
-                            />
-                            <Route
-                                path="/portfolio/crypto"
-                                element={<CryptoPage />}
-                            />
-                            <Route
-                                path="/portfolio/metals"
-                                element={<MetalsPage />}
-                            />
-                            <Route
-                                path="/portfolio/real-estate"
-                                element={<RealEstatePage />}
-                            />
-                            <Route
-                                path="/portfolio/savings"
-                                element={<SavingsPage />}
-                            />
-                            <Route
-                                path="/portfolio/performance"
-                                element={<PerformancePage />}
-                            />
-                            <Route
-                                path="/portfolio/rebalance"
-                                element={<RebalancePage />}
-                            />
-                            <Route
-                                path="/portfolio/net-worth"
-                                element={<NetWorthPage />}
-                            />
+                            {lazyAppRoutes.map(({ path, admin, Component }) => (
+                                <Route
+                                    key={path}
+                                    path={path}
+                                    element={
+                                        admin ? (
+                                            <RequireAdmin>
+                                                <Component />
+                                            </RequireAdmin>
+                                        ) : (
+                                            <Component />
+                                        )
+                                    }
+                                />
+                            ))}
                             <Route
                                 path="/portfolio/exchange-rates"
                                 element={
@@ -292,49 +152,8 @@ function RouterSurface() {
                                 }
                             />
                             <Route
-                                path="/portfolio/import"
-                                element={<PortfolioImportPage />}
-                            />
-                            <Route
-                                path="/portfolio/import/:batchId/review"
-                                element={<PortfolioImportReviewPage />}
-                            />
-                            <Route
-                                path="/portfolio/tax"
-                                element={<PortfolioTaxPage />}
-                            />
-                            {/* Research (ADR-079) */}
-                            <Route
-                                path="/research"
-                                element={<ResearchHomePage />}
-                            />
-                            <Route
-                                path="/research/markets"
-                                element={<MarketOverviewPage />}
-                            />
-                            <Route
-                                path="/research/market"
-                                element={<MarketLookupPage />}
-                            />
-                            <Route
-                                path="/research/watchlist"
-                                element={<WatchlistPage />}
-                            />
-                            <Route
                                 path="/research/symbol/:symbol"
                                 element={<RedirectSymbolToMarket />}
-                            />
-                            <Route
-                                path="/research/compare"
-                                element={<ResearchComparePage />}
-                            />
-                            <Route
-                                path="/research/forecast"
-                                element={<PortfolioForecastPage />}
-                            />
-                            <Route
-                                path="/research/charts"
-                                element={<ChartBuilderPage />}
                             />
                             <Route
                                 path="/portfolio/market"
@@ -348,7 +167,6 @@ function RouterSurface() {
                                     <RedirectWithQuery to="/research/watchlist" />
                                 }
                             />
-                            <Route path="/ai-chat" element={<AIChatPage />} />
                             <Route path="*" element={<NotFound />} />
                         </Routes>
                     </Suspense>
@@ -374,7 +192,6 @@ const App = () => {
         // React bails out of re-rendering the app when the bundle arrives.
         <LazyMotion features={loadMotionFeatures} strict>
             <QueryClientProvider client={queryClient}>
-                <DevtoolsGate />
                 <SettingsPreloadProvider>
                     <ThemeProvider>
                         <SettingsProvider>
@@ -383,13 +200,15 @@ const App = () => {
                                     <LanguageHydration>
                                         <TooltipProvider>
                                             <ErrorBoundary>
-                                                <Sonner />
-                                                <SettingsSaveErrorToaster />
-                                                <BelgianTaxSaveErrorToaster />
-                                                <GlobalMutationErrorToaster />
-                                                <RouterProvider
-                                                    router={browserRouter}
-                                                />
+                                                <LegacyInsightDismissalMigrationGate>
+                                                    <Sonner />
+                                                    <SettingsSaveErrorToaster />
+                                                    <BelgianTaxSaveErrorToaster />
+                                                    <GlobalMutationErrorToaster />
+                                                    <RouterProvider
+                                                        router={browserRouter}
+                                                    />
+                                                </LegacyInsightDismissalMigrationGate>
                                             </ErrorBoundary>
                                         </TooltipProvider>
                                     </LanguageHydration>
@@ -398,6 +217,7 @@ const App = () => {
                         </SettingsProvider>
                     </ThemeProvider>
                 </SettingsPreloadProvider>
+                <DevtoolsGate />
             </QueryClientProvider>
         </LazyMotion>
     );

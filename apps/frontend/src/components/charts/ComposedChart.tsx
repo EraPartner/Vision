@@ -6,13 +6,18 @@
  */
 import { curveMonotoneX } from "@visx/curve";
 import { Group } from "@visx/group";
-import { ParentSize } from "@visx/responsive";
-import { scaleLinear, scaleLog, scaleTime } from "@visx/scale";
+import { scaleLinear, scaleLog } from "@visx/scale";
 import { AreaClosed, Line, LinePath } from "@visx/shape";
-import { bisector, extent, max, min } from "d3-array";
+import { bisector, max, min } from "d3-array";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
+import {
+    CartesianChartFrame,
+    type CartesianXScale,
+    ResponsiveCartesianFrame,
+    useCartesianFrame,
+} from "./CartesianChartFrame";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -71,9 +76,7 @@ function repValue<Datum>(s: ComposedSeries<Datum>, d: Datum): number | null {
 type ComposedYScale =
     | ReturnType<typeof scaleLinear<number>>
     | ReturnType<typeof scaleLog<number>>;
-type ComposedXScale =
-    | ReturnType<typeof scaleTime<number>>
-    | ReturnType<typeof scaleLinear<number>>;
+type ComposedXScale = CartesianXScale;
 
 interface ComposedSeriesLayerProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
@@ -248,15 +251,9 @@ const ComposedSeriesLayer = memo(
 export function ComposedChart<Datum>(props: ComposedChartProps<Datum>) {
     const { height = 360 } = props;
     return (
-        <div style={{ width: "100%", height }}>
-            <ParentSize>
-                {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? (
-                        <Inner {...props} width={w} height={h} />
-                    ) : null
-                }
-            </ParentSize>
-        </div>
+        <ResponsiveCartesianFrame height={height}>
+            {(size) => <Inner {...props} {...size} />}
+        </ResponsiveCartesianFrame>
     );
 }
 
@@ -276,38 +273,18 @@ function Inner<Datum>({
     height,
 }: ComposedChartProps<Datum> & { width: number; height: number }) {
     const { t } = useLanguage();
-    const innerWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
-    const innerHeight = Math.max(0, height - MARGIN.top - MARGIN.bottom);
+    const { innerWidth, innerHeight, stableXAccessor, xScale } =
+        useCartesianFrame({
+            data,
+            xAccessor,
+            xIsDate,
+            width,
+            height,
+            margin: MARGIN,
+        });
     const { appSettings } = useAppSettings();
 
     const hasRight = series.some((s) => s.axis === "right");
-
-    // Same inline-accessor stabilizer as AreaChart/LineChart — keeps the scale,
-    // bisector, and memoized series layer valid across consumer re-renders.
-    const xAccessorRef = useRef(xAccessor);
-    xAccessorRef.current = xAccessor;
-    const stableXAccessor = useCallback(
-        (d: Datum) => xAccessorRef.current(d),
-        [],
-    );
-
-    const xScale = useMemo(() => {
-        const xs = data.map((d) => stableXAccessor(d));
-        if (xIsDate) {
-            const [lo, hi] = extent(xs as Date[]);
-            return scaleTime({
-                range: [0, innerWidth],
-                domain: [lo ?? new Date(), hi ?? new Date()],
-            });
-        }
-        const nums = xs as number[];
-        // numeric-x branch is currently unused (all callers pass xIsDate); if it is
-        // ever wired up, keep it finite. d3 min/max avoid the spread stack hazard.
-        return scaleLinear({
-            range: [0, innerWidth],
-            domain: [min(nums) ?? 0, max(nums) ?? 0],
-        });
-    }, [data, innerWidth, stableXAccessor, xIsDate]);
 
     const buildYScale = useCallback(
         (axis: "left" | "right") => {
@@ -420,11 +397,10 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg
+            <CartesianChartFrame
                 width={width}
                 height={height}
-                role="img"
-                aria-label={
+                ariaLabel={
                     ariaLabel ??
                     summarizeSeriesChart(
                         t,
@@ -433,7 +409,7 @@ function Inner<Datum>({
                         series.map((item) => item.label),
                     )
                 }
-                tabIndex={data.length > 0 ? 0 : undefined}
+                pointCount={data.length}
                 onKeyDown={keyboardNav.onKeyDown}
                 onBlur={keyboardNav.onBlur}
             >
@@ -517,7 +493,7 @@ function Inner<Datum>({
                         onPointerLeave={handleLeave}
                     />
                 </Group>
-            </svg>
+            </CartesianChartFrame>
 
             <ChartTooltip
                 open={hoverDatum != null}

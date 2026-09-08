@@ -39,6 +39,7 @@ import {
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { parseDecimal } from "@/lib/decimal";
+import { formatEditableNumber } from "@/utils/currency";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { todayYmd } from "@/lib/timezone";
@@ -80,7 +81,7 @@ export function RecipientOwesDetail({
     const handlePay = (event: FormEvent) => {
         event.preventDefault();
         if (!payDialog) return;
-        const amount = parseDecimal(payAmount);
+        const amount = parseDecimal(payAmount, appSettings.numberFormat);
         if (!amount || amount <= 0) return;
         recordPayment.mutate(
             { splitId: payDialog.splitId, amount },
@@ -102,7 +103,8 @@ export function RecipientOwesDetail({
                 amount: formatCurrency(
                     totalOutstanding,
                     defaultCurrency,
-                    locale, appSettings.showDecimalPlaces ?? 2
+                    locale,
+                    appSettings.showDecimalPlaces ?? 2,
                 ),
             }),
             confirmLabel: t("owesPage.settleAll.confirmAction"),
@@ -225,7 +227,9 @@ export function RecipientOwesDetail({
                                                             ),
                                                             split.transaction_currency ||
                                                                 defaultCurrency,
-                                                            locale, appSettings.showDecimalPlaces ?? 2
+                                                            locale,
+                                                            appSettings.showDecimalPlaces ??
+                                                                2,
                                                         ),
                                                     })}
                                                     {split.note &&
@@ -235,6 +239,13 @@ export function RecipientOwesDetail({
                                                     <Progress
                                                         value={progress}
                                                         className="h-1.5 flex-1"
+                                                        aria-label={t(
+                                                            "owesPage.repaymentProgress",
+                                                            {
+                                                                recipient:
+                                                                    recipient.name,
+                                                            },
+                                                        )}
                                                     />
                                                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                                                         <Money
@@ -280,8 +291,9 @@ export function RecipientOwesDetail({
                                                                 split.remaining,
                                                         });
                                                         setPayAmount(
-                                                            String(
+                                                            formatEditableNumber(
                                                                 split.remaining,
+                                                                appSettings.numberFormat,
                                                             ),
                                                         );
                                                     }}
@@ -362,8 +374,8 @@ export function RecipientOwesDetail({
                                     {t("owesPage.recordDialog.amount")}
                                 </label>
                                 <Input
-                                    type="number"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={payAmount}
                                     onChange={(event) =>
                                         setPayAmount(event.target.value)
@@ -378,7 +390,9 @@ export function RecipientOwesDetail({
                                             amount: formatCurrency(
                                                 payDialog.remaining,
                                                 defaultCurrency,
-                                                locale, appSettings.showDecimalPlaces ?? 2
+                                                locale,
+                                                appSettings.showDecimalPlaces ??
+                                                    2,
                                             ),
                                         })}
                                     </p>

@@ -63,4 +63,43 @@ describe("RebalancePage saved-plan deletion", () => {
         await waitFor(() => expect(deletePlan).toHaveBeenCalledWith("plan-1"));
         expect(deletePlan).toHaveBeenCalledTimes(1);
     });
+
+    it("parses EU grouped target weights and cash caps with the selected format", async () => {
+        const calls: unknown[] = [];
+        vi.spyOn(apiClient, "computeRebalance").mockImplementation(
+            async (input) => {
+                calls.push(input);
+                return {
+                    availableCash: 5000,
+                    actualValues: {},
+                    targetWeights: {},
+                    deployment: {},
+                } as never;
+            },
+        );
+        const user = userEvent.setup();
+        renderWithApp(<RebalancePage />, {
+            initialEntries: [
+                "/portfolio/rebalance?source=custom&target=stocks%3A1.234&cap=1.234",
+            ],
+        });
+
+        expect(
+            await screen.findByRole("textbox", { name: /target/i }),
+        ).toHaveAttribute("inputmode", "decimal");
+        expect(
+            screen.getByRole("textbox", { name: /cap the cash/i }),
+        ).toHaveAttribute("inputmode", "decimal");
+
+        await user.click(
+            await screen.findByRole("button", { name: /compute/i }),
+        );
+
+        await waitFor(() => {
+            expect(calls.at(-1)).toMatchObject({
+                targetWeights: { stocks: 12.34 },
+                availableCash: 1234,
+            });
+        });
+    });
 });

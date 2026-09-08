@@ -1,26 +1,32 @@
-import { memo } from 'react';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
-import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
+import { memo } from "react";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
-    SettingsSection, SettingsGroup, SelectSettingRow, type SelectRowConfig,
-} from '../SettingsPrimitives';
-import { SUPPORTED_CURRENCIES as CURRENCIES } from '@/utils/currency';
-import type { AppDateFormat } from '@/stores/settingsStore';
+    SettingsSection,
+    SettingsGroup,
+    SelectSettingRow,
+    type SelectRowConfig,
+} from "../SettingsPrimitives";
+import {
+    SUPPORTED_CURRENCIES as CURRENCIES,
+    type NumberFormat,
+} from "@/utils/currency";
+import type { AppDateFormat } from "@/stores/settingsStore";
 
 const DATE_FORMATS = [
-    { value: 'DD/MM/YYYY', labelKey: 'settings.dateFormat.ddmmyyyy' },
-    { value: 'MM/DD/YYYY', labelKey: 'settings.dateFormat.mmddyyyy' },
-    { value: 'YYYY-MM-DD', labelKey: 'settings.dateFormat.yyyymmdd' },
-    { value: 'DD.MM.YYYY', labelKey: 'settings.dateFormat.ddmmyyyy2' },
-    { value: 'DD-MM-YYYY', labelKey: 'settings.dateFormat.ddmmyyyy3' },
+    { value: "DD/MM/YYYY", labelKey: "settings.dateFormat.ddmmyyyy" },
+    { value: "MM/DD/YYYY", labelKey: "settings.dateFormat.mmddyyyy" },
+    { value: "YYYY-MM-DD", labelKey: "settings.dateFormat.yyyymmdd" },
+    { value: "DD.MM.YYYY", labelKey: "settings.dateFormat.ddmmyyyy2" },
+    { value: "DD-MM-YYYY", labelKey: "settings.dateFormat.ddmmyyyy3" },
 ] satisfies ReadonlyArray<{ value: AppDateFormat; labelKey: string }>;
 
 const NUMBER_FORMATS = [
-    { value: 'eu', labelKey: 'settings.numberFormat.eu' },
-    { value: 'us', labelKey: 'settings.numberFormat.us' },
-    { value: 'ch', labelKey: 'settings.numberFormat.ch' },
-    { value: 'in', labelKey: 'settings.numberFormat.in' },
-];
+    { value: "eu", labelKey: "settings.numberFormat.eu" },
+    { value: "us", labelKey: "settings.numberFormat.us" },
+    { value: "ch", labelKey: "settings.numberFormat.ch" },
+    { value: "in", labelKey: "settings.numberFormat.in" },
+] satisfies ReadonlyArray<{ value: NumberFormat; labelKey: string }>;
 
 export const GeneralSection = memo(function GeneralSection() {
     const { t } = useLanguage();
@@ -28,85 +34,107 @@ export const GeneralSection = memo(function GeneralSection() {
 
     const formattingRows: SelectRowConfig[] = [
         {
-            title: t('settings.general.currency'),
-            description: t('settings.general.currencyHint'),
+            title: t("settings.general.currency"),
+            description: t("settings.general.currencyHint"),
             value: appSettings.defaultCurrency,
             onValueChange: (v) => updateAppSettings({ defaultCurrency: v }),
             options: CURRENCIES.map((c) => ({ value: c, label: c })),
         },
         {
-            title: t('settings.general.numberFormat'),
+            title: t("settings.general.numberFormat"),
             value: appSettings.numberFormat,
-            onValueChange: (v) => updateAppSettings({ numberFormat: v }),
-            options: NUMBER_FORMATS.map((f) => ({ value: f.value, label: t(f.labelKey) })),
+            onValueChange: (v) => {
+                const selected = NUMBER_FORMATS.find(
+                    (format) => format.value === v,
+                );
+                if (selected)
+                    updateAppSettings({ numberFormat: selected.value });
+            },
+            options: NUMBER_FORMATS.map((f) => ({
+                value: f.value,
+                label: t(f.labelKey),
+            })),
         },
         {
-            title: t('settings.general.decimalPlaces'),
+            title: t("settings.general.decimalPlaces"),
             value: String(appSettings.showDecimalPlaces),
-            onValueChange: (v) => updateAppSettings({ showDecimalPlaces: Number(v) }),
+            onValueChange: (v) =>
+                updateAppSettings({ showDecimalPlaces: Number(v) }),
             options: [
-                { value: '0', label: '0 (1,234)' },
-                { value: '1', label: '1 (1,234.5)' },
-                { value: '2', label: '2 (1,234.56)' },
-                { value: '3', label: '3 (1,234.567)' },
+                { value: "0", label: "0 (1,234)" },
+                { value: "1", label: "1 (1,234.5)" },
+                { value: "2", label: "2 (1,234.56)" },
+                { value: "3", label: "3 (1,234.567)" },
             ],
         },
         {
-            title: t('settings.general.dateFormat'),
+            title: t("settings.general.dateFormat"),
             value: appSettings.dateFormat,
             onValueChange: (v) => {
-                const selected = DATE_FORMATS.find((format) => format.value === v);
+                const selected = DATE_FORMATS.find(
+                    (format) => format.value === v,
+                );
                 if (selected) updateAppSettings({ dateFormat: selected.value });
             },
-            options: DATE_FORMATS.map((f) => ({ value: f.value, label: t(f.labelKey) })),
+            options: DATE_FORMATS.map((f) => ({
+                value: f.value,
+                label: t(f.labelKey),
+            })),
         },
     ];
 
     const localeRows: SelectRowConfig[] = [
         {
-            title: t('settings.general.language'),
-            description: t('settings.general.languageHint'),
-            value: appSettings.language ?? 'en',
-            onValueChange: (v) => updateAppSettings({ language: v as 'en' | 'nl' }),
+            title: t("settings.general.language"),
+            description: t("settings.general.languageHint"),
+            value: appSettings.language ?? "en",
+            onValueChange: (v) =>
+                updateAppSettings({ language: v as "en" | "nl" }),
             options: [
-                { value: 'en', label: t('settings.general.lang.en') },
-                { value: 'nl', label: t('settings.general.lang.nl') },
+                { value: "en", label: t("settings.general.lang.en") },
+                { value: "nl", label: t("settings.general.lang.nl") },
             ],
         },
         {
-            title: t('settings.general.startOfWeek'),
+            title: t("settings.general.startOfWeek"),
             value: appSettings.startOfWeek,
-            onValueChange: (v) => updateAppSettings({ startOfWeek: v as 'monday' | 'sunday' }),
+            onValueChange: (v) =>
+                updateAppSettings({ startOfWeek: v as "monday" | "sunday" }),
             options: [
-                { value: 'monday', label: t('settings.general.monday') },
-                { value: 'sunday', label: t('settings.general.sunday') },
+                { value: "monday", label: t("settings.general.monday") },
+                { value: "sunday", label: t("settings.general.sunday") },
             ],
         },
         {
-            title: t('settings.general.pageSize'),
-            description: t('settings.general.pageSizeHint'),
+            title: t("settings.general.pageSize"),
+            description: t("settings.general.pageSizeHint"),
             value: String(appSettings.defaultPageSize),
-            onValueChange: (v) => updateAppSettings({ defaultPageSize: Number(v) }),
+            onValueChange: (v) =>
+                updateAppSettings({ defaultPageSize: Number(v) }),
             options: [
-                { value: '25', label: `25 ${t('settings.general.rows')}` },
-                { value: '50', label: `50 ${t('settings.general.rows')}` },
-                { value: '100', label: `100 ${t('settings.general.rows')}` },
-                { value: '200', label: `200 ${t('settings.general.rows')}` },
+                { value: "25", label: `25 ${t("settings.general.rows")}` },
+                { value: "50", label: `50 ${t("settings.general.rows")}` },
+                { value: "100", label: `100 ${t("settings.general.rows")}` },
+                { value: "200", label: `200 ${t("settings.general.rows")}` },
             ],
         },
     ];
 
     return (
         <SettingsSection
-            title={t('settings.tab.general')}
-            description={t('settings.section.general.desc')}
+            title={t("settings.tab.general")}
+            description={t("settings.section.general.desc")}
         >
-            <SettingsGroup label={t('settings.group.formatting')}>
-                {formattingRows.map((row) => <SelectSettingRow key={row.title} {...row} />)}
+            <SettingsGroup label={t("settings.group.formatting")}>
+                {formattingRows.map((row) => (
+                    <SelectSettingRow key={row.title} {...row} />
+                ))}
             </SettingsGroup>
 
-            <SettingsGroup label={t('settings.group.localeDisplay')}>
-                {localeRows.map((row) => <SelectSettingRow key={row.title} {...row} />)}
+            <SettingsGroup label={t("settings.group.localeDisplay")}>
+                {localeRows.map((row) => (
+                    <SelectSettingRow key={row.title} {...row} />
+                ))}
             </SettingsGroup>
         </SettingsSection>
     );

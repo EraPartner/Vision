@@ -14,7 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InvestmentCombobox } from "@/features/portfolio/InvestmentCombobox";
-import { AccountFilterCombobox } from "@/features/transactions/components/AccountFilterCombobox";
+import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
+import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
+import { accountLabel } from "@/features/accounts/groupAccounts";
+import { useAccounts } from "@/hooks/useAccounts";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -164,9 +167,9 @@ export function PortfolioImportReviewPage() {
     const { batchId: batchIdParam } = useParams<{ batchId: string }>();
     const batchId = Number(batchIdParam);
     const [busyGroup, setBusyGroup] = useState<string | null>(null);
-    const [repairAccountId, setRepairAccountId] = useState<
-        number | undefined
-    >();
+    const [repairAccountId, setRepairAccountId] = useState<number>();
+    const { data: accountsData } = useAccounts({ active: "true" });
+    const brokerAccounts = activeBrokerAccounts(accountsData?.items ?? []);
 
     const queryKey = portfolioImportPreviewKey(batchId);
     const { data, isLoading, error } = usePortfolioImportPreview(batchId);
@@ -263,6 +266,26 @@ export function PortfolioImportReviewPage() {
                         "brokerage cash row requires a batch account",
             ),
     );
+    const needsAccountRepair =
+        hasRepairableCashError ||
+        (data.account_id != null && !data.account_valid);
+    const tradeCount = data.groups
+        .filter((group) => !group.is_cash)
+        .reduce((sum, group) => sum + group.row_count, 0);
+    const repairAccount = brokerAccounts.find(
+        (account) => account.id === repairAccountId,
+    );
+    const routingAccountName = repairAccount
+        ? accountLabel(repairAccount)
+        : data.account_name;
+    const routingKey =
+        tradeCount === 1
+            ? "portfolioImport.review.routingBrokerOne"
+            : "portfolioImport.review.routingBroker";
+    const unassignedRoutingKey =
+        tradeCount === 1
+            ? "portfolioImport.review.routingUnassignedOne"
+            : "portfolioImport.review.routingUnassigned";
 
     return (
         <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -292,6 +315,19 @@ export function PortfolioImportReviewPage() {
                         </Badge>
                     )}
                 </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                {needsAccountRepair && !repairAccount
+                    ? t("portfolioImport.review.routingUnavailable")
+                    : routingAccountName
+                      ? t(routingKey, {
+                            count: tradeCount,
+                            broker: routingAccountName,
+                        })
+                      : t(unassignedRoutingKey, {
+                            count: tradeCount,
+                        })}
             </div>
 
             {data.groups.map((g) => {
@@ -374,16 +410,25 @@ export function PortfolioImportReviewPage() {
             })}
 
             <div className="flex gap-2">
-                {hasRepairableCashError && (
+                {needsAccountRepair && (
                     <div className="flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground">
                             {t("portfolioImport.review.cashAccount")}
                         </span>
-                        <AccountFilterCombobox
-                            value={repairAccountId}
-                            onChange={(selection) =>
-                                setRepairAccountId(selection?.id)
+                        <PortfolioBrokerField
+                            id="portfolio-import-repair-account"
+                            accounts={brokerAccounts}
+                            value={
+                                repairAccountId == null
+                                    ? undefined
+                                    : String(repairAccountId)
                             }
+                            onChange={(value) =>
+                                setRepairAccountId(
+                                    value ? Number(value) : undefined,
+                                )
+                            }
+                            t={t}
                         />
                     </div>
                 )}
@@ -391,7 +436,7 @@ export function PortfolioImportReviewPage() {
                     onClick={() => commit.mutate(repairAccountId)}
                     disabled={
                         commit.isPending ||
-                        (hasRepairableCashError && repairAccountId == null)
+                        (needsAccountRepair && repairAccountId == null)
                     }
                     className="flex-1 h-11"
                     size="lg"

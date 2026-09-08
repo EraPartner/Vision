@@ -1,16 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import { tagKeys } from '@/lib/queryKeys';
-import type { TagCreate } from '@/types/api';
-import { toast } from 'sonner';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { tagKeys } from "@/lib/queryKeys";
+import type { TagCreate } from "@/types/api";
+import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export function useTags(params?: { is_active?: boolean }) {
     return useQuery({
         queryKey: tagKeys.list(params ?? {}),
         queryFn: () => apiClient.getTags(params),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -24,7 +25,9 @@ export function useCreateTag() {
             queryClient.invalidateQueries({ queryKey: tagKeys.all });
         },
         onError: (error: Error) => {
-            toast.error(t('tags.createFailed'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("tags.createFailed"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }

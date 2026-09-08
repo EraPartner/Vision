@@ -1,9 +1,18 @@
 import { describe, expect, test } from "vitest";
 import {
-    addPortfolioTxnSchema,
-    editPortfolioTxnSchema,
-    parseNonNegative,
+    addPortfolioTxnSchema as createAddPortfolioTxnSchema,
+    editPortfolioTxnSchema as createEditPortfolioTxnSchema,
+    parseNonNegative as parseNonNegativeWithFormat,
 } from "../portfolioTxnSchema";
+
+const addPortfolioTxnSchema = (
+    flags: Parameters<typeof createAddPortfolioTxnSchema>[0],
+) => createAddPortfolioTxnSchema(flags, "eu");
+const editPortfolioTxnSchema = (
+    flags: Parameters<typeof createEditPortfolioTxnSchema>[0],
+) => createEditPortfolioTxnSchema(flags, "eu");
+const parseNonNegative = (value: string) =>
+    parseNonNegativeWithFormat(value, "eu");
 
 /** Blank form-field baseline; spread overrides per case. */
 const blank = {
@@ -121,7 +130,7 @@ describe("addPortfolioTxnSchema", () => {
             ...blank,
             amount: "50",
             fees: "1,25",
-            fxRateToEur: "1.08",
+            fxRateToEur: "1,08",
         });
         expect(result.success).toBe(true);
         if (result.success) {

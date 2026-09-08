@@ -22,15 +22,19 @@
 import { z } from "zod";
 import { parseDecimal } from "@/lib/decimal";
 import { deriveUnitMath, parsePositive } from "@/lib/portfolioUnitMath";
+import type { NumberFormat } from "@/utils/currency";
 
 /**
  * Parse a form-field string as a non-negative number (Edit's amount parser —
  * unlike parsePositive, an explicit 0 stays 0). Empty/garbage/negative →
  * undefined.
  */
-export function parseNonNegative(value: string): number | undefined {
+export function parseNonNegative(
+    value: string,
+    numberFormat: NumberFormat,
+): number | undefined {
     if (!value.trim()) return undefined;
-    const n = parseDecimal(value, NaN);
+    const n = parseDecimal(value, numberFormat, NaN);
     if (!Number.isFinite(n) || n < 0) return undefined;
     return n;
 }
@@ -47,16 +51,22 @@ export interface PortfolioTxnFlags {
  * so the dialogs' render-time inline field errors use the exact predicate the
  * submit gate runs, and the two can never disagree.
  */
-export function invalidOptionalMoney(value: string): boolean {
+export function invalidOptionalMoney(
+    value: string,
+    numberFormat: NumberFormat,
+): boolean {
     if (!value) return false;
-    const n = parseDecimal(value, NaN);
+    const n = parseDecimal(value, numberFormat, NaN);
     return !Number.isFinite(n) || n < 0;
 }
 
 /** Same, for the FX rate: a typed value must be strictly positive. */
-export function invalidOptionalFxRate(value: string): boolean {
+export function invalidOptionalFxRate(
+    value: string,
+    numberFormat: NumberFormat,
+): boolean {
     if (!value) return false;
-    const n = parseDecimal(value, NaN);
+    const n = parseDecimal(value, numberFormat, NaN);
     return !Number.isFinite(n) || n <= 0;
 }
 
@@ -93,15 +103,15 @@ export interface AddPortfolioTxnParsed {
     fxRateToEur?: number;
 }
 
-export function addPortfolioTxnSchema({
-    isBuySell,
-    isGift,
-}: PortfolioTxnFlags) {
+export function addPortfolioTxnSchema(
+    { isBuySell, isGift }: PortfolioTxnFlags,
+    numberFormat: NumberFormat,
+) {
     return rawFields.transform((raw, ctx): AddPortfolioTxnParsed => {
         const unitMath = deriveUnitMath({
-            amount: parsePositive(raw.amount),
-            units: parsePositive(raw.units),
-            price: parsePositive(raw.pricePerUnit),
+            amount: parsePositive(raw.amount, numberFormat),
+            units: parsePositive(raw.units, numberFormat),
+            price: parsePositive(raw.pricePerUnit, numberFormat),
             derive: isBuySell,
         });
         const effectiveAmount = isGift ? 0 : unitMath.effectiveAmount;
@@ -122,15 +132,19 @@ export function addPortfolioTxnSchema({
 
         // NaN fallback, not the default 0 — garbage in these fields must block the
         // submit instead of silently posting €0 fees/taxes or fx_rate_to_eur = 0.
-        const fees = raw.fees ? parseDecimal(raw.fees, NaN) : undefined;
-        const taxes = raw.taxes ? parseDecimal(raw.taxes, NaN) : undefined;
+        const fees = raw.fees
+            ? parseDecimal(raw.fees, numberFormat, NaN)
+            : undefined;
+        const taxes = raw.taxes
+            ? parseDecimal(raw.taxes, numberFormat, NaN)
+            : undefined;
         const fxRateToEur = raw.fxRateToEur
-            ? parseDecimal(raw.fxRateToEur, NaN)
+            ? parseDecimal(raw.fxRateToEur, numberFormat, NaN)
             : undefined;
         if (
-            invalidOptionalMoney(raw.fees) ||
-            invalidOptionalMoney(raw.taxes) ||
-            invalidOptionalFxRate(raw.fxRateToEur)
+            invalidOptionalMoney(raw.fees, numberFormat) ||
+            invalidOptionalMoney(raw.taxes, numberFormat) ||
+            invalidOptionalFxRate(raw.fxRateToEur, numberFormat)
         ) {
             return fail(ctx, "addPortTxn.error.invalidNumber");
         }
@@ -159,15 +173,15 @@ export interface EditPortfolioTxnParsed {
     fxRateToEur: number | null;
 }
 
-export function editPortfolioTxnSchema({
-    isBuySell,
-    isGift,
-}: PortfolioTxnFlags) {
+export function editPortfolioTxnSchema(
+    { isBuySell, isGift }: PortfolioTxnFlags,
+    numberFormat: NumberFormat,
+) {
     return rawFields.transform((raw, ctx): EditPortfolioTxnParsed => {
         const unitMath = deriveUnitMath({
-            amount: parseNonNegative(raw.amount),
-            units: parsePositive(raw.units),
-            price: parsePositive(raw.pricePerUnit),
+            amount: parseNonNegative(raw.amount, numberFormat),
+            units: parsePositive(raw.units, numberFormat),
+            price: parsePositive(raw.pricePerUnit, numberFormat),
             derive: isBuySell || isGift,
         });
         const { effectiveAmount, effectiveUnits, effectivePrice } = unitMath;
@@ -193,15 +207,17 @@ export function editPortfolioTxnSchema({
         // Same guard as the Add dialog: NaN fallback so garbage can't silently
         // become €0, and an FX rate of 0 (min="0" permits it) must not reach the
         // backend's "must be positive" check as a raw 400.
-        const fees = raw.fees ? parseDecimal(raw.fees, NaN) : 0;
-        const taxes = raw.taxes ? parseDecimal(raw.taxes, NaN) : 0;
+        const fees = raw.fees ? parseDecimal(raw.fees, numberFormat, NaN) : 0;
+        const taxes = raw.taxes
+            ? parseDecimal(raw.taxes, numberFormat, NaN)
+            : 0;
         const fxRateToEur = raw.fxRateToEur
-            ? parseDecimal(raw.fxRateToEur, NaN)
+            ? parseDecimal(raw.fxRateToEur, numberFormat, NaN)
             : null;
         if (
-            invalidOptionalMoney(raw.fees) ||
-            invalidOptionalMoney(raw.taxes) ||
-            invalidOptionalFxRate(raw.fxRateToEur)
+            invalidOptionalMoney(raw.fees, numberFormat) ||
+            invalidOptionalMoney(raw.taxes, numberFormat) ||
+            invalidOptionalFxRate(raw.fxRateToEur, numberFormat)
         ) {
             return fail(ctx, "addPortTxn.error.invalidNumber");
         }

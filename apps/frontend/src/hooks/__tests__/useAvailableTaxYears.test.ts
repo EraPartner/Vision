@@ -64,7 +64,7 @@ function setMocks({
         } as never),
     );
     mockedPortfolio.mockReturnValue({
-        summaries: [{ transactions: portfolioTxns }],
+        allSummaries: [{ transactions: portfolioTxns }],
     } as unknown as ReturnType<typeof usePortfolio>);
     mockedStats.mockReturnValue({
         data: { categoryPivot: pivot },

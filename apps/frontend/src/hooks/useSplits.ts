@@ -1,16 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import { splitKeys } from '@/lib/queryKeys';
-import { toast } from 'sonner';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
-import type { SplitCreateInput } from '@/lib/api/splits';
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { splitKeys } from "@/lib/queryKeys";
+import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { SplitCreateInput } from "@/lib/api/splits";
 
 export function useOwedSummary() {
     return useQuery({
         queryKey: splitKeys.owedSummary,
         queryFn: () => apiClient.getOwedSummary(),
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 
@@ -19,7 +20,7 @@ export function useOwedByRecipient(recipientId: number | null) {
         queryKey: splitKeys.owedByRecipient(recipientId),
         queryFn: () => apiClient.getOwedByRecipient(recipientId!),
         enabled: !!recipientId,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 
@@ -28,7 +29,7 @@ export function useSplitsByTransaction(transactionId: number | null) {
         queryKey: splitKeys.byTransaction(transactionId),
         queryFn: () => apiClient.getSplitsByTransaction(transactionId!),
         enabled: !!transactionId,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 
@@ -36,13 +37,18 @@ export function useCreateSplits() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (data: { transaction_id: number; splits: SplitCreateInput[] }) =>
-            apiClient.createSplitsBatch(data.transaction_id, data.splits),
+        mutationFn: (data: {
+            transaction_id: number;
+            splits: SplitCreateInput[];
+        }) => apiClient.createSplitsBatch(data.transaction_id, data.splits),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
-            toast.success(t('splits.created'));
+            toast.success(t("splits.created"));
         },
-        onError: (e: Error) => toast.error(t('splits.createFailed'), { description: apiErrorToMessage(e, t) }),
+        onError: (e: Error) =>
+            toast.error(t("splits.createFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 }
 
@@ -50,13 +56,26 @@ export function useRecordPayment() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (data: { splitId: number; amount: number; note?: string; paid_at?: string }) =>
-            apiClient.recordSplitPayment(data.splitId, data.amount, data.note, data.paid_at),
+        mutationFn: (data: {
+            splitId: number;
+            amount: number;
+            note?: string;
+            paid_at?: string;
+        }) =>
+            apiClient.recordSplitPayment(
+                data.splitId,
+                data.amount,
+                data.note,
+                data.paid_at,
+            ),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
-            toast.success(t('splits.paymentRecorded'));
+            toast.success(t("splits.paymentRecorded"));
         },
-        onError: (e: Error) => toast.error(t('splits.paymentFailed'), { description: apiErrorToMessage(e, t) }),
+        onError: (e: Error) =>
+            toast.error(t("splits.paymentFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 }
 
@@ -67,9 +86,12 @@ export function useSettleSplit() {
         mutationFn: (splitId: number) => apiClient.settleSplit(splitId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
-            toast.success(t('splits.settled'));
+            toast.success(t("splits.settled"));
         },
-        onError: (e: Error) => toast.error(t('splits.settledFailed'), { description: apiErrorToMessage(e, t) }),
+        onError: (e: Error) =>
+            toast.error(t("splits.settledFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 }
 
@@ -77,12 +99,16 @@ export function useSettleAllSplitsByRecipient() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (recipientId: number) => apiClient.settleAllSplitsByRecipient(recipientId),
+        mutationFn: (recipientId: number) =>
+            apiClient.settleAllSplitsByRecipient(recipientId),
         onSuccess: (result) => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
-            toast.success(t('splits.allSettled', { n: result.settled_count }));
+            toast.success(t("splits.allSettled", { n: result.settled_count }));
         },
-        onError: (e: Error) => toast.error(t('splits.allSettledFailed'), { description: apiErrorToMessage(e, t) }),
+        onError: (e: Error) =>
+            toast.error(t("splits.allSettledFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 }
 
@@ -93,8 +119,11 @@ export function useDeleteSplit() {
         mutationFn: (splitId: number) => apiClient.deleteSplit(splitId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
-            toast.success(t('splits.removed'));
+            toast.success(t("splits.removed"));
         },
-        onError: (e: Error) => toast.error(t('splits.removeFailed'), { description: apiErrorToMessage(e, t) }),
+        onError: (e: Error) =>
+            toast.error(t("splits.removeFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
     });
 }

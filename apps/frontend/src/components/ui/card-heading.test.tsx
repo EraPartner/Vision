@@ -27,6 +27,11 @@ describe("page heading semantics", () => {
         expect(
             screen.getByRole("heading", { name: "Empty page", level: 2 }),
         ).toBeInTheDocument();
+        expect(
+            screen
+                .getByRole("heading", { name: "Panel title", level: 2 })
+                .closest(".glass-thin"),
+        ).toBeInTheDocument();
     });
 
     it("supports explicit nested h3 and h4 card titles", () => {

@@ -4,9 +4,9 @@ import type {
     PlannedTransactionsListResponse,
     PlannedTransactionUpdate,
     PlannedTransactionExecuteRequest,
-} from '@/types/api';
-import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery } from '@/lib/api/helpers';
+} from "@/types/api";
+import { apiRequest } from "@/lib/api/client";
+import { requestWithQuery } from "@/lib/api/helpers";
 
 export function getPlannedTransactions(params?: {
     limit?: number;
@@ -14,6 +14,7 @@ export function getPlannedTransactions(params?: {
     start_date?: string;
     end_date?: string;
     bank_account?: string;
+    account_id?: number;
     category_id?: number;
     recipient_id?: number;
     is_recurring?: boolean;
@@ -21,14 +22,17 @@ export function getPlannedTransactions(params?: {
     active?: boolean;
     search?: string;
 }): Promise<PlannedTransactionsListResponse> {
-    return requestWithQuery<PlannedTransactionsListResponse>('/api/planned-transactions', params);
+    return requestWithQuery<PlannedTransactionsListResponse>(
+        "/api/planned-transactions",
+        params,
+    );
 }
 
 export function createPlannedTransaction(
     transaction: PlannedTransactionCreate,
 ): Promise<PlannedTransaction> {
-    return apiRequest<PlannedTransaction>('/api/planned-transactions', {
-        method: 'POST',
+    return apiRequest<PlannedTransaction>("/api/planned-transactions", {
+        method: "POST",
         body: JSON.stringify(transaction),
     });
 }
@@ -38,23 +42,28 @@ export function updatePlannedTransaction(
     transaction: PlannedTransactionUpdate,
 ): Promise<PlannedTransaction> {
     return apiRequest<PlannedTransaction>(`/api/planned-transactions/${id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(transaction),
     });
 }
 
 export async function deletePlannedTransaction(id: number): Promise<void> {
-    await apiRequest<void>(`/api/planned-transactions/${id}`, { method: 'DELETE' });
+    await apiRequest<void>(`/api/planned-transactions/${id}`, {
+        method: "DELETE",
+    });
 }
 
 export function executePlannedTransaction(
     id: number,
     executeRequest: PlannedTransactionExecuteRequest,
 ): Promise<PlannedTransaction> {
-    return apiRequest<PlannedTransaction>(`/api/planned-transactions/${id}/execute`, {
-        method: 'POST',
-        body: JSON.stringify(executeRequest),
-    });
+    return apiRequest<PlannedTransaction>(
+        `/api/planned-transactions/${id}/execute`,
+        {
+            method: "POST",
+            body: JSON.stringify(executeRequest),
+        },
+    );
 }
 
 export interface PlannedMatchCandidate {
@@ -84,9 +93,12 @@ export interface PlannedMatchSuggestion {
  * that were not auto-cleared (ambiguous matches, or auto-clear disabled).
  * Canonical `{items, total}` collection body — callers only need the rows.
  */
-export async function getPlannedMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
-    const { items } = await apiRequest<{ items: PlannedMatchSuggestion[]; total: number }>(
-        '/api/planned-transactions/match-suggestions',
-    );
+export async function getPlannedMatchSuggestions(): Promise<
+    PlannedMatchSuggestion[]
+> {
+    const { items } = await apiRequest<{
+        items: PlannedMatchSuggestion[];
+        total: number;
+    }>("/api/planned-transactions/match-suggestions");
     return items;
 }

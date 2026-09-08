@@ -236,6 +236,9 @@ describe("Language switch (integration)", () => {
         expect(
             await screen.findByRole("heading", { name: /^ai-chat$/i }),
         ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Tonen mijn inzichten" }),
+        ).toBeInTheDocument();
     });
 
     // ── PortfolioOverviewPage ─────────────────────────────────────────────────

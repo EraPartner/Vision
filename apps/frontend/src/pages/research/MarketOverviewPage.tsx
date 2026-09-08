@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -94,7 +95,7 @@ export default function MarketOverviewPage() {
     const { data } = useMarketQuotesQuery<OverviewQuote>(
         ["market-overview", region, sector],
         symbols,
-        { staleTime: 60_000 },
+        { staleTime: QUERY_STALE_TIME_MS.STANDARD },
     );
 
     const pctMap = useMemo(

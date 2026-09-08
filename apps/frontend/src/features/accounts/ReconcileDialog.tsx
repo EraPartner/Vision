@@ -77,15 +77,6 @@ import type { Account } from "@/types/api";
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * The shape the amount input's `pattern` attribute declares. That attribute is
- * decorative here — the inputs do not live in a <form>, so nothing enforces it —
- * and `parseLocaleNumber` is deliberately lenient (it replaces only the FIRST
- * separator, so "12,,3" parses as 12 and "1234..56" as 123456). Typos must not
- * pass as money, so the raw string is validated against the same shape in JS.
- */
-const READING_SHAPE_RE = /^-?\d+([.,]\d+)?$/;
-
-/**
  * Mirrors reconcileService.js's DRIFT_EPSILON: a difference below half a cent is
  * already reconciled, and the server rejects reconciling it. A fresh reading that
  * lands inside the epsilon IS the resolution — save it and stop, rather than
@@ -183,13 +174,12 @@ export function ReconcileDialog({
     const [reading, setReading] = useState("");
     const [readingDate, setReadingDate] = useState(() => toYmd(new Date()));
 
-    // Shape-check the RAW string first (parseLocaleNumber would happily turn
-    // "12,,3" into 12), then round to cents so the previewed figure is exactly
-    // the figure the server will store.
+    // The strict locale parser rejects malformed grouping and foreign
+    // separators. Round to cents so preview and stored reading agree.
     const readingRaw = reading.trim();
-    const parsedReading = READING_SHAPE_RE.test(readingRaw)
-        ? roundToCents(parseDecimal(readingRaw, NaN))
-        : NaN;
+    const parsedReading = roundToCents(
+        parseDecimal(readingRaw, appSettings.numberFormat, NaN),
+    );
     const hasReading = Number.isFinite(parsedReading);
     /** Something was typed, but it is not a number we would dare send as money. */
     const readingInvalid = readingRaw !== "" && !hasReading;
@@ -466,7 +456,6 @@ export function ReconcileDialog({
                                 id="reconcile-reading"
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^-?[0-9]+([.,][0-9]+)?$"
                                 placeholder={fmtCur(statement, baseCurrency)}
                                 value={reading}
                                 disabled={busy}

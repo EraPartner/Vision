@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
@@ -8,7 +9,7 @@ export function useResearchProviderKeys() {
     return useQuery({
         queryKey: researchKeys.providerKeys,
         queryFn: getResearchProviderKeys,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -16,7 +17,7 @@ export function useStatisticsRecipientOptions() {
     return useQuery({
         queryKey: recipientKeys.allList,
         queryFn: () => apiClient.getRecipients({ limit: 1000 }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -24,7 +25,7 @@ export function useSetting(key: string) {
     return useQuery({
         queryKey: settingKeys.byKey(key),
         queryFn: () => apiClient.getSetting(key),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -57,7 +58,7 @@ export function useBrokerageCashCategoryIds() {
                 result.value as Partial<BrokerageCashCategoryIds> | null;
             return { ...EMPTY_BROKERAGE_CASH_CATEGORY_IDS, ...(value ?? {}) };
         },
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
     const save = useMutation({
         mutationFn: (value: BrokerageCashCategoryIds) =>

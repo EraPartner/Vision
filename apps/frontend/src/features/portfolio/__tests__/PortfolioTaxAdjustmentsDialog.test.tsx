@@ -122,7 +122,9 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
 
         // Assert — each investment name appears inside the dialog
         expect(await screen.findByText("MSCI World ETF")).toBeInTheDocument();
-        expect(await screen.findByText("Emerging Markets ETF")).toBeInTheDocument();
+        expect(
+            await screen.findByText("Emerging Markets ETF"),
+        ).toBeInTheDocument();
     });
 
     it("cancel button closes dialog", async () => {
@@ -213,25 +215,31 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
         await user.type(firstTaxInput, "12.50");
 
         // Assert
-        expect(firstTaxInput).toHaveValue(12.5);
+        expect(firstTaxInput).toHaveValue("12.50");
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("Escape key closes the dialog", async () => {
         const user = userEvent.setup();
-        renderWithApp(<PortfolioTaxAdjustmentsDialog investments={[INVESTMENT_A]} />);
+        renderWithApp(
+            <PortfolioTaxAdjustmentsDialog investments={[INVESTMENT_A]} />,
+        );
         await user.click(
             await screen.findByRole("button", { name: /manual adjustments/i }),
         );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         const user = userEvent.setup();
-        renderWithApp(<PortfolioTaxAdjustmentsDialog investments={[INVESTMENT_A]} />);
+        renderWithApp(
+            <PortfolioTaxAdjustmentsDialog investments={[INVESTMENT_A]} />,
+        );
         await user.click(
             await screen.findByRole("button", { name: /manual adjustments/i }),
         );

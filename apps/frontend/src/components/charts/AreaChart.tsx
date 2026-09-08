@@ -13,14 +13,19 @@ import { curveMonotoneX } from "@visx/curve";
 import { summarizeSeriesChart } from "./chartAria";
 import { LinearGradient } from "@visx/gradient";
 import { Group } from "@visx/group";
-import { ParentSize } from "@visx/responsive";
-import { scaleLinear, scaleTime } from "@visx/scale";
+import { scaleLinear } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
-import { bisector, extent, max, min, sum } from "d3-array";
+import { bisector, max, min, sum } from "d3-array";
 import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
+import {
+    CartesianChartFrame,
+    type CartesianXScale,
+    ResponsiveCartesianFrame,
+    useCartesianFrame,
+} from "./CartesianChartFrame";
 import { useChartSync } from "./ChartSyncContext";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { formatScrubDelta, useChartScrub } from "./scrub";
@@ -83,9 +88,7 @@ export interface AreaChartProps<Datum> {
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
 type AreaYScale = ReturnType<typeof scaleLinear<number>>;
-type AreaXScale =
-    | ReturnType<typeof scaleTime<number>>
-    | ReturnType<typeof scaleLinear<number>>;
+type AreaXScale = CartesianXScale;
 
 interface AreaSeriesLayerProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
@@ -223,21 +226,10 @@ const AreaSeriesLayer = memo(
 
 export function AreaChart<Datum>(props: AreaChartProps<Datum>) {
     const { height = 280, width } = props;
-
-    if (width !== undefined) {
-        return <AreaChartInner {...props} width={width} height={height} />;
-    }
-
     return (
-        <div style={{ width: "100%", height }}>
-            <ParentSize>
-                {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? (
-                        <AreaChartInner {...props} width={w} height={h} />
-                    ) : null
-                }
-            </ParentSize>
-        </div>
+        <ResponsiveCartesianFrame width={width} height={height}>
+            {(size) => <AreaChartInner {...props} {...size} />}
+        </ResponsiveCartesianFrame>
     );
 }
 
@@ -273,41 +265,15 @@ function AreaChartInner<Datum>({
     const formatPercent = usePercentFormatter();
     const reduce = useReducedMotion();
 
-    const innerWidth = Math.max(0, width - margin.left - margin.right);
-    const innerHeight = Math.max(0, height - margin.top - margin.bottom);
-
-    // Prevent inline xAccessor props from invalidating memoized derivations every render.
-    // The ref always tracks the latest accessor; the stable wrapper never changes identity.
-    const xAccessorRef = useRef(xAccessor);
-    xAccessorRef.current = xAccessor;
-
-    const stableXAccessor = useCallback(
-        (d: Datum) => xAccessorRef.current(d),
-        [],
-    );
-
-    const xValues = useMemo(
-        () => data.map((d) => stableXAccessor(d)),
-        [data, stableXAccessor],
-    );
-
-    const xScale = useMemo(() => {
-        if (xIsDate) {
-            const [xMin, xMax] = extent(xValues as Date[]);
-            return scaleTime({
-                range: [0, innerWidth],
-                domain: [xMin ?? new Date(), xMax ?? new Date()],
-            });
-        }
-        const nums = xValues as number[];
-        // The only live numeric-x caller (ForecastInner) feeds dayNum = i+1, so
-        // nums is finite: d3 min/max equal Math.min/max(...) here and avoid the
-        // spread stack-size hazard. (`?? 0` only guards the unreachable empty case.)
-        return scaleLinear({
-            range: [0, innerWidth],
-            domain: [min(nums) ?? 0, max(nums) ?? 0],
+    const { innerWidth, innerHeight, stableXAccessor, xScale } =
+        useCartesianFrame({
+            data,
+            xAccessor,
+            xIsDate,
+            width,
+            height,
+            margin,
         });
-    }, [innerWidth, xIsDate, xValues]);
 
     const yScale = useMemo(() => {
         if (yDomain) {
@@ -488,11 +454,10 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg
+            <CartesianChartFrame
                 width={width}
                 height={height}
-                role="img"
-                aria-label={
+                ariaLabel={
                     ariaLabel ??
                     summarizeSeriesChart(
                         t,
@@ -501,7 +466,7 @@ function AreaChartInner<Datum>({
                         series.map((s) => s.label),
                     )
                 }
-                tabIndex={data.length > 0 ? 0 : undefined}
+                pointCount={data.length}
                 onKeyDown={handleKeyDown}
                 onBlur={handleBlur}
             >
@@ -702,7 +667,7 @@ function AreaChartInner<Datum>({
                         onPointerCancel={handleUp}
                     />
                 </Group>
-            </svg>
+            </CartesianChartFrame>
 
             {scrub.range
                 ? (() => {

@@ -42,6 +42,7 @@ import {
     groupAccounts,
     sumConvertedBalances,
     computeNetCash,
+    isHoldingsOnlyPortfolioType,
     isPortfolioType,
     type AccountGroup,
 } from "@/features/accounts/groupAccounts";
@@ -52,6 +53,8 @@ import type { Account } from "@/types/api";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
 
 export default function AccountsPage() {
     const { t } = useLanguage();
@@ -69,6 +72,8 @@ export default function AccountsPage() {
     const { appSettings } = useAppSettings();
     const displayCurrency = appSettings.defaultCurrency || "EUR";
     const { convertToTarget } = useCurrencyConverter(displayCurrency);
+    const portfolioSummaryQuery = usePortfolioSummaryQuery(displayCurrency);
+    const portfolioSummary = portfolioSummaryQuery.data;
     const [archivedOpen, setArchivedOpen] = useState(false);
 
     // Only Reconcile remains a hub-level dialog (WP-B4): Edit / Merge / Close /
@@ -128,10 +133,11 @@ export default function AccountsPage() {
     };
 
     const renderAccountCard = (a: Account) => {
-        // Portfolio accounts (brokerage/crypto/pension) keep their activity in
-        // portfolio_transactions, not the ledger — only offer "view transactions"
-        // when there actually are ledger rows to show.
-        const canViewTransactions = a.has_transactions !== false;
+        const holdingsOnly = isHoldingsOnlyPortfolioType(a.type);
+        // Wallets and exchanges have no cash sleeve or ledger workflow. Broker
+        // accounts can still expose imported cash transactions.
+        const canViewTransactions =
+            !holdingsOnly && a.has_transactions !== false;
         // Provenance subline (WP-B2): where the computed balance comes
         // from — stamped statement anchor + entries since, or plain sum.
         const provenanceText = balanceProvenance(a);
@@ -139,10 +145,14 @@ export default function AccountsPage() {
         // land — a "€0,00" computed ledger balance is misleading, so show a
         // placeholder instead (§3 F8).
         const portfolioPlaceholder = isPortfolioType(a.type);
+        const portfolioMetrics = portfolioPlaceholder
+            ? getBrokerAccountMetrics(portfolioSummary, a.id)
+            : undefined;
         // Drift chip content: "Drift +€15,50 · statement 03/06/2026", in warning
         // tone once that statement reading is older than ~45 days (§3 F1).
-        const drift = driftBadge(a);
-        const canReconcile = !!drift || a.multi_currency_cash;
+        const drift = holdingsOnly ? undefined : driftBadge(a);
+        const canReconcile =
+            !holdingsOnly && (!!drift || a.multi_currency_cash);
         return (
             <Card
                 key={a.id}
@@ -170,7 +180,14 @@ export default function AccountsPage() {
                             )}
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge
+                                variant={
+                                    a.type === "wallet"
+                                        ? "outline"
+                                        : "secondary"
+                                }
+                                className="text-xs"
+                            >
                                 {t(`accounts.type.${a.type}`)}
                             </Badge>
                             {!a.in_net_worth && (
@@ -212,8 +229,63 @@ export default function AccountsPage() {
                             )}
                         </div>
                         {portfolioPlaceholder ? (
-                            <div className="mt-2 text-sm font-medium text-muted-foreground">
-                                {t("accounts.trackedInPortfolio")}
+                            <div className="mt-2 space-y-1">
+                                {portfolioMetrics?.hasPosition ? (
+                                    <>
+                                        <div className="text-lg font-semibold tabular-nums">
+                                            <Money
+                                                amount={
+                                                    portfolioMetrics.holdingsValue
+                                                }
+                                                currency={displayCurrency}
+                                            />
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {t("accounts.portfolio.holdings")}
+                                        </div>
+                                        <div
+                                            className={cn(
+                                                "text-xs font-medium tabular-nums",
+                                                portfolioMetrics.gainLoss > 0
+                                                    ? "text-gain"
+                                                    : portfolioMetrics.gainLoss <
+                                                        0
+                                                      ? "text-loss"
+                                                      : "text-muted-foreground",
+                                            )}
+                                        >
+                                            {t("accounts.portfolio.pnl")}{" "}
+                                            <Money
+                                                amount={
+                                                    portfolioMetrics.gainLoss
+                                                }
+                                                currency={displayCurrency}
+                                                signed
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        {portfolioMetrics
+                                            ? t(
+                                                  "accounts.portfolio.noAssignedHoldings",
+                                              )
+                                            : t("accounts.trackedInPortfolio")}
+                                    </div>
+                                )}
+                                {!holdingsOnly &&
+                                    a.computed_balance != null && (
+                                        <div className="text-xs text-muted-foreground">
+                                            {t("accounts.portfolio.cash")}{" "}
+                                            <Money
+                                                amount={a.computed_balance}
+                                                currency={a.currency}
+                                            />
+                                            {provenanceText && (
+                                                <span> · {provenanceText}</span>
+                                            )}
+                                        </div>
+                                    )}
                             </div>
                         ) : (
                             <>
@@ -316,25 +388,60 @@ export default function AccountsPage() {
 
     // Group header: label left, converted subtotal right — mirrors the muted
     // section-header idiom used elsewhere; cards themselves are untouched.
-    const renderGroupSubtotal = (group: AccountGroup) => (
-        <p className="text-xs text-muted-foreground">
-            {t("accounts.group.subtotal")}{" "}
-            <span className="font-semibold tabular-nums text-foreground">
-                <Money
-                    amount={sumConvertedBalances(
-                        group.accounts,
-                        convertToTarget,
-                    )}
-                    currency={displayCurrency}
-                />
-            </span>
-            {group.accounts.some((account) => account.balance_incomplete) && (
-                <span className="ml-1 text-warning">
-                    {t("accounts.group.subtotalIncomplete")}
+    const renderGroupSubtotal = (group: AccountGroup) => {
+        const needsPortfolioSummary = group.accounts.some((account) =>
+            isPortfolioType(account.type),
+        );
+        if (needsPortfolioSummary && portfolioSummaryQuery.isLoading) {
+            return (
+                <p className="text-xs text-muted-foreground">
+                    {t("accounts.group.subtotal")}{" "}
+                    {t("accounts.group.subtotalPending")}
+                </p>
+            );
+        }
+        if (needsPortfolioSummary && portfolioSummaryQuery.isError) {
+            return (
+                <p className="text-xs text-warning">
+                    {t("accounts.group.subtotal")}{" "}
+                    {t("accounts.group.subtotalUnavailable")}
+                </p>
+            );
+        }
+        const cash = sumConvertedBalances(
+            group.accounts.filter(
+                (account) => !isHoldingsOnlyPortfolioType(account.type),
+            ),
+            convertToTarget,
+        );
+        const holdings = group.accounts.reduce(
+            (sum, account) =>
+                sum +
+                (getBrokerAccountMetrics(portfolioSummary, account.id)
+                    ?.holdingsValue ?? 0),
+            0,
+        );
+        return (
+            <p className="text-xs text-muted-foreground">
+                {t("accounts.group.subtotal")}{" "}
+                <span className="font-semibold tabular-nums text-foreground">
+                    <Money
+                        amount={cash + holdings}
+                        currency={displayCurrency}
+                    />
                 </span>
-            )}
-        </p>
-    );
+                {group.accounts.some(
+                    (account) =>
+                        !isHoldingsOnlyPortfolioType(account.type) &&
+                        account.balance_incomplete,
+                ) && (
+                    <span className="ml-1 text-warning">
+                        {t("accounts.group.subtotalIncomplete")}
+                    </span>
+                )}
+            </p>
+        );
+    };
 
     return (
         <PageShell className="">

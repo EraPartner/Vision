@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Info, Pencil, Check, X } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatEditableNumber } from "@/utils/currency";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
 import { Money } from "@/components/shared/Money";
@@ -31,10 +32,6 @@ import type { TableTransaction, InfoEditableField } from "../types";
 // never rendered — the parse result is the contract. Amount accepts any
 // locale-formatted finite number, 0 and negatives included (the sign flips
 // expense/income); date must be a non-empty YYYY-MM-DD.
-const editAmountSchema = moneyAmount({
-    required: "addTxn.invalidAmount",
-    invalid: "addTxn.invalidAmount",
-});
 const editDateSchema = ymdDateString("validation.required");
 
 interface TransactionInfoDialogProps {
@@ -94,7 +91,13 @@ export function TransactionInfoDialog({
         let localValue: string | number | undefined = trimmed;
 
         if (editingInfoField === "amount") {
-            const parsed = editAmountSchema.safeParse(trimmed);
+            const parsed = moneyAmount(
+                {
+                    required: "addTxn.invalidAmount",
+                    invalid: "addTxn.invalidAmount",
+                },
+                appSettings.numberFormat,
+            ).safeParse(trimmed);
             if (!parsed.success) return;
             payload.amount = parsed.data;
             localValue = parsed.data;
@@ -219,8 +222,11 @@ export function TransactionInfoDialog({
                                 ),
                                 editable: true,
                                 editField: "amount",
-                                editValue: String(txn.amount),
-                                editType: "number",
+                                editValue: formatEditableNumber(
+                                    txn.amount,
+                                    appSettings.numberFormat,
+                                ),
+                                editType: "text",
                             },
                             {
                                 key: "currency",
@@ -336,6 +342,12 @@ export function TransactionInfoDialog({
                                                                     type={
                                                                         editType ??
                                                                         "text"
+                                                                    }
+                                                                    inputMode={
+                                                                        editField ===
+                                                                        "amount"
+                                                                            ? "decimal"
+                                                                            : undefined
                                                                     }
                                                                     value={
                                                                         editingInfoValue

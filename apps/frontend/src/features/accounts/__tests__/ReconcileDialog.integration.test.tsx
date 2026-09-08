@@ -650,7 +650,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // would leave an unresolved difference on the account.
         await user.type(
             screen.getByLabelText(/new statement reading/i),
-            "1000.005",
+            "1000,005",
         );
         await waitFor(() => expect(deltaText()).toMatch(/\+.*0,01/));
 
@@ -672,7 +672,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // 1000.004 rounds to 1000,00 — identical to the computed balance.
         await user.type(
             screen.getByLabelText(/new statement reading/i),
-            "1000.004",
+            "1000,004",
         );
         await waitFor(() => expect(deltaText()).toMatch(/0,00/));
 

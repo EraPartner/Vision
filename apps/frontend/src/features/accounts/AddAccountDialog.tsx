@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { useCreateAccount } from "@/hooks/useAccounts";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { apiClient } from "@/lib/api";
 import {
     invalidateAccountDerived,
@@ -41,6 +42,7 @@ import type {
 import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
 import { toAccountPayload } from "./accountFormMapping";
 import { accountFormSchema } from "./accountFormSchema";
+import { isHoldingsOnlyPortfolioType } from "./groupAccounts";
 
 export type AccountFormValues = {
     name: string;
@@ -175,6 +177,7 @@ type AddAccountDialogProps =
 
 export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const queryClient = useQueryClient();
     const isEditMode = props.mode === "edit";
     const editProps = isEditMode ? props : undefined;
@@ -271,16 +274,29 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                 defaults[k],
             ]),
         ) as Partial<AccountFormValues>;
-        setForm((f) => ({ ...f, type, ...untouched }));
+        const holdingsOnly = isHoldingsOnlyPortfolioType(type);
+        setForm((f) => ({
+            ...f,
+            type,
+            ...untouched,
+            ...(holdingsOnly
+                ? { statementBalance: "", statementBalanceDate: "" }
+                : {}),
+        }));
+        if (holdingsOnly) setOpeningBalance("");
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const holdingsOnly = isHoldingsOnlyPortfolioType(form.type);
+        const validationInput = holdingsOnly
+            ? { ...form, statementBalance: "", statementBalanceDate: "" }
+            : form;
         // Validation + string normalization live in accountFormSchema; the
         // presentation of each failure is unchanged.
         const parsed = accountFormSchema(
             isEditMode ? "edit" : "create",
-        ).safeParse(form);
+        ).safeParse(validationInput);
         if (!parsed.success) {
             // Missing name: silent block, as always (the submit button is
             // disabled on it too — this is the keyboard-submit backstop).
@@ -304,43 +320,51 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
             ...parsed.data,
             // Belt-and-braces: a create payload must never carry a statement
             // reading, whatever a stale form value says.
-            ...(isEditMode
-                ? {}
-                : { statementBalance: "", statementBalanceDate: "" }),
+            ...(!isEditMode || holdingsOnly
+                ? { statementBalance: "", statementBalanceDate: "" }
+                : {}),
         };
 
         if (isEditMode) {
             editProps?.onSave(values);
         } else {
-            const hasOpeningBalance = openingBalance.trim().length > 0;
+            const hasOpeningBalance =
+                !holdingsOnly && openingBalance.trim().length > 0;
             const openingAmount = hasOpeningBalance
-                ? parseDecimal(openingBalance, Number.NaN)
+                ? parseDecimal(
+                      openingBalance,
+                      appSettings.numberFormat,
+                      Number.NaN,
+                  )
                 : null;
             if (hasOpeningBalance && !Number.isFinite(openingAmount)) {
                 toast.error(t("accounts.openingBalance.invalid"));
                 return;
             }
-            createMutation.mutate(toAccountPayload(values, "create"), {
-                onSuccess: (created) => {
-                    // Opening balance entered on create → stamp the visible
-                    // 'opening' ledger row on the new account (§3 F4).
-                    if (openingAmount != null && openingBalanceDate) {
-                        stampOpeningBalance.mutate({
-                            id: created.id,
-                            balance: openingAmount,
-                            date: openingBalanceDate,
-                            currency: values.currency,
-                        });
-                    }
-                    setForm(EMPTY);
-                    setTouchedFlags(new Set());
-                    setDisplayNameEdited(false);
-                    setOpeningBalance("");
-                    setOpeningBalanceDate(toYmd(new Date()));
-                    setShowAdvanced(false);
-                    setCreateOpen(false);
+            createMutation.mutate(
+                toAccountPayload(values, "create", appSettings.numberFormat),
+                {
+                    onSuccess: (created) => {
+                        // Opening balance entered on create → stamp the visible
+                        // 'opening' ledger row on the new account (§3 F4).
+                        if (openingAmount != null && openingBalanceDate) {
+                            stampOpeningBalance.mutate({
+                                id: created.id,
+                                balance: openingAmount,
+                                date: openingBalanceDate,
+                                currency: values.currency,
+                            });
+                        }
+                        setForm(EMPTY);
+                        setTouchedFlags(new Set());
+                        setDisplayNameEdited(false);
+                        setOpeningBalance("");
+                        setOpeningBalanceDate(toYmd(new Date()));
+                        setShowAdvanced(false);
+                        setCreateOpen(false);
+                    },
                 },
-            });
+            );
         }
     };
 
@@ -475,7 +499,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                 {/* Opening balance on create (§3 F4) — stamps the visible
                     'opening' ledger row after creation. Liability accounts
                     call it what it is: outstanding debt. */}
-                {!isEditMode && (
+                {!isEditMode && !isHoldingsOnlyPortfolioType(form.type) && (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="acct-opening-balance">
@@ -489,7 +513,6 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                 id="acct-opening-balance"
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^-?[0-9]+([.,][0-9]+)?$"
                                 placeholder={t(
                                     "accounts.openingBalance.createPlaceholder",
                                 )}
@@ -608,47 +631,49 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                             empty ledger; a new account records its starting
                             figure through the opening-balance field above, and a
                             later statement through the Reconcile dialog. */}
-                        {isEditMode && (
-                            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="acct-stmt-bal">
-                                        {t("accounts.field.statementBalance")}
-                                    </Label>
-                                    <Input
-                                        id="acct-stmt-bal"
-                                        type="text"
-                                        inputMode="decimal"
-                                        pattern="^-?[0-9]+([.,][0-9]+)?$"
-                                        value={form.statementBalance}
-                                        onChange={(e) =>
-                                            set(
-                                                "statementBalance",
-                                                e.target.value,
-                                            )
-                                        }
-                                    />
+                        {isEditMode &&
+                            !isHoldingsOnlyPortfolioType(form.type) && (
+                                <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="acct-stmt-bal">
+                                            {t(
+                                                "accounts.field.statementBalance",
+                                            )}
+                                        </Label>
+                                        <Input
+                                            id="acct-stmt-bal"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={form.statementBalance}
+                                            onChange={(e) =>
+                                                set(
+                                                    "statementBalance",
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="acct-stmt-date">
+                                            {t(
+                                                "accounts.field.statementBalanceDate",
+                                            )}
+                                        </Label>
+                                        <Input
+                                            id="acct-stmt-date"
+                                            type="date"
+                                            required={!!form.statementBalance}
+                                            value={form.statementBalanceDate}
+                                            onChange={(e) =>
+                                                set(
+                                                    "statementBalanceDate",
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="acct-stmt-date">
-                                        {t(
-                                            "accounts.field.statementBalanceDate",
-                                        )}
-                                    </Label>
-                                    <Input
-                                        id="acct-stmt-date"
-                                        type="date"
-                                        required={!!form.statementBalance}
-                                        value={form.statementBalanceDate}
-                                        onChange={(e) =>
-                                            set(
-                                                "statementBalanceDate",
-                                                e.target.value,
-                                            )
-                                        }
-                                    />
-                                </div>
-                            </div>
-                        )}
+                            )}
                     </div>
                 )}
 

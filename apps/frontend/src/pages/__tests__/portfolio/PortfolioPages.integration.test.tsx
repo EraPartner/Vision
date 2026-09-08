@@ -6,7 +6,7 @@ import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, INVESTMENT_STUB, ok } from "@/test/msw/handlers";
+import { ACCOUNT_STUB, err, INVESTMENT_STUB, ok } from "@/test/msw/handlers";
 import StocksPage from "@/pages/portfolio/StocksPage";
 import CryptoPage from "@/pages/portfolio/CryptoPage";
 import MetalsPage from "@/pages/portfolio/MetalsPage";
@@ -497,6 +497,183 @@ describe("Portfolio pages (integration)", () => {
             screen.getByRole("heading", { name: "Liabilities" }),
         ).toBeInTheDocument();
     }, 15_000);
+
+    it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            ...ACCOUNT_STUB,
+                            id: 10,
+                            name: "Daily cash",
+                            display_name: "Daily cash",
+                            currency: "USD",
+                            computed_balance: 1000,
+                        },
+                        {
+                            ...ACCOUNT_STUB,
+                            id: 20,
+                            name: "Broker",
+                            display_name: "Broker",
+                            type: "brokerage",
+                            computed_balance: 100,
+                        },
+                    ],
+                    total: 2,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/exchange-rates`, () =>
+                ok({
+                    rates: [
+                        {
+                            currency: "USD",
+                            rate_to_eur: 0.9,
+                            rate_date: "2026-09-08",
+                            fetched_at: "2026-09-08T00:00:00Z",
+                        },
+                    ],
+                    fallback_rates: {},
+                    base: "EUR",
+                    date: "2026-09-08",
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: { totalPortfolioValue: 950 },
+                    summaries: [],
+                    byAccount: [
+                        {
+                            account_id: 20,
+                            assignment: "account",
+                            contribution_kind: "position",
+                            oversold: false,
+                            currentValue: 900,
+                            totalInvested: 800,
+                            realizedGain: 0,
+                            unrealizedGain: 100,
+                            gainLoss: 100,
+                        },
+                        {
+                            account_id: null,
+                            assignment: "unassigned",
+                            contribution_kind: "position",
+                            oversold: false,
+                            currentValue: 50,
+                            totalInvested: 50,
+                            realizedGain: 0,
+                            unrealizedGain: 0,
+                            gainLoss: 0,
+                        },
+                    ],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/net-worth`, () =>
+                ok({
+                    current: {
+                        liquid: 1000,
+                        liabilities: 0,
+                        investments: 950,
+                        netWorth: 1950,
+                    },
+                    monthlyChange: 0,
+                    monthlyChangePercent: 0,
+                    snapshots: [
+                        {
+                            date: "2026-09-08",
+                            liquid: 1000,
+                            liabilities: 0,
+                            investments: 950,
+                            netWorth: 1950,
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderWithApp(<NetWorthPage />);
+
+        const heading = await screen.findByRole("heading", {
+            name: "By Account",
+        });
+        const card = heading.closest(".glass-thin") as HTMLElement;
+        expect(card).toHaveTextContent(/Daily cash.*900,00/s);
+        expect(card).toHaveTextContent(/Broker.*100,00.*900,00.*1\.000,00/s);
+        expect(card).toHaveTextContent(/Unassigned.*50,00/s);
+        expect(card).toHaveTextContent(
+            /Displayed total.*Matches net worth.*1\.950,00/s,
+        );
+    }, 15_000);
+
+    it("keeps By Account pending and then unavailable when FX rates fail", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            ...ACCOUNT_STUB,
+                            id: 10,
+                            currency: "USD",
+                            computed_balance: 100,
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/net-worth`, () =>
+                ok({
+                    current: {
+                        liquid: 90,
+                        liabilities: 0,
+                        investments: 0,
+                        netWorth: 90,
+                    },
+                    monthlyChange: 0,
+                    monthlyChangePercent: 0,
+                    snapshots: [
+                        {
+                            date: "2026-09-08",
+                            liquid: 90,
+                            liabilities: 0,
+                            investments: 0,
+                            netWorth: 90,
+                        },
+                    ],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/exchange-rates`, async () => {
+                await pending;
+                return err(500, "rates unavailable");
+            }),
+        );
+
+        renderWithApp(<NetWorthPage />);
+        await screen.findByRole("heading", { name: "Net Worth", level: 1 });
+        expect(
+            screen.queryByRole("heading", { name: "By Account" }),
+        ).not.toBeInTheDocument();
+        release();
+        expect(
+            await screen.findByText(/account breakdown could not be loaded/i),
+        ).toBeInTheDocument();
+    });
 
     it("NetWorthPage hydrates its visible period from the URL", async () => {
         server.use(
@@ -1285,7 +1462,8 @@ describe("Portfolio pages (integration)", () => {
 
     // ─── WatchlistPage mutation tests ─────────────────────────────────────────
 
-    it("WatchlistPage truncates long company names and links them to market lookup", async () => {
+    it("WatchlistPage discloses truncated company names by pointer and keyboard", async () => {
+        const user = userEvent.setup();
         const mockItem = {
             id: 1,
             name: "A very long watchlist company name",
@@ -1308,6 +1486,17 @@ describe("Portfolio pages (integration)", () => {
         const link = await screen.findByRole("link", { name: mockItem.name });
         expect(link).toHaveAttribute("href", "/research/market?symbol=LONG");
         expect(link.closest("[class*='truncate']")).toBeInTheDocument();
+
+        await user.hover(link);
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            mockItem.name,
+        );
+
+        await user.unhover(link);
+        link.focus();
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            mockItem.name,
+        );
     });
 
     it("WatchlistPage remove item shows success toast after DELETE", async () => {

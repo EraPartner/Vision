@@ -7,7 +7,7 @@
  *
  * Skipped automatically when LIVE_API_BASE is not set (normal unit-test runs).
  * In CI the `test-live-api-contracts` job sets LIVE_API_BASE=http://localhost:3002
- * and starts a full Docker Compose stack before running this file.
+ * and starts a native PostgreSQL-backed production stack before running this file.
  */
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -22,7 +22,9 @@ import {
     TransactionItemSchema as StrictTransactionItemSchema,
 } from "@/test/contracts/schemas";
 
-const LIVE_BASE = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.LIVE_API_BASE ?? "";
+const LIVE_BASE =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } })
+        .process?.env?.LIVE_API_BASE ?? "";
 const enabled = Boolean(LIVE_BASE);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,7 +40,9 @@ async function get(path: string): Promise<unknown> {
 function validate<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
     const result = schema.safeParse(data);
     if (!result.success) {
-        throw new Error(`Contract violation [${label}]:\n${result.error.toString()}`);
+        throw new Error(
+            `Contract violation [${label}]:\n${result.error.toString()}`,
+        );
     }
     return result.data;
 }
@@ -74,17 +78,19 @@ const MetaSourceSchema = z.enum(["live", "cache", "mv"]);
 
 describe("live contract schema projections", () => {
     it("validates selected fields without rejecting the rest of a full resource", () => {
-        expect(CategoryItemSchema.safeParse({
-            id: 1,
-            general: "Food",
-            detail: null,
-            is_active: true,
-            description: null,
-            created_at: "2026-08-25T00:00:00.000Z",
-            updated_at: null,
-            category_name: "Food",
-            links: [],
-        }).success).toBe(true);
+        expect(
+            CategoryItemSchema.safeParse({
+                id: 1,
+                general: "Food",
+                detail: null,
+                is_active: true,
+                description: null,
+                created_at: "2026-08-25T00:00:00.000Z",
+                updated_at: null,
+                category_name: "Food",
+                links: [],
+            }).success,
+        ).toBe(true);
     });
 });
 
@@ -111,12 +117,20 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     // collection with no limit/offset echoed; an explicit limit/offset pages.
     it("GET /api/categories returns full collection when unpaginated", async () => {
         const data = await get("/api/categories");
-        validate(collectionSchema(CategoryItemSchema), data, "GET /api/categories");
+        validate(
+            collectionSchema(CategoryItemSchema),
+            data,
+            "GET /api/categories",
+        );
     });
 
     it("GET /api/categories?limit=5 returns paginated list", async () => {
         const data = await get("/api/categories?limit=5&offset=0");
-        validate(paginatedOf(CategoryItemSchema), data, "GET /api/categories?limit=5");
+        validate(
+            paginatedOf(CategoryItemSchema),
+            data,
+            "GET /api/categories?limit=5",
+        );
     });
 
     it("GET /api/recipients returns paginated list", async () => {
@@ -126,12 +140,20 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/transactions returns paginated list", async () => {
         const data = await get("/api/transactions");
-        validate(paginatedOf(TransactionItemSchema), data, "GET /api/transactions");
+        validate(
+            paginatedOf(TransactionItemSchema),
+            data,
+            "GET /api/transactions",
+        );
     });
 
     it("GET /api/investments returns paginated list", async () => {
         const data = await get("/api/investments");
-        validate(paginatedOf(InvestmentItemSchema), data, "GET /api/investments");
+        validate(
+            paginatedOf(InvestmentItemSchema),
+            data,
+            "GET /api/investments",
+        );
     });
 
     it("GET /api/aggregations/monthly-summary returns expected shape", async () => {
@@ -179,10 +201,12 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     it("GET /api/info/exchange-rates returns rates object", async () => {
         const data = await get("/api/info/exchange-rates");
         validate(
-            z.object({
-                rates: z.array(z.unknown()),
-                total_rates: z.number(),
-            }).passthrough(),
+            z
+                .object({
+                    rates: z.array(z.unknown()),
+                    total_rates: z.number(),
+                })
+                .passthrough(),
             data,
             "GET /api/info/exchange-rates",
         );
@@ -190,7 +214,11 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/info/transaction-count returns count object", async () => {
         const data = await get("/api/info/transaction-count");
-        validate(z.object({ total_transactions: z.number() }), data, "GET /api/info/transaction-count");
+        validate(
+            z.object({ total_transactions: z.number() }),
+            data,
+            "GET /api/info/transaction-count",
+        );
     });
 
     it("GET /api/ai/status returns enabled flag", async () => {
@@ -382,7 +410,9 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     it("GET /api/info/inflation-rates returns rates object", async () => {
         const data = await get("/api/info/inflation-rates");
         validate(
-            z.object({ rates: z.array(z.unknown()), source: z.string() }).passthrough(),
+            z
+                .object({ rates: z.array(z.unknown()), source: z.string() })
+                .passthrough(),
             data,
             "GET /api/info/inflation-rates",
         );
@@ -436,7 +466,11 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/splits/owed returns shape", async () => {
         const data = await get("/api/splits/owed");
-        validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/splits/owed");
+        validate(
+            z.object({ items: z.array(z.unknown()) }),
+            data,
+            "GET /api/splits/owed",
+        );
     });
 
     it("GET /api/saved-charts returns { items, total }", async () => {
@@ -446,7 +480,11 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/recipients/clusters returns clusters", async () => {
         const data = await get("/api/recipients/clusters");
-        validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
+        validate(
+            z.object({ items: z.array(z.unknown()) }),
+            data,
+            "GET /api/recipients/clusters",
+        );
     });
 
     // (GET /api/info/transaction-summary removed — Phase 9 cutover deleted the route.)

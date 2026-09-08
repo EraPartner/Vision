@@ -4,14 +4,19 @@
 import { curveMonotoneX } from "@visx/curve";
 import { summarizeSeriesChart } from "./chartAria";
 import { Group } from "@visx/group";
-import { ParentSize } from "@visx/responsive";
-import { scaleLinear, scaleTime } from "@visx/scale";
+import { scaleLinear } from "@visx/scale";
 import { Line, LinePath } from "@visx/shape";
-import { bisector, extent, max, min } from "d3-array";
+import { bisector, max, min } from "d3-array";
 import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
+import {
+    CartesianChartFrame,
+    type CartesianXScale,
+    ResponsiveCartesianFrame,
+    useCartesianFrame,
+} from "./CartesianChartFrame";
 import { useChartSync } from "./ChartSyncContext";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { formatScrubDelta, useChartScrub } from "./scrub";
@@ -72,9 +77,7 @@ export interface LineChartProps<Datum> {
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
 type LineYScale = ReturnType<typeof scaleLinear<number>>;
-type LineXScale =
-    | ReturnType<typeof scaleTime<number>>
-    | ReturnType<typeof scaleLinear<number>>;
+type LineXScale = CartesianXScale;
 
 interface LineSeriesLayerProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
@@ -153,15 +156,9 @@ const LineSeriesLayer = memo(
 export function LineChart<Datum>(props: LineChartProps<Datum>) {
     const { height = 280 } = props;
     return (
-        <div style={{ width: "100%", height }}>
-            <ParentSize>
-                {({ width: w, height: h }) =>
-                    w > 0 && h > 0 ? (
-                        <Inner {...props} width={w} height={h} />
-                    ) : null
-                }
-            </ParentSize>
-        </div>
+        <ResponsiveCartesianFrame height={height}>
+            {(size) => <Inner {...props} {...size} />}
+        </ResponsiveCartesianFrame>
     );
 }
 
@@ -190,37 +187,15 @@ function Inner<Datum>({
     const formatPercent = usePercentFormatter();
     const reduce = useReducedMotion();
 
-    const innerWidth = Math.max(0, width - margin.left - margin.right);
-    const innerHeight = Math.max(0, height - margin.top - margin.bottom);
-
-    // Prevent inline xAccessor props from invalidating memoized derivations every
-    // render (same stabilizer as AreaChart) — without it, a consumer re-render
-    // with an inline accessor rebuilds the scale, the bisector, and every path.
-    const xAccessorRef = useRef(xAccessor);
-    xAccessorRef.current = xAccessor;
-    const stableXAccessor = useCallback(
-        (d: Datum) => xAccessorRef.current(d),
-        [],
-    );
-
-    const xScale = useMemo(() => {
-        const xs = data.map((d) => stableXAccessor(d));
-        if (xIsDate) {
-            const [lo, hi] = extent(xs as Date[]);
-            return scaleTime({
-                range: [0, innerWidth],
-                domain: [lo ?? new Date(), hi ?? new Date()],
-            });
-        }
-        const nums = xs as number[];
-        // The only live numeric-x caller (ForecastInner) feeds dayNum = i+1, so
-        // nums is finite: d3 min/max equal Math.min/max(...) here and avoid the
-        // spread stack-size hazard. (`?? 0` only guards the unreachable empty case.)
-        return scaleLinear({
-            range: [0, innerWidth],
-            domain: [min(nums) ?? 0, max(nums) ?? 0],
+    const { innerWidth, innerHeight, stableXAccessor, xScale } =
+        useCartesianFrame({
+            data,
+            xAccessor,
+            xIsDate,
+            width,
+            height,
+            margin,
         });
-    }, [data, innerWidth, stableXAccessor, xIsDate]);
 
     const yScale = useMemo(() => {
         if (yDomain) {
@@ -382,11 +357,10 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg
+            <CartesianChartFrame
                 width={width}
                 height={height}
-                role="img"
-                aria-label={
+                ariaLabel={
                     ariaLabel ??
                     summarizeSeriesChart(
                         t,
@@ -395,7 +369,7 @@ function Inner<Datum>({
                         series.map((s) => s.label),
                     )
                 }
-                tabIndex={data.length > 0 ? 0 : undefined}
+                pointCount={data.length}
                 onKeyDown={handleKeyDown}
                 onBlur={handleBlur}
             >
@@ -605,7 +579,7 @@ function Inner<Datum>({
                         onPointerCancel={handleUp}
                     />
                 </Group>
-            </svg>
+            </CartesianChartFrame>
 
             {scrub.range
                 ? (() => {

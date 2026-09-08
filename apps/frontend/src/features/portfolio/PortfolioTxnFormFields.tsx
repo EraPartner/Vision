@@ -34,6 +34,8 @@ import {
 } from "@/hooks/useFieldErrors";
 import type { RecurrenceInterval } from "@/types/portfolio";
 import type { DividendAmountConvention } from "@/types/api";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatEditableNumber } from "@/utils/currency";
 
 type TranslateFn = (
     key: string,
@@ -63,7 +65,7 @@ function buildRecurrenceLabels(
     return {
         daily: t("addPortTxn.recurrence.daily"),
         weekly: t("addPortTxn.recurrence.weekly"),
-        "bi-weekly": t("addPortTxn.recurrence.biweekly"),
+        biweekly: t("addPortTxn.recurrence.biweekly"),
         monthly: t("addPortTxn.recurrence.monthly"),
         quarterly: t("addPortTxn.recurrence.quarterly"),
         yearly: t("addPortTxn.recurrence.yearly"),
@@ -120,13 +122,17 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
     withPlaceholders,
     errors,
 }: PortfolioTxnFormFieldsProps<F>) {
+    const { appSettings } = useAppSettings();
     const recurrenceLabels = buildRecurrenceLabels(t);
     const lockAmount = isGift && lockAmountWhenGift;
     const amountPlaceholder = withPlaceholders
         ? lockAmount
             ? "0.00"
             : derivedAmount !== undefined
-              ? derivedAmount.toFixed(4)
+              ? formatEditableNumber(
+                    Number(derivedAmount.toFixed(4)),
+                    appSettings.numberFormat,
+                )
               : "0.00"
         : undefined;
     const dateId = `${idPrefix}-date`;
@@ -176,7 +182,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 id={unitsId}
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^[0-9]+([.,][0-9]+)?$"
                                 placeholder={
                                     withPlaceholders ? "10" : undefined
                                 }
@@ -205,7 +210,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 id={`${idPrefix}-ppu`}
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^[0-9]+([.,][0-9]+)?$"
                                 placeholder={
                                     withPlaceholders ? "98.50" : undefined
                                 }
@@ -230,7 +234,11 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                             </span>
                         ) : derivedAmount !== undefined ? (
                             <span className="text-muted-foreground ml-1 text-xs">
-                                = {derivedAmount.toFixed(4)}
+                                ={" "}
+                                {formatEditableNumber(
+                                    Number(derivedAmount.toFixed(4)),
+                                    appSettings.numberFormat,
+                                )}
                             </span>
                         ) : null}
                     </Label>
@@ -238,7 +246,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                         id={amountId}
                         type="text"
                         inputMode="decimal"
-                        pattern="^[0-9]+([.,][0-9]+)?$"
                         placeholder={amountPlaceholder}
                         value={lockAmount ? "0" : form.amount}
                         disabled={lockAmount}
@@ -278,7 +285,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 id={feesId}
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^[0-9]+([.,][0-9]+)?$"
                                 placeholder={
                                     withPlaceholders ? "0.00" : undefined
                                 }
@@ -304,7 +310,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 id={taxesId}
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^[0-9]+([.,][0-9]+)?$"
                                 placeholder={
                                     withPlaceholders ? "0.00" : undefined
                                 }
@@ -374,7 +379,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                         id={fxId}
                         type="text"
                         inputMode="decimal"
-                        pattern="^[0-9]+([.,][0-9]+)?$"
                         placeholder={
                             withPlaceholders ? "1.0000000000" : undefined
                         }

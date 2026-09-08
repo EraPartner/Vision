@@ -62,6 +62,16 @@ function buildData(
                     p25: futureDates.map((d) => ({ date: d, value: 2 })),
                     p75: futureDates.map((d) => ({ date: d, value: 8 })),
                 },
+                cumulative_bands: {
+                    p25: futureDates.map((d, i) => ({
+                        date: d,
+                        value: 40 + (i + 1) * 2,
+                    })),
+                    p75: futureDates.map((d, i) => ({
+                        date: d,
+                        value: 40 + (i + 1) * 8,
+                    })),
+                },
                 error: null,
             },
         ],
@@ -104,7 +114,7 @@ describe("mergeForViewRolling", () => {
         expect(rows.slice(6).every((r) => r.actual === null)).toBe(true);
     });
 
-    test("cumulative view: bands carry forward last actual cumulative", () => {
+    test("cumulative view uses cumulative simulated-path bands", () => {
         const data = buildData(3, 3);
         const visible = new Set(["monte_carlo_parametric"]);
         const { rows } = mergeForViewRolling(
@@ -113,7 +123,6 @@ describe("mergeForViewRolling", () => {
             visible,
             "Actual",
         );
-        // Last actual cum = 4*10 = 40 (4th entry, index 3). Future band p25 starts at 40 + 2 = 42.
         const futureRow = rows[4];
         expect(futureRow.monte_carlo_parametric__pLo).toBe(42);
         expect(futureRow.monte_carlo_parametric__pHi).toBe(48);
@@ -122,6 +131,11 @@ describe("mergeForViewRolling", () => {
     test("cumulative bands apply scheduled ledger rows", () => {
         const data = buildData(3, 3);
         data.scheduled_actual.push({ date: data.actual[4].date, net: -12 });
+        const mc = data.methods.find(
+            (method) => method.id === "monte_carlo_parametric",
+        );
+        Object.assign(mc!.cumulative_bands!.p25[0], { value: 30 });
+        Object.assign(mc!.cumulative_bands!.p75[0], { value: 36 });
         const { rows } = mergeForViewRolling(
             data,
             "cumulative",

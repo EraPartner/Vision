@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { Route, Routes } from "react-router";
@@ -112,7 +112,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithApp(<AccountsPage />);
 
         const card = (await screen.findByText("Wise")).closest(
-            ".glass-regular",
+            ".glass-thin",
         ) as HTMLElement;
         await userEvent.click(
             within(card).getByRole("button", { name: "Account actions" }),
@@ -159,7 +159,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         const link = await screen.findByRole("link", {
             name: "Unsupported currency",
         });
-        const card = link.closest(".glass-regular") as HTMLElement;
+        const card = link.closest(".glass-thin") as HTMLElement;
         expect(
             within(card).getByText(/converted total incomplete/i),
         ).toBeInTheDocument();
@@ -252,8 +252,19 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(grandLine).toHaveTextContent(/1\.200,00/);
     });
 
-    it("renders the Tracked-in-Portfolio placeholder instead of a misleading zero balance on portfolio-type cards", async () => {
-        mockAccounts();
+    it("keeps non-zero brokerage cash and provenance visible without assigned holdings", async () => {
+        mockAccounts(
+            FIXTURE.map((account) =>
+                account.id === 4
+                    ? {
+                          ...account,
+                          computed_balance: 75,
+                          anchor_date: "2026-09-01",
+                          post_anchor_count: 2,
+                      }
+                    : account,
+            ),
+        );
         renderWithApp(<AccountsPage />);
 
         const portfolio = await screen.findByRole("region", {
@@ -261,12 +272,152 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const brokerCard = within(portfolio)
             .getByRole("link", { name: "Degiro" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         expect(
-            within(brokerCard).getByText(/tracked in portfolio/i),
+            within(brokerCard).getByText(/no assigned holdings/i),
         ).toBeInTheDocument();
-        // The card must NOT show the €0,00 computed ledger balance.
-        expect(within(brokerCard).queryByText(/0,00/)).not.toBeInTheDocument();
+        expect(brokerCard).toHaveTextContent(/Cash.*75,00/s);
+        expect(brokerCard).toHaveTextContent(
+            /as of 01\/09\/2026 bank statement/s,
+        );
+    });
+
+    it("marks the Portfolio subtotal as pending until holdings load", async () => {
+        mockAccounts();
+        let release!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
+                await pending;
+                return ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [],
+                });
+            }),
+        );
+        renderWithApp(<AccountsPage />);
+
+        const portfolio = await screen.findByRole("region", {
+            name: "Portfolio accounts",
+        });
+        expect(within(portfolio).getByText(/subtotal/i)).toHaveTextContent(
+            /calculating/i,
+        );
+        release();
+        await waitFor(() =>
+            expect(
+                within(portfolio).getByText(/subtotal/i),
+            ).not.toHaveTextContent(/calculating/i),
+        );
+    });
+
+    it("marks the Portfolio subtotal unavailable when holdings fail", async () => {
+        mockAccounts();
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                err(503, "summary unavailable"),
+            ),
+        );
+        renderWithApp(<AccountsPage />);
+
+        const portfolio = await screen.findByRole("region", {
+            name: "Portfolio accounts",
+        });
+        expect(
+            await within(portfolio).findByText(/subtotal.*unavailable/i),
+        ).toBeInTheDocument();
+    });
+
+    it("shows holdings, broker profit/loss, and real cash on a brokerage card", async () => {
+        mockAccounts();
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [
+                        {
+                            account_id: 4,
+                            assignment: "account",
+                            contribution_kind: "position",
+                            oversold: false,
+                            currentValue: 1250,
+                            totalInvested: 1000,
+                            realizedGain: 20,
+                            unrealizedGain: 230,
+                            gainLoss: 250,
+                        },
+                    ],
+                }),
+            ),
+        );
+        renderWithApp(<AccountsPage />);
+
+        const card = (
+            await screen.findByRole("link", { name: "Degiro" })
+        ).closest(".glass-thin") as HTMLElement;
+        expect(within(card).getByText("Holdings value")).toBeVisible();
+        expect(card).toHaveTextContent(/1\.250,00/);
+        expect(card).toHaveTextContent(/Broker P&L.*\+250,00/s);
+        expect(card).toHaveTextContent(/Cash.*0,00/s);
+        const portfolio = screen.getByRole("region", {
+            name: "Portfolio accounts",
+        });
+        expect(within(portfolio).getByText(/subtotal/i).textContent).toMatch(
+            /1\.250,00/,
+        );
+    });
+
+    it("renders a distinct Wallet badge without cash-ledger or Reconcile actions", async () => {
+        mockAccounts([
+            {
+                ...ACCOUNT_STUB,
+                id: 7,
+                name: "Cold storage",
+                display_name: "Cold storage",
+                type: "wallet",
+                computed_balance: 1234,
+                has_transactions: true,
+                multi_currency_cash: true,
+                drift: 25,
+            },
+        ]);
+        renderWithApp(<AccountsPage />);
+
+        const portfolio = await screen.findByRole("region", {
+            name: "Portfolio accounts",
+        });
+        const card = within(portfolio)
+            .getByRole("link", { name: "Cold storage" })
+            .closest(".glass-thin") as HTMLElement;
+        expect(within(card).getByText("Wallet")).toBeInTheDocument();
+        expect(
+            within(card).getByText(/no assigned holdings/i),
+        ).toBeInTheDocument();
+        expect(within(card).queryByText(/1\.234,00/)).not.toBeInTheDocument();
+        expect(
+            within(portfolio).queryByText(/1\.234,00/),
+        ).not.toBeInTheDocument();
+
+        await userEvent.click(
+            within(card).getByRole("button", { name: "Account actions" }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: /view details/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /view transactions/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /reconcile balance/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("shows the not-in-net-worth chip only on excluded accounts", async () => {
@@ -278,14 +429,14 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const excluded = within(cash)
             .getByRole("link", { name: "Partner Checking" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         expect(
             within(excluded).getByText("not in net worth"),
         ).toBeInTheDocument();
 
         const included = within(cash)
             .getByRole("link", { name: "KBC Checking" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         expect(
             within(included).queryByText("not in net worth"),
         ).not.toBeInTheDocument();
@@ -328,7 +479,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const card = within(cash)
             .getByRole("link", { name: "KBC Checking" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         await userEvent.click(
             within(card).getByRole("button", { name: "Account actions" }),
         );
@@ -456,7 +607,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     function driftBadgeFor(label: string): HTMLElement {
         const card = screen
             .getByRole("link", { name: label })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         return within(card).getByRole("button", { name: "Reconcile balance" });
     }
 

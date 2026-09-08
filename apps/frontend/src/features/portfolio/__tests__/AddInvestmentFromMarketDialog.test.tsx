@@ -52,7 +52,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Assert — uses portfolio.addInvestment key (not form.addTransaction.title)
-        const button = await screen.findByRole("button", { name: /add investment/i });
+        const button = await screen.findByRole("button", {
+            name: /add investment/i,
+        });
         expect(button).toBeInTheDocument();
     });
 
@@ -66,7 +68,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         );
 
         // Assert — uses form.addTransaction.title key
-        const button = await screen.findByRole("button", { name: /add transaction/i });
+        const button = await screen.findByRole("button", {
+            name: /add transaction/i,
+        });
         expect(button).toBeInTheDocument();
     });
 
@@ -76,7 +80,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
 
         // Assert — dialog open and 'choose' step content visible
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -90,7 +96,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act — open dialog, then click 'create new' option button
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);
@@ -105,7 +113,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act — open → advance to new → click back
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);
@@ -129,7 +139,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act — open → new step → submit
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);
@@ -140,7 +152,9 @@ describe("AddInvestmentFromMarketDialog", () => {
 
         // Assert — POST was called and dialog closed
         await waitFor(() => expect(posted).toBe(true));
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("clicking 'add transaction' option (with existingInvestment) navigates to 'transaction' step", async () => {
@@ -154,7 +168,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         );
 
         // Act — open dialog, click the 'add transaction' option
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         // Scope to dialog to avoid matching the trigger button outside the portal
         const txnOptionBtn = within(dialog)
@@ -177,7 +193,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         );
 
         // Act — open → transaction step → back
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         const txnOptionBtn = within(dialog)
             .getAllByRole("button")
@@ -208,7 +226,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         );
 
         // Act — open → transaction step → fill amount → record
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         const txnOptionBtn = within(dialog)
             .getAllByRole("button")
@@ -217,13 +237,17 @@ describe("AddInvestmentFromMarketDialog", () => {
 
         // Fill the amount field (required for submission)
         const amountInput = await screen.findByLabelText(/total amount/i);
-        await user.type(amountInput, "1955.00");
+        await user.type(amountInput, "1955,00");
 
-        await user.click(await screen.findByRole("button", { name: /record/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /record/i }),
+        );
 
         // Assert
         await waitFor(() => expect(postedTxn).toBe(true));
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("cancel/close (Escape) closes the dialog", async () => {
@@ -232,12 +256,16 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act — open then close with Escape
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
 
         // Assert
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("keeps the half-filled new-investment form when dismissed", async () => {
@@ -246,7 +274,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
         // Act — walk to the create step, rename, dismiss, reopen
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);
@@ -254,21 +284,31 @@ describe("AddInvestmentFromMarketDialog", () => {
         await user.clear(nameInput);
         await user.type(nameInput, "Apple long-term");
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-        await user.click(screen.getByRole("button", { name: /add investment/i }));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add investment/i }),
+        );
 
         // Assert — still on the create step, with the typed name intact
         await screen.findByRole("dialog");
-        expect(await screen.findByDisplayValue("Apple long-term")).toBeInTheDocument();
+        expect(
+            await screen.findByDisplayValue("Apple long-term"),
+        ).toBeInTheDocument();
     });
 
     it("re-seeds from the quote when the page looks up a different symbol", async () => {
         // Arrange
         const user = userEvent.setup();
-        const { rerender } = renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
+        const { rerender } = renderWithApp(
+            <AddInvestmentFromMarketDialog quote={QUOTE} />,
+        );
 
         // Act — dirty the form, dismiss, then let the page swap the quote
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);
@@ -276,19 +316,30 @@ describe("AddInvestmentFromMarketDialog", () => {
         await user.clear(nameInput);
         await user.type(nameInput, "Apple long-term");
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
 
         rerender(
             <AddInvestmentFromMarketDialog
-                quote={{ ...QUOTE, symbol: "MSFT", name: "Microsoft Corp.", price: 410 }}
+                quote={{
+                    ...QUOTE,
+                    symbol: "MSFT",
+                    name: "Microsoft Corp.",
+                    price: 410,
+                }}
             />,
         );
-        await user.click(screen.getByRole("button", { name: /add investment/i }));
+        await user.click(
+            screen.getByRole("button", { name: /add investment/i }),
+        );
 
         // Assert — back to the choose step for MSFT; Apple's draft is gone, so
         // the old price/name can never be submitted under the new symbol
         await screen.findByRole("dialog");
-        expect(screen.queryByDisplayValue("Apple long-term")).not.toBeInTheDocument();
+        expect(
+            screen.queryByDisplayValue("Apple long-term"),
+        ).not.toBeInTheDocument();
         expect(await screen.findByText(/create new/i)).toBeInTheDocument();
     });
 
@@ -297,7 +348,9 @@ describe("AddInvestmentFromMarketDialog", () => {
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
@@ -305,12 +358,16 @@ describe("AddInvestmentFromMarketDialog", () => {
     it("submit error: dialog content remains visible when create endpoint 5xxs", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.post(`${API_BASE}/api/investments`, () => err(500, "create failed")),
+            http.post(`${API_BASE}/api/investments`, () =>
+                err(500, "create failed"),
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         // Without further navigation, the dialog still shows phase 1 content
         expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -330,7 +387,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
 
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         const createNewBtn = await screen.findByText(/create new/i);
         await user.click(createNewBtn.closest("button") ?? createNewBtn);

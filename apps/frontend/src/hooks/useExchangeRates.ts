@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 /**
  * Exchange-rate map for client-side FX conversion.
  *
@@ -66,7 +67,7 @@ export function useFxStatus() {
     return useQuery<ExchangeRatesData>({
         queryKey: exchangeRateKeys.fxStatus,
         queryFn: () => getExchangeRates({ dbOnly: true }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
         retry: false,
     });
 }

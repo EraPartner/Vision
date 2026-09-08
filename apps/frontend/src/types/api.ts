@@ -422,9 +422,7 @@ export interface PlannedTransactionExecuteRequest {
 
 // AssetClass / PortfolioTxnType / RecurrenceInterval derive from the canonical
 // runtime arrays in @vision/types; re-exported here so existing '@/types/api'
-// imports keep working. RecurrenceInterval is the portfolio vocabulary — the
-// hyphenated 'bi-weekly' spelling; planned transactions use a different,
-// unhyphenated one (see @vision/types/recurrence).
+// imports keep working. Portfolio and planned transactions share `biweekly`.
 export type { AssetClass, PortfolioTxnType, RecurrenceInterval };
 export type PriceProvider =
     "manual" | "binance" | "yahoo" | "custom" | "kinesis";
@@ -535,7 +533,7 @@ export interface PortfolioTransaction {
     dividend_amount_convention?: DividendAmountConvention;
     currency: string;
     fx_rate_to_eur?: number;
-    account_id?: number;
+    account_id?: number | null;
     import_batch_id?: string | null;
     note?: string;
     is_recurring: boolean;
@@ -551,6 +549,29 @@ export interface PortfolioTransactionsListResponse {
     limit: number;
     offset: number;
     links: Link[];
+}
+
+export interface PortfolioBrokerRetagRequest {
+    transaction_ids: number[];
+    from_account_id: number | null;
+    to_account_id: number | null;
+    idempotency_key: string;
+}
+
+export interface PortfolioBrokerRetagReceipt {
+    receipt_id: number;
+    idempotency_key: string;
+    from_account_id: number | null;
+    to_account_id: number | null;
+    transaction_ids: number[];
+    previous_assignments: Array<{
+        transaction_id: number;
+        account_id: number | null;
+    }>;
+    selected_count: number;
+    changed_count: number;
+    created_at: string;
+    replayed: boolean;
 }
 
 export interface PortfolioTransactionCreate {

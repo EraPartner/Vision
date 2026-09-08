@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
@@ -21,7 +22,7 @@ export function useResearchMappingsQuery(
         queryKey: researchMappingsKey(instrumentKey, keyType),
         queryFn: () => apiClient.getResearchMappings(instrumentKey, keyType),
         enabled: enabled && !!instrumentKey,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -67,7 +68,7 @@ export function useMacroSearchQuery(query: string) {
         queryKey: ["macro-search", query],
         queryFn: () => apiClient.searchMacro(query),
         enabled: query.length >= 1,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -99,7 +100,7 @@ export function useChartBuilderSeriesQueries(
                           fetchKey.provider || undefined,
                       ),
             enabled: fetchKey.macro ? true : !!fetchKey.symbol,
-            staleTime: 60_000,
+            staleTime: QUERY_STALE_TIME_MS.STANDARD,
         })),
     });
 }
@@ -113,7 +114,7 @@ export function useResearchCompareQueries(
             queryKey: ["research-chart", symbol, range],
             queryFn: () => apiClient.getResearchChart(symbol, range),
             enabled: !!symbol,
-            staleTime: 60_000,
+            staleTime: QUERY_STALE_TIME_MS.STANDARD,
         })),
     });
     const fundamentals = useQueries({

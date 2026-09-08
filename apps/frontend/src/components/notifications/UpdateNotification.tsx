@@ -20,8 +20,7 @@ import type { UpdateCheckStatus } from "@/lib/api/electron";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-type ApplyPhase =
-    "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
+type ApplyPhase = "idle" | "backing-up" | "downloading" | "restarting" | "done";
 
 export function UpdateNotification() {
     const { t } = useLanguage();
@@ -54,8 +53,6 @@ export function UpdateNotification() {
     }, [check]);
 
     const handleInstall = async () => {
-        const mode = status?.update_mode ?? "source";
-
         // Step 1: pre-update backup (Electron only)
         if (apiClient.isElectron()) {
             setPhase("backing-up");
@@ -79,36 +76,7 @@ export function UpdateNotification() {
             }
         }
 
-        // Step 2: apply update based on mode
-        if (mode === "docker") {
-            setPhase("pulling");
-            try {
-                const result = await apiClient.triggerDockerUpdate();
-                if (!result?.success) {
-                    toast.error(t("update.failed"), {
-                        description: electronErrorToMessage(result?.error, t),
-                    });
-                    setPhase("idle");
-                    return;
-                }
-                setPhase("restarting");
-                setDialogOpen(false);
-                toast.success(t("update.complete"), {
-                    description: t("update.nowRunning", {
-                        version: status?.latest_version ?? "",
-                    }),
-                    duration: 6000,
-                });
-                setPhase("done");
-            } catch (err) {
-                const msg = electronErrorToMessage(err, t);
-                toast.error(t("update.failed"), { description: msg });
-                setPhase("idle");
-            }
-            return;
-        }
-
-        // source / dev mode: shell update
+        // Step 2: install the verified native application update.
         setPhase("downloading");
         try {
             const result = await apiClient.installShellUpdate();
@@ -158,10 +126,7 @@ export function UpdateNotification() {
 
     const isApplying = phase !== "idle" && phase !== "done";
     // Only the Electron shell can actually install an update from inside the
-    // app. In a browser (docker-compose self-host, or the web build) every
-    // install path is a no-op — installShellUpdate() returns null and
-    // triggerDockerUpdate() has no IPC bridge — so we show the command the
-    // operator has to run instead of a button that does nothing.
+    // app. In a browser, the release link is the manual update path.
     const canInstallInApp = apiClient.isElectron();
 
     const phaseLabel = () => {
@@ -170,8 +135,6 @@ export function UpdateNotification() {
                 return t("update.backingUp");
             case "downloading":
                 return t("update.downloading");
-            case "pulling":
-                return t("update.pulling");
             case "restarting":
                 return t("update.restarting");
             default:
@@ -242,16 +205,12 @@ export function UpdateNotification() {
                         </div>
                     )}
 
-                    {/* Non-Electron deployments update from the command line */}
+                    {/* Browser deployments update through their host environment. */}
                     {!canInstallInApp && (
                         <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
                             <p className="text-muted-foreground">
-                                {t("update.dockerComposeHint")}
+                                {t("update.reloadHint")}
                             </p>
-                            <code className="mt-1.5 block break-all font-mono text-xs text-foreground">
-                                docker compose pull &amp;&amp; docker compose up
-                                -d
-                            </code>
                         </div>
                     )}
 

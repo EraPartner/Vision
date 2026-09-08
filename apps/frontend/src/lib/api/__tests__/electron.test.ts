@@ -15,7 +15,6 @@ import {
     setNativeVibrancy,
     persistSplashTheme,
     getSystemAccentColor,
-    triggerDockerUpdate,
     installShellUpdate,
     preUpdateBackup,
     runBackup,
@@ -64,7 +63,6 @@ describe("electron capability detection (absent branch)", () => {
     });
 
     it("update/backup helpers return null when no bridge is present", async () => {
-        expect(await triggerDockerUpdate()).toBeNull();
         expect(await installShellUpdate()).toBeNull();
         expect(await preUpdateBackup()).toBeNull();
         expect(await runBackup("/tmp")).toBeNull();
@@ -80,19 +78,13 @@ describe("electron capability detection (absent branch)", () => {
 describe("electron capability detection (present branch)", () => {
     beforeEach(() => {
         win.electronUpdater = {
-            pullImage: vi
-                .fn()
-                .mockResolvedValue({ success: true, wasNew: true }),
             installShellUpdate: vi
                 .fn()
                 .mockResolvedValue({ success: true, version: "1.2.3" }),
-            getMode: vi
-                .fn()
-                .mockResolvedValue({
-                    mode: "docker",
-                    is_packaged: true,
-                    use_repo_mode: false,
-                }),
+            getMode: vi.fn().mockResolvedValue({
+                mode: "native",
+                is_packaged: true,
+            }),
             preUpdateBackup: vi
                 .fn()
                 .mockResolvedValue({ success: true, file: "/b.sql" }),
@@ -151,10 +143,6 @@ describe("electron capability detection (present branch)", () => {
     });
 
     it("update helpers delegate to the updater bridge", async () => {
-        expect(await triggerDockerUpdate()).toMatchObject({
-            success: true,
-            wasNew: true,
-        });
         expect(await installShellUpdate()).toMatchObject({ version: "1.2.3" });
         expect(await preUpdateBackup()).toMatchObject({ file: "/b.sql" });
     });

@@ -101,6 +101,50 @@ export interface paths {
         patch: operations["updateAccount"];
         trace?: never;
     };
+    "/api/accounts/{id}/portfolio-lot-retag-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview portfolio lot rows assigned to an account
+         * @description Returns the exact buy, gift, and sell row count assigned to the account. Transaction IDs are returned only when the complete selection fits the 500-row audited bulk broker re-tag limit; a partial ID list is never returned.
+         */
+        get: operations["previewAccountPortfolioLots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close an account, optionally zeroing each currency partition
+         * @description Atomically closes the account and removes it from net worth. With balance_handling=adjustment, writes one visible system adjustment per non-zero currency partition before closing; these rows are excluded from income and spending. Repeating a successful close is idempotent.
+         */
+        post: operations["closeAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{id}/merge": {
         parameters: {
             query?: never;
@@ -1011,6 +1055,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/insights-digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deterministic Smart Insights findings */
+        get: operations["getInsightsDigest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/info/insights-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the persisted undismissed insight count */
+        get: operations["getInsightsCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/info/insight-dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Persist an insight dismissal */
+        put: operations["dismissInsight"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/info/exchange-rates": {
         parameters: {
             query?: never;
@@ -1444,6 +1539,26 @@ export interface paths {
         /** List portfolio transactions across all investments */
         get: operations["getBulkPortfolioTransactions"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/investments/transactions/broker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Atomically re-tag reviewed portfolio transactions to a broker
+         * @description Applies one compare-and-set update. Every selected row must still have from_account_id. Replaying the same UUID with the same semantic request returns the durable receipt; reusing it for another request returns 409.
+         */
+        put: operations["bulkRetagPortfolioTransactions"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2323,7 +2438,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** One-shot portfolio CSV import with custom column mapping */
+        /**
+         * One-shot portfolio CSV import with custom column mapping
+         * @description Every mapping field also accepts a compatibility query parameter. A present multipart body field is authoritative when both locations supply the same field.
+         */
         post: operations["portfolioImportCsvCustom"];
         delete?: never;
         options?: never;
@@ -2340,7 +2458,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** SSE-streaming portfolio CSV import */
+        /**
+         * SSE-streaming portfolio CSV import
+         * @description Every mapping field also accepts a compatibility query parameter. A present multipart body field is authoritative when both locations supply the same field.
+         */
         post: operations["portfolioImportCsvStream"];
         delete?: never;
         options?: never;
@@ -3100,12 +3221,61 @@ export interface components {
             /** Format: uri */
             html_url?: string;
             /** @enum {string} */
-            update_mode: "source" | "docker" | "native" | "dev" | "docker-compose";
+            update_mode: "source" | "native" | "dev";
             source_launcher_available?: boolean;
             error?: string;
         };
         UpdateCheckEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["UpdateCheck"];
+        };
+        CashForecastInsight: {
+            month: string;
+            currency: string;
+            /** @description Zero-based expected income minus outflows at month end; not an account balance. */
+            monthEndNetCashflow: number;
+            monthEndNetCashflowLow: number | null;
+            monthEndNetCashflowHigh: number | null;
+            movedSignificantly: boolean;
+            /** @enum {string} */
+            prominence: "alert" | "standing";
+            methodId: string;
+        };
+        InsightsDigestData: {
+            subscriptionCreep: {
+                new: {
+                    [key: string]: unknown;
+                }[];
+                priceChanges: {
+                    [key: string]: unknown;
+                }[];
+            };
+            categoryOutliers: {
+                [key: string]: unknown;
+            }[];
+            cashForecast: components["schemas"]["CashForecastInsight"] | null;
+        };
+        InsightsDigestEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["InsightsDigestData"];
+        };
+        InsightsCountData: {
+            count: number | null;
+            /** @enum {string} */
+            status: "ready" | "pending" | "unavailable";
+            /** Format: date-time */
+            computed_at: string | null;
+        };
+        InsightsCountEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["InsightsCountData"];
+        };
+        InsightDismissalRequest: {
+            /** @enum {string} */
+            kind: "subscription_new" | "subscription_price_change";
+            recipient_id: number;
+        } | {
+            /** @enum {string} */
+            kind: "category_outlier";
+            category_id: number;
+            month_key: string;
         };
         PortfolioSummaryItem: {
             /** Format: int32 */
@@ -3114,6 +3284,8 @@ export interface components {
             fullyAssigned: boolean;
             /** @description True when at least one assigned broker partition sold more units than its lots provide. */
             oversold: boolean;
+            /** @description Exact current holdings and profit/loss partitions for this investment. */
+            byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
         } & {
             [key: string]: unknown;
         };
@@ -3125,6 +3297,11 @@ export interface components {
              * @enum {string}
              */
             assignment: "account" | "unassigned";
+            /**
+             * @description Lot-bearing position result or standalone income/adjustment partition.
+             * @enum {string}
+             */
+            contribution_kind: "position" | "non_position";
             oversold: boolean;
             currentValue: number;
             totalInvested: number;
@@ -3747,6 +3924,23 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        PortfolioImportPreviewData: {
+            /** Format: int64 */
+            batch_id: number;
+            account_id: number | null;
+            account_name: string | null;
+            /** @description True only when account_id still names an active portfolio account. */
+            account_valid: boolean;
+            groups: {
+                [key: string]: unknown;
+            }[];
+            totals: {
+                [key: string]: number;
+            };
+        };
+        PortfolioImportPreviewEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["PortfolioImportPreviewData"];
+        };
         Transaction: {
             id: number;
             /**
@@ -3938,7 +4132,7 @@ export interface components {
         /** @enum {string} */
         PortfolioTxnType: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest" | "rent_income" | "appreciation" | "gift" | "split" | "merger" | "spinoff" | "return_of_capital";
         /** @enum {string} */
-        RecurrenceInterval: "daily" | "weekly" | "bi-weekly" | "monthly" | "quarterly" | "yearly";
+        RecurrenceInterval: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
         /** @enum {string} */
         PriceProvider: "manual" | "binance" | "yahoo" | "custom" | "kinesis";
         Investment: {
@@ -4014,11 +4208,49 @@ export interface components {
             items: components["schemas"]["PortfolioTransaction"][];
             links: components["schemas"]["Link"][];
         };
+        PortfolioBrokerRetagReceipt: {
+            /** Format: int64 */
+            receipt_id: number;
+            /** Format: uuid */
+            idempotency_key: string;
+            /** Format: int32 */
+            from_account_id: number | null;
+            /** Format: int32 */
+            to_account_id: number | null;
+            transaction_ids: number[];
+            previous_assignments: {
+                /** Format: int32 */
+                transaction_id: number;
+                /** Format: int32 */
+                account_id: number | null;
+            }[];
+            selected_count: number;
+            changed_count: number;
+            /** Format: date-time */
+            created_at: string;
+            replayed: boolean;
+        };
         AggregationEnvelope: {
             ok: boolean;
             cached: boolean;
             /** Format: date-time */
             generatedAt: string;
+        };
+        RecipientPivotData: {
+            recipientPivot: {
+                [key: string]: {
+                    recipientId: number;
+                    name: string;
+                    total: number;
+                    transactionCount: number;
+                }[];
+            };
+            conversion: {
+                /** @description True when at least one row lacked its requested historical rate and used a current or identity fallback. */
+                usedHistoricalFallback: boolean;
+                /** @description Sorted uppercase source currencies whose rows used the fallback. */
+                affectedCurrencies: string[];
+            };
         };
         NetWorthSnapshot: {
             /** Format: date */
@@ -4235,6 +4467,9 @@ export interface components {
             id: number;
             name: string;
             config: {
+                /** @description Optional active portfolio account used as the file-level broker destination. */
+                accountId?: number;
+            } & {
                 [key: string]: unknown;
             };
             /** Format: date-time */
@@ -4672,6 +4907,87 @@ export interface operations {
             };
             /** @description An account with that name already exists */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewAccountPortfolioLots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account portfolio lot preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** Format: int32 */
+                            account_id: number;
+                            eligible_count: number;
+                            transaction_ids: number[];
+                            /** @enum {integer} */
+                            limit: 500;
+                        };
+                    };
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    closeAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    balance_handling: "preserve" | "adjustment";
+                };
+            };
+        };
+        responses: {
+            /** @description Account closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid balance handling */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6614,6 +6930,8 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 bank_account?: string;
+                /** @description Exact account foreign-key filter; takes precedence over bank_account. */
+                account_id?: number;
                 is_recurring?: boolean;
                 is_executed?: boolean;
             };
@@ -6969,6 +7287,88 @@ export interface operations {
             };
         };
     };
+    getInsightsDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription, category-outlier, and net-cashflow findings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsDigestEnvelope"];
+                };
+            };
+        };
+    };
+    getInsightsCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cheap count projection state; pending never exposes a stale count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsCountEnvelope"];
+                };
+            };
+        };
+    };
+    dismissInsight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsightDismissalRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotently persisted dismissal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid dismissal shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Referenced recipient is missing or the category outlier is no longer active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
     getExchangeRates: {
         parameters: {
             query?: {
@@ -7125,6 +7525,12 @@ export interface operations {
         parameters: {
             query?: {
                 currency?: string;
+                /** @description Inclusive lower transaction-date bound. Ignored when all_time=true. */
+                start_date?: string;
+                /** @description Inclusive upper transaction-date bound. Ignored when all_time=true. */
+                end_date?: string;
+                /** @description Return the complete history and ignore explicit date bounds. */
+                all_time?: boolean;
                 excluded_category_ids?: number[];
                 excluded_recipient_ids?: number[];
             };
@@ -7148,8 +7554,6 @@ export interface operations {
     getCategoryBreakdown: {
         parameters: {
             query?: {
-                start_date?: string;
-                end_date?: string;
                 currency?: string;
             };
             header?: never;
@@ -7172,9 +7576,11 @@ export interface operations {
     getRecipientInsights: {
         parameters: {
             query?: {
-                start_date?: string;
-                end_date?: string;
                 currency?: string;
+                /** @description Inclusive lower transaction-date bound. */
+                start_date?: string;
+                /** @description Inclusive upper transaction-date bound. */
+                end_date?: string;
             };
             header?: never;
             path?: never;
@@ -7372,6 +7778,10 @@ export interface operations {
         parameters: {
             query?: {
                 currency?: string;
+                /** @description Inclusive lower transaction-date bound. */
+                start_date?: string;
+                /** @description Inclusive upper transaction-date bound. */
+                end_date?: string;
                 excluded_category_ids?: number[];
                 excluded_recipient_ids?: number[];
             };
@@ -7381,13 +7791,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pivot table data */
+            /** @description Pivot table data with historical conversion completeness metadata */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["RecipientPivotData"];
+                    };
                 };
             };
         };
@@ -7396,6 +7808,10 @@ export interface operations {
         parameters: {
             query?: {
                 currency?: string;
+                /** @description Inclusive lower transaction-date bound. */
+                start_date?: string;
+                /** @description Inclusive upper transaction-date bound. */
+                end_date?: string;
                 excluded_category_ids?: number[];
                 excluded_recipient_ids?: number[];
             };
@@ -7562,6 +7978,68 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransactionList"];
                     };
                 };
+            };
+        };
+    };
+    bulkRetagPortfolioTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    transaction_ids: number[];
+                    /** Format: int32 */
+                    from_account_id: number | null;
+                    /** Format: int32 */
+                    to_account_id: number | null;
+                    /** Format: uuid */
+                    idempotency_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Durable re-tag receipt or idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioBrokerRetagReceipt"];
+                    };
+                };
+            };
+            /** @description Invalid request shape, destination, or projected partition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed the application's mutation access policy */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale source assignment or conflicting idempotency key */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Broker re-tag rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9056,7 +9534,18 @@ export interface operations {
     };
     importRecipients: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                separator?: string;
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                encoding?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9090,7 +9579,18 @@ export interface operations {
     };
     importCategories: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                separator?: string;
+                /**
+                 * @deprecated
+                 * @description Compatibility fallback; the multipart body key wins when present.
+                 */
+                encoding?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9829,7 +10329,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["PortfolioImportPreviewEnvelope"];
                 };
             };
         };
@@ -10153,11 +10653,10 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                offset?: number;
+                /** @description Opaque continuation cursor returned by the preceding page. It is bound to the table, sort, direction, and filters. */
+                cursor?: string;
                 orderBy?: string;
                 dir?: "asc" | "desc";
-                /** @description Raw SQL WHERE fragment (validated and parameterised server-side) */
-                where?: string;
                 /** @description JSON-encoded array of structured column filters */
                 filters?: string;
             };
@@ -10169,7 +10668,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Page of rows with column metadata and total count */
+            /** @description Keyset page of rows with column metadata and continuation state. No unbounded count query is run. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10181,9 +10680,11 @@ export interface operations {
                             columns?: Record<string, never>[];
                             primaryKey?: string[];
                             rows?: Record<string, never>[];
+                            /** @description Exact total only when the first page is shorter than the requested limit. */
                             total?: number;
                             limit?: number;
-                            offset?: number;
+                            hasMore?: boolean;
+                            nextCursor?: string | null;
                         };
                     };
                 };

@@ -31,38 +31,56 @@ describe("AI settings behavior", () => {
         ollama.useStatus.mockReturnValue({
             data: {
                 ok: false,
-                displayUrl: "http://host.docker.internal:11434",
+                displayUrl: "http://localhost:11434",
                 error: "Connection refused",
                 hint: "Restart Ollama and try again.",
             },
             isLoading: false,
         });
 
-        renderWithApp(<AIChatSettingsSection value={undefined} onChange={vi.fn()} />);
+        renderWithApp(
+            <AIChatSettingsSection value={undefined} onChange={vi.fn()} />,
+        );
 
-        expect(await screen.findByText("http://host.docker.internal:11434")).toHaveClass("font-mono");
-        expect(screen.getByText("Connection refused")).toHaveClass("text-destructive");
-        expect(screen.getByText("Restart Ollama and try again.")).toBeInTheDocument();
-        expect(screen.getByRole("combobox", { name: /default model/i })).toBeDisabled();
+        expect(await screen.findByText("http://localhost:11434")).toHaveClass(
+            "font-mono",
+        );
+        expect(screen.getByText("Connection refused")).toHaveClass(
+            "text-destructive",
+        );
+        expect(
+            screen.getByText("Restart Ollama and try again."),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: /default model/i }),
+        ).toBeDisabled();
     });
 
     it("associates provider inputs and preserves save behavior", async () => {
         let savedKey: string | undefined;
         server.use(
-            http.get(`${API_BASE}/api/research/provider-keys`, () => ok({
-                items: [{
-                    provider: "alpha_vantage",
-                    label: "Alpha Vantage",
-                    envVar: "ALPHA_VANTAGE_API_KEY",
-                    configured: false,
-                    source: "none",
-                }],
-                total: 1,
-            })),
-            http.put(`${API_BASE}/api/research/provider-keys/alpha_vantage`, async ({ request }) => {
-                savedKey = ((await request.json()) as { api_key: string }).api_key;
-                return ok({ items: [], total: 0 });
-            }),
+            http.get(`${API_BASE}/api/research/provider-keys`, () =>
+                ok({
+                    items: [
+                        {
+                            provider: "alpha_vantage",
+                            label: "Alpha Vantage",
+                            envVar: "ALPHA_VANTAGE_API_KEY",
+                            configured: false,
+                            source: "none",
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+            http.put(
+                `${API_BASE}/api/research/provider-keys/alpha_vantage`,
+                async ({ request }) => {
+                    savedKey = ((await request.json()) as { api_key: string })
+                        .api_key;
+                    return ok({ items: [], total: 0 });
+                },
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(<ResearchKeysSection />);

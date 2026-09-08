@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
@@ -42,7 +43,7 @@ export function useCashflowForecastQueries({
                 mc_paths: 500,
                 mc_percentiles: [25, 75],
             }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
         enabled: mode === "month",
     });
 
@@ -66,7 +67,7 @@ export function useCashflowForecastQueries({
                 mc_percentiles: [25, 75],
                 include_backtest: false,
             }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
         enabled: mode === "rolling",
     });
 
@@ -111,7 +112,7 @@ export function useBankBalances(currency: string) {
     return useQuery({
         queryKey: cashflowKeys.bankBalances(currency),
         queryFn: () => apiClient.getBankBalances({ currency }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -133,6 +134,6 @@ export function useDashboardRecentTransactions(
                 excludedRecipientIds,
             ),
         enabled: exclusionsReady && exclusionsApply,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }

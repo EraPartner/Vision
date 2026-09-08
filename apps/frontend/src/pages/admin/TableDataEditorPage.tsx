@@ -58,7 +58,6 @@ import {
     useTableRows,
 } from "@/features/admin/useTableDataEditorData";
 
-const PAGE_SIZE = 100;
 const MATVIEW_BASE_TABLES = new Set([
     "transactions",
     "recipients",
@@ -74,8 +73,15 @@ interface NewRow {
 
 // ── value helpers ───────────────────────────────────────────────────────────
 
-function rowKey(row: DbRow, primaryKey: string[]): string {
-    return primaryKey.map((k) => String(row[k])).join("");
+function rowKey(
+    row: DbRow,
+    primaryKey: string[],
+    readOnlyIndex?: number,
+): string {
+    if (primaryKey.length > 0) {
+        return primaryKey.map((k) => String(row[k])).join("");
+    }
+    return `readonly:${readOnlyIndex}:${JSON.stringify(row)}`;
 }
 
 function pickPk(row: DbRow, primaryKey: string[]): Record<string, unknown> {
@@ -275,6 +281,7 @@ export default function TableDataEditorPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
     const [page, setPage] = useState(0);
+    const [pageCursors, setPageCursors] = useState<(string | null)[]>([null]);
     const [sort, setSort] = useState<SortState>(undefined);
     const [draftFilters, setDraftFilters] = useState<Record<string, string>>(
         {},
@@ -291,7 +298,12 @@ export default function TableDataEditorPage() {
         PreviewStatement[]
     >([]);
 
-    const { query, refresh } = useTableRows(table, page, sort, appliedFilters);
+    const { query, refresh } = useTableRows(
+        table,
+        pageCursors[page] ?? null,
+        sort,
+        appliedFilters,
+    );
 
     const data = query.data;
     const columns = useMemo(() => data?.columns ?? [], [data]);
@@ -301,6 +313,7 @@ export default function TableDataEditorPage() {
 
     const rowsByKey = useMemo(() => {
         const m = new Map<string, DbRow>();
+        if (primaryKey.length === 0) return m;
         for (const r of rows) m.set(rowKey(r, primaryKey), r);
         return m;
     }, [rows, primaryKey]);
@@ -417,6 +430,7 @@ export default function TableDataEditorPage() {
             .map(([column, v]) => ({ column, op: "contains", value: v }));
         setAppliedFilters(fs);
         setPage(0);
+        setPageCursors([null]);
     }
     function toggleSort(column: string) {
         setSort((prev) => {
@@ -425,13 +439,11 @@ export default function TableDataEditorPage() {
             return undefined;
         });
         setPage(0);
+        setPageCursors([null]);
     }
 
     const { preview: previewMutation, commit: commitMutation } =
         useTableMutationData(table);
-
-    const total = data?.total ?? 0;
-    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
     return (
         <PageShell>
@@ -703,8 +715,12 @@ export default function TableDataEditorPage() {
 
                             {/* Existing rows */}
                             {!query.isLoading &&
-                                rows.map((row) => {
-                                    const key = rowKey(row, primaryKey);
+                                rows.map((row, rowIndex) => {
+                                    const key = rowKey(
+                                        row,
+                                        primaryKey,
+                                        rowIndex,
+                                    );
                                     const isDeleted = deletes.has(key);
                                     const edited = edits[key] ?? {};
                                     return (
@@ -806,31 +822,41 @@ export default function TableDataEditorPage() {
 
                 {/* Pagination footer */}
                 <div className="flex items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-                    <span>{t("dbEditor.rowsCount", { n: total })}</span>
+                    <span>{t("dbEditor.rowsOnPage", { n: rows.length })}</span>
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
                             size="icon"
                             className="h-7 w-7"
-                            disabled={page <= 0 || hasPending}
+                            disabled={
+                                page <= 0 || hasPending || query.isFetching
+                            }
                             aria-label={t("dbEditor.prevPage")}
                             onClick={() => setPage((p) => Math.max(0, p - 1))}
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <span>
-                            {t("dbEditor.pageOf", {
+                            {t("dbEditor.pageNumber", {
                                 page: page + 1,
-                                pages: pageCount,
                             })}
                         </span>
                         <Button
                             variant="outline"
                             size="icon"
                             className="h-7 w-7"
-                            disabled={page + 1 >= pageCount || hasPending}
+                            disabled={
+                                !data?.hasMore || hasPending || query.isFetching
+                            }
                             aria-label={t("dbEditor.nextPage")}
-                            onClick={() => setPage((p) => p + 1)}
+                            onClick={() => {
+                                if (!data?.nextCursor) return;
+                                setPageCursors((current) => [
+                                    ...current.slice(0, page + 1),
+                                    data.nextCursor,
+                                ]);
+                                setPage((p) => p + 1);
+                            }}
                         >
                             <ChevronRight className="h-4 w-4" />
                         </Button>

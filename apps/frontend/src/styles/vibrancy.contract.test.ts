@@ -18,6 +18,7 @@ describe("macOS vibrancy material contract", () => {
         for (const selector of [
             ".glass",
             ".glass-regular",
+            ".card-material",
             ".glass-chrome",
             ".glass-elevated",
             ".app-topbar",

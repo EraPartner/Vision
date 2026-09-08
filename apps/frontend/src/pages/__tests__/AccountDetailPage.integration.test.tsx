@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http } from "msw";
+import { http, HttpResponse } from "msw";
 import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -33,6 +33,18 @@ const BROKER = {
     type: "brokerage",
     computed_balance: 0,
     has_transactions: false,
+};
+
+const WALLET = {
+    ...ACCOUNT_STUB,
+    id: 7,
+    name: "Cold storage",
+    display_name: "Cold storage",
+    type: "wallet",
+    computed_balance: 1234,
+    has_transactions: true,
+    multi_currency_cash: true,
+    drift: 25,
 };
 
 const DRIFTING = {
@@ -95,8 +107,14 @@ const LEDGER_ROWS = [
 function mockApi({
     accounts = [CHECKING, BROKER, DRIFTING],
     rows = LEDGER_ROWS,
-}: { accounts?: unknown[]; rows?: typeof LEDGER_ROWS } = {}) {
+    planned = [],
+}: {
+    accounts?: unknown[];
+    rows?: typeof LEDGER_ROWS;
+    planned?: unknown[];
+} = {}) {
     const captured: URLSearchParams[] = [];
+    const closeBodies: Array<Record<string, unknown>> = [];
     server.use(
         http.get(`${API_BASE}/api/accounts`, () =>
             ok({ items: accounts, total: accounts.length, links: [] }),
@@ -111,8 +129,36 @@ function mockApi({
                 links: [],
             });
         }),
+        http.get(`${API_BASE}/api/planned-transactions`, ({ request }) => {
+            captured.push(new URL(request.url).searchParams);
+            return ok({
+                items: planned,
+                total: planned.length,
+                limit: 100,
+                offset: 0,
+                links: [],
+            });
+        }),
+        http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+            ok({
+                currency: "EUR",
+                computed_at: "2026-09-08T00:00:00Z",
+                totals: {},
+                summaries: [],
+                byAccount: [],
+            }),
+        ),
+        http.post(`${API_BASE}/api/accounts/:id/close`, async ({ request }) => {
+            closeBodies.push((await request.json()) as Record<string, unknown>);
+            return ok({
+                account_id: 1,
+                balance_handling: "adjustment",
+                already_closed: false,
+                adjustments: [],
+            });
+        }),
     );
-    return captured;
+    return Object.assign(captured, { closeBodies });
 }
 
 function renderDetail(path: string) {
@@ -283,6 +329,120 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         expect(del).toHaveTextContent(/has transactions — close instead/i);
     });
 
+    it("defaults residual cash to a visible zero-out adjustment before closing", async () => {
+        const captured = mockApi();
+        renderDetail("/accounts/1");
+        await screen.findByRole("heading", {
+            name: "KBC Checking",
+            level: 1,
+        });
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await userEvent.click(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(
+            within(dialog).getByRole("checkbox", { name: /zero the account/i }),
+        ).toBeChecked();
+        await userEvent.click(
+            within(dialog).getByRole("button", { name: /^close account$/i }),
+        );
+
+        await waitFor(() =>
+            expect(captured.closeBodies).toEqual([
+                { balance_handling: "adjustment" },
+            ]),
+        );
+    });
+
+    it("allows preserving residual cash when the user opts out of zero-out", async () => {
+        const captured = mockApi();
+        renderDetail("/accounts/1");
+        await screen.findByRole("heading", {
+            name: "KBC Checking",
+            level: 1,
+        });
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await userEvent.click(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        );
+        const checkbox = await screen.findByRole("checkbox", {
+            name: /zero the account/i,
+        });
+        await userEvent.click(checkbox);
+        await userEvent.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^close account$/i,
+            }),
+        );
+
+        await waitFor(() =>
+            expect(captured.closeBodies).toEqual([
+                { balance_handling: "preserve" },
+            ]),
+        );
+    });
+
+    it("offers zero-out when native currency partitions offset to a zero converted total", async () => {
+        const offsetting = {
+            ...CHECKING,
+            computed_balance: 0,
+            balance_parts: [
+                { currency: "EUR", balance: 100 },
+                { currency: "USD", balance: -100 },
+            ],
+        };
+        mockApi({ accounts: [offsetting] });
+        renderDetail("/accounts/1");
+        await screen.findByRole("heading", {
+            name: "KBC Checking",
+            level: 1,
+        });
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await userEvent.click(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        );
+
+        const dialog = await screen.findByRole("dialog");
+        expect(
+            within(dialog).getByRole("checkbox", { name: /zero the account/i }),
+        ).toBeChecked();
+        expect(dialog).toHaveTextContent(/100.*€.*-.*100.*\$/);
+    });
+
+    it("asks the server to zero a cash account even when the cached balance is zero", async () => {
+        const captured = mockApi({ accounts: [BROKER] });
+        renderDetail("/accounts/2");
+        await screen.findByRole("heading", { name: "Degiro", level: 1 });
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await userEvent.click(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+        await userEvent.click(
+            within(dialog).getByRole("button", { name: /^close account$/i }),
+        );
+
+        await waitFor(() =>
+            expect(captured.closeBodies).toEqual([
+                { balance_handling: "adjustment" },
+            ]),
+        );
+    });
+
     it("enables Delete for an account without transactions", async () => {
         mockApi();
         renderDetail("/accounts/2"); // BROKER: has_transactions: false
@@ -405,21 +565,346 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("shows the Holdings placeholder (and no cash balance) for portfolio-type accounts", async () => {
+    it("shows assigned holdings, broker profit/loss, and cash consistently on broker detail", async () => {
         mockApi();
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [
+                        {
+                            account_id: 2,
+                            assignment: "account",
+                            contribution_kind: "position",
+                            oversold: false,
+                            currentValue: 1250,
+                            totalInvested: 1000,
+                            realizedGain: 20,
+                            unrealizedGain: 230,
+                            gainLoss: 250,
+                        },
+                    ],
+                }),
+            ),
+        );
         renderDetail("/accounts/2");
         await screen.findByRole("heading", { name: "Degiro", level: 1 });
 
         expect(screen.getByText("Holdings")).toBeInTheDocument();
-        expect(
-            screen.getByText(/holdings arrive in a later release/i),
-        ).toBeInTheDocument();
-        // The misleading €0,00 ledger balance is replaced by the placeholder…
-        expect(screen.getByText(/tracked in portfolio/i)).toBeInTheDocument();
-        // …and a has_transactions=false account explains its missing ledger.
+        const holdings = (await screen.findByText("Holdings value"))
+            .parentElement as HTMLElement;
+        const profitLoss = screen.getByText("Broker P&L")
+            .parentElement as HTMLElement;
+        const cash = screen.getByText("Balance").parentElement as HTMLElement;
+        expect(holdings).toHaveTextContent(/1\.250,00/);
+        expect(profitLoss).toHaveTextContent(/\+250,00/);
+        expect(cash).toHaveTextContent(/0,00/);
         expect(
             screen.getByText(/keeps its activity in the portfolio/i),
         ).toBeInTheDocument();
+    });
+
+    it("keeps the holdings section loading until a delayed summary settles", async () => {
+        mockApi();
+        let release!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
+                await pending;
+                return ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [],
+                });
+            }),
+        );
+        renderDetail("/accounts/2");
+
+        await screen.findByRole("heading", { name: "Degiro", level: 1 });
+        const holdingsCard = screen
+            .getByRole("heading", { name: "Holdings" })
+            .closest(".glass-thin") as HTMLElement;
+        expect(within(holdingsCard).getByRole("status")).toHaveAttribute(
+            "aria-busy",
+            "true",
+        );
+        expect(
+            within(holdingsCard).queryByText(/no assigned holdings/i),
+        ).not.toBeInTheDocument();
+        release();
+        expect(
+            await within(holdingsCard).findByText(/no assigned holdings/i),
+        ).toBeInTheDocument();
+    });
+
+    it("shows a holdings error without claiming the broker has no positions", async () => {
+        mockApi();
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                HttpResponse.json(
+                    { error: { message: "summary unavailable" } },
+                    { status: 400 },
+                ),
+            ),
+        );
+        renderDetail("/accounts/2");
+
+        const holdingsCard = (
+            await screen.findByRole("heading", { name: "Holdings" })
+        ).closest(".glass-thin") as HTMLElement;
+        await waitFor(() =>
+            expect(
+                within(holdingsCard).queryByRole("status"),
+            ).not.toBeInTheDocument(),
+        );
+        expect(holdingsCard).toHaveTextContent(/details weren.t accepted/i);
+        expect(
+            screen.queryByText(/no assigned holdings/i),
+        ).not.toBeInTheDocument();
+    });
+
+    it("shows wallet holdings and oversold state while suppressing stale cash", async () => {
+        mockApi({ accounts: [CHECKING, WALLET] });
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [
+                        {
+                            account_id: 7,
+                            assignment: "account",
+                            contribution_kind: "position",
+                            oversold: true,
+                            currentValue: 300,
+                            totalInvested: 275,
+                            realizedGain: 0,
+                            unrealizedGain: 25,
+                            gainLoss: 25,
+                        },
+                    ],
+                }),
+            ),
+        );
+        renderDetail("/accounts/7");
+
+        expect(
+            await screen.findByRole("status", { name: /oversold broker/i }),
+        ).toBeInTheDocument();
+        const holdings = screen.getByText("Holdings value")
+            .parentElement as HTMLElement;
+        const profitLoss = screen.getByText("Broker P&L")
+            .parentElement as HTMLElement;
+        expect(holdings).toHaveTextContent(/300,00/);
+        expect(profitLoss).toHaveTextContent(/\+25,00/);
+        expect(screen.queryByText(/1\.234,00/)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText("Transaction ledger"),
+        ).not.toBeInTheDocument();
+    });
+
+    it("does not request the portfolio summary for a non-portfolio account", async () => {
+        mockApi();
+        let summaryRequests = 0;
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () => {
+                summaryRequests += 1;
+                return ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [],
+                });
+            }),
+        );
+        renderDetail("/accounts/1");
+
+        await screen.findByRole("heading", { name: "KBC Checking", level: 1 });
+        await waitFor(() =>
+            expect(screen.getByText("Ledger")).toBeInTheDocument(),
+        );
+        expect(summaryRequests).toBe(0);
+    });
+
+    it("keeps wallets holdings-only even when stale cash fields are present", async () => {
+        const captured = mockApi({ accounts: [CHECKING, BROKER, WALLET] });
+        renderDetail("/accounts/7");
+        await screen.findByRole("heading", { name: "Cold storage", level: 1 });
+
+        expect(screen.getByText("Holdings")).toBeInTheDocument();
+        expect(screen.getByText(/tracked in portfolio/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no assigned holdings/i),
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/1\.234,00/)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText("Transaction ledger"),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /reconcile balance/i }),
+        ).not.toBeInTheDocument();
+        expect(captured).toHaveLength(0);
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await screen.findByRole("menuitem", { name: /edit/i });
+        expect(
+            screen.queryByRole("menuitem", { name: /set opening balance/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("menuitem", { name: /view transactions/i }),
+        ).not.toBeInTheDocument();
+
+        await userEvent.click(
+            screen.getByRole("menuitem", { name: /close account/i }),
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(within(dialog).queryByText(/1\.234,00/)).not.toBeInTheDocument();
+        await userEvent.click(
+            within(dialog).getByRole("button", { name: /^close account$/i }),
+        );
+        await waitFor(() =>
+            expect(captured.closeBodies).toEqual([
+                { balance_handling: "preserve" },
+            ]),
+        );
+    });
+
+    it("preserves the cash ledger and Reconcile affordances for brokerage accounts", async () => {
+        const brokerWithCash = {
+            ...BROKER,
+            has_transactions: true,
+            drift: 15,
+        };
+        const captured = mockApi({ accounts: [CHECKING, brokerWithCash] });
+        renderDetail("/accounts/2");
+        await screen.findByRole("heading", { name: "Degiro", level: 1 });
+
+        expect(await screen.findByRole("table")).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /reconcile balance/i }),
+        ).toBeInTheDocument();
+        expect(
+            captured.some((params) => params.get("account_id") === "2"),
+        ).toBe(true);
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        expect(
+            await screen.findByRole("menuitem", {
+                name: /set opening balance/i,
+            }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /view transactions/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("menuitem", { name: /transfer portfolio lots/i }),
+        ).toBeInTheDocument();
+    });
+
+    it.each([
+        ["a non-portfolio account", CHECKING],
+        ["an inactive portfolio account", { ...BROKER, is_active: false }],
+    ])("hides portfolio lot transfer for %s", async (_label, account) => {
+        mockApi({ accounts: [account] });
+        renderDetail(`/accounts/${account.id}`);
+        await screen.findByRole("heading", {
+            name: account.display_name,
+            level: 1,
+        });
+
+        await userEvent.click(
+            screen.getByRole("button", { name: "Account actions" }),
+        );
+        await screen.findByRole("menuitem", { name: /edit/i });
+        expect(
+            screen.queryByRole("menuitem", {
+                name: /transfer portfolio lots/i,
+            }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("shows account plans separately without changing ledger balances", async () => {
+        const planned = {
+            id: 81,
+            planned_date: "2025-04-01",
+            bank_account: "KBC Checking",
+            recipient_name: "Landlord",
+            memo: "Rent",
+            amount: -700,
+            currency: "EUR",
+            is_recurring: true,
+            is_executed: false,
+            execution_count: 0,
+            is_active: true,
+            created_at: "2025-03-01T10:00:00.000Z",
+            links: [],
+        };
+        const captured = mockApi({ planned: [planned] });
+        renderDetail("/accounts/1");
+
+        const heading = await screen.findByRole("heading", {
+            name: "Upcoming planned transactions",
+        });
+        const plannedCard = heading.closest(
+            "[class*='premium-frame']",
+        ) as HTMLElement;
+        expect(plannedCard).not.toBeNull();
+        expect(await screen.findByText("Landlord")).toBeInTheDocument();
+        expect(
+            within(plannedCard!).getByText(
+                /not included in the current balance/i,
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getAllByText(/950/).length).toBeGreaterThan(0);
+
+        const plannedCall = captured.find(
+            (params) =>
+                params.get("account_id") === "1" &&
+                params.get("limit") === "5000",
+        );
+        expect(plannedCall?.has("bank_account")).toBe(false);
+        expect(plannedCall?.get("active")).toBe("true");
+        expect(plannedCall?.get("is_executed")).toBe("false");
+    });
+
+    it("keeps the posted ledger visible when the planned forecast fails", async () => {
+        mockApi();
+        server.use(
+            http.get(`${API_BASE}/api/planned-transactions`, () =>
+                HttpResponse.json(
+                    { ok: false, error: { message: "forecast unavailable" } },
+                    { status: 503 },
+                ),
+            ),
+        );
+        renderDetail("/accounts/3");
+
+        const heading = await screen.findByRole("heading", {
+            name: "Upcoming planned transactions",
+        });
+        const plannedCard = heading.closest(
+            "[class*='premium-frame']",
+        ) as HTMLElement;
+        await waitFor(() =>
+            expect(
+                plannedCard.querySelector(".text-destructive"),
+            ).toBeInTheDocument(),
+        );
+        expect(await screen.findByText("Albert Heijn")).toBeInTheDocument();
     });
 
     it("narrows the ledger to rows on/after ?since= and clears back to the full view", async () => {

@@ -36,12 +36,14 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
-import { SUPPORTED_CURRENCIES } from "@/utils/currency";
+import { formatEditableNumber, SUPPORTED_CURRENCIES } from "@/utils/currency";
 import {
     useDialogFormState,
     useReseedOnIdentityChange,
 } from "@/hooks/useDialogFormState";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import { PortfolioBrokerField } from "./PortfolioBrokerField";
+import { useManualTradeBrokerOptions } from "./manualTradeBroker";
 
 interface Quote {
     symbol: string;
@@ -74,7 +76,10 @@ export function AddInvestmentFromMarketDialog({
         addTransaction,
         isAddingInvestment,
         isAddingTransaction,
+        transactions,
     } = usePortfolio();
+    const { accounts: brokerAccounts, defaultBrokerId } =
+        useManualTradeBrokerOptions(transactions, existingInvestment?.id);
 
     const today = todayYmd();
     const todayLabel = formatDateWithAppSettings(
@@ -98,7 +103,10 @@ export function AddInvestmentFromMarketDialog({
         name: quote.name,
         symbol: quote.symbol,
         currency: quote.currency ?? "EUR",
-        currentPrice: quote.price.toString(),
+        currentPrice: formatEditableNumber(
+            quote.price,
+            appSettings.numberFormat,
+        ),
         notes: t("addInvFromMarket.notesDefault", { date: todayLabel }),
     });
 
@@ -107,12 +115,16 @@ export function AddInvestmentFromMarketDialog({
         date: today,
         amount: "",
         units: "",
-        pricePerUnit: quote.price.toString(),
+        pricePerUnit: formatEditableNumber(
+            quote.price,
+            appSettings.numberFormat,
+        ),
         fees: "",
         taxes: "",
         dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
+        accountId: undefined as string | undefined,
         isRecurring: false,
         recurrenceInterval: "monthly" as RecurrenceInterval,
         recurrenceEndDate: "",
@@ -164,7 +176,10 @@ export function AddInvestmentFromMarketDialog({
                 asset_class: assetClass,
                 currency: newInvestmentForm.currency,
                 // Cleared/invalid price → omit rather than persisting a bogus 0.
-                current_price: parsePositive(newInvestmentForm.currentPrice),
+                current_price: parsePositive(
+                    newInvestmentForm.currentPrice,
+                    appSettings.numberFormat,
+                ),
                 notes: newInvestmentForm.notes.trim() || undefined,
                 price_provider: "yahoo",
                 price_provider_id: quote.symbol,
@@ -179,9 +194,18 @@ export function AddInvestmentFromMarketDialog({
         }
     };
 
-    const amountInput = parsePositive(transactionForm.amount);
-    const unitsInput = parsePositive(transactionForm.units);
-    const priceInput = parsePositive(transactionForm.pricePerUnit);
+    const amountInput = parsePositive(
+        transactionForm.amount,
+        appSettings.numberFormat,
+    );
+    const unitsInput = parsePositive(
+        transactionForm.units,
+        appSettings.numberFormat,
+    );
+    const priceInput = parsePositive(
+        transactionForm.pricePerUnit,
+        appSettings.numberFormat,
+    );
     const isBuySell = ["buy", "sell"].includes(transactionForm.type);
     // Backend requires a consistent 2-of-3 (amount / units / price) only for
     // unit-based buy/sell; other types just need an amount.
@@ -230,13 +254,17 @@ export function AddInvestmentFromMarketDialog({
         // NaN fallback, not the default 0 — garbage in these fields must block the
         // submit instead of silently posting €0 fees/taxes or fx_rate_to_eur = 0.
         const feesValue = transactionForm.fees
-            ? parseDecimal(transactionForm.fees, NaN)
+            ? parseDecimal(transactionForm.fees, appSettings.numberFormat, NaN)
             : undefined;
         const taxesValue = transactionForm.taxes
-            ? parseDecimal(transactionForm.taxes, NaN)
+            ? parseDecimal(transactionForm.taxes, appSettings.numberFormat, NaN)
             : undefined;
         const fxRateValue = transactionForm.fxRateToEur
-            ? parseDecimal(transactionForm.fxRateToEur, NaN)
+            ? parseDecimal(
+                  transactionForm.fxRateToEur,
+                  appSettings.numberFormat,
+                  NaN,
+              )
             : undefined;
         if (
             (feesValue !== undefined &&
@@ -251,6 +279,9 @@ export function AddInvestmentFromMarketDialog({
         }
 
         try {
+            const effectiveBrokerId =
+                transactionForm.accountId ??
+                (defaultBrokerId !== undefined ? String(defaultBrokerId) : "");
             await addTransaction({
                 investmentId: existingInvestment.id,
                 type: transactionForm.type,
@@ -267,6 +298,9 @@ export function AddInvestmentFromMarketDialog({
                 fx_rate_to_eur: fxRateValue,
                 currency: existingInvestment.currency,
                 note: transactionForm.note.trim() || undefined,
+                account_id: effectiveBrokerId
+                    ? Number(effectiveBrokerId)
+                    : undefined,
                 is_recurring: transactionForm.isRecurring,
                 recurrence_interval: transactionForm.isRecurring
                     ? transactionForm.recurrenceInterval
@@ -460,9 +494,8 @@ export function AddInvestmentFromMarketDialog({
                                 </Label>
                                 <Input
                                     id="new-price"
-                                    type="number"
-                                    step="0.0001"
-                                    min="0"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={newInvestmentForm.currentPrice}
                                     onChange={(e) =>
                                         setNewInvestmentForm((f) => ({
@@ -561,6 +594,25 @@ export function AddInvestmentFromMarketDialog({
                             isGift={false}
                             lockAmountWhenGift={false}
                             withPlaceholders
+                        />
+
+                        <PortfolioBrokerField
+                            id="market-txn-broker"
+                            accounts={brokerAccounts}
+                            value={
+                                transactionForm.accountId ??
+                                (defaultBrokerId !== undefined
+                                    ? String(defaultBrokerId)
+                                    : "")
+                            }
+                            onChange={(accountId) =>
+                                setTransactionForm((current) => ({
+                                    ...current,
+                                    accountId,
+                                }))
+                            }
+                            compactDefault
+                            t={t}
                         />
 
                         <DialogFooter className="sm:justify-between">

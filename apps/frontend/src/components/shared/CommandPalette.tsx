@@ -93,7 +93,10 @@ export function CommandPalette({
     }, [open]);
 
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const fxParsed = useMemo(() => parseFxQuery(query.trim()), [query]);
+    const fxParsed = useMemo(
+        () => parseFxQuery(query.trim(), appSettings.numberFormat),
+        [appSettings.numberFormat, query],
+    );
     const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
     const { convertToTarget } = useCurrencyConverter(fxTarget);
     // User-typed/provider currency codes share the canonical guarded formatter.
@@ -120,13 +123,16 @@ export function CommandPalette({
 
     const calcResult = useMemo(() => {
         if (fxParsed) return null;
-        const value = evaluateArithmetic(query.trim());
+        const value = evaluateArithmetic(
+            query.trim(),
+            appSettings.numberFormat,
+        );
         return value == null
             ? null
             : new Intl.NumberFormat(locale, {
                   maximumFractionDigits: 6,
               }).format(value);
-    }, [fxParsed, query, locale]);
+    }, [appSettings.numberFormat, fxParsed, query, locale]);
 
     const copyResult = (text: string) => {
         onOpenChange(false);

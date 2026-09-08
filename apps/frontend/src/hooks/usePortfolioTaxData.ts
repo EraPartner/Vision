@@ -82,7 +82,7 @@ export function usePortfolioTaxData() {
             ),
         [liveProfile, snapshots, snapshotMetas, viewedYear],
     );
-    const { summaries: rawSummaries } = usePortfolio();
+    const { allSummaries: rawSummaries } = usePortfolio();
     const { getAdjustment } = usePortfolioTaxAdjustments();
     const { getClassification } = usePortfolioTaxClassifications();
     // Overlay user-provided tax classifications onto each summary so downstream

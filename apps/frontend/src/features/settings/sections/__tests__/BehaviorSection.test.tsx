@@ -174,9 +174,7 @@ function installElectronStubs(
     loadedSettings: ServicesSettings = { keepServicesOnQuit: false },
 ) {
     const win = window as unknown as Record<string, unknown>;
-    win.electronUpdater = {
-        pullImage: vi.fn().mockResolvedValue({ success: true, wasNew: false }),
-    };
+    win.electronUpdater = {};
     const saveSettings = vi.fn().mockResolvedValue(undefined);
     const loadSettings = vi.fn().mockResolvedValue(loadedSettings);
     win.electronServices = { saveSettings, loadSettings };

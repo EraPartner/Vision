@@ -107,21 +107,20 @@ export interface CategoryOutlier {
     categoryId: number;
     categoryName: string;
     monthKey: string;
+    comparisonEndDay: number;
     currentAmount: number;
     baselineMedian: number;
     deviation: number;
     direction: string;
 }
 
-/** Month-end cash forecast insight (null when no forecast is available). */
+/** Zero-based month-end net-cashflow insight (not an account balance). */
 export interface CashForecast {
     month: string;
     currency: string;
-    monthEndProjected: number;
-    minProjected: number;
-    monthEndLow: number;
-    monthEndHigh: number;
-    crossesZero: boolean;
+    monthEndNetCashflow: number;
+    monthEndNetCashflowLow: number | null;
+    monthEndNetCashflowHigh: number | null;
     movedSignificantly: boolean;
     prominence: string;
     methodId: string;
@@ -149,6 +148,32 @@ export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
             cashForecast: null,
         };
     }
+}
+
+export interface InsightsCountResponse {
+    count: number | null;
+    status: "ready" | "pending" | "unavailable";
+    computed_at: string | null;
+}
+
+export function getInsightsCount(): Promise<InsightsCountResponse> {
+    return apiRequest("/api/info/insights-count");
+}
+
+export type InsightDismissalRequest =
+    | {
+          kind: "subscription_new" | "subscription_price_change";
+          recipient_id: number;
+      }
+    | { kind: "category_outlier"; category_id: number; month_key: string };
+
+export function dismissInsight(
+    request: InsightDismissalRequest,
+): Promise<unknown> {
+    return apiRequest("/api/info/insight-dismissals", {
+        method: "PUT",
+        body: JSON.stringify(request),
+    });
 }
 
 /** One user category contributing to a deduction-type candidate group. */
@@ -330,12 +355,15 @@ export interface PortfolioSummaryItem {
     totalAppreciation: number;
     fullyAssigned: boolean;
     oversold: boolean;
+    byAccount: PortfolioSummaryByAccountItem[];
 }
 
 export interface PortfolioSummaryByAccountItem {
     account_id: number | null;
     /** Machine-readable identity; clients localize `unassigned` for display. */
     assignment: "account" | "unassigned";
+    /** Lot-bearing position row or standalone income/adjustment row. */
+    contribution_kind: "position" | "non_position";
     oversold: boolean;
     currentValue: number;
     totalInvested: number;

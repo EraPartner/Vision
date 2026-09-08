@@ -52,18 +52,20 @@ import { Sparkline } from "@/components/charts";
 import {
     ArchiveRestore,
     ArrowLeft,
+    ArrowRightLeft,
     Coins,
     DoorClosed,
     GitMerge,
-    Lock,
     MoreVertical,
     Pencil,
     Receipt,
     Scale,
     Trash2,
     X,
+    CalendarClock,
 } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { BrokerTransferDialog } from "@/features/portfolio/BrokerTransferDialog";
 import {
     useAccounts,
     useUpdateAccount,
@@ -74,7 +76,10 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
-import { isPortfolioType } from "@/features/accounts/groupAccounts";
+import {
+    isHoldingsOnlyPortfolioType,
+    isPortfolioType,
+} from "@/features/accounts/groupAccounts";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import {
     AddAccountDialog,
@@ -94,6 +99,10 @@ import type { Account } from "@/types/api";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { useAccountLedger } from "@/hooks/useTransactions";
+import { useAccountPlannedTransactions } from "@/hooks/useAccountPlannedTransactions";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
+import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -118,6 +127,7 @@ export default function AccountDetailPage() {
     // Shared drift chip content + tone (§3 F1) — identical to the hub card.
     const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
+    const displayCurrency = appSettings.defaultCurrency || "EUR";
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // The hub's cached population (active + archived) — the simplest source for
@@ -134,6 +144,7 @@ export default function AccountDetailPage() {
     const [editing, setEditing] = useState(false);
     const [merging, setMerging] = useState(false);
     const [closing, setClosing] = useState(false);
+    const [transferringLots, setTransferringLots] = useState(false);
     const [anchoring, setAnchoring] = useState(false);
     const [reconciling, setReconciling] = useState(false);
     const [ledgerLimit, setLedgerLimit] = useState(LEDGER_PAGE_SIZE);
@@ -152,10 +163,21 @@ export default function AccountDetailPage() {
             { replace: true },
         );
 
-    // Portfolio-type accounts keep their activity in portfolio_transactions —
-    // there may still be ledger rows (broker cash), but no reconcile-cash story.
+    // Wallets and exchanges are holdings-only. Brokerage accounts may still
+    // have an imported cash sleeve and ledger transactions.
     const portfolio = account ? isPortfolioType(account.type) : false;
-    const canViewTransactions = account?.has_transactions !== false;
+    const holdingsOnly = account
+        ? isHoldingsOnlyPortfolioType(account.type)
+        : false;
+    const canViewTransactions =
+        !holdingsOnly && account?.has_transactions !== false;
+    const portfolioSummaryQuery = usePortfolioSummaryQuery(
+        displayCurrency,
+        portfolio,
+    );
+    const portfolioMetrics = account
+        ? getBrokerAccountMetrics(portfolioSummaryQuery.data, account.id)
+        : undefined;
 
     // FULL running-balance ledger, newest first. include_balance=true adds the
     // per-account SQL window (evaluated over the whole account before
@@ -176,6 +198,17 @@ export default function AccountDetailPage() {
 
     const rows = useMemo(() => txData?.items ?? [], [txData]);
     const total = txData?.total ?? 0;
+    const plannedQuery = useAccountPlannedTransactions(
+        account?.id,
+        !!account && !holdingsOnly,
+    );
+    const upcomingPlanned = useMemo(
+        () =>
+            [...(plannedQuery.data?.items ?? [])].sort((a, b) =>
+                a.planned_date.localeCompare(b.planned_date),
+            ),
+        [plannedQuery.data?.items],
+    );
 
     // ?since= narrowing (client-side). Rows are date-desc, so matches are a
     // prefix — plain YYYY-MM-DD string comparison, no Date parsing (and no
@@ -227,7 +260,14 @@ export default function AccountDetailPage() {
     const handleSave = (values: AccountFormValues) => {
         if (!account) return;
         updateMutation.mutate(
-            { id: account.id, data: toAccountPayload(values, "update") },
+            {
+                id: account.id,
+                data: toAccountPayload(
+                    values,
+                    "update",
+                    appSettings.numberFormat,
+                ),
+            },
             { onSuccess: () => setEditing(false) },
         );
     };
@@ -304,7 +344,7 @@ export default function AccountDetailPage() {
     }
 
     const a = account;
-    const drift = driftBadge(a);
+    const drift = holdingsOnly ? undefined : driftBadge(a);
     const provenanceText = balanceProvenance(a);
 
     const metadata: Array<{ label: string; value: string }> = [
@@ -383,12 +423,14 @@ export default function AccountDetailPage() {
                                     <Pencil className="mr-2 h-4 w-4" />{" "}
                                     {t("common.edit")}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => setAnchoring(true)}
-                                >
-                                    <Coins className="mr-2 h-4 w-4" />{" "}
-                                    {t("accounts.openingBalance.action")}
-                                </DropdownMenuItem>
+                                {!holdingsOnly && (
+                                    <DropdownMenuItem
+                                        onClick={() => setAnchoring(true)}
+                                    >
+                                        <Coins className="mr-2 h-4 w-4" />{" "}
+                                        {t("accounts.openingBalance.action")}
+                                    </DropdownMenuItem>
+                                )}
                                 {canViewTransactions && (
                                     <DropdownMenuItem
                                         onClick={() =>
@@ -406,6 +448,16 @@ export default function AccountDetailPage() {
                                     >
                                         <GitMerge className="mr-2 h-4 w-4" />{" "}
                                         {t("accounts.merge")}
+                                    </DropdownMenuItem>
+                                )}
+                                {a.is_active && portfolio && (
+                                    <DropdownMenuItem
+                                        onClick={() =>
+                                            setTransferringLots(true)
+                                        }
+                                    >
+                                        <ArrowRightLeft className="mr-2 h-4 w-4" />{" "}
+                                        {t("portfolio.brokerTransfer.action")}
                                     </DropdownMenuItem>
                                 )}
                                 {/* ONE lifecycle verb (§3 F5): Close (= archive + drop from
@@ -462,9 +514,7 @@ export default function AccountDetailPage() {
                         <div className="eyebrow">
                             {t("accounts.detail.balance")}
                         </div>
-                        {portfolio ? (
-                            // Portfolio-type shells have no real cash value until
-                            // WP-C5's holdings land — mirror the hub placeholder.
+                        {holdingsOnly ? (
                             <div className="mt-1 text-lg font-medium text-muted-foreground">
                                 {t("accounts.trackedInPortfolio")}
                             </div>
@@ -512,7 +562,7 @@ export default function AccountDetailPage() {
                                 <TooltipContent>{drift.tooltip}</TooltipContent>
                             </Tooltip>
                         )}
-                        {!drift && a.multi_currency_cash && (
+                        {!holdingsOnly && !drift && a.multi_currency_cash && (
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -539,7 +589,7 @@ export default function AccountDetailPage() {
                 </CardContent>
             </Card>
 
-            {/* Holdings placeholder — portfolio-type only; fed for real in WP-C5. */}
+            {/* Current holdings use the same server partition as the hub card. */}
             {portfolio && (
                 <Card>
                     <CardHeader className="pb-3">
@@ -548,184 +598,331 @@ export default function AccountDetailPage() {
                             className="flex items-center gap-2"
                         >
                             {t("accounts.detail.holdings")}
-                            <Lock
-                                className="h-3.5 w-3.5 text-muted-foreground"
-                                aria-hidden
+                            <PortfolioOversoldBadge
+                                oversold={portfolioMetrics?.oversold}
                             />
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="rounded-xl border border-dashed border-border/60 p-4">
-                            <p className="text-sm text-muted-foreground">
-                                {t("accounts.detail.holdingsDark")}
+                        {portfolioSummaryQuery.isLoading ? (
+                            <SectionLoader />
+                        ) : portfolioSummaryQuery.isError ? (
+                            <p className="text-sm text-destructive">
+                                {apiErrorToMessage(
+                                    portfolioSummaryQuery.error,
+                                    t,
+                                )}
                             </p>
-                        </div>
+                        ) : portfolioMetrics?.hasPosition ? (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <div className="eyebrow">
+                                        {t("accounts.portfolio.holdings")}
+                                    </div>
+                                    <div className="mt-1 text-2xl font-semibold tabular-nums">
+                                        <Money
+                                            amount={
+                                                portfolioMetrics.holdingsValue
+                                            }
+                                            currency={displayCurrency}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="eyebrow">
+                                        {t("accounts.portfolio.pnl")}
+                                    </div>
+                                    <div
+                                        className={cn(
+                                            "mt-1 text-2xl font-semibold tabular-nums",
+                                            portfolioMetrics.gainLoss > 0
+                                                ? "text-gain"
+                                                : portfolioMetrics.gainLoss < 0
+                                                  ? "text-loss"
+                                                  : "text-muted-foreground",
+                                        )}
+                                    >
+                                        <Money
+                                            amount={portfolioMetrics.gainLoss}
+                                            currency={displayCurrency}
+                                            signed
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                {t("accounts.portfolio.noAssignedHoldings")}
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
             )}
 
-            {/* Running-balance ledger */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                        <CardTitle variant="sm">
-                            {t("accounts.detail.ledgerTitle")}
-                        </CardTitle>
-                        {canViewTransactions && total > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                                {tc("accounts.detail.ledgerCount", total)}
-                            </span>
-                        )}
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    {since && (
-                        <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
-                            <span className="text-sm text-foreground">
-                                {t("accounts.detail.sinceBanner", {
-                                    date: formatDateStringWithAppSettings(
-                                        since,
-                                        appSettings.dateFormat,
-                                    ),
-                                })}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="ml-auto h-6 w-6"
-                                onClick={clearSince}
-                                aria-label={t("aria.clearFilter")}
+            {!holdingsOnly &&
+                (plannedQuery.isLoading ||
+                    plannedQuery.isError ||
+                    upcomingPlanned.length > 0) && (
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle
+                                variant="sm"
+                                className="flex items-center gap-2"
                             >
-                                <X className="h-3.5 w-3.5" />
-                            </Button>
-                        </div>
-                    )}
-
-                    {!canViewTransactions ? (
-                        <p className="text-sm text-muted-foreground">
-                            {t("accounts.detail.noLedger")}
-                        </p>
-                    ) : txLoading ? (
-                        <SectionLoader />
-                    ) : txIsError ? (
-                        <p className="text-sm text-destructive">
-                            {apiErrorToMessage(txError, t)}
-                        </p>
-                    ) : visibleRows.length === 0 ? (
-                        <p className="py-4 text-sm text-muted-foreground">
-                            {t("accounts.detail.noTransactions")}
-                        </p>
-                    ) : (
-                        <>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>
-                                            {t("txPage.col.date")}
-                                        </TableHead>
-                                        <TableHead>
-                                            {t("txPage.field.description")}
-                                        </TableHead>
-                                        <TableHead className="hidden md:table-cell">
-                                            {t("txPage.col.category")}
-                                        </TableHead>
-                                        <TableHead className="text-right">
-                                            {t("txPage.col.amount")}
-                                        </TableHead>
-                                        <TableHead className="text-right">
-                                            {t("txPage.field.balance")}
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody
-                                    className={cn(
-                                        isPlaceholderData && "opacity-60",
-                                    )}
-                                >
-                                    {visibleRows.map((txn) => (
-                                        <TableRow key={txn.id}>
-                                            <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                                                {formatDateStringWithAppSettings(
-                                                    (
-                                                        txn.transaction_date ??
-                                                        ""
-                                                    ).slice(0, 10),
-                                                    appSettings.dateFormat,
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="max-w-[18rem]">
-                                                <div className="truncate font-medium">
-                                                    {txn.recipient_name ||
-                                                        txn.memo ||
-                                                        t(
-                                                            "accounts.detail.unlabelled",
-                                                        )}
-                                                </div>
-                                                {txn.recipient_name &&
-                                                    txn.memo && (
-                                                        <div className="truncate text-xs text-muted-foreground">
-                                                            {txn.memo}
-                                                        </div>
+                                <CalendarClock
+                                    className="h-4 w-4"
+                                    aria-hidden
+                                />
+                                {t("accounts.detail.upcomingPlanned")}
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                                {t("accounts.detail.upcomingPlannedHint")}
+                            </p>
+                        </CardHeader>
+                        <CardContent>
+                            {plannedQuery.isLoading ? (
+                                <SectionLoader />
+                            ) : plannedQuery.isError ? (
+                                <p className="text-sm text-destructive">
+                                    {apiErrorToMessage(plannedQuery.error, t)}
+                                </p>
+                            ) : (
+                                <>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>
+                                                    {t("txPage.col.date")}
+                                                </TableHead>
+                                                <TableHead>
+                                                    {t(
+                                                        "txPage.field.description",
                                                     )}
-                                            </TableCell>
-                                            <TableCell className="hidden max-w-[10rem] truncate text-muted-foreground md:table-cell">
-                                                {txn.category_name || "—"}
-                                            </TableCell>
-                                            <TableCell
-                                                className={cn(
-                                                    "whitespace-nowrap text-right tabular-nums",
-                                                    txn.amount >= 0
-                                                        ? "text-gain"
-                                                        : "text-loss",
-                                                )}
-                                            >
-                                                <Money
-                                                    amount={txn.amount}
-                                                    currency={
-                                                        txn.currency ?? "EUR"
-                                                    }
-                                                    signed
-                                                />
-                                            </TableCell>
-                                            <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
-                                                {txn.running_balance != null ? (
+                                                </TableHead>
+                                                <TableHead className="text-right">
+                                                    {t("txPage.col.amount")}
+                                                </TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {upcomingPlanned.map((planned) => (
+                                                <TableRow key={planned.id}>
+                                                    <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                                        {formatDateStringWithAppSettings(
+                                                            planned.planned_date,
+                                                            appSettings.dateFormat,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {planned.recipient_name ||
+                                                            planned.memo ||
+                                                            t(
+                                                                "accounts.detail.unlabelled",
+                                                            )}
+                                                    </TableCell>
+                                                    <TableCell className="whitespace-nowrap text-right tabular-nums">
+                                                        <Money
+                                                            amount={
+                                                                planned.amount
+                                                            }
+                                                            currency={
+                                                                planned.currency ??
+                                                                account?.currency ??
+                                                                "EUR"
+                                                            }
+                                                            signed
+                                                        />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                    {(plannedQuery.data?.total ?? 0) >
+                                        upcomingPlanned.length && (
+                                        <p className="pt-2 text-xs text-muted-foreground">
+                                            {t(
+                                                "accounts.detail.upcomingPlannedTruncated",
+                                                {
+                                                    shown: upcomingPlanned.length,
+                                                    total:
+                                                        plannedQuery.data
+                                                            ?.total ?? 0,
+                                                },
+                                            )}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+            {/* Holdings-only accounts have no cash ledger. */}
+            {!holdingsOnly && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <CardTitle variant="sm">
+                                {t("accounts.detail.ledgerTitle")}
+                            </CardTitle>
+                            {canViewTransactions && total > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                    {tc("accounts.detail.ledgerCount", total)}
+                                </span>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {since && (
+                            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
+                                <span className="text-sm text-foreground">
+                                    {t("accounts.detail.sinceBanner", {
+                                        date: formatDateStringWithAppSettings(
+                                            since,
+                                            appSettings.dateFormat,
+                                        ),
+                                    })}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="ml-auto h-6 w-6"
+                                    onClick={clearSince}
+                                    aria-label={t("aria.clearFilter")}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        )}
+
+                        {!canViewTransactions ? (
+                            <p className="text-sm text-muted-foreground">
+                                {t("accounts.detail.noLedger")}
+                            </p>
+                        ) : txLoading ? (
+                            <SectionLoader />
+                        ) : txIsError ? (
+                            <p className="text-sm text-destructive">
+                                {apiErrorToMessage(txError, t)}
+                            </p>
+                        ) : visibleRows.length === 0 ? (
+                            <p className="py-4 text-sm text-muted-foreground">
+                                {t("accounts.detail.noTransactions")}
+                            </p>
+                        ) : (
+                            <>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>
+                                                {t("txPage.col.date")}
+                                            </TableHead>
+                                            <TableHead>
+                                                {t("txPage.field.description")}
+                                            </TableHead>
+                                            <TableHead className="hidden md:table-cell">
+                                                {t("txPage.col.category")}
+                                            </TableHead>
+                                            <TableHead className="text-right">
+                                                {t("txPage.col.amount")}
+                                            </TableHead>
+                                            <TableHead className="text-right">
+                                                {t("txPage.field.balance")}
+                                            </TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody
+                                        className={cn(
+                                            isPlaceholderData && "opacity-60",
+                                        )}
+                                    >
+                                        {visibleRows.map((txn) => (
+                                            <TableRow key={txn.id}>
+                                                <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                                    {formatDateStringWithAppSettings(
+                                                        (
+                                                            txn.transaction_date ??
+                                                            ""
+                                                        ).slice(0, 10),
+                                                        appSettings.dateFormat,
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="max-w-[18rem]">
+                                                    <div className="truncate font-medium">
+                                                        {txn.recipient_name ||
+                                                            txn.memo ||
+                                                            t(
+                                                                "accounts.detail.unlabelled",
+                                                            )}
+                                                    </div>
+                                                    {txn.recipient_name &&
+                                                        txn.memo && (
+                                                            <div className="truncate text-xs text-muted-foreground">
+                                                                {txn.memo}
+                                                            </div>
+                                                        )}
+                                                </TableCell>
+                                                <TableCell className="hidden max-w-[10rem] truncate text-muted-foreground md:table-cell">
+                                                    {txn.category_name || "—"}
+                                                </TableCell>
+                                                <TableCell
+                                                    className={cn(
+                                                        "whitespace-nowrap text-right tabular-nums",
+                                                        txn.amount >= 0
+                                                            ? "text-gain"
+                                                            : "text-loss",
+                                                    )}
+                                                >
                                                     <Money
-                                                        amount={
-                                                            txn.running_balance
-                                                        }
+                                                        amount={txn.amount}
                                                         currency={
                                                             txn.currency ??
                                                             "EUR"
                                                         }
+                                                        signed
                                                     />
-                                                ) : (
-                                                    "—"
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            {hasMore && (
-                                <div className="flex justify-center pt-1">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={isPlaceholderData}
-                                        onClick={() =>
-                                            setLedgerLimit(
-                                                (l) => l + LEDGER_PAGE_SIZE,
-                                            )
-                                        }
-                                    >
-                                        {t("accounts.detail.loadMore")}
-                                    </Button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </CardContent>
-            </Card>
+                                                </TableCell>
+                                                <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
+                                                    {txn.running_balance !=
+                                                    null ? (
+                                                        <Money
+                                                            amount={
+                                                                txn.running_balance
+                                                            }
+                                                            currency={
+                                                                txn.currency ??
+                                                                "EUR"
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        "—"
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                                {hasMore && (
+                                    <div className="flex justify-center pt-1">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={isPlaceholderData}
+                                            onClick={() =>
+                                                setLedgerLimit(
+                                                    (l) => l + LEDGER_PAGE_SIZE,
+                                                )
+                                            }
+                                        >
+                                            {t("accounts.detail.loadMore")}
+                                        </Button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Metadata — the sheet's Details grid, kept on the page. */}
             <Card>
@@ -756,7 +953,10 @@ export default function AccountDetailPage() {
                         if (!o) setEditing(false);
                     }}
                     isSaving={updateMutation.isPending}
-                    initialValues={accountToFormValues(a)}
+                    initialValues={accountToFormValues(
+                        a,
+                        appSettings.numberFormat,
+                    )}
                     onSave={handleSave}
                 />
             )}
@@ -778,7 +978,16 @@ export default function AccountDetailPage() {
                     }}
                 />
             )}
-            {anchoring && (
+            {transferringLots && (
+                <BrokerTransferDialog
+                    account={a}
+                    open={transferringLots}
+                    onOpenChange={(o) => {
+                        if (!o) setTransferringLots(false);
+                    }}
+                />
+            )}
+            {!holdingsOnly && anchoring && (
                 <OpeningBalanceDialog
                     key={a.id}
                     account={a}
@@ -788,7 +997,7 @@ export default function AccountDetailPage() {
                     }}
                 />
             )}
-            {reconciling && (
+            {!holdingsOnly && reconciling && (
                 <ReconcileDialog
                     key={a.id}
                     account={a}

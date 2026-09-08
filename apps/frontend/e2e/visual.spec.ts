@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import type { Page } from "@playwright/test";
 
 // Visual regression tests — screenshots stored in e2e/__screenshots__/.
 // This suite is manual because Linux CI and local macOS render different
@@ -14,7 +15,7 @@ const SHOTS: Array<{
   {
     name: "dashboard",
     path: "/",
-    heading: /dashboard/i,
+    heading: /good (morning|afternoon|evening)/i,
     file: "dashboard.png",
   },
   {
@@ -43,11 +44,50 @@ const SHOTS: Array<{
   },
 ];
 
+async function revealLazyContent(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const settle = () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    const step = Math.max(1, window.innerHeight - 100);
+
+    for (
+      let top = 0;
+      top < document.documentElement.scrollHeight;
+      top += step
+    ) {
+      window.scrollTo(0, top);
+      await settle();
+    }
+
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await settle();
+    window.scrollTo(0, 0);
+    await settle();
+  });
+}
+
 for (const { name, path, heading, file } of SHOTS) {
   test(`${name} screenshot`, async ({ page }) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: heading }).waitFor();
+    await page.getByRole("heading", { name: heading, level: 1 }).waitFor();
+    await page.addStyleTag({
+      content:
+        ".app-topbar { position: relative !important; top: auto !important; }",
+    });
+    await revealLazyContent(page);
+
+    if (path === "/portfolio") {
+      const calculatingSubtotals = page.getByText(
+        "Calculating broker subtotals…",
+        { exact: true },
+      );
+      await page.waitForTimeout(1_000);
+      await calculatingSubtotals.waitFor({ state: "hidden", timeout: 15_000 });
+    }
+    await page.waitForTimeout(1_000);
     await expect(page).toHaveScreenshot(file, { fullPage: true });
   });
 }

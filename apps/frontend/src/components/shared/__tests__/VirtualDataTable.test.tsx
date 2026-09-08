@@ -21,7 +21,9 @@ const measureElementMock = vi.hoisted(() => vi.fn());
 // Provide synchronous translations so tests don't depend on async locale loading.
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
+        await importOriginal<
+            typeof import("@/stores/hydration/LanguageHydration")
+        >();
     const { default: enDict } = await import("@/locales/en");
     return {
         ...actual,
@@ -731,7 +733,7 @@ describe("VirtualDataTable — inline editing", () => {
         renderTable({ columns: EDITABLE_COLUMNS, onRowUpdate });
 
         await user.dblClick(screen.getByText("Alpha"));
-        const valueInput = screen.getByRole("spinbutton");
+        const valueInput = screen.getByDisplayValue("100");
         await user.clear(valueInput);
         await user.keyboard("{Enter}");
 
@@ -750,9 +752,9 @@ describe("VirtualDataTable — inline editing", () => {
         renderTable({ columns: EDITABLE_COLUMNS, onRowUpdate });
 
         await user.dblClick(screen.getByText("Alpha"));
-        const valueInput = screen.getByRole("spinbutton");
+        const valueInput = screen.getByDisplayValue("100");
         await user.clear(valueInput);
-        await user.type(valueInput, "12.5");
+        await user.type(valueInput, "12,5");
         await user.keyboard("{Enter}");
 
         await waitFor(() =>
@@ -761,6 +763,49 @@ describe("VirtualDataTable — inline editing", () => {
                 expect.objectContaining({ value: 12.5 }),
             ),
         );
+    });
+
+    it("serializes decimal API values for the selected format before editing", async () => {
+        const user = userEvent.setup();
+        const onRowUpdate = vi.fn();
+        renderTable({
+            columns: EDITABLE_COLUMNS,
+            data: [{ id: 1, name: "Alpha", value: -25.5 }],
+            onRowUpdate,
+        });
+
+        await user.dblClick(screen.getByText("Alpha"));
+        const valueInput = screen.getByDisplayValue("-25,5");
+        await user.clear(valueInput);
+        await user.type(valueInput, "-25,6");
+        await user.keyboard("{Enter}");
+
+        await waitFor(() =>
+            expect(onRowUpdate).toHaveBeenCalledWith(
+                0,
+                expect.objectContaining({ value: -25.6 }),
+            ),
+        );
+    });
+
+    it("keeps editing instead of saving an invalid localized number as zero", async () => {
+        const user = userEvent.setup();
+        const onRowUpdate = vi.fn();
+        renderTable({
+            columns: EDITABLE_COLUMNS,
+            data: [{ id: 1, name: "Alpha", value: -25.5 }],
+            onRowUpdate,
+        });
+
+        await user.dblClick(screen.getByText("Alpha"));
+        const valueInput = screen.getByDisplayValue("-25,5");
+        await user.clear(valueInput);
+        await user.type(valueInput, "-25.6");
+        await user.keyboard("{Enter}");
+
+        expect(onRowUpdate).not.toHaveBeenCalled();
+        expect(valueInput).toHaveAttribute("aria-invalid", "true");
+        expect(valueInput).toHaveValue("-25.6");
     });
 
     it("saves a typed DatePicker edit as YYYY-MM-DD", async () => {

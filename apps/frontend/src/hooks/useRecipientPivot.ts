@@ -1,6 +1,10 @@
-import { getAggregationRecipientPivot, type RecipientPivotItem } from '@/lib/api/aggregations';
-import type { SavedChart } from '@/types/apiClient';
-import { usePivotQuery, type PivotConfig } from './usePivotQuery';
+import {
+    getAggregationRecipientPivot,
+    type RecipientPivotConversion,
+    type RecipientPivotItem,
+} from "@/lib/api/aggregations";
+import type { SavedChart } from "@/types/apiClient";
+import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
 
 export type { RecipientPivotItem };
 
@@ -10,8 +14,12 @@ export interface RecipientPeriodData {
     months: Record<string, number>;
 }
 
-const config: PivotConfig<RecipientPivotItem, RecipientPeriodData> = {
-    kind: 'recipient-pivot',
+const config: PivotConfig<
+    RecipientPivotItem,
+    RecipientPeriodData,
+    RecipientPivotConversion
+> = {
+    kind: "recipient-pivot",
     fetchPivot: async ({ currency, bucket, start, end, all, ids }) => {
         const res = await getAggregationRecipientPivot({
             currency,
@@ -24,14 +32,26 @@ const config: PivotConfig<RecipientPivotItem, RecipientPeriodData> = {
             // recipient.
             recipient_ids: all ? undefined : ids,
         });
-        return res.data?.recipientPivot ?? {};
+        return {
+            pivot: res.data?.recipientPivot ?? {},
+            metadata: res.data?.conversion,
+        };
     },
     getItemId: (item) => item.recipientId,
-    initRow: (item) => ({ recipientId: item.recipientId, name: item.name, months: {} }),
+    initRow: (item) => ({
+        recipientId: item.recipientId,
+        name: item.name,
+        months: {},
+    }),
     getRowId: (row) => row.recipientId,
 };
 
 export function useRecipientPivot(chart: SavedChart | null | undefined) {
-    const { query, rows } = usePivotQuery(chart, !!chart?.all_recipients, chart?.recipient_ids, config);
-    return { ...query, recipientData: rows };
+    const { query, rows, metadata } = usePivotQuery(
+        chart,
+        !!chart?.all_recipients,
+        chart?.recipient_ids,
+        config,
+    );
+    return { ...query, recipientData: rows, conversion: metadata };
 }

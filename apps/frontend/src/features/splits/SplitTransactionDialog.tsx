@@ -18,6 +18,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { parseDecimal } from "@/lib/decimal";
 import { toDecimal, addAll, multiply, roundMoney } from "@/lib/money";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 interface SplitEntry {
     uid: string;
@@ -48,6 +49,7 @@ export function SplitTransactionDialog({
     const { data: existingSplitsData, isLoading: isLoadingExistingSplits } =
         useSplitsByTransaction(open ? transactionId : null);
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const formatCurrency = useCurrencyFormatter(transactionCurrency);
 
     const absAmount = Math.abs(transactionAmount);
@@ -91,7 +93,13 @@ export function SplitTransactionDialog({
             : 0;
 
     const customTotal = open
-        ? roundMoney(addAll(validEntries.map((e) => parseDecimal(e.amount))))
+        ? roundMoney(
+              addAll(
+                  validEntries.map((e) =>
+                      parseDecimal(e.amount, appSettings.numberFormat),
+                  ),
+              ),
+          )
         : 0;
     const existingSplits = existingSplitsData?.items ?? [];
     const existingSplitTotal = open
@@ -111,7 +119,9 @@ export function SplitTransactionDialog({
           ? validEntries.length > 0 && equalShare <= 0
           : validEntries.some((entry) => {
                 if (!entry.recipient_id) return false;
-                return parseDecimal(entry.amount) <= 0;
+                return (
+                    parseDecimal(entry.amount, appSettings.numberFormat) <= 0
+                );
             });
     const totalAfterSubmit = roundMoney(
         toDecimal(existingSplitTotal).plus(newSplitTotal),
@@ -130,7 +140,10 @@ export function SplitTransactionDialog({
         event.preventDefault();
         const splits = validEntries.map((e) => ({
             recipient_id: e.recipient_id!,
-            amount: splitType === "equal" ? equalShare : parseDecimal(e.amount),
+            amount:
+                splitType === "equal"
+                    ? equalShare
+                    : parseDecimal(e.amount, appSettings.numberFormat),
             note: e.note || undefined,
         }));
 
@@ -313,7 +326,6 @@ export function SplitTransactionDialog({
                                                 aria-label={`${t("splitDialog.amountOwed")} ${idx + 1}`}
                                                 type="text"
                                                 inputMode="decimal"
-                                                pattern="^[0-9]+([.,][0-9]+)?$"
                                                 placeholder={t(
                                                     "splitDialog.amountOwed",
                                                 )}

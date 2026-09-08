@@ -7,6 +7,8 @@ export function getAggregationMonthlySummary(params?: {
     excluded_recipient_ids?: number[];
     currency?: string;
     all_time?: boolean;
+    start_date?: string;
+    end_date?: string;
 }): Promise<
     AggregationEnvelope<{
         months: Array<{
@@ -32,6 +34,8 @@ export function getAggregationMonthlySummary(params?: {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.all_time) qp.set("all_time", "true");
+    if (params?.start_date) qp.set("start_date", params.start_date);
+    if (params?.end_date) qp.set("end_date", params.end_date);
     if (params?.excluded_category_ids?.length) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
@@ -48,6 +52,8 @@ export function getAggregationMonthlySummary(params?: {
 
 export function getAggregationRecipientInsights(params?: {
     currency?: string;
+    start_date?: string;
+    end_date?: string;
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
 }): Promise<
@@ -117,8 +123,15 @@ export interface RecipientYearlySpending {
     transactionCount: number;
 }
 
+export interface RecipientPivotConversion {
+    usedHistoricalFallback: boolean;
+    affectedCurrencies: string[];
+}
+
 export function getAggregationCategoryPivot(params?: {
     currency?: string;
+    start_date?: string;
+    end_date?: string;
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
 }): Promise<
@@ -126,6 +139,8 @@ export function getAggregationCategoryPivot(params?: {
 > {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
+    if (params?.start_date) qp.set("start_date", params.start_date);
+    if (params?.end_date) qp.set("end_date", params.end_date);
     if (params?.excluded_category_ids?.length) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
@@ -142,6 +157,8 @@ export function getAggregationCategoryPivot(params?: {
 
 export function getAggregationRecipientByYear(params?: {
     currency?: string;
+    start_date?: string;
+    end_date?: string;
     excluded_recipient_ids?: number[];
     excluded_category_ids?: number[];
 }): Promise<
@@ -151,6 +168,8 @@ export function getAggregationRecipientByYear(params?: {
 > {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
+    if (params?.start_date) qp.set("start_date", params.start_date);
+    if (params?.end_date) qp.set("end_date", params.end_date);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
@@ -182,6 +201,7 @@ export function getAggregationRecipientPivot(params?: {
 }): Promise<
     AggregationEnvelope<{
         recipientPivot: Record<string, RecipientPivotItem[]>;
+        conversion: RecipientPivotConversion;
     }>
 > {
     const qp = new URLSearchParams();
@@ -267,6 +287,7 @@ export interface CashflowForecastMethod {
     readonly daily: ForecastDailyPoint[];
     readonly cumulative: ForecastDailyPoint[];
     readonly bands: ForecastBands | null;
+    readonly cumulative_bands?: ForecastBands | null;
     readonly error: string | null;
 }
 

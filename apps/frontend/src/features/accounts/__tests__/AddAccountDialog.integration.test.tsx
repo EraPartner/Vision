@@ -7,7 +7,10 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { toYmd } from "@/lib/dateUtils";
-import { AddAccountDialog } from "@/features/accounts/AddAccountDialog";
+import {
+    AddAccountDialog,
+    type AccountFormValues,
+} from "@/features/accounts/AddAccountDialog";
 import { toast } from "sonner";
 
 vi.mock("sonner", () => ({
@@ -99,6 +102,28 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         expect(calls.opening).toHaveLength(0);
+    });
+
+    it("does not offer or stamp an opening balance for a wallet", async () => {
+        const calls = mockCreate();
+        const user = userEvent.setup();
+        renderWithApp(<AddAccountDialog />);
+
+        await openCreateDialog(user);
+        await user.type(screen.getByLabelText(/^name$/i), "Cold storage");
+        await user.click(screen.getByRole("combobox", { name: /^type$/i }));
+        await user.click(await screen.findByRole("option", { name: "Wallet" }));
+
+        expect(
+            screen.queryByLabelText(/opening balance/i),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /create/i }));
+
+        await waitFor(() => expect(calls.create).toHaveLength(1));
+        expect(calls.opening).toHaveLength(0);
+        expect(calls.create[0]).toMatchObject({ type: "wallet" });
+        expect(calls.create[0]).not.toHaveProperty("statement_balance");
+        expect(calls.create[0]).not.toHaveProperty("statement_balance_date");
     });
 
     it("blocks account creation when a non-empty opening balance is invalid", async () => {
@@ -267,5 +292,47 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             statementBalance: "1284.4",
             statementBalanceDate: "2026-07-20",
         });
+    });
+
+    it("clears stale statement fields when editing a crypto exchange", async () => {
+        const user = userEvent.setup();
+        const saved: AccountFormValues[] = [];
+        renderWithApp(
+            <AddAccountDialog
+                mode="edit"
+                open
+                onOpenChange={() => {}}
+                initialValues={{
+                    name: "Exchange",
+                    display_name: "Exchange",
+                    institution: "",
+                    currency: "EUR",
+                    type: "crypto_exchange",
+                    owner: "me",
+                    liquidity_class: "liquid",
+                    tax_wrapper: "none",
+                    spendable: false,
+                    in_net_worth: true,
+                    multi_currency_cash: false,
+                    has_cash_sleeve: false,
+                    statementBalance: "999",
+                    statementBalanceDate: "",
+                }}
+                onSave={(values) => saved.push(values)}
+            />,
+        );
+
+        expect(
+            screen.queryByLabelText(/statement balance/i),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^as of$/i)).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        expect(saved).toEqual([
+            expect.objectContaining({
+                type: "crypto_exchange",
+                statementBalance: "",
+                statementBalanceDate: "",
+            }),
+        ]);
     });
 });

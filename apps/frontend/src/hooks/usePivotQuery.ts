@@ -1,14 +1,19 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
-import type { SavedChart } from '@/types/apiClient';
-import { aggregationKeys } from '@/lib/queryKeys';
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import type { SavedChart } from "@/types/apiClient";
+import { aggregationKeys } from "@/lib/queryKeys";
 
 /**
  * Static (module-level) part of a pivot-hook configuration. Keeping it out of
  * the hook body keeps the reshape memo below stable across renders.
  */
-export interface PivotConfig<Item extends { total: number }, Row extends { months: Record<string, number> }> {
+export interface PivotConfig<
+    Item extends { total: number },
+    Row extends { months: Record<string, number> },
+    Metadata = unknown,
+> {
     /** Cache-key segment naming the pivot, e.g. 'recipient-pivot'. */
     kind: string;
     /**
@@ -18,19 +23,25 @@ export interface PivotConfig<Item extends { total: number }, Row extends { month
      */
     fetchPivot: (params: {
         currency: string;
-        bucket: SavedChart['time_bucket'];
+        bucket: SavedChart["time_bucket"];
         start?: string;
         end?: string;
         all: boolean;
         ids: number[];
-    }) => Promise<Record<string, Item[]>>;
+    }) => Promise<{
+        pivot: Record<string, Item[]>;
+        metadata?: Metadata;
+    }>;
     getItemId: (item: Item) => number;
     /** Build an output row for an item; `months` is filled by the shared reshape. */
     initRow: (item: Item) => Row;
     getRowId: (row: Row) => number;
 }
 
-function buildPeriodData<Item extends { total: number }, Row extends { months: Record<string, number> }>(
+function buildPeriodData<
+    Item extends { total: number },
+    Row extends { months: Record<string, number> },
+>(
     pivot: Record<string, Item[]>,
     { getItemId, initRow }: PivotConfig<Item, Row>,
 ): Row[] {
@@ -54,16 +65,20 @@ function buildPeriodData<Item extends { total: number }, Row extends { months: R
  * query for a period-bucketed pivot plus the memoized reshape/filter to
  * per-entity rows.
  */
-export function usePivotQuery<Item extends { total: number }, Row extends { months: Record<string, number> }>(
+export function usePivotQuery<
+    Item extends { total: number },
+    Row extends { months: Record<string, number> },
+    Metadata = unknown,
+>(
     chart: SavedChart | null | undefined,
     /** Whether the chart selects every entity of this dimension. */
     all: boolean,
     /** The chart's explicitly selected entity ids for this dimension. */
     ids: number[] | undefined,
-    config: PivotConfig<Item, Row>,
+    config: PivotConfig<Item, Row, Metadata>,
 ) {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || 'EUR';
+    const targetCurrency = appSettings.defaultCurrency || "EUR";
 
     const enabled = !!(chart && (all || (ids?.length ?? 0) > 0));
 
@@ -73,10 +88,10 @@ export function usePivotQuery<Item extends { total: number }, Row extends { mont
         queryKey: aggregationKeys.pivot(
             config.kind,
             targetCurrency,
-            chart?.time_bucket ?? 'monthly',
+            chart?.time_bucket ?? "monthly",
             chart?.date_range_start ?? null,
             chart?.date_range_end ?? null,
-            all ? 'all' : (ids ?? []),
+            all ? "all" : (ids ?? []),
         ),
         queryFn: () =>
             config.fetchPivot({
@@ -88,10 +103,10 @@ export function usePivotQuery<Item extends { total: number }, Row extends { mont
                 ids: ids ?? [],
             }),
         enabled,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
-    const rawPivot = query.data;
+    const rawPivot = query.data?.pivot;
 
     // Filter to only the ids selected in the chart. Memoized so the
     // nested-loop reshape + filter only runs when the query data or selection
@@ -104,5 +119,5 @@ export function usePivotQuery<Item extends { total: number }, Row extends { mont
         return data.filter((row) => selected.has(config.getRowId(row)));
     }, [rawPivot, ids, all, config]);
 
-    return { query, rows };
+    return { query, rows, metadata: query.data?.metadata };
 }

@@ -20,6 +20,7 @@ import { create } from "zustand";
 import { z } from "zod";
 import type { Language } from "@/types/i18n";
 import type { ThemeVariant } from "@/styles/themes";
+import { NUMBER_FORMATS, type NumberFormat } from "@/utils/currency";
 import {
     createBelgianTaxSlice,
     type BelgianTaxSlice,
@@ -58,7 +59,7 @@ export type AppDateFormat = (typeof APP_DATE_FORMATS)[number];
 export interface AppSettings {
     defaultCurrency: string;
     dateFormat: AppDateFormat;
-    numberFormat: string;
+    numberFormat: NumberFormat;
     defaultPageSize: number;
     startOfWeek: "monday" | "sunday";
     showDecimalPlaces: number;
@@ -135,8 +136,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
  *
  * `dateFormat` is limited to the five values exposed by Settings; malformed or
  * hand-edited values recover to the default instead of reaching an English-only
- * long-date fallback. `numberFormatToLocale` already maps unknown number-format
- * strings to its own default, so that field remains shape-only.
+ * long-date fallback. Number format is restricted to the four Settings choices
+ * because it now controls strict user-input parsing as well as display.
  * `showDecimalPlaces` deliberately keeps the app's conservative 0–20 bound
  * (the UI offers 0–3), even though current Intl engines accept up to 100;
  * `defaultCurrency` is limited to a well-formed ISO-4217 3-letter code.
@@ -147,7 +148,9 @@ const storedAppSettingsSchema = z.looseObject({
         .regex(/^[A-Za-z]{3}$/)
         .catch(DEFAULT_APP_SETTINGS.defaultCurrency),
     dateFormat: z.enum(APP_DATE_FORMATS).catch(DEFAULT_APP_SETTINGS.dateFormat),
-    numberFormat: z.string().catch(DEFAULT_APP_SETTINGS.numberFormat),
+    numberFormat: z
+        .enum(NUMBER_FORMATS)
+        .catch(DEFAULT_APP_SETTINGS.numberFormat),
     defaultPageSize: z
         .number()
         .int()

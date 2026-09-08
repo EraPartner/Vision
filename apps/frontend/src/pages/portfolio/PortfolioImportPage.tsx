@@ -61,6 +61,9 @@ import type { ImportProgress } from "@/types/apiClient";
 import { isImportCancelled } from "@/lib/api/importCancelled";
 import { PageShell } from "@/components/shared/PageShell";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import { useAccounts } from "@/hooks/useAccounts";
+import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
+import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
 
 const DEFAULT_CONFIG: PortfolioCustomConfig = {
     dateColumn: "",
@@ -101,6 +104,8 @@ export function PortfolioImportPage() {
     const abortRef = useRef<(() => void) | null>(null);
 
     const { data: savedParsers } = usePortfolioParserConfigs();
+    const { data: accountsData } = useAccounts({ active: "true" });
+    const brokerAccounts = activeBrokerAccounts(accountsData?.items ?? []);
     const createParser = useCreatePortfolioParserConfig();
     const updateParser = useUpdatePortfolioParserConfig();
     const deleteParser = useDeletePortfolioParserConfig();
@@ -214,6 +219,9 @@ export function PortfolioImportPage() {
                 config,
                 adapterName,
                 (p) => setProgress(p),
+                config.accountId != null
+                    ? { isBrokerage: true, accountId: config.accountId }
+                    : undefined,
             );
             abortRef.current = abort;
             const data = await result;
@@ -370,6 +378,23 @@ export function PortfolioImportPage() {
                         separator={config.separator}
                         config={config}
                         onChange={setConfig}
+                    />
+
+                    <PortfolioBrokerField
+                        id="pf-broker-account"
+                        accounts={brokerAccounts}
+                        value={
+                            config.accountId == null
+                                ? undefined
+                                : String(config.accountId)
+                        }
+                        onChange={(value) =>
+                            setConfig({
+                                ...config,
+                                accountId: value ? Number(value) : undefined,
+                            })
+                        }
+                        t={t}
                     />
 
                     {/* Save parser */}

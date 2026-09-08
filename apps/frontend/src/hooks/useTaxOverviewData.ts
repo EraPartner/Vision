@@ -77,7 +77,7 @@ export function useTaxOverviewData() {
         [liveProfile, snapshots, snapshotMetas, viewedYear],
     );
     const stats = useStatistics();
-    const { summaries } = usePortfolio();
+    const { allSummaries: summaries } = usePortfolio();
     const { convertToTarget } = useCurrencyConverter(
         appSettings.defaultCurrency || "EUR",
     );

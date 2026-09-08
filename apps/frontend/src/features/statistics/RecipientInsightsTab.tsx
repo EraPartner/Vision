@@ -30,7 +30,10 @@ import {
 } from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
-import { useRecipientInsights } from "@/hooks/useStatistics";
+import {
+    useRecipientInsights,
+    type StatisticsWindow,
+} from "@/hooks/useStatistics";
 
 type RecipientDetailRow = {
     recipientId: number;
@@ -45,10 +48,12 @@ type RecipientDetailRow = {
 interface RecipientInsightsTabProps {
     /** Statistics-derived top recipients chart (with exclusion toggle support) */
     statisticsTopRecipientsChart?: React.ReactNode;
+    statisticsWindow: StatisticsWindow;
 }
 
 export function RecipientInsightsTab({
     statisticsTopRecipientsChart,
+    statisticsWindow,
 }: RecipientInsightsTabProps) {
     const formatPercent = usePercentFormatter();
     // Resolve exclusions (settings + hidden categories, alias-aware) and pass them
@@ -75,6 +80,7 @@ export function RecipientInsightsTab({
         targetCurrency,
         effectiveExcludedCatIds,
         effectiveExcludedRecIds,
+        statisticsWindow,
     );
 
     // Server already applied exclusions (alias-aware) — no client-side post-filter.

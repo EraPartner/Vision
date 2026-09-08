@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useCallback, useSyncExternalStore } from "react";
 import {
     useInfiniteQuery,
@@ -29,7 +30,7 @@ export function useConversations() {
             const next = lastPage.offset + lastPage.items.length;
             return next < lastPage.total ? next : undefined;
         },
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
     useBackgroundQueryCue(query.isFetching && !query.isFetchingNextPage);
     return query;

@@ -31,6 +31,11 @@ import {
 } from "@/features/research/useWatchlistData";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
     stock: "bg-chart-3/10 text-chart-3 border-chart-3/20",
@@ -196,19 +201,29 @@ export default function WatchlistPage() {
                                 <CardHeader className="pb-2">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1 space-y-1">
-                                            <CardTitle
-                                                variant="sm"
-                                                className="truncate"
-                                            >
-                                                {item.symbol ? (
-                                                    <TextLink
-                                                        to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
-                                                    >
+                                            <CardTitle variant="sm">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        {item.symbol ? (
+                                                            <TextLink
+                                                                className="block truncate"
+                                                                to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
+                                                            >
+                                                                {item.name}
+                                                            </TextLink>
+                                                        ) : (
+                                                            <span
+                                                                className="block truncate"
+                                                                tabIndex={0}
+                                                            >
+                                                                {item.name}
+                                                            </span>
+                                                        )}
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
                                                         {item.name}
-                                                    </TextLink>
-                                                ) : (
-                                                    item.name
-                                                )}
+                                                    </TooltipContent>
+                                                </Tooltip>
                                             </CardTitle>
                                             {item.symbol && (
                                                 <Badge

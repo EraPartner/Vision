@@ -599,7 +599,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
 
         await user.click(screen.getByLabelText(/loan repayment/i));
         await user.type(screen.getByLabelText(/principal amount/i), "1000");
-        await user.type(screen.getByLabelText(/annual interest/i), "3.5");
+        await user.type(screen.getByLabelText(/annual interest/i), "3,5");
         const termField = screen.getByLabelText(/term \(months\)/i);
         await user.type(termField, "601");
 
@@ -649,7 +649,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
 
         await user.click(screen.getByLabelText(/loan repayment/i));
         await user.type(screen.getByLabelText(/principal amount/i), "1000");
-        await user.type(screen.getByLabelText(/annual interest/i), "3.5");
+        await user.type(screen.getByLabelText(/annual interest/i), "3,5");
         await user.type(screen.getByLabelText(/term \(months\)/i), "240");
 
         await user.click(submitBtn());

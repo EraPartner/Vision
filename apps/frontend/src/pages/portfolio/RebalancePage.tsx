@@ -57,6 +57,8 @@ import {
 } from "./rebalanceUrlState";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useRebalanceInputs } from "@/features/portfolio/usePortfolioQueries";
+import { parseDecimal } from "@/lib/decimal";
+import { formatEditableNumber, type NumberFormat } from "@/utils/currency";
 
 const MODELS: ModelPortfolio[] = ["sixty_forty", "all_weather", "three_fund"];
 
@@ -90,22 +92,33 @@ interface Row {
 const clamp = (v: number, lo: number, hi: number) =>
     Math.max(lo, Math.min(hi, v));
 // A cap value only counts when entered and finite; blank/invalid means "deploy all".
-const resolveCap = (raw: string, available: number): number | undefined => {
+const resolveCap = (
+    raw: string,
+    available: number,
+    numberFormat: NumberFormat,
+): number | undefined => {
     if (raw.trim() === "") return undefined;
-    const n = Number(raw);
+    const n = parseDecimal(raw, numberFormat, NaN);
     return Number.isFinite(n) ? clamp(n, 0, available) : undefined;
 };
-const fractionToPct = (w: number) => String(+(w * 100).toFixed(2));
+const fractionToPct = (w: number, numberFormat: NumberFormat) =>
+    formatEditableNumber(Number((w * 100).toFixed(2)), numberFormat);
 
-function weightsToRows(weights: Record<string, number>): Row[] {
+function weightsToRows(
+    weights: Record<string, number>,
+    numberFormat: NumberFormat,
+): Row[] {
     const rows = Object.entries(weights).map(([sleeve, w]) => ({
         sleeve,
-        pct: fractionToPct(w),
+        pct: fractionToPct(w, numberFormat),
     }));
     return rows.length ? rows : [{ sleeve: "stocks", pct: "" }];
 }
 
-function actualsToRows(actuals: Record<string, number>): Row[] {
+function actualsToRows(
+    actuals: Record<string, number>,
+    numberFormat: NumberFormat,
+): Row[] {
     const entries = Object.entries(actuals).filter(([, v]) => v > 0);
     const total = entries.reduce((s, [, v]) => s + v, 0);
     if (total <= 0)
@@ -115,7 +128,7 @@ function actualsToRows(actuals: Record<string, number>): Row[] {
         ];
     return entries.map(([sleeve, v]) => ({
         sleeve,
-        pct: fractionToPct(v / total),
+        pct: fractionToPct(v / total, numberFormat),
     }));
 }
 
@@ -179,15 +192,31 @@ export default function RebalancePage() {
         if (plan && !searchParams.has("target")) {
             updateDraft({
                 source: `plan:${plan.id}`,
-                rows: weightsToRows(plan.targetWeights),
+                rows: weightsToRows(
+                    plan.targetWeights,
+                    appSettings.numberFormat,
+                ),
                 name: plan.name,
                 capEnabled: plan.cashCap != null,
-                cap: plan.cashCap != null ? String(plan.cashCap) : "",
+                cap:
+                    plan.cashCap != null
+                        ? formatEditableNumber(
+                              plan.cashCap,
+                              appSettings.numberFormat,
+                          )
+                        : "",
             });
         } else if (!plan) {
             updateDraft((previous) => ({ ...previous, source: "custom" }));
         }
-    }, [editingPlanId, plans, plansLoading, searchParams, updateDraft]);
+    }, [
+        appSettings.numberFormat,
+        editingPlanId,
+        plans,
+        plansLoading,
+        searchParams,
+        updateDraft,
+    ]);
 
     // Shared cached currency formatter. Also fixes a locale bug: the old inline
     // Intl.NumberFormat passed `undefined` locale, ignoring the user's
@@ -226,7 +255,11 @@ export default function RebalancePage() {
                 });
             const targetWeights = rowsToWeights(rows);
             const availableCashArg = useCashCap
-                ? resolveCap(cashCapInput, availableCash)
+                ? resolveCap(
+                      cashCapInput,
+                      availableCash,
+                      appSettings.numberFormat,
+                  )
                 : undefined;
             return apiClient.computeRebalance({
                 targetWeights,
@@ -244,14 +277,21 @@ export default function RebalancePage() {
         ? Object.values(result.deployment).reduce((s, v) => s + v, 0)
         : 0;
 
-    const weightTotalPct = rows.reduce((s, r) => s + (Number(r.pct) || 0), 0);
-    const hasValidRows = rows.some((r) => r.sleeve && Number(r.pct) > 0);
+    const weightTotalPct = rows.reduce(
+        (sum, row) => sum + parseDecimal(row.pct, appSettings.numberFormat, 0),
+        0,
+    );
+    const hasValidRows = rows.some(
+        (row) =>
+            row.sleeve &&
+            parseDecimal(row.pct, appSettings.numberFormat, 0) > 0,
+    );
 
     function rowsToWeights(rs: Row[]): Record<string, number> {
         const out: Record<string, number> = {};
         for (const r of rs) {
             if (!r.sleeve) continue;
-            const n = Number(r.pct);
+            const n = parseDecimal(r.pct, appSettings.numberFormat, NaN);
             if (!Number.isFinite(n) || n <= 0) continue;
             out[r.sleeve] = (out[r.sleeve] ?? 0) + n / 100;
         }
@@ -265,6 +305,7 @@ export default function RebalancePage() {
                 source: value,
                 rows: weightsToRows(
                     PRESET_WEIGHTS[value.slice(6) as ModelPortfolio],
+                    appSettings.numberFormat,
                 ),
                 name: "",
                 capEnabled: false,
@@ -276,7 +317,7 @@ export default function RebalancePage() {
             updateDraft({
                 source: "custom",
                 rows: Object.keys(currentActuals).length
-                    ? actualsToRows(currentActuals)
+                    ? actualsToRows(currentActuals, appSettings.numberFormat)
                     : [
                           { sleeve: "stocks", pct: "60" },
                           { sleeve: "bonds", pct: "40" },
@@ -291,10 +332,19 @@ export default function RebalancePage() {
         if (plan) {
             updateDraft({
                 source: value,
-                rows: weightsToRows(plan.targetWeights),
+                rows: weightsToRows(
+                    plan.targetWeights,
+                    appSettings.numberFormat,
+                ),
                 name: plan.name,
                 capEnabled: plan.cashCap != null,
-                cap: plan.cashCap != null ? String(plan.cashCap) : "",
+                cap:
+                    plan.cashCap != null
+                        ? formatEditableNumber(
+                              plan.cashCap,
+                              appSettings.numberFormat,
+                          )
+                        : "",
             });
         }
     }
@@ -323,12 +373,12 @@ export default function RebalancePage() {
     const seedFromCurrent = () =>
         updateDraft((previous) => ({
             ...previous,
-            rows: actualsToRows(currentActuals),
+            rows: actualsToRows(currentActuals, appSettings.numberFormat),
         }));
     const seedFromPreset = (m: ModelPortfolio) =>
         updateDraft((previous) => ({
             ...previous,
-            rows: weightsToRows(PRESET_WEIGHTS[m]),
+            rows: weightsToRows(PRESET_WEIGHTS[m], appSettings.numberFormat),
         }));
 
     const onSave = async () => {
@@ -344,7 +394,7 @@ export default function RebalancePage() {
         }
         const id = editingPlanId ?? crypto.randomUUID();
         const cashCap = useCashCap
-            ? resolveCap(cashCapInput, availableCash)
+            ? resolveCap(cashCapInput, availableCash, appSettings.numberFormat)
             : undefined;
         await upsertPlan({
             id,
@@ -373,7 +423,10 @@ export default function RebalancePage() {
         await deletePlan(editingPlanId);
         updateDraft({
             source: "model:sixty_forty",
-            rows: weightsToRows(PRESET_WEIGHTS.sixty_forty),
+            rows: weightsToRows(
+                PRESET_WEIGHTS.sixty_forty,
+                appSettings.numberFormat,
+            ),
             name: "",
             capEnabled: false,
             cap: "",
@@ -536,10 +589,7 @@ export default function RebalancePage() {
                                     </Select>
                                     <div className="relative w-28">
                                         <Input
-                                            type="number"
-                                            min={0}
-                                            max={100}
-                                            step="any"
+                                            type="text"
                                             inputMode="decimal"
                                             value={row.pct}
                                             onChange={(e) =>
@@ -617,10 +667,7 @@ export default function RebalancePage() {
                             {useCashCap && (
                                 <div className="space-y-1">
                                     <Input
-                                        type="number"
-                                        min={0}
-                                        max={availableCash}
-                                        step="any"
+                                        type="text"
                                         inputMode="decimal"
                                         value={cashCapInput}
                                         onChange={(e) =>

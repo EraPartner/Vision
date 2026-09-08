@@ -114,7 +114,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 
@@ -258,7 +258,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 
@@ -307,7 +307,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 
@@ -340,7 +340,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 
@@ -476,7 +476,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
 
         await user.clear(amount);
-        await user.type(amount, "12.50");
+        await user.type(amount, "12,50");
 
         await waitFor(() => expect(amount).not.toHaveAttribute("aria-invalid"));
         expect(amount).not.toHaveAttribute("aria-describedby");
@@ -589,7 +589,7 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 
@@ -643,7 +643,7 @@ describe("AddTransactionDialog (integration)", () => {
         await user.click(
             await screen.findByRole("button", { name: /add transaction/i }),
         );
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
 
         await user.click(
@@ -700,7 +700,7 @@ describe("AddTransactionDialog (integration)", () => {
         await user.click(
             await screen.findByRole("button", { name: /add transaction/i }),
         );
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await user.type(screen.getByLabelText(/amount/i), "12,50");
         await pickBankAccount(user, "Main");
         await pickRecipient(user, "Test Supermarket");
 

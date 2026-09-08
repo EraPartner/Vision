@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * Every Card used to lift, recolor its border to primary and fade in the
  * elevated shadow on hover. Uniform affordance is no affordance: a static
  * disclaimer reacted exactly like a clickable account tile, and the
- * glass-regular / glass-elevated elevation ladder ADR-105 built collapsed the
+ * glass-thin / glass-elevated elevation ladder collapsed the
  * moment the pointer moved. The character is kept in full — it is now *routed*
  * to the cards that have earned it rather than sprayed across all of them.
  *
@@ -22,11 +22,11 @@ import { cn } from "@/lib/utils";
  *   Use it for cards you can activate (click / navigate / open) and for
  *   hero-KPI tiles, the "something you could pick up" tier.
  *
- * There is deliberately no third `elevated` hover tier: ADR-105 specifies
- * elevation as a *material* (`glass-regular` for cards vs `glass-elevated` for
- * hero tiles/KPIs), applied via the class at the call site and orthogonal to
- * this variant. Inventing a third hover tier would add exactly the invented
- * sameness the ADR set out to remove.
+ * There is deliberately no third `elevated` hover tier: ADR-132 specifies
+ * elevation as a *material* (`glass-thin` for ordinary cards vs explicit
+ * `glass-elevated` for hero tiles/KPIs), orthogonal to this variant. Inventing
+ * a third hover tier would add exactly the invented sameness ADR-105 set out to
+ * remove.
  *
  * The lift is a single transform. `micro-lift` used to be re-added at the call
  * sites, stacking its `transform: translateY(-1px)` on top of the base
@@ -43,7 +43,7 @@ import { cn } from "@/lib/utils";
  * intent at the call site and to cover the resting/`:active` states.
  */
 const cardVariants = cva(
-    "glass-regular premium-frame relative rounded-[0.75rem] text-card-foreground",
+    "card-material glass-thin premium-frame relative rounded-[0.75rem] text-card-foreground",
     {
         variants: {
             variant: {

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ComponentProps } from "react";
 import { Input } from "@/components/ui/input";
 import { parseDecimal } from "@/lib/decimal";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatEditableNumber } from "@/utils/currency";
 
 export type ProfileNumberInputProps = Omit<
     ComponentProps<typeof Input>,
@@ -12,8 +14,11 @@ export type ProfileNumberInputProps = Omit<
     allowEmpty?: boolean;
 };
 
-function valueText(value: number | null | undefined): string {
-    return value == null ? "" : String(value);
+function valueText(
+    value: number | null | undefined,
+    numberFormat: Parameters<typeof formatEditableNumber>[1],
+): string {
+    return value == null ? "" : formatEditableNumber(value, numberFormat);
 }
 
 /**
@@ -30,16 +35,18 @@ export function ProfileNumberInput({
     onBlur,
     ...inputProps
 }: ProfileNumberInputProps) {
-    const [draft, setDraft] = useState(() => valueText(value));
+    const { appSettings } = useAppSettings();
+    const [draft, setDraft] = useState(() =>
+        valueText(value, appSettings.numberFormat),
+    );
     const [focused, setFocused] = useState(false);
 
     useEffect(() => {
-        if (!focused) setDraft(valueText(value));
-    }, [focused, value]);
+        if (!focused) setDraft(valueText(value, appSettings.numberFormat));
+    }, [appSettings.numberFormat, focused, value]);
 
     const updateDraft = (raw: string) => {
-        const shape = integer ? /^-?\d*$/ : /^-?\d*(?:[.,]\d*)?$/;
-        if (!shape.test(raw)) return;
+        if (integer && !/^-?\d*$/.test(raw)) return;
         setDraft(raw);
 
         if (raw === "") {
@@ -49,7 +56,7 @@ export function ProfileNumberInput({
 
         const parsed = integer
             ? Number.parseInt(raw, 10)
-            : parseDecimal(raw, NaN);
+            : parseDecimal(raw, appSettings.numberFormat, NaN);
         if (Number.isFinite(parsed)) onValueChange(parsed);
     };
 
@@ -58,7 +65,7 @@ export function ProfileNumberInput({
             {...inputProps}
             type="text"
             inputMode={integer ? "numeric" : "decimal"}
-            pattern={integer ? "-?[0-9]*" : "-?[0-9]*([.,][0-9]*)?"}
+            pattern={integer ? "-?[0-9]*" : undefined}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
             onFocus={(event) => {
@@ -67,7 +74,7 @@ export function ProfileNumberInput({
             }}
             onBlur={(event) => {
                 setFocused(false);
-                setDraft(valueText(value));
+                setDraft(valueText(value, appSettings.numberFormat));
                 onBlur?.(event);
             }}
         />

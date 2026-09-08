@@ -33,12 +33,21 @@ export function isPortfolioType(type: AccountType): boolean {
     return (PORTFOLIO_ACCOUNT_TYPES as readonly string[]).includes(type);
 }
 
-export function accountLabel(a: Pick<Account, "display_name" | "name">): string {
+/** Portfolio accounts whose value and activity live only in holdings. */
+export function isHoldingsOnlyPortfolioType(type: AccountType): boolean {
+    return type === "crypto_exchange" || type === "wallet";
+}
+
+export function accountLabel(
+    a: Pick<Account, "display_name" | "name">,
+): string {
     return a.display_name || a.name;
 }
 
 /** Archived overrides type: every inactive account lands in "archived". */
-export function accountGroupId(a: Pick<Account, "type" | "is_active">): AccountGroupId {
+export function accountGroupId(
+    a: Pick<Account, "type" | "is_active">,
+): AccountGroupId {
     if (a.is_active === false) return "archived";
     if (a.type === "liability") return "liabilities";
     if (isPortfolioType(a.type)) return "portfolio";
@@ -55,22 +64,28 @@ export interface AccountGroup {
  * sort by display label (locale-aware via Intl.Collator) with the numeric id
  * as a deterministic tie-breaker. Empty groups are omitted.
  */
-export function groupAccounts(accounts: Account[], locale?: string): AccountGroup[] {
+export function groupAccounts(
+    accounts: Account[],
+    locale?: string,
+): AccountGroup[] {
     const buckets = new Map<AccountGroupId, Account[]>(
         ACCOUNT_GROUP_ORDER.map((id) => [id, []]),
     );
     for (const a of accounts) {
         buckets.get(accountGroupId(a))!.push(a);
     }
-    const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
-    return ACCOUNT_GROUP_ORDER
-        .map((id) => ({
-            id,
-            accounts: [...buckets.get(id)!].sort(
-                (a, b) => collator.compare(accountLabel(a), accountLabel(b)) || a.id - b.id,
-            ),
-        }))
-        .filter((g) => g.accounts.length > 0);
+    const collator = new Intl.Collator(locale, {
+        sensitivity: "base",
+        numeric: true,
+    });
+    return ACCOUNT_GROUP_ORDER.map((id) => ({
+        id,
+        accounts: [...buckets.get(id)!].sort(
+            (a, b) =>
+                collator.compare(accountLabel(a), accountLabel(b)) ||
+                a.id - b.id,
+        ),
+    })).filter((g) => g.accounts.length > 0);
 }
 
 export type ConvertFn = (amount: number, fromCurrency?: string) => number;
@@ -81,7 +96,10 @@ export type ConvertFn = (amount: number, fromCurrency?: string) => number;
  * subtotal is naturally negative. Accounts without a computed balance
  * contribute 0.
  */
-export function sumConvertedBalances(accounts: Account[], convert: ConvertFn): number {
+export function sumConvertedBalances(
+    accounts: Account[],
+    convert: ConvertFn,
+): number {
     return accounts.reduce(
         (sum, a) => sum + convert(a.computed_balance ?? 0, a.currency),
         0,
@@ -96,7 +114,10 @@ export function sumConvertedBalances(accounts: Account[], convert: ConvertFn): n
  * balances which aren't real value until WP-C5's holdings land. Signs come
  * from the balances themselves (liabilities negative), so the sum is the net.
  */
-export function computeNetCash(accounts: Account[], convert: ConvertFn): number {
+export function computeNetCash(
+    accounts: Account[],
+    convert: ConvertFn,
+): number {
     return sumConvertedBalances(
         accounts.filter(
             (a) => a.is_active && a.in_net_worth && !isPortfolioType(a.type),

@@ -1,5 +1,6 @@
-import { lazy, memo, Suspense, useMemo } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -11,27 +12,16 @@ import type {
 
 const ToolResultChart = lazy(() => import("./ToolResultChart"));
 
-function formatToolError(
-    error: ToolResultPayload["error"],
-    fallback: string,
-): string {
-    if (!error) return fallback;
-    if (typeof error === "string") return error;
+function toolErrorTranslationKey(error: ToolResultPayload["error"]): string {
+    if (!error || typeof error === "string") return "aiChat.toolFailed";
     const detail = error as ToolErrorDetail;
-    const parts: string[] = [];
-    if (detail.field) parts.push(detail.field);
-    if (detail.message) parts.push(detail.message);
-    if (parts.length === 0) {
-        if (detail.code) parts.push(detail.code);
-        else {
-            try {
-                return JSON.stringify(detail);
-            } catch {
-                return fallback;
-            }
-        }
+    if (detail.code === "VALIDATION_ERROR") {
+        return "aiChat.toolError.validation";
     }
-    return parts.join(": ");
+    if (detail.code === "UNKNOWN_TOOL") {
+        return "aiChat.toolError.unavailable";
+    }
+    return "aiChat.toolFailed";
 }
 
 interface ToolResultCardProps {
@@ -79,6 +69,15 @@ function inferColumns(rows: Row[], preferred?: string[]): string[] {
 
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     const { t } = useLanguage();
+    useEffect(() => {
+        if (!result.ok && result.error) {
+            logger.error("AI tool returned an error", {
+                toolName,
+                error: result.error,
+            });
+        }
+    }, [result.error, result.ok, toolName]);
+
     const rows = useMemo(
         () => asRows(result.ok ? result.data : null),
         [result],
@@ -91,8 +90,7 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
         return (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <p className="text-xs font-medium text-destructive">
-                    {toolName ? `${toolName}: ` : ""}
-                    {formatToolError(result.error, t("aiChat.toolFailed"))}
+                    {t(toolErrorTranslationKey(result.error))}
                 </p>
             </div>
         );

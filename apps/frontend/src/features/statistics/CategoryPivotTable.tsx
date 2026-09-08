@@ -1,5 +1,5 @@
 import { Fragment, useId, useState, useMemo, useCallback } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
     Card,
     CardContent,
@@ -39,6 +39,8 @@ interface CategoryPivotTableProps {
     onToggle: (key: string) => void;
     exclusionsApply: boolean;
 }
+
+const PERIOD_WINDOW_SIZE = 12;
 
 /**
  * Pure period-value accessor — hoisted out of the component so it isn't
@@ -108,6 +110,26 @@ export function CategoryPivotTable({
         if (yearFilter === "all") return data.allPeriods;
         return data.allPeriods.filter((p) => p.startsWith(yearFilter));
     }, [yearFilter, data.allPeriods]);
+
+    const [periodPage, setPeriodPage] = useState(0);
+    const periodPageCount = Math.max(
+        1,
+        Math.ceil(filteredPeriods.length / PERIOD_WINDOW_SIZE),
+    );
+    const effectivePeriodPage = Math.min(periodPage, periodPageCount - 1);
+    const visiblePeriods = useMemo(() => {
+        const end =
+            filteredPeriods.length - effectivePeriodPage * PERIOD_WINDOW_SIZE;
+        return filteredPeriods.slice(
+            Math.max(0, end - PERIOD_WINDOW_SIZE),
+            end,
+        );
+    }, [effectivePeriodPage, filteredPeriods]);
+
+    const selectYear = useCallback((year: string) => {
+        setYearFilter(year);
+        setPeriodPage(0);
+    }, []);
 
     const filteredCategories = useMemo(() => {
         return data.categoryPivot
@@ -271,7 +293,7 @@ export function CategoryPivotTable({
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <Select value={yearFilter} onValueChange={setYearFilter}>
+                    <Select value={yearFilter} onValueChange={selectYear}>
                         <SelectTrigger className="w-[120px]">
                             <SelectValue
                                 placeholder={t("statistics.selectYear")}
@@ -304,17 +326,70 @@ export function CategoryPivotTable({
                 </div>
             </CardHeader>
             <CardContent>
+                {periodPageCount > 1 && (
+                    <nav
+                        aria-label={t("statsPage.pivotTitle")}
+                        className="mb-3 flex items-center justify-end gap-2"
+                    >
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                                effectivePeriodPage >= periodPageCount - 1
+                            }
+                            onClick={() => setPeriodPage((page) => page + 1)}
+                        >
+                            <ChevronLeft
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                            />
+                            {t("common.previous")}
+                        </Button>
+                        <span
+                            className="min-w-32 text-center text-sm text-muted-foreground"
+                            aria-live="polite"
+                        >
+                            {visiblePeriods.length > 0
+                                ? `${formatPeriodShort(visiblePeriods[0]!, monthLabelLocale)} – ${formatPeriodShort(visiblePeriods[visiblePeriods.length - 1]!, monthLabelLocale)}`
+                                : "—"}
+                        </span>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={effectivePeriodPage === 0}
+                            onClick={() =>
+                                setPeriodPage((page) => Math.max(0, page - 1))
+                            }
+                        >
+                            {t("common.next")}
+                            <ChevronRight
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                            />
+                        </Button>
+                    </nav>
+                )}
                 <ScrollArea className="w-full">
                     <div className="min-w-[800px]">
-                        <table className="w-full text-sm">
+                        <table
+                            className="w-full text-sm"
+                            aria-label={t("statsPage.pivotTitle")}
+                        >
                             <thead>
                                 <tr className="border-b border-border">
-                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 table-sticky-col z-10">
+                                    <th
+                                        scope="col"
+                                        className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 table-sticky-col z-10"
+                                    >
                                         {t("statsPage.category")}
                                     </th>
-                                    {filteredPeriods.map((p) => (
+                                    {visiblePeriods.map((p) => (
                                         <th
                                             key={p}
+                                            scope="col"
+                                            data-pivot-period={p}
                                             className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap"
                                         >
                                             {formatPeriodShort(
@@ -323,7 +398,10 @@ export function CategoryPivotTable({
                                             )}
                                         </th>
                                     ))}
-                                    <th className="text-right py-2 px-3 font-bold text-foreground">
+                                    <th
+                                        scope="col"
+                                        className="text-right py-2 px-3 font-bold text-foreground"
+                                    >
                                         {t("statsPage.total")}
                                     </th>
                                 </tr>
@@ -397,72 +475,70 @@ export function CategoryPivotTable({
                                                             </span>
                                                         )}
                                                     </td>
-                                                    {filteredPeriods.map(
-                                                        (p) => {
-                                                            const val =
-                                                                group.months[
+                                                    {visiblePeriods.map((p) => {
+                                                        const val =
+                                                            group.months[p] ||
+                                                            0;
+                                                        const canClick =
+                                                            val !== 0 &&
+                                                            groupCategoryIds.length >
+                                                                0;
+                                                        const label = `${group.general} — ${formatPeriodShort(p, monthLabelLocale)}`;
+                                                        const drillUrl =
+                                                            canClick
+                                                                ? buildTransactionDrillUrl(
+                                                                      {
+                                                                          categoryIds:
+                                                                              groupCategoryIds,
+                                                                          period: p,
+                                                                          valueMode,
+                                                                          label,
+                                                                      },
+                                                                  )
+                                                                : undefined;
+                                                        return (
+                                                            <td
+                                                                key={p}
+                                                                data-pivot-period={
                                                                     p
-                                                                ] || 0;
-                                                            const canClick =
-                                                                val !== 0 &&
-                                                                groupCategoryIds.length >
-                                                                    0;
-                                                            const label = `${group.general} — ${formatPeriodShort(p, monthLabelLocale)}`;
-                                                            const drillUrl =
-                                                                canClick
-                                                                    ? buildTransactionDrillUrl(
-                                                                          {
-                                                                              categoryIds:
-                                                                                  groupCategoryIds,
-                                                                              period: p,
-                                                                              valueMode,
-                                                                              label,
-                                                                          },
-                                                                      )
-                                                                    : undefined;
-                                                            return (
-                                                                <td
-                                                                    key={p}
-                                                                    className={cn(
-                                                                        "text-right py-2 px-3 tabular-nums font-semibold",
-                                                                        val ===
-                                                                            0 &&
-                                                                            "text-muted-foreground/40",
-                                                                        val <
-                                                                            0 &&
-                                                                            "text-loss",
-                                                                        canClick &&
-                                                                            clickableCell,
-                                                                    )}
-                                                                >
-                                                                    {drillUrl ? (
-                                                                        <DrillCellLink
-                                                                            ariaLabel={t(
-                                                                                "statsPage.pivot.drillAria",
-                                                                                {
-                                                                                    label,
-                                                                                },
-                                                                            )}
-                                                                            to={
-                                                                                drillUrl
-                                                                            }
-                                                                        >
-                                                                            {formatCurrency(
-                                                                                val,
-                                                                            )}
-                                                                        </DrillCellLink>
-                                                                    ) : val ===
-                                                                      0 ? (
-                                                                        "—"
-                                                                    ) : (
-                                                                        formatCurrency(
+                                                                }
+                                                                className={cn(
+                                                                    "text-right py-2 px-3 tabular-nums font-semibold",
+                                                                    val === 0 &&
+                                                                        "text-muted-foreground/40",
+                                                                    val < 0 &&
+                                                                        "text-loss",
+                                                                    canClick &&
+                                                                        clickableCell,
+                                                                )}
+                                                            >
+                                                                {drillUrl ? (
+                                                                    <DrillCellLink
+                                                                        ariaLabel={t(
+                                                                            "statsPage.pivot.drillAria",
+                                                                            {
+                                                                                label,
+                                                                            },
+                                                                        )}
+                                                                        to={
+                                                                            drillUrl
+                                                                        }
+                                                                    >
+                                                                        {formatCurrency(
                                                                             val,
-                                                                        )
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        },
-                                                    )}
+                                                                        )}
+                                                                    </DrillCellLink>
+                                                                ) : val ===
+                                                                  0 ? (
+                                                                    "—"
+                                                                ) : (
+                                                                    formatCurrency(
+                                                                        val,
+                                                                    )
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
                                                     {(() => {
                                                         const drillUrl =
                                                             groupCategoryIds.length >
@@ -540,7 +616,7 @@ export function CategoryPivotTable({
                                                             <td className="py-2 px-3 pl-8 text-muted-foreground sticky left-0 table-sticky-col z-10 whitespace-nowrap">
                                                                 {cat.detailName}
                                                             </td>
-                                                            {filteredPeriods.map(
+                                                            {visiblePeriods.map(
                                                                 (p) => {
                                                                     const val =
                                                                         getPeriodValue(
@@ -569,6 +645,9 @@ export function CategoryPivotTable({
                                                                     return (
                                                                         <td
                                                                             key={
+                                                                                p
+                                                                            }
+                                                                            data-pivot-period={
                                                                                 p
                                                                             }
                                                                             className={cn(
@@ -678,7 +757,7 @@ export function CategoryPivotTable({
                                     <td className="py-2 px-3 sticky left-0 table-sticky-col z-10">
                                         {t("statsPage.total")}
                                     </td>
-                                    {filteredPeriods.map((p) => {
+                                    {visiblePeriods.map((p) => {
                                         const r = formatCompact(
                                             columnTotals[p] || 0,
                                         );
@@ -695,6 +774,7 @@ export function CategoryPivotTable({
                                         return (
                                             <td
                                                 key={p}
+                                                data-pivot-period={p}
                                                 className={cn(
                                                     "text-right py-2 px-3 tabular-nums",
                                                     clickableCell,

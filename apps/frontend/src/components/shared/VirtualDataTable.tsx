@@ -9,6 +9,11 @@ import {
 } from "react";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { parseDecimal } from "@/lib/decimal";
+import {
+    formatEditableNumber,
+    parseLocaleNumber,
+    type NumberFormat,
+} from "@/utils/currency";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,6 +47,7 @@ import type { Column } from "@/types/dataTable";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useLocation } from "react-router";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 export type { Column };
 
@@ -214,6 +220,7 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     saveLabel: string;
     cancelLabel: string;
     editLabel: string;
+    numberFormat: NumberFormat;
 }
 
 function VirtualizedTableRow<T extends Record<string, unknown>>({
@@ -241,6 +248,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     saveLabel,
     cancelLabel,
     editLabel,
+    numberFormat,
 }: VirtualizedTableRowProps<T>) {
     const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
     const rowEl = (
@@ -367,8 +375,30 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                 />
                             ) : (
                                 <Input
-                                    type={col.type || "text"}
+                                    type={
+                                        col.type === "number"
+                                            ? "text"
+                                            : col.type || "text"
+                                    }
+                                    inputMode={
+                                        col.type === "number"
+                                            ? "decimal"
+                                            : undefined
+                                    }
                                     value={String(editValues?.[col.key] ?? "")}
+                                    aria-invalid={
+                                        col.type === "number" &&
+                                        typeof editValues?.[col.key] ===
+                                            "string" &&
+                                        String(editValues[col.key]).trim() !==
+                                            "" &&
+                                        !Number.isFinite(
+                                            parseLocaleNumber(
+                                                String(editValues[col.key]),
+                                                numberFormat,
+                                            ),
+                                        )
+                                    }
                                     onChange={(event) =>
                                         setEditValues((prev) => ({
                                             ...prev,
@@ -473,6 +503,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     onEditingChange,
     scrollRestorationKey,
 }: VirtualDataTableProps<T>) {
+    const { appSettings } = useAppSettings();
     // Ungroup the server-mode config once — all internal logic keys off these
     // leaf values (identical names/defaults to the former flat props), so a
     // fresh `serverMode` object identity per render costs nothing: hooks below
@@ -1054,11 +1085,13 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     typeof val === "string" &&
                     val.includes("T")
                         ? val.split("T")[0]
-                        : val;
+                        : col.type === "number" && typeof val === "number"
+                          ? formatEditableNumber(val, appSettings.numberFormat)
+                          : val;
             });
             setEditValues(values);
         },
-        [columns],
+        [appSettings.numberFormat, columns],
     );
 
     const saveEditing = useCallback(
@@ -1079,7 +1112,15 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     const raw = values[col.key];
                     if (typeof raw === "string") {
                         if (raw.trim() === "") delete values[col.key];
-                        else values[col.key] = parseDecimal(raw);
+                        else {
+                            const parsed = parseDecimal(
+                                raw,
+                                appSettings.numberFormat,
+                                Number.NaN,
+                            );
+                            if (!Number.isFinite(parsed)) return;
+                            values[col.key] = parsed;
+                        }
                     }
                 }
                 const updatedRow = { ...row, ...values } as T;
@@ -1088,7 +1129,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             setEditingRow(null);
             setEditValues({});
         },
-        [columns, editValues, onRowUpdate],
+        [appSettings.numberFormat, columns, editValues, onRowUpdate],
     );
 
     const clearAllFilters = () => {
@@ -1554,6 +1595,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             saveLabel={t("aria.save")}
                                             cancelLabel={t("aria.cancel")}
                                             editLabel={t("aria.edit")}
+                                            numberFormat={
+                                                appSettings.numberFormat
+                                            }
                                         />
                                     );
                                 })}

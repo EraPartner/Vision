@@ -58,9 +58,7 @@ function installElectronStubs(
     loadedSettings: BackupSettings = { backupDir: "", backupOnQuit: false },
 ) {
     const win = window as unknown as Record<string, unknown>;
-    win.electronUpdater = {
-        pullImage: vi.fn().mockResolvedValue({ success: true, wasNew: false }),
-    };
+    win.electronUpdater = {};
     win.electronBackup = {
         runBackup:
             overrides.runBackup ??

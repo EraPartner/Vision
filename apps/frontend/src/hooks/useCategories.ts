@@ -1,15 +1,16 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {apiClient} from '@/lib/api';
-import {categoryKeys} from '@/lib/queryKeys';
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { categoryKeys } from "@/lib/queryKeys";
 import {
     fetchCategoriesForExclusions,
     takeStartedCategoriesPreload,
-} from '@/lib/categoriesPreload';
-import type {CategoryCreate, CategoryUpdate} from '@/types/api';
-import {toast} from 'sonner';
-import { apiErrorToMessage } from '@/lib/api/errorMessage';
-import {useLanguage} from '@/stores/hydration/LanguageHydration';
-import {useBackgroundQueryCue} from '@/components/shared/BackgroundQueryIndicator';
+} from "@/lib/categoriesPreload";
+import type { CategoryCreate, CategoryUpdate } from "@/types/api";
+import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 export function useCategories(params?: {
     limit?: number;
@@ -56,7 +57,7 @@ export function useAllCategories(enabled = true) {
             return preloaded ?? (await fetchCategoriesForExclusions());
         },
         enabled,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -65,17 +66,20 @@ export function useCreateCategory() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (category: CategoryCreate) => apiClient.createCategory(category),
+        mutationFn: (category: CategoryCreate) =>
+            apiClient.createCategory(category),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: categoryKeys.all});
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             if (data.wasCreated) {
-                toast.success(t('categories.created'));
+                toast.success(t("categories.created"));
             } else {
-                toast.info(t('categories.exists'));
+                toast.info(t("categories.exists"));
             }
         },
         onError: (error: Error) => {
-            toast.error(t('categories.createFailedTitle'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("categories.createFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
@@ -85,14 +89,16 @@ export function useUpdateCategory() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({id, data}: { id: number; data: CategoryUpdate }) =>
+        mutationFn: ({ id, data }: { id: number; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: categoryKeys.all});
-            toast.success(t('categories.updated'));
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            toast.success(t("categories.updated"));
         },
         onError: (error: Error) => {
-            toast.error(t('categories.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("categories.updateFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }
@@ -104,10 +110,12 @@ export function useDeleteCategory() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCategory(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: categoryKeys.all});
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
         },
         onError: (error: Error) => {
-            toast.error(t('categories.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
+            toast.error(t("categories.deleteFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            });
         },
     });
 }

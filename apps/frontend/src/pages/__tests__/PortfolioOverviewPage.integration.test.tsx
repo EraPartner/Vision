@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, act } from "@testing-library/react";
+import { screen, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -218,6 +218,54 @@ describe("PortfolioOverviewPage (integration)", () => {
         );
         renderWithApp(<PortfolioOverviewPage />);
         expect(await screen.findByText(/msci world etf/i)).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", {
+                name: "Filter investments by broker",
+            }),
+        ).toBeDisabled();
+        expect(
+            await screen.findByText("Broker subtotals are unavailable."),
+        ).toBeVisible();
+        const investmentsCard = screen
+            .getByRole("heading", { name: "All Investments" })
+            .closest(".glass-thin") as HTMLElement;
+        expect(
+            within(investmentsCard).queryByText("Holdings"),
+        ).not.toBeInTheDocument();
+    });
+
+    it("keeps the broker filter disabled while the summary is pending", async () => {
+        let releaseSummary!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            releaseSummary = resolve;
+        });
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [INVESTMENT_STUB],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
+                await pending;
+                return err(500, "Server error");
+            }),
+        );
+
+        renderWithApp(<PortfolioOverviewPage />);
+        const filter = await screen.findByRole("combobox", {
+            name: "Filter investments by broker",
+        });
+        expect(filter).toBeDisabled();
+        expect(screen.getByText("Calculating broker subtotals…")).toBeVisible();
+
+        releaseSummary();
+        expect(
+            await screen.findByText("Broker subtotals are unavailable."),
+        ).toBeVisible();
     });
 
     it("shows the live-price as-of caption with the portfolio total", async () => {
@@ -236,6 +284,206 @@ describe("PortfolioOverviewPage (integration)", () => {
         renderWithApp(<PortfolioOverviewPage />);
 
         expect(await screen.findByText(/prices as of/i)).toBeInTheDocument();
+    });
+
+    it("filters instruments by exact server broker partitions and shows matching subtotals", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({
+                    items: [
+                        {
+                            ...INVESTMENT_STUB,
+                            id: 1,
+                            name: "Fund A",
+                            oversold: true,
+                        },
+                        { ...INVESTMENT_STUB, id: 2, name: "Fund B" },
+                    ],
+                    total: 2,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/investments/transactions`, () =>
+                ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
+            ),
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        { id: 10, name: "Broker A", display_name: "Broker A" },
+                        { id: 20, name: "Broker B", display_name: "Broker B" },
+                    ],
+                    total: 2,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {
+                        totalPortfolioValue: 1200,
+                        totalGainLoss: 120,
+                        totalGain: 120,
+                        totalInvested: 1080,
+                        totalRealizedGain: 0,
+                        totalUnrealizedGain: 120,
+                        totalIncome: 0,
+                        totalFees: 0,
+                        totalTaxes: 0,
+                        totalAssetGain: 120,
+                        totalFxGain: 0,
+                        totalReturnPct: 11.11,
+                        usedFallbackRate: false,
+                    },
+                    summaries: [
+                        {
+                            id: 1,
+                            name: "Fund A",
+                            currency: "EUR",
+                            originalCurrency: "EUR",
+                            totalBuyCost: 630,
+                            currentValue: 700,
+                            gainLoss: 70,
+                            gainLossPercent: 11.11,
+                            fullyAssigned: true,
+                            oversold: true,
+                            byAccount: [
+                                {
+                                    account_id: 10,
+                                    assignment: "account",
+                                    contribution_kind: "position",
+                                    oversold: false,
+                                    currentValue: 700,
+                                    totalInvested: 630,
+                                    realizedGain: 0,
+                                    unrealizedGain: 70,
+                                    gainLoss: 70,
+                                },
+                                {
+                                    account_id: 20,
+                                    assignment: "account",
+                                    contribution_kind: "position",
+                                    oversold: true,
+                                    currentValue: 0,
+                                    totalInvested: 0,
+                                    realizedGain: 0,
+                                    unrealizedGain: 0,
+                                    gainLoss: 0,
+                                },
+                            ],
+                        },
+                        {
+                            id: 2,
+                            name: "Fund B",
+                            currency: "EUR",
+                            originalCurrency: "EUR",
+                            totalBuyCost: 450,
+                            currentValue: 500,
+                            gainLoss: 50,
+                            gainLossPercent: 11.11,
+                            fullyAssigned: true,
+                            oversold: false,
+                            byAccount: [
+                                {
+                                    account_id: 20,
+                                    assignment: "account",
+                                    contribution_kind: "position",
+                                    oversold: false,
+                                    currentValue: 450,
+                                    totalInvested: 410,
+                                    realizedGain: 0,
+                                    unrealizedGain: 40,
+                                    gainLoss: 40,
+                                },
+                                {
+                                    account_id: null,
+                                    assignment: "unassigned",
+                                    contribution_kind: "non_position",
+                                    oversold: false,
+                                    currentValue: 50,
+                                    totalInvested: 40,
+                                    realizedGain: 0,
+                                    unrealizedGain: 10,
+                                    gainLoss: 10,
+                                },
+                                {
+                                    account_id: 30,
+                                    assignment: "account",
+                                    contribution_kind: "non_position",
+                                    oversold: false,
+                                    currentValue: 25,
+                                    totalInvested: 20,
+                                    realizedGain: 5,
+                                    unrealizedGain: 0,
+                                    gainLoss: 5,
+                                },
+                            ],
+                        },
+                    ],
+                    byAccount: [],
+                }),
+            ),
+        );
+        renderWithApp(<PortfolioOverviewPage />);
+
+        expect(await screen.findByText("Fund A")).toBeInTheDocument();
+        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        expect(screen.getByText("Oversold broker")).toBeInTheDocument();
+        await user.click(
+            screen.getByRole("combobox", {
+                name: "Filter investments by broker",
+            }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Broker A" }),
+        );
+
+        expect(screen.getByText("Fund A")).toBeInTheDocument();
+        expect(screen.queryByText("Fund B")).not.toBeInTheDocument();
+        expect(screen.queryByText("Oversold broker")).not.toBeInTheDocument();
+        const investmentsCard = screen
+            .getByRole("heading", { name: "All Investments" })
+            .closest(".glass-thin") as HTMLElement;
+        expect(
+            within(investmentsCard).getByText(/Holdings/).parentElement,
+        ).toHaveTextContent(/700,00/);
+        expect(
+            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+        ).toHaveTextContent(/\+70,00/);
+
+        await user.click(
+            screen.getByRole("combobox", {
+                name: "Filter investments by broker",
+            }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Unassigned" }),
+        );
+        expect(screen.queryByText("Fund A")).not.toBeInTheDocument();
+        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        expect(
+            within(investmentsCard).getByText(/Holdings/).parentElement,
+        ).toHaveTextContent(/50,00/);
+        expect(
+            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+        ).toHaveTextContent(/\+10,00/);
+
+        await user.click(
+            screen.getByRole("combobox", {
+                name: "Filter investments by broker",
+            }),
+        );
+        await user.click(await screen.findByRole("option", { name: "#30" }));
+        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        expect(
+            within(investmentsCard).getByText(/Holdings/).parentElement,
+        ).toHaveTextContent(/25,00/);
+        expect(
+            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+        ).toHaveTextContent(/\+5,00/);
     });
 
     it("disables Refresh Prices button when offline", async () => {

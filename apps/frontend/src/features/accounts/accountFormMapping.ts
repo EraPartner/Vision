@@ -1,6 +1,8 @@
 import { parseDecimal } from "@/lib/decimal";
 import type { Account, AccountCreate, AccountUpdate } from "@/types/api";
+import { formatEditableNumber, type NumberFormat } from "@/utils/currency";
 import type { AccountFormValues } from "./AddAccountDialog";
+import { isHoldingsOnlyPortfolioType } from "./groupAccounts";
 
 /**
  * Map AccountFormValues to the API payload. The empty-field sentinel differs
@@ -10,10 +12,23 @@ import type { AccountFormValues } from "./AddAccountDialog";
  * - `update` (PATCH) sends explicit `null` so the backend clears the stored
  *   value — `undefined` keys are dropped in JSON and would no-op the clear.
  */
-export function toAccountPayload(values: AccountFormValues, mode: "create"): AccountCreate;
-export function toAccountPayload(values: AccountFormValues, mode: "update"): AccountUpdate;
-export function toAccountPayload(values: AccountFormValues, mode: "create" | "update"): AccountCreate | AccountUpdate {
+export function toAccountPayload(
+    values: AccountFormValues,
+    mode: "create",
+    numberFormat: NumberFormat,
+): AccountCreate;
+export function toAccountPayload(
+    values: AccountFormValues,
+    mode: "update",
+    numberFormat: NumberFormat,
+): AccountUpdate;
+export function toAccountPayload(
+    values: AccountFormValues,
+    mode: "create" | "update",
+    numberFormat: NumberFormat,
+): AccountCreate | AccountUpdate {
     const empty = mode === "create" ? undefined : null;
+    const holdingsOnly = isHoldingsOnlyPortfolioType(values.type);
     return {
         name: values.name,
         display_name: values.display_name || empty,
@@ -27,13 +42,22 @@ export function toAccountPayload(values: AccountFormValues, mode: "create" | "up
         in_net_worth: values.in_net_worth,
         multi_currency_cash: values.multi_currency_cash,
         has_cash_sleeve: values.has_cash_sleeve,
-        statement_balance: values.statementBalance ? parseDecimal(values.statementBalance) : empty,
-        statement_balance_date: values.statementBalanceDate || empty,
+        statement_balance:
+            !holdingsOnly && values.statementBalance
+                ? parseDecimal(values.statementBalance, numberFormat)
+                : empty,
+        statement_balance_date:
+            !holdingsOnly && values.statementBalanceDate
+                ? values.statementBalanceDate
+                : empty,
     } as AccountCreate | AccountUpdate;
 }
 
 /** Map a stored Account onto the edit form's field values. */
-export function accountToFormValues(account: Account): AccountFormValues {
+export function accountToFormValues(
+    account: Account,
+    numberFormat: NumberFormat,
+): AccountFormValues {
     return {
         name: account.name,
         display_name: account.display_name ?? "",
@@ -47,9 +71,14 @@ export function accountToFormValues(account: Account): AccountFormValues {
         in_net_worth: account.in_net_worth,
         multi_currency_cash: account.multi_currency_cash,
         has_cash_sleeve: account.has_cash_sleeve,
-        statementBalance: account.statement_balance != null ? String(account.statement_balance) : "",
+        statementBalance: formatEditableNumber(
+            account.statement_balance,
+            numberFormat,
+        ),
         // The API emits YYYY-MM-DD. Keep the slice as defensive compatibility
         // with older cached payloads that may still contain an ISO timestamp.
-        statementBalanceDate: account.statement_balance_date ? account.statement_balance_date.slice(0, 10) : "",
+        statementBalanceDate: account.statement_balance_date
+            ? account.statement_balance_date.slice(0, 10)
+            : "",
     };
 }

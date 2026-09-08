@@ -38,8 +38,7 @@ import {
     APP_VERSION,
 } from "@/lib/appIdentity";
 
-type ApplyPhase =
-    "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
+type ApplyPhase = "idle" | "backing-up" | "downloading" | "restarting" | "done";
 
 interface AboutSectionProps {
     onOpenChange: (open: boolean) => void;
@@ -89,8 +88,6 @@ export const AboutSection = memo(function AboutSection({
     };
 
     const handleApplyUpdate = async () => {
-        const mode = updateStatus?.update_mode ?? "source";
-
         if (apiClient.isElectron()) {
             setApplyPhase("backing-up");
             try {
@@ -111,35 +108,6 @@ export const AboutSection = memo(function AboutSection({
                 setApplyPhase("idle");
                 return;
             }
-        }
-
-        if (mode === "docker") {
-            setApplyPhase("pulling");
-            try {
-                const result = await apiClient.triggerDockerUpdate();
-                if (!result?.success) {
-                    toast.error(t("settings.app.updateFailed"), {
-                        description: electronErrorToMessage(result?.error, t),
-                    });
-                    setApplyPhase("idle");
-                    return;
-                }
-                setApplyPhase("restarting");
-                toast.success(t("settings.app.updateComplete"), {
-                    description: t("settings.app.nowRunning", {
-                        version: updateStatus?.latest_version ?? "",
-                    }),
-                    duration: 8000,
-                });
-                setApplyPhase("done");
-            } catch (err: unknown) {
-                const msg = electronErrorToMessage(err, t);
-                toast.error(t("settings.app.updateFailed"), {
-                    description: msg,
-                });
-                setApplyPhase("idle");
-            }
-            return;
         }
 
         setApplyPhase("downloading");
@@ -337,9 +305,7 @@ export const AboutSection = memo(function AboutSection({
                                 ? t("update.backingUp")
                                 : applyPhase === "downloading"
                                   ? t("update.downloading")
-                                  : applyPhase === "pulling"
-                                    ? t("settings.app.pulling")
-                                    : t("settings.app.restarting")}
+                                  : t("settings.app.restarting")}
                         </div>
                     )}
 

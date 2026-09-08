@@ -14,6 +14,7 @@ import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
 import { INVESTMENT_CURRENCIES } from "@/utils/currency";
+import type { ReactNode } from "react";
 
 export interface InvestmentForm {
     assetClass: string;
@@ -42,6 +43,7 @@ export interface InvestmentForm {
     initialUnits: string;
     initialDate: string;
     initialFees: string;
+    initialAccountId?: string;
 }
 
 interface InvestmentFormFieldsProps {
@@ -52,6 +54,7 @@ interface InvestmentFormFieldsProps {
     isRealEstate: boolean;
     computedPricePerUnit: string;
     t: (key: string, params?: Record<string, string | number>) => string;
+    initialBrokerField?: ReactNode;
 }
 
 export function InvestmentFormFields({
@@ -62,6 +65,7 @@ export function InvestmentFormFields({
     isRealEstate,
     computedPricePerUnit,
     t,
+    initialBrokerField,
 }: InvestmentFormFieldsProps) {
     return (
         <>
@@ -141,10 +145,8 @@ export function InvestmentFormFields({
                             </Label>
                             <Input
                                 id="inv-rate"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="100"
+                                type="text"
+                                inputMode="decimal"
                                 placeholder="3.50"
                                 value={form.interestRate}
                                 onChange={(e) =>
@@ -231,9 +233,8 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="inv-cadastral-income"
-                                    type="number"
-                                    min="0"
-                                    step="1"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder={t(
                                         "addInv.placeholder.cadastralIncome",
                                     )}
@@ -252,9 +253,8 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="inv-municipality-tax-rate"
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder={t(
                                         "addInv.placeholder.municipalityTaxRate",
                                     )}
@@ -356,9 +356,8 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="init-amount"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                    type="text"
+                                    inputMode="decimal"
                                     className="h-9"
                                     placeholder="10000.00"
                                     value={form.initialAmount}
@@ -383,9 +382,8 @@ export function InvestmentFormFields({
                                     </Label>
                                     <Input
                                         id="init-units"
-                                        type="number"
-                                        step="0.000001"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         className="h-9"
                                         placeholder="100"
                                         value={form.initialUnits}
@@ -414,9 +412,8 @@ export function InvestmentFormFields({
                             </Label>
                             <Input
                                 id="init-fees"
-                                type="number"
-                                step="0.01"
-                                min="0"
+                                type="text"
+                                inputMode="decimal"
                                 className="h-9"
                                 placeholder="0.00"
                                 value={form.initialFees}
@@ -428,6 +425,7 @@ export function InvestmentFormFields({
                                 }
                             />
                         </div>
+                        {initialBrokerField}
                     </div>
                 )}
             </div>

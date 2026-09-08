@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
@@ -23,7 +24,7 @@ export function useAdminOverviewQueries() {
     const providers = useQuery({
         queryKey: adminKeys.providerHealth,
         queryFn: getProviderHealth,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
     const metrics = useQuery({
         queryKey: adminKeys.requestMetrics,
@@ -51,7 +52,7 @@ export function useProviderHealthQuery() {
     return useQuery({
         queryKey: adminKeys.providerHealth,
         queryFn: getProviderHealth,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 

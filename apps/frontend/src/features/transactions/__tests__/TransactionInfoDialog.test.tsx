@@ -418,7 +418,7 @@ describe("TransactionInfoDialog", () => {
 
     // ─── F3: Field validation ──────────────────────────────────────────────
 
-    it("amount edit submits parsed value via parseLocaleNumber (US-format smoke test)", async () => {
+    it("amount edit submits parsed value using the selected EU number format", async () => {
         // Note: EU-comma parsing is unit-tested in src/utils/currency.test.ts.
         // jsdom's type=number input rejects locale-comma values via fireEvent,
         // so we cannot simulate "1,50" keystrokes here without changing the
@@ -462,8 +462,10 @@ describe("TransactionInfoDialog", () => {
         // (balance is read-only — no edit button — see ADR-094)
         await user.click(editButtons[2]);
 
-        const input = screen.getByRole("spinbutton") as HTMLInputElement;
-        fireEvent.change(input, { target: { value: "42.5" } });
+        const input = screen.getByRole("textbox", {
+            name: "Amount",
+        }) as HTMLInputElement;
+        fireEvent.change(input, { target: { value: "42,5" } });
 
         await user.click(
             await screen.findByRole("button", { name: /^save$/i }),

@@ -3,8 +3,8 @@
  * contracts in a real browser. A backend-side schema change that breaks a
  * page should fail at least one of these tests.
  *
- * These tests run against the dev stack (frontend + backend via Docker
- * Compose in CI; local `bun run dev` otherwise). Visit each major page and
+ * These tests run against the native production stack in CI and `bun run dev`
+ * locally. Visit each major page and
  * assert it renders without runtime errors. Write-path coverage (create /
  * edit / delete roundtrips) lives in `mutations-parity.spec.ts`.
  */

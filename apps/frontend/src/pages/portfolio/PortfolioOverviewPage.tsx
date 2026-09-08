@@ -25,6 +25,7 @@ import {
     ArrowUpRight,
     Clock,
     AlertTriangle,
+    Archive,
 } from "lucide-react";
 import {
     DonutChart,
@@ -46,7 +47,7 @@ import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -62,6 +63,18 @@ import { Money } from "@/components/shared/Money";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageShell } from "@/components/shared/PageShell";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
+import { ArchivedInvestmentsCard } from "@/features/portfolio/ArchivedInvestmentsCard";
+import { UnassignedLotsNudge } from "@/features/portfolio/UnassignedLotsNudge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { useAccounts } from "@/hooks/useAccounts";
+import { accountLabel } from "@/features/accounts/groupAccounts";
+import { addAll, toNumber } from "@/lib/money";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
     return [
@@ -110,12 +123,17 @@ export default function PortfolioOverviewPage() {
     const targetCurrency = appSettings.defaultCurrency || "EUR";
     const {
         summaries,
+        inactiveSummaries,
         transactions,
         deleteInvestment,
+        updateInvestment,
         refreshPrices,
         isRefreshingPrices,
     } = usePortfolio();
-    const { data: portfolioSummary } = usePortfolioSummaryQuery(targetCurrency);
+    const portfolioSummaryQuery = usePortfolioSummaryQuery(targetCurrency);
+    const portfolioSummary = portfolioSummaryQuery.data;
+    const { data: accountsData } = useAccounts({ active: "all" });
+    const [brokerFilter, setBrokerFilter] = useState("all");
     const isOnline = useOnlineStatus();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const PORTFOLIO_WIDGETS = useMemo(() => getPortfolioWidgets(t), [t]);
@@ -199,6 +217,101 @@ export default function PortfolioOverviewPage() {
     }, [summaries, convertToTarget, assetClassGroups]);
 
     const { newsSymbols, allocationData } = allocationAndNews;
+
+    const brokerFilterOptions = useMemo(() => {
+        const accountIds = new Set<number>();
+        let hasUnassigned = false;
+        for (const summary of portfolioSummary?.summaries ?? []) {
+            for (const row of summary.byAccount ?? []) {
+                if (row.account_id == null) hasUnassigned = true;
+                else accountIds.add(row.account_id);
+            }
+        }
+        const accounts = new Map(
+            (accountsData?.items ?? []).map((account) => [account.id, account]),
+        );
+        return {
+            accounts: [...accountIds]
+                .map((id) => ({
+                    id,
+                    label: accounts.has(id)
+                        ? accountLabel(accounts.get(id)!)
+                        : `#${id}`,
+                }))
+                .sort((a, b) =>
+                    a.label.localeCompare(b.label, undefined, {
+                        sensitivity: "base",
+                        numeric: true,
+                    }),
+                ),
+            hasUnassigned,
+        };
+    }, [accountsData?.items, portfolioSummary?.summaries]);
+
+    const filteredBrokerMetrics = useMemo(() => {
+        if (brokerFilter === "all") return undefined;
+        const accountId =
+            brokerFilter === "unassigned" ? null : Number(brokerFilter);
+        const byInvestment = new Map<
+            number,
+            {
+                currentValue: number;
+                totalInvested: number;
+                gainLoss: number;
+                oversold: boolean;
+            }
+        >();
+        for (const summary of portfolioSummary?.summaries ?? []) {
+            const rows = (summary.byAccount ?? []).filter(
+                (row) => row.account_id === accountId,
+            );
+            if (rows.length === 0) continue;
+            byInvestment.set(summary.id, {
+                currentValue: toNumber(
+                    addAll(rows.map((row) => row.currentValue)),
+                ),
+                totalInvested: toNumber(
+                    addAll(rows.map((row) => row.totalInvested)),
+                ),
+                gainLoss: toNumber(addAll(rows.map((row) => row.gainLoss))),
+                oversold: rows.some((row) => row.oversold === true),
+            });
+        }
+        return byInvestment;
+    }, [brokerFilter, portfolioSummary?.summaries]);
+
+    const displayedSummaries = useMemo(
+        () =>
+            filteredBrokerMetrics
+                ? summaries.filter((summary) =>
+                      filteredBrokerMetrics.has(summary.id),
+                  )
+                : summaries,
+        [filteredBrokerMetrics, summaries],
+    );
+    const serverSummariesById = useMemo(
+        () =>
+            new Map(
+                (portfolioSummary?.summaries ?? []).map((summary) => [
+                    summary.id,
+                    summary,
+                ]),
+            ),
+        [portfolioSummary?.summaries],
+    );
+    const brokerSubtotal = useMemo(() => {
+        if (!filteredBrokerMetrics) {
+            return {
+                currentValue: totals?.totalPortfolioValue ?? 0,
+                gainLoss: totals?.totalGainLoss ?? 0,
+            };
+        }
+        const rows = [...filteredBrokerMetrics.values()];
+        return {
+            currentValue: toNumber(addAll(rows.map((row) => row.currentValue))),
+            gainLoss: toNumber(addAll(rows.map((row) => row.gainLoss))),
+        };
+    }, [filteredBrokerMetrics, totals]);
 
     const gainPercent = totals?.totalReturnPct ?? 0;
 
@@ -632,17 +745,144 @@ export default function PortfolioOverviewPage() {
                                 )}
                             >
                                 <Card className="h-full flex flex-col">
-                                    <CardHeader>
+                                    <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
                                         <CardTitle>
                                             {t("portfolio.widget.investments")}
                                         </CardTitle>
+                                        <Select
+                                            value={brokerFilter}
+                                            onValueChange={setBrokerFilter}
+                                            disabled={
+                                                portfolioSummaryQuery.isLoading ||
+                                                portfolioSummaryQuery.isError
+                                            }
+                                        >
+                                            <SelectTrigger
+                                                className="w-44"
+                                                aria-label={t(
+                                                    "portfolio.brokerFilter.label",
+                                                )}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    {t(
+                                                        "portfolio.brokerFilter.all",
+                                                    )}
+                                                </SelectItem>
+                                                {brokerFilterOptions.accounts.map(
+                                                    (account) => (
+                                                        <SelectItem
+                                                            key={account.id}
+                                                            value={String(
+                                                                account.id,
+                                                            )}
+                                                        >
+                                                            {account.label}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
+                                                {brokerFilterOptions.hasUnassigned && (
+                                                    <SelectItem value="unassigned">
+                                                        {t(
+                                                            "portfolio.brokerFilter.unassigned",
+                                                        )}
+                                                    </SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
                                     </CardHeader>
                                     <CardContent className="min-h-0">
                                         <div className="space-y-2">
-                                            {summaries.map((inv) => {
+                                            {portfolioSummaryQuery.isLoading ? (
+                                                <p className="mb-3 text-right text-xs text-muted-foreground">
+                                                    {t(
+                                                        "portfolio.brokerFilter.loading",
+                                                    )}
+                                                </p>
+                                            ) : portfolioSummaryQuery.isError ? (
+                                                <p className="mb-3 text-right text-xs text-warning">
+                                                    {t(
+                                                        "portfolio.brokerFilter.unavailable",
+                                                    )}
+                                                </p>
+                                            ) : (
+                                                <div className="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                    <span>
+                                                        {t(
+                                                            "portfolio.brokerFilter.holdingsSubtotal",
+                                                        )}{" "}
+                                                        <Money
+                                                            amount={
+                                                                brokerSubtotal.currentValue
+                                                            }
+                                                            currency={
+                                                                targetCurrency
+                                                            }
+                                                        />
+                                                    </span>
+                                                    <span>
+                                                        {t(
+                                                            "portfolio.brokerFilter.pnlSubtotal",
+                                                        )}{" "}
+                                                        <Money
+                                                            amount={
+                                                                brokerSubtotal.gainLoss
+                                                            }
+                                                            currency={
+                                                                targetCurrency
+                                                            }
+                                                            signed
+                                                        />
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {displayedSummaries.map((inv) => {
                                                 const unitBased = isUnitBased(
                                                     inv.assetClass,
                                                 );
+                                                const selectedMetrics =
+                                                    filteredBrokerMetrics?.get(
+                                                        inv.id,
+                                                    );
+                                                const serverSummary =
+                                                    serverSummariesById.get(
+                                                        inv.id,
+                                                    );
+                                                const displayedCost =
+                                                    selectedMetrics?.totalInvested ??
+                                                    serverSummary?.totalBuyCost ??
+                                                    convertToTarget(
+                                                        inv.totalBuyCost,
+                                                        inv.currency,
+                                                    );
+                                                const displayedValue =
+                                                    selectedMetrics?.currentValue ??
+                                                    serverSummary?.currentValue ??
+                                                    convertToTarget(
+                                                        inv.currentValue,
+                                                        inv.currency,
+                                                    );
+                                                const displayedGain =
+                                                    selectedMetrics?.gainLoss ??
+                                                    serverSummary?.gainLoss ??
+                                                    convertToTarget(
+                                                        inv.gainLoss,
+                                                        inv.currency,
+                                                    );
+                                                const displayedGainPercent =
+                                                    selectedMetrics
+                                                        ? selectedMetrics.totalInvested !==
+                                                          0
+                                                            ? (selectedMetrics.gainLoss /
+                                                                  Math.abs(
+                                                                      selectedMetrics.totalInvested,
+                                                                  )) *
+                                                              100
+                                                            : 0
+                                                        : (serverSummary?.gainLossPercent ??
+                                                          inv.gainLossPercent);
                                                 return (
                                                     <div
                                                         key={inv.id}
@@ -673,6 +913,8 @@ export default function PortfolioOverviewPage() {
                                                                 </Badge>
                                                                 <PortfolioOversoldBadge
                                                                     oversold={
+                                                                        selectedMetrics?.oversold ??
+                                                                        serverSummary?.oversold ??
                                                                         inv.oversold
                                                                     }
                                                                 />
@@ -683,16 +925,17 @@ export default function PortfolioOverviewPage() {
                                                                         "portfolio.costLabel",
                                                                     )}{" "}
                                                                     <Money
-                                                                        amount={convertToTarget(
-                                                                            inv.totalBuyCost,
-                                                                            inv.currency,
-                                                                        )}
+                                                                        amount={
+                                                                            displayedCost
+                                                                        }
                                                                         currency={
                                                                             targetCurrency
                                                                         }
                                                                     />
                                                                 </span>
-                                                                {unitBased &&
+                                                                {brokerFilter ===
+                                                                    "all" &&
+                                                                    unitBased &&
                                                                     inv.totalUnits >
                                                                         0 && (
                                                                         <span>
@@ -712,31 +955,45 @@ export default function PortfolioOverviewPage() {
                                                                             )}
                                                                         </span>
                                                                     )}
-                                                                {inv.totalIncome >
-                                                                    0 && (
-                                                                    <span className="text-gain">
-                                                                        {t(
-                                                                            "portfolio.income.label",
-                                                                            {
-                                                                                amount: fmt(
-                                                                                    convertToTarget(
-                                                                                        inv.totalIncome,
-                                                                                        inv.currency,
+                                                                {brokerFilter ===
+                                                                    "all" &&
+                                                                    inv.totalIncome >
+                                                                        0 && (
+                                                                        <span className="text-gain">
+                                                                            {t(
+                                                                                "portfolio.income.label",
+                                                                                {
+                                                                                    amount: fmt(
+                                                                                        convertToTarget(
+                                                                                            inv.totalIncome,
+                                                                                            inv.currency,
+                                                                                        ),
                                                                                     ),
-                                                                                ),
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                )}
+                                                                                },
+                                                                            )}
+                                                                        </span>
+                                                                    )}
                                                             </div>
+                                                            {!inv.fullyAssigned && (
+                                                                <UnassignedLotsNudge
+                                                                    investmentId={
+                                                                        inv.id
+                                                                    }
+                                                                    investmentName={
+                                                                        inv.name
+                                                                    }
+                                                                    transactions={
+                                                                        transactions
+                                                                    }
+                                                                />
+                                                            )}
                                                         </div>
                                                         <div className="text-right shrink-0">
                                                             <p className="font-bold text-sm tabular-nums">
                                                                 <Money
-                                                                    amount={convertToTarget(
-                                                                        inv.currentValue,
-                                                                        inv.currency,
-                                                                    )}
+                                                                    amount={
+                                                                        displayedValue
+                                                                    }
                                                                     currency={
                                                                         targetCurrency
                                                                     }
@@ -745,17 +1002,16 @@ export default function PortfolioOverviewPage() {
                                                             <p
                                                                 className={cn(
                                                                     "text-xs tabular-nums font-medium",
-                                                                    inv.totalGain >=
+                                                                    displayedGain >=
                                                                         0
                                                                         ? "text-gain"
                                                                         : "text-loss",
                                                                 )}
                                                             >
                                                                 <Money
-                                                                    amount={convertToTarget(
-                                                                        inv.totalGain,
-                                                                        inv.currency,
-                                                                    )}
+                                                                    amount={
+                                                                        displayedGain
+                                                                    }
                                                                     currency={
                                                                         targetCurrency
                                                                     }
@@ -763,7 +1019,7 @@ export default function PortfolioOverviewPage() {
                                                                 />{" "}
                                                                 (
                                                                 {formatPercent(
-                                                                    inv.gainLossPercent,
+                                                                    displayedGainPercent,
                                                                     {
                                                                         digits: 1,
                                                                         signed: true,
@@ -779,6 +1035,48 @@ export default function PortfolioOverviewPage() {
                                                             <AddPortfolioTxnDialog
                                                                 investment={inv}
                                                             />
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="icon-touch-target text-muted-foreground"
+                                                                aria-label={t(
+                                                                    "portfolio.archiveInvestment",
+                                                                )}
+                                                                title={t(
+                                                                    "portfolio.archiveInvestment",
+                                                                )}
+                                                                onClick={async () => {
+                                                                    const ok =
+                                                                        await confirm(
+                                                                            {
+                                                                                title: t(
+                                                                                    "portfolio.archiveInvestment",
+                                                                                ),
+                                                                                description:
+                                                                                    t(
+                                                                                        "portfolio.archiveInvestmentDesc",
+                                                                                        {
+                                                                                            name: inv.name,
+                                                                                        },
+                                                                                    ),
+                                                                                confirmLabel:
+                                                                                    t(
+                                                                                        "portfolio.archiveInvestment",
+                                                                                    ),
+                                                                            },
+                                                                        );
+                                                                    if (ok) {
+                                                                        await updateInvestment(
+                                                                            inv.id,
+                                                                            {
+                                                                                is_active: false,
+                                                                            },
+                                                                        );
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Archive className="h-4 w-4" />
+                                                            </Button>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
@@ -820,6 +1118,14 @@ export default function PortfolioOverviewPage() {
                                                     </div>
                                                 );
                                             })}
+                                            {displayedSummaries.length === 0 &&
+                                                !portfolioSummaryQuery.isLoading && (
+                                                    <p className="py-6 text-center text-sm text-muted-foreground">
+                                                        {t(
+                                                            "portfolio.brokerFilter.empty",
+                                                        )}
+                                                    </p>
+                                                )}
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -833,6 +1139,12 @@ export default function PortfolioOverviewPage() {
                     </div>
                 </>
             )}
+
+            <ArchivedInvestmentsCard
+                investments={inactiveSummaries}
+                onRestore={(id) => updateInvestment(id, { is_active: true })}
+                t={t}
+            />
 
             <ConfirmDialog />
         </PageShell>

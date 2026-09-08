@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQuery } from "@tanstack/react-query";
 
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -69,14 +70,14 @@ export function useMarketLookupData<Quote>({
             return quotes[0] ?? null;
         },
         enabled: useYahoo && isOnline,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         refetchInterval: isOnline ? 60_000 : false,
     });
     const chartQuery = useQuery({
         queryKey: marketKeys.chart(symbol, range, interval),
         queryFn: () => apiClient.getMarketChart(symbol!, range, interval),
         enabled: useYahoo,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
     const providerChartQuery = useQuery({
         queryKey: marketKeys.providerChart(providerInvestment?.id, range),
@@ -102,7 +103,7 @@ export function useMarketLookupData<Quote>({
             };
         },
         enabled: isProviderAsset && !!providerInvestment,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
     return {

@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import type { ChartPeriod } from "@/components/charts";
@@ -114,7 +115,7 @@ export function usePortfolioTickerQuotes<T>(
         queryFn: () =>
             apiClient.getMarketQuotes<T>(symbols, { detail: "basic" }),
         enabled: isOnline && hasSymbols,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
         refetchInterval: active && isOnline ? 60_000 : false,
         refetchOnWindowFocus: false,
         retry: isOnline ? 1 : false,
@@ -147,7 +148,7 @@ export function useRebalanceInputs(currency: string) {
         queryKey: ["rebalance-inputs", currency],
         queryFn: () =>
             apiClient.computeRebalance({ model: "sixty_forty", currency }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 

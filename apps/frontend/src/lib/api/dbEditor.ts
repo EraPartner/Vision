@@ -5,7 +5,7 @@
  * All routes are admin-gated; the Bearer token is attached by apiRequest.
  */
 
-import { apiRequest } from '@/lib/api/client';
+import { apiRequest } from "@/lib/api/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,14 +31,23 @@ export interface TableSchema {
 
 export interface TableRows extends TableSchema {
     rows: DbRow[];
-    total: number;
+    total?: number;
     limit: number;
-    offset: number;
+    hasMore: boolean;
+    nextCursor: string | null;
 }
 
 export type FilterOp =
-    | 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte'
-    | 'contains' | 'startsWith' | 'isnull' | 'notnull';
+    | "eq"
+    | "ne"
+    | "lt"
+    | "lte"
+    | "gt"
+    | "gte"
+    | "contains"
+    | "startsWith"
+    | "isnull"
+    | "notnull";
 
 export interface DbFilter {
     column: string;
@@ -48,16 +57,21 @@ export interface DbFilter {
 
 export interface ReadParams {
     limit?: number;
-    offset?: number;
+    cursor?: string;
     orderBy?: string;
-    dir?: 'asc' | 'desc';
+    dir?: "asc" | "desc";
     filters?: DbFilter[];
 }
 
 export type DbChange =
-    | { op: 'insert'; values: Record<string, unknown> }
-    | { op: 'update'; pk: Record<string, unknown>; xmin?: string; set: Record<string, unknown> }
-    | { op: 'delete'; pk: Record<string, unknown>; xmin?: string };
+    | { op: "insert"; values: Record<string, unknown> }
+    | {
+          op: "update";
+          pk: Record<string, unknown>;
+          xmin?: string;
+          set: Record<string, unknown>;
+      }
+    | { op: "delete"; pk: Record<string, unknown>; xmin?: string };
 
 export interface PreviewStatement {
     op: string;
@@ -79,33 +93,44 @@ export interface CommitResult {
 
 // ── Calls ─────────────────────────────────────────────────────────────────────
 
-const base = (table: string) => `/api/admin/database/tables/${encodeURIComponent(table)}`;
+const base = (table: string) =>
+    `/api/admin/database/tables/${encodeURIComponent(table)}`;
 
 export function getTableSchema(table: string): Promise<TableSchema> {
     return apiRequest<TableSchema>(`${base(table)}/schema`);
 }
 
-export function getTableRows(table: string, params: ReadParams = {}): Promise<TableRows> {
+export function getTableRows(
+    table: string,
+    params: ReadParams = {},
+): Promise<TableRows> {
     const q = new URLSearchParams();
-    if (params.limit !== undefined) q.set('limit', String(params.limit));
-    if (params.offset !== undefined) q.set('offset', String(params.offset));
-    if (params.orderBy) q.set('orderBy', params.orderBy);
-    if (params.dir) q.set('dir', params.dir);
-    if (params.filters && params.filters.length) q.set('filters', JSON.stringify(params.filters));
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    if (params.cursor) q.set("cursor", params.cursor);
+    if (params.orderBy) q.set("orderBy", params.orderBy);
+    if (params.dir) q.set("dir", params.dir);
+    if (params.filters && params.filters.length)
+        q.set("filters", JSON.stringify(params.filters));
     const qs = q.toString();
-    return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ''}`);
+    return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ""}`);
 }
 
-export function previewTableMutation(table: string, changes: DbChange[]): Promise<PreviewResult> {
+export function previewTableMutation(
+    table: string,
+    changes: DbChange[],
+): Promise<PreviewResult> {
     return apiRequest<PreviewResult>(`${base(table)}/mutate`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ changes, dryRun: true }),
     });
 }
 
-export function commitTableMutation(table: string, changes: DbChange[]): Promise<CommitResult> {
+export function commitTableMutation(
+    table: string,
+    changes: DbChange[],
+): Promise<CommitResult> {
     return apiRequest<CommitResult>(`${base(table)}/mutate`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ changes }),
     });
 }

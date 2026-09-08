@@ -51,6 +51,37 @@ function gainLossOf(
 }
 
 describe("usePortfolioSummaries — gainLoss does not double-count (FE mirror of backend)", () => {
+    it("keeps archived history discoverable but excludes it from current totals", () => {
+        const { result } = renderHook(
+            () =>
+                usePortfolioSummaries({
+                    investments: [
+                        inv({ id: 1, current_price: 20 }),
+                        inv({ id: 2, current_price: 50, is_active: false }),
+                    ],
+                    transactions: [
+                        txn({ id: 1, investment_id: 1, amount: 10, units: 1 }),
+                        txn({ id: 2, investment_id: 2, amount: 25, units: 1 }),
+                    ],
+                }),
+            { wrapper: makeWrapper() },
+        );
+
+        expect(result.current.summaries.map((summary) => summary.id)).toEqual([
+            1,
+        ]);
+        expect(
+            result.current.inactiveSummaries.map((summary) => summary.id),
+        ).toEqual([2]);
+        expect(
+            result.current.allSummaries.map((summary) => summary.id),
+        ).toEqual([1, 2]);
+        expect(result.current.inactiveSummaries[0].transactions).toHaveLength(
+            1,
+        );
+        expect(result.current.totals.totalPortfolioValue).toBe(20);
+    });
+
     it("uses broker partitions and exposes legacy oversells instead of flat replay", () => {
         const { result } = renderHook(
             () =>

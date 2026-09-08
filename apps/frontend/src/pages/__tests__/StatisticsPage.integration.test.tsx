@@ -3,12 +3,19 @@ import { describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { useLocation } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import StatisticsPage from "@/pages/StatisticsPage";
 
 const API_BASE = "http://localhost:3002";
+
+function LocationProbe() {
+    return (
+        <output data-testid="location-search">{useLocation().search}</output>
+    );
+}
 
 /** Monthly summary with one real month so useStatistics returns non-empty data. */
 function monthlySummaryWithData() {
@@ -52,6 +59,38 @@ describe("StatisticsPage (integration)", () => {
                 ).toBeInTheDocument(),
             { timeout: 5000 },
         );
+    });
+
+    it("shows the 24-month default and persists explicit All time in the URL", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <>
+                <StatisticsPage />
+                <LocationProbe />
+            </>,
+            { initialEntries: ["/statistics"] },
+        );
+
+        await screen.findByRole("heading", { name: /no data yet/i });
+        const range = screen.getByRole("combobox", {
+            name: /date range/i,
+        });
+        expect(range).toHaveTextContent("Last 24 months");
+        expect(screen.getByTestId("location-search")).toHaveTextContent("");
+
+        await user.click(range);
+        await user.click(
+            await screen.findByRole("option", { name: "All time" }),
+        );
+
+        await waitFor(() =>
+            expect(screen.getByTestId("location-search")).toHaveTextContent(
+                "?window=all",
+            ),
+        );
+        expect(
+            screen.getByRole("combobox", { name: /date range/i }),
+        ).toHaveTextContent("All time");
     });
 
     it("renders without crashing with empty transaction data", async () => {

@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import type { AccountCreate, AccountUpdate } from "@/types/api";
@@ -27,7 +28,7 @@ export function useAccountMergePreview(sourceId: number, targetId?: number) {
         queryKey: accountKeys.mergePreview(sourceId, targetId ?? 0),
         queryFn: () => apiClient.previewMerge(sourceId, targetId!),
         enabled: targetId !== undefined,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 

@@ -25,6 +25,7 @@ import {
     Clock,
     Pencil,
     Plus,
+    Archive,
 } from "lucide-react";
 import { isUnitBased, isFixedIncome, isRealEstate } from "@/utils/assetClass";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -119,6 +120,7 @@ const TransactionRow = memo(function TransactionRow({
     editDialogOpen,
     onEdit,
     onDelete,
+    readOnly,
 }: {
     txn: TxnRow;
     t: Translate;
@@ -131,6 +133,7 @@ const TransactionRow = memo(function TransactionRow({
     editDialogOpen: boolean;
     onEdit: (txn: TxnRow, event: React.MouseEvent<HTMLElement>) => void;
     onDelete: (txn: TxnRow) => void;
+    readOnly: boolean;
 }) {
     const fmtNum = (val: number, decimals = 2) =>
         getNumberFmt(locale, decimals).format(val);
@@ -217,41 +220,43 @@ const TransactionRow = memo(function TransactionRow({
                 )}
             </div>
 
-            <div className="flex items-center gap-1">
-                {!nestedEdit ? (
+            {!readOnly && (
+                <div className="flex items-center gap-1">
+                    {!nestedEdit ? (
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                            onClick={(event) => onEdit(txn, event)}
+                            aria-label={t("aria.editTransaction")}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    ) : (
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label={t("aria.editTransaction")}
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded={editDialogOpen}
+                            onClick={(event) => onEdit(txn, event)}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    )}
                     <Button
                         size="icon"
                         variant="ghost"
-                        className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={(event) => onEdit(txn, event)}
-                        aria-label={t("aria.editTransaction")}
+                        className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => onDelete(txn)}
+                        aria-label={t("aria.deleteTransaction")}
                     >
-                        <Pencil className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                     </Button>
-                ) : (
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label={t("aria.editTransaction")}
-                        type="button"
-                        aria-haspopup="dialog"
-                        aria-expanded={editDialogOpen}
-                        onClick={(event) => onEdit(txn, event)}
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </Button>
-                )}
-                <Button
-                    size="icon"
-                    variant="ghost"
-                    className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => onDelete(txn)}
-                    aria-label={t("aria.deleteTransaction")}
-                >
-                    <Trash2 className="h-4 w-4" />
-                </Button>
-            </div>
+                </div>
+            )}
         </div>
     );
 });
@@ -277,6 +282,7 @@ function TransactionList({
     editTxnId,
     onEdit,
     onDelete,
+    readOnly,
 }: {
     transactions: TxnRow[];
     t: Translate;
@@ -289,6 +295,7 @@ function TransactionList({
     editTxnId: number | null;
     onEdit: (txn: TxnRow, event: React.MouseEvent<HTMLElement>) => void;
     onDelete: (txn: TxnRow) => void;
+    readOnly: boolean;
 }) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
@@ -336,6 +343,7 @@ function TransactionList({
                                 }
                                 onEdit={onEdit}
                                 onDelete={onDelete}
+                                readOnly={readOnly}
                             />
                         </div>
                     );
@@ -383,7 +391,8 @@ export function InvestmentDetailDialog({
             openDialog(true);
         };
 
-    const { deleteTransaction } = usePortfolio();
+    const { deleteTransaction, updateInvestment, isUpdatingInvestment } =
+        usePortfolio();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -399,6 +408,7 @@ export function InvestmentDetailDialog({
     const unitBased = isUnitBased(investment.assetClass);
     const fixedIncome = isFixedIncome(investment.assetClass);
     const realEstate = isRealEstate(investment.assetClass);
+    const archived = investment.is_active === false;
 
     // Anything FX-related is shown only when the holding is in a foreign currency;
     // for base-currency holdings the conversion is a no-op and the extra rows
@@ -433,7 +443,7 @@ export function InvestmentDetailDialog({
 
     // The same add-transaction control appears in three spots (overview footer,
     // empty-transactions CTA, transactions footer) — build it once.
-    const addTransactionControl = onAddTransaction ? (
+    const addTransactionControl = archived ? null : onAddTransaction ? (
         <Button
             size="sm"
             className="gap-1.5"
@@ -496,6 +506,19 @@ export function InvestmentDetailDialog({
         [confirm, deleteTransaction, t],
     );
 
+    const handleArchive = useCallback(async () => {
+        const ok = await confirm({
+            title: t("portfolio.archiveInvestment"),
+            description: t("portfolio.archiveInvestmentDesc", {
+                name: investment.name,
+            }),
+            confirmLabel: t("portfolio.archiveInvestment"),
+        });
+        if (!ok) return;
+        await updateInvestment(investment.id, { is_active: false });
+        setOpen(false);
+    }, [confirm, investment.id, investment.name, t, updateInvestment]);
+
     return (
         <>
             <Dialog
@@ -534,46 +557,69 @@ export function InvestmentDetailDialog({
                             <Badge variant="secondary">
                                 {getAssetClassLabel(t, investment.assetClass)}
                             </Badge>
+                            {archived && (
+                                <Badge variant="outline">
+                                    {t("portfolio.archived")}
+                                </Badge>
+                            )}
                             <PortfolioOversoldBadge
                                 oversold={
                                     apiHolding?.oversold ?? investment.oversold
                                 }
                             />
-                            <div className="ml-auto flex items-center gap-1.5">
-                                {onEditInvestment ? (
+                            {!archived && (
+                                <div className="ml-auto flex items-center gap-1.5">
+                                    {onEditInvestment ? (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5"
+                                            onClick={() =>
+                                                onEditInvestment(investment)
+                                            }
+                                        >
+                                            <Pencil className="h-4 w-4" />{" "}
+                                            {t("common.edit")}
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5"
+                                            type="button"
+                                            aria-haspopup="dialog"
+                                            aria-expanded={editInvestmentOpen}
+                                            onClick={openNested(
+                                                setEditInvestmentOpen,
+                                            )}
+                                        >
+                                            <Pencil className="h-4 w-4" />{" "}
+                                            {t("common.edit")}
+                                        </Button>
+                                    )}
                                     <Button
                                         size="sm"
                                         variant="outline"
                                         className="gap-1.5"
-                                        onClick={() =>
-                                            onEditInvestment(investment)
-                                        }
+                                        disabled={isUpdatingInvestment}
+                                        onClick={() => void handleArchive()}
                                     >
-                                        <Pencil className="h-4 w-4" />{" "}
-                                        {t("common.edit")}
+                                        <Archive className="h-4 w-4" />{" "}
+                                        {t("portfolio.archiveInvestment")}
                                     </Button>
-                                ) : (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1.5"
-                                        type="button"
-                                        aria-haspopup="dialog"
-                                        aria-expanded={editInvestmentOpen}
-                                        onClick={openNested(
-                                            setEditInvestmentOpen,
-                                        )}
-                                    >
-                                        <Pencil className="h-4 w-4" />{" "}
-                                        {t("common.edit")}
-                                    </Button>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                         <DialogDescription className="sr-only">
                             {investment.name}
                         </DialogDescription>
                     </DialogHeader>
+
+                    {archived && (
+                        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                            {t("portfolio.archivedExcluded")}
+                        </p>
+                    )}
 
                     <Tabs defaultValue="overview" className="mt-4">
                         <TabsList className="grid w-full grid-cols-2">
@@ -1209,6 +1255,7 @@ export function InvestmentDetailDialog({
                                     editTxnId={editTxnId}
                                     onEdit={handleEditTxn}
                                     onDelete={handleDeleteTxn}
+                                    readOnly={archived}
                                 />
                             )}
 
@@ -1223,7 +1270,7 @@ export function InvestmentDetailDialog({
             </Dialog>
             {/* Siblings of the dialog above, not children of its content: they must
           outlive its dismissal for their drafts to survive one. */}
-            {nestedMounted && !onAddTransaction && (
+            {nestedMounted && !archived && !onAddTransaction && (
                 <AddPortfolioTxnDialog
                     investment={investment}
                     open={addTxnOpen}
@@ -1231,7 +1278,7 @@ export function InvestmentDetailDialog({
                     returnFocusRef={nestedOpenerRef}
                 />
             )}
-            {nestedMounted && !onEditInvestment && (
+            {nestedMounted && !archived && !onEditInvestment && (
                 <EditInvestmentDialog
                     investment={investment}
                     open={editInvestmentOpen}
@@ -1239,7 +1286,7 @@ export function InvestmentDetailDialog({
                     returnFocusRef={nestedOpenerRef}
                 />
             )}
-            {nestedMounted && !onEditTransaction && editTxn && (
+            {nestedMounted && !archived && !onEditTransaction && editTxn && (
                 <EditPortfolioTxnDialog
                     investment={investment}
                     transaction={editTxn}

@@ -68,6 +68,8 @@ export const apiClient = {
     createAccount: acct.createAccount,
     updateAccount: acct.updateAccount,
     deleteAccount: acct.deleteAccount,
+    getAccountPortfolioLotRetagPreview: acct.getAccountPortfolioLotRetagPreview,
+    closeAccount: acct.closeAccount,
     mergeAccounts: acct.mergeAccounts,
     previewMerge: acct.previewMerge,
     setOpeningBalance: acct.setOpeningBalance,
@@ -131,6 +133,7 @@ export const apiClient = {
     createPortfolioTransaction: port.createPortfolioTransaction,
     updatePortfolioTransaction: port.updatePortfolioTransaction,
     deletePortfolioTransaction: port.deletePortfolioTransaction,
+    bulkRetagPortfolioTransactions: port.bulkRetagPortfolioTransactions,
 
     // Portfolio imports
     importPortfolioCSVCustom: portImp.importPortfolioCSVCustom,
@@ -186,7 +189,6 @@ export const apiClient = {
     // Electron (desktop only)
     isElectron: electron.isElectron,
     checkForUpdates: electron.checkForUpdates,
-    triggerDockerUpdate: electron.triggerDockerUpdate,
     installShellUpdate: electron.installShellUpdate,
     preUpdateBackup: electron.preUpdateBackup,
     runBackup: electron.runBackup,

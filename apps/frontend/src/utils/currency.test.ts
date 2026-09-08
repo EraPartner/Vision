@@ -3,6 +3,7 @@ import {
     formatCurrency,
     formatCurrencyCompact,
     formatPercent,
+    formatEditableNumber,
     numberFormatToLocale,
     parseLocaleNumber,
 } from "./currency";
@@ -315,59 +316,67 @@ describe("formatPercent — degradation", () => {
 
 describe("parseLocaleNumber", () => {
     test("returns the input unchanged when given a number", () => {
-        expect(parseLocaleNumber(42.5)).toBe(42.5);
-        expect(parseLocaleNumber(-7)).toBe(-7);
-        expect(parseLocaleNumber(0)).toBe(0);
+        expect(parseLocaleNumber(42.5, "eu")).toBe(42.5);
+        expect(parseLocaleNumber(-7, "us")).toBe(-7);
+        expect(parseLocaleNumber(0, "ch")).toBe(0);
     });
 
-    test("parses plain US-format decimals", () => {
-        expect(parseLocaleNumber("42.50")).toBe(42.5);
-        expect(parseLocaleNumber("0.01")).toBe(0.01);
+    test.each([
+        ["eu", "1.234,56", 1234.56],
+        ["eu", "1000,005", 1000.005],
+        ["us", "1,234.56", 1234.56],
+        ["ch", "1'234.56", 1234.56],
+        ["ch", "1’234.56", 1234.56],
+        ["in", "1,23,456.78", 123456.78],
+    ] as const)("parses %s input %s", (format, input, expected) => {
+        expect(parseLocaleNumber(input, format)).toBe(expected);
     });
 
-    test("parses EU-format comma decimal (1,50 → 1.5)", () => {
-        expect(parseLocaleNumber("1,50")).toBe(1.5);
-        expect(parseLocaleNumber("0,99")).toBe(0.99);
+    test("treats a single EU dot as grouping, not a decimal", () => {
+        expect(parseLocaleNumber("1.234", "eu")).toBe(1234);
     });
 
-    test("parses US thousands+decimal (1,500.25 → 1500.25)", () => {
-        expect(parseLocaleNumber("1,500.25")).toBe(1500.25);
-        expect(parseLocaleNumber("12,345.67")).toBe(12345.67);
+    test("accepts ungrouped values and strict edge currency symbols", () => {
+        expect(parseLocaleNumber("€ 42,50", "eu")).toBe(42.5);
+        expect(parseLocaleNumber("42.50 $", "us")).toBe(42.5);
+        expect(parseLocaleNumber("123456.78", "in")).toBe(123456.78);
     });
 
-    test("parses EU thousands+decimal (1.234,56 → 1234.56)", () => {
-        expect(parseLocaleNumber("1.234,56")).toBe(1234.56);
-        expect(parseLocaleNumber("12.345,67")).toBe(12345.67);
+    test("parses signs and accounting negatives", () => {
+        expect(parseLocaleNumber("-€ 42,50", "eu")).toBe(-42.5);
+        expect(parseLocaleNumber("+42.50", "us")).toBe(42.5);
+        expect(parseLocaleNumber("(1'234.50)", "ch")).toBe(-1234.5);
     });
 
-    test("treats double-comma + 3-digit tail as US thousands separator (12,345,500 → 12345500)", () => {
-        expect(parseLocaleNumber("12,345,500")).toBe(12345500);
+    test.each([
+        ["eu", "1,234.56"],
+        ["us", "1.234,56"],
+        ["ch", "1,234.56"],
+        ["in", "123,456.78"],
+        ["us", "12,34.56"],
+        ["eu", "1.23,45"],
+        ["ch", "1'234’567.89"],
+        ["eu", "12,34tail"],
+        ["us", "$1$"],
+        ["us", "1 234.56"],
+    ] as const)("rejects malformed or foreign %s input %s", (format, input) => {
+        expect(Number.isNaN(parseLocaleNumber(input, format))).toBe(true);
     });
 
-    test("treats single-comma + 3-digit tail as US thousands separator (1,000 → 1000)", () => {
-        expect(parseLocaleNumber("1,000")).toBe(1000);
-        expect(parseLocaleNumber("5,000")).toBe(5000);
-        expect(parseLocaleNumber("999,000")).toBe(999000);
+    test("returns NaN for empty and non-numeric input", () => {
+        expect(Number.isNaN(parseLocaleNumber("", "eu"))).toBe(true);
+        expect(Number.isNaN(parseLocaleNumber("abc", "us"))).toBe(true);
+        expect(Number.isNaN(parseLocaleNumber(null, "ch"))).toBe(true);
+        expect(Number.isNaN(parseLocaleNumber(undefined, "in"))).toBe(true);
     });
+});
 
-    test("strips currency symbols and whitespace", () => {
-        expect(parseLocaleNumber("$ 42.50 ")).toBe(42.5);
-        expect(parseLocaleNumber("€1,50")).toBe(1.5);
-    });
-
-    test("parses parenthesised negatives", () => {
-        expect(parseLocaleNumber("(42.50)")).toBe(-42.5);
-    });
-
-    test("parses leading-sign values", () => {
-        expect(parseLocaleNumber("-42.50")).toBe(-42.5);
-        expect(parseLocaleNumber("+42.50")).toBe(42.5);
-    });
-
-    test("returns NaN for non-numeric input", () => {
-        expect(Number.isNaN(parseLocaleNumber(""))).toBe(true);
-        expect(Number.isNaN(parseLocaleNumber("abc"))).toBe(true);
-        expect(Number.isNaN(parseLocaleNumber(null))).toBe(true);
-        expect(Number.isNaN(parseLocaleNumber(undefined))).toBe(true);
+describe("formatEditableNumber", () => {
+    test("emits ungrouped drafts that round-trip in every configured format", () => {
+        for (const format of ["eu", "us", "ch", "in"] as const) {
+            const draft = formatEditableNumber(1234.56, format);
+            expect(parseLocaleNumber(draft, format)).toBe(1234.56);
+            expect(draft).toBe(format === "eu" ? "1234,56" : "1234.56");
+        }
     });
 });

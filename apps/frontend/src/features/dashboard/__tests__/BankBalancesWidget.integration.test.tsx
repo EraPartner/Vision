@@ -118,7 +118,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         renderWithApp(<BankBalancesWidget />);
 
         const heading = await screen.findByText("Total Net Liquid Position");
-        const totalCard = heading.closest(".glass-regular") as HTMLElement;
+        const totalCard = heading.closest(".glass-thin") as HTMLElement;
 
         // The headline figure is the server's sum over its three payload rows.
         // de-DE has no compact suffix at this magnitude, so the full value stays
@@ -157,7 +157,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         renderWithApp(<BankBalancesWidget />);
 
         const heading = await screen.findByText("Total Net Liquid Position");
-        const totalCard = heading.closest(".glass-regular") as HTMLElement;
+        const totalCard = heading.closest(".glass-thin") as HTMLElement;
         expect(within(totalCard).getByText(/2\.450,75/)).toBeInTheDocument();
         expect(
             within(totalCard).queryByTitle(/2\.450,75/),
@@ -183,7 +183,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         const card = (
             await screen.findByRole("link", { name: "KBC Checking" })
-        ).closest(".glass-regular") as HTMLElement;
+        ).closest(".glass-thin") as HTMLElement;
         expect(within(card).getByText("73 transactions")).toBeInTheDocument();
     });
 
@@ -193,7 +193,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         const drifting = (
             await screen.findByRole("link", { name: "KBC Checking" })
-        ).closest(".glass-regular") as HTMLElement;
+        ).closest(".glass-thin") as HTMLElement;
         // Same wording + statement date as the Accounts hub badge.
         const chip = within(drifting).getByText(/^Drift/);
         expect(chip.textContent).toMatch(/-49,25/);
@@ -204,7 +204,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         const clean = screen
             .getByRole("link", { name: "Argenta Savings" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         expect(within(clean).queryByText(/^Drift/)).not.toBeInTheDocument();
     });
 
@@ -235,7 +235,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // visible and there is no redundant full-value tooltip.
         const usdCard = (
             await screen.findByRole("link", { name: "Wise USD" })
-        ).closest(".glass-regular") as HTMLElement;
+        ).closest(".glass-thin") as HTMLElement;
         expect(within(usdCard).getByText(/1\.234,50\s*\$/)).toBeInTheDocument();
         expect(
             within(usdCard).queryByTitle(/1\.234,50/),
@@ -245,7 +245,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // The EUR account beside it still reads in euro — nothing global changed.
         const eurCard = screen
             .getByRole("link", { name: "Argenta Savings" })
-            .closest(".glass-regular") as HTMLElement;
+            .closest(".glass-thin") as HTMLElement;
         expect(eurCard.textContent).toMatch(/€/);
         expect(eurCard.textContent).not.toMatch(/\$/);
     });
@@ -322,7 +322,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         renderWithApp(<BankBalancesWidget />);
 
         const heading = await screen.findByText("Balance History");
-        const historyCard = heading.closest(".glass-regular") as HTMLElement;
+        const historyCard = heading.closest(".glass-thin") as HTMLElement;
         expect(within(historyCard).getByText("KBC Daily")).toBeInTheDocument();
         expect(
             within(historyCard).queryByText("Aggregation label must not win"),
@@ -356,7 +356,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         const card = (
             await screen.findByRole("link", { name: "KBC Checking" })
-        ).closest(".glass-regular") as HTMLElement;
+        ).closest(".glass-thin") as HTMLElement;
         const chip = within(card).getByText(/^Drift/);
         expect(chip.className).toMatch(
             /border-warning\/40 bg-warning\/15 text-warning/,

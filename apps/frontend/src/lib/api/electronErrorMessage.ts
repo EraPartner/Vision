@@ -3,8 +3,8 @@
  *
  * The sibling `apiErrorToMessage` deliberately does not cover these: nothing
  * here is HTTP, and blanket generic copy would throw away main-process detail
- * that is genuinely useful ("Shell update not available in embedded mode — use
- * Docker image update instead."). What the toasts leaked instead was the
+ * that is genuinely useful ("Native update checksum is invalid"). What the
+ * toasts leaked instead was the
  * machine wrapper around that detail, in two shapes:
  *
  *   1. A rejected `ipcRenderer.invoke` arrives as
@@ -21,15 +21,18 @@
  */
 
 /** The `t` from `useLanguage()`. Structural so this module stays React-free. */
-export type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+export type TranslateFn = (
+    key: string,
+    vars?: Record<string, string | number>,
+) => string;
 
 /** i18n keys this module can return. Exported so tests assert on keys, not copy. */
 export const ELECTRON_ERROR_KEYS = {
-    notFound: 'electronError.notFound',
-    permission: 'electronError.permission',
-    diskFull: 'electronError.diskFull',
-    notReady: 'electronError.notReady',
-    unknown: 'electronError.unknown',
+    notFound: "electronError.notFound",
+    permission: "electronError.permission",
+    diskFull: "electronError.diskFull",
+    notReady: "electronError.notReady",
+    unknown: "electronError.unknown",
 } as const;
 
 /** `Error invoking remote method 'channel': rest` → `rest`. */
@@ -51,12 +54,12 @@ const MACHINE_PATTERNS: { pattern: RegExp; key: string }[] = [
 
 /** Pull a string message out of an unknown throwable or an IPC result field. */
 function readRaw(err: unknown): string {
-    if (typeof err === 'string') return err;
-    if (err && typeof err === 'object') {
+    if (typeof err === "string") return err;
+    if (err && typeof err === "object") {
         const message = (err as Record<string, unknown>).message;
-        if (typeof message === 'string') return message;
+        if (typeof message === "string") return message;
     }
-    return '';
+    return "";
 }
 
 /**
@@ -68,9 +71,9 @@ function readRaw(err: unknown): string {
  */
 export function electronErrorToMessage(err: unknown, t: TranslateFn): string {
     const unwrapped = readRaw(err)
-        .replace(ERROR_PREFIX, '')
-        .replace(IPC_WRAPPER, '')
-        .replace(ERROR_PREFIX, '')
+        .replace(ERROR_PREFIX, "")
+        .replace(IPC_WRAPPER, "")
+        .replace(ERROR_PREFIX, "")
         .trim();
 
     if (!unwrapped) return t(ELECTRON_ERROR_KEYS.unknown);

@@ -166,6 +166,12 @@ export default function OwesPage() {
                                     <Progress
                                         value={progress}
                                         className="h-2"
+                                        aria-label={t(
+                                            "owesPage.repaymentProgress",
+                                            {
+                                                recipient: item.recipient_name,
+                                            },
+                                        )}
                                     />
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>
@@ -173,7 +179,9 @@ export default function OwesPage() {
                                                 amount: formatCurrency(
                                                     item.total_paid,
                                                     defaultCurrency,
-                                                    locale, appSettings.showDecimalPlaces ?? 2
+                                                    locale,
+                                                    appSettings.showDecimalPlaces ??
+                                                        2,
                                                 ),
                                             })}
                                         </span>
@@ -182,7 +190,9 @@ export default function OwesPage() {
                                                 amount: formatCurrency(
                                                     item.total_owed,
                                                     defaultCurrency,
-                                                    locale, appSettings.showDecimalPlaces ?? 2
+                                                    locale,
+                                                    appSettings.showDecimalPlaces ??
+                                                        2,
                                                 ),
                                             })}
                                         </span>

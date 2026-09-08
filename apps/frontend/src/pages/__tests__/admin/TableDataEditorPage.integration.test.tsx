@@ -49,7 +49,8 @@ const rowsResponse = {
     ],
     total: 2,
     limit: 100,
-    offset: 0,
+    hasMore: false,
+    nextCursor: null,
 };
 
 function renderEditor() {
@@ -77,6 +78,18 @@ describe("TableDataEditorPage (integration)", () => {
         expect(await screen.findByText("USD")).toBeInTheDocument();
     });
 
+    it("renders every row of a read-only table without a primary key", async () => {
+        server.use(
+            http.get(
+                `${API_BASE}/api/admin/database/tables/transactions/rows`,
+                () => ok({ ...rowsResponse, primaryKey: [] }),
+            ),
+        );
+        renderEditor();
+        expect(await screen.findByText("EUR")).toBeInTheDocument();
+        expect(await screen.findByText("USD")).toBeInTheDocument();
+    });
+
     it("shows the bypass-validation caution banner", async () => {
         server.use(
             http.get(
@@ -88,6 +101,53 @@ describe("TableDataEditorPage (integration)", () => {
         expect(
             await screen.findByText(/bypass the app's validation/i),
         ).toBeInTheDocument();
+    });
+
+    it("uses opaque cursors for next-page navigation and keeps Previous local", async () => {
+        const requestedCursors: Array<string | null> = [];
+        server.use(
+            http.get(
+                `${API_BASE}/api/admin/database/tables/transactions/rows`,
+                ({ request }) => {
+                    const cursor = new URL(request.url).searchParams.get(
+                        "cursor",
+                    );
+                    requestedCursors.push(cursor);
+                    if (cursor === "second-page") {
+                        return ok({
+                            ...rowsResponse,
+                            rows: [
+                                {
+                                    id: 3,
+                                    amount: "8.75",
+                                    currency: "GBP",
+                                    __xmin: "502",
+                                },
+                            ],
+                            total: undefined,
+                            hasMore: false,
+                            nextCursor: null,
+                        });
+                    }
+                    return ok({
+                        ...rowsResponse,
+                        hasMore: true,
+                        nextCursor: "second-page",
+                    });
+                },
+            ),
+        );
+
+        const user = userEvent.setup();
+        renderEditor();
+        expect(await screen.findByText("EUR")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /next page/i }));
+        expect(await screen.findByText("GBP")).toBeInTheDocument();
+        expect(requestedCursors).toContain("second-page");
+        await user.click(
+            screen.getByRole("button", { name: /previous page/i }),
+        );
+        expect(await screen.findByText("EUR")).toBeInTheDocument();
     });
 
     it("adds a row and previews the generated SQL before commit", async () => {

@@ -108,9 +108,12 @@ describe("responsive layout contract", () => {
         expect(portfolio).toContain("lg:[&>*:only-child]:col-span-3");
     });
 
-    it("widens the import page without changing its one-column order", () => {
+    it("uses a wide import workspace with a desktop reference sidebar", () => {
         const source = readSource("src/pages/ImportPage.tsx");
-        expect(source).toContain('<PageShell className="max-w-4xl mx-auto">');
-        expect(source).not.toContain("max-w-2xl mx-auto");
+        expect(source).toContain('<PageShell className="max-w-7xl mx-auto">');
+        expect(source).toContain(
+            "xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]",
+        );
+        expect(source).not.toContain("xl:sticky");
     });
 });

@@ -29,7 +29,7 @@ import {
 import { useAccounts } from "@/hooks/useAccounts";
 import {
     ADD_TRANSACTION_FIELD_IDS,
-    addTransactionSchema,
+    createAddTransactionSchema,
     createAddTransactionFormState,
 } from "@/features/transactions/addTransactionForm";
 import { fieldErrorsFromZod } from "@/lib/forms/schemas";
@@ -117,7 +117,9 @@ export function AddTransactionDialog() {
     // used to be hand-rolled here; issue messages are i18n keys translated at
     // this seam, so the message on each field is unchanged. Server errors
     // still toast, below.
-    const parsed = addTransactionSchema.safeParse(form);
+    const parsed = createAddTransactionSchema(
+        appSettings.numberFormat,
+    ).safeParse(form);
     const fieldErrors: FieldErrorMap = fieldErrorsFromZod(
         parsed.success ? undefined : parsed.error,
         ADD_TRANSACTION_FIELD_IDS,
@@ -249,7 +251,6 @@ export function AddTransactionDialog() {
                                 id="tx_amount"
                                 type="text"
                                 inputMode="decimal"
-                                pattern="^-?[0-9]+([.,][0-9]+)?$"
                                 placeholder={t(
                                     "form.addTransaction.amountPlaceholder",
                                 )}

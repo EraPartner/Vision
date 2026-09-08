@@ -68,56 +68,86 @@ function getNumberFormatter(
     return formatter;
 }
 
+export const NUMBER_FORMATS = ["eu", "us", "ch", "in"] as const;
+export type NumberFormat = (typeof NUMBER_FORMATS)[number];
+
 /**
- * Map a numberFormat setting value (from AppSettings) to a BCP 47 locale string
- * suitable for use with Intl.NumberFormat.
- *
- * numberFormat values:  'eu' | 'us' | 'ch' | 'in'
- */
-/**
- * Parse a user-entered numeric string into a Number, handling both
- * comma-as-decimal (EU) and period-as-decimal (US) regardless of
- * what `Number()` would do alone. Returns NaN if unparseable.
- *
- * Heuristic: if both "," and "." are present, the rightmost wins as decimal.
- * If only "," and the segment after it is not 3 digits, treat as decimal.
+ * Strictly parse a user-entered number using the selected app number format.
+ * Grouping is optional, but when present it must match the locale exactly.
+ * A currency symbol may appear once at either edge, outside the number.
  */
 export function parseLocaleNumber(
     input: string | number | null | undefined,
+    numberFormat: NumberFormat,
 ): number {
-    if (typeof input === "number") return input;
+    if (typeof input === "number") return Number.isFinite(input) ? input : NaN;
     if (input == null) return NaN;
     let s = String(input).trim();
     if (!s) return NaN;
-    s = s.replace(/\s/g, "").replace(/[$€£¥]/g, "");
+
     let negative = false;
     if (s.startsWith("(") && s.endsWith(")")) {
         negative = true;
-        s = s.slice(1, -1);
+        s = s.slice(1, -1).trim();
+        if (!s || /^[+-]/.test(s)) return NaN;
+    } else if (s.includes("(") || s.includes(")")) {
+        return NaN;
     }
     if (s.startsWith("-")) {
-        negative = !negative;
-        s = s.slice(1);
+        negative = true;
+        s = s.slice(1).trimStart();
     } else if (s.startsWith("+")) {
-        s = s.slice(1);
+        s = s.slice(1).trimStart();
     }
-    const lastComma = s.lastIndexOf(",");
-    const lastDot = s.lastIndexOf(".");
-    if (lastComma >= 0 && lastDot >= 0) {
-        if (lastComma > lastDot) s = s.replace(/\./g, "").replace(",", ".");
-        else s = s.replace(/,/g, "");
-    } else if (lastComma >= 0) {
-        const tail = s.length - lastComma - 1;
-        if (tail === 3) s = s.replace(/,/g, "");
-        else s = s.replace(",", ".");
-    } else if (lastDot >= 0 && s.indexOf(".") !== lastDot) {
-        // Only dots, more than one of them → EU thousands grouping (e.g.
-        // "1.234.567"). A single dot is left untouched as the decimal point.
-        s = s.replace(/\./g, "");
+
+    const symbol = "[$€£¥₹]";
+    const prefix = s.match(new RegExp(`^${symbol}\\s*`));
+    if (prefix) s = s.slice(prefix[0].length);
+    const suffix = s.match(new RegExp(`\\s*${symbol}$`));
+    if (suffix) {
+        if (prefix) return NaN;
+        s = s.slice(0, -suffix[0].length);
     }
-    const n = parseFloat(s);
-    if (isNaN(n)) return NaN;
+    if (!s || /\s/.test(s)) return NaN;
+
+    const patterns: Record<NumberFormat, RegExp> = {
+        eu: /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/,
+        us: /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/,
+        ch: /^(?:\d+|\d{1,3}(?:'\d{3})+|\d{1,3}(?:’\d{3})+)(?:\.\d+)?$/,
+        in: /^(?:\d+|\d{1,2}(?:,\d{2})*,\d{3})(?:\.\d+)?$/,
+    };
+    if (!patterns[numberFormat].test(s)) return NaN;
+
+    const decimalSeparator = numberFormat === "eu" ? "," : ".";
+    const groupingSeparator =
+        numberFormat === "eu"
+            ? /\./g
+            : numberFormat === "us" || numberFormat === "in"
+              ? /,/g
+              : /['’]/g;
+    const normalized = s
+        .replace(groupingSeparator, "")
+        .replace(decimalSeparator, ".");
+    const n = Number(normalized);
+    if (!Number.isFinite(n)) return NaN;
     return negative ? -n : n;
+}
+
+/** Serialize a numeric API value into an ungrouped, locale-parseable form draft. */
+export function formatEditableNumber(
+    value: number | string | null | undefined,
+    numberFormat: NumberFormat,
+): string {
+    if (value === null || value === undefined || value === "") return "";
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "";
+    const plain = String(numeric).includes("e")
+        ? numeric.toLocaleString("en-US", {
+              useGrouping: false,
+              maximumFractionDigits: 20,
+          })
+        : String(numeric);
+    return numberFormat === "eu" ? plain.replace(".", ",") : plain;
 }
 
 export function numberFormatToLocale(numberFormat: string): string {

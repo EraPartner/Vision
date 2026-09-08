@@ -36,6 +36,7 @@ import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
 import { useWatchlistMarketQueries } from "./usePortfolioQueries";
+import { formatEditableNumber } from "@/utils/currency";
 
 interface WatchlistChartDialogProps {
     item: WatchlistItem | null;
@@ -82,7 +83,11 @@ export function WatchlistChartDialog({
 
         // parseDecimal's default 0-fallback would silently save a 0 target for
         // garbage input like "1e999"; validate explicitly instead.
-        const targetValue = parseDecimal(newTargetPrice, NaN);
+        const targetValue = parseDecimal(
+            newTargetPrice,
+            appSettings.numberFormat,
+            NaN,
+        );
         if (
             !Number.isFinite(targetValue) ||
             targetValue <= 0 ||
@@ -182,15 +187,18 @@ export function WatchlistChartDialog({
                                         aria-label={t(
                                             "watchlistChart.targetPrice",
                                         )}
-                                        type="number"
-                                        step="0.01"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={newTargetPrice}
                                         onChange={(e) =>
                                             setNewTargetPrice(e.target.value)
                                         }
                                         placeholder={
                                             hasValidTarget
-                                                ? targetPrice.toString()
+                                                ? formatEditableNumber(
+                                                      targetPrice,
+                                                      appSettings.numberFormat,
+                                                  )
                                                 : "0"
                                         }
                                         className="h-8"
@@ -215,7 +223,10 @@ export function WatchlistChartDialog({
                                 <button
                                     onClick={() => {
                                         setNewTargetPrice(
-                                            targetPrice.toString(),
+                                            formatEditableNumber(
+                                                targetPrice,
+                                                appSettings.numberFormat,
+                                            ),
                                         );
                                         setEditingPrice(true);
                                     }}

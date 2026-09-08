@@ -10,7 +10,12 @@ import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
 import type { Account } from "@/types/api";
 
 vi.mock("sonner", () => ({
-    toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    toast: {
+        success: vi.fn(),
+        error: vi.fn(),
+        warning: vi.fn(),
+        info: vi.fn(),
+    },
 }));
 
 const API_BASE = "http://localhost:3002";
@@ -60,13 +65,23 @@ const SINGLE_CURRENCY = {
 function mockOpeningBalanceApi() {
     const calls: Array<{ id: string; body: Record<string, unknown> }> = [];
     server.use(
-        http.post(`${API_BASE}/api/accounts/:id/opening-balance`, async ({ request, params }) => {
-            calls.push({
-                id: String(params.id),
-                body: (await request.json()) as Record<string, unknown>,
-            });
-            return ok({ transaction: { id: 1, balance: 0, transfer_source: "opening" }, warning: null });
-        }),
+        http.post(
+            `${API_BASE}/api/accounts/:id/opening-balance`,
+            async ({ request, params }) => {
+                calls.push({
+                    id: String(params.id),
+                    body: (await request.json()) as Record<string, unknown>,
+                });
+                return ok({
+                    transaction: {
+                        id: 1,
+                        balance: 0,
+                        transfer_source: "opening",
+                    },
+                    warning: null,
+                });
+            },
+        ),
     );
     return calls;
 }
@@ -93,7 +108,9 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
 
         // 100 (the EUR partition) — NOT 150 (every partition converted into EUR).
         expect(balanceInput().value).toBe("100");
-        expect(screen.getByText(/^Opening balance \(EUR\)$/)).toBeInTheDocument();
+        expect(
+            screen.getByText(/^Opening balance \(EUR\)$/),
+        ).toBeInTheDocument();
     });
 
     it("prefills and stamps in reconcilable_currency when it differs from the declared one", async () => {
@@ -102,9 +119,13 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         await renderDialog(MISLABELLED);
 
         expect(balanceInput().value).toBe("1000");
-        expect(screen.getByText(/^Opening balance \(USD\)$/)).toBeInTheDocument();
+        expect(
+            screen.getByText(/^Opening balance \(USD\)$/),
+        ).toBeInTheDocument();
 
-        await user.click(screen.getByRole("button", { name: "Set opening balance" }));
+        await user.click(
+            screen.getByRole("button", { name: "Set opening balance" }),
+        );
 
         await vi.waitFor(() => expect(calls).toHaveLength(1));
         expect(calls[0].id).toBe("10");
@@ -118,18 +139,28 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         const user = userEvent.setup();
         await renderDialog(SINGLE_CURRENCY);
 
-        expect(balanceInput().value).toBe("2450.75");
-        expect(screen.getByText(/^Opening balance \(EUR\)$/)).toBeInTheDocument();
+        expect(balanceInput().value).toBe("2450,75");
+        expect(
+            screen.getByText(/^Opening balance \(EUR\)$/),
+        ).toBeInTheDocument();
 
-        await user.click(screen.getByRole("button", { name: "Set opening balance" }));
+        await user.click(
+            screen.getByRole("button", { name: "Set opening balance" }),
+        );
 
         await vi.waitFor(() => expect(calls).toHaveLength(1));
-        expect(calls[0].body).toMatchObject({ balance: 2450.75, currency: "EUR" });
+        expect(calls[0].body).toMatchObject({
+            balance: 2450.75,
+            currency: "EUR",
+        });
     });
 
     it("still prefers a stored statement reading over either computed figure", async () => {
         mockOpeningBalanceApi();
-        await renderDialog({ ...MULTI_CURRENCY, statement_balance: 120 } as Account);
+        await renderDialog({
+            ...MULTI_CURRENCY,
+            statement_balance: 120,
+        } as Account);
 
         expect(balanceInput().value).toBe("120");
     });

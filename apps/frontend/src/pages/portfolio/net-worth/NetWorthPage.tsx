@@ -52,6 +52,11 @@ import {
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
 import { useNetWorthSummary } from "@/features/portfolio/usePortfolioQueries";
+import { useAccounts } from "@/hooks/useAccounts";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { NetWorthByAccountTable } from "./NetWorthByAccountTable";
+import { buildNetWorthAccountRows } from "./netWorthByAccount";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -66,6 +71,9 @@ export default function NetWorthPage() {
     const targetCurrency = appSettings.defaultCurrency || "EUR";
 
     const { data, isLoading, error } = useNetWorthSummary(targetCurrency);
+    const accountsQuery = useAccounts({ active: "all" });
+    const portfolioSummaryQuery = usePortfolioSummaryQuery(targetCurrency);
+    const currencyConverter = useCurrencyConverter(targetCurrency);
 
     const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
     const isOnline = useOnlineStatus();
@@ -155,6 +163,23 @@ export default function NetWorthPage() {
         investments: 0,
         netWorth: 0,
     };
+    const byAccountRows = useMemo(
+        () =>
+            accountsQuery.data && portfolioSummaryQuery.data
+                ? buildNetWorthAccountRows(
+                      accountsQuery.data.items,
+                      portfolioSummaryQuery.data,
+                      currencyConverter.convertToTargetIfAvailable,
+                      t("networth.byAccount.unassigned"),
+                  )
+                : undefined,
+        [
+            accountsQuery.data,
+            portfolioSummaryQuery.data,
+            currencyConverter.convertToTargetIfAvailable,
+            t,
+        ],
+    );
 
     const tooltipLabelFormatter = useCallback(
         (v: string) => fmtDay(v, appSettings.dateFormat),
@@ -394,6 +419,34 @@ export default function NetWorthPage() {
                     )}
                 </div>
             </div>
+
+            {accountsQuery.isLoading ||
+            portfolioSummaryQuery.isLoading ||
+            currencyConverter.isLoading ? (
+                <Card>
+                    <CardContent variant="headerless">
+                        <Skeleton className="h-48 w-full" />
+                    </CardContent>
+                </Card>
+            ) : accountsQuery.isError ||
+              portfolioSummaryQuery.isError ||
+              currencyConverter.error ||
+              !byAccountRows ? (
+                <Card>
+                    <CardContent variant="headerless">
+                        <p className="text-sm text-destructive">
+                            {t("networth.byAccount.unavailable")}
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <NetWorthByAccountTable
+                    rows={byAccountRows}
+                    currency={targetCurrency}
+                    headline={current.netWorth}
+                    t={t}
+                />
+            )}
 
             <NetWorthChart
                 snapshots={displaySnapshots}

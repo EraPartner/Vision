@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { registerUndo } from "@/lib/undo";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -44,7 +45,7 @@ export function useTransactions(params?: UseTransactionsParams) {
     const query = useQuery({
         queryKey: transactionKeys.list(params),
         queryFn: () => apiClient.getTransactions(params),
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
@@ -67,7 +68,7 @@ export function useAccountLedger(
                 include_balance: true,
             }),
         enabled,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         placeholderData: (previous) => previous,
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);

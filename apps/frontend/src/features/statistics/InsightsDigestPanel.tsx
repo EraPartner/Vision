@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { useInsightsDigest } from "@/hooks/useInsightsDigest";
+import {
+    useDismissInsight,
+    useInsightsDigest,
+} from "@/hooks/useInsightsDigest";
 import {
     Card,
     CardContent,
@@ -22,14 +25,6 @@ import {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import {
-    countUndismissed,
-    dismissOutlier,
-    dismissSubscription,
-    filterDigest,
-    loadDismissState,
-    type SubscriptionFindingType,
-} from "@/lib/insightsDismiss";
 import type { CategoryOutlier } from "@/lib/api/info";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import {
@@ -51,9 +46,8 @@ export function InsightsDigestPanel() {
     const formatCurrency = useCurrencyFormatter();
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(true);
-    const [dismissState, setDismissState] = useState(loadDismissState);
-
     const { data, isLoading, error } = useInsightsDigest();
+    const dismissMutation = useDismissInsight();
 
     const PATTERN_LABELS: Record<string, string> = {
         weekly: t("recurring.pattern.weekly"),
@@ -66,13 +60,23 @@ export function InsightsDigestPanel() {
 
     const handleDismissSubscription = (
         recipientId: number,
-        findingType: SubscriptionFindingType,
+        findingType: "new" | "priceChange",
     ) => {
-        setDismissState(dismissSubscription(recipientId, findingType));
+        dismissMutation.mutate({
+            kind:
+                findingType === "new"
+                    ? "subscription_new"
+                    : "subscription_price_change",
+            recipient_id: recipientId,
+        });
     };
 
     const handleDismissOutlier = (outlier: CategoryOutlier) => {
-        setDismissState(dismissOutlier(outlier));
+        dismissMutation.mutate({
+            kind: "category_outlier",
+            category_id: outlier.categoryId,
+            month_key: outlier.monthKey,
+        });
     };
 
     if (isLoading) {
@@ -92,9 +96,16 @@ export function InsightsDigestPanel() {
 
     if (error || !data) return null;
 
-    const { newSubscriptions, priceChanges, categoryOutliers, cashForecast } =
-        filterDigest(data, dismissState);
-    const count = countUndismissed(data, dismissState);
+    const {
+        subscriptionCreep: { new: newSubscriptions, priceChanges },
+        categoryOutliers,
+        cashForecast,
+    } = data;
+    const count =
+        newSubscriptions.length +
+        priceChanges.length +
+        categoryOutliers.length +
+        (cashForecast?.prominence === "alert" ? 1 : 0);
 
     if (
         newSubscriptions.length === 0 &&
@@ -289,12 +300,15 @@ export function InsightsDigestPanel() {
                                                     outlier.currentAmount,
                                                 )}
                                             </span>{" "}
-                                            {t("insights.panel.thisMonth")}
+                                            {t("insights.panel.thisMonth", {
+                                                day: outlier.comparisonEndDay,
+                                            })}
                                             {" · "}
                                             {t("insights.panel.vsTypical", {
                                                 amount: formatCurrency(
                                                     outlier.baselineMedian,
                                                 ),
+                                                day: outlier.comparisonEndDay,
                                             })}
                                         </p>
                                     </div>
@@ -336,22 +350,21 @@ export function InsightsDigestPanel() {
                                                 : "text-muted-foreground",
                                         )}
                                     >
-                                        {t("insights.panel.monthEndProjected", {
-                                            amount: formatCurrency(
-                                                cashForecast.monthEndProjected,
-                                                cashForecast.currency,
-                                            ),
-                                        })}
+                                        {t(
+                                            "insights.panel.monthEndNetCashflow",
+                                            {
+                                                amount: formatCurrency(
+                                                    cashForecast.monthEndNetCashflow,
+                                                    cashForecast.currency,
+                                                ),
+                                            },
+                                        )}
                                     </p>
-                                    {forecastAlert && (
+                                    {cashForecast.movedSignificantly && (
                                         <p className="text-xs text-destructive mt-0.5">
-                                            {cashForecast.crossesZero
-                                                ? t(
-                                                      "insights.panel.overdraftRisk",
-                                                  )
-                                                : t(
-                                                      "insights.panel.significantMove",
-                                                  )}
+                                            {t(
+                                                "insights.panel.significantMove",
+                                            )}
                                         </p>
                                     )}
                                 </div>

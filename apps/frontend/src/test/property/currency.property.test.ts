@@ -21,7 +21,7 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
         fc.assert(
             fc.property(
                 fc.float({ noNaN: true, noDefaultInfinity: true }),
-                (n) => parseLocaleNumber(n) === n,
+                (n) => parseLocaleNumber(n, "eu") === n,
             ),
         );
     });
@@ -29,22 +29,25 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
     it("null / undefined / empty / whitespace → NaN", () => {
         fc.assert(
             fc.property(
-                fc.constantFrom<string | null | undefined>(null, undefined, "", "   ", "\t\n"),
-                (input) => Number.isNaN(parseLocaleNumber(input)),
+                fc.constantFrom<string | null | undefined>(
+                    null,
+                    undefined,
+                    "",
+                    "   ",
+                    "\t\n",
+                ),
+                (input) => Number.isNaN(parseLocaleNumber(input, "eu")),
             ),
         );
     });
 
     it("US-style format round-trips integer values", () => {
         fc.assert(
-            fc.property(
-                fc.integer({ min: 0, max: 1_000_000_000 }),
-                (n) => {
-                    const formatted = n.toLocaleString("en-US"); // "1,234,567"
-                    const parsed = parseLocaleNumber(formatted);
-                    return parsed === n;
-                },
-            ),
+            fc.property(fc.integer({ min: 0, max: 1_000_000_000 }), (n) => {
+                const formatted = n.toLocaleString("en-US"); // "1,234,567"
+                const parsed = parseLocaleNumber(formatted, "us");
+                return parsed === n;
+            }),
         );
     });
 
@@ -58,7 +61,7 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
                     const wholeStr = whole.toLocaleString("de-DE");
                     const fracStr = String(frac).padStart(2, "0");
                     const formatted = `${wholeStr},${fracStr}`;
-                    const parsed = parseLocaleNumber(formatted);
+                    const parsed = parseLocaleNumber(formatted, "eu");
                     const expected = whole + frac / 100;
                     return Math.abs(parsed - expected) < 1e-9;
                 },
@@ -74,7 +77,7 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
                 (whole, frac) => {
                     const fracStr = String(frac).padStart(2, "0");
                     const inner = `${whole},${fracStr}`;
-                    const parsed = parseLocaleNumber(`(${inner})`);
+                    const parsed = parseLocaleNumber(`(${inner})`, "eu");
                     const expected = -(whole + frac / 100);
                     return Math.abs(parsed - expected) < 1e-9;
                 },
@@ -89,7 +92,7 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
                 fc.integer({ min: 1, max: 999_999 }),
                 (sym, n) => {
                     const formatted = `${sym}${n}`;
-                    const parsed = parseLocaleNumber(formatted);
+                    const parsed = parseLocaleNumber(formatted, "us");
                     return parsed === n;
                 },
             ),
@@ -98,14 +101,12 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
 
     it("internal whitespace does not break parsing", () => {
         fc.assert(
-            fc.property(
-                fc.integer({ min: 0, max: 1_000_000 }),
-                (n) => {
-                    const formatted = `${n.toString().slice(0, 1)} ${n.toString().slice(1)}`.trim();
-                    const parsed = parseLocaleNumber(formatted);
-                    return parsed === n || Number.isNaN(parsed); // whitespace stripping is best-effort
-                },
-            ),
+            fc.property(fc.integer({ min: 0, max: 1_000_000 }), (n) => {
+                const formatted =
+                    `${n.toString().slice(0, 1)} ${n.toString().slice(1)}`.trim();
+                const parsed = parseLocaleNumber(formatted, "eu");
+                return parsed === n || Number.isNaN(parsed); // whitespace stripping is best-effort
+            }),
         );
     });
 
@@ -113,7 +114,7 @@ describe("Phase F5 — parseLocaleNumber properties", () => {
         fc.assert(
             fc.property(fc.string(), (s) => {
                 // Should not throw; result is either a number or NaN
-                const n = parseLocaleNumber(s);
+                const n = parseLocaleNumber(s, "eu");
                 return typeof n === "number";
             }),
         );

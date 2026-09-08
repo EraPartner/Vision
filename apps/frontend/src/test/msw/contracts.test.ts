@@ -348,7 +348,7 @@ describe("Mutation handler contracts (E2)", () => {
     //   routes/transactions.js:576            → 201
     //   routes/categories.js:53-59            → 200 (no res.status call)
     //   routes/recipients.js:77-89            → 200 (no res.status call)
-    //   controllers/investmentController.js:389 → 201
+    //   services/investmentService.js:389 → 201
     //   routes/plannedTransactions.js:443     → 201
     // Every PATCH in this table is a bare `res.ok(...)` → 200.
     describe.each<[string, string, z.ZodTypeAny, number]>([
@@ -694,7 +694,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                 up_to_date: z.boolean(),
                 current_version: z.string(),
                 latest_version: z.string().nullable(),
-                update_mode: z.literal("docker-compose"),
+                update_mode: z.literal("source"),
             }),
         ],
         [
@@ -1172,7 +1172,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 cached_count: z.number(),
                 live: z.boolean(),
             }),
-            200, // controllers/investmentController.js:440 — bare res.ok
+            200, // services/investmentService.js:440 — bare res.ok
         ],
         [
             "POST /api/investments/:id/transactions returns single transaction",
@@ -1187,7 +1187,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 currency: z.string(),
             }),
-            201, // controllers/investmentController.js:612
+            201, // services/investmentService.js:612
         ],
         [
             "PATCH /api/investments/transactions/:id returns single transaction",
@@ -1200,7 +1200,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 investment_id: z.number(),
                 type: z.string(),
             }),
-            200, // controllers/investmentController.js:682 — bare res.ok
+            200, // services/investmentService.js:682 — bare res.ok
         ],
         [
             // `{ primary, merged_ids, reassigned, aliases, patternSuggestion }`

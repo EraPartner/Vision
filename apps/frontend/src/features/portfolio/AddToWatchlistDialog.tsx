@@ -25,6 +25,7 @@ import { Search, Loader2 } from "lucide-react";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { toast } from "sonner";
 
 import { createWatchlistItem, type MarketSearchResult } from "@/lib/api/market";
@@ -33,6 +34,7 @@ import {
     useMarketQuoteQuery,
     useMarketSearchQuery,
 } from "./usePortfolioQueries";
+import { formatEditableNumber } from "@/utils/currency";
 
 type SearchResult = MarketSearchResult;
 type AssetClass = "stock" | "etf" | "crypto" | "metals";
@@ -85,6 +87,7 @@ export function AddToWatchlistDialog({
     const debouncedQuery = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
     const queryClient = useQueryClient();
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
 
     const { data: searchResults, isLoading: isSearching } =
         useMarketSearchQuery(
@@ -108,7 +111,7 @@ export function AddToWatchlistDialog({
         if (prefill.currency) setCurrency(prefill.currency);
         setTargetPrice(
             prefill.price != null && Number.isFinite(prefill.price)
-                ? String(prefill.price)
+                ? formatEditableNumber(prefill.price, appSettings.numberFormat)
                 : "",
         );
         setSearchQuery("");
@@ -128,7 +131,11 @@ export function AddToWatchlistDialog({
 
         // parseDecimal's default 0-fallback would silently save a 0 target for
         // garbage input like "1e999"; validate explicitly instead.
-        const targetValue = parseDecimal(targetPrice, NaN);
+        const targetValue = parseDecimal(
+            targetPrice,
+            appSettings.numberFormat,
+            NaN,
+        );
         if (
             !Number.isFinite(targetValue) ||
             targetValue <= 0 ||
@@ -344,14 +351,18 @@ export function AddToWatchlistDialog({
                                     id="watchlist-target-price"
                                     type="text"
                                     inputMode="decimal"
-                                    pattern="^[0-9]+([.,][0-9]+)?$"
                                     placeholder={
                                         quoteData &&
                                         Number.isFinite(quoteData.price) &&
                                         quoteData.price > 0
                                             ? t("addWatchlist.currentPrice", {
-                                                  price: quoteData.price.toFixed(
-                                                      2,
+                                                  price: formatEditableNumber(
+                                                      Number(
+                                                          quoteData.price.toFixed(
+                                                              2,
+                                                          ),
+                                                      ),
+                                                      appSettings.numberFormat,
                                                   ),
                                               })
                                             : t(
@@ -368,8 +379,10 @@ export function AddToWatchlistDialog({
                                     quoteData.price > 0 &&
                                     targetPrice && (
                                         <p className="text-xs text-muted-foreground">
-                                            {parseDecimal(targetPrice) <
-                                            quoteData.price
+                                            {parseDecimal(
+                                                targetPrice,
+                                                appSettings.numberFormat,
+                                            ) < quoteData.price
                                                 ? t(
                                                       "addWatchlist.belowCurrent",
                                                       {
@@ -377,6 +390,7 @@ export function AddToWatchlistDialog({
                                                               (1 -
                                                                   parseDecimal(
                                                                       targetPrice,
+                                                                      appSettings.numberFormat,
                                                                   ) /
                                                                       quoteData.price) *
                                                                   100,
@@ -390,6 +404,7 @@ export function AddToWatchlistDialog({
                                                           n: formatPercent(
                                                               (parseDecimal(
                                                                   targetPrice,
+                                                                  appSettings.numberFormat,
                                                               ) /
                                                                   quoteData.price -
                                                                   1) *

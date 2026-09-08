@@ -122,41 +122,34 @@ function buildBandMaps(
     methods: ReadonlyArray<CashflowForecastMethod>,
     visibleMethodIds: ReadonlySet<string>,
     view: "cumulative" | "daily",
-    lastActualCum: number,
-    cumulativeOverlays: ReadonlyArray<{ date: string; net: number }>,
 ) {
     type BandPair = { pLo: Map<string, number>; pHi: Map<string, number> };
     const bandsCum = new Map<string, BandPair>();
     const bandsDaily = new Map<string, BandPair>();
-    const overlayByDate = new Map<string, number>();
-    for (const point of cumulativeOverlays) {
-        overlayByDate.set(
-            point.date,
-            (overlayByDate.get(point.date) ?? 0) + point.net,
-        );
-    }
-
     for (const m of methods) {
         if (!m.bands || !visibleMethodIds.has(m.id)) continue;
-        const { loKey, hiKey } = bandBoundaryKeys(m.bands);
-        const loSrc = m.bands[loKey] ?? [];
-        const hiSrc = m.bands[hiKey] ?? [];
 
         if (view === "cumulative") {
-            let cumLo = lastActualCum;
-            let cumHi = lastActualCum;
-            const pLo = new Map<string, number>();
-            const pHi = new Map<string, number>();
-            for (const pt of loSrc) {
-                cumLo += pt.value + (overlayByDate.get(pt.date) ?? 0);
-                pLo.set(pt.date, cumLo);
-            }
-            for (const pt of hiSrc) {
-                cumHi += pt.value + (overlayByDate.get(pt.date) ?? 0);
-                pHi.set(pt.date, cumHi);
-            }
-            bandsCum.set(m.id, { pLo, pHi });
+            if (!m.cumulative_bands) continue;
+            const { loKey, hiKey } = bandBoundaryKeys(m.cumulative_bands);
+            bandsCum.set(m.id, {
+                pLo: new Map(
+                    (m.cumulative_bands[loKey] ?? []).map((p) => [
+                        p.date,
+                        p.value,
+                    ]),
+                ),
+                pHi: new Map(
+                    (m.cumulative_bands[hiKey] ?? []).map((p) => [
+                        p.date,
+                        p.value,
+                    ]),
+                ),
+            });
         } else {
+            const { loKey, hiKey } = bandBoundaryKeys(m.bands);
+            const loSrc = m.bands[loKey] ?? [];
+            const hiSrc = m.bands[hiKey] ?? [];
             bandsDaily.set(m.id, {
                 pLo: new Map(loSrc.map((p) => [p.date, p.value])),
                 pHi: new Map(hiSrc.map((p) => [p.date, p.value])),
@@ -180,19 +173,10 @@ export function mergeForView(
     const actualByDate = new Map(data.actual.map((p) => [p.date, p.net]));
     const allDates = data.actual.map((p) => p.date);
 
-    const lastActualCum =
-        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ??
-        0;
-
     const { bandsCum, bandsDaily } = buildBandMaps(
         data.methods,
         visibleMethodIds,
         view,
-        lastActualCum,
-        [
-            ...data.scheduled_actual,
-            ...(data.include_planned ? data.planned : []),
-        ],
     );
 
     const methodMaps = new Map<string, Map<string, number>>();
@@ -256,19 +240,10 @@ export function mergeForViewRolling(
         .map((p) => p.date)
         .filter((d) => ISO_DATE_RE.test(d));
 
-    const lastActualCum =
-        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ??
-        0;
-
     const { bandsCum, bandsDaily } = buildBandMaps(
         data.methods,
         visibleMethodIds,
         view,
-        lastActualCum,
-        [
-            ...data.scheduled_actual,
-            ...(data.include_planned ? data.planned : []),
-        ],
     );
 
     const methodMaps = new Map<string, Map<string, number>>();

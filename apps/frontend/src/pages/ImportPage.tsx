@@ -68,7 +68,7 @@ export default function ImportPage() {
     }, [location.pathname, location.state, navigate]);
 
     return (
-        <PageShell className="max-w-4xl mx-auto">
+        <PageShell className="max-w-7xl mx-auto">
             <PageHeader
                 title={t("importPage.title")}
                 subtitle={t("importPage.subtitle")}
@@ -123,47 +123,55 @@ export default function ImportPage() {
                     </CardContent>
                 </Card>
             )}
-            <TransactionImportCard
-                onImportSuccess={() => setHistoryKey((k) => k + 1)}
-            />
-            <ImportHistoryCard refreshKey={historyKey} />
-            <ExportCard />
-            <Collapsible
-                open={setupOpen}
-                onOpenChange={setSetupOpen}
-                className="rounded-xl border border-border/60 bg-card/40 p-4"
-            >
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 className="font-display text-lg font-semibold">
-                            {t("importPage.setupReference")}
-                        </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {t("importPage.setupReferenceDesc")}
-                        </p>
-                    </div>
-                    <CollapsibleTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            aria-label={t("importPage.toggleSetupReference")}
-                        >
-                            <ChevronDown
-                                className={cn(
-                                    "h-4 w-4 transition-transform duration-[var(--duration-fast)] motion-reduce:transition-none",
-                                    setupOpen && "rotate-180",
-                                )}
-                            />
-                        </Button>
-                    </CollapsibleTrigger>
+            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)] xl:items-start">
+                <div className="min-w-0 space-y-6">
+                    <TransactionImportCard
+                        onImportSuccess={() => setHistoryKey((k) => k + 1)}
+                    />
+                    <ImportHistoryCard refreshKey={historyKey} />
                 </div>
-                <CollapsibleContent className="space-y-4 pt-4">
-                    <RecipientsImportCard />
-                    <CategoriesImportCard />
-                    <SupportedBanksCard />
-                </CollapsibleContent>
-            </Collapsible>
+                <aside className="min-w-0 space-y-6">
+                    <ExportCard />
+                    <Collapsible
+                        open={setupOpen}
+                        onOpenChange={setSetupOpen}
+                        className="rounded-xl border border-border/60 bg-card/40 p-4"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="font-display text-lg font-semibold">
+                                    {t("importPage.setupReference")}
+                                </h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {t("importPage.setupReferenceDesc")}
+                                </p>
+                            </div>
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t(
+                                        "importPage.toggleSetupReference",
+                                    )}
+                                >
+                                    <ChevronDown
+                                        className={cn(
+                                            "h-4 w-4 transition-transform duration-[var(--duration-fast)] motion-reduce:transition-none",
+                                            setupOpen && "rotate-180",
+                                        )}
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent className="space-y-4 pt-4">
+                            <RecipientsImportCard />
+                            <CategoriesImportCard />
+                            <SupportedBanksCard />
+                        </CollapsibleContent>
+                    </Collapsible>
+                </aside>
+            </div>
         </PageShell>
     );
 }

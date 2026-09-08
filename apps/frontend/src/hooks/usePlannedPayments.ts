@@ -10,6 +10,7 @@ import {
 } from "@/lib/plannedPaymentMapper";
 import type { PlannedTransactionExecuteRequest } from "@/types/api";
 import { useCurrencyFormatSettings } from "@/hooks/useCurrencyFormatter";
+import { plannedKeys } from "@/lib/queryKeys";
 
 // The PlannedPayment view model and its wire-shape mappers live in
 // lib/plannedPaymentMapper.ts (pure, unit-tested); re-export the type so
@@ -51,7 +52,10 @@ export function usePlannedPayments(showInactive: boolean = false) {
     // or the banner shows stale data for up to its staleTime.
     const invalidateUpcoming = useCallback(() => {
         queryClient.invalidateQueries({
-            queryKey: ["upcomingPlannedPayments"],
+            queryKey: plannedKeys.upcomingAll,
+        });
+        queryClient.invalidateQueries({
+            queryKey: plannedKeys.accountTransactionsAll,
         });
     }, [queryClient]);
 

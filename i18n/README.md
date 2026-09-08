@@ -25,7 +25,8 @@ Recommended workflow for translators or developers:
 Runtime notes:
 
 - Native frontend and Electron package builds run locale generation before packaging.
-- Docker builds also run locale generation, so the optional image stays aligned with `i18n/source`.
+- CI and release verification run locale generation so shipped bundles stay aligned with
+  `i18n/source`.
 - Electron startup uses the generated `packaging/electron/i18n/*.json`; keep these committed and in sync via the generator.
 
 If you need automated translation help for missing Dutch keys, coordinate with the maintainers — the repository intentionally falls back to English for missing keys.

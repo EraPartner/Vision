@@ -1,4 +1,5 @@
 import {
+    differenceInCalendarDays as dateFnsDifferenceInCalendarDays,
     format as dateFnsFormat,
     isValid as dateFnsIsValid,
     parse as dateFnsParse,
@@ -94,17 +95,7 @@ export function parseISO(dateString: string): Date {
 }
 
 export function differenceInDays(dateLeft: Date, dateRight: Date): number {
-    const utcLeft = Date.UTC(
-        dateLeft.getFullYear(),
-        dateLeft.getMonth(),
-        dateLeft.getDate(),
-    );
-    const utcRight = Date.UTC(
-        dateRight.getFullYear(),
-        dateRight.getMonth(),
-        dateRight.getDate(),
-    );
-    return Math.round((utcLeft - utcRight) / 86400000);
+    return dateFnsDifferenceInCalendarDays(dateLeft, dateRight);
 }
 
 export function formatDistanceToNow(

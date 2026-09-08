@@ -22,16 +22,18 @@
  * YYYY-MM-DD strings converted through the same UTC constructor, never on mixed
  * local/UTC Date instances, which shift a day either side of midnight.
  */
-import { useCallback } from 'react';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
-import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
-import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
-import { formatDateStringWithAppSettings, toYmd } from '@/lib/dateUtils';
-import type { Account } from '@/types/api';
+import { useCallback } from "react";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { formatDateStringWithAppSettings, toYmd } from "@/lib/dateUtils";
+import type { Account } from "@/types/api";
 
 /**
- * A statement reading older than this many days is treated as stale: its drift
- * is reported in warning (amber) tone rather than destructive.
+ * Fixed product policy, not a user preference. A statement reading older than
+ * this many days is treated as stale: its drift is reported in warning (amber)
+ * tone rather than destructive. Keep the threshold shared across every drift
+ * surface so one statement cannot be fresh on one page and stale on another.
  */
 export const STALE_STATEMENT_DAYS = 45;
 
@@ -44,7 +46,7 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
  * its calendar day rather than poisoning a comparison.
  */
 export function statementYmd(
-    account: Pick<Account, 'statement_balance_date'>,
+    account: Pick<Account, "statement_balance_date">,
 ): string | undefined {
     const raw = account.statement_balance_date;
     if (!raw) return undefined;
@@ -54,7 +56,7 @@ export function statementYmd(
 
 /** Midnight-UTC epoch ms for a YYYY-MM-DD calendar day (no timezone shift). */
 function ymdToUtcMs(ymd: string): number {
-    const [y, m, d] = ymd.split('-').map(Number);
+    const [y, m, d] = ymd.split("-").map(Number);
     return Date.UTC(y, m - 1, d);
 }
 
@@ -63,7 +65,9 @@ function ymdToUtcMs(ymd: string): number {
  * the same UTC constructor, so the difference is DST- and timezone-proof.
  */
 export function daysBetweenYmd(fromYmd: string, toYmdStr: string): number {
-    return Math.round((ymdToUtcMs(toYmdStr) - ymdToUtcMs(fromYmd)) / 86_400_000);
+    return Math.round(
+        (ymdToUtcMs(toYmdStr) - ymdToUtcMs(fromYmd)) / 86_400_000,
+    );
 }
 
 /**
@@ -85,7 +89,7 @@ export interface DriftBadgeContent {
     /** The statement reading behind this drift is older than ~45 days. */
     stale: boolean;
     /** `badgeVariants` variant carrying the tone — never a bespoke colour. */
-    variant: 'destructive' | 'warning';
+    variant: "destructive" | "warning";
     /** Tooltip text; the stale case explains that age, not breakage. */
     tooltip: string;
     /** Statement as-of date (YYYY-MM-DD) when one is stamped. */
@@ -96,7 +100,9 @@ export interface DriftBadgeContent {
  * Returns a formatter mapping an account to its drift badge content, or null
  * when the account carries no (non-zero) drift.
  */
-export function useDriftBadge(): (account: Account) => DriftBadgeContent | null {
+export function useDriftBadge(): (
+    account: Account,
+) => DriftBadgeContent | null {
     const { t } = useLanguage();
     const fmtCur = useCurrencyFormatter();
     const { appSettings } = useAppSettings();
@@ -125,16 +131,21 @@ export function useDriftBadge(): (account: Account) => DriftBadgeContent | null 
             // the locale generator normalizes U+00B7 to a full stop, and the
             // same middle-dot meta separator is composed in TSX elsewhere
             // (e.g. the hub card's "EUR · {institution}" line).
-            const base = t('accounts.driftBadge', { amount });
+            const base = t("accounts.driftBadge", { amount });
             return {
                 label: statementDate
-                    ? `${base} · ${t('accounts.driftBadgeStatement', {
-                        date: formatDateStringWithAppSettings(statementDate, appSettings.dateFormat),
-                    })}`
+                    ? `${base} · ${t("accounts.driftBadgeStatement", {
+                          date: formatDateStringWithAppSettings(
+                              statementDate,
+                              appSettings.dateFormat,
+                          ),
+                      })}`
                     : base,
                 stale,
-                variant: stale ? 'warning' : 'destructive',
-                tooltip: stale ? t('accounts.driftStaleTooltip') : t('accounts.driftTooltip'),
+                variant: stale ? "warning" : "destructive",
+                tooltip: stale
+                    ? t("accounts.driftStaleTooltip")
+                    : t("accounts.driftTooltip"),
                 statementDate,
             };
         },

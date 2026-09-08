@@ -1,5 +1,7 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQuery, type QueryKey } from "@tanstack/react-query";
 import { useMemo, useState, useCallback } from "react";
+import { format, startOfMonth, subMonths } from "date-fns";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { aggregationKeys } from "@/lib/queryKeys";
@@ -68,6 +70,18 @@ export interface StatisticsData {
 }
 
 export type GraphExclusions = Record<string, boolean>;
+export type StatisticsWindow = "24m" | "all";
+
+export function getStatisticsDateRange(
+    window: StatisticsWindow,
+    now: Date = new Date(),
+): { start_date?: string; end_date?: string; all_time?: boolean } {
+    if (window === "all") return { all_time: true };
+    return {
+        start_date: format(startOfMonth(subMonths(now, 23)), "yyyy-MM-dd"),
+        end_date: format(now, "yyyy-MM-dd"),
+    };
+}
 
 // ── Payload aliases ───────────────────────────────────────────────────────────
 
@@ -84,26 +98,28 @@ type RecipientByYearPayload = Awaited<
     ReturnType<typeof getAggregationRecipientByYear>
 >["data"];
 
-const STATISTICS_STALE_TIME_MS = 60_000;
-
 export function useRecipientInsights(
     currency: string,
     excludedCategoryIds: number[],
     excludedRecipientIds: number[],
+    window: StatisticsWindow,
 ) {
+    const dateRange = useMemo(() => getStatisticsDateRange(window), [window]);
     return useQuery({
         queryKey: aggregationKeys.recipientInsightsWithExclusions(
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ),
         queryFn: () =>
             apiClient.getRecipientInsights({
                 currency,
+                ...dateRange,
                 excluded_category_ids: excludedCategoryIds,
                 excluded_recipient_ids: excludedRecipientIds,
             }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -141,7 +157,7 @@ function useFilteredStatisticsQuery<TData>(
         queryKey,
         queryFn,
         enabled,
-        staleTime: STATISTICS_STALE_TIME_MS,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }
 
@@ -284,9 +300,10 @@ export function mapToStatisticsData(
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useStatistics() {
+export function useStatistics(window: StatisticsWindow = "24m") {
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const dateRange = useMemo(() => getStatisticsDateRange(window), [window]);
 
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
 
@@ -317,34 +334,52 @@ export function useStatistics() {
     // ── Unfiltered queries ────────────────────────────────────────────────────
 
     const monthlySummaryUnfilteredQuery = useQuery({
-        queryKey: aggregationKeys.monthlySummaryUnfiltered(targetCurrency),
+        queryKey: aggregationKeys.monthlySummaryUnfiltered(
+            targetCurrency,
+            window,
+        ),
         queryFn: () =>
             getAggregationMonthlySummary({
                 currency: targetCurrency,
-                all_time: true,
+                ...dateRange,
             }),
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
     const categoryPivotUnfilteredQuery = useQuery({
-        queryKey: aggregationKeys.categoryPivotUnfiltered(targetCurrency),
+        queryKey: aggregationKeys.categoryPivotUnfiltered(
+            targetCurrency,
+            window,
+        ),
         queryFn: () =>
-            getAggregationCategoryPivot({ currency: targetCurrency }),
-        staleTime: 60_000,
+            getAggregationCategoryPivot({
+                currency: targetCurrency,
+                ...dateRange,
+            }),
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
     const recipientInsightsQuery = useQuery({
-        queryKey: aggregationKeys.recipientInsights(targetCurrency),
+        queryKey: aggregationKeys.recipientInsights(targetCurrency, window),
         queryFn: () =>
-            getAggregationRecipientInsights({ currency: targetCurrency }),
-        staleTime: 60_000,
+            getAggregationRecipientInsights({
+                currency: targetCurrency,
+                ...dateRange,
+            }),
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
     const recipientByYearUnfilteredQuery = useQuery({
-        queryKey: aggregationKeys.recipientByYearUnfiltered(targetCurrency),
+        queryKey: aggregationKeys.recipientByYearUnfiltered(
+            targetCurrency,
+            window,
+        ),
         queryFn: () =>
-            getAggregationRecipientByYear({ currency: targetCurrency }),
-        staleTime: 60_000,
+            getAggregationRecipientByYear({
+                currency: targetCurrency,
+                ...dateRange,
+            }),
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 
     // ── Filtered queries (only when exclusions are active) ────────────────────
@@ -354,11 +389,12 @@ export function useStatistics() {
             targetCurrency,
             effectiveExcludedCategoryIds,
             settingsExcludedRecIds,
+            window,
         ),
         () =>
             getAggregationMonthlySummary({
                 currency: targetCurrency,
-                all_time: true,
+                ...dateRange,
                 excluded_category_ids: effectiveExcludedCategoryIds,
                 excluded_recipient_ids: settingsExcludedRecIds,
             }),
@@ -370,10 +406,12 @@ export function useStatistics() {
             targetCurrency,
             effectiveExcludedCategoryIds,
             settingsExcludedRecIds,
+            window,
         ),
         () =>
             getAggregationCategoryPivot({
                 currency: targetCurrency,
+                ...dateRange,
                 excluded_category_ids: effectiveExcludedCategoryIds,
                 excluded_recipient_ids: settingsExcludedRecIds,
             }),
@@ -385,10 +423,12 @@ export function useStatistics() {
             targetCurrency,
             effectiveExcludedCategoryIds,
             settingsExcludedRecIds,
+            window,
         ),
         () =>
             getAggregationRecipientByYear({
                 currency: targetCurrency,
+                ...dateRange,
                 excluded_recipient_ids: settingsExcludedRecIds,
                 excluded_category_ids: effectiveExcludedCategoryIds,
             }),
@@ -405,10 +445,12 @@ export function useStatistics() {
             targetCurrency,
             effectiveExcludedCategoryIds,
             settingsExcludedRecIds,
+            window,
         ),
         () =>
             getAggregationRecipientInsights({
                 currency: targetCurrency,
+                ...dateRange,
                 excluded_category_ids: effectiveExcludedCategoryIds,
                 excluded_recipient_ids: settingsExcludedRecIds,
             }),

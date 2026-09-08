@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -17,14 +18,15 @@ export function useRecentRecipientTransactions(recipientId: number) {
 
     const { data, isLoading } = useQuery({
         queryKey: transactionKeys.owesRecipientGroup(recipientId),
-        queryFn: () => apiClient.getTransactions({
-            recipient_group_id: recipientId,
-            limit: RECIPIENT_TRANSACTION_PAGE_SIZE,
-            offset: 0,
-            sort_by: "transaction_date",
-            sort_dir: "desc",
-        }),
-        staleTime: 30_000,
+        queryFn: () =>
+            apiClient.getTransactions({
+                recipient_group_id: recipientId,
+                limit: RECIPIENT_TRANSACTION_PAGE_SIZE,
+                offset: 0,
+                sort_by: "transaction_date",
+                sort_dir: "desc",
+            }),
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 
     useEffect(() => {
@@ -41,7 +43,8 @@ export function useRecentRecipientTransactions(recipientId: number) {
         setItems(data.items);
         setTotalItems(data.total ?? data.items.length);
         offsetRef.current = data.items.length;
-        hasMoreRef.current = data.items.length < (data.total ?? data.items.length);
+        hasMoreRef.current =
+            data.items.length < (data.total ?? data.items.length);
     }, [data]);
 
     const loadMore = useCallback(async () => {
@@ -58,14 +61,17 @@ export function useRecentRecipientTransactions(recipientId: number) {
             });
 
             setItems((currentItems) => {
-                const existingIds = new Set(currentItems.map((item) => item.id));
+                const existingIds = new Set(
+                    currentItems.map((item) => item.id),
+                );
                 return [
                     ...currentItems,
                     ...result.items.filter((item) => !existingIds.has(item.id)),
                 ];
             });
             offsetRef.current += result.items.length;
-            hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
+            hasMoreRef.current =
+                offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } finally {
             setIsFetchingMore(false);

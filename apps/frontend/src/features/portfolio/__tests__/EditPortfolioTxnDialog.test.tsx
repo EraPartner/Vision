@@ -375,7 +375,7 @@ describe("EditPortfolioTxnDialog", () => {
 
         // Assert — fees and taxes are populated (buy type shows fee/tax fields)
         const feesInput = await screen.findByLabelText(/fees/i);
-        expect(feesInput).toHaveValue("2.5");
+        expect(feesInput).toHaveValue("2,5");
 
         const taxesInput = screen.getByLabelText(/taxes/i);
         expect(taxesInput).toHaveValue("0");

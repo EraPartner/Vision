@@ -27,9 +27,7 @@ type ElectronBackupMock = {
     loadSettings: ReturnType<typeof vi.fn>;
 };
 
-type ElectronUpdaterMock = {
-    pullImage: ReturnType<typeof vi.fn>;
-};
+type ElectronUpdaterMock = {};
 
 function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
     backup: ElectronBackupMock;
@@ -45,9 +43,7 @@ function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
         loadSettings: vi.fn(),
         ...overrides,
     };
-    const updater: ElectronUpdaterMock = {
-        pullImage: vi.fn(),
-    };
+    const updater: ElectronUpdaterMock = {};
     window.electronBackup = backup as unknown as ElectronBackupBridge;
     window.electronUpdater = updater as unknown as ElectronUpdaterBridge;
     return { backup, updater };

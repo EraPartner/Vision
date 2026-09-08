@@ -48,7 +48,7 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
             snapshots: state.snapshots,
             snapshotMetas: state.snapshotMetas,
         }));
-    const { summaries } = usePortfolio();
+    const { allSummaries: summaries } = usePortfolio();
     const stats = useStatistics();
 
     const taxIncomeCategoryIds = useMemo(

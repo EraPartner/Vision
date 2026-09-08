@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { RecurringDetectionPanel } from "@/features/planned/RecurringDetectionPanel";
+import { plannedKeys } from "@/lib/queryKeys";
 
 const API_BASE = "http://localhost:3002";
 
@@ -81,7 +82,8 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         const user = userEvent.setup();
         const captured = servePatternsAndCapturePost("income");
 
-        renderWithApp(<RecurringDetectionPanel />);
+        const { queryClient } = renderWithApp(<RecurringDetectionPanel />);
+        const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
         expect(
             await screen.findByText(/detected recurring patterns/i),
@@ -97,6 +99,12 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
             planned_date: "2025-07-28",
             is_recurring: true,
             recurrence_pattern: "monthly",
+        });
+        expect(invalidateQueries).toHaveBeenCalledWith({
+            queryKey: plannedKeys.upcomingAll,
+        });
+        expect(invalidateQueries).toHaveBeenCalledWith({
+            queryKey: plannedKeys.accountTransactionsAll,
         });
     });
 

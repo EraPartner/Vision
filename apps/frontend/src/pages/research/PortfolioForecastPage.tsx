@@ -38,6 +38,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePortfolioForecastQuery } from "@/features/research/useResearchQueries";
+import { parseDecimal } from "@/lib/decimal";
 
 const HORIZONS = [
     { labelKey: "research.forecast.h1y", months: 12 },
@@ -96,11 +97,16 @@ export default function PortfolioForecastPage() {
     const input = useMemo(
         () => ({
             horizonMonths,
-            monthlyContribution: Number(monthlyContribution) || 0,
+            monthlyContribution: parseDecimal(
+                monthlyContribution,
+                appSettings.numberFormat,
+            ),
             forwardBlend: returnSource === "blended" ? blendPct / 100 : 0,
             method,
             paths,
-            targetValue: Number(targetValue) || undefined,
+            targetValue:
+                parseDecimal(targetValue, appSettings.numberFormat, NaN) ||
+                undefined,
             currency,
         }),
         [
@@ -112,6 +118,7 @@ export default function PortfolioForecastPage() {
             paths,
             targetValue,
             currency,
+            appSettings.numberFormat,
         ],
     );
     const debouncedInput = useDebounce(input, 450);
@@ -219,8 +226,7 @@ export default function PortfolioForecastPage() {
                         </Label>
                         <Input
                             id="contribution"
-                            type="number"
-                            min={0}
+                            type="text"
                             inputMode="decimal"
                             placeholder="0"
                             value={monthlyContribution}
@@ -236,8 +242,7 @@ export default function PortfolioForecastPage() {
                         </Label>
                         <Input
                             id="target"
-                            type="number"
-                            min={0}
+                            type="text"
                             inputMode="decimal"
                             placeholder={t(
                                 "research.forecast.targetPlaceholder",

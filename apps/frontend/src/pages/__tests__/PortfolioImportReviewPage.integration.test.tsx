@@ -45,25 +45,40 @@ vi.mock("@/features/portfolio/InvestmentCombobox", () => ({
     ),
 }));
 
-vi.mock("@/features/transactions/components/AccountFilterCombobox", () => ({
-    AccountFilterCombobox: ({
+vi.mock("@/features/portfolio/PortfolioBrokerField", () => ({
+    PortfolioBrokerField: ({
         onChange,
     }: {
-        onChange: (selection: { id: number; label: string }) => void;
+        onChange: (id: string) => void;
     }) => (
-        <button
-            type="button"
-            onClick={() => onChange({ id: 77, label: "Broker cash" })}
-        >
+        <button type="button" onClick={() => onChange("77")}>
             Choose cash account
         </button>
     ),
+}));
+
+vi.mock("@/hooks/useAccounts", () => ({
+    useAccounts: () => ({
+        data: {
+            items: [
+                {
+                    id: 77,
+                    name: "Broker cash",
+                    type: "brokerage",
+                    is_active: true,
+                },
+            ],
+        },
+    }),
 }));
 
 const API_BASE = "http://localhost:3002";
 
 const preview = {
     batch_id: 5,
+    account_id: 7,
+    account_name: "Degiro",
+    account_valid: true,
     groups: [
         {
             is_cash: false,
@@ -147,6 +162,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
         renderReviewPage();
 
         expect(await screen.findByText("2026-01-01")).toBeInTheDocument();
+        expect(screen.getByText("3 trades to Degiro")).toBeInTheDocument();
         expect(screen.getByText("2026-01-03")).toBeInTheDocument();
         expect(screen.queryByText("2026-01-02")).not.toBeInTheDocument();
         expect(useWindowVirtualizerMock).toHaveBeenCalledWith(
@@ -327,6 +343,53 @@ describe("PortfolioImportReviewPage group resolution", () => {
             screen.getByRole("button", { name: "Choose cash account" }),
         );
         expect(commitButton).toBeEnabled();
+        await user.click(commitButton);
+
+        expect(
+            await screen.findByText("Portfolio destination"),
+        ).toBeInTheDocument();
+        expect(body).toEqual({ account_id: 77 });
+    });
+
+    it("blocks commit until an unavailable saved broker is replaced", async () => {
+        const user = userEvent.setup();
+        let body: unknown = null;
+        server.use(
+            http.get(`${API_BASE}/api/portfolio/import/batches/5/preview`, () =>
+                ok({
+                    ...preview,
+                    account_id: 99,
+                    account_name: "Archived broker",
+                    account_valid: false,
+                }),
+            ),
+            http.post(
+                `${API_BASE}/api/portfolio/import/batches/5/commit`,
+                async ({ request }) => {
+                    body = await request.json();
+                    return ok({
+                        batch_id: 5,
+                        imported: 3,
+                        duplicates: 0,
+                        errors: 0,
+                    });
+                },
+            ),
+        );
+
+        renderReviewPage();
+        expect(
+            await screen.findByText(/saved broker account is unavailable/i),
+        ).toBeInTheDocument();
+        const commitButton = screen.getByRole("button", {
+            name: "Confirm import",
+        });
+        expect(commitButton).toBeDisabled();
+
+        await user.click(
+            screen.getByRole("button", { name: "Choose cash account" }),
+        );
+        expect(screen.getByText("3 trades to Broker cash")).toBeInTheDocument();
         await user.click(commitButton);
 
         expect(

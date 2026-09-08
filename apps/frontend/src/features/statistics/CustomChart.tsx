@@ -35,6 +35,7 @@ import type { SavedChart } from "@/types/apiClient";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getChartColor } from "@/components/charts/palette";
+import { HistoricalFxFallbackWarning } from "@/features/statistics/HistoricalFxFallbackWarning";
 
 // Muted colour for the bundled "Other" series/bar.
 const OTHER_COLOR = "hsl(var(--muted-foreground))";
@@ -117,8 +118,11 @@ export function CustomChart({
     // Any dynamic "All …" source caps the long tail into "Other".
     const capActive =
         allCategories || savedChart.all_recipients || savedChart.all_tags;
-    const { recipientData, isLoading: recipientLoading } =
-        useRecipientPivot(savedChart);
+    const {
+        recipientData,
+        conversion: recipientConversion,
+        isLoading: recipientLoading,
+    } = useRecipientPivot(savedChart);
     const { tagData, isLoading: tagLoading } = useTagPivot(savedChart);
 
     // Resolve the in-scope categories once — this was recomputed three times per
@@ -378,6 +382,7 @@ export function CustomChart({
             </CardHeader>
 
             <CardContent>
+                <HistoricalFxFallbackWarning conversion={recipientConversion} />
                 {isLoading ? (
                     <Skeleton
                         {...loadingSurfaceProps}

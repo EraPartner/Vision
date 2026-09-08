@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
@@ -159,7 +160,7 @@ export function useTransactionListData({
                 signal,
             ),
         placeholderData: (prev) => prev, // keep previous page while a new filter/search/sort round-trips
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
     useBackgroundQueryCue(isFetching && isPlaceholderData);
 

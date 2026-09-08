@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { dashboardKeys, monthlySummaryKeys } from "@/lib/queryKeys";
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 
@@ -73,7 +74,7 @@ export function useMonthlySummary({
             });
             return envelope.data;
         },
-        staleTime: 30000, // Consider data fresh for 30 seconds
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         // Do not refetch on window focus — the dashboard has its own staleTime and
         // refetching on every alt-tab creates unnecessary API load.
         refetchOnWindowFocus: false,
@@ -109,7 +110,7 @@ export function useFilteredDashboardStats() {
     const countQuery = useQuery({
         queryKey: dashboardKeys.transactionCount,
         queryFn: () => apiClient.getTransactionCount(),
-        staleTime: 30000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         refetchOnWindowFocus: false,
     });
 

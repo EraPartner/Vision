@@ -1,5 +1,5 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -80,6 +80,36 @@ export default function TransactionsPage() {
         useState<TableTransaction | null>(null);
     const [quickLookTransaction, setQuickLookTransaction] =
         useState<TableTransaction | null>(null);
+    const infoReturnFocusRef = useRef<HTMLElement | null>(null);
+    const quickLookReturnFocusRef = useRef<HTMLElement | null>(null);
+
+    const rememberFocusedElement = useCallback(() => {
+        return document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+    }, []);
+    const openInfo = useCallback(
+        (transaction: TableTransaction) => {
+            infoReturnFocusRef.current = rememberFocusedElement();
+            setInfoTransaction(transaction);
+        },
+        [rememberFocusedElement],
+    );
+    const closeInfo = useCallback(() => {
+        setInfoTransaction(null);
+        requestAnimationFrame(() => infoReturnFocusRef.current?.focus());
+    }, []);
+    const openQuickLook = useCallback(
+        (transaction: TableTransaction) => {
+            quickLookReturnFocusRef.current = rememberFocusedElement();
+            setQuickLookTransaction(transaction);
+        },
+        [rememberFocusedElement],
+    );
+    const closeQuickLook = useCallback(() => {
+        setQuickLookTransaction(null);
+        requestAnimationFrame(() => quickLookReturnFocusRef.current?.focus());
+    }, []);
 
     const recipientIdFilter = searchParams.get("recipient_id")
         ? Number(searchParams.get("recipient_id"))
@@ -702,8 +732,8 @@ export default function TransactionsPage() {
                         },
                     }}
                     onRowUpdate={handleUpdate}
-                    onOpenInfo={setInfoTransaction}
-                    onQuickLook={setQuickLookTransaction}
+                    onOpenInfo={openInfo}
+                    onQuickLook={openQuickLook}
                     onDuplicate={handleDuplicate}
                     onFilterByRecipient={handleFilterByRecipient}
                     onToggleActive={toggleActive}
@@ -747,12 +777,12 @@ export default function TransactionsPage() {
             <ConfirmDialog />
             <TransactionInfoDialog
                 infoTransaction={infoTransaction}
-                onClose={() => setInfoTransaction(null)}
+                onClose={closeInfo}
                 onApplyLocal={applyInfoFieldLocally}
             />
             <TransactionQuickLook
                 transaction={quickLookTransaction}
-                onClose={() => setQuickLookTransaction(null)}
+                onClose={closeQuickLook}
             />
         </>
     );

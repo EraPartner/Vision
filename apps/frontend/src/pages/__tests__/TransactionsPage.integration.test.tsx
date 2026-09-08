@@ -318,7 +318,7 @@ describe("TransactionsPage (integration)", () => {
         // Fill amount
         const amountInput = screen.getByPlaceholderText(/0\.00/i);
         await user.clear(amountInput);
-        await user.type(amountInput, "-25.50");
+        await user.type(amountInput, "-25,50");
 
         // Fill bank account via the AccountCombobox (Phase B2): type a new
         // label and take the explicit-create escape hatch (D1) — the MSW

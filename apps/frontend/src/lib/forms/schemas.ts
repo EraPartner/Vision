@@ -16,8 +16,8 @@
  * TaxProfileDialog (taxProfileSchema.ts). New forms should compose these
  * builders rather than hand-rolling `if (!value)` chains.
  */
-import { z } from 'zod';
-import { parseLocaleNumber } from '@/utils/currency';
+import { z } from "zod";
+import { parseLocaleNumber, type NumberFormat } from "@/utils/currency";
 
 /** Non-empty string field (mirrors a plain `!value` required check). */
 export function requiredString(requiredKey: string) {
@@ -26,7 +26,9 @@ export function requiredString(requiredKey: string) {
 
 /** String field that must be non-empty after trimming. */
 export function requiredTrimmedString(requiredKey: string) {
-    return z.string().refine((value) => value.trim().length > 0, { message: requiredKey });
+    return z
+        .string()
+        .refine((value) => value.trim().length > 0, { message: requiredKey });
 }
 
 /**
@@ -45,15 +47,24 @@ export function ymdDateString(requiredKey: string) {
  * empty → `required`; unparseable/non-finite → `invalid`; and, when a `zero`
  * key is given, an exact 0 → `zero`.
  */
-export function moneyAmount(keys: { required: string; invalid: string; zero?: string }) {
+export function moneyAmount(
+    keys: { required: string; invalid: string; zero?: string },
+    numberFormat: NumberFormat,
+) {
     return z.string().transform((value, ctx) => {
         if (!value) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: keys.required });
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: keys.required,
+            });
             return z.NEVER;
         }
-        const parsed = parseLocaleNumber(value);
+        const parsed = parseLocaleNumber(value, numberFormat);
         if (!Number.isFinite(parsed)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: keys.invalid });
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: keys.invalid,
+            });
             return z.NEVER;
         }
         if (keys.zero !== undefined && parsed === 0) {
@@ -90,7 +101,7 @@ export function fieldErrorsFromZod(
     const map: Record<string, string | undefined> = {};
     if (!error) return map;
     for (const issue of error.issues) {
-        const fieldId = pathToFieldId[String(issue.path[0] ?? '')];
+        const fieldId = pathToFieldId[String(issue.path[0] ?? "")];
         if (!fieldId || map[fieldId] !== undefined) continue;
         map[fieldId] = translate(issue.message);
     }

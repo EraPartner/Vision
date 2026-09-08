@@ -164,6 +164,43 @@ describe("InvestmentDetailDialog", () => {
         expect(await screen.findByText("Initial buy")).toBeInTheDocument();
     });
 
+    it("keeps archived history visible while disabling portfolio changes", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <InvestmentDetailDialog
+                investment={{ ...INVESTMENT, is_active: false }}
+                onAddTransaction={vi.fn()}
+                onEditInvestment={vi.fn()}
+                onEditTransaction={vi.fn()}
+            />,
+        );
+
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        expect(await screen.findByText(/^archived$/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/excluded from current totals/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /^edit$/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /add transaction/i }),
+        ).not.toBeInTheDocument();
+
+        await user.click(
+            await screen.findByRole("tab", { name: /transactions/i }),
+        );
+        expect(await screen.findByText("Initial buy")).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /edit transaction/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /delete transaction/i }),
+        ).not.toBeInTheDocument();
+    });
+
     it("close button closes dialog", async () => {
         // Arrange
         const user = userEvent.setup();

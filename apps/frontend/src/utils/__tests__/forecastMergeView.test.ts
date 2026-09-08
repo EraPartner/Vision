@@ -93,6 +93,10 @@ describe("mergeForView", () => {
                 p25: [{ date: "2026-01-03", value: 5 }],
                 p75: [{ date: "2026-01-03", value: 25 }],
             },
+            cumulative_bands: {
+                p25: [{ date: "2026-01-03", value: 35 }],
+                p75: [{ date: "2026-01-03", value: 55 }],
+            },
         };
         const { rows, series } = mergeForView(
             baseData([banded]),
@@ -100,7 +104,6 @@ describe("mergeForView", () => {
             new Set(["ewma"]),
             "Actual",
         );
-        // Bands accumulate on top of last actual cumulative (30).
         expect(rows[2].ewma__pLo).toBe(35);
         expect(rows[2].ewma__pHi).toBe(55);
         const keys = series.map((s) => s.key);
@@ -108,13 +111,17 @@ describe("mergeForView", () => {
         expect(keys).toContain("ewma__pHi");
     });
 
-    test("cumulative bands include scheduled and enabled planned overlays", () => {
+    test("uses server-computed cumulative bands without reapplying overlays", () => {
         const banded: CashflowForecastMethod = {
             ...simpleMethod,
             id: "ewma",
             bands: {
                 p25: [{ date: "2026-01-03", value: 5 }],
                 p75: [{ date: "2026-01-03", value: 25 }],
+            },
+            cumulative_bands: {
+                p25: [{ date: "2026-01-03", value: 29 }],
+                p75: [{ date: "2026-01-03", value: 49 }],
             },
         };
         const data = baseData([banded]);

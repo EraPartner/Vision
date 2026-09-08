@@ -40,6 +40,10 @@ import {
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useFieldErrors, type FieldErrorMap } from "@/hooks/useFieldErrors";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
+import { PortfolioBrokerField } from "./PortfolioBrokerField";
+import { useManualTradeBrokerOptions } from "./manualTradeBroker";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatEditableNumber } from "@/utils/currency";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -69,6 +73,14 @@ function normalizeYmdInput(value?: string): string {
     return toYmd(parsed);
 }
 
+function normalizeRecurrenceInterval(
+    value: string | null | undefined,
+): RecurrenceInterval {
+    return value === "bi-weekly"
+        ? "biweekly"
+        : ((value || "monthly") as RecurrenceInterval);
+}
+
 interface Props extends ControlledDialogProps {
     investment: InvestmentSummary;
     transaction: PortfolioTransaction;
@@ -84,7 +96,13 @@ export function EditPortfolioTxnDialog({
     returnFocusRef,
 }: Props) {
     const { t } = useLanguage();
-    const { updateTransaction, isUpdatingTransaction } = usePortfolio();
+    const { appSettings } = useAppSettings();
+    const { updateTransaction, isUpdatingTransaction, transactions } =
+        usePortfolio();
+    const { accounts: brokerAccounts } = useManualTradeBrokerOptions(
+        transactions,
+        investment.id,
+    );
     const { open, setOpen, controlled } = useControlledOpen({
         open: openProp,
         onOpenChange,
@@ -94,19 +112,46 @@ export function EditPortfolioTxnDialog({
 
     const initialForm = () => ({
         date: normalizeYmdInput(transaction.date),
-        amount: String(transaction.amount ?? ""),
-        units: transaction.units !== undefined ? String(transaction.units) : "",
+        amount: formatEditableNumber(
+            transaction.amount ?? 0,
+            appSettings.numberFormat,
+        ),
+        units:
+            transaction.units !== undefined
+                ? formatEditableNumber(
+                      transaction.units,
+                      appSettings.numberFormat,
+                  )
+                : "",
         pricePerUnit:
             transaction.price_per_unit !== undefined
-                ? String(transaction.price_per_unit)
+                ? formatEditableNumber(
+                      transaction.price_per_unit,
+                      appSettings.numberFormat,
+                  )
                 : "",
-        fees: transaction.fees !== undefined ? String(transaction.fees) : "",
-        taxes: transaction.taxes !== undefined ? String(transaction.taxes) : "",
+        fees:
+            transaction.fees !== undefined
+                ? formatEditableNumber(
+                      transaction.fees,
+                      appSettings.numberFormat,
+                  )
+                : "",
+        taxes:
+            transaction.taxes !== undefined
+                ? formatEditableNumber(
+                      transaction.taxes,
+                      appSettings.numberFormat,
+                  )
+                : "",
         dividendAmountConvention:
             transaction.dividend_amount_convention ?? "unknown",
         fxRateToEur:
             transaction.fx_rate_to_eur !== undefined
-                ? String(transaction.fx_rate_to_eur)
+                ? formatEditableNumber(
+                      transaction.fx_rate_to_eur,
+                      appSettings.numberFormat,
+                  )
                 : "",
         note: transaction.note || "",
         accountId:
@@ -114,8 +159,9 @@ export function EditPortfolioTxnDialog({
                 ? String(transaction.account_id)
                 : "",
         isRecurring: Boolean(transaction.is_recurring),
-        recurrenceInterval: (transaction.recurrence_interval ||
-            "monthly") as RecurrenceInterval,
+        recurrenceInterval: normalizeRecurrenceInterval(
+            transaction.recurrence_interval,
+        ),
         recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
     });
 
@@ -134,9 +180,9 @@ export function EditPortfolioTxnDialog({
     // below re-runs the same helper inside the Zod schema, so the two can never
     // disagree.
     const unitMath = deriveUnitMath({
-        amount: parseNonNegative(form.amount),
-        units: parsePositive(form.units),
-        price: parsePositive(form.pricePerUnit),
+        amount: parseNonNegative(form.amount, appSettings.numberFormat),
+        units: parsePositive(form.units, appSettings.numberFormat),
+        price: parsePositive(form.pricePerUnit, appSettings.numberFormat),
         derive: isBuySell || isGift,
     });
     const { derivedAmount } = unitMath;
@@ -184,13 +230,22 @@ export function EditPortfolioTxnDialog({
                         unitMath.effectiveAmount <= 0)
                   ? t("addPortTxn.error.amountRequired")
                   : undefined,
-        "edit-txn-fees": invalidOptionalMoney(form.fees)
+        "edit-txn-fees": invalidOptionalMoney(
+            form.fees,
+            appSettings.numberFormat,
+        )
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
-        "edit-txn-taxes": invalidOptionalMoney(form.taxes)
+        "edit-txn-taxes": invalidOptionalMoney(
+            form.taxes,
+            appSettings.numberFormat,
+        )
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
-        "edit-txn-fx-rate-to-eur": invalidOptionalFxRate(form.fxRateToEur)
+        "edit-txn-fx-rate-to-eur": invalidOptionalFxRate(
+            form.fxRateToEur,
+            appSettings.numberFormat,
+        )
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
     };
@@ -215,9 +270,10 @@ export function EditPortfolioTxnDialog({
         if (!checkValid()) return;
         // Narrowing only — checkValid() mirrors the schema's rules field-by-field,
         // so a blocked submit never reaches this parse.
-        const parsed = editPortfolioTxnSchema({ isBuySell, isGift }).safeParse(
-            form,
-        );
+        const parsed = editPortfolioTxnSchema(
+            { isBuySell, isGift },
+            appSettings.numberFormat,
+        ).safeParse(form);
         if (!parsed.success) return;
 
         try {
@@ -315,6 +371,16 @@ export function EditPortfolioTxnDialog({
                         lockAmountWhenGift={false}
                         withPlaceholders={false}
                         errors={visibleErrors}
+                    />
+
+                    <PortfolioBrokerField
+                        id="edit-txn-broker"
+                        accounts={brokerAccounts}
+                        value={form.accountId}
+                        onChange={(accountId) =>
+                            setForm((current) => ({ ...current, accountId }))
+                        }
+                        t={t}
                     />
 
                     <DialogFooter className="pt-2">

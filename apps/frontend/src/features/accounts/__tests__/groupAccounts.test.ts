@@ -6,6 +6,7 @@ import {
     accountLabel,
     computeNetCash,
     groupAccounts,
+    isHoldingsOnlyPortfolioType,
     isPortfolioType,
     sumConvertedBalances,
 } from "@/features/accounts/groupAccounts";
@@ -49,18 +50,57 @@ describe("accountGroupId", () => {
     });
 
     it.each([
-        "checking", "savings", "pension", "brokerage", "crypto_exchange", "wallet", "liability",
-    ] as AccountType[])("archived overrides type: inactive %s → archived", (type) => {
-        expect(accountGroupId(makeAccount({ type, is_active: false }))).toBe("archived");
-    });
+        "checking",
+        "savings",
+        "pension",
+        "brokerage",
+        "crypto_exchange",
+        "wallet",
+        "liability",
+    ] as AccountType[])(
+        "archived overrides type: inactive %s → archived",
+        (type) => {
+            expect(
+                accountGroupId(makeAccount({ type, is_active: false })),
+            ).toBe("archived");
+        },
+    );
 });
 
 describe("isPortfolioType", () => {
     it("flags exactly brokerage/crypto_exchange/wallet", () => {
-        const portfolio: AccountType[] = ["brokerage", "crypto_exchange", "wallet"];
-        const rest: AccountType[] = ["checking", "savings", "pension", "liability"];
+        const portfolio: AccountType[] = [
+            "brokerage",
+            "crypto_exchange",
+            "wallet",
+        ];
+        const rest: AccountType[] = [
+            "checking",
+            "savings",
+            "pension",
+            "liability",
+        ];
         portfolio.forEach((tp) => expect(isPortfolioType(tp)).toBe(true));
         rest.forEach((tp) => expect(isPortfolioType(tp)).toBe(false));
+    });
+});
+
+describe("isHoldingsOnlyPortfolioType", () => {
+    it("flags wallets and crypto exchanges without suppressing brokerage cash", () => {
+        const holdingsOnly: AccountType[] = ["crypto_exchange", "wallet"];
+        const rest: AccountType[] = [
+            "checking",
+            "savings",
+            "brokerage",
+            "pension",
+            "liability",
+        ];
+        holdingsOnly.forEach((type) =>
+            expect(isHoldingsOnlyPortfolioType(type)).toBe(true),
+        );
+        rest.forEach((type) =>
+            expect(isHoldingsOnlyPortfolioType(type)).toBe(false),
+        );
     });
 });
 
@@ -70,11 +110,25 @@ describe("groupAccounts", () => {
             makeAccount({ type: "liability", name: "Mortgage" }),
             makeAccount({ type: "brokerage", name: "Degiro" }),
             makeAccount({ type: "checking", name: "KBC" }),
-            makeAccount({ type: "savings", name: "Old savings", is_active: false }),
+            makeAccount({
+                type: "savings",
+                name: "Old savings",
+                is_active: false,
+            }),
         ];
         const groups = groupAccounts(accounts);
-        expect(groups.map((g) => g.id)).toEqual(["cash", "portfolio", "liabilities", "archived"]);
-        expect(ACCOUNT_GROUP_ORDER).toEqual(["cash", "portfolio", "liabilities", "archived"]);
+        expect(groups.map((g) => g.id)).toEqual([
+            "cash",
+            "portfolio",
+            "liabilities",
+            "archived",
+        ]);
+        expect(ACCOUNT_GROUP_ORDER).toEqual([
+            "cash",
+            "portfolio",
+            "liabilities",
+            "archived",
+        ]);
     });
 
     it("omits empty groups", () => {
@@ -110,13 +164,25 @@ describe("groupAccounts", () => {
 
     it("routes every inactive account to archived regardless of type, sorted by label", () => {
         const groups = groupAccounts([
-            makeAccount({ id: 1, name: "B liability", type: "liability", is_active: false }),
-            makeAccount({ id: 2, name: "A broker", type: "brokerage", is_active: false }),
+            makeAccount({
+                id: 1,
+                name: "B liability",
+                type: "liability",
+                is_active: false,
+            }),
+            makeAccount({
+                id: 2,
+                name: "A broker",
+                type: "brokerage",
+                is_active: false,
+            }),
             makeAccount({ id: 3, name: "C checking", is_active: false }),
         ]);
         expect(groups.map((g) => g.id)).toEqual(["archived"]);
         expect(groups[0].accounts.map((a) => a.name)).toEqual([
-            "A broker", "B liability", "C checking",
+            "A broker",
+            "B liability",
+            "C checking",
         ]);
     });
 });
@@ -128,7 +194,8 @@ describe("sumConvertedBalances", () => {
             makeAccount({ computed_balance: 50, currency: "USD" }),
             makeAccount({ computed_balance: undefined }),
         ];
-        const double = (amount: number, from?: string) => (from === "USD" ? amount * 2 : amount);
+        const double = (amount: number, from?: string) =>
+            from === "USD" ? amount * 2 : amount;
         expect(sumConvertedBalances(accounts, double)).toBe(200);
     });
 
@@ -146,19 +213,39 @@ describe("computeNetCash — reconciles with the WP-A1 Liquid+Liabilities popula
     // POPULATION + SIGN, matching WP-A1's net-worth definition (in_net_worth
     // gates aggregates; liabilities enter with their negative sign; portfolio
     // ledger balances are excluded until WP-C5 makes them real).
-    const inNetWorthChecking = makeAccount({ type: "checking", computed_balance: 1000 });
-    const inNetWorthSavings = makeAccount({ type: "savings", computed_balance: 500 });
-    const inNetWorthLiability = makeAccount({ type: "liability", computed_balance: -300 });
+    const inNetWorthChecking = makeAccount({
+        type: "checking",
+        computed_balance: 1000,
+    });
+    const inNetWorthSavings = makeAccount({
+        type: "savings",
+        computed_balance: 500,
+    });
+    const inNetWorthLiability = makeAccount({
+        type: "liability",
+        computed_balance: -300,
+    });
     const notInNetWorth = makeAccount({
-        type: "checking", in_net_worth: false, computed_balance: 999,
+        type: "checking",
+        in_net_worth: false,
+        computed_balance: 999,
     });
     const archived = makeAccount({
-        type: "savings", is_active: false, computed_balance: 555,
+        type: "savings",
+        is_active: false,
+        computed_balance: 555,
     });
-    const portfolioBrokerage = makeAccount({ type: "brokerage", computed_balance: 42 });
+    const portfolioBrokerage = makeAccount({
+        type: "brokerage",
+        computed_balance: 42,
+    });
     const fixture = [
-        inNetWorthChecking, inNetWorthSavings, inNetWorthLiability,
-        notInNetWorth, archived, portfolioBrokerage,
+        inNetWorthChecking,
+        inNetWorthSavings,
+        inNetWorthLiability,
+        notInNetWorth,
+        archived,
+        portfolioBrokerage,
     ];
 
     it("equals Σ(in_net_worth, active, non-portfolio computed_balance) — 1000 + 500 − 300", () => {
@@ -176,23 +263,38 @@ describe("computeNetCash — reconciles with the WP-A1 Liquid+Liabilities popula
     });
 
     it("excludes the not-in-net-worth account", () => {
-        expect(computeNetCash([...fixture], identity))
-            .toBe(computeNetCash(fixture.filter((a) => a !== notInNetWorth), identity));
+        expect(computeNetCash([...fixture], identity)).toBe(
+            computeNetCash(
+                fixture.filter((a) => a !== notInNetWorth),
+                identity,
+            ),
+        );
     });
 
     it("excludes the archived account", () => {
-        expect(computeNetCash([...fixture], identity))
-            .toBe(computeNetCash(fixture.filter((a) => a !== archived), identity));
+        expect(computeNetCash([...fixture], identity)).toBe(
+            computeNetCash(
+                fixture.filter((a) => a !== archived),
+                identity,
+            ),
+        );
     });
 
     it("excludes portfolio-type ledger balances", () => {
-        expect(computeNetCash([...fixture], identity))
-            .toBe(computeNetCash(fixture.filter((a) => a !== portfolioBrokerage), identity));
+        expect(computeNetCash([...fixture], identity)).toBe(
+            computeNetCash(
+                fixture.filter((a) => a !== portfolioBrokerage),
+                identity,
+            ),
+        );
     });
 
     it("carries the liability's negative sign into the net", () => {
-        const withoutLiability = fixture.filter((a) => a !== inNetWorthLiability);
-        expect(computeNetCash(fixture, identity))
-            .toBe(computeNetCash(withoutLiability, identity) - 300);
+        const withoutLiability = fixture.filter(
+            (a) => a !== inNetWorthLiability,
+        );
+        expect(computeNetCash(fixture, identity)).toBe(
+            computeNetCash(withoutLiability, identity) - 300,
+        );
     });
 });

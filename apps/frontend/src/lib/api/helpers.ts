@@ -36,6 +36,8 @@ export function buildExclusionQuery(params?: {
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
     currency?: string;
+    start_date?: string;
+    end_date?: string;
 }): string {
     const queryParams = new URLSearchParams();
 
@@ -51,6 +53,12 @@ export function buildExclusionQuery(params?: {
     }
     if (params?.currency) {
         queryParams.set("currency", params.currency);
+    }
+    if (params?.start_date) {
+        queryParams.set("start_date", params.start_date);
+    }
+    if (params?.end_date) {
+        queryParams.set("end_date", params.end_date);
     }
 
     return queryParams.toString();

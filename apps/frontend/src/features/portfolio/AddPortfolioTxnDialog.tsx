@@ -44,6 +44,9 @@ import {
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useFieldErrors, type FieldErrorMap } from "@/hooks/useFieldErrors";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
+import { PortfolioBrokerField } from "./PortfolioBrokerField";
+import { useManualTradeBrokerOptions } from "./manualTradeBroker";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -71,7 +74,11 @@ export function AddPortfolioTxnDialog({
         onOpenChange,
     });
     const { t } = useLanguage();
-    const { addTransaction, isAddingTransaction } = usePortfolio();
+    const { appSettings } = useAppSettings();
+    const { addTransaction, isAddingTransaction, transactions } =
+        usePortfolio();
+    const { accounts: brokerAccounts, defaultBrokerId } =
+        useManualTradeBrokerOptions(transactions, investment.id);
 
     const unitBased = isUnitBased(investment.assetClass);
     const realEstate = isRealEstate(investment.assetClass);
@@ -97,6 +104,7 @@ export function AddPortfolioTxnDialog({
         dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
+        accountId: undefined as string | undefined,
         isRecurring: false,
         recurrenceInterval: "monthly" as RecurrenceInterval,
         recurrenceEndDate: "",
@@ -116,9 +124,9 @@ export function AddPortfolioTxnDialog({
     // below re-runs the same helper inside the Zod schema, so the two can never
     // disagree.
     const unitMath = deriveUnitMath({
-        amount: parsePositive(form.amount),
-        units: parsePositive(form.units),
-        price: parsePositive(form.pricePerUnit),
+        amount: parsePositive(form.amount, appSettings.numberFormat),
+        units: parsePositive(form.units, appSettings.numberFormat),
+        price: parsePositive(form.pricePerUnit, appSettings.numberFormat),
         derive: isBuySell,
     });
     const { derivedAmount } = unitMath;
@@ -151,13 +159,16 @@ export function AddPortfolioTxnDialog({
                         Number.isNaN(unitMath.effectiveAmount))
                   ? t("addPortTxn.error.amountRequired")
                   : undefined,
-        "txn-fees": invalidOptionalMoney(form.fees)
+        "txn-fees": invalidOptionalMoney(form.fees, appSettings.numberFormat)
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
-        "txn-taxes": invalidOptionalMoney(form.taxes)
+        "txn-taxes": invalidOptionalMoney(form.taxes, appSettings.numberFormat)
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
-        "txn-fx-rate-to-eur": invalidOptionalFxRate(form.fxRateToEur)
+        "txn-fx-rate-to-eur": invalidOptionalFxRate(
+            form.fxRateToEur,
+            appSettings.numberFormat,
+        )
             ? t("addPortTxn.error.invalidNumber")
             : undefined,
     };
@@ -182,12 +193,16 @@ export function AddPortfolioTxnDialog({
         if (!checkValid()) return;
         // Narrowing only — checkValid() mirrors the schema's rules field-by-field,
         // so a blocked submit never reaches this parse.
-        const parsed = addPortfolioTxnSchema({ isBuySell, isGift }).safeParse(
-            form,
-        );
+        const parsed = addPortfolioTxnSchema(
+            { isBuySell, isGift },
+            appSettings.numberFormat,
+        ).safeParse(form);
         if (!parsed.success) return;
 
         try {
+            const effectiveBrokerId =
+                form.accountId ??
+                (defaultBrokerId !== undefined ? String(defaultBrokerId) : "");
             await addTransaction({
                 investmentId: investment.id,
                 type: form.type,
@@ -204,6 +219,9 @@ export function AddPortfolioTxnDialog({
                 fx_rate_to_eur: parsed.data.fxRateToEur,
                 currency: investment.currency,
                 note: form.note.trim() || undefined,
+                account_id: effectiveBrokerId
+                    ? Number(effectiveBrokerId)
+                    : undefined,
                 is_recurring: form.isRecurring,
                 recurrence_interval: form.isRecurring
                     ? form.recurrenceInterval
@@ -311,6 +329,22 @@ export function AddPortfolioTxnDialog({
                         lockAmountWhenGift
                         withPlaceholders
                         errors={visibleErrors}
+                    />
+
+                    <PortfolioBrokerField
+                        id="txn-broker"
+                        accounts={brokerAccounts}
+                        value={
+                            form.accountId ??
+                            (defaultBrokerId !== undefined
+                                ? String(defaultBrokerId)
+                                : "")
+                        }
+                        onChange={(accountId) =>
+                            setForm((current) => ({ ...current, accountId }))
+                        }
+                        compactDefault
+                        t={t}
                     />
 
                     <DialogFooter className="pt-2">

@@ -27,7 +27,7 @@ import { isUnitBased } from "@/utils/assetClass";
 import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
 import { priceProviderPayload } from "./priceProviderPayload";
-import { INVESTMENT_CURRENCIES } from "@/utils/currency";
+import { formatEditableNumber, INVESTMENT_CURRENCIES } from "@/utils/currency";
 import {
     useDialogFormState,
     useReseedOnIdentityChange,
@@ -36,6 +36,7 @@ import {
     type ControlledDialogProps,
 } from "@/hooks/useDialogFormState";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 interface Props extends ControlledDialogProps {
     investment: InvestmentSummary;
@@ -50,6 +51,7 @@ export function EditInvestmentDialog({
     returnFocusRef,
 }: Props) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const { updateInvestment, isUpdatingInvestment } = usePortfolio();
     const { open, setOpen, controlled } = useControlledOpen({
         open: openProp,
@@ -67,9 +69,15 @@ export function EditInvestmentDialog({
         currency: investment.originalCurrency || investment.currency || "EUR",
         currentPrice:
             investment.currentPrice != null
-                ? String(investment.currentPrice)
+                ? formatEditableNumber(
+                      investment.currentPrice,
+                      appSettings.numberFormat,
+                  )
                 : investment.current_price != null
-                  ? String(investment.current_price)
+                  ? formatEditableNumber(
+                        investment.current_price,
+                        appSettings.numberFormat,
+                    )
                   : "",
         priceProvider: (investment.price_provider || "manual") as PriceProvider,
         priceProviderId: investment.price_provider_id || "",
@@ -123,7 +131,10 @@ export function EditInvestmentDialog({
                 currency: form.currency,
                 current_price:
                     form.priceProvider === "manual" && form.currentPrice
-                        ? parseDecimal(form.currentPrice)
+                        ? parseDecimal(
+                              form.currentPrice,
+                              appSettings.numberFormat,
+                          )
                         : undefined,
                 ...priceProviderPayload(form),
             });

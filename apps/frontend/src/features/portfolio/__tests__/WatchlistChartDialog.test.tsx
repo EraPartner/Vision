@@ -234,7 +234,7 @@ describe("WatchlistChartDialog", () => {
             await user.click(targetPriceButton);
 
             // Fill in the new price
-            const priceInput = await screen.findByRole("spinbutton", {
+            const priceInput = await screen.findByRole("textbox", {
                 name: "Target Price",
             });
             await user.clear(priceInput);
@@ -275,13 +275,13 @@ describe("WatchlistChartDialog", () => {
         await screen.findByRole("dialog");
         await user.click(await screen.findByRole("button", { name: /200/i }));
         expect(
-            await screen.findByRole("spinbutton", { name: "Target Price" }),
+            await screen.findByRole("textbox", { name: "Target Price" }),
         ).toBeInTheDocument();
 
         await user.click(screen.getByRole("button", { name: "Cancel" }));
 
         expect(
-            screen.queryByRole("spinbutton", { name: "Target Price" }),
+            screen.queryByRole("textbox", { name: "Target Price" }),
         ).not.toBeInTheDocument();
         expect(patchCount).toBe(0);
     });
@@ -312,7 +312,9 @@ describe("WatchlistChartDialog", () => {
 
         // Act — enter edit mode and set the price to 0 (paste-equivalent)
         await user.click(await screen.findByRole("button", { name: /200/i }));
-        const priceInput = await screen.findByRole("spinbutton");
+        const priceInput = await screen.findByRole("textbox", {
+            name: "Target Price",
+        });
         fireEvent.change(priceInput, { target: { value: "0" } });
 
         const editContainer = priceInput.closest("div") as HTMLElement;
@@ -321,7 +323,9 @@ describe("WatchlistChartDialog", () => {
 
         // Assert — edit mode stays open (success path would close it) and no PATCH sent
         await waitFor(() =>
-            expect(screen.getByRole("spinbutton")).toBeInTheDocument(),
+            expect(
+                screen.getByRole("textbox", { name: "Target Price" }),
+            ).toBeInTheDocument(),
         );
         expect(patched).toBe(false);
     });

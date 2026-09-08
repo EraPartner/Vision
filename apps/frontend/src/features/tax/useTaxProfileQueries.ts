@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
@@ -12,6 +13,6 @@ export function useTaxIncomeCategories() {
             });
             return response.items;
         },
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
 }

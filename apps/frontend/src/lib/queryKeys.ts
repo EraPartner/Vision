@@ -143,12 +143,19 @@ export const dashboardKeys = {
 export const aggregationKeys = {
     /** Invalidation prefix for every server-side aggregation. */
     all: ["aggregations"] as const,
-    monthlySummaryUnfiltered: (currency: string) =>
-        ["aggregations", "monthly-summary", "unfiltered", currency] as const,
+    monthlySummaryUnfiltered: (currency: string, window: string) =>
+        [
+            "aggregations",
+            "monthly-summary",
+            "unfiltered",
+            currency,
+            window,
+        ] as const,
     monthlySummaryFiltered: (
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
+        window: string,
     ) =>
         [
             "aggregations",
@@ -157,13 +164,21 @@ export const aggregationKeys = {
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ] as const,
-    categoryPivotUnfiltered: (currency: string) =>
-        ["aggregations", "category-pivot", "unfiltered", currency] as const,
+    categoryPivotUnfiltered: (currency: string, window: string) =>
+        [
+            "aggregations",
+            "category-pivot",
+            "unfiltered",
+            currency,
+            window,
+        ] as const,
     categoryPivotFiltered: (
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
+        window: string,
     ) =>
         [
             "aggregations",
@@ -172,13 +187,15 @@ export const aggregationKeys = {
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ] as const,
-    recipientInsights: (currency: string) =>
-        ["aggregations", "recipient-insights", currency] as const,
+    recipientInsights: (currency: string, window: string) =>
+        ["aggregations", "recipient-insights", currency, window] as const,
     recipientInsightsFiltered: (
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
+        window: string,
     ) =>
         [
             "aggregations",
@@ -187,6 +204,7 @@ export const aggregationKeys = {
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ] as const,
     /**
      * Recipient-insights tab variant — historical 5-element shape WITHOUT the
@@ -196,6 +214,7 @@ export const aggregationKeys = {
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
+        window: string,
     ) =>
         [
             "aggregations",
@@ -203,13 +222,21 @@ export const aggregationKeys = {
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ] as const,
-    recipientByYearUnfiltered: (currency: string) =>
-        ["aggregations", "recipient-by-year", "unfiltered", currency] as const,
+    recipientByYearUnfiltered: (currency: string, window: string) =>
+        [
+            "aggregations",
+            "recipient-by-year",
+            "unfiltered",
+            currency,
+            window,
+        ] as const,
     recipientByYearFiltered: (
         currency: string,
         excludedCategoryIds: number[],
         excludedRecipientIds: number[],
+        window: string,
     ) =>
         [
             "aggregations",
@@ -218,6 +245,7 @@ export const aggregationKeys = {
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
+            window,
         ] as const,
     sankey: (
         year: number,
@@ -272,14 +300,17 @@ export const plannedKeys = {
      * showInactive]` caches (that hook still keys inline).
      */
     transactionsAll: ["plannedTransactions"] as const,
+    accountTransactionsAll: ["account-planned-transactions"] as const,
+    accountTransactions: (accountId: number | undefined) =>
+        ["account-planned-transactions", accountId] as const,
     recurringPatterns: ["recurringPatterns"] as const,
 };
 
 // ── AI-insights digest (detection layer, no LLM) ────────────────────────────
 
 export const insightsKeys = {
-    /** Shared by the Statistics panel and the badge — one cache entry. */
     digest: ["insightsDigest"] as const,
+    count: ["insightsCount"] as const,
 };
 
 // ── Tax (transaction-derived) ───────────────────────────────────────────────
@@ -364,6 +395,8 @@ export const portfolioKeys = {
     transactionsAll: ["portfolio-transactions"] as const,
     transactions: (investmentIdsCsv: string) =>
         ["portfolio-transactions", investmentIdsCsv] as const,
+    allTransactionsForInvestment: (investmentId: number) =>
+        ["portfolio-transactions", "all", investmentId] as const,
     summaryAll: ["portfolio-summary"] as const,
     summary: (currency: string) => ["portfolio-summary", currency] as const,
     performanceAll: ["portfolio-performance"] as const,
@@ -448,8 +481,12 @@ export const adminKeys = {
     dbStats: ["admin", "db-stats"] as const,
     providerHealth: ["admin", "provider-health"] as const,
     dbTableAll: (table: string) => ["admin", "db-table", table] as const,
-    dbTable: (table: string, page: number, sort: unknown, filters: unknown) =>
-        ["admin", "db-table", table, page, sort, filters] as const,
+    dbTable: (
+        table: string,
+        cursor: string | null,
+        sort: unknown,
+        filters: unknown,
+    ) => ["admin", "db-table", table, cursor, sort, filters] as const,
 };
 
 // ── Cross-domain invalidation fan-out helpers ───────────────────────────────
@@ -467,9 +504,19 @@ export const adminKeys = {
 export function invalidateTransactionData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     queryClient.invalidateQueries({ queryKey: transactionKeys.virtualAll });
+    queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
+    queryClient.invalidateQueries({ queryKey: cashflowKeys.bankBalancesAll });
     queryClient.invalidateQueries({ queryKey: monthlySummaryKeys.all });
     queryClient.invalidateQueries({ queryKey: dashboardKeys.filteredStatsAll });
     queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+    queryClient.invalidateQueries({ queryKey: insightsKeys.digest });
+    queryClient.invalidateQueries({ queryKey: insightsKeys.count });
+    queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
+    queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
+    queryClient.invalidateQueries({
+        queryKey: plannedKeys.accountTransactionsAll,
+    });
     queryClient.invalidateQueries({
         queryKey: dashboardKeys.recentTransactionsAll,
     });
@@ -513,6 +560,9 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
     // Planned payments can reference the merged/closed account.
     queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
     queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
+    queryClient.invalidateQueries({
+        queryKey: plannedKeys.accountTransactionsAll,
+    });
     queryClient.invalidateQueries({ queryKey: plannedKeys.matchSuggestions });
     // Holdings move across accounts (in-specie), so the portfolio trees restate.
     queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });

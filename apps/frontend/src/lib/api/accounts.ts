@@ -71,6 +71,45 @@ export async function deleteAccount(id: number): Promise<void> {
     await apiRequest<void>(`/api/accounts/${id}`, { method: "DELETE" });
 }
 
+export type AccountCloseBalanceHandling = "preserve" | "adjustment";
+
+export interface AccountPortfolioLotRetagPreview {
+    account_id: number;
+    eligible_count: number;
+    transaction_ids: number[];
+    limit: number;
+}
+
+export function getAccountPortfolioLotRetagPreview(
+    id: number,
+): Promise<AccountPortfolioLotRetagPreview> {
+    return apiRequest<AccountPortfolioLotRetagPreview>(
+        `/api/accounts/${id}/portfolio-lot-retag-preview`,
+    );
+}
+
+export interface AccountCloseResult {
+    account_id: number;
+    balance_handling: AccountCloseBalanceHandling;
+    already_closed: boolean;
+    adjustments: Array<{
+        id: number;
+        amount: number;
+        currency: string;
+        transfer_source: "adjustment";
+    }>;
+}
+
+export function closeAccount(
+    id: number,
+    balanceHandling: AccountCloseBalanceHandling,
+): Promise<AccountCloseResult> {
+    return apiRequest<AccountCloseResult>(`/api/accounts/${id}/close`, {
+        method: "POST",
+        body: JSON.stringify({ balance_handling: balanceHandling }),
+    });
+}
+
 export interface AccountMergeResult {
     into: number;
     merged: number[];

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
+import { formatEditableNumber } from "@/utils/currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,7 +91,12 @@ export default function PlannedPaymentForm({
     // Edit path: the stored amount is signed, the field is a magnitude — split it
     // back into |amount| + direction so re-saving an untouched row is a no-op.
     const [amount, setAmount] = useState(
-        initial?.amount != null ? Math.abs(initial.amount).toString() : "",
+        initial?.amount != null
+            ? formatEditableNumber(
+                  Math.abs(initial.amount),
+                  appSettings.numberFormat,
+              )
+            : "",
     );
     // Default to "expense": planned payments are overwhelmingly bills, and it is
     // the direction that keeps a new row auto-matchable against a real debit.
@@ -118,10 +124,20 @@ export default function PlannedPaymentForm({
         initial?.loan_type ?? "amortizing",
     );
     const [loanPrincipal, setLoanPrincipal] = useState(
-        initial?.loan_principal?.toString() ?? "",
+        initial?.loan_principal != null
+            ? formatEditableNumber(
+                  initial.loan_principal,
+                  appSettings.numberFormat,
+              )
+            : "",
     );
     const [loanRate, setLoanRate] = useState(
-        initial?.loan_annual_interest_rate?.toString() ?? "",
+        initial?.loan_annual_interest_rate != null
+            ? formatEditableNumber(
+                  initial.loan_annual_interest_rate,
+                  appSettings.numberFormat,
+              )
+            : "",
     );
     const [loanTermMonths, setLoanTermMonths] = useState(
         initial?.loan_term_months?.toString() ?? "",
@@ -178,7 +194,12 @@ export default function PlannedPaymentForm({
     const initialFingerprint = JSON.stringify({
         name: initial?.name ?? "",
         amount:
-            initial?.amount != null ? Math.abs(initial.amount).toString() : "",
+            initial?.amount != null
+                ? formatEditableNumber(
+                      Math.abs(initial.amount),
+                      appSettings.numberFormat,
+                  )
+                : "",
         direction: (initial?.amount ?? 0) > 0 ? "income" : "expense",
         currency: initial?.currency ?? appSettings.defaultCurrency,
         dueDate: initial?.due_date ?? toYmd(new Date()),
@@ -186,8 +207,20 @@ export default function PlannedPaymentForm({
         frequency: initial?.frequency ?? "monthly",
         isLoan: initial?.is_loan ?? false,
         loanType: initial?.loan_type ?? "amortizing",
-        loanPrincipal: initial?.loan_principal?.toString() ?? "",
-        loanRate: initial?.loan_annual_interest_rate?.toString() ?? "",
+        loanPrincipal:
+            initial?.loan_principal != null
+                ? formatEditableNumber(
+                      initial.loan_principal,
+                      appSettings.numberFormat,
+                  )
+                : "",
+        loanRate:
+            initial?.loan_annual_interest_rate != null
+                ? formatEditableNumber(
+                      initial.loan_annual_interest_rate,
+                      appSettings.numberFormat,
+                  )
+                : "",
         loanTermMonths: initial?.loan_term_months?.toString() ?? "",
         loanPaymentDay: initial?.loan_payment_day?.toString() ?? "",
         customDays: initial?.custom_interval_days?.toString() ?? "",
@@ -263,7 +296,9 @@ export default function PlannedPaymentForm({
         // Recombine magnitude + direction into the signed stored amount. Math.abs
         // guards a stray typed "-" so the toggle is the single source of the sign;
         // the 0 case is spelled out to avoid handing the API a `-0`.
-        const magnitude = Math.abs(parseDecimal(amount));
+        const magnitude = Math.abs(
+            parseDecimal(amount, appSettings.numberFormat),
+        );
         const signedAmount =
             magnitude === 0 || effectiveDirection === "income"
                 ? magnitude
@@ -284,8 +319,14 @@ export default function PlannedPaymentForm({
             is_loan: isLoan,
             ...(isLoan && {
                 loan_type: loanType,
-                loan_principal: parseDecimal(loanPrincipal),
-                loan_annual_interest_rate: parseDecimal(loanRate),
+                loan_principal: parseDecimal(
+                    loanPrincipal,
+                    appSettings.numberFormat,
+                ),
+                loan_annual_interest_rate: parseDecimal(
+                    loanRate,
+                    appSettings.numberFormat,
+                ),
                 loan_term_months: parseInt(loanTermMonths, 10),
                 loan_start_date: dueDateStr,
                 loan_payment_day: loanPaymentDay
@@ -375,7 +416,6 @@ export default function PlannedPaymentForm({
                                     id="pp-amount"
                                     type="text"
                                     inputMode="decimal"
-                                    pattern="^[0-9]+([.,][0-9]+)?$"
                                     placeholder="0.00"
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
@@ -623,7 +663,6 @@ export default function PlannedPaymentForm({
                                             id="pp-loan-principal"
                                             type="text"
                                             inputMode="decimal"
-                                            pattern="^[0-9]+([.,][0-9]+)?$"
                                             value={loanPrincipal}
                                             onChange={(e) =>
                                                 setLoanPrincipal(e.target.value)
@@ -652,7 +691,6 @@ export default function PlannedPaymentForm({
                                             id="pp-loan-rate"
                                             type="text"
                                             inputMode="decimal"
-                                            pattern="^[0-9]+([.,][0-9]+)?$"
                                             value={loanRate}
                                             onChange={(e) =>
                                                 setLoanRate(e.target.value)

@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import {
@@ -46,7 +47,7 @@ export function useRecipientPatterns(recipientId: number, enabled: boolean) {
         queryKey: ["recipient-patterns", recipientId],
         enabled,
         queryFn: () => apiClient.listRecipientPatterns(recipientId),
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 
@@ -99,7 +100,7 @@ export function useVirtualRecipients(params: {
                 sort_dir: params.sortDir ?? undefined,
             }),
         placeholderData: (previous) => previous,
-        staleTime: 30_000,
+        staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
     return query;

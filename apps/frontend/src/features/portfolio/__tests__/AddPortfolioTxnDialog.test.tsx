@@ -95,12 +95,16 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
 
         // Assert — dialog is open and key form fields are visible
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(await screen.findByLabelText(/units/i)).toBeInTheDocument();
-        expect(await screen.findByLabelText(/price per unit/i)).toBeInTheDocument();
+        expect(
+            await screen.findByLabelText(/price per unit/i),
+        ).toBeInTheDocument();
     });
 
     it("cancel button closes dialog", async () => {
@@ -109,9 +113,13 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
-        await user.click(await screen.findByRole("button", { name: /cancel/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /cancel/i }),
+        );
 
         // Assert
         await waitFor(() =>
@@ -125,7 +133,9 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
 
@@ -146,7 +156,9 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — open dialog, fill units + price per unit (amount derives), submit
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const unitsInput = await screen.findByLabelText(/units/i);
@@ -165,24 +177,108 @@ describe("AddPortfolioTxnDialog", () => {
         );
     });
 
+    it("submits the instrument's most recent broker default", async () => {
+        let capturedBody: Record<string, unknown> | undefined;
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 7,
+                            name: "Degiro",
+                            currency: "EUR",
+                            type: "brokerage",
+                            liquidity_class: "liquid",
+                            spendable: false,
+                            in_net_worth: true,
+                            tax_wrapper: "none",
+                            owner: "me",
+                            multi_currency_cash: false,
+                            has_cash_sleeve: false,
+                            is_active: true,
+                            created_at: "2025-01-01T00:00:00Z",
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/investments`, () =>
+                ok({ items: [INVESTMENT], total: 1, limit: 500, offset: 0 }),
+            ),
+            http.get(`${API_BASE}/api/investments/transactions`, () =>
+                ok({
+                    items: [
+                        {
+                            ...PORTFOLIO_TXN_STUB,
+                            id: 77,
+                            account_id: 7,
+                            import_batch_id: "12",
+                        },
+                    ],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.post(
+                `${API_BASE}/api/investments/1/transactions`,
+                async ({ request }) => {
+                    capturedBody = (await request.json()) as Record<
+                        string,
+                        unknown
+                    >;
+                    return ok({ ...PORTFOLIO_TXN_STUB, account_id: 7 });
+                },
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
+        expect(await screen.findByText("Degiro")).toBeInTheDocument();
+        await user.type(screen.getByLabelText(/units/i), "10");
+        const price = screen.getByLabelText(/price per unit/i);
+        await user.clear(price);
+        await user.type(price, "90");
+        await user.click(screen.getByRole("button", { name: /record/i }));
+
+        await waitFor(() => expect(capturedBody).toBeDefined());
+        expect(capturedBody?.account_id).toBe(7);
+    });
+
     it("submits dividend transaction successfully with amount only", async () => {
         // Arrange
         server.use(
             http.post(`${API_BASE}/api/investments/1/transactions`, () =>
-                ok({ ...PORTFOLIO_TXN_STUB, id: 102, type: "dividend", units: undefined, price_per_unit: undefined, amount: 50 }),
+                ok({
+                    ...PORTFOLIO_TXN_STUB,
+                    id: 102,
+                    type: "dividend",
+                    units: undefined,
+                    price_per_unit: undefined,
+                    amount: 50,
+                }),
             ),
         );
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — open dialog, change type to dividend, fill amount, submit
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // Change transaction type to dividend via Select
         const typeTrigger = screen.getAllByRole("combobox")[0];
         await user.click(typeTrigger);
-        const dividendOption = await screen.findByRole("option", { name: /dividend/i });
+        const dividendOption = await screen.findByRole("option", {
+            name: /dividend/i,
+        });
         await user.click(dividendOption);
 
         const amountInput = await screen.findByLabelText(/total amount/i);
@@ -208,7 +304,9 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — open, fill required fields, submit to trigger error
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const unitsInput = await screen.findByLabelText(/units/i);
@@ -233,7 +331,9 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — open dialog, fill only units (only 1 of 3 fields)
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const unitsInput = await screen.findByLabelText(/units/i);
@@ -242,10 +342,14 @@ describe("AddPortfolioTxnDialog", () => {
 
         // Assert — Record button is present (form allows submit attempt; validation fires on submit)
         // The button itself is not disabled — the in-form validation error message appears instead
-        expect(screen.getByRole("button", { name: /record/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /record/i }),
+        ).toBeInTheDocument();
         // Validation hint appears inline in the form since only 1 of 3 fields is filled
         expect(
-            await screen.findByText(/for buy\/sell.*two|enter any two|two of.*(amount|units)/i),
+            await screen.findByText(
+                /for buy\/sell.*two|enter any two|two of.*(amount|units)/i,
+            ),
         ).toBeInTheDocument();
     });
 
@@ -261,7 +365,9 @@ describe("AddPortfolioTxnDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const unitsInput = await screen.findByLabelText(/units/i);
@@ -281,7 +387,9 @@ describe("AddPortfolioTxnDialog", () => {
 
         // Act 2 — fees valid again, but FX rate of 0 (backend rejects ≤ 0)
         fireEvent.change(feesInput, { target: { value: "1" } });
-        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), { target: { value: "0" } });
+        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), {
+            target: { value: "0" },
+        });
         await user.click(screen.getByRole("button", { name: /record/i }));
 
         // Assert 2 — still blocked client-side
@@ -317,18 +425,26 @@ describe("AddPortfolioTxnDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const typeTrigger = screen.getAllByRole("combobox")[0];
         await user.click(typeTrigger);
-        await user.click(await screen.findByRole("option", { name: /dividend/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /dividend/i }),
+        );
 
         await user.click(screen.getByRole("button", { name: /record/i }));
 
         const amountInput = await screen.findByLabelText(/total amount/i);
-        await waitFor(() => expect(amountInput).toHaveAttribute("aria-invalid", "true"));
-        expect(describedError(amountInput)).toHaveTextContent(/amount is required/i);
+        await waitFor(() =>
+            expect(amountInput).toHaveAttribute("aria-invalid", "true"),
+        );
+        expect(describedError(amountInput)).toHaveTextContent(
+            /amount is required/i,
+        );
         await waitFor(() => expect(amountInput).toHaveFocus());
         // The inline message fully replaces the transient toast.
         expect(toastSpy).not.toHaveBeenCalled();
@@ -341,7 +457,9 @@ describe("AddPortfolioTxnDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         // Only 1 of the amount/units/price trio — the two-of-three rule blocks.
@@ -362,7 +480,9 @@ describe("AddPortfolioTxnDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.type(await screen.findByLabelText(/units/i), "10");
@@ -372,7 +492,9 @@ describe("AddPortfolioTxnDialog", () => {
         // fireEvent.submit bypasses JSDOM pattern constraint checking so handleSubmit runs
         fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
 
-        await waitFor(() => expect(feesInput).toHaveAttribute("aria-invalid", "true"));
+        await waitFor(() =>
+            expect(feesInput).toHaveAttribute("aria-invalid", "true"),
+        );
         expect(describedError(feesInput)).toHaveTextContent(/valid numbers/i);
         await waitFor(() => expect(feesInput).toHaveFocus());
         expect(toastSpy).not.toHaveBeenCalled();
@@ -384,39 +506,65 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — open dialog and expand the type select
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const typeTrigger = screen.getAllByRole("combobox")[0];
         await user.click(typeTrigger);
 
         // Assert — ETF allows buy, sell, gift, dividend, fee, tax
-        expect(await screen.findByRole("option", { name: /buy/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /sell/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /dividend/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /gift/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /fee/i })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: /tax/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("option", { name: /buy/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /sell/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /dividend/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /gift/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /fee/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: /tax/i }),
+        ).toBeInTheDocument();
         // savings/bond-only types should not appear
-        expect(screen.queryByRole("option", { name: /interest/i })).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("option", { name: /interest/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("shows interest type for savings asset class, not dividend", async () => {
         // Arrange
         const user = userEvent.setup();
-        renderWithApp(<AddPortfolioTxnDialog investment={SAVINGS_INVESTMENT} />);
+        renderWithApp(
+            <AddPortfolioTxnDialog investment={SAVINGS_INVESTMENT} />,
+        );
 
         // Act — open dialog and expand the type select
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
 
         const typeTrigger = screen.getAllByRole("combobox")[0];
         await user.click(typeTrigger);
 
         // Assert — savings shows buy/sell/fee/tax but not gift/dividend
-        expect(await screen.findByRole("option", { name: /buy/i })).toBeInTheDocument();
-        expect(screen.queryByRole("option", { name: /dividend/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("option", { name: /gift/i })).not.toBeInTheDocument();
+        expect(
+            await screen.findByRole("option", { name: /buy/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("option", { name: /dividend/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("option", { name: /gift/i }),
+        ).not.toBeInTheDocument();
     });
 
     // ─── Unsaved input survives dismissal ──────────────────────────────────
@@ -431,12 +579,18 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — type, dismiss by accident, reopen
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         await user.type(await screen.findByLabelText(/units/i), "12");
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add transaction/i }),
+        );
 
         // Assert — the work is still there
         await screen.findByRole("dialog");
@@ -449,12 +603,18 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — a stray click next to the dialog is the exact reported accident
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         await user.type(await screen.findByLabelText(/units/i), "12");
         await user.click(overlay());
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add transaction/i }),
+        );
 
         // Assert
         await screen.findByRole("dialog");
@@ -467,12 +627,18 @@ describe("AddPortfolioTxnDialog", () => {
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — Cancel is a deliberate discard, unlike a dismissal
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         await user.type(await screen.findByLabelText(/units/i), "12");
         await user.click(screen.getByRole("button", { name: /cancel/i }));
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add transaction/i }),
+        );
 
         // Assert
         await screen.findByRole("dialog");
@@ -482,19 +648,27 @@ describe("AddPortfolioTxnDialog", () => {
     it("clears the form after a successful submit", async () => {
         // Arrange
         server.use(
-            http.post(`${API_BASE}/api/investments/1/transactions`, () => ok(PORTFOLIO_TXN_STUB)),
+            http.post(`${API_BASE}/api/investments/1/transactions`, () =>
+                ok(PORTFOLIO_TXN_STUB),
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
 
         // Act — record a transaction, then reopen the dialog
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         await user.type(await screen.findByLabelText(/units/i), "10");
         await user.type(screen.getByLabelText(/price per unit/i), "90");
         await user.click(screen.getByRole("button", { name: /record/i }));
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+        await user.click(
+            screen.getByRole("button", { name: /add transaction/i }),
+        );
 
         // Assert — a recorded transaction must not be prefilled into the next one
         await screen.findByRole("dialog");
@@ -507,7 +681,9 @@ describe("AddPortfolioTxnDialog", () => {
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
@@ -515,7 +691,9 @@ describe("AddPortfolioTxnDialog", () => {
     it("first focusable element exists for keyboard nav", async () => {
         const user = userEvent.setup();
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
         await screen.findByRole("dialog");
         const inputs = screen.getAllByRole("textbox");
         const numbers = screen.queryAllByRole("spinbutton");

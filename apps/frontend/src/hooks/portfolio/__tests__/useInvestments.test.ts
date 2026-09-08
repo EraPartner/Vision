@@ -1,18 +1,22 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { createQueryWrapper } from "@/test/queryWrapper";
+import { createQueryWrapper, createTestQueryClient } from "@/test/queryWrapper";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import {
     useInvestmentsQuery,
     usePortfolioTransactionsQuery,
+    useAllPortfolioTransactionsQuery,
     useInvestmentMutations,
 } from "@/hooks/portfolio/useInvestments";
 import { INVESTMENT_STUB } from "@/test/msw/handlers";
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
+    const actual =
+        await importOriginal<
+            typeof import("@/stores/hydration/LanguageHydration")
+        >();
     const { default: enDict } = await import("@/locales/en");
     return {
         ...actual,
@@ -65,7 +69,9 @@ describe("useInvestmentsQuery", () => {
             offset: 0,
             links: [],
         });
-        const { result } = renderHook(() => useInvestmentsQuery(), { wrapper: makeWrapper() });
+        const { result } = renderHook(() => useInvestmentsQuery(), {
+            wrapper: makeWrapper(),
+        });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data?.items).toHaveLength(1);
         expect(result.current.data?.items[0].id).toBe(1);
@@ -79,15 +85,59 @@ describe("useInvestmentsQuery", () => {
             offset: 0,
             links: [],
         });
-        const { result } = renderHook(() => useInvestmentsQuery(), { wrapper: makeWrapper() });
+        const { result } = renderHook(() => useInvestmentsQuery(), {
+            wrapper: makeWrapper(),
+        });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(spy).toHaveBeenCalledWith({ limit: 500, active: false });
     });
 
     it("exposes error on failure", async () => {
-        vi.spyOn(apiClient, "getInvestments").mockRejectedValue(new Error("network error"));
-        const { result } = renderHook(() => useInvestmentsQuery(), { wrapper: makeWrapper() });
+        vi.spyOn(apiClient, "getInvestments").mockRejectedValue(
+            new Error("network error"),
+        );
+        const { result } = renderHook(() => useInvestmentsQuery(), {
+            wrapper: makeWrapper(),
+        });
         await waitFor(() => expect(result.current.isError).toBe(true));
+    });
+});
+
+describe("useAllPortfolioTransactionsQuery", () => {
+    it("pages until the server total proves the instrument history complete", async () => {
+        const spy = vi
+            .spyOn(apiClient, "getPortfolioTransactions")
+            .mockResolvedValueOnce({
+                items: Array.from({ length: 1000 }, (_, index) => ({
+                    ...PORTFOLIO_TXN_STUB,
+                    id: index + 1,
+                })),
+                total: 1001,
+                limit: 1000,
+                offset: 0,
+                links: [],
+            })
+            .mockResolvedValueOnce({
+                items: [{ ...PORTFOLIO_TXN_STUB, id: 1001 }],
+                total: 1001,
+                limit: 1000,
+                offset: 1000,
+                links: [],
+            });
+        const { result } = renderHook(
+            () => useAllPortfolioTransactionsQuery(4),
+            { wrapper: makeWrapper() },
+        );
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toHaveLength(1001);
+        expect(spy).toHaveBeenNthCalledWith(1, 4, {
+            limit: 1000,
+            offset: 0,
+        });
+        expect(spy).toHaveBeenNthCalledWith(2, 4, {
+            limit: 1000,
+            offset: 1000,
+        });
     });
 });
 
@@ -97,17 +147,18 @@ describe("useInvestmentsQuery", () => {
 
 describe("usePortfolioTransactionsQuery", () => {
     it("is idle when investmentIds is empty", () => {
-        const spy = vi.spyOn(apiClient, "getPortfolioTransactionsBulk").mockResolvedValue({
-            items: [],
-            total: 0,
-            limit: 1000,
-            offset: 0,
-            links: [],
+        const spy = vi
+            .spyOn(apiClient, "getPortfolioTransactionsBulk")
+            .mockResolvedValue({
+                items: [],
+                total: 0,
+                limit: 1000,
+                offset: 0,
+                links: [],
+            });
+        const { result } = renderHook(() => usePortfolioTransactionsQuery([]), {
+            wrapper: makeWrapper(),
         });
-        const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([]),
-            { wrapper: makeWrapper() },
-        );
         expect(spy).not.toHaveBeenCalled();
         expect(result.current.fetchStatus).toBe("idle");
     });
@@ -129,13 +180,15 @@ describe("usePortfolioTransactionsQuery", () => {
     });
 
     it("passes investment_ids as comma-joined string to bulk endpoint", async () => {
-        const spy = vi.spyOn(apiClient, "getPortfolioTransactionsBulk").mockResolvedValue({
-            items: [],
-            total: 0,
-            limit: 1000,
-            offset: 0,
-            links: [],
-        });
+        const spy = vi
+            .spyOn(apiClient, "getPortfolioTransactionsBulk")
+            .mockResolvedValue({
+                items: [],
+                total: 0,
+                limit: 1000,
+                offset: 0,
+                links: [],
+            });
         const { result } = renderHook(
             () => usePortfolioTransactionsQuery([1, 2, 3]),
             { wrapper: makeWrapper() },
@@ -163,7 +216,9 @@ describe("usePortfolioTransactionsQuery", () => {
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toEqual([PORTFOLIO_TXN_STUB]);
-        expect(apiClient.getPortfolioTransactions).toHaveBeenCalledWith(1, { limit: 1000 });
+        expect(apiClient.getPortfolioTransactions).toHaveBeenCalledWith(1, {
+            limit: 1000,
+        });
     });
 
     it("flattens transactions from multiple investments in fallback mode", async () => {
@@ -202,20 +257,36 @@ describe("usePortfolioTransactionsQuery", () => {
 
 describe("useInvestmentMutations — addInvestment", () => {
     it("calls apiClient.createInvestment with payload", async () => {
-        const spy = vi.spyOn(apiClient, "createInvestment").mockResolvedValue(INVESTMENT_STUB as never);
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        await act(async () => {
-            await result.current.addInvestment({ name: "Test ETF", asset_class: "etf" });
+        const spy = vi
+            .spyOn(apiClient, "createInvestment")
+            .mockResolvedValue(INVESTMENT_STUB as never);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
         });
-        expect(spy).toHaveBeenCalledWith({ name: "Test ETF", asset_class: "etf" });
+        await act(async () => {
+            await result.current.addInvestment({
+                name: "Test ETF",
+                asset_class: "etf",
+            });
+        });
+        expect(spy).toHaveBeenCalledWith({
+            name: "Test ETF",
+            asset_class: "etf",
+        });
     });
 
     it("calls toast.error when addInvestment fails", async () => {
         const toastSpy = vi.spyOn(toast, "error");
-        vi.spyOn(apiClient, "createInvestment").mockRejectedValue(new Error("create failed"));
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        vi.spyOn(apiClient, "createInvestment").mockRejectedValue(
+            new Error("create failed"),
+        );
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         await act(async () => {
-            await result.current.addInvestment({ name: "Test ETF", asset_class: "etf" }).catch(() => {});
+            await result.current
+                .addInvestment({ name: "Test ETF", asset_class: "etf" })
+                .catch(() => {});
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
@@ -223,8 +294,12 @@ describe("useInvestmentMutations — addInvestment", () => {
 
 describe("useInvestmentMutations — updateInvestment", () => {
     it("calls apiClient.updateInvestment with id and payload", async () => {
-        const spy = vi.spyOn(apiClient, "updateInvestment").mockResolvedValue(INVESTMENT_STUB as never);
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        const spy = vi
+            .spyOn(apiClient, "updateInvestment")
+            .mockResolvedValue(INVESTMENT_STUB as never);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         await act(async () => {
             await result.current.updateInvestment(1, { name: "Updated ETF" });
         });
@@ -233,10 +308,16 @@ describe("useInvestmentMutations — updateInvestment", () => {
 
     it("calls toast.error when updateInvestment fails", async () => {
         const toastSpy = vi.spyOn(toast, "error");
-        vi.spyOn(apiClient, "updateInvestment").mockRejectedValue(new Error("update failed"));
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        vi.spyOn(apiClient, "updateInvestment").mockRejectedValue(
+            new Error("update failed"),
+        );
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         await act(async () => {
-            await result.current.updateInvestment(1, { name: "Updated" }).catch(() => {});
+            await result.current
+                .updateInvestment(1, { name: "Updated" })
+                .catch(() => {});
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
@@ -244,17 +325,29 @@ describe("useInvestmentMutations — updateInvestment", () => {
 
 describe("useInvestmentMutations — deleteInvestment", () => {
     it("calls apiClient.deleteInvestment with id", async () => {
-        const spy = vi.spyOn(apiClient, "deleteInvestment").mockResolvedValue(undefined);
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.deleteInvestment(1); });
+        const spy = vi
+            .spyOn(apiClient, "deleteInvestment")
+            .mockResolvedValue(undefined);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.deleteInvestment(1);
+        });
         await waitFor(() => expect(spy).toHaveBeenCalledWith(1));
     });
 
     it("calls toast.error when deleteInvestment fails", async () => {
         const toastSpy = vi.spyOn(toast, "error");
-        vi.spyOn(apiClient, "deleteInvestment").mockRejectedValue(new Error("delete failed"));
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.deleteInvestment(1); });
+        vi.spyOn(apiClient, "deleteInvestment").mockRejectedValue(
+            new Error("delete failed"),
+        );
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.deleteInvestment(1);
+        });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
 });
@@ -265,10 +358,12 @@ describe("useInvestmentMutations — deleteInvestment", () => {
 
 describe("useInvestmentMutations — addTransaction", () => {
     it("calls apiClient.createPortfolioTransaction with investmentId and data", async () => {
-        const spy = vi.spyOn(apiClient, "createPortfolioTransaction").mockResolvedValue(
-            PORTFOLIO_TXN_STUB,
-        );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        const spy = vi
+            .spyOn(apiClient, "createPortfolioTransaction")
+            .mockResolvedValue(PORTFOLIO_TXN_STUB);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         const payload = {
             investmentId: 1,
             type: "buy" as const,
@@ -290,13 +385,17 @@ describe("useInvestmentMutations — addTransaction", () => {
         vi.spyOn(apiClient, "createPortfolioTransaction").mockRejectedValue(
             new Error("txn failed"),
         );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         await act(async () => {
-            await result.current.addTransaction({
-                investmentId: 1,
-                type: "buy",
-                date: "2025-01-15",
-            }).catch(() => {});
+            await result.current
+                .addTransaction({
+                    investmentId: 1,
+                    type: "buy",
+                    date: "2025-01-15",
+                })
+                .catch(() => {});
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
@@ -304,9 +403,15 @@ describe("useInvestmentMutations — addTransaction", () => {
 
 describe("useInvestmentMutations — deleteTransaction", () => {
     it("calls apiClient.deletePortfolioTransaction with id", async () => {
-        const spy = vi.spyOn(apiClient, "deletePortfolioTransaction").mockResolvedValue(undefined);
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.deleteTransaction(5); });
+        const spy = vi
+            .spyOn(apiClient, "deletePortfolioTransaction")
+            .mockResolvedValue(undefined);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.deleteTransaction(5);
+        });
         await waitFor(() => expect(spy).toHaveBeenCalledWith(5));
     });
 
@@ -315,18 +420,24 @@ describe("useInvestmentMutations — deleteTransaction", () => {
         vi.spyOn(apiClient, "deletePortfolioTransaction").mockRejectedValue(
             new Error("delete txn failed"),
         );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.deleteTransaction(5); });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.deleteTransaction(5);
+        });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
 });
 
 describe("useInvestmentMutations — updateTransaction", () => {
     it("calls apiClient.updatePortfolioTransaction with id and data", async () => {
-        const spy = vi.spyOn(apiClient, "updatePortfolioTransaction").mockResolvedValue(
-            PORTFOLIO_TXN_STUB,
-        );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
+        const spy = vi
+            .spyOn(apiClient, "updatePortfolioTransaction")
+            .mockResolvedValue(PORTFOLIO_TXN_STUB);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
         await act(async () => {
             await result.current.updateTransaction(5, {
                 amount: 2000,
@@ -348,20 +459,54 @@ describe("useInvestmentMutations — updateTransaction", () => {
     });
 });
 
+describe("useInvestmentMutations — bulk broker re-tag", () => {
+    it("invalidates portfolio, account, and net-worth consumers", async () => {
+        const client = createTestQueryClient();
+        const invalidate = vi.spyOn(client, "invalidateQueries");
+        const payload = {
+            transaction_ids: [1, 2],
+            from_account_id: null,
+            to_account_id: 7,
+            idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
+        };
+        const spy = vi
+            .spyOn(apiClient, "bulkRetagPortfolioTransactions")
+            .mockResolvedValue({ changed_count: 2 } as never);
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: createQueryWrapper(client),
+        });
+
+        await act(async () => {
+            await result.current.bulkRetagTransactions(payload);
+        });
+
+        expect(spy).toHaveBeenCalledWith(payload);
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ["investments"] });
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ["accounts"] });
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ["net-worth"] });
+    });
+});
+
 // ---------------------------------------------------------------------------
 // useInvestmentMutations — refreshPrices
 // ---------------------------------------------------------------------------
 
 describe("useInvestmentMutations — refreshPrices", () => {
     it("calls apiClient.refreshInvestmentPrices", async () => {
-        const spy = vi.spyOn(apiClient, "refreshInvestmentPrices").mockResolvedValue({
-            updated: 2,
-            total: 2,
-            prices: {},
-            priceSources: { IWDA: "live", SPY: "close" },
+        const spy = vi
+            .spyOn(apiClient, "refreshInvestmentPrices")
+            .mockResolvedValue({
+                updated: 2,
+                total: 2,
+                prices: {},
+                priceSources: { IWDA: "live", SPY: "close" },
+            });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
         });
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
+        act(() => {
+            result.current.refreshPrices();
+        });
         await waitFor(() => expect(spy).toHaveBeenCalled());
     });
 
@@ -373,8 +518,12 @@ describe("useInvestmentMutations — refreshPrices", () => {
             prices: {},
             priceSources: { IWDA: "live", SPY: "close" },
         });
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
         await waitFor(() => expect(successSpy).toHaveBeenCalled());
     });
 
@@ -386,8 +535,12 @@ describe("useInvestmentMutations — refreshPrices", () => {
             prices: {},
             priceSources: { IWDA: "historical_fallback", SPY: "live" },
         });
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
         await waitFor(() => expect(warnSpy).toHaveBeenCalled());
     });
 
@@ -399,8 +552,12 @@ describe("useInvestmentMutations — refreshPrices", () => {
             prices: {},
             priceSources: { IWDA: "cached" },
         });
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
         await waitFor(() => expect(warnSpy).toHaveBeenCalled());
     });
 
@@ -409,8 +566,12 @@ describe("useInvestmentMutations — refreshPrices", () => {
         vi.spyOn(apiClient, "refreshInvestmentPrices").mockRejectedValue(
             new Error("price fetch failed"),
         );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
 
@@ -419,17 +580,31 @@ describe("useInvestmentMutations — refreshPrices", () => {
             updated: number;
             total: number;
             prices: Record<string, number>;
-            priceSources: Record<string, "live" | "close" | "cached" | "historical_fallback">;
+            priceSources: Record<
+                string,
+                "live" | "close" | "cached" | "historical_fallback"
+            >;
         }) => void;
         vi.spyOn(apiClient, "refreshInvestmentPrices").mockImplementation(
-            () => new Promise((res) => { resolve = res; }),
+            () =>
+                new Promise((res) => {
+                    resolve = res;
+                }),
         );
-        const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
-        act(() => { result.current.refreshPrices(); });
-        await waitFor(() => expect(result.current.isRefreshingPrices).toBe(true));
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
+        await waitFor(() =>
+            expect(result.current.isRefreshingPrices).toBe(true),
+        );
         act(() => {
             resolve({ updated: 0, total: 0, prices: {}, priceSources: {} });
         });
-        await waitFor(() => expect(result.current.isRefreshingPrices).toBe(false));
+        await waitFor(() =>
+            expect(result.current.isRefreshingPrices).toBe(false),
+        );
     });
 });

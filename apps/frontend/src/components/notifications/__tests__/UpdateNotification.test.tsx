@@ -23,7 +23,7 @@ const UPDATE_AVAILABLE = {
     published_at: "2025-04-01T00:00:00.000Z",
     release_notes: "- Bug fixes\n- New features",
     html_url: "https://example.com/release/1.3.0",
-    update_mode: "source" as const,
+    update_mode: "native" as const,
 };
 
 /** Compatibility fixture for a legacy server that did not send update_mode. */
@@ -137,13 +137,11 @@ describe("UpdateNotification", () => {
         });
     });
 
-    it("hides the Install button outside Electron and shows the compose command", async () => {
-        // Browser (docker-compose self-host) deployments have no in-app
-        // installer: installShellUpdate() is a no-op there, so the button used
-        // to promise something it could not deliver.
+    it("hides the Install button outside Electron and shows manual guidance", async () => {
+        // Browser deployments have no in-app installer.
         server.use(
             http.get(`${API_BASE}/api/admin/update/check`, () =>
-                ok({ ...UPDATE_AVAILABLE, update_mode: "docker-compose" }),
+                ok(UPDATE_AVAILABLE),
             ),
         );
         const user = userEvent.setup();
@@ -157,9 +155,7 @@ describe("UpdateNotification", () => {
         expect(
             screen.queryByRole("button", { name: /install update/i }),
         ).not.toBeInTheDocument();
-        expect(dialog).toHaveTextContent(
-            /docker compose pull && docker compose up -d/i,
-        );
+        expect(dialog).toHaveTextContent(/close and reopen the app/i);
         // The dismiss button is still there — the notice stays, only the dead
         // Install button goes away.
         expect(
@@ -205,7 +201,6 @@ describe("UpdateNotification", () => {
 
         (window as unknown as { electronUpdater: unknown }).electronUpdater = {
             checkRelease,
-            pullImage: vi.fn(),
             installShellUpdate,
             preUpdateBackup,
         };
@@ -238,7 +233,6 @@ describe("UpdateNotification", () => {
 
         (window as unknown as { electronUpdater: unknown }).electronUpdater = {
             checkRelease,
-            pullImage: vi.fn(),
             installShellUpdate,
             preUpdateBackup,
         };
@@ -261,36 +255,4 @@ describe("UpdateNotification", () => {
         });
     });
 
-    it("triggers Docker pull path when update_mode is 'docker'", async () => {
-        const pullImage = vi
-            .fn()
-            .mockResolvedValue({ success: true, wasNew: true });
-        const preUpdateBackup = vi.fn().mockResolvedValue({ success: true });
-        const checkRelease = vi
-            .fn()
-            .mockResolvedValue({ ...UPDATE_AVAILABLE, update_mode: "docker" });
-
-        (window as unknown as { electronUpdater: unknown }).electronUpdater = {
-            checkRelease,
-            pullImage,
-            preUpdateBackup,
-        };
-
-        const user = userEvent.setup();
-
-        renderWithApp(<UpdateNotification />);
-        await user.click(
-            await screen.findByRole("button", { name: /update available/i }),
-        );
-        await screen.findByRole("dialog");
-
-        await user.click(
-            screen.getByRole("button", { name: /install update/i }),
-        );
-
-        await waitFor(() => {
-            expect(preUpdateBackup).toHaveBeenCalledTimes(1);
-            expect(pullImage).toHaveBeenCalledTimes(1);
-        });
-    });
 });

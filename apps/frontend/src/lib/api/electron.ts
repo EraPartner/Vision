@@ -4,7 +4,6 @@ import type {
     BackupResult,
     ElectronApiBridge,
     InstallUpdateResult,
-    PullImageResult,
     RestoreResult,
     SplashThemeColors,
     UpdateCheckStatus,
@@ -99,12 +98,6 @@ export async function checkForUpdates(): Promise<UpdateCheckStatus> {
         return updater.checkRelease();
     }
     return apiRequest("/api/admin/update/check");
-}
-
-export async function triggerDockerUpdate(): Promise<PullImageResult | null> {
-    const updater = getElectronUpdater();
-    if (!updater) return null;
-    return updater.pullImage();
 }
 
 export async function installShellUpdate(): Promise<InstallUpdateResult | null> {

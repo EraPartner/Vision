@@ -22,17 +22,17 @@ export interface TableSort {
 
 export function useTableRows(
     table: string,
-    page: number,
+    cursor: string | null,
     sort: TableSort | undefined,
     filters: DbFilter[],
 ) {
     const queryClient = useQueryClient();
     const query = useQuery({
-        queryKey: adminKeys.dbTable(table, page, sort, filters),
+        queryKey: adminKeys.dbTable(table, cursor, sort, filters),
         queryFn: () =>
             getTableRows(table, {
                 limit: PAGE_SIZE,
-                offset: page * PAGE_SIZE,
+                cursor: cursor ?? undefined,
                 orderBy: sort?.column,
                 dir: sort?.dir,
                 filters,

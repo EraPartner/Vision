@@ -1,30 +1,20 @@
-import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { useInsightsDigest } from "@/hooks/useInsightsDigest";
-import {
-    countUndismissed,
-    loadDismissState,
-    subscribeToDismissals,
-} from "@/lib/insightsDismiss";
+import { useInsightsCount } from "@/hooks/useInsightsDigest";
 
 /**
- * Undismissed-insights count next to the Statistics nav item. Shares the
- * digest cache with InsightsDigestPanel (same query key) and re-renders on
- * dismissals via the insightsDismiss listener, so dismissing a row on the
- * Statistics page updates the badge immediately. Renders nothing at zero.
+ * Undismissed-insights count next to the Statistics nav item. The request only
+ * reads the persisted count projection; it never runs the full detectors.
  */
 export function InsightsNavBadge() {
-    const { data } = useInsightsDigest();
-    const [dismissState, setDismissState] = useState(loadDismissState);
-
-    useEffect(() => subscribeToDismissals(setDismissState), []);
-
-    const count = countUndismissed(data, dismissState);
-    if (count === 0) return null;
+    const { data } = useInsightsCount();
+    if (data?.status !== "ready" || !data.count) return null;
 
     return (
-        <Badge variant="secondary" className="ml-auto shrink-0 px-1.5 py-0 text-2xs leading-4">
-            {count}
+        <Badge
+            variant="secondary"
+            className="ml-auto shrink-0 px-1.5 py-0 text-2xs leading-4"
+        >
+            {data.count}
         </Badge>
     );
 }

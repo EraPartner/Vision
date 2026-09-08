@@ -206,6 +206,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             queryClient.invalidateQueries({
                 queryKey: plannedKeys.transactionsAll,
             });
+            queryClient.invalidateQueries({
+                queryKey: plannedKeys.upcomingAll,
+            });
+            queryClient.invalidateQueries({
+                queryKey: plannedKeys.accountTransactionsAll,
+            });
             toast.success(
                 t("recurring.toast.created", { name: pattern.recipientName }),
             );

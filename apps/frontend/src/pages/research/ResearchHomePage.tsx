@@ -1,3 +1,4 @@
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo } from "react";
 import { Link } from "react-router";
@@ -63,7 +64,7 @@ export default function ResearchHomePage() {
     const { data: benchmarkData } = useMarketQuotesQuery(
         ["research-benchmarks", BENCHMARK_SYMBOLS],
         BENCHMARK_SYMBOLS,
-        { staleTime: 60_000 },
+        { staleTime: QUERY_STALE_TIME_MS.STANDARD },
     );
     const benchmarkMap = useMemo(
         () => new Map((benchmarkData ?? []).map((q) => [q.symbol, q])),
@@ -89,7 +90,7 @@ export default function ResearchHomePage() {
     const { data: watchlistQuotes } = useMarketQuotesQuery(
         watchlistKeys.quotes(watchlistSymbols),
         watchlistSymbols,
-        { staleTime: 60_000 },
+        { staleTime: QUERY_STALE_TIME_MS.STANDARD },
     );
     const watchlistPriceMap = useMemo(
         () => new Map((watchlistQuotes ?? []).map((q) => [q.symbol, q])),

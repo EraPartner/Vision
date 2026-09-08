@@ -1,7 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useMemo, lazy, Suspense } from "react";
-import { Link } from "react-router";
-import { useStatistics } from "@/hooks/useStatistics";
+import { useCallback, useMemo, lazy, Suspense } from "react";
+import { Link, useSearchParams } from "react-router";
+import { useStatistics, type StatisticsWindow } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +20,13 @@ import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";
 import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PageShell } from "@/components/shared/PageShell";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const STATISTICS_TABS = [
     "overview",
@@ -91,7 +98,41 @@ const ChartSkeleton = () => {
     return <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full" />;
 };
 
+function StatisticsWindowSelect({
+    value,
+    onChange,
+    label,
+    rollingLabel,
+    allTimeLabel,
+}: {
+    value: StatisticsWindow;
+    onChange: (value: StatisticsWindow) => void;
+    label: string;
+    rollingLabel: string;
+    allTimeLabel: string;
+}) {
+    return (
+        <div className="flex items-center gap-2" data-print-actions>
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger className="w-40" aria-label={label}>
+                    <SelectValue>
+                        {value === "all" ? allTimeLabel : rollingLabel}
+                    </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="24m">{rollingLabel}</SelectItem>
+                    <SelectItem value="all">{allTimeLabel}</SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
+    );
+}
+
 export default function StatisticsPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const statisticsWindow: StatisticsWindow =
+        searchParams.get("window") === "all" ? "all" : "24m";
     const {
         data,
         isLoading,
@@ -101,10 +142,28 @@ export default function StatisticsPage() {
         graphExclusions,
         toggleGraphExclusion,
         exclusionsApply,
-    } = useStatistics();
+    } = useStatistics(statisticsWindow);
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [activeTab, setActiveTab] = useTabParam(STATISTICS_TABS, "overview");
+    const setStatisticsWindow = useCallback(
+        (value: StatisticsWindow) => {
+            const next = new URLSearchParams(searchParams);
+            if (value === "all") next.set("window", "all");
+            else next.delete("window");
+            setSearchParams(next, { replace: true });
+        },
+        [searchParams, setSearchParams],
+    );
+    const windowSelect = (
+        <StatisticsWindowSelect
+            value={statisticsWindow}
+            onChange={setStatisticsWindow}
+            label={t("statsPage.window.label")}
+            rollingLabel={t("statsPage.window.rolling24")}
+            allTimeLabel={t("statsPage.window.allTime")}
+        />
+    );
     const {
         isVisible,
         setWidgetVisible,
@@ -137,7 +196,13 @@ export default function StatisticsPage() {
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("statsPage.title")} icon={PAGE_ICONS["/statistics"]} />
+                <div className="flex items-center justify-between gap-4">
+                    <PageHeader
+                        title={t("statsPage.title")}
+                        icon={PAGE_ICONS["/statistics"]}
+                    />
+                    {windowSelect}
+                </div>
                 {/* Mirrors MonthlyRhythm's anatomy (headline column + bar strip, then a
             three-fact footer) so the page never settles into a shape it never
             promised while loading. */}
@@ -166,7 +231,13 @@ export default function StatisticsPage() {
     if (isError) {
         return (
             <PageShell className="">
-                <PageHeader title={t("statsPage.title")} icon={PAGE_ICONS["/statistics"]} />
+                <div className="flex items-center justify-between gap-4">
+                    <PageHeader
+                        title={t("statsPage.title")}
+                        icon={PAGE_ICONS["/statistics"]}
+                    />
+                    {windowSelect}
+                </div>
                 <Card>
                     <CardContent variant="headerless">
                         <p className="text-destructive">
@@ -197,6 +268,7 @@ export default function StatisticsPage() {
                         resetToDefaults={resetToDefaults}
                     />
                 </div>
+                {windowSelect}
                 <EmptyState
                     icon={PAGE_ICONS["/statistics"]}
                     title={t("statsPage.noDataTitle")}
@@ -223,6 +295,7 @@ export default function StatisticsPage() {
                     icon={PAGE_ICONS["/statistics"]}
                 />
                 <div className="flex items-center gap-2" data-print-actions>
+                    {windowSelect}
                     <ExportDialog />
                     <WidgetVisibilityDialog
                         widgets={widgets}
@@ -352,6 +425,7 @@ export default function StatisticsPage() {
                     <Suspense fallback={<ChartSkeleton />}>
                         {isVisible("topRecipients") && (
                             <RecipientInsightsTab
+                                statisticsWindow={statisticsWindow}
                                 statisticsTopRecipientsChart={
                                     <ChartCard
                                         title={t(

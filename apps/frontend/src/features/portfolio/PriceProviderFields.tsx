@@ -130,9 +130,8 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                     </Label>
                     <Input
                         id={`${idPrefix}-price`}
-                        type="number"
-                        step="0.0001"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0.00"
                         value={form.currentPrice}
                         onChange={(e) =>

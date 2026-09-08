@@ -16,7 +16,7 @@ interface RestoreFromBackupCardProps {
 /**
  * Self-contained restore-from-backup card.
  *
- * Shows only in the Electron shell (returns null in web/Docker). Handles the
+ * Shows only in the Electron shell (returns null in a web build). Handles the
  * full restore lifecycle: file selection → confirmation → DB restore →
  * localStorage frontend-state write → page reload. Schema-version errors are
  * surfaced with a dedicated user-friendly message. When the selected backup is

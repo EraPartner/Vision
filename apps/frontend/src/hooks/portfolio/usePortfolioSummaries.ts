@@ -103,7 +103,7 @@ export function usePortfolioSummaries({
         appSettings.costBasisMethod ?? "weighted_avg";
     const targetCurrency = (appSettings.defaultCurrency || "EUR").toUpperCase();
 
-    const summaries: InvestmentSummary[] = useMemo(() => {
+    const allSummaries: InvestmentSummary[] = useMemo(() => {
         const txnsByInvestment = new Map<number, PortfolioTransaction[]>();
         for (const txn of transactions) {
             const bucket = txnsByInvestment.get(txn.investment_id);
@@ -130,6 +130,15 @@ export function usePortfolioSummaries({
         targetCurrency,
         multiplierFor,
     ]);
+
+    const summaries = useMemo(
+        () => allSummaries.filter((summary) => summary.is_active),
+        [allSummaries],
+    );
+    const inactiveSummaries = useMemo(
+        () => allSummaries.filter((summary) => !summary.is_active),
+        [allSummaries],
+    );
 
     const totals = useMemo(
         () => ({
@@ -171,5 +180,11 @@ export function usePortfolioSummaries({
         [groupedByClass],
     );
 
-    return { summaries, totals, byAssetClass };
+    return {
+        summaries,
+        allSummaries,
+        inactiveSummaries,
+        totals,
+        byAssetClass,
+    };
 }

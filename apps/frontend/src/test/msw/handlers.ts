@@ -611,7 +611,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),
     http.delete(`${API_BASE}/api/recipients/:id`, () => noContent()),
 
-    // 201: controllers/investmentController.js:389.
+    // 201: services/investmentService.js:389.
     http.post(`${API_BASE}/api/investments`, () => ok201(INVESTMENT_STUB)),
     http.patch(`${API_BASE}/api/investments/:id`, () => ok(INVESTMENT_STUB)),
     http.delete(`${API_BASE}/api/investments/:id`, () => noContent()),
@@ -657,7 +657,7 @@ export const defaultHandlers = [
             up_to_date: true,
             current_version: "test",
             latest_version: null,
-            update_mode: "docker-compose",
+            update_mode: "source",
         }),
     ),
     // `res.ok({ vacuumed: table ?? 'all' })` — routes/admin.js:282. There is no
@@ -878,7 +878,7 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
         ok({ items: [], total: 0 }),
     ),
-    // 201: controllers/investmentController.js:612. The PATCH below is 200
+    // 201: services/investmentService.js:612. The PATCH below is 200
     // (same controller, :682).
     http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
         ok201({

@@ -228,7 +228,7 @@
         opacity: 1;
     }
 
-    /* Thin — for top chrome, navigation */
+    /* Thin — default Cards and subtle standalone controls */
     .glass-thin,
     .liquid-glass-soft {
         background: linear-gradient(
@@ -254,7 +254,7 @@
             0 1px 24px hsl(var(--glass-shadow) / 0.35);
     }
 
-    /* Regular — default card material */
+    /* Regular — explicit stronger content material */
     .glass-regular,
     .liquid-glass,
     .surface-glass,
@@ -585,8 +585,9 @@
     /* Native under-window vibrancy already supplies the full-window blur at
        the enhanced tier. Keep the translucent material fills and their edge
        treatment, but do not blur the same pixels again on persistent cards,
-       chrome, hero surfaces, or the full-width top bar. Small transient
-       materials (thin and thick) retain their local blur for hierarchy. */
+       chrome, hero surfaces, or the full-width top bar. The semantic
+       card-material marker distinguishes thin Cards from small transient
+       thin controls, which retain their local blur for hierarchy. */
     @supports (
         (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
     ) {
@@ -594,6 +595,7 @@
             :is(
                 .glass,
                 .glass-regular,
+                .card-material,
                 .liquid-glass,
                 .surface-glass,
                 .glass-effect,

@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import { aiKeys } from '@/lib/queryKeys';
-import type { OllamaStatus } from '@/types/aiChat';
-import { useBackgroundQueryCue } from '@/components/shared/BackgroundQueryIndicator';
+import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { aiKeys } from "@/lib/queryKeys";
+import type { OllamaStatus } from "@/types/aiChat";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 /** Reachable Ollama: unchanged cadence, so a model/URL change is noticed as fast as before. */
 const HEALTHY_POLL_MS = 30_000;
@@ -31,11 +32,12 @@ const DOWN_POLL_MS = 120_000;
  * to the "keep watching" branch just because one request also failed.
  */
 export function nextOllamaPollInterval(state: {
-    status: 'pending' | 'error' | 'success';
+    status: "pending" | "error" | "success";
     data: OllamaStatus | undefined;
 }): number | false {
     if (state.data && !state.data.enabled) return false;
-    if (state.status === 'error' || (state.data && !state.data.ok)) return DOWN_POLL_MS;
+    if (state.status === "error" || (state.data && !state.data.ok))
+        return DOWN_POLL_MS;
     return HEALTHY_POLL_MS;
 }
 
@@ -59,7 +61,7 @@ export function useOllamaModels(enabled = true) {
         queryKey: aiKeys.ollamaModels,
         queryFn: () => apiClient.getOllamaModels(),
         enabled,
-        staleTime: 60_000,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
         retry: 0,
         placeholderData: (prev) => prev,
     });

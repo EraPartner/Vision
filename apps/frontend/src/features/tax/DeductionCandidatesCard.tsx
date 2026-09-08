@@ -24,6 +24,8 @@ import {
     isCandidateDismissed,
     loadDismissedCandidates,
 } from "@/lib/deductionCandidatesDismiss";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { todayYmd } from "@/lib/timezone";
 
 /**
  * Transaction-derived complement to SuggestedDeductionsCard: lists deductible
@@ -42,6 +44,7 @@ export function DeductionCandidatesCard() {
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const { data, isLoading } = useDeductionCandidates(profile.taxYear);
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [dismissed, setDismissed] = useState(loadDismissedCandidates);
     // Session-local "Applied" marker so a confirmed group swaps its buttons for
@@ -63,7 +66,7 @@ export function DeductionCandidatesCard() {
     if (isLoading || groups.length === 0) return null;
     const currency = data?.currency;
 
-    const handleConfirm = (group: DeductionTypeGroup) => {
+    const applyCandidate = (group: DeductionTypeGroup) => {
         const mapping = DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
         if (!mapping) return;
         // SET semantics: the total replaces the field's current value (shown to
@@ -81,123 +84,161 @@ export function DeductionCandidatesCard() {
         );
     };
 
+    const handleConfirm = async (group: DeductionTypeGroup) => {
+        const mapping = DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
+        if (!mapping) return;
+        const currentYear = Number(todayYmd().slice(0, 4));
+        if (year === currentYear) {
+            const acknowledged = await confirm({
+                title: t("tax.deductionCandidates.incompleteYearTitle", {
+                    year,
+                }),
+                description: t(
+                    "tax.deductionCandidates.incompleteYearDescription",
+                    {
+                        currentValue: fmt(
+                            profile[mapping.amountField] ?? 0,
+                            currency,
+                        ),
+                        candidateValue: fmt(group.total, currency),
+                    },
+                ),
+                confirmLabel: t(
+                    "tax.deductionCandidates.incompleteYearConfirm",
+                ),
+            });
+            if (!acknowledged) return;
+        }
+        applyCandidate(group);
+    };
+
     const handleDismiss = (deductionType: string) => {
         setDismissed(dismissCandidate(year, deductionType));
     };
 
     return (
-        <Card>
-            <CardHeader className="pb-3">
-                <CardTitle>{t("tax.deductionCandidates.title")}</CardTitle>
-                <CardDescription>
-                    {t("tax.deductionCandidates.description")}
-                </CardDescription>
-                <p className="text-xs text-muted-foreground">
-                    {t("tax.deductionCandidates.disclaimer")}
-                </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-                {groups.map((group) => {
-                    const mapping =
-                        DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
-                    if (!mapping) return null;
-                    const currentValue = profile[mapping.amountField] ?? 0;
-                    return (
-                        <div
-                            key={group.deductionType}
-                            className="rounded-lg border bg-card p-3"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-foreground">
-                                        {t(
-                                            `tax.deductionCandidates.type.${group.deductionType}`,
-                                        )}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {t(
-                                            "tax.deductionCandidates.fromCategories",
-                                            { count: group.categoryCount },
-                                        )}
-                                    </p>
-                                    <ul className="mt-1 space-y-0.5">
-                                        {group.categories.map((cat) => (
-                                            <li
-                                                key={cat.category}
-                                                className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground"
-                                            >
-                                                <span className="truncate">
-                                                    {cat.category}
-                                                </span>
-                                                <span className="shrink-0">
-                                                    {fmt(cat.total, currency)}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <p className="text-xs text-muted-foreground mt-1.5">
-                                        {t(
-                                            "tax.deductionCandidates.currentValue",
-                                            {
-                                                value: fmt(
-                                                    currentValue,
-                                                    currency,
-                                                ),
-                                            },
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
-                                    <span className="text-sm font-bold text-foreground">
-                                        {fmt(group.total, currency)}
-                                    </span>
-                                    {appliedTypes.has(group.deductionType) ? (
-                                        <Badge
-                                            variant="outline"
-                                            className="text-xs text-accent border-accent/30 bg-accent/10"
-                                        >
-                                            <CheckCircle2 className="h-3 w-3 mr-1" />
+        <>
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle>{t("tax.deductionCandidates.title")}</CardTitle>
+                    <CardDescription>
+                        {t("tax.deductionCandidates.description")}
+                    </CardDescription>
+                    <p className="text-xs text-muted-foreground">
+                        {t("tax.deductionCandidates.disclaimer")}
+                    </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {groups.map((group) => {
+                        const mapping =
+                            DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
+                        if (!mapping) return null;
+                        const currentValue = profile[mapping.amountField] ?? 0;
+                        return (
+                            <div
+                                key={group.deductionType}
+                                className="rounded-lg border bg-card p-3"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-foreground">
                                             {t(
-                                                "tax.deductionCandidates.applied",
+                                                `tax.deductionCandidates.type.${group.deductionType}`,
                                             )}
-                                        </Badge>
-                                    ) : (
-                                        <div className="flex items-center gap-1">
-                                            <Button
-                                                size="sm"
-                                                variant="default"
-                                                className="h-7 text-xs"
-                                                onClick={() =>
-                                                    handleConfirm(group)
-                                                }
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {t(
+                                                "tax.deductionCandidates.fromCategories",
+                                                { count: group.categoryCount },
+                                            )}
+                                        </p>
+                                        <ul className="mt-1 space-y-0.5">
+                                            {group.categories.map((cat) => (
+                                                <li
+                                                    key={cat.category}
+                                                    className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground"
+                                                >
+                                                    <span className="truncate">
+                                                        {cat.category}
+                                                    </span>
+                                                    <span className="shrink-0">
+                                                        {fmt(
+                                                            cat.total,
+                                                            currency,
+                                                        )}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <p className="text-xs text-muted-foreground mt-1.5">
+                                            {t(
+                                                "tax.deductionCandidates.currentValue",
+                                                {
+                                                    value: fmt(
+                                                        currentValue,
+                                                        currency,
+                                                    ),
+                                                },
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
+                                        <span className="text-sm font-bold text-foreground">
+                                            {fmt(group.total, currency)}
+                                        </span>
+                                        {appliedTypes.has(
+                                            group.deductionType,
+                                        ) ? (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-xs text-accent border-accent/30 bg-accent/10"
                                             >
+                                                <CheckCircle2 className="h-3 w-3 mr-1" />
                                                 {t(
-                                                    "tax.deductionCandidates.confirm",
+                                                    "tax.deductionCandidates.applied",
                                                 )}
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-7 text-xs text-muted-foreground"
-                                                onClick={() =>
-                                                    handleDismiss(
-                                                        group.deductionType,
-                                                    )
-                                                }
-                                            >
-                                                {t(
-                                                    "tax.deductionCandidates.dismiss",
-                                                )}
-                                            </Button>
-                                        </div>
-                                    )}
+                                            </Badge>
+                                        ) : (
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="default"
+                                                    className="h-7 text-xs"
+                                                    onClick={() =>
+                                                        void handleConfirm(
+                                                            group,
+                                                        )
+                                                    }
+                                                >
+                                                    {t(
+                                                        "tax.deductionCandidates.confirm",
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-7 text-xs text-muted-foreground"
+                                                    onClick={() =>
+                                                        handleDismiss(
+                                                            group.deductionType,
+                                                        )
+                                                    }
+                                                >
+                                                    {t(
+                                                        "tax.deductionCandidates.dismiss",
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </CardContent>
-        </Card>
+                        );
+                    })}
+                </CardContent>
+            </Card>
+            <ConfirmDialog />
+        </>
     );
 }
 
