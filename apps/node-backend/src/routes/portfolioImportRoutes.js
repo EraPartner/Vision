@@ -42,6 +42,11 @@ import { commitReviewedPortfolioImport } from "../services/portfolioImportCommit
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
 import { registerParserRoutes } from "./parserConfigRoutes.js";
 import { registerImportBatchRoutes } from "./importBatchRoutes.js";
+import {
+  assertPortfolioImportAccount,
+  buildPortfolioImportPreviewRouting,
+  getPortfolioImportAccountForPreview,
+} from "../services/portfolioImportAccountService.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -281,7 +286,14 @@ router.post(
       throw err;
     }
 
-    const brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+    let brokerage;
+    try {
+      brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      await assertPortfolioImportAccount(brokerage.accountId);
+    } catch (err) {
+      cleanup(req.file.path);
+      throw err;
+    }
 
     try {
       const result = await runPortfolioImportPipeline({
@@ -344,6 +356,7 @@ router.post(
     let brokerage;
     try {
       brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      await assertPortfolioImportAccount(brokerage.accountId);
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -403,6 +416,21 @@ const portfolioParserConfigSchema = z
     defaultAssetClass: z.enum([...VALID_ASSET_CLASSES], {
       error: "config.defaultAssetClass must be a valid asset class",
     }),
+    accountId: z
+      .unknown()
+      .optional()
+      .transform((value, ctx) => {
+        if (value == null || value === "") return undefined;
+        const parsed = validateId(value, "config.accountId");
+        if (!parsed.valid) {
+          ctx.addIssue({
+            code: "custom",
+            message: "config.accountId must be a positive integer",
+          });
+          return z.NEVER;
+        }
+        return parsed.value;
+      }),
   })
   .superRefine((config, ctx) => {
     const hasSymbol =
@@ -479,7 +507,12 @@ router.get(
     if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
     const preview = await getPortfolioImportBatchPreview(batchId);
-    res.ok({ batch_id: batchId, ...preview });
+    const account = await getPortfolioImportAccountForPreview(batch.account_id);
+    res.ok({
+      batch_id: batchId,
+      ...buildPortfolioImportPreviewRouting(batch, account),
+      ...preview,
+    });
   },
 );
 
@@ -581,7 +614,7 @@ router.post(
         investment = await createInvestmentForRow({ batchId, rowId });
       } catch (err) {
         // Repository/service VALIDATION_ERROR (missing default asset class, no
-        // name, duplicate symbol) → typed 400, matching investmentController's
+        // name, duplicate symbol) → typed 400, matching investmentService's
         // translateRepoError — a raw coded Error would surface as a 500.
         if (/** @type {any} */ (err)?.code === "VALIDATION_ERROR") {
           throw new ValidationError(/** @type {Error} */ (err).message);
@@ -666,5 +699,7 @@ router.post(
 );
 
 router.use(csvUploadErrorTranslator);
+
+export { normalizePortfolioParserConfig as __normalizePortfolioParserConfig };
 
 export default router;

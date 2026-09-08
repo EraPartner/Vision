@@ -449,6 +449,15 @@ describe("accountRepository", () => {
       expect(params).toEqual(["X", 5]);
     });
 
+    it("renames the account without writing retired transaction labels", async () => {
+      query.mockResolvedValueOnce({ rows: [{ id: 5, name: "Renamed" }] });
+      const result = await accountRepository.update(5, { name: "Renamed" });
+      expect(result.name).toBe("Renamed");
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query.mock.calls[0][0]).toContain("UPDATE accounts");
+      expect(query.mock.calls[0][0]).not.toContain("bank_account");
+    });
+
     it("falls back to getById when no writable fields are provided", async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 5, name: "Same" }] });
       const r = await accountRepository.update(5, { nope: 1 });

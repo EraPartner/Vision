@@ -15,20 +15,34 @@
 
 BEGIN;
 
+-- Block every concurrent writer before checking parity. Keep these locks until
+-- COMMIT so no row can diverge between the guard and the column drop.
+LOCK TABLE transactions, planned_transactions IN ACCESS EXCLUSIVE MODE;
+
 -- 1. Soak gate — refuse to proceed unless every active row is backfilled.
 DO $$
 DECLARE unbacked bigint;
 BEGIN
   SELECT count(*) INTO unbacked
-    FROM transactions WHERE bank_account IS NOT NULL AND account_id IS NULL;
+    FROM transactions t
+    LEFT JOIN accounts a ON a.id = t.account_id
+    WHERE (t.bank_account IS NULL) <> (t.account_id IS NULL)
+       OR (t.bank_account IS NOT NULL AND t.account_id IS NOT NULL
+           AND (a.id IS NULL
+                OR lower(btrim(t.bank_account)) <> lower(btrim(a.name))));
   IF unbacked <> 0 THEN
-    RAISE EXCEPTION 'Soak not met: % transactions have bank_account but no account_id', unbacked;
+    RAISE EXCEPTION 'Soak not met: % transactions have divergent bank_account/account_id identity', unbacked;
   END IF;
 
   SELECT count(*) INTO unbacked
-    FROM planned_transactions WHERE bank_account IS NOT NULL AND account_id IS NULL;
+    FROM planned_transactions p
+    LEFT JOIN accounts a ON a.id = p.account_id
+    WHERE (p.bank_account IS NULL) <> (p.account_id IS NULL)
+       OR (p.bank_account IS NOT NULL AND p.account_id IS NOT NULL
+           AND (a.id IS NULL
+                OR lower(btrim(p.bank_account)) <> lower(btrim(a.name))));
   IF unbacked <> 0 THEN
-    RAISE EXCEPTION 'Soak not met: % planned_transactions have bank_account but no account_id', unbacked;
+    RAISE EXCEPTION 'Soak not met: % planned_transactions have divergent bank_account/account_id identity', unbacked;
   END IF;
 END $$;
 

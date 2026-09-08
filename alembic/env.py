@@ -8,7 +8,7 @@ from sqlalchemy import pool
 
 # Load environment variables from .env.local if present. The native macOS
 # runtime supplies an explicit generated environment and must never let a
-# source checkout's Docker-oriented .env.local redirect Alembic to another
+# source checkout's development .env.local redirect Alembic to another
 # database.
 config_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_local_path = os.path.join(config_dir, "config", ".env.local")
@@ -25,7 +25,7 @@ if not skip_config_env_local and os.path.exists(env_local_path):
 # instead so the operator must supply DATABASE_URL (compose/.env.local do).
 #
 # DATABASE_URL_MIGRATIONS takes precedence when set: in the least-privilege
-# setup (docker/postgres-init/01-app-role.sh) the runtime pool's DATABASE_URL
+# setup, the runtime pool's DATABASE_URL
 # points at the non-superuser ftm_app role, while migrations keep the
 # privileged ftm_user role for DDL.
 database_url = os.getenv("DATABASE_URL_MIGRATIONS") or os.getenv("DATABASE_URL")

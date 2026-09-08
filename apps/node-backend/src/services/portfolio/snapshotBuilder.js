@@ -150,6 +150,29 @@ import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
 const FIXED_INCOME_ASSET_CLASSES = new Set(["savings", "bond"]);
 const REAL_ESTATE_ASSET_CLASS = "real_estate";
 const NON_UNIT_ASSET_CLASSES = ["savings", "bond", "real_estate"];
+const SNAPSHOT_SLEEVE_BY_ASSET_CLASS = Object.freeze({
+  stock: "stocks_etfs",
+  etf: "stocks_etfs",
+  crypto: "crypto",
+  metals: "metals",
+});
+const SNAPSHOT_SLEEVES = ["stocks_etfs", "crypto", "metals"];
+
+/** @returns {Map<string, Decimal>} */
+function createSleeveAccumulator() {
+  return new Map(SNAPSHOT_SLEEVES.map((sleeve) => [sleeve, toDecimal(0)]));
+}
+
+/**
+ * @param {Map<string, Decimal>} accumulator
+ * @param {string|undefined} assetClass
+ * @param {Decimal} amount signed amount to add
+ */
+function addToSleeve(accumulator, assetClass, amount) {
+  const sleeve = SNAPSHOT_SLEEVE_BY_ASSET_CLASS[assetClass];
+  if (!sleeve) return;
+  accumulator.set(sleeve, accumulator.get(sleeve).plus(amount));
+}
 
 /** @returns {Promise<string|null>} ISO date string or null */
 export async function getFirstDataDate() {
@@ -584,9 +607,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
   // Money accumulators stay Decimal — float drift compounds across a multi-year
   // day walk and is persisted into portfolio_performance_snapshots.
   let cumulativeInvested = toDecimal(0);
-  let stocksEtfsInvested = toDecimal(0);
-  let cryptoInvested = toDecimal(0);
-  let metalsInvested = toDecimal(0);
+  const investedBySleeve = createSleeveAccumulator();
   let cumulativeInflation = toDecimal(1);
   let lastInflationMonth = "";
   /** @type {Record<number, number>} */
@@ -627,12 +648,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
 
       if (tx.type === "buy" || tx.type === "gift") {
         cumulativeInvested = cumulativeInvested.plus(converted);
-        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
-          stocksEtfsInvested = stocksEtfsInvested.plus(converted);
-        else if (inv?.assetClass === "crypto")
-          cryptoInvested = cryptoInvested.plus(converted);
-        else if (inv?.assetClass === "metals")
-          metalsInvested = metalsInvested.plus(converted);
+        addToSleeve(investedBySleeve, inv?.assetClass, converted);
         const key = partitionKey(tx);
         const partitionState = partitionUnits(tx.investmentId);
         partitionState.set(key, (partitionState.get(key) || 0) + tx.units);
@@ -679,12 +695,11 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
             ? converted.times(toDecimal(consumedUnits).div(tx.units))
             : converted;
         cumulativeInvested = cumulativeInvested.minus(effectiveConverted);
-        if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
-          stocksEtfsInvested = stocksEtfsInvested.minus(effectiveConverted);
-        else if (inv?.assetClass === "crypto")
-          cryptoInvested = cryptoInvested.minus(effectiveConverted);
-        else if (inv?.assetClass === "metals")
-          metalsInvested = metalsInvested.minus(effectiveConverted);
+        addToSleeve(
+          investedBySleeve,
+          inv?.assetClass,
+          effectiveConverted.negated(),
+        );
         partitionState.set(key, Math.max(0, heldUnits - tx.units));
         refreshTotalUnits(tx.investmentId);
         if (tx.units > 0 && tx.amount > 0)
@@ -729,12 +744,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0) {
           cumulativeInvested = cumulativeInvested.minus(converted);
-          if (inv?.assetClass === "stock" || inv?.assetClass === "etf")
-            stocksEtfsInvested = stocksEtfsInvested.minus(converted);
-          else if (inv?.assetClass === "crypto")
-            cryptoInvested = cryptoInvested.minus(converted);
-          else if (inv?.assetClass === "metals")
-            metalsInvested = metalsInvested.minus(converted);
+          addToSleeve(investedBySleeve, inv?.assetClass, converted.negated());
         } else if (nonUnitS) {
           // Non-unit classes (savings/bond/real_estate) hold no units, so the
           // heldUnits gate never fires. Mirror the sell branch: reduce net
@@ -756,9 +766,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
     // Compute portfolio value
     let totalValue = toDecimal(0);
     let totalValueFxNeutral = toDecimal(0);
-    let stocksEtfsValue = toDecimal(0);
-    let cryptoValue = toDecimal(0);
-    let metalsValue = toDecimal(0);
+    const valueBySleeve = createSleeveAccumulator();
 
     const isLatestDay = day === todayYmd;
 
@@ -790,12 +798,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         day,
       );
       totalValue = totalValue.plus(invValue);
-      if (inv.assetClass === "stock" || inv.assetClass === "etf")
-        stocksEtfsValue = stocksEtfsValue.plus(invValue);
-      else if (inv.assetClass === "crypto")
-        cryptoValue = cryptoValue.plus(invValue);
-      else if (inv.assetClass === "metals")
-        metalsValue = metalsValue.plus(invValue);
+      addToSleeve(valueBySleeve, inv.assetClass, invValue);
 
       // FX-neutral: value the position at its cost-weighted purchase-date
       // rate. Positions with no recorded buy amounts (e.g. price-only seeds)
@@ -881,13 +884,13 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       invested: roundMoney(cumulativeInvested),
       value: roundMoney(totalValue),
       value_fx_neutral: roundMoney(totalValueFxNeutral),
-      stocks_etfs_value: roundMoney(stocksEtfsValue),
-      crypto_value: roundMoney(cryptoValue),
-      metals_value: roundMoney(metalsValue),
+      stocks_etfs_value: roundMoney(valueBySleeve.get("stocks_etfs")),
+      crypto_value: roundMoney(valueBySleeve.get("crypto")),
+      metals_value: roundMoney(valueBySleeve.get("metals")),
       cash_value: roundMoney(fixedIncomeValue),
-      stocks_etfs_invested: roundMoney(stocksEtfsInvested),
-      crypto_invested: roundMoney(cryptoInvested),
-      metals_invested: roundMoney(metalsInvested),
+      stocks_etfs_invested: roundMoney(investedBySleeve.get("stocks_etfs")),
+      crypto_invested: roundMoney(investedBySleeve.get("crypto")),
+      metals_invested: roundMoney(investedBySleeve.get("metals")),
       cumulative_inflation: roundMoney(
         cumulativeInflation.minus(1).times(100),
         2,

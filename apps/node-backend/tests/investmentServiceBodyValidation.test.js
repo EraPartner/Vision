@@ -5,7 +5,7 @@ import {
   createTransaction,
   __parsePortfolioTransactionBody as parsePortfolioTransactionBody,
   updateTransaction,
-} from "../src/controllers/investmentController.js";
+} from "../src/services/investmentService.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -70,6 +70,15 @@ describe("portfolio transaction request body validation", () => {
       note: null,
       account_id: null,
     });
+  });
+
+  it("normalizes the legacy portfolio recurrence spelling at the route edge", () => {
+    expect(
+      parsePortfolioTransactionBody({ recurrence_interval: "bi-weekly" }),
+    ).toEqual({ recurrence_interval: "biweekly" });
+    expect(
+      parsePortfolioTransactionBody({ recurrence_interval: "biweekly" }),
+    ).toEqual({ recurrence_interval: "biweekly" });
   });
 
   it("accepts compatible numeric strings within the safe money boundary", () => {

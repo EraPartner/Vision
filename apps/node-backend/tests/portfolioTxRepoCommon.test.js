@@ -319,6 +319,15 @@ describe("normalizeTransactionPayload — other types (dividend/fee/tax/etc)", (
     });
     expect(r.recurrence_interval).toBe("monthly");
   });
+
+  it("normalizes the legacy bi-weekly spelling during compatibility", () => {
+    const r = normalizeTransactionPayload({
+      type: "dividend",
+      amount: 100,
+      recurrence_interval: "bi-weekly",
+    });
+    expect(r.recurrence_interval).toBe("biweekly");
+  });
 });
 
 describe("validateSellUnitsAvailability", () => {

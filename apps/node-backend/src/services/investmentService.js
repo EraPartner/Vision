@@ -1,5 +1,5 @@
 /**
- * Investment Controller
+ * Investment Service
  *
  * Business logic for investment and portfolio transaction endpoints.
  * Routes in routes/investments.js delegate here; this module owns
@@ -15,13 +15,14 @@ import investmentRepository, {
   pickInvestmentCreateFields,
 } from "../repositories/investmentRepository.js";
 import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
-import portfolioTransactionService from "../services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
+import portfolioBrokerRetagService from "./portfolio/portfolioBrokerRetagService.js";
 import {
   fetchHistoricalPrices,
   fetchLivePricesDetailed,
   SUPPORTED_PROVIDERS,
-} from "../services/priceProviderService.js";
-import { refreshQuotesForInvestment } from "../services/quoteBackfillService.js";
+} from "./priceProviderService.js";
+import { refreshQuotesForInvestment } from "./quoteBackfillService.js";
 import { logger } from "../config/logger.js";
 import { getKinesisAssetConfig } from "../config/kinesisConfig.js";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
@@ -34,9 +35,9 @@ import {
   validateIntArray,
 } from "../lib/validation.js";
 import { assertIdParam } from "../middleware/validation.js";
-import { invalidatePortfolioCaches } from "../services/info/cache.js";
+import { invalidatePortfolioCaches } from "./info/cache.js";
 import { assertPublicHttpUrl } from "../lib/urlSafety.js";
-import { autoResolveFxRateToEur } from "../services/portfolio/fxResolve.js";
+import { autoResolveFxRateToEur } from "./portfolio/fxResolve.js";
 import { parsePagination, parseIntClamped } from "../lib/pagination.js";
 import { PORTFOLIO_TXN_TYPES } from "@vision/types/portfolioTxnTypes";
 import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
@@ -181,6 +182,19 @@ const investmentBodySchema = z.looseObject({
   ),
 });
 
+const brokerRetagBodySchema = z.strictObject({
+  transaction_ids: z
+    .array(z.number().int().positive().max(2_147_483_647))
+    .min(1)
+    .max(500)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "transaction_ids must be distinct",
+    }),
+  from_account_id: z.number().int().positive().max(2_147_483_647).nullable(),
+  to_account_id: z.number().int().positive().max(2_147_483_647).nullable(),
+  idempotency_key: z.string().uuid(),
+});
+
 /**
  * @param {unknown} body
  * @returns {any}
@@ -200,6 +214,27 @@ function parseInvestmentBody(body) {
     throw new ValidationError(msg);
   }
   return result.data;
+}
+
+/**
+ * @param {unknown} body
+ * @returns {{ transaction_ids:number[], from_account_id:number|null, to_account_id:number|null, idempotency_key:string }}
+ */
+export function parseBrokerRetagBody(body) {
+  const result = brokerRetagBodySchema.safeParse(body);
+  if (!result.success) {
+    const message = result.error.issues
+      .map((issue) =>
+        issue.path.length
+          ? `${issue.path.join(".")}: ${issue.message}`
+          : issue.message,
+      )
+      .join("; ");
+    throw new ValidationError(message);
+  }
+  return /** @type {{ transaction_ids:number[], from_account_id:number|null, to_account_id:number|null, idempotency_key:string }} */ (
+    result.data
+  );
 }
 
 // POST and PATCH accept the same portfolio-transaction field vocabulary. Keep
@@ -313,6 +348,7 @@ const portfolioCurrencyField = z
 const portfolioRecurrenceIntervalField = z
   .union([
     z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
+    z.literal("bi-weekly").transform(() => "biweekly"),
     z.null(),
     z.literal("").transform(/** @returns {null} */ () => null),
   ])
@@ -388,8 +424,8 @@ export function parseRequestId(req) {
  * Delegates to `validateId`, so the accept set is every other id param's: a
  * plain base-10 digit string or an integer number, 1..2^31-1. `routes/
  * investments.js` also puts `validateIntParam('txnId')` in front of both
- * routes, which re-stamps the param with the parsed number — hence the number
- * branch in `validateId` — so this is the second of two identical checks.
+ * routes for early validation. This point-of-use parser is the explicit
+ * numeric handoff to the service.
  *
  * It was `parseInt` guarded by `isNaN`/`<= 0`, which takes the leading digits
  * of anything: `DELETE /investments/transactions/12abc` returned **204 having
@@ -399,9 +435,7 @@ export function parseRequestId(req) {
  * @returns {number}
  */
 export function parseTxnRequestId(req) {
-  const result = validateId(req.params.txnId, "transaction ID");
-  if (!result.valid) throw new ValidationError("Invalid transaction ID");
-  return result.value;
+  return assertIdParam(req, "txnId");
 }
 
 /**
@@ -845,7 +879,13 @@ export async function listTransactions(req, res) {
   );
   const result = await portfolioTransactionRepository.getAllWithCount(opts);
   res.ok({
-    items: result.rows,
+    items: result.rows.map((row) => ({
+      ...row,
+      recurrence_interval:
+        row.recurrence_interval === "bi-weekly"
+          ? "biweekly"
+          : row.recurrence_interval,
+    })),
     total: result.total,
     limit: opts.limit,
     offset: opts.offset,
@@ -1012,6 +1052,21 @@ export async function updateTransaction(req, res) {
     });
   });
   res.ok(txn);
+}
+
+/**
+ * Atomically move a reviewed set of portfolio transactions between broker
+ * partitions. The expected source account makes this a compare-and-set write.
+ *
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
+export async function bulkRetagTransactions(req, res) {
+  const request = parseBrokerRetagBody(req.body);
+  const receipt =
+    await portfolioBrokerRetagService.retagPortfolioTransactions(request);
+  clearInvestmentsCaches();
+  res.ok(receipt);
 }
 
 /**

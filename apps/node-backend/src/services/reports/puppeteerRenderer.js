@@ -15,8 +15,8 @@ let launchPromise = null;
 
 async function launchBrowser() {
   const { default: puppeteer } = await import("puppeteer");
-  // Docker points this at its distro Chromium. The native macOS runtime points
-  // it at a supported installed Chrome/Chromium executable so packaged PDF
+  // The native macOS runtime points this at a supported installed
+  // Chrome/Chromium executable so packaged PDF
   // rendering does not depend on a Puppeteer download cache.
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 

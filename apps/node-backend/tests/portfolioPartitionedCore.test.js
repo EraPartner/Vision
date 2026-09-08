@@ -168,6 +168,60 @@ describe("partitionTxnsByAccount — corporate actions apply across partitions",
     expect(partitions.get(2).map((t) => t.type)).toEqual(["dividend"]);
     expect(partitions.get(null).map((t) => t.type)).toEqual(["dividend"]);
   });
+
+  it("classifies an unassigned adjustment-only partition as non-position", () => {
+    const result = buildInvestmentSummaryCorePartitioned(
+      stock(10),
+      [
+        buy(1, 10, 1000, "2026-01-01"),
+        {
+          type: "fee",
+          amount: 7,
+          date: "2026-02-01",
+          account_id: null,
+        },
+      ],
+      OPTS,
+    );
+
+    expect(result.fullyAssigned).toBe(true);
+    expect(
+      result.partitions.map(({ accountId, contributionKind }) => ({
+        accountId,
+        contributionKind,
+      })),
+    ).toEqual([
+      { accountId: 1, contributionKind: "position" },
+      { accountId: null, contributionKind: "non_position" },
+    ]);
+  });
+
+  it("keeps lot completeness while classifying an unassigned income-only partition", () => {
+    const result = buildInvestmentSummaryCorePartitioned(
+      stock(10),
+      [
+        buy(1, 10, 1000, "2026-01-01"),
+        {
+          type: "dividend",
+          amount: 25,
+          date: "2026-02-01",
+          account_id: null,
+        },
+      ],
+      OPTS,
+    );
+
+    expect(result.fullyAssigned).toBe(true);
+    expect(
+      result.partitions.map(({ accountId, contributionKind }) => ({
+        accountId,
+        contributionKind,
+      })),
+    ).toEqual([
+      { accountId: 1, contributionKind: "position" },
+      { accountId: null, contributionKind: "non_position" },
+    ]);
+  });
 });
 
 describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account lots", () => {

@@ -13,7 +13,7 @@ import "./loadDotenv.js";
 import { z } from "zod";
 import { logger } from "./logger.js";
 
-// Development-only convenience fallback matching the documented Docker flow.
+// Development-only convenience fallback for a local PostgreSQL installation.
 // Outside development the backend must fail closed rather than silently
 // connect with a guessable password — see enforceDatabaseUrlPolicy().
 const DEFAULT_DATABASE_URL =
@@ -120,8 +120,8 @@ const envSchema = z
     ADMIN_AUTH_TOKEN: stringEnv(""),
     // Explicit acknowledgment that /api/admin/* may run without a token on a
     // non-loopback bind because an OUTER layer restricts access (the documented
-    // compose flow binds 0.0.0.0 inside the container but publishes the port on
-    // host loopback only). Without this, a tokenless non-loopback bind refuses
+    // reverse proxy or host firewall binds the public-facing listener to
+    // loopback only). Without this, a tokenless non-loopback bind refuses
     // to start instead of logging a warning nobody reads.
     ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: booleanEnv(false),
 
@@ -145,7 +145,6 @@ const envSchema = z
     APP_TIMEZONE: stringEnv("Europe/Brussels"),
 
     APP_VERSION: optionalStringEnv,
-    APP_IMAGE_TAG: optionalStringEnv,
 
     KINESIS_BASE_URL: stringEnv(
       "https://api.kinesis.money/api/market-data/trendlines",

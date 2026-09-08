@@ -12,9 +12,14 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import infoService from "../../services/infoService.js";
 import { detectRecurringPatterns } from "../../services/recurringDetectionService.js";
-import { getInsightsDigest } from "../../services/insightsDigestService.js";
+import {
+  getInsightsCount,
+  getInsightsDigest,
+} from "../../services/insightsDigestService.js";
+import { dismissInsight } from "../../services/insightDismissalService.js";
 import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.js";
 import { listAdapters } from "../../services/importPipeline/adapters/index.js";
 import { logger } from "../../config/logger.js";
@@ -28,6 +33,28 @@ import { ValidationError } from "../../middleware/errorHandler.js";
  */
 
 const router = Router();
+
+const insightDismissalSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.enum(["subscription_new", "subscription_price_change"]),
+    recipient_id: z.number().int().positive(),
+  }),
+  z.strictObject({
+    kind: z.literal("category_outlier"),
+    category_id: z.number().int().positive(),
+    month_key: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  }),
+]);
+
+function parseInsightDismissal(body) {
+  const result = insightDismissalSchema.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError(
+      result.error.issues.map((issue) => issue.message).join("; "),
+    );
+  }
+  return result.data;
+}
 
 // (Removed legacy GET /api/info and GET /api/info/transaction-summary — Phase 9
 // cutover (ADR-010): the aggregations.js routes superseded them and they had
@@ -46,6 +73,14 @@ router.get(
     res.ok({ items: banks, total: banks.length });
   },
 );
+
+router.get("/insights-count", async (_req, res) => {
+  res.ok(await getInsightsCount());
+});
+
+router.put("/insight-dismissals", async (req, res) => {
+  res.ok(await dismissInsight(parseInsightDismissal(req.body)));
+});
 
 router.get(
   "/supported-adapters",

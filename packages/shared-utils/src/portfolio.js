@@ -772,6 +772,13 @@ export function buildInvestmentSummaryCore(
 export const LOT_TXN_TYPES = new Set(["buy", "gift", "sell"]);
 
 /**
+ * @param {Array<{ type: string }>} rows
+ * @returns {"position"|"non_position"}
+ */
+const contributionKindOf = (rows) =>
+  rows.some((row) => LOT_TXN_TYPES.has(row.type)) ? "position" : "non_position";
+
+/**
  * Whether an investment's lots are fully broker-assigned (ADR-108 transition
  * rule): every lot-bearing row (buy/gift/sell) carries a non-null account_id.
  * Vacuously true with no lot rows — there is nothing left to assign.
@@ -1047,7 +1054,7 @@ export function partitionOversellDeficits(txns) {
  * @param {{ costBasisMethod?: CostBasisMethod, todayYmd: string, fxMultiplierNow?: number|string }} opts
  * @returns {{
  *   core: ReturnType<typeof buildInvestmentSummaryCore>,
- *   partitions: Array<{ accountId: number|null, core: ReturnType<typeof buildInvestmentSummaryCore> }>,
+ *   partitions: Array<{ accountId: number|null, contributionKind: "position"|"non_position", core: ReturnType<typeof buildInvestmentSummaryCore> }>,
  *   fullyAssigned: boolean,
  * }}
  */
@@ -1063,7 +1070,10 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
       txns.length > 0 && fullyAssigned ? [...accountKeys][0] : null;
     return {
       core,
-      partitions: txns.length > 0 ? [{ accountId, core }] : [],
+      partitions:
+        txns.length > 0
+          ? [{ accountId, contributionKind: contributionKindOf(txns), core }]
+          : [],
       fullyAssigned,
     };
   }
@@ -1073,7 +1083,10 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
     const core = buildInvestmentSummaryCore(inv, txns, opts);
     return {
       core,
-      partitions: txns.length > 0 ? [{ accountId: null, core }] : [],
+      partitions:
+        txns.length > 0
+          ? [{ accountId: null, contributionKind: "position", core }]
+          : [],
       fullyAssigned: false,
     };
   }
@@ -1084,13 +1097,25 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
     const accountId = streams.size === 1 ? [...streams.keys()][0] : null;
     return {
       core,
-      partitions: streams.size === 1 ? [{ accountId, core }] : [],
+      partitions:
+        streams.size === 1
+          ? [
+              {
+                accountId,
+                contributionKind: contributionKindOf(
+                  streams.values().next().value ?? [],
+                ),
+                core,
+              },
+            ]
+          : [],
       fullyAssigned: true,
     };
   }
 
   const partitions = [...streams.entries()].map(([accountId, rows]) => ({
     accountId,
+    contributionKind: contributionKindOf(rows),
     core: buildInvestmentSummaryCore(inv, rows, opts),
   }));
   return {

@@ -84,6 +84,7 @@ describe("detectCategoryOutliers", () => {
         categoryId: 1,
         categoryName: "FOOD:GROCERIES",
         monthKey: "2026-07",
+        comparisonEndDay: 15,
         currentAmount: 400,
         baselineMedian: 100,
         deviation: 40.47,

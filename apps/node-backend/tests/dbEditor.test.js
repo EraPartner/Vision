@@ -211,10 +211,9 @@ describe("getTableMeta", () => {
 // ── Reads ───────────────────────────────────────────────────────────────────
 
 describe("readRows", () => {
-  it("runs inside a READ ONLY transaction and returns rows + total", async () => {
+  it("runs inside a READ ONLY transaction and returns a bounded row page", async () => {
     query.mockImplementation(catalogRouter("transactions"));
     const { client } = makeClient([
-      ["count(*)", { rows: [{ total: "42" }] }],
       [
         "SELECT *",
         {
@@ -232,14 +231,17 @@ describe("readRows", () => {
     ]);
     getClient.mockResolvedValue(client);
 
-    const result = await readRows("transactions", { limit: 25, offset: 25 });
+    const result = await readRows("transactions", { limit: 25 });
 
-    expect(result.total).toBe(42);
+    expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
     expect(result.rows[0].__xmin).toBe("500");
     const issued = client.query.mock.calls.map((c) => c[0]);
     expect(issued).toContain("SET TRANSACTION READ ONLY");
     expect(issued.some((s) => s.includes("xmin::text AS __xmin"))).toBe(true);
-    expect(issued.some((s) => s.includes("LIMIT 25"))).toBe(true);
+    expect(issued.some((s) => s.includes("LIMIT 26"))).toBe(true);
+    expect(issued.some((s) => s.includes("count(*)"))).toBe(false);
   });
 
   it("uses a short first page as the exact total without running COUNT(*)", async () => {
@@ -248,61 +250,54 @@ describe("readRows", () => {
       { id: 1, amount: "10", currency: "EUR", is_active: true, __xmin: "500" },
       { id: 2, amount: "20", currency: "EUR", is_active: true, __xmin: "501" },
     ];
-    const { client } = makeClient([
-      ["SELECT *", { rows }],
-      [
-        "::bigint AS total",
-        (_sql, params) => ({ rows: [{ total: params.at(-1) }] }),
-      ],
-    ]);
+    const { client } = makeClient([["SELECT *", { rows }]]);
     getClient.mockResolvedValue(client);
 
-    const result = await readRows("transactions", { limit: 25, offset: 0 });
+    const result = await readRows("transactions", { limit: 25 });
 
     expect(result.total).toBe(2);
     expect(
       client.query.mock.calls.some(([sql]) => sql.includes("count(*)")),
     ).toBe(false);
-    const totalCall = client.query.mock.calls.find(([sql]) =>
-      sql.includes("::bigint AS total"),
-    );
-    expect(totalCall).toEqual(["SELECT $1::bigint AS total", [2]]);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        sql.includes("::bigint AS total"),
+      ),
+    ).toBe(false);
     expect(client.query.mock.calls.some(([sql]) => sql === "COMMIT")).toBe(
       true,
     );
   });
 
-  it("runs COUNT(*) when the first page is full", async () => {
+  it("fetches one extra row instead of counting when a page is full", async () => {
     query.mockImplementation(catalogRouter("transactions"));
-    const rows = Array.from({ length: 2 }, (_, index) => ({ id: index + 1 }));
-    const { client } = makeClient([
-      ["count(*)", { rows: [{ total: "7" }] }],
-      ["SELECT *", { rows }],
-    ]);
+    const rows = Array.from({ length: 3 }, (_, index) => ({
+      id: index + 1,
+      __vision_cursor_value_1: String(index + 1),
+    }));
+    const { client } = makeClient([["SELECT *", { rows }]]);
     getClient.mockResolvedValue(client);
 
-    const result = await readRows("transactions", { limit: 2, offset: 0 });
+    const result = await readRows("transactions", { limit: 2 });
 
-    expect(result.total).toBe(7);
+    expect(result.total).toBeUndefined();
+    expect(result.rows).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toEqual(expect.any(String));
     expect(
       client.query.mock.calls.filter(([sql]) => sql.includes("count(*)")),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
   it("uses a filtered short first page as the exact filtered total", async () => {
     query.mockImplementation(catalogRouter("transactions"));
     const { client } = makeClient([
       ["SELECT *", { rows: [{ id: 1, currency: "EUR" }] }],
-      [
-        "::bigint AS total",
-        (_sql, params) => ({ rows: [{ total: params.at(-1) }] }),
-      ],
     ]);
     getClient.mockResolvedValue(client);
 
     const result = await readRows("transactions", {
       limit: 25,
-      offset: 0,
       filters: [{ column: "currency", op: "eq", value: "EUR" }],
     });
 
@@ -310,10 +305,11 @@ describe("readRows", () => {
     expect(
       client.query.mock.calls.some(([sql]) => sql.includes("count(*)")),
     ).toBe(false);
-    const totalCall = client.query.mock.calls.find(([sql]) =>
-      sql.includes("::bigint AS total"),
-    );
-    expect(totalCall).toEqual(["SELECT $1::bigint AS total", [1]]);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        sql.includes("::bigint AS total"),
+      ),
+    ).toBe(false);
     const dataCall = client.query.mock.calls.find(([sql]) =>
       sql.includes("SELECT *"),
     );

@@ -67,6 +67,9 @@ const mockClearMemoryCache = vi.fn();
 const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
 const mockGetPortfolioSummary = vi.fn();
+const mockGetInsightsDigest = vi.fn();
+const mockGetInsightsCount = vi.fn();
+const mockDismissInsight = vi.fn();
 
 vi.mock("../../src/services/recurringDetectionService.js", () => ({
   detectRecurringPatterns: mockDetectRecurringPatterns,
@@ -102,6 +105,15 @@ vi.mock("../../src/services/portfolio/portfolioSummaryService.js", () => ({
   getPortfolioSummary: mockGetPortfolioSummary,
 }));
 
+vi.mock("../../src/services/insightsDigestService.js", () => ({
+  getInsightsDigest: mockGetInsightsDigest,
+  getInsightsCount: mockGetInsightsCount,
+}));
+
+vi.mock("../../src/services/insightDismissalService.js", () => ({
+  dismissInsight: mockDismissInsight,
+}));
+
 import infoRepository from "../../src/repositories/infoRepository.js";
 import { logger } from "../../src/config/logger.js";
 import {
@@ -130,6 +142,66 @@ describe("Info Routes", () => {
       totals: {},
       summaries: [],
       byAccount: [],
+    });
+    mockGetInsightsDigest.mockResolvedValue({
+      subscriptionCreep: { new: [], priceChanges: [] },
+      categoryOutliers: [],
+      cashForecast: null,
+    });
+    mockGetInsightsCount.mockResolvedValue({
+      count: 2,
+      status: "ready",
+      computed_at: "2026-09-08T00:00:00Z",
+    });
+    mockDismissInsight.mockResolvedValue({ id: 1 });
+  });
+
+  describe("insight persistence", () => {
+    it("serves the cheap count projection", async () => {
+      const res = await api.get(`${BASE}/insights-count`).expect(200);
+      expect(res.body.data).toEqual({
+        count: 2,
+        status: "ready",
+        computed_at: "2026-09-08T00:00:00Z",
+      });
+      expect(mockGetInsightsDigest).not.toHaveBeenCalled();
+    });
+
+    it("accepts strict subscription and category dismissal shapes", async () => {
+      await api
+        .put(`${BASE}/insight-dismissals`)
+        .send({ kind: "subscription_new", recipient_id: 8 })
+        .expect(200);
+      await api
+        .put(`${BASE}/insight-dismissals`)
+        .send({
+          kind: "category_outlier",
+          category_id: 4,
+          month_key: "2026-09",
+        })
+        .expect(200);
+      expect(mockDismissInsight).toHaveBeenNthCalledWith(1, {
+        kind: "subscription_new",
+        recipient_id: 8,
+      });
+      expect(mockDismissInsight).toHaveBeenNthCalledWith(2, {
+        kind: "category_outlier",
+        category_id: 4,
+        month_key: "2026-09",
+      });
+    });
+
+    it("rejects client-supplied outlier deviation and malformed month keys", async () => {
+      await api
+        .put(`${BASE}/insight-dismissals`)
+        .send({
+          kind: "category_outlier",
+          category_id: 4,
+          month_key: "2026-9",
+          deviation_at_dismiss: 999,
+        })
+        .expect(400);
+      expect(mockDismissInsight).not.toHaveBeenCalled();
     });
   });
 

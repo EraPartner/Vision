@@ -10,31 +10,37 @@
  * exclusions force a filtered scan.
  */
 
-import infoRepository from '../../../repositories/infoRepository.js';
-import { buildEnvelope } from './_envelope.js';
-import { assertNoNaN, assertMonthlyInvariants } from './_invariants.js';
+import infoRepository from "../../../repositories/infoRepository.js";
+import { buildEnvelope } from "./_envelope.js";
+import { assertNoNaN, assertMonthlyInvariants } from "./_invariants.js";
 
 /**
- * @param {{ targetCurrency?: string, excludedCategoryIds?: number[], excludedRecipientIds?: number[], allTime?: boolean }} [opts]
+ * @param {{ targetCurrency?: string, excludedCategoryIds?: number[], excludedRecipientIds?: number[], allTime?: boolean, startDate?: string, endDate?: string }} [opts]
  */
 export async function computeMonthlySummary({
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
   excludedCategoryIds = [],
   excludedRecipientIds = [],
   allTime = false,
+  startDate = undefined,
+  endDate = undefined,
 } = {}) {
   const data = await infoRepository.getMonthlyFinancialSummary(
     excludedCategoryIds,
     targetCurrency,
     excludedRecipientIds,
     allTime,
+    startDate,
+    endDate,
   );
 
-  assertNoNaN(data, 'computeMonthlySummary');
+  assertNoNaN(data, "computeMonthlySummary");
   assertMonthlyInvariants(Array.isArray(data) ? data : data?.months);
 
-  const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
-  const source = hasExclusions ? 'live' : 'mv';
+  const hasExclusions =
+    excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
+  const source =
+    hasExclusions || allTime || startDate || endDate ? "live" : "mv";
   return buildEnvelope(data, { source });
 }
 

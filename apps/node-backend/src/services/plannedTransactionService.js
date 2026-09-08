@@ -10,7 +10,6 @@ import plannedTransactionRepository, {
   insertPlannedTransactionInTransaction,
   replaceLoanScheduleInTransaction,
   setPlannedTransactionTags,
-  updatePlannedFields,
 } from "../repositories/plannedTransactionRepository.js";
 import { stampAccountIdForUpdate } from "../repositories/transactionRepository.js";
 
@@ -56,6 +55,10 @@ export async function create(input) {
   };
 
   const plannedId = await withTransaction(async (client) => {
+    // Resolve the compatibility label inside the create transaction, then
+    // persist only account_id. A later failure rolls back a newly minted
+    // account together with the planned row.
+    await stampAccountIdForUpdate(normalized, client);
     const id = await insertPlannedTransactionInTransaction(client, normalized);
     if (
       normalized.is_loan &&
@@ -76,15 +79,13 @@ export async function create(input) {
 export async function update(id, fields) {
   const { tags, ...txFields } = fields;
   const sanitized = sanitizeUpdateFields("planned_transactions", txFields);
-  await stampAccountIdForUpdate(sanitized);
-
-  if (tags === undefined) {
-    return updatePlannedFields(id, sanitized);
-  }
 
   const found = await withTransaction(async (client) => {
+    await stampAccountIdForUpdate(sanitized, client);
     if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
-    await setPlannedTransactionTags(client, id, tags);
+    if (tags !== undefined) {
+      await setPlannedTransactionTags(client, id, tags);
+    }
     return true;
   });
   if (!found) return null;
@@ -102,9 +103,9 @@ export async function update(id, fields) {
 export async function updateWithLoanSchedule(id, fields, scheduleEntries = []) {
   const { tags, ...txFields } = fields;
   const sanitized = sanitizeUpdateFields("planned_transactions", txFields);
-  await stampAccountIdForUpdate(sanitized);
 
   const found = await withTransaction(async (client) => {
+    await stampAccountIdForUpdate(sanitized, client);
     if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
     if (tags !== undefined) {
       await setPlannedTransactionTags(client, id, tags);
@@ -144,6 +145,7 @@ export async function executeAndAdvance(
       "planned_transactions",
       updateFields,
     );
+    await stampAccountIdForUpdate(sanitized, client);
     if (Object.keys(sanitized).length > 0) {
       await applyPlannedFieldUpdate(client, plannedTransactionId, sanitized);
     }

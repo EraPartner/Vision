@@ -2,7 +2,7 @@
  * Real-Postgres tests for the runtime least-privilege role bootstrap
  * (src/database/roleBootstrap.js) — the mechanism that gives ALREADY-
  * INITIALISED databases the non-superuser app role which
- * docker/postgres-init/01-app-role.sh only creates on first volume init.
+ * Native runtime bootstrap creates and refreshes the application role.
  *
  * This is a DB suite on purpose: the interesting behaviour is Postgres's —
  * role creation, grant application, default privileges for future tables,

@@ -50,6 +50,7 @@ function happyPath({
     if (sql.includes("UPDATE transactions")) return { rowCount: 3 };
     if (sql.includes("UPDATE planned_transactions")) return { rowCount: 1 };
     if (sql.includes("UPDATE portfolio_transactions")) return { rowCount: 2 };
+    if (sql.includes("UPDATE portfolio_import_batches")) return { rowCount: 1 };
     if (sql.includes("UPDATE accounts SET funding_account_id"))
       return { rowCount: 0 };
     if (sql.includes("DELETE FROM accounts")) return { rowCount: 1 };
@@ -117,17 +118,40 @@ describe("mergeAccounts (ADR-088)", () => {
     });
 
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const batchLockIndex = calls.findIndex(
+      (s) =>
+        s.includes("FROM portfolio_import_batches") && s.includes("FOR UPDATE"),
+    );
+    const accountLockIndex = calls.findIndex(
+      (s) => s.includes("FROM accounts") && s.includes("FOR UPDATE"),
+    );
+    expect(batchLockIndex).toBeGreaterThan(-1);
+    expect(batchLockIndex).toBeLessThan(accountLockIndex);
     expect(
       calls.some(
-        (s) => s.includes("UPDATE transactions") && s.includes("bank_account"),
+        (s) => s.includes("UPDATE transactions") && !s.includes("bank_account"),
       ),
     ).toBe(true);
-    expect(calls.some((s) => s.includes("UPDATE planned_transactions"))).toBe(
-      true,
-    );
+    expect(
+      calls.some(
+        (s) =>
+          s.includes("UPDATE planned_transactions") &&
+          !s.includes("bank_account"),
+      ),
+    ).toBe(true);
     expect(calls.some((s) => s.includes("UPDATE portfolio_transactions"))).toBe(
       true,
     );
+    const batchRepointIndex = calls.findIndex((s) =>
+      s.includes("UPDATE portfolio_import_batches"),
+    );
+    const deleteSourcesIndex = calls.findIndex((s) =>
+      s.includes("DELETE FROM accounts"),
+    );
+    expect(batchRepointIndex).toBeGreaterThan(-1);
+    expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
+    const batchCall = mockClient.query.mock.calls[batchRepointIndex];
+    expect(batchCall[1]).toEqual([2, [1]]);
     expect(
       calls.some((s) => s.includes("UPDATE accounts SET funding_account_id")),
     ).toBe(true);
@@ -137,7 +161,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
-    expect(txCall[1]).toEqual([2, "TARGET", [1]]);
+    expect(txCall[1]).toEqual([2, [1]]);
   });
 
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
@@ -199,7 +223,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
-    expect(txCall[1]).toEqual([2, "TARGET", [1]]);
+    expect(txCall[1]).toEqual([2, [1]]);
   });
 
   // §1 F2 regression: two concurrently-imported accounts (survivor KBC stamped

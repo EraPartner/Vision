@@ -278,6 +278,7 @@ describe("monteCarloParametric", () => {
     });
     expect(a.series).toEqual(b.series);
     expect(a.bands.p10).toEqual(b.bands.p10);
+    expect(a.cumulative_bands).toEqual(b.cumulative_bands);
   });
 
   it("returns monotone percentiles", () => {
@@ -295,6 +296,12 @@ describe("monteCarloParametric", () => {
       );
       expect(out.bands.p50[i].value).toBeLessThanOrEqual(
         out.bands.p90[i].value,
+      );
+      expect(out.cumulative_bands.p10[i].value).toBeLessThanOrEqual(
+        out.cumulative_bands.p50[i].value,
+      );
+      expect(out.cumulative_bands.p50[i].value).toBeLessThanOrEqual(
+        out.cumulative_bands.p90[i].value,
       );
     }
   });
@@ -326,6 +333,7 @@ describe("monteCarloBlockBootstrap", () => {
       seed: "xyz",
     });
     expect(a.series).toEqual(b.series);
+    expect(a.cumulative_bands).toEqual(b.cumulative_bands);
   });
 
   it("returns monotone percentiles on realistic history", () => {
@@ -343,6 +351,12 @@ describe("monteCarloBlockBootstrap", () => {
       );
       expect(out.bands.p50[i].value).toBeLessThanOrEqual(
         out.bands.p90[i].value,
+      );
+      expect(out.cumulative_bands.p10[i].value).toBeLessThanOrEqual(
+        out.cumulative_bands.p50[i].value,
+      );
+      expect(out.cumulative_bands.p50[i].value).toBeLessThanOrEqual(
+        out.cumulative_bands.p90[i].value,
       );
     }
   });
@@ -634,6 +648,8 @@ describe("orchestrator computeCashflowForecast", () => {
     expect(mc.bands).toBeTruthy();
     expect(mc.bands.p10).toBeDefined();
     expect(mc.bands.p90).toBeDefined();
+    expect(mc.cumulative_bands.p10).toHaveLength(mc.daily.length);
+    expect(mc.cumulative_bands.p90).toHaveLength(mc.daily.length);
 
     expect(env.data.diagnostics).toBeTruthy();
     expect(env.data.diagnostics.backtest.length).toBeGreaterThan(0);

@@ -85,14 +85,12 @@ const BASE = "/api/admin";
 
 describe("Admin Routes", () => {
   const initialAppVersion = process.env.APP_VERSION;
-  const initialAppImageTag = process.env.APP_IMAGE_TAG;
 
   beforeEach(() => {
     vi.clearAllMocks();
     settings.admin.enableResetDb = false;
     settings.admin.authToken = undefined;
     delete process.env.APP_VERSION;
-    delete process.env.APP_IMAGE_TAG;
   });
 
   afterEach(() => {
@@ -100,12 +98,6 @@ describe("Admin Routes", () => {
       delete process.env.APP_VERSION;
     } else {
       process.env.APP_VERSION = initialAppVersion;
-    }
-
-    if (initialAppImageTag === undefined) {
-      delete process.env.APP_IMAGE_TAG;
-    } else {
-      process.env.APP_IMAGE_TAG = initialAppImageTag;
     }
   });
 
@@ -291,16 +283,14 @@ describe("Admin Routes", () => {
       expect(payload).toHaveProperty("current_version");
     });
 
-    it("should report docker-compose update mode (HTTP clients are never Electron)", async () => {
+    it("should report source update mode for HTTP clients", async () => {
       // Inside the desktop shell the frontend short-circuits to the Electron
-      // IPC updater, so anything hitting this route is a self-hosted
-      // docker-compose deployment with no in-app installer. Omitting the field
-      // made the frontend default to 'source' and render a dead Install button.
+      // IPC updater, so anything hitting this route is a source deployment.
       mockGitHubReleaseBody(JSON.stringify({ tag_name: "v9.9.9" }));
 
       const res = await api.get(`${BASE}/update/check`).expect(200);
 
-      expect(res.body.data.update_mode).toBe("docker-compose");
+      expect(res.body.data.update_mode).toBe("source");
     });
 
     it("should include version metadata in update check response", async () => {
@@ -325,7 +315,7 @@ describe("Admin Routes", () => {
           current_version: "unknown",
           error: "No published releases found",
           latest_version: null,
-          update_mode: "docker-compose",
+          update_mode: "source",
         }),
       );
     });

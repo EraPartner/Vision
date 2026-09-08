@@ -238,6 +238,22 @@ describe("statisticsRepository.getCategoryPivot", () => {
     );
   });
 
+  it("binds explicit date bounds after exclusion ids", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await statisticsRepository.getCategoryPivot({
+      excludedCategoryIds: [7],
+      startDate: "2024-10-01",
+      endDate: "2026-09-07",
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("t.date >= $2");
+    expect(sql).toContain("t.date <= $3");
+    expect(params).toEqual([7, "2024-10-01", "2026-09-07"]);
+  });
+
   // Was: asserted to bind as [5, 7] — the pivot silently included the
   // categories the caller asked to exclude. See the note in filterBuilder.test.js.
   it("rejects malformed exclusion lists instead of dropping the bad ids", async () => {

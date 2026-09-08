@@ -337,9 +337,8 @@ describeDb("importPipeline commit (real Postgres)", () => {
       autoLinkedCount: 0,
     });
 
-    // Two labels → two accounts, and BOTH halves of the dual-write landed:
-    // the raw label string (feeds the sync trigger until the contract drop)
-    // and the explicitly-resolved account_id (the decoupled half).
+    // Two labels resolve to two canonical account IDs. The compatibility
+    // column is deliberately no longer written before the contract drop.
     const { rows } = await pool.query(
       `SELECT t.bank_account, t.account_id, a.name
          FROM transactions t JOIN accounts a ON a.id = t.account_id
@@ -348,7 +347,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows[0].account_id).not.toBe(rows[1].account_id);
-    for (const r of rows) expect(r.name).toBe(r.bank_account);
+    for (const r of rows) {
+      expect(r.name).toMatch(/^BE/);
+      expect(r.bank_account).toBeNull();
+    }
   });
 
   it("dedups two casings of the SAME account label (FK identity, ADR-088)", async () => {
@@ -915,7 +917,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       date: "2026-03-04",
       amount: "-42.5000",
       memo: "CARD PAYMENT - CURRENT",
-      bank_account: "BE68 5390 0754 7034",
+      bank_account: null,
       recipient_id: fx.recipientId,
       // ADR-046: no per-row override → the recipient's default category.
       category_id: fx.categoryId,

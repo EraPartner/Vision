@@ -59,7 +59,7 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  *     paths?: number,
  *     percentiles?: number[],
  *     seed?: number|string,
- *   }) => { series: ForecastPoint[], bands: Record<string, ForecastPoint[]> },
+ *   }) => { series: ForecastPoint[], bands: Record<string, ForecastPoint[]>, cumulative_bands: Record<string, ForecastPoint[]> },
  * }} McMethodModule
  *
  * One method's output as assembled by `runForecastEngine`, pre-cumulative-fold.
@@ -68,6 +68,7 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  *   label: string,
  *   series: ForecastPoint[],
  *   bands?: Record<string, ForecastPoint[]>,
+ *   cumulative_bands?: Record<string, ForecastPoint[]>,
  *   error?: string,
  * }} MethodOutput
  *
@@ -79,6 +80,7 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  *   daily: ForecastPoint[],
  *   cumulative: CumulativePoint[],
  *   bands: Record<string, ForecastPoint[]> | null,
+ *   cumulative_bands: Record<string, ForecastPoint[]> | null,
  *   error: string | null,
  * }} MethodResult
  *
@@ -318,6 +320,7 @@ async function runForecastEngine({
         label: mod.label,
         series: out.series,
         bands: out.bands,
+        cumulative_bands: out.cumulative_bands,
       });
     } catch {
       methodOutputs.push({
@@ -363,12 +366,41 @@ async function runForecastEngine({
     return out;
   };
 
+  /**
+   * Add the actual anchor and deterministic overlays to cumulative simulated
+   * path quantiles. The path values already include every stochastic day up to
+   * each point, so only scheduled/planned cash is accumulated here.
+   *
+   * @param {Record<string, ForecastPoint[]>|undefined} cumulativeBands
+   * @returns {Record<string, ForecastPoint[]>|null}
+   */
+  const cumulativeBandsWithOverlays = (cumulativeBands) => {
+    if (!cumulativeBands) return null;
+    return Object.fromEntries(
+      Object.entries(cumulativeBands).map(([key, band]) => {
+        let overlay = 0;
+        return [
+          key,
+          band.map((point) => {
+            overlay += scheduledMap.get(point.date) ?? 0;
+            if (includePlanned) overlay += plannedMap.get(point.date) ?? 0;
+            return {
+              date: point.date,
+              value: lastActualCum + point.value + overlay,
+            };
+          }),
+        ];
+      }),
+    );
+  };
+
   const methods = methodOutputs.map((m) => ({
     id: m.id,
     label: m.label,
     daily: m.series,
     cumulative: cumulativeFor(m.series),
     bands: m.bands ?? null,
+    cumulative_bands: cumulativeBandsWithOverlays(m.cumulative_bands),
     error: m.error ?? null,
   }));
 
@@ -430,7 +462,7 @@ function filterHash({
   const recs = [...(excludedRecipientIds ?? [])]
     .sort((a, b) => a - b)
     .join(",");
-  return `effective-date-v1|${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|d${effectiveDate}|t${includeTransfers ? 1 : 0}`;
+  return `cumulative-bands-v2|${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|d${effectiveDate}|t${includeTransfers ? 1 : 0}`;
 }
 
 /**

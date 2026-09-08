@@ -545,16 +545,16 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
     ).toBe(true);
     await q("DELETE FROM investments WHERE id = 501");
 
-    // The FKs the view shape could never hold are real now — and enforced.
-    // contype 'n' (per-column NOT NULL) exists only on PG >= 18; exclude it so
-    // the exact list is portable across the PG 16 (local) / 18 (CI) split.
-    const cons = (
+    // The PK and FKs the view shape could never hold are real now — and
+    // enforced. Scope this inventory to key constraints owned by 0087; later
+    // migrations add independent CHECKs, and PostgreSQL 18 catalogs NOT NULL
+    // constraints separately.
+    const keyCons = (
       await q(
-        "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass AND contype <> 'n' ORDER BY conname",
+        "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass AND contype IN ('p', 'f') ORDER BY conname",
       )
     ).rows.map((r) => r.conname);
-    expect(cons).toEqual([
-      "chk_portfolio_transactions_dividend_amount_convention",
+    expect(keyCons).toEqual([
       "portfolio_transactions_account_id_fkey",
       "portfolio_transactions_import_batch_id_fkey",
       "portfolio_transactions_investment_id_fkey",

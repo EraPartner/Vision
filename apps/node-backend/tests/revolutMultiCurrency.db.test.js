@@ -163,8 +163,10 @@ async function importExport(csv) {
 async function ledger() {
   const { rows } = await pool.query(
     `SELECT to_char(t.date, 'YYYY-MM-DD') AS date, t.bank_account,
+            a.name AS account_name,
             t.amount::text AS amount, t.currency, t.balance::text AS balance
        FROM transactions t
+       JOIN accounts a ON a.id = t.account_id
       WHERE t.is_active = true
       ORDER BY t.date, t.currency, t.id`,
   );
@@ -214,10 +216,12 @@ describeDb("Revolut multi-currency import (real DB)", () => {
     expect(imported).toBe(4);
 
     const rows = await ledger();
-    // One account for all four rows (D2), each row carrying its OWN currency.
-    expect(rows.map((r) => r.bank_account)).toEqual(
+    // One canonical account for all four rows (D2), each row carrying its OWN
+    // currency. The compatibility string is no longer written.
+    expect(rows.map((r) => r.account_name)).toEqual(
       Array(4).fill("REVOLUT CURRENT"),
     );
+    expect(rows.map((r) => r.bank_account)).toEqual(Array(4).fill(null));
     expect(rows.map((r) => `${r.date} ${r.amount} ${r.currency}`)).toEqual([
       "2026-03-01 -25.0000 EUR",
       "2026-03-02 50.0000 EUR",

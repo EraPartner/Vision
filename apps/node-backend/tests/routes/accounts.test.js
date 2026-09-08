@@ -38,6 +38,10 @@ vi.mock("../../src/services/reconcileService.js", () => ({
   reconcileAccount: vi.fn(),
 }));
 
+vi.mock("../../src/services/accountCloseService.js", () => ({
+  closeAccount: vi.fn(),
+}));
+
 vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
@@ -53,6 +57,7 @@ import {
 } from "../../src/services/accountMergeService.js";
 import { setOpeningBalance } from "../../src/services/openingBalanceService.js";
 import { reconcileAccount } from "../../src/services/reconcileService.js";
+import { closeAccount } from "../../src/services/accountCloseService.js";
 import { scheduleAggregationRefresh } from "../../src/services/aggregationRefresh.js";
 import { invalidatePortfolioCaches } from "../../src/services/info/cache.js";
 
@@ -198,6 +203,19 @@ describe("Account Routes — portfolio cache invalidation", () => {
   it("reconcile busts the portfolio caches and still refreshes aggregations", async () => {
     reconcileAccount.mockResolvedValue({ id: 1 });
     await api.post(`${BASE}/1/reconcile`).send({ mode: "accept" }).expect(200);
+    expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
+    expect(scheduleAggregationRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("close forwards balance handling and refreshes transaction-derived caches", async () => {
+    closeAccount.mockResolvedValue({ account_id: 1, adjustments: [] });
+    await api
+      .post(`${BASE}/1/close`)
+      .send({ balance_handling: "adjustment" })
+      .expect(200);
+    expect(closeAccount).toHaveBeenCalledWith(1, {
+      balance_handling: "adjustment",
+    });
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(scheduleAggregationRefresh).toHaveBeenCalledTimes(1);
   });

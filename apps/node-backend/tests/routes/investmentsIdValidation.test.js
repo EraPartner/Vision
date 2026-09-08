@@ -20,7 +20,7 @@
  *    `?investment_ids=5,12abc` read investments 5 **and 12** with a 200.
  *
  * Own file rather than appended to investments.test.js: these matrices are
- * ~60 requests, and the bulk-transactions cache in investmentController is
+ * ~60 requests, and the bulk-transactions cache in investmentService is
  * module-scoped, so a fresh module registry keeps the query-param cases from
  * reading each other's cached payloads.
  */

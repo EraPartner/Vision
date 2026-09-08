@@ -7,6 +7,7 @@
  * POST   /api/accounts        — create
  * PATCH  /api/accounts/:id    — update (partial)
  * DELETE /api/accounts/:id    — delete (409 if still referenced; archive instead)
+ * POST   /api/accounts/:id/close — atomically close, optionally zeroing cash partitions
  *
  * Data access + orchestration live in services/accountService.js — routes never
  * touch the repository layer directly (vision-local/no-repo-direct-from-route).
@@ -21,6 +22,10 @@ import {
 } from "../services/accountMergeService.js";
 import { setOpeningBalance } from "../services/openingBalanceService.js";
 import { reconcileAccount } from "../services/reconcileService.js";
+import {
+  closeAccount,
+  previewAccountPortfolioLots,
+} from "../services/accountCloseService.js";
 import { scheduleAggregationRefresh } from "../services/aggregationRefresh.js";
 import { invalidatePortfolioCaches } from "../services/info/cache.js";
 import {
@@ -90,6 +95,19 @@ router.post(
   },
 );
 
+router.get(
+  "/:id/portfolio-lot-retag-preview",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const id = assertIdParam(req);
+    const result = await previewAccountPortfolioLots(id);
+    res.ok({ ...result, links: [] });
+  },
+);
+
 router.patch(
   "/:id",
   validateIdParam,
@@ -118,6 +136,21 @@ router.delete(
     invalidatePortfolioCaches();
     // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
     res.status(204).send();
+  },
+);
+
+router.post(
+  "/:id/close",
+  validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const id = assertIdParam(req);
+    const result = await closeAccount(id, req.body);
+    scheduleAggregationRefresh();
+    invalidatePortfolioCaches();
+    res.ok({ ...result, links: [] });
   },
 );
 

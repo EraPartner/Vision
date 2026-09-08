@@ -4,8 +4,8 @@ import {
   lockBatchForUpdate,
   setBatchAccount,
 } from "../repositories/portfolioImportBatchRepository.js";
-import accountService from "./accountService.js";
 import { commitPortfolioImport } from "./portfolioImportPipeline/index.js";
+import { assertPortfolioImportAccount } from "./portfolioImportAccountService.js";
 
 /**
  * Commit one reviewed batch while holding its batch-row lock. Account selection,
@@ -29,7 +29,7 @@ export async function commitReviewedPortfolioImport({ batchId, accountId }) {
     }
 
     if (accountId !== undefined) {
-      await accountService.get(accountId);
+      await assertPortfolioImportAccount(accountId);
       await setBatchAccount(batchId, accountId);
     }
 

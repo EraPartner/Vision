@@ -58,10 +58,8 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
  * @property {string} [preloaded_asset_class]
  */
 
-// The recurrence_interval DB enum (migration 0001) / frontend RecurrenceInterval
-// union, single-sourced in @vision/types/recurrence — note the hyphenated
-// 'bi-weekly' spelling, which is NOT the planned-transaction vocabulary. An
-// out-of-set value has no DB CHECK and otherwise surfaces as a raw enum-cast 500.
+// The canonical recurrence vocabulary is shared with planned transactions.
+// Migration 0099 replaces the legacy enum column with a checked text column.
 // Widened to Set<string>: callers probe raw, untrusted values with .has().
 export const VALID_RECURRENCE_INTERVALS = new Set(
   /** @type {readonly string[]} */ (PORTFOLIO_RECURRENCE_INTERVALS),
@@ -151,6 +149,14 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
  */
 export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   const type = payload.type;
+  const recurrenceInterval =
+    payload.recurrence_interval === "bi-weekly"
+      ? "biweekly"
+      : payload.recurrence_interval;
+  const normalizedPayload = {
+    ...payload,
+    recurrence_interval: recurrenceInterval,
+  };
   // Membership guard: an unknown type ('banana') otherwise inserted (invisible
   // to the units replay) or reached the enum column as a raw cast 500. The
   // import pipeline already constrains types to this same canonical set, so this
@@ -158,12 +164,12 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   if (type != null && !VALID_PORTFOLIO_TXN_TYPES.has(type)) {
     throw makeValidationError(`Invalid transaction type: ${type}`);
   }
-  // recurrence_interval is a DB enum with no CHECK constraint; an out-of-set
-  // value 500'd at insert. The import path never sets it (undefined).
+  // recurrence_interval is checked in the database after migration 0099; reject
+  // invalid values at the domain boundary so they never surface as DB errors.
   if (
-    payload.recurrence_interval != null &&
-    payload.recurrence_interval !== "" &&
-    !VALID_RECURRENCE_INTERVALS.has(payload.recurrence_interval)
+    recurrenceInterval != null &&
+    recurrenceInterval !== "" &&
+    !VALID_RECURRENCE_INTERVALS.has(recurrenceInterval)
   ) {
     throw makeValidationError(
       `Invalid recurrence_interval: ${payload.recurrence_interval}`,
@@ -205,7 +211,7 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   if ((type === "buy" || type === "sell") && isUnitBasedAssetClass) {
     const math = normalizeBuySellMath({ amount, units, pricePerUnit });
     return {
-      ...payload,
+      ...normalizedPayload,
       dividend_amount_convention: dividendAmountConvention,
       ...math,
       fees: fees ?? 0,
@@ -219,7 +225,7 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
       throw makeValidationError("amount is required");
     }
     return {
-      ...payload,
+      ...normalizedPayload,
       dividend_amount_convention: dividendAmountConvention,
       amount,
       units,
@@ -249,7 +255,7 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
     }
 
     return {
-      ...payload,
+      ...normalizedPayload,
       dividend_amount_convention: dividendAmountConvention,
       amount: amount ?? 0,
       units: roundMoney(units, 8),
@@ -266,7 +272,7 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   }
 
   return {
-    ...payload,
+    ...normalizedPayload,
     dividend_amount_convention: dividendAmountConvention,
     amount,
     units,

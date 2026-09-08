@@ -349,8 +349,8 @@ export async function convertRowsToEur(
   // Resolve a rate for one side of the conversion. Returns the rate plus a
   // boolean flagging whether we fell back to current rates because the
   // requested historical rate was missing. convertRowsToEur retains this as
-  // internal diagnostic metadata; current repositories intentionally project
-  // it away rather than treating it as an API response contract.
+  // internal row metadata. Recipient pivot summarizes it into an explicit
+  // response-level conversion contract; other repositories may project it away.
   /**
    * @param {string} code
    * @param {string|null} rowDate

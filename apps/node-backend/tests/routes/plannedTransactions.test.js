@@ -91,6 +91,19 @@ describe("Planned Transaction Routes", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("GET /", () => {
+    it("forwards account_id as an exact account filter", async () => {
+      plannedTransactionRepository.getAll.mockResolvedValue({
+        items: [],
+        total: 0,
+      });
+
+      await api.get(`${BASE}/?account_id=7&bank_account=Cash`).expect(200);
+
+      expect(plannedTransactionRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 7, bankAccount: "Cash" }),
+      );
+    });
+
     it("should return empty list", async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({
         items: [],

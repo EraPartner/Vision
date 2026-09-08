@@ -20,6 +20,7 @@
  * deeper trade-offs are documented in the ADR.
  */
 
+import crypto from "node:crypto";
 import { query, getClient } from "../database/connection.js";
 import { logger } from "../config/logger.js";
 import { scheduleAggregationRefresh } from "./aggregationRefresh.js";
@@ -187,6 +188,11 @@ let userTablesCache = {
 };
 const tableMetaCache = new Map();
 
+export function __clearDbEditorMetadataCacheForTests() {
+  userTablesCache = { value: null, expiresAt: 0 };
+  tableMetaCache.clear();
+}
+
 async function listUserTables() {
   const now = Date.now();
   if (userTablesCache.value && userTablesCache.expiresAt > now)
@@ -337,7 +343,7 @@ function buildFilterFragment(filter, params, columnNames) {
  * survives CORS on this CSRF-exempt GET), and a bare `--` silently truncated
  * the rest of the statement past the `;` guard.
  * @param {string} table
- * @param {{limit?:number, offset?:number, orderBy?:string, dir?:string,
+ * @param {{limit?:number, cursor?:string, orderBy?:string, dir?:string,
  *          filters?:Filter[],
  *          where?:string}} [opts] `where` is accepted only to be rejected (400) —
  *          the raw-WHERE escape hatch was removed.
@@ -347,8 +353,6 @@ export async function readRows(table, opts = {}) {
   const columnNames = new Set(columns.map((c) => c.name));
 
   const limit = clampInt(opts.limit, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-  const offset = clampInt(opts.offset, 0, 0, Number.MAX_SAFE_INTEGER);
-
   /** @type {unknown[]} */
   const params = [];
   /** @type {string[]} */
@@ -364,24 +368,132 @@ export async function readRows(table, opts = {}) {
     );
   }
 
-  const whereSql = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
-
-  let orderSql = "";
+  const dir = String(opts.dir).toLowerCase() === "desc" ? "DESC" : "ASC";
+  /** @type {string[]} */
+  const orderColumns = [];
   if (opts.orderBy !== undefined && String(opts.orderBy) !== "") {
     const orderCol = resolveIdent(opts.orderBy, columnNames);
     if (orderCol === null) {
       throw new ValidationError(`Unknown sort column: ${opts.orderBy}`);
     }
-    const dir = String(opts.dir).toLowerCase() === "desc" ? "DESC" : "ASC";
-    orderSql = `ORDER BY ${quoteIdent(orderCol)} ${dir}`;
-  } else if (primaryKey.length) {
-    orderSql = `ORDER BY ${primaryKey.map(quoteIdent).join(", ")}`;
+    orderColumns.push(orderCol);
   }
+  for (const pk of primaryKey) {
+    if (!orderColumns.includes(pk)) orderColumns.push(pk);
+  }
+  const cursorColumns = orderColumns.map((column) => ({
+    expression: quoteIdent(column),
+    contextKey: column,
+    ctid: false,
+    valueKey: "",
+  }));
+  if (primaryKey.length === 0) {
+    cursorColumns.push({
+      expression: "ctid",
+      contextKey: "__system_ctid",
+      ctid: true,
+      valueKey: "",
+    });
+  }
+  const reservedAliases = new Set(columnNames);
+  for (let index = 0; index < cursorColumns.length; index += 1) {
+    const base = `__vision_cursor_value_${index + 1}`;
+    let alias = base;
+    let suffix = 2;
+    while (reservedAliases.has(alias)) {
+      alias = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    cursorColumns[index].valueKey = alias;
+    reservedAliases.add(alias);
+  }
+  const orderSql = `ORDER BY ${cursorColumns
+    .map((column) => `${column.expression} ${dir} NULLS LAST`)
+    .join(", ")}`;
+
+  const cursorContext = {
+    v: 2,
+    table: safeTable,
+    orderColumns: cursorColumns.map((column) => column.contextKey),
+    dir,
+    filters: crypto
+      .createHash("sha256")
+      .update(JSON.stringify(opts.filters ?? []))
+      .digest("hex"),
+  };
+  if (opts.cursor) {
+    let decoded;
+    try {
+      decoded = JSON.parse(
+        Buffer.from(String(opts.cursor), "base64url").toString("utf8"),
+      );
+    } catch {
+      throw new ValidationError("Invalid pagination cursor");
+    }
+    if (
+      decoded?.v !== cursorContext.v ||
+      decoded?.table !== cursorContext.table ||
+      decoded?.dir !== cursorContext.dir ||
+      decoded?.filters !== cursorContext.filters ||
+      JSON.stringify(decoded?.orderColumns) !==
+        JSON.stringify(cursorContext.orderColumns) ||
+      !Array.isArray(decoded?.values) ||
+      decoded.values.length !== cursorColumns.length
+    ) {
+      throw new ValidationError(
+        "Pagination cursor does not match the current table, sort, or filters",
+      );
+    }
+    if (
+      decoded.values.some(
+        (value) => value !== null && typeof value !== "string",
+      )
+    ) {
+      throw new ValidationError("Invalid pagination cursor");
+    }
+    const cursorValues = decoded.values;
+    const branches = [];
+    for (let index = 0; index < cursorColumns.length; index += 1) {
+      const prefix = [];
+      for (let prior = 0; prior < index; prior += 1) {
+        params.push(cursorValues[prior]);
+        prefix.push(
+          cursorColumns[prior].ctid
+            ? `${cursorColumns[prior].expression} = $${params.length}::tid`
+            : `${cursorColumns[prior].expression} IS NOT DISTINCT FROM $${params.length}`,
+        );
+      }
+      const value = cursorValues[index];
+      if (value === null || value === undefined) continue;
+      params.push(value);
+      const comparison = cursorColumns[index].ctid
+        ? `${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length}::tid`
+        : `(${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length} OR ${cursorColumns[index].expression} IS NULL)`;
+      branches.push(`(${[...prefix, comparison].join(" AND ")})`);
+    }
+    if (branches.length === 0) {
+      whereParts.push("FALSE");
+    } else {
+      whereParts.push(`(${branches.join(" OR ")})`);
+    }
+  }
+
+  const cursorWhereSql = whereParts.length
+    ? `WHERE ${whereParts.join(" AND ")}`
+    : "";
 
   const tbl = quoteIdent(safeTable);
   // xmin (the row version) rides along as a hidden optimistic-concurrency token.
-  const dataSql = `SELECT *, xmin::text AS __xmin FROM ${tbl} ${whereSql} ${orderSql} LIMIT ${limit} OFFSET ${offset}`;
-  let countSql = `SELECT count(*)::bigint AS total FROM ${tbl} ${whereSql}`;
+  // Cursor boundaries come from PostgreSQL text projections, not node-postgres
+  // decoded values. This preserves timestamp microseconds and exact bytea,
+  // numeric, array, and special floating-point representations.
+  const cursorSelect = cursorColumns
+    .map(
+      (column) =>
+        `, (${column.expression})::text AS ${quoteIdent(column.valueKey)}`,
+    )
+    .join("");
+  const dataSql = `SELECT *, xmin::text AS __xmin${cursorSelect} FROM ${tbl} ${cursorWhereSql} ${orderSql} LIMIT ${limit + 1}`;
 
   const client = await getClient();
   try {
@@ -389,23 +501,31 @@ export async function readRows(table, opts = {}) {
     await client.query("SET TRANSACTION READ ONLY");
     await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
     const dataRes = await client.query(dataSql, [...params]);
-    // A short first page proves the exact total. Keep the established query
-    // sink on its original line for CodeQL; switch only its SQL/parameters to
-    // a constant-time scalar query so there is no second table scan.
-    if (offset === 0 && dataRes.rows.length < limit) {
-      params.splice(0, params.length, dataRes.rows.length);
-      countSql = "SELECT $1::bigint AS total";
+    const hasMore = dataRes.rows.length > limit;
+    const rows = dataRes.rows.slice(0, limit);
+    const last = rows.at(-1);
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(
+            JSON.stringify({
+              ...cursorContext,
+              values: cursorColumns.map((column) => last[column.valueKey]),
+            }),
+          ).toString("base64url")
+        : null;
+    for (const row of rows) {
+      for (const column of cursorColumns) delete row[column.valueKey];
     }
-    const countRes = await client.query(countSql, params);
     await client.query("COMMIT");
     return {
       table: safeTable,
       columns,
       primaryKey,
-      rows: dataRes.rows,
-      total: Number(countRes.rows[0].total),
+      rows,
+      total: !opts.cursor && !hasMore ? rows.length : undefined,
       limit,
-      offset,
+      hasMore,
+      nextCursor,
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

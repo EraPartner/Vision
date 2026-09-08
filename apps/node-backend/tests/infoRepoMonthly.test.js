@@ -254,6 +254,29 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     expect(sql).toContain("SELECT MIN(date_trunc");
   });
 
+  it("uses explicit calendar bounds on both the month series and transaction scan", async () => {
+    mvAvailable.mockResolvedValue(true);
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValue([]);
+
+    await getMonthlyFinancialSummary(
+      [],
+      "EUR",
+      [],
+      false,
+      "2024-10-01",
+      "2026-09-07",
+    );
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("date_trunc('month', $2::date)");
+    expect(sql).toContain("date_trunc('month', $3::date)");
+    expect(sql).toContain("t.date >= $2::date");
+    expect(sql).toContain("t.date <= $3::date");
+    expect(params).toEqual([todayAppDateString(), "2024-10-01", "2026-09-07"]);
+    expect(mvAvailable).not.toHaveBeenCalled();
+  });
+
   it("buckets per-(date,currency) grouped aggregates into income vs spending", async () => {
     mvAvailable.mockResolvedValueOnce(false);
 

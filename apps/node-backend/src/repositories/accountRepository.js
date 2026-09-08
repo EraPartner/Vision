@@ -271,16 +271,13 @@ export const accountRepository = {
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const renaming =
-      Object.prototype.hasOwnProperty.call(fields, "name") &&
-      fields.name !== undefined;
     const touchesStatement =
       Object.prototype.hasOwnProperty.call(fields, "statement_balance") ||
       Object.prototype.hasOwnProperty.call(fields, "statement_balance_date");
     const touchesCurrency =
       Object.prototype.hasOwnProperty.call(fields, "currency") &&
       fields.currency !== undefined;
-    if (!renaming && !touchesStatement && !touchesCurrency) {
+    if (!touchesStatement && !touchesCurrency) {
       const result = await query(
         `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
         params,
@@ -288,7 +285,7 @@ export const accountRepository = {
       return result.rows[0] ?? undefined;
     }
 
-    // Rename and legacy statement compatibility both need the pre-update row
+    // Statement compatibility and currency changes need the pre-update row
     // and must commit atomically with the account mutation.
     return withTransaction(async (client) => {
       const prev = await client.query(
@@ -304,17 +301,6 @@ export const accountRepository = {
       );
       const updated = result.rows[0];
       if (!updated) return undefined;
-      if (updated.name !== prev.rows[0].name) {
-        await client.query(
-          "UPDATE transactions SET bank_account = $1 WHERE account_id = $2",
-          [updated.name, id],
-        );
-        await client.query(
-          "UPDATE planned_transactions SET bank_account = $1 WHERE account_id = $2",
-          [updated.name, id],
-        );
-      }
-
       const accountCurrency = updated.currency;
       if (touchesStatement) {
         const balance = Object.prototype.hasOwnProperty.call(
@@ -530,15 +516,19 @@ export const accountRepository = {
    * casing (no-op update purely to RETURNING the id in one round-trip).
    *
    * @param {string|null|undefined} name
-   * @param {{ multiCurrencyCash?: boolean }} [capabilities]
+   * @param {{ multiCurrencyCash?: boolean, client?: import('../types/rows.js').QueryRunner }} [capabilities]
    * @returns {Promise<number|undefined>} undefined when `name` is null or
    *   btrims to empty (the trigger's blank path — no account)
    */
-  async resolveOrCreateByName(name, { multiCurrencyCash = false } = {}) {
+  async resolveOrCreateByName(
+    name,
+    { multiCurrencyCash = false, client } = {},
+  ) {
     if (name == null) return undefined;
     const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
-    const result = await query(
+    const runQuery = client ? client.query.bind(client) : query;
+    const result = await runQuery(
       `INSERT INTO accounts (name, display_name, multi_currency_cash) VALUES ($1, $1, $2)
        ON CONFLICT (lower(btrim(name))) DO UPDATE
          SET multi_currency_cash = accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash

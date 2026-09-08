@@ -14,10 +14,10 @@
  * of dismiss records lives elsewhere (UI layer owns it).
  */
 
-import { query } from '../database/connection.js';
-import { logger } from '../config/logger.js';
-import { addAll, roundMoney, toDecimal } from '../lib/money.js';
-import { median } from '../lib/math.js';
+import { query } from "../database/connection.js";
+import { logger } from "../config/logger.js";
+import { addAll, roundMoney, toDecimal } from "../lib/money.js";
+import { median } from "../lib/math.js";
 
 // Modified z-score constant (Iglewicz & Hoaglin): scales MAD so the score is
 // comparable to a standard z-score under normality.
@@ -74,11 +74,16 @@ export function __clearCategoryOutlierCacheForTests() {
 function toCalendarParts(value) {
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
-    return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+    return {
+      year: value.getFullYear(),
+      month: value.getMonth() + 1,
+      day: value.getDate(),
+    };
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-    if (m) return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
+    if (m)
+      return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
   }
   return null;
 }
@@ -91,7 +96,7 @@ function toCalendarParts(value) {
  * @returns {string}
  */
 function monthKey(year, month) {
-  return `${year}-${String(month).padStart(2, '0')}`;
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 /**
@@ -128,15 +133,19 @@ function priorMonthKeys(year, month, count) {
  *
  * @param {Array<{ date: Date|string, amount: string|number, category_id: number, category_name: string|null }>} rows
  * @param {Date} today Reference "now" — determines the current month and window size N.
- * @returns {any[]} findings sorted by deviation descending
+ * @param {{ outlierZThreshold?: number, flatBaselineOverspendFloorEur?: number }} [policy]
+ * @returns {Array<{categoryId: number, categoryName: string|null, monthKey: string, comparisonEndDay: number, currentAmount: number, baselineMedian: number, deviation: number, direction: string}>} findings sorted by deviation descending
  */
-function computeOutliers(rows, today) {
+function computeOutliers(rows, today, policy = {}) {
+  const outlierZThreshold = policy.outlierZThreshold ?? OUTLIER_Z_THRESHOLD;
+  const flatBaselineOverspendFloorEur =
+    policy.flatBaselineOverspendFloorEur ?? FLAT_BASELINE_OVERSPEND_FLOOR_EUR;
   const windowDay = today.getDate(); // N: compare day 1..N in every month
   const currentKey = monthKey(today.getFullYear(), today.getMonth() + 1);
   const priorKeys = priorMonthKeys(
     today.getFullYear(),
     today.getMonth() + 1,
-    PRIOR_MONTHS_CONSIDERED
+    PRIOR_MONTHS_CONSIDERED,
   );
   const consideredKeys = new Set([currentKey, ...priorKeys]);
 
@@ -151,7 +160,10 @@ function computeOutliers(rows, today) {
 
     let group = byCategory.get(row.category_id);
     if (!group) {
-      group = { categoryName: row.category_name || 'Unknown', months: new Map() };
+      group = {
+        categoryName: row.category_name || "Unknown",
+        months: new Map(),
+      };
       byCategory.set(row.category_id, group);
     }
     // Expense amounts are negative NUMERIC strings — accumulate as Decimals
@@ -177,7 +189,9 @@ function computeOutliers(rows, today) {
 
     const currentValue = currentSpend.toNumber();
     const baselineMedian = median(priorWindowValues);
-    const mad = median(priorWindowValues.map((v) => Math.abs(v - baselineMedian)));
+    const mad = median(
+      priorWindowValues.map((v) => Math.abs(v - baselineMedian)),
+    );
 
     const diff = currentValue - baselineMedian;
     if (diff <= 0) continue; // only OVERSPEND ("creep") is surfaced
@@ -187,21 +201,22 @@ function computeOutliers(rows, today) {
       // Degenerate (near-flat) baseline: the z-score denominator is
       // meaningless, so require an absolute overspend floor instead, and
       // compute the reported score against the floored MAD to stay finite.
-      if (diff <= FLAT_BASELINE_OVERSPEND_FLOOR_EUR) continue;
+      if (diff <= flatBaselineOverspendFloorEur) continue;
       deviation = (MODIFIED_Z_SCALE * diff) / NEAR_ZERO_MAD_EUR;
     } else {
       deviation = (MODIFIED_Z_SCALE * diff) / mad;
-      if (deviation <= OUTLIER_Z_THRESHOLD) continue;
+      if (deviation <= outlierZThreshold) continue;
     }
 
     findings.push({
       categoryId,
       categoryName: group.categoryName,
       monthKey: currentKey,
+      comparisonEndDay: windowDay,
       currentAmount: roundMoney(currentSpend),
       baselineMedian: roundMoney(baselineMedian),
       deviation: roundMoney(deviation, 2),
-      direction: 'increased',
+      direction: "increased",
     });
   }
 
@@ -225,9 +240,14 @@ function computeOutliers(rows, today) {
  * @param {Date} [now] Injectable clock for tests; defaults to the current time.
  * @returns {any[]} the findings that remain visible
  */
- function filterDismissedFindings(findings, dismissRecords = [], now = new Date()) {
+function filterDismissedFindings(
+  findings,
+  dismissRecords = [],
+  now = new Date(),
+) {
   if (!Array.isArray(findings) || findings.length === 0) return [];
-  if (!Array.isArray(dismissRecords) || dismissRecords.length === 0) return [...findings];
+  if (!Array.isArray(dismissRecords) || dismissRecords.length === 0)
+    return [...findings];
 
   const nowMs = now.getTime();
   // Latest dismissal per {categoryId, monthKey}
@@ -239,7 +259,10 @@ function computeOutliers(rows, today) {
     const key = `${rec.categoryId}:${rec.monthKey}`;
     const prev = latestByKey.get(key);
     if (!prev || dismissedMs > prev.dismissedMs) {
-      latestByKey.set(key, { dismissedMs, deviationAtDismiss: rec.deviationAtDismiss });
+      latestByKey.set(key, {
+        dismissedMs,
+        deviationAtDismiss: rec.deviationAtDismiss,
+      });
     }
   }
 
@@ -285,10 +308,15 @@ async function getRawFindings() {
     `);
 
     const findings = computeOutliers(result.rows, new Date());
-    outlierCache = { value: findings, expiresAt: Date.now() + CATEGORY_OUTLIER_CACHE_TTL_MS };
+    outlierCache = {
+      value: findings,
+      expiresAt: Date.now() + CATEGORY_OUTLIER_CACHE_TTL_MS,
+    };
     return findings;
   } catch (err) {
-    logger.error('Error detecting category spend outliers', { error: err.message });
+    logger.error("Error detecting category spend outliers", {
+      error: err.message,
+    });
     throw err;
   }
 }
@@ -311,3 +339,4 @@ export async function detectCategoryOutliers({ dismissRecords = [] } = {}) {
 }
 
 export { filterDismissedFindings as __filterDismissedFindings };
+export { computeOutliers as __computeOutliers };

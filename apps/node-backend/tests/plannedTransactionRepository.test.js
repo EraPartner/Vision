@@ -117,6 +117,24 @@ describe("plannedTransactionRepository.getAll", () => {
     expect(query.mock.calls[1][1]).toEqual(["%needle%"]);
   });
 
+  it("uses account_id as an exact filter and ignores the fuzzy bank name", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] });
+
+    await plannedTransactionRepository.getAll({
+      accountId: 7,
+      bankAccount: "Cash",
+    });
+
+    for (const [sql] of query.mock.calls) {
+      expect(sql).toContain("pt.account_id = $1");
+      expect(sql).not.toContain("fa.name ILIKE");
+    }
+    expect(query.mock.calls[0][1]).toEqual([7, 50, 0]);
+    expect(query.mock.calls[1][1]).toEqual([7]);
+  });
+
   it("attaches executions and loan schedules when planned rows are returned", async () => {
     query
       .mockResolvedValueOnce({
@@ -283,6 +301,7 @@ describe("plannedTransactionService.create", () => {
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 41 }] })
       .mockResolvedValueOnce({ rows: [{ id: 51 }] })
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({});
@@ -352,10 +371,15 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
+      expect.stringContaining("INSERT INTO accounts"),
+      ["BE12", false],
+    );
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining("INSERT INTO planned_transactions"),
       expect.arrayContaining([
         "2026-05-01",
-        "BE12",
+        41,
         3,
         -100,
         "MORTGAGE",
@@ -366,18 +390,18 @@ describe("plannedTransactionService.create", () => {
       ]),
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.stringContaining("INSERT INTO planned_transaction_loan_schedule"),
       expect.arrayContaining([51, 1, "2026-06-01", 100, 80, 20, 920]),
     );
-    expect(clientQuery).toHaveBeenNthCalledWith(4, "COMMIT");
+    expect(clientQuery).toHaveBeenNthCalledWith(5, "COMMIT");
     expect(release).toHaveBeenCalledTimes(1);
     expect(result).toEqual(
       expect.objectContaining({ id: 51, is_loan: true, execution_count: 0 }),
     );
     // recurrence_pattern (param 11, index 10) is forced to 'monthly' for loans
     // so executeAndAdvance rolls planned_date forward instead of leaving it due.
-    expect(clientQuery.mock.calls[1][1][10]).toBe("monthly");
+    expect(clientQuery.mock.calls[2][1][10]).toBe("monthly");
   });
 
   it("rolls back and rethrows when loan schedule insert fails", async () => {
@@ -385,6 +409,7 @@ describe("plannedTransactionService.create", () => {
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 41 }] })
       .mockResolvedValueOnce({ rows: [{ id: 88 }] })
       .mockRejectedValueOnce(scheduleError)
       .mockResolvedValueOnce({});
@@ -418,15 +443,20 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
+      expect.stringContaining("INSERT INTO accounts"),
+      ["BE12", false],
+    );
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining("INSERT INTO planned_transactions"),
       expect.any(Array),
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.stringContaining("INSERT INTO planned_transaction_loan_schedule"),
       expect.any(Array),
     );
-    expect(clientQuery).toHaveBeenNthCalledWith(4, "ROLLBACK");
+    expect(clientQuery).toHaveBeenNthCalledWith(5, "ROLLBACK");
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -434,6 +464,7 @@ describe("plannedTransactionService.create", () => {
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 42 }] })
       .mockResolvedValueOnce({ rows: [{ id: 52 }] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
@@ -469,14 +500,19 @@ describe("plannedTransactionService.create", () => {
       loan_schedule: [],
     });
 
-    expect(clientQuery).toHaveBeenCalledTimes(3);
+    expect(clientQuery).toHaveBeenCalledTimes(4);
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("INSERT INTO planned_transactions"),
-      expect.arrayContaining(["BE56", "SALARY", "EUR", true, "monthly", false]),
+      expect.stringContaining("INSERT INTO accounts"),
+      ["BE56", false],
     );
-    expect(clientQuery).toHaveBeenNthCalledWith(3, "COMMIT");
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("INSERT INTO planned_transactions"),
+      expect.arrayContaining([42, "SALARY", "EUR", true, "monthly", false]),
+    );
+    expect(clientQuery).toHaveBeenNthCalledWith(4, "COMMIT");
     expect(
       clientQuery.mock.calls.some(([sql]) =>
         String(sql).includes("planned_transaction_loan_schedule"),
@@ -500,6 +536,13 @@ describe("plannedTransactionService.update", () => {
   });
 
   it("returns getById(id) when sanitized update fields are empty", async () => {
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 33 }], rowCount: 1 })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
     query
       .mockResolvedValueOnce({
         rows: [
@@ -531,25 +574,45 @@ describe("plannedTransactionService.update", () => {
       expect.stringContaining("WHERE pt.id = $1"),
       [33],
     );
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      2,
+      "SELECT id FROM planned_transactions WHERE id = $1",
+      [33],
+    );
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
   it("returns null when update affects zero rows", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
 
     const result = await plannedTransactionRepository.update(999, {
       memo: "updated",
     });
 
     expect(result).toBeNull();
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining("WITH updated AS"),
+    expect(query).not.toHaveBeenCalled();
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("UPDATE planned_transactions"),
       ["updated", 999],
     );
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
   it("returns updated loan row with executions and schedule", async () => {
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 70 }], rowCount: 1 })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
     query
       .mockResolvedValueOnce({
         rows: [
@@ -589,9 +652,9 @@ describe("plannedTransactionService.update", () => {
     });
 
     expect(query).toHaveBeenCalledTimes(4);
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining("WITH updated AS"),
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("UPDATE planned_transactions"),
       ["updated memo", 70],
     );
     expect(result).toEqual(
@@ -602,6 +665,7 @@ describe("plannedTransactionService.update", () => {
       }),
     );
     expect(result.loan_schedule).toHaveLength(1);
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });
 

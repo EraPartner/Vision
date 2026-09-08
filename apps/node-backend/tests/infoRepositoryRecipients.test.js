@@ -218,6 +218,28 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     }
     expect(topParams).toEqual([5, 7]);
   });
+
+  it("applies explicit date bounds to both recipient-insight scans", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ current_period: "2026-09", prev_period: "2026-08" }],
+      });
+    convertRowsToEur.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientInsights("EUR", {
+      excludedRecipientIds: [9],
+      startDate: "2024-10-01",
+      endDate: "2026-09-07",
+    });
+
+    for (const [sql, params] of query.mock.calls.slice(0, 2)) {
+      expect(sql).toContain("t.date >= $2");
+      expect(sql).toContain("t.date <= $3");
+      expect(params).toEqual([9, "2024-10-01", "2026-09-07"]);
+    }
+  });
 });
 
 describe("recipientInsightsRepository.getRecipientByYear", () => {
@@ -305,6 +327,23 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
     );
     expect(params).toEqual([5, 7]);
   });
+
+  it("binds explicit date bounds after exclusion ids", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientByYear({
+      targetCurrency: "EUR",
+      excludedRecipientIds: [9],
+      startDate: "2024-10-01",
+      endDate: "2026-09-07",
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("t.date >= $2");
+    expect(sql).toContain("t.date <= $3");
+    expect(params).toEqual([9, "2024-10-01", "2026-09-07"]);
+  });
 });
 
 describe("recipientInsightsRepository.getRecipientPivot", () => {
@@ -365,7 +404,13 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
         targetCurrency: "EUR",
         recipientIds: [2147483646],
       }),
-    ).resolves.toEqual({ recipientPivot: {} });
+    ).resolves.toEqual({
+      recipientPivot: {},
+      conversion: {
+        usedHistoricalFallback: false,
+        affectedCurrencies: [],
+      },
+    });
 
     expect(query).toHaveBeenCalledTimes(1);
     expect(convertRowsToEur).not.toHaveBeenCalled();
@@ -443,6 +488,50 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
       { recipientId: 2, name: "B", total: 50, transactionCount: 1 },
       { recipientId: 1, name: "A", total: 125, transactionCount: 2 },
     ]);
+    expect(r.conversion).toEqual({
+      usedHistoricalFallback: false,
+      affectedCurrencies: [],
+    });
+  });
+
+  it("surfaces affected currencies when historical conversion falls back", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([
+      {
+        period: "2025-04",
+        recipient_id: 1,
+        recipient_name: "A",
+        amount_eur: -100,
+        cnt: 1,
+        currency: "usd",
+        used_fallback_rate: true,
+      },
+      {
+        period: "2025-04",
+        recipient_id: 2,
+        recipient_name: "B",
+        amount_eur: -50,
+        cnt: 1,
+        currency: "GBP",
+        used_fallback_rate: true,
+      },
+      {
+        period: "2025-04",
+        recipient_id: 3,
+        recipient_name: "C",
+        amount_eur: -25,
+        cnt: 1,
+        currency: "USD",
+      },
+    ]);
+
+    const result = await recipientInsightsRepository.getRecipientPivot();
+
+    expect(result.conversion).toEqual({
+      usedHistoricalFallback: true,
+      affectedCurrencies: ["GBP", "USD"],
+    });
+    expect(result.recipientPivot["2025-04"]).toHaveLength(3);
   });
 
   it("combines exclusion ids and date filter param numbering", async () => {

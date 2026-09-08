@@ -6,8 +6,9 @@
 -- Lossless: accounts.name was backfilled from these same strings, so the values
 -- re-derive exactly. Column/index shape mirrors alembic/versions/0056; the
 -- trigger function body mirrors the HEAD variant (migration 0083). Run this
--- only to undo a premature up.sql. Reverting the coupled code first is not
--- required (it is safe to run with either code version: it restores the string).
+-- only to undo a premature up.sql. Keep writers stopped until the legacy
+-- dual-write application build has also been restored: contract-phase code
+-- deliberately does not maintain these compatibility strings.
 
 BEGIN;
 

@@ -15,8 +15,8 @@ bun run dev
 ```
 
 This starts Vision's private PostgreSQL 18.6 development cluster, the backend in watch mode, and
-Vite. It does not require Docker or a running Homebrew PostgreSQL service. The native preparation
-step needs PostgreSQL 18.6 build files, the pinned Python migration build environment, and the
+Vite. It does not require a running Homebrew PostgreSQL service. The native preparation step needs
+PostgreSQL 18.6 build files, the pinned Python migration build environment, and the
 pinned Chrome Headless Shell download. See
 [`docs/guides/native-macos-runtime.md`](../../docs/guides/native-macos-runtime.md).
 
@@ -36,7 +36,7 @@ boundary.
 Backend source development uses the environment layering defined in ADR-080:
 
 1. `apps/node-backend/.env.local` for local connection and port overrides;
-2. the repository `.env` for shared provider keys and optional Docker settings; and
+2. the repository `.env` for shared provider keys and optional manual backend settings; and
 3. real process environment values, which take precedence.
 
 Packaged native Vision does not depend on these checkout files. Electron generates a restricted
@@ -55,8 +55,8 @@ guarded JavaScript runner because it preflights `alembic_version.version_num` as
 bun run db:upgrade
 ```
 
-Do not use bare `alembic upgrade`, stamp, reset, or downgrade against live data. Native startup and
-Docker startup both invoke the same underlying migration runner automatically.
+Do not use bare `alembic upgrade`, stamp, reset, or downgrade against live data. Native startup
+invokes the same underlying migration runner automatically.
 
 ## Focused checks
 
@@ -69,8 +69,8 @@ bun vitest run src/path/to/test.test.js
 bun vitest run --test-name-pattern="name"
 ```
 
-Database-backed tests use the repository's disposable PostgreSQL 18 harness. It prefers installed
-native tools and does not start the Homebrew service; Docker remains an optional fallback:
+Database-backed tests use the repository's disposable PostgreSQL 18 harness. It requires installed
+PostgreSQL 18 tools and does not start the Homebrew service:
 
 ```bash
 bun run test:db

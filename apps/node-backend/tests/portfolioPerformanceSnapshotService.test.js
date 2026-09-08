@@ -446,6 +446,114 @@ describe("portfolioPerformanceSnapshotService", () => {
     expect(snapshots[1].value).toBe(100); // units unchanged → value unchanged
   });
 
+  it("keeps every sleeve and aggregate stable across mixed portfolio events", async () => {
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: "EUR", current_price: 12, asset_class: "stock" },
+        { id: 2, currency: "EUR", current_price: 6, asset_class: "etf" },
+        { id: 3, currency: "EUR", current_price: 25, asset_class: "crypto" },
+        { id: 4, currency: "EUR", current_price: 50, asset_class: "metals" },
+      ],
+      transactions: [
+        {
+          investment_id: 1,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 100,
+          units: 10,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 2,
+          day: "2026-01-01",
+          type: "gift",
+          amount: 40,
+          units: 4,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 3,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 60,
+          units: 3,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 4,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 80,
+          units: 2,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 1,
+          day: "2026-01-02",
+          type: "sell",
+          amount: 50,
+          units: 5,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 2,
+          day: "2026-01-02",
+          type: "split",
+          amount: 0,
+          units: 8,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+        {
+          investment_id: 3,
+          day: "2026-01-02",
+          type: "return_of_capital",
+          amount: 10,
+          units: 0,
+          currency: "EUR",
+          fx_rate_to_eur: null,
+        },
+      ],
+      prices: [
+        { investment_id: 1, day: "2026-01-01", close_price: 10 },
+        { investment_id: 2, day: "2026-01-01", close_price: 10 },
+        { investment_id: 3, day: "2026-01-01", close_price: 20 },
+        { investment_id: 4, day: "2026-01-01", close_price: 40 },
+        { investment_id: 1, day: "2026-01-02", close_price: 12 },
+        { investment_id: 2, day: "2026-01-02", close_price: 6 },
+        { investment_id: 3, day: "2026-01-02", close_price: 25 },
+        { investment_id: 4, day: "2026-01-02", close_price: 50 },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots("EUR");
+    expect(snapshots[0]).toMatchObject({
+      invested: 280,
+      value: 280,
+      stocks_etfs_invested: 140,
+      stocks_etfs_value: 140,
+      crypto_invested: 60,
+      crypto_value: 60,
+      metals_invested: 80,
+      metals_value: 80,
+    });
+    expect(snapshots[1]).toMatchObject({
+      invested: 220,
+      value: 283,
+      stocks_etfs_invested: 90,
+      stocks_etfs_value: 108,
+      crypto_invested: 50,
+      crypto_value: 75,
+      metals_invested: 80,
+      metals_value: 100,
+    });
+  });
+
   it("reduces non-unit (bond) invested and value on return_of_capital", async () => {
     // Non-unit classes hold no units, so the heldUnits gate never fired and
     // return_of_capital was ignored — invested/value overstated forever.

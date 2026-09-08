@@ -3,7 +3,7 @@
 
 Why this exists
 ---------------
-Native and Docker backend startup run Vision's guarded migration runner before accepting requests,
+Native backend startup runs Vision's guarded migration runner before accepting requests,
 so anything landing in `alembic/versions/` reaches every installation on its next start -- before,
 or without, the app code that depends on the change. That already broke production once:
 `0055_drop_bank_account_string` dropped columns + a trigger + a matview ahead of its coupled code

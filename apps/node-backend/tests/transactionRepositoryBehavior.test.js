@@ -376,8 +376,12 @@ describe("getById", () => {
 });
 
 describe("create", () => {
-  it("uppercases bank_account/memo/currency and uses queryPrepared without tags", async () => {
-    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 3 }] });
+  it("resolves bank_account to account_id and normalizes memo/currency", async () => {
+    const client = { query: vi.fn() };
+    client.query
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 3 }] });
+    withTransaction.mockImplementation(async (fn) => fn(client));
     query.mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.create({
       transaction_date: "2024-05-01",
@@ -391,14 +395,20 @@ describe("create", () => {
       comment: "c",
     });
     expect(row.id).toBe(3);
-    const params = queryPrepared.mock.calls[0][2];
-    expect(params[1]).toBe("KBC");
+    expect(client.query.mock.calls[0][1]).toEqual(["KBC", false]);
+    const [sql, params] = client.query.mock.calls[1];
+    expect(sql).toContain("INSERT INTO transactions (date, account_id");
+    expect(sql).not.toContain("date, bank_account");
+    expect(params[1]).toBe(7);
     expect(params[4]).toBe("COFFEE");
     expect(params[5]).toBe("USD");
   });
 
-  it("defaults currency to EUR and nulls bank/memo when absent", async () => {
-    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 4 }] });
+  it("defaults currency to EUR and nulls account/memo when absent", async () => {
+    const client = {
+      query: vi.fn().mockResolvedValueOnce({ rows: [{ id: 4 }] }),
+    };
+    withTransaction.mockImplementation(async (fn) => fn(client));
     query.mockResolvedValueOnce({ rows: [] });
     await transactionRepository.create({
       transaction_date: "2024-05-01",
@@ -408,8 +418,8 @@ describe("create", () => {
       category_id: null,
       comment: null,
     });
-    const params = queryPrepared.mock.calls[0][2];
-    expect(params[1]).toBeNull(); // bank_account
+    const params = client.query.mock.calls[0][1];
+    expect(params[1]).toBeNull(); // account_id
     expect(params[4]).toBeNull(); // memo
     expect(params[5]).toBe("EUR");
   });
@@ -418,6 +428,9 @@ describe("create", () => {
     const client = { query: vi.fn() };
     // CTE insert -> inserted row
     client.query.mockImplementation(async (sql) => {
+      if (typeof sql === "string" && sql.includes("INSERT INTO accounts")) {
+        return { rows: [{ id: 7 }] };
+      }
       if (typeof sql === "string" && sql.includes("INSERT INTO transactions")) {
         return { rows: [{ id: 50 }] };
       }
@@ -467,16 +480,23 @@ describe("create", () => {
 });
 
 describe("update", () => {
+  beforeEach(() => {
+    withTransaction.mockImplementation(async (fn) => fn({ query }));
+  });
+
   it("falls back to getById when there are no writable fields and no tags", async () => {
-    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 1 }] }); // getById
-    query.mockResolvedValueOnce({ rows: [] }); // tag lookup
+    query
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }) // existence
+      .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // hydrated fetch
+      .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.update(1, {});
     expect(row.id).toBe(1);
   });
 
   it("maps transaction_date to date and returns enriched row", async () => {
     query
-      .mockResolvedValueOnce({ rows: [{ id: 2, recipient_name: "r" }] }) // update CTE
+      .mockResolvedValueOnce({ rows: [{ id: 2 }] }) // update
+      .mockResolvedValueOnce({ rows: [{ id: 2, recipient_name: "r" }] }) // fetch
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.update(2, {
       transaction_date: "2024-06-01",

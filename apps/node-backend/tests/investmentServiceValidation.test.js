@@ -41,7 +41,7 @@ import {
   createInvestment,
   updateInvestment,
   __parseDefaultListOptions as parseDefaultListOptions,
-} from "../src/controllers/investmentController.js";
+} from "../src/services/investmentService.js";
 import { ValidationError } from "../src/middleware/errorHandler.js";
 
 function mockRes() {

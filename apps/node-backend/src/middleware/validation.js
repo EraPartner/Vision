@@ -6,10 +6,10 @@
  * the canonical library module directly.
  */
 
-import { validateId } from '../lib/validation.js';
-import { ValidationError } from './errorHandler.js';
+import { validateId } from "../lib/validation.js";
+import { ValidationError } from "./errorHandler.js";
 
-export * from '../lib/validation.js';
+export * from "../lib/validation.js";
 
 /**
  * Validate a route parameter again at its point of use and return its numeric
@@ -18,7 +18,7 @@ export * from '../lib/validation.js';
  * @param {string} [name]
  * @returns {number}
  */
-export function assertIdParam(req, name = 'id') {
+export function assertIdParam(req, name = "id") {
   const result = validateId(req.params[name], name);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
@@ -33,7 +33,6 @@ export function validateIdParam(req, _res, next) {
   if (req.params.id) {
     const result = validateId(req.params.id);
     if (!result.valid) return next(new ValidationError(result.error));
-    req.params.id = /** @type {string} */ (/** @type {unknown} */ (result.value));
   }
   next();
 }
@@ -46,7 +45,6 @@ export function validateIntParam(name) {
   return (req, _res, next) => {
     const result = validateId(req.params[name], name);
     if (!result.valid) return next(new ValidationError(result.error));
-    req.params[name] = /** @type {string} */ (/** @type {unknown} */ (result.value));
     next();
   };
 }

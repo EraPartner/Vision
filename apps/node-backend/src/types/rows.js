@@ -71,7 +71,7 @@
  * @property {string|null} balance NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094).
  * @property {string|null} memo
  * @property {string|null} comment
- * @property {string|null} bank_account Denormalised account label; being retired in favour of `account_id` (ADR-088).
+ * @property {string|null} [bank_account] Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation.
  * @property {number|null} [account_id] FK → accounts (migration 0050).
  * @property {number|null} recipient_id
  * @property {number|null} recipient_bank_account_id
@@ -141,7 +141,7 @@
  * @property {string|null} memo
  * @property {string|null} comment
  * @property {string|null} url
- * @property {string|null} bank_account
+ * @property {string|null} [bank_account] Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation.
  * @property {number|null} [account_id]
  * @property {number|null} recipient_id
  * @property {number|null} category_id
@@ -555,7 +555,7 @@
  * @property {number|null} fx_rate_to_eur Coerced from NUMERIC(20,10).
  * @property {string|null} note
  * @property {boolean} is_recurring
- * @property {string|null} recurrence_interval `recurrence_interval` enum.
+ * @property {string|null} recurrence_interval Canonical checked recurrence cadence.
  * @property {string|null} recurrence_end_date 'YYYY-MM-DD'
  * @property {number|null} [account_id] Owning account for the lot (ADR-091).
  * @property {string|null} [import_batch_id] The portfolio import batch that created

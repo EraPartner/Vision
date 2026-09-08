@@ -3,13 +3,12 @@
  *
  * Update strategy (packaged desktop app):
  *   - Electron shell updates: handled by the Electron wrapper (manual unsigned ZIP install)
- *   - Docker image updates: Electron calls `docker compose pull` + `docker compose up -d`
- *   - Alembic migrations: run automatically via docker-entrypoint.sh on every container start
+ *   - Alembic migrations: run automatically during native backend startup
  *
  * The git-pull based update approach has been removed. The Node backend running
- * inside the Docker container has no git repo, so those endpoints were only
- * applicable to bare self-hosted installs (which can still use git manually).
- * This endpoint is focused on backend/container update metadata.
+ * in a packaged application has no git repository, so those endpoints were only
+ * applicable to source checkouts (which can still use git manually). This
+ * endpoint is focused on release metadata.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
@@ -58,7 +57,7 @@ const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITH
 
 // Update mode reported to HTTP clients. See buildUpdateCheckPayload for why this
 // is a constant rather than something detected per-request.
-const UPDATE_MODE_DOCKER_COMPOSE = "docker-compose";
+const UPDATE_MODE_SOURCE = "source";
 
 /**
  * Fetch the latest GitHub Release metadata.
@@ -115,7 +114,7 @@ function hasValidReleaseTag(release) {
 }
 
 function detectCurrentAppVersion() {
-  return env.APP_VERSION || env.APP_IMAGE_TAG || "unknown";
+  return env.APP_VERSION || "unknown";
 }
 
 /**
@@ -138,12 +137,9 @@ function buildUpdateCheckPayload(release, currentVersion) {
       // Anything reaching this HTTP route is a non-Electron client: inside the
       // desktop shell the frontend short-circuits to the electronUpdater IPC
       // (apps/frontend/src/lib/api/electron.ts → checkForUpdates), which
-      // supplies its own 'source'/'docker'/'dev' mode. So the only consumer
-      // here is a self-hosted docker-compose (or bare web) deployment, which
-      // updates from the command line — never via an in-app installer. Without
-      // this field the frontend defaulted to 'source' and offered an Install
-      // button that no-oped outside Electron.
-      update_mode: UPDATE_MODE_DOCKER_COMPOSE,
+      // supplies its own native/dev mode. HTTP clients are source deployments
+      // and update from their host environment rather than an in-app installer.
+      update_mode: UPDATE_MODE_SOURCE,
     },
     latestVersion,
     upToDate,
@@ -248,7 +244,7 @@ router.get(
         current_version: currentVersion,
         error: "No published releases found",
         latest_version: null,
-        update_mode: UPDATE_MODE_DOCKER_COMPOSE,
+        update_mode: UPDATE_MODE_SOURCE,
       });
       return;
     }
@@ -430,7 +426,7 @@ router.get(
     // addendum); readRows rejects it with a 400 pointing at filters[].
     const result = await readRows(req.params.table, {
       limit: req.query.limit,
-      offset: req.query.offset,
+      cursor: req.query.cursor,
       orderBy: req.query.orderBy,
       dir: req.query.dir,
       where: req.query.where,

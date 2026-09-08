@@ -323,7 +323,7 @@ if (settings.aiChat?.enabled) {
 buildRouteManifest(app);
 
 // ==================== Static Frontend (Production) ====================
-// Serve the built React app when running in production (Docker/standalone)
+// Serve the built React app when running in production.
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
   const distPath = process.env.VISION_DIST_DIR
@@ -447,14 +447,13 @@ async function start() {
     // destructive routes) is reachable by anyone who can reach the port, with
     // no per-request check. Refuse to start rather than rely on a log line —
     // unless the operator explicitly acknowledges an outer restriction
-    // (ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, set by the documented compose flow
-    // where the container binds 0.0.0.0 but the port is published on host
-    // loopback only).
+    // (ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, set only when a reverse proxy or host
+    // firewall provides an equivalent outer access-control boundary).
     if (!isLoopbackHost(HOST) && !settings.admin.allowTokenlessNonLoopback) {
       logger.error(
         `Refusing to start: bind address '${HOST}' is not loopback and ADMIN_AUTH_TOKEN is not set. ` +
           "Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an " +
-          "outer layer already restricts access (e.g. Docker publishing the port on host loopback) — " +
+          "outer layer already restricts access (for example, a reverse proxy or host firewall) — " +
           "set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.",
       );
       process.exit(1);
@@ -471,9 +470,8 @@ async function start() {
   try {
     // Least-privilege role bootstrap — MUST run before the pool poll below:
     // in the three-variable setup DATABASE_URL points at the non-superuser app
-    // role, which does not exist yet on an already-initialised database (the
-    // docker/postgres-init script only runs on first volume init). Connects
-    // once as the privileged DATABASE_URL_MIGRATIONS role, creates the app
+    // role, which may not exist yet on an already-initialised database. Connect
+    // once as the privileged DATABASE_URL_MIGRATIONS role, create the app
     // role if missing and (re)applies the shared grant set. No-op in the
     // classic single-role setup; warn-not-crash on every failure path.
     const endRoleBootstrap = bootMark("role_bootstrap");
@@ -483,11 +481,9 @@ async function start() {
     });
     endRoleBootstrap();
 
-    // Wait for PostgreSQL to be fully ready.
-    // With depends_on removed from docker-compose, both containers start in
-    // parallel. On a cold first-ever start postgres can take up to ~30s to
-    // initialise its data directory, so we give it 40 attempts with exponential
-    // backoff (max 1s). On warm starts postgres is up in <100ms.
+    // Wait for PostgreSQL to be fully ready. On a cold first-ever native start,
+    // PostgreSQL can take up to ~30s to initialise its data directory, so give
+    // it 40 attempts with exponential backoff (max 1s). Warm starts are faster.
     let dbReady = false;
     let attemptCount = 0;
     const maxAttempts = 40;
@@ -644,8 +640,8 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 // Last-resort handlers. Node terminates the process on an unhandled rejection
 // or uncaught exception anyway — but with no structured log line, so under a
-// supervisor (Docker `restart: unless-stopped`, Electron) the only visible
-// symptom is a container that silently bounced. Log with stack + requestId
+// supervisor (such as Electron) the only visible symptom may be a process that
+// silently restarted. Log with stack + requestId
 // (when the error carries one) so the crash leaves a trace, then exit non-zero
 // to hand control back to the supervisor for a clean restart. Many of the
 // fire-and-forget chains here (warmup, deferred refresh, SSE) are exactly where

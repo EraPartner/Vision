@@ -160,7 +160,7 @@ describe("account merge atomicity (ADR-088)", () => {
     );
 
     const sqls = expectRolledBackOnOneConnection(client, pool);
-    // All four repoints were issued by repositories, inside this transaction —
+    // All repoints were issued by repositories, inside this transaction —
     // so the ROLLBACK above undoes every one of them.
     expect(
       sqls.some((s) => s.includes("UPDATE transactions SET account_id")),
@@ -178,12 +178,13 @@ describe("account merge atomicity (ADR-088)", () => {
     expect(
       sqls.some((s) => s.includes("UPDATE accounts SET funding_account_id")),
     ).toBe(true);
-    // The graph-wide protocol lock and survivor row lock were taken on the same
-    // connection, in that order, before any repoint.
+    // The graph-wide protocol lock, pending-import lock, and survivor row lock
+    // were taken on the same connection, in that order, before any repoint.
     expect(sqls[1]).toContain("pg_advisory_xact_lock");
+    expect(sqls[2]).toContain("portfolio_import_batches");
     expect(
       sqls.indexOf("SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE"),
-    ).toBe(2);
+    ).toBe(3);
   });
 });
 

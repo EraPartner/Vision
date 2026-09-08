@@ -241,8 +241,12 @@ describe("DeduplicationService", () => {
         existingTransactionId: null,
       });
       expect(query.mock.calls[1][0]).toContain(
-        "COALESCE(UPPER(bank_account), '') = $5",
+        "LEFT JOIN accounts acct ON acct.id = t.account_id",
       );
+      expect(query.mock.calls[1][0]).toContain(
+        "COALESCE(UPPER(acct.name), '') = $5",
+      );
+      expect(query.mock.calls[1][0]).not.toMatch(/UPPER\(bank_account\)/);
       expect(query.mock.calls[1][1]).toEqual([
         "2026-02-10",
         -50,

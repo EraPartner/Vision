@@ -8,12 +8,19 @@ data-bearing rollback copy. This operation removes those copies after the conver
 Fresh flat installations have no such relations and the script is an explicit no-op. A partial or
 wrong-kind residue set aborts before any `CASCADE`.
 
+There is no global cleanup date. The 30-day clock starts when the exact installation first runs the
+stable release containing migration 0087. Do not run this cleanup until migration 0087 has passed its
+PostgreSQL 18 legacy-fixture upgrade/parity/downgrade gate and the installation has completed 30
+consecutive incident-free days. A conversion-related repair, rollback, or portfolio-integrity incident
+restarts that soak. The cleanup stays manual and will not be promoted into the auto-applied chain.
+
 ## Preconditions
 
 1. Stop every Vision writer.
 2. Confirm the database is at or beyond `0087_flat_investments_conversion`.
 3. Create a fresh logical database backup and verify that it can be listed and restored into a
-   disposable database. The legacy relations are deliberately outside `BACKUP_COVERED_TABLES`
+   disposable PostgreSQL 18 database. Run portfolio reads and one disposable write/rollback smoke on
+   that restored database. The legacy relations are deliberately outside `BACKUP_COVERED_TABLES`
    because they are not part of the head application schema; a full `pg_dump` still captures them.
 4. Confirm the canonical flat tables exist as ordinary tables and their row counts match the
    application before cleanup.

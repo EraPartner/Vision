@@ -100,6 +100,28 @@ describe("detectRecurringPatterns", () => {
     expect(Array.isArray(result.patterns[0].amountChanges)).toBe(true);
   });
 
+  it("compares a price change with the immediately preceding charge", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          gymRow(1, "2026-01-01", "-10.00"),
+          gymRow(2, "2026-02-01", "-30.00"),
+          gymRow(3, "2026-03-01", "-20.00"),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ exists: true }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await detectRecurringPatterns();
+
+    expect(result.patterns[0].amountChanges.at(-1)).toMatchObject({
+      previousAmount: 30,
+      newAmount: 20,
+      percentChange: -33.33,
+      direction: "decreased",
+    });
+  });
+
   it("partitions income and expense flows from the same recipient", async () => {
     // Bucketing by recipient alone blended a €2000 monthly salary with €50
     // monthly payments into one nonsensical averaged pattern.

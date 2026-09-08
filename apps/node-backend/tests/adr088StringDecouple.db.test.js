@@ -217,9 +217,8 @@ describeDb(
         );
         expect(updated.bank_account).toBe("KBC Current");
 
-        // create() still dual-writes the (uppercased) string; the trigger
-        // resolves it case-insensitively onto the existing account and the READ
-        // surfaces the canonical casing.
+        // Contract-phase create resolves the compatibility label directly to
+        // account_id; the pre-drop column is intentionally no longer written.
         const created = await plannedTransactionRepository.create({
           planned_date: "2026-03-01",
           bank_account: "kbc current",
@@ -234,7 +233,7 @@ describeDb(
           "SELECT bank_account FROM planned_transactions WHERE id = $1",
           [created.id],
         );
-        expect(rows[0].bank_account).toBe("KBC CURRENT"); // dual-write string, pre-drop
+        expect(rows[0].bank_account).toBeNull();
       });
     });
 
@@ -257,7 +256,9 @@ describeDb(
            FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
           [fx.txnKbc],
         );
-        expect(rows[0].bank_account).toBe("Brand New Label"); // dual-write string
+        // The pre-drop compatibility column is left untouched. Runtime reads
+        // follow the newly resolved FK and the lockstep drop removes the string.
+        expect(rows[0].bank_account).toBe("KBC CURRENT");
         expect(rows[0].name).toBe("Brand New Label"); // FK moved to the minted account
 
         // Reads see the edit — and the label is findable.
@@ -281,14 +282,6 @@ describeDb(
         });
         expect(updated.account_id).toBe(fx["Wise USD"]);
         expect(updated.bank_account).toBe("Wise USD"); // canonical casing on read
-      });
-
-      it("transaction PATCH blanking the label detaches the FK", async () => {
-        const updated = await transactionRepository.update(fx.txnKbc, {
-          bank_account: null,
-        });
-        expect(updated.account_id).toBeNull();
-        expect(updated.bank_account).toBeNull();
       });
 
       it("planned PATCH (update and updateWithLoanSchedule) resolves first-seen labels onto the FK", async () => {

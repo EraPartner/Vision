@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const repository = vi.hoisted(() => ({
+  listDismissals: vi.fn(),
+  getCountState: vi.fn(),
+  saveCountIfVersion: vi.fn(),
+}));
+
+vi.mock("../src/repositories/insightDismissalRepository.js", () => ({
+  default: repository,
+}));
+
 vi.mock("../src/services/subscriptionCreepService.js", () => ({
   detectSubscriptionCreep: vi.fn(),
 }));
@@ -16,9 +26,17 @@ import { detectSubscriptionCreep } from "../src/services/subscriptionCreepServic
 import { detectCategoryOutliers } from "../src/services/categoryOutlierService.js";
 import { getCashForecastInsight } from "../src/services/cashForecastInsightService.js";
 import { insightsDigest } from "../src/services/aiChat/tools/insights.js";
-import { __TOOLS as TOOLS, getToolSchemas } from "../src/services/aiChat/tools/index.js";
+import {
+  __TOOLS as TOOLS,
+  getToolSchemas,
+} from "../src/services/aiChat/tools/index.js";
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  repository.listDismissals.mockResolvedValue([]);
+  repository.getCountState.mockResolvedValue({ dirty_version: 1 });
+  repository.saveCountIfVersion.mockResolvedValue({});
+});
 
 function newSubscriptionFinding(overrides = {}) {
   return {
@@ -67,11 +85,9 @@ function cashForecastFinding(overrides = {}) {
   return {
     month: "2026-07",
     currency: "EUR",
-    monthEndProjected: 1250.4,
-    minProjected: 320.1,
-    monthEndLow: 900.2,
-    monthEndHigh: 1800.7,
-    crossesZero: false,
+    monthEndNetCashflow: 1250.4,
+    monthEndNetCashflowLow: 900.2,
+    monthEndNetCashflowHigh: 1800.7,
     movedSignificantly: false,
     prominence: "standing",
     methodId: "monte_carlo_parametric",
@@ -108,7 +124,7 @@ describe("insightsDigest", () => {
     });
   });
 
-  it("passes no dismiss records and no previous projection to the services (v1)", async () => {
+  it("passes the server dismissal inputs to both detectors", async () => {
     detectSubscriptionCreep.mockResolvedValueOnce({
       new: [],
       priceChanges: [],
@@ -118,8 +134,12 @@ describe("insightsDigest", () => {
 
     await insightsDigest.run({});
 
-    expect(detectSubscriptionCreep).toHaveBeenCalledWith();
-    expect(detectCategoryOutliers).toHaveBeenCalledWith();
+    expect(detectSubscriptionCreep).toHaveBeenCalledWith({
+      dismissRecords: [],
+    });
+    expect(detectCategoryOutliers).toHaveBeenCalledWith({
+      dismissRecords: [],
+    });
     expect(getCashForecastInsight).toHaveBeenCalledWith();
   });
 
@@ -204,5 +224,6 @@ describe("insightsDigest", () => {
       properties: {},
     });
     expect(schema.function.description).toBe(insightsDigest.description);
+    expect(schema.function.description).toContain("not an account balance");
   });
 });

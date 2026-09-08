@@ -489,6 +489,7 @@ router.get(
       start_date,
       end_date,
       bank_account,
+      account_id,
       category_id,
       recipient_id,
       is_recurring,
@@ -504,6 +505,7 @@ router.get(
       startDate: assertYmd(start_date, "start_date"),
       endDate: assertYmd(end_date, "end_date"),
       bankAccount: bank_account || undefined,
+      accountId: assertOptionalId(account_id, "account_id"),
       // Same strict id parse as the transactions list endpoint — absent/empty
       // means "no filter" (undefined, 200), malformed is a 400. These were bare
       // `x ? parseInt(x) : null`, which takes the leading digits of anything, so

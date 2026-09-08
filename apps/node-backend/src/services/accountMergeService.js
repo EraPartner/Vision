@@ -7,10 +7,6 @@
  * repoint-then-delete. The account_id FKs are ON DELETE RESTRICT, so deletion only
  * succeeds once every reference has moved — which is exactly the integrity guarantee.
  *
- * transactions / planned_transactions also get bank_account = target.name so the
- * dual-write trigger (migration 0051) keeps account_id at the target and a later edit
- * can't re-resolve the old name back into a fresh account (un-merge).
- *
  * Overlapping-stamp guard (§1 F2): per-row `balance` stamps are per-source-bank
  * running balances. When two accounts that were BOTH being stamped over the same
  * period merge, the stamps interleave in one partition and the anchor+delta
@@ -47,6 +43,7 @@ import { accountRepository } from "../repositories/accountRepository.js";
 import { transactionRepository } from "../repositories/transactionRepository.js";
 import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";
 import { portfolioTransactionRepository } from "../repositories/portfolioTransactionRepository.js";
+import * as portfolioImportBatchRepository from "../repositories/portfolioImportBatchRepository.js";
 
 export const MAX_ACCOUNT_MERGE_SOURCES = 500;
 
@@ -190,10 +187,14 @@ export async function mergeAccounts(targetId, sourceIds) {
     // the survivor chain when validation started.
     await accountRepository.lockFundingGraphForMutation();
 
+    // Portfolio import commit locks its batch before inserting a lot, whose
+    // account FK then locks the account row. Match that batch -> account order
+    // here so concurrent commit and merge serialize instead of deadlocking.
+    await portfolioImportBatchRepository.lockForAccountMerge(ids);
+
     // Lock the survivor + sources so concurrent merges serialize.
     const tgt = await accountRepository.lockByIdForMerge(targetId);
     if (!tgt) throw new NotFoundError(`Account ${targetId} not found`);
-    const targetName = tgt.name;
 
     const srcRows = await accountRepository.lockByIdsForMerge(ids);
     const found = new Set(srcRows.map((r) => r.id));
@@ -232,14 +233,9 @@ export async function mergeAccounts(targetId, sourceIds) {
       );
     }
 
-    const txCount = await transactionRepository.repointAccount(
-      targetId,
-      targetName,
-      ids,
-    );
+    const txCount = await transactionRepository.repointAccount(targetId, ids);
     const plannedCount = await plannedTransactionRepository.repointAccount(
       targetId,
-      targetName,
       ids,
     );
 
@@ -249,6 +245,12 @@ export async function mergeAccounts(targetId, sourceIds) {
       targetId,
       ids,
     );
+
+    // Preserve the reviewed broker destination for batches that have not been
+    // committed yet (and for retryable/rolled-back batches). Without this
+    // explicit repoint, deleting a source fires ON DELETE SET NULL and a later
+    // commit silently routes its lots to Unassigned.
+    await portfolioImportBatchRepository.repointAccount(targetId, ids);
 
     // Accounts that used a merged source as their funding/settlement account.
     const fundingCount = await accountRepository.repointFundingAccount(

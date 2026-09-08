@@ -294,6 +294,7 @@ describeDb(
         expect(result.byAccount[0]).toEqual({
           account_id: fx.ibkr,
           assignment: "account",
+          contribution_kind: "position",
           oversold: false,
           currentValue: 4220,
           totalInvested: 3700,
@@ -304,6 +305,7 @@ describeDb(
         expect(result.byAccount[1]).toEqual({
           account_id: fx.degiro,
           assignment: "account",
+          contribution_kind: "position",
           oversold: false,
           currentValue: 1375,
           totalInvested: 3600,
@@ -315,6 +317,7 @@ describeDb(
         expect(result.byAccount[2]).toEqual({
           account_id: null,
           assignment: "unassigned",
+          contribution_kind: "position",
           oversold: false,
           currentValue: 900,
           totalInvested: 1000,

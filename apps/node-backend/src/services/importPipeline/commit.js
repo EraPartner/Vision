@@ -386,9 +386,6 @@ async function commitChunkPerRow({ chunk, batchId, committedHashes }) {
           // field-based check above can't double-insert.
           const insertedId = await transactionRepository.insertImportedRow({
             date: d.dateStr,
-            // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
-            // trigger; the resolved FK is written explicitly (decoupled half).
-            bankAccount: d.bankAccount,
             accountId: d.accountId,
             recipientId: d.recipientId,
             categoryId: d.categoryId,
@@ -723,16 +720,14 @@ async function planChunk({ chunk, batchId, committedHashes }) {
  * @throws {ChunkPlanInvalid} when the write did not land exactly as planned
  */
 async function bulkInsertPlanned(toInsert, batchId) {
-  // Dual-write (ADR-088 pre-drop): bank_account keeps feeding the sync
-  // trigger, account_id is written explicitly as the decoupled half (the
-  // trigger re-resolves the string to the same id).
+  // ADR-088 contract phase: staging keeps the imported label for review, but
+  // committed transactions persist only the resolved account_id.
   const { rows } = await query(
     `INSERT INTO transactions
-              (date, bank_account, account_id, recipient_id, category_id, amount, memo, currency, balance,
+              (date, account_id, recipient_id, category_id, amount, memo, currency, balance,
                comment, import_batch_id, matched_pattern_id, tx_hash, is_active)
           SELECT UNNEST($1::date[]),
-                 UNNEST($2::text[]),
-                 UNNEST($13::integer[]),
+                 UNNEST($2::integer[]),
                  UNNEST($3::integer[]),
                  UNNEST($4::integer[]),
                  UNNEST($5::numeric[]),
@@ -748,7 +743,7 @@ async function bulkInsertPlanned(toInsert, batchId) {
           RETURNING id, tx_hash`,
     [
       toInsert.map((d) => d.dateStr),
-      toInsert.map((d) => d.bankAccount),
+      toInsert.map((d) => d.accountId),
       toInsert.map((d) => d.recipientId),
       toInsert.map((d) => d.categoryId),
       toInsert.map((d) => d.row.amount),
@@ -759,7 +754,6 @@ async function bulkInsertPlanned(toInsert, batchId) {
       batchId,
       toInsert.map((d) => d.patternId),
       toInsert.map((d) => d.txHash),
-      toInsert.map((d) => d.accountId),
     ],
   );
 

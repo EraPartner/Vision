@@ -32,7 +32,11 @@ beforeEach(() => {
   mocks.lockBatchForUpdate.mockResolvedValue({
     status: "complete_with_errors",
   });
-  mocks.getAccount.mockResolvedValue({ id: 77 });
+  mocks.getAccount.mockResolvedValue({
+    id: 77,
+    type: "brokerage",
+    is_active: true,
+  });
   mocks.commitPortfolioImport.mockResolvedValue({
     imported: 1,
     duplicates: 0,
@@ -74,5 +78,19 @@ describe("commitReviewedPortfolioImport", () => {
 
     expect(mocks.setBatchAccount).not.toHaveBeenCalled();
     expect(mocks.commitPortfolioImport).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive and non-portfolio replacement accounts", async () => {
+    for (const account of [
+      { id: 77, type: "checking", is_active: true },
+      { id: 77, type: "wallet", is_active: false },
+    ]) {
+      mocks.getAccount.mockResolvedValueOnce(account);
+      await expect(
+        commitReviewedPortfolioImport({ batchId: 5, accountId: 77 }),
+      ).rejects.toThrow("active portfolio account");
+      expect(mocks.setBatchAccount).not.toHaveBeenCalled();
+      expect(mocks.commitPortfolioImport).not.toHaveBeenCalled();
+    }
   });
 });

@@ -166,11 +166,12 @@ export async function isManualDuplicate({
 
   // Fallback: field-based duplicate check (includes memo for accurate match).
   const fieldResult = await query(
-    `SELECT id FROM transactions
-     WHERE date = $1 AND amount = $2 AND recipient_id = $3
-       AND COALESCE(TRIM(memo), '') = $4
-       AND COALESCE(UPPER(bank_account), '') = $5
-       AND is_active = true
+    `SELECT t.id FROM transactions t
+     LEFT JOIN accounts acct ON acct.id = t.account_id
+     WHERE t.date = $1 AND t.amount = $2 AND t.recipient_id = $3
+       AND COALESCE(TRIM(t.memo), '') = $4
+       AND COALESCE(UPPER(acct.name), '') = $5
+       AND t.is_active = true
      LIMIT 1`,
     [
       date,

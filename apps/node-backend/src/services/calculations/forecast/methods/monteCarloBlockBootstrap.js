@@ -8,7 +8,7 @@
 
 import { buildSeasonalityBuckets, lookupBucket } from "../seasonality.js";
 import { makeRng } from "../prng.js";
-import { quantile } from "../_statistics.js";
+import { summarizeSimulationPaths } from "../simulationBands.js";
 
 export const id = "monte_carlo_block_bootstrap";
 export const label = "Monte Carlo (block bootstrap)";
@@ -36,7 +36,7 @@ function computeResiduals(history, buckets) {
  *   percentiles?: number[],
  *   seed?: number|string,
  * }} ctx
- * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>> }}
+ * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>>, cumulative_bands: Record<string, Array<{date: string, value: number}>> }}
  */
 function forecast({
   history,
@@ -46,7 +46,7 @@ function forecast({
   seed = "default",
 }) {
   const H = forecastDates.length;
-  if (H === 0) return { series: [], bands: {} };
+  if (H === 0) return { series: [], bands: {}, cumulative_bands: {} };
 
   const buckets = buildSeasonalityBuckets(history);
   const residuals = computeResiduals(history, buckets);
@@ -58,7 +58,7 @@ function forecast({
     const bands = {};
     for (const q of percentiles)
       bands[`p${q}`] = forecastDates.map((date) => ({ date, value: 0 }));
-    return { series, bands };
+    return { series, bands, cumulative_bands: bands };
   }
 
   // Stationary bootstrap: block length ~ Geom(1/L), start index ~ Uniform.
@@ -78,27 +78,7 @@ function forecast({
     }
   }
 
-  /** @type {Record<string, number[]>} */
-  const bands = {};
-  for (const q of percentiles) bands[`p${q}`] = forecastDates.map(() => 0);
-  const series = new Array(H);
-
-  for (let h = 0; h < H; h++) {
-    const sorted = samples[h].slice().sort((a, b) => a - b);
-    for (const q of percentiles) bands[`p${q}`][h] = quantile(sorted, q);
-    series[h] = { date: forecastDates[h], value: quantile(sorted, 50) };
-  }
-
-  /** @type {Record<string, Array<{date: string, value: number}>>} */
-  const bandsByDate = {};
-  for (const q of percentiles) {
-    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({
-      date,
-      value: bands[`p${q}`][h],
-    }));
-  }
-
-  return { series, bands: bandsByDate };
+  return summarizeSimulationPaths(samples, forecastDates, percentiles);
 }
 
 export { forecast };

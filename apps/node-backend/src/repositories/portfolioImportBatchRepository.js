@@ -14,6 +14,44 @@ const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
   error_summary, started_at, completed_at`;
 
 /**
+ * Keep reviewable and retryable import batches routed to the surviving account
+ * when their selected broker account is merged away. This must run before the
+ * source account rows are deleted; otherwise the FK's ON DELETE SET NULL action
+ * irreversibly loses the reviewed destination.
+ *
+ * @param {number} targetId
+ * @param {number[]} sourceIds
+ * @returns {Promise<number>}
+ */
+export async function repointAccount(targetId, sourceIds) {
+  const result = await query(
+    `UPDATE portfolio_import_batches
+        SET account_id = $1
+      WHERE account_id = ANY($2::int[])`,
+    [targetId, sourceIds],
+  );
+  return result.rowCount ?? 0;
+}
+
+/** Lock routed batches before account rows so merge follows the same batch ->
+ * account lock order as portfolio-import commit. This prevents the two
+ * operations from deadlocking while preserving the reviewed destination.
+ *
+ * @param {number[]} sourceIds
+ * @returns {Promise<void>}
+ */
+export async function lockForAccountMerge(sourceIds) {
+  await query(
+    `SELECT id
+       FROM portfolio_import_batches
+      WHERE account_id = ANY($1::int[])
+      ORDER BY id
+      FOR UPDATE`,
+    [sourceIds],
+  );
+}
+
+/**
  * Set the batch-level brokerage account (ADR-095). Lots committed from this batch
  * inherit it as their account_id (ADR-091). Pass null to clear. A present
  * account also repairs cash rows whose exact commit error says the batch

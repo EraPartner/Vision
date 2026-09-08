@@ -7,7 +7,7 @@
 
 import { buildSeasonalityBuckets, lookupBucket } from "../seasonality.js";
 import { makeRng, gaussian } from "../prng.js";
-import { quantile } from "../_statistics.js";
+import { summarizeSimulationPaths } from "../simulationBands.js";
 
 export const id = "monte_carlo_parametric";
 export const label = "Monte Carlo (parametric)";
@@ -23,7 +23,7 @@ const DEFAULT_PERCENTILES = [10, 50, 90];
  *   percentiles?: number[],
  *   seed?: number|string,
  * }} ctx
- * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>> }}
+ * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>>, cumulative_bands: Record<string, Array<{date: string, value: number}>> }}
  */
 function forecast({
   history,
@@ -36,7 +36,7 @@ function forecast({
   const rng = makeRng(seed);
 
   const H = forecastDates.length;
-  if (H === 0) return { series: [], bands: {} };
+  if (H === 0) return { series: [], bands: {}, cumulative_bands: {} };
 
   /** @type {number[][]} */
   const samples = Array.from({ length: H }, () => new Array(paths));
@@ -48,28 +48,7 @@ function forecast({
     }
   }
 
-  /** @type {Record<string, number[]>} */
-  const bands = {};
-  for (const q of percentiles) bands[`p${q}`] = new Array(H);
-  const median = new Array(H);
-
-  for (let h = 0; h < H; h++) {
-    const sorted = samples[h].slice().sort((a, b) => a - b);
-    for (const q of percentiles) bands[`p${q}`][h] = quantile(sorted, q);
-    median[h] = quantile(sorted, 50);
-  }
-
-  const series = forecastDates.map((date, h) => ({ date, value: median[h] }));
-  /** @type {Record<string, Array<{date: string, value: number}>>} */
-  const bandsByDate = {};
-  for (const q of percentiles) {
-    bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({
-      date,
-      value: bands[`p${q}`][h],
-    }));
-  }
-
-  return { series, bands: bandsByDate };
+  return summarizeSimulationPaths(samples, forecastDates, percentiles);
 }
 
 export { forecast };

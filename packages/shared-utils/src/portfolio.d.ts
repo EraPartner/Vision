@@ -111,6 +111,7 @@ export interface PartitionedTxnLike extends PortfolioTxnLike {
 
 export interface InvestmentSummaryPartition {
   accountId: number | null;
+  contributionKind: "position" | "non_position";
   core: InvestmentSummaryCore;
 }
 

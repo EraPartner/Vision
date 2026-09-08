@@ -3,8 +3,7 @@
  *
  * Tests that need a real Postgres instance import `getTestPool()`. Resolution
  * rules:
- *   - If `TEST_DATABASE_URL` is set, use it (expected: compose DB on a dedicated
- *     test schema, or a testcontainers-pg instance in CI)
+ *   - If `TEST_DATABASE_URL` is set, use that disposable test database.
  *   - Otherwise return null so the test can self-skip with `it.skipIf(!pool)`
  *
  * Callers are responsible for their own schema/truncate/rollback strategy. A
@@ -20,7 +19,7 @@
  * what marks a module as DB-backed for that count.
  */
 
-import pg from 'pg';
+import pg from "pg";
 
 const { Pool } = pg;
 
@@ -79,7 +78,7 @@ export async function acquireDbSuiteLock() {
   if (!pool || lockClient) return;
   const client = await pool.connect();
   try {
-    await client.query('SELECT pg_advisory_lock($1)', [DB_SUITE_LOCK_KEY]);
+    await client.query("SELECT pg_advisory_lock($1)", [DB_SUITE_LOCK_KEY]);
   } catch (err) {
     client.release();
     throw err;
@@ -93,7 +92,7 @@ export async function releaseDbSuiteLock() {
   const client = lockClient;
   lockClient = null;
   try {
-    await client.query('SELECT pg_advisory_unlock($1)', [DB_SUITE_LOCK_KEY]);
+    await client.query("SELECT pg_advisory_unlock($1)", [DB_SUITE_LOCK_KEY]);
   } finally {
     client.release();
   }

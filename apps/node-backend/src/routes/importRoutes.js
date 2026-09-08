@@ -161,8 +161,8 @@ const csvImportOptionsSchema = z.object({
 /** @param {ExpressRequest} req */
 function parseCsvImportOptions(req) {
   const result = csvImportOptionsSchema.safeParse({
-    separator: req.query.separator || req.body.separator,
-    encoding: req.query.encoding || req.body.encoding,
+    separator: bodyFirstParam(req.body, req.query, "separator"),
+    encoding: bodyFirstParam(req.body, req.query, "encoding"),
   });
   if (!result.success) {
     if (req.file) cleanup(req.file.path);
@@ -172,6 +172,9 @@ function parseCsvImportOptions(req) {
   }
   return result.data;
 }
+
+// Listener-free contract seam for environments that cannot bind a test socket.
+export const __parseCsvImportOptionsForTests = parseCsvImportOptions;
 
 // Free-text multipart field: falsy passes through (the required-set check in
 // superRefine owns the rejection message); a truthy non-string is a clean 400

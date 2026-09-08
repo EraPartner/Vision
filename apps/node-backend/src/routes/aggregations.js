@@ -37,9 +37,9 @@ import { computeTagPivot } from "../services/calculations/aggregation/tagPivot.j
 import { getTargetCurrency } from "./info/_queryParams.js";
 import { parseBooleanQueryParam } from "../lib/httpParams.js";
 import { parseIntClamped } from "../lib/pagination.js";
-import { assertYmd } from "../lib/validation.js";
 import { ValidationError } from "../middleware/errorHandler.js";
 import { validateIntArray } from "../middleware/validation.js";
+import { parseAggregationDateRange } from "../lib/aggregationDateRange.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -94,21 +94,6 @@ function parseNumericArrayQueryParam(raw) {
   return values.map((v) => Number(v)).filter((n) => Number.isFinite(n));
 }
 
-/**
- * Normalize the pivots' legacy `start`/`end` aliases onto the API-wide
- * `start_date`/`end_date` contract. The canonical spelling wins when callers
- * send both, including when its value is empty (which means no bound).
- * @param {ExpressRequest['query']} query
- */
-function parsePivotDateRange(query) {
-  const start = query.start_date !== undefined ? query.start_date : query.start;
-  const end = query.end_date !== undefined ? query.end_date : query.end;
-  return {
-    startDate: assertYmd(start, "start_date"),
-    endDate: assertYmd(end, "end_date"),
-  };
-}
-
 router.get(
   "/monthly-summary",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
@@ -116,6 +101,7 @@ router.get(
     res,
   ) => {
     const allTime = parseBooleanQueryParam(req.query.all_time);
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const { data, meta } = await computeMonthlySummary({
       targetCurrency: getTargetCurrency(req),
       excludedCategoryIds: parseIdArrayQueryParam(
@@ -127,6 +113,8 @@ router.get(
         "excluded_recipient_ids",
       ),
       allTime,
+      startDate: allTime ? undefined : startDate,
+      endDate: allTime ? undefined : endDate,
     });
     res.ok({ data, meta });
   },
@@ -151,6 +139,7 @@ router.get(
     req,
     res,
   ) => {
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const { data, meta } = await computeRecipientInsights({
       targetCurrency: getTargetCurrency(req),
       excludedCategoryIds: parseIdArrayQueryParam(
@@ -161,6 +150,8 @@ router.get(
         req.query.excluded_recipient_ids,
         "excluded_recipient_ids",
       ),
+      startDate,
+      endDate,
     });
     res.ok({ data, meta });
   },
@@ -424,6 +415,7 @@ router.get(
     req,
     res,
   ) => {
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const { data, meta } = await computeCategoryPivot({
       targetCurrency: getTargetCurrency(req),
       excludedCategoryIds: parseIdArrayQueryParam(
@@ -434,6 +426,8 @@ router.get(
         req.query.excluded_recipient_ids,
         "excluded_recipient_ids",
       ),
+      startDate,
+      endDate,
     });
     res.ok({ data, meta });
   },
@@ -445,6 +439,7 @@ router.get(
     req,
     res,
   ) => {
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const { data, meta } = await computeRecipientByYear({
       targetCurrency: getTargetCurrency(req),
       excludedRecipientIds: parseIdArrayQueryParam(
@@ -455,6 +450,8 @@ router.get(
         req.query.excluded_category_ids,
         "excluded_category_ids",
       ),
+      startDate,
+      endDate,
     });
     res.ok({ data, meta });
   },
@@ -469,7 +466,7 @@ router.get(
     const bucket = ["monthly", "yearly"].includes(req.query.bucket)
       ? req.query.bucket
       : "monthly";
-    const { startDate, endDate } = parsePivotDateRange(req.query);
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const recipientIds = parseIdArrayQueryParam(
       req.query.recipient_ids,
       "recipient_ids",
@@ -498,7 +495,7 @@ router.get(
     const bucket = ["monthly", "yearly"].includes(req.query.bucket)
       ? req.query.bucket
       : "monthly";
-    const { startDate, endDate } = parsePivotDateRange(req.query);
+    const { startDate, endDate } = parseAggregationDateRange(req.query);
     const tagIds = parseIdArrayQueryParam(req.query.tag_ids, "tag_ids");
     const allTags =
       parseBooleanQueryParam(req.query.all) ||

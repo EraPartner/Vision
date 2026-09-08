@@ -197,6 +197,7 @@ export async function getPortfolioSummary(targetCurrency = "EUR") {
  * @typedef {{
  *   account_id: number|null,
  *   assignment: "account"|"unassigned",
+ *   contribution_kind: "position"|"non_position",
  *   oversold: boolean,
  *   currentValue: Decimal,
  *   totalInvested: Decimal,
@@ -219,12 +220,14 @@ export async function getPortfolioSummary(targetCurrency = "EUR") {
  * @param {AccountContribution[]} contributions
  */
 function aggregateByAccount(contributions) {
-  /** @type {Map<number|null, AccountContribution>} */
-  const acc = new Map(); // account_id (or null) → aggregate
+  /** @type {Map<string, AccountContribution>} */
+  const acc = new Map(); // (account_id, contribution kind) → aggregate
   for (const c of contributions) {
-    const cur = acc.get(c.account_id) ?? {
+    const key = `${c.account_id ?? "null"}:${c.contribution_kind}`;
+    const cur = acc.get(key) ?? {
       account_id: c.account_id,
       assignment: c.account_id == null ? "unassigned" : "account",
+      contribution_kind: c.contribution_kind,
       oversold: false,
       currentValue: toDecimal(0),
       totalInvested: toDecimal(0),
@@ -238,12 +241,13 @@ function aggregateByAccount(contributions) {
     cur.unrealizedGain = cur.unrealizedGain.plus(c.unrealizedGain);
     cur.gainLoss = cur.gainLoss.plus(c.gainLoss);
     cur.oversold ||= c.oversold;
-    acc.set(c.account_id, cur);
+    acc.set(key, cur);
   }
   return [...acc.values()]
     .map((a) => ({
       account_id: a.account_id,
       assignment: a.assignment,
+      contribution_kind: a.contribution_kind,
       oversold: a.oversold,
       currentValue: round2(a.currentValue),
       totalInvested: round2(a.totalInvested),
@@ -397,6 +401,7 @@ function buildInvestmentSummary(
     assignment: /** @type {"account"|"unassigned"} */ (
       p.accountId == null ? "unassigned" : "account"
     ),
+    contribution_kind: p.contributionKind,
     oversold: p.core.oversold,
     currentValue: p.core.converted.currentValue,
     totalInvested: p.core.converted.totalBuyCost,
@@ -479,6 +484,9 @@ function buildInvestmentSummary(
     // byAccount null row — read surfaces show an "assign lots" nudge instead).
     fullyAssigned,
     oversold: core.oversold,
+    // Exact per-investment broker partitions for client-side filtering. The
+    // portfolio-wide `byAccount` array remains the round-once aggregate truth.
+    byAccount: aggregateByAccount(accountContributions),
   };
 
   return { summary, accountContributions };

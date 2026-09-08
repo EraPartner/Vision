@@ -157,29 +157,31 @@ function detectAmountChanges(transactions) {
     const aTime = new Date(a?.date).getTime();
     const bTime = new Date(b?.date).getTime();
 
-    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) {
+      return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+    }
     if (Number.isNaN(aTime)) return 1;
     if (Number.isNaN(bTime)) return -1;
-    return aTime - bTime;
+    return aTime - bTime || Number(a?.id ?? 0) - Number(b?.id ?? 0);
   });
 
-  // Calculate baseline (median of all amounts)
-  const amounts = sorted.map((t) => toDecimal(t.amount).abs().toNumber());
-  const medianAmount = median(amounts);
-  if (!Number.isFinite(medianAmount) || medianAmount === 0) {
-    return [];
-  }
+  // Compare recent charges with the immediately preceding chronological
+  // charge. This keeps `previousAmount` literal and avoids describing an
+  // all-history median as the prior price.
+  for (let i = Math.max(1, sorted.length - 3); i < sorted.length; i++) {
+    const previousAmount = toDecimal(sorted[i - 1].amount)
+      .abs()
+      .toNumber();
+    if (!Number.isFinite(previousAmount) || previousAmount === 0) continue;
 
-  // Check last few transactions for changes
-  for (let i = Math.max(0, sorted.length - 3); i < sorted.length; i++) {
     const amt = toDecimal(sorted[i].amount).abs().toNumber();
-    const pctChange = ((amt - medianAmount) / medianAmount) * 100;
+    const pctChange = ((amt - previousAmount) / previousAmount) * 100;
 
     if (Math.abs(pctChange) > 5) {
-      // More than 5% change from median
+      // More than 5% change from the preceding charge.
       changes.push({
         date: sorted[i].date,
-        previousAmount: medianAmount,
+        previousAmount,
         newAmount: amt,
         percentChange: Math.round(pctChange * 100) / 100,
         direction: pctChange > 0 ? "increased" : "decreased",

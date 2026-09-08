@@ -1,12 +1,8 @@
 /**
  * Runtime least-privilege role bootstrap.
  *
- * docker/postgres-init/01-app-role.sh creates the non-superuser `ftm_app`
- * role — but only when the Postgres data volume is FIRST initialised.
- * Already-initialised databases (every install that predates the
- * least-privilege setup, and every packaged desktop install, whose embedded
- * compose does not mount the init dir at all) never run it. This module closes
- * that gap: when the operator configures the three-variable setup
+ * Native installations create the non-superuser application role at runtime.
+ * When the operator configures the three-variable setup
  * (DATABASE_URL pointing at the app role + DATABASE_URL_MIGRATIONS keeping the
  * privileged role), it connects ONCE as the privileged role before the runtime
  * pool starts polling, creates the app role if missing, and (re)applies the
@@ -23,8 +19,8 @@
  *     app role genuinely cannot be made to exist, the ordinary pool-connect
  *     path surfaces the failure exactly as any other bad DATABASE_URL would.
  *   - Single source of truth for grants:
- *     docker/postgres-init/app-role-grants.sql.tpl is shared verbatim with the
- *     first-init shell script; this module substitutes the same psql-style
+ *     config/postgres/app-role-grants.sql.tpl is packaged with the backend;
+ *     this module substitutes the psql-style
  *     :"var" placeholders.
  */
 
@@ -38,16 +34,15 @@ import { logger } from "../config/logger.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // repo root: apps/node-backend/src/database/ -> ../../../.. (mirrors migrate.js;
-// in the Docker image this resolves to /app, where the Dockerfile copies
-// docker/postgres-init/ alongside alembic/).
+// in the packaged runtime this resolves to its resource root).
 const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
   ? path.resolve(process.env.VISION_RUNTIME_ROOT)
   : path.resolve(__dirname, "..", "..", "..", "..");
 
 const GRANTS_TEMPLATE_PATH = path.join(
   REPO_ROOT,
-  "docker",
-  "postgres-init",
+  "config",
+  "postgres",
   "app-role-grants.sql.tpl",
 );
 
@@ -114,7 +109,7 @@ function quoteLiteral(value) {
  * @param {{ appRole: string, ownerRole: string, dbName: string }} names
  * @returns {string[]}
  */
- function renderGrantStatements({ appRole, ownerRole, dbName }) {
+function renderGrantStatements({ appRole, ownerRole, dbName }) {
   const template = readFileSync(GRANTS_TEMPLATE_PATH, "utf8");
   const substituted = template
     .split(':"app_role"')
@@ -360,7 +355,7 @@ export async function ensureAppRole({
         if (privRes.rows[0]?.can_create !== true) {
           log.warn(
             `[role-bootstrap] app role ${appConn.user} does not exist and the migration role lacks CREATEROLE — ` +
-              "cannot bootstrap it. Create the role manually (see docker/postgres-init/01-app-role.sh for the intended shape) " +
+              "cannot bootstrap it. Create the role manually with config/postgres/app-role-grants.sql.tpl " +
               "or the runtime pool will fail to connect.",
           );
           return { status: "degraded", reason: "no-createrole" };

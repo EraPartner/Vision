@@ -23,33 +23,28 @@ import { buildSetClauses } from "../lib/sqlClauses.js";
 import { accountRepository } from "./accountRepository.js";
 
 /**
- * ADR-088 UPDATE-path decouple, shared by this repo and
- * plannedTransactionRepository: when an update writes `bank_account`, resolve
- * the label to an account and stamp `account_id` into the same SET.
+ * ADR-088 contract-phase translation, shared by this repository and
+ * plannedTransactionRepository. The HTTP contract still accepts the legacy
+ * `bank_account` label, but persistence stores only `account_id`.
  *
- * Without this, an API edit to a first-seen label leaves a GHOST row — string
- * set, FK NULL/stale — because the 0062 sync trigger is deliberately
- * lookup-only on UPDATE (it never creates). Every flipped read then surfaces
- * the OLD account's name (the edit silently "reverts"), and the import dedup
- * probe, now keyed on account_id, mis-verdicts against the ghost in both
- * directions. Resolution uses the trigger's own lower(btrim) identity
- * (resolveOrCreateByName), so the trigger's UPDATE-time lookup lands on the
- * very account created here — the two writes cannot disagree. An accepted
- * blank/null label resolves to NULL, matching the trigger's blank-detach.
- * The string itself keeps being written too (pre-drop dual-write contract);
- * raw-SQL/DB-editor updates intentionally keep the 0062 lookup-only guard.
+ * Resolve the label through the account entity's lower(btrim) identity, then
+ * remove the compatibility field before dynamic SET clauses are built. A
+ * blank/null label resolves to NULL and detaches the row.
  *
  * Mutates and returns `sanitized`. Called AFTER sanitizeUpdateFields, so a
  * request body can never set account_id directly (it is not whitelisted).
  *
  * @param {Record<string, any>} sanitized output of sanitizeUpdateFields
+ * @param {import('../types/rows.js').QueryRunner} [client]
  * @returns {Promise<Record<string, any>>}
  */
-export async function stampAccountIdForUpdate(sanitized) {
+export async function stampAccountIdForUpdate(sanitized, client) {
   if (Object.hasOwn(sanitized, "bank_account")) {
     sanitized.account_id =
-      (await accountRepository.resolveOrCreateByName(sanitized.bank_account)) ??
-      null;
+      (await accountRepository.resolveOrCreateByName(sanitized.bank_account, {
+        client,
+      })) ?? null;
+    delete sanitized.bank_account;
   }
   return sanitized;
 }
@@ -707,7 +702,7 @@ export const transactionRepository = {
    *
    * @param {object} input
    * @param {string} input.transaction_date 'YYYY-MM-DD'
-   * @param {string|null} [input.bank_account] Upper-cased before insert.
+   * @param {string|null} [input.bank_account] Compatibility label resolved to account_id.
    * @param {number|null} [input.recipient_id]
    * @param {number|string} input.amount
    * @param {string|null} [input.memo] Upper-cased before insert.
@@ -733,7 +728,7 @@ export const transactionRepository = {
     // The CSV import pipeline writes `balance` via its own INSERT (commit.js).
     const sql = `
       WITH inserted AS (
-        INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, category_id, comment, is_active)
+        INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
         RETURNING *
       )
@@ -745,32 +740,33 @@ export const transactionRepository = {
       FROM inserted t
       ${TRANSACTION_JOINS}
     `;
-    const sqlParams = [
-      transaction_date,
-      bank_account ? bank_account.toUpperCase() : null,
-      recipient_id,
-      amount,
-      memo ? memo.toUpperCase() : null,
-      // Default to EUR rather than NULL: currency is NOT NULL at the DB level
-      // (migration 0046) and the read layer already coalesces missing → EUR.
-      currency ? currency.toUpperCase() : "EUR",
-      category_id,
-      comment,
-    ];
-
-    let row;
-    if (tags !== null) {
-      row = await withTransaction(async (client) => {
-        const res = await client.query(sql, sqlParams);
-        const inserted = res.rows[0];
-        if (!inserted) return null;
+    const row = await withTransaction(async (client) => {
+      // Resolve inside this transaction so a failed create cannot leave an
+      // orphan account that the former INSERT trigger would have rolled back.
+      const accountId =
+        (await accountRepository.resolveOrCreateByName(
+          bank_account ? bank_account.toUpperCase() : null,
+          { client },
+        )) ?? null;
+      const res = await client.query(sql, [
+        transaction_date,
+        accountId,
+        recipient_id,
+        amount,
+        memo ? memo.toUpperCase() : null,
+        // Default to EUR rather than NULL: currency is NOT NULL at the DB level
+        // (migration 0046) and the read layer already coalesces missing → EUR.
+        currency ? currency.toUpperCase() : "EUR",
+        category_id,
+        comment,
+      ]);
+      const inserted = res.rows[0];
+      if (!inserted) return null;
+      if (tags !== null) {
         await setTransactionTags(client, inserted.id, tags);
-        return inserted;
-      });
-    } else {
-      const result = await queryPrepared("tx_create", sql, sqlParams);
-      row = result.rows[0] || null;
-    }
+      }
+      return inserted;
+    });
 
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
@@ -896,20 +892,6 @@ export const transactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields("transactions", txFields);
-    // A bank_account edit also writes the resolved FK (ADR-088 — see
-    // stampAccountIdForUpdate). Resolution happens before the row UPDATE, so
-    // an edit against a missing id can mint the account without applying the
-    // field change — harmless (same account the retried PATCH will then use).
-    await stampAccountIdForUpdate(sanitized);
-    // Map frontend field names to DB columns (transaction_date → date)
-    const {
-      clauses: setClauses,
-      params: updateParams,
-      nextIdx: paramIdx,
-    } = buildSetClauses(sanitized, {
-      quote: true,
-      mapColumn: (key) => (key === "transaction_date" ? "date" : key),
-    });
 
     // Same 3-level enrichment as getById/getAll/create (shared fragments): the
     // update response must not disagree with an immediately-following GET on
@@ -925,63 +907,44 @@ export const transactionRepository = {
       WHERE t.id = $1
     `;
 
-    if (tags !== undefined) {
-      const row = await withTransaction(async (client) => {
-        if (setClauses.length > 0) {
-          setClauses.push(`updated_at = NOW()`);
-          updateParams.push(id);
-          const updateSql = `
-            WITH updated AS (
-              UPDATE transactions SET ${setClauses.join(", ")}
-              WHERE id = $${paramIdx} RETURNING id
-            )
-            SELECT id FROM updated
-          `;
-          const res = await client.query(updateSql, updateParams);
-          if (!res.rows[0]) return null;
-        } else {
-          // Tags-only PATCH: probe existence first. Otherwise setTransactionTags'
-          // junction INSERT hits the transaction_id FK for a missing row → a raw
-          // 23503 surfaces as a 500 instead of the standard 404.
-          const exists = await client.query(
-            "SELECT 1 FROM transactions WHERE id = $1",
-            [id],
-          );
-          if (!exists.rows[0]) return null;
-        }
-        await setTransactionTags(client, id, tags ?? []);
-        const res = await client.query(fetchSql, [id]);
-        return res.rows[0] || null;
+    const row = await withTransaction(async (client) => {
+      // Resolve the compatibility label on this connection. A missing target
+      // row or failed update then rolls back any account minted for the label.
+      await stampAccountIdForUpdate(sanitized, client);
+      const {
+        clauses: setClauses,
+        params: updateParams,
+        nextIdx: paramIdx,
+      } = buildSetClauses(sanitized, {
+        quote: true,
+        mapColumn: (key) => (key === "transaction_date" ? "date" : key),
       });
-      if (!row) return null;
-      const [enriched] = await attachTagsToRows([row]);
-      clearTransactionCountCache();
-      return enriched;
-    }
 
-    if (setClauses.length === 0) return this.getById(id);
+      if (setClauses.length > 0) {
+        setClauses.push(`updated_at = NOW()`);
+        updateParams.push(id);
+        const updateSql = `
+          UPDATE transactions SET ${setClauses.join(", ")}
+          WHERE id = $${paramIdx} RETURNING id
+        `;
+        const res = await client.query(updateSql, updateParams);
+        if (!res.rows[0]) return null;
+      } else {
+        // Tags-only or empty PATCH: probe existence first. Otherwise the tag
+        // junction INSERT would expose a raw FK error instead of the usual 404.
+        const exists = await client.query(
+          "SELECT 1 FROM transactions WHERE id = $1",
+          [id],
+        );
+        if (!exists.rows[0]) return null;
+      }
 
-    setClauses.push(`updated_at = NOW()`);
-    updateParams.push(id);
-
-    const sql = `
-      WITH updated AS (
-        UPDATE transactions
-        SET ${setClauses.join(", ")}
-        WHERE id = $${paramIdx}
-        RETURNING *
-      )
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             ${RECIPIENT_NAME_SQL} AS recipient_name,
-             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
-             ${CATEGORY_NAME_SQL} AS category_name
-      FROM updated t
-      ${TRANSACTION_JOINS}
-    `;
-
-    const result = await query(sql, updateParams);
-    const row = result.rows[0] || null;
+      if (tags !== undefined) {
+        await setTransactionTags(client, id, tags ?? []);
+      }
+      const res = await client.query(fetchSql, [id]);
+      return res.rows[0] || null;
+    });
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
     clearTransactionCountCache();
@@ -1077,19 +1040,15 @@ export const transactionRepository = {
 
   /**
    * Repoint transactions off merged-away source accounts onto the survivor.
-   * Also stamps `bank_account` with the survivor's name so the dual-write
-   * trigger (migration 0051) keeps account_id at the target and a later edit
-   * can't re-resolve the old name into a fresh account (un-merge).
    *
    * @param {number} targetId
-   * @param {string} targetName
    * @param {number[]} sourceIds
    * @returns {Promise<number>} rows repointed
    */
-  async repointAccount(targetId, targetName, sourceIds) {
+  async repointAccount(targetId, sourceIds) {
     const result = await query(
-      `UPDATE transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
-      [targetId, targetName, sourceIds],
+      `UPDATE transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
+      [targetId, sourceIds],
     );
     return result.rowCount ?? 0;
   },
@@ -1410,16 +1369,11 @@ export const transactionRepository = {
    * partial unique index on tx_hash to stay race-safe against a concurrent
    * import. A conflict yields no row.
    *
-   * Dual-write contract (ADR-088, pre-drop): BOTH the label string and the
-   * resolved `account_id` are written. The 0051/0083 sync trigger derives
-   * account_id FROM bank_account on INSERT, so the string must keep flowing
-   * until the out-of-band contract drop; the explicit account_id write is the
-   * decoupled half (the trigger re-resolves to the same id — commit.js
-   * resolves with the trigger's own lower(btrim) mapping).
+   * ADR-088 contract phase: the import pipeline resolves the compatibility
+   * label first and this INSERT persists only the canonical `account_id`.
    *
    * @param {object} row
    * @param {string} row.date 'YYYY-MM-DD'
-   * @param {string|null} row.bankAccount
    * @param {number|null} row.accountId Resolved account id for the label (commit.js).
    * @param {number|null} row.recipientId
    * @param {number|null} row.categoryId
@@ -1435,7 +1389,6 @@ export const transactionRepository = {
    */
   async insertImportedRow({
     date,
-    bankAccount,
     accountId,
     recipientId,
     categoryId,
@@ -1450,14 +1403,13 @@ export const transactionRepository = {
   }) {
     const result = await query(
       `INSERT INTO transactions
-                (date, bank_account, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
+                (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, tx_hash, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
              ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
              RETURNING id`,
       [
         date,
-        bankAccount,
         accountId ?? null,
         recipientId,
         categoryId,

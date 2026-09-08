@@ -35,11 +35,16 @@ export const recipientInsightsRepository = {
    * - month-over-month comparison alerts ("You spent X% more at …")
    *
    * @param {string} [targetCurrency]
-   * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
+   * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[], startDate?: string, endDate?: string }} [opts]
    */
   async getRecipientInsights(
     targetCurrency = "EUR",
-    { excludedCategoryIds = [], excludedRecipientIds = [] } = {},
+    {
+      excludedCategoryIds = [],
+      excludedRecipientIds = [],
+      startDate,
+      endDate,
+    } = {},
   ) {
     // Canonical exclusion semantics (lib/filterBuilder.buildExclusionClauses,
     // shared with the dashboard / statistics endpoints): drop hidden categories
@@ -53,6 +58,18 @@ export const recipientInsightsRepository = {
     });
     const params = excl.params;
     const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
+    const dateFilters = [];
+    if (startDate) {
+      params.push(startDate);
+      dateFilters.push(`t.date >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      dateFilters.push(`t.date <= $${params.length}`);
+    }
+    const dateWhere = dateFilters.length
+      ? `AND ${dateFilters.join(" AND ")}`
+      : "";
 
     // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
     // the conversion below can use each row's OWN date rate, exactly as
@@ -81,6 +98,7 @@ export const recipientInsightsRepository = {
         AND t.is_active = true
         AND t.is_transfer = false
         ${exclusionWhere}
+        ${dateWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `,
       params,
@@ -178,6 +196,7 @@ export const recipientInsightsRepository = {
                        + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)
         )
         ${exclusionWhere}
+        ${dateWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
     `,
       params,
@@ -243,12 +262,16 @@ export const recipientInsightsRepository = {
    *   targetCurrency?: string,
    *   excludedRecipientIds?: number[],
    *   excludedCategoryIds?: number[],
+   *   startDate?: string,
+   *   endDate?: string,
    * }} [options]
    */
   async getRecipientByYear({
     targetCurrency = "EUR",
     excludedRecipientIds = [],
     excludedCategoryIds = [],
+    startDate,
+    endDate,
   } = {}) {
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
@@ -260,6 +283,18 @@ export const recipientInsightsRepository = {
     });
     const params = excl.params;
     const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
+    const dateFilters = [];
+    if (startDate) {
+      params.push(startDate);
+      dateFilters.push(`t.date >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      dateFilters.push(`t.date <= $${params.length}`);
+    }
+    const dateWhere = dateFilters.length
+      ? `AND ${dateFilters.join(" AND ")}`
+      : "";
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
@@ -280,6 +315,7 @@ export const recipientInsightsRepository = {
         AND t.amount < 0
         AND t.is_transfer = false
         ${exclusionWhere}
+        ${dateWhere}
       GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `;
 
@@ -402,7 +438,15 @@ export const recipientInsightsRepository = {
           ),
         ),
       ];
-      if (memberIds.length === 0) return { recipientPivot: {} };
+      if (memberIds.length === 0) {
+        return {
+          recipientPivot: {},
+          conversion: {
+            usedHistoricalFallback: false,
+            affectedCurrencies: [],
+          },
+        };
+      }
       params.push(memberIds);
       recipientInclude = `AND t.recipient_id = ANY($${params.length}::int[])`;
     }
@@ -446,6 +490,28 @@ export const recipientInsightsRepository = {
       labelKey: "name",
     });
 
-    return { recipientPivot };
+    const usedHistoricalFallback = converted.some(
+      (row) => row.used_fallback_rate === true,
+    );
+    const affectedCurrencies = [
+      ...new Set(
+        converted
+          .filter((row) => row.used_fallback_rate === true)
+          .map((row) =>
+            String(row.currency || "")
+              .trim()
+              .toUpperCase(),
+          )
+          .filter(Boolean),
+      ),
+    ].sort();
+
+    return {
+      recipientPivot,
+      conversion: {
+        usedHistoricalFallback,
+        affectedCurrencies,
+      },
+    };
   },
 };

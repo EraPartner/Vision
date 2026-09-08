@@ -205,8 +205,8 @@ router.use(enforceAiChatEnabled);
 // Normalized for the frontend:
 //   - `ok`         : boolean          — reachable flag
 //   - `baseUrl`    : string           — actual URL used by the backend
-//   - `displayUrl` : string           — rewrites `host.docker.internal` → `localhost`
-//   - `hint`       : string | null    — guidance when the container can't reach host-side Ollama
+//   - `displayUrl` : string           — URL displayed to the user
+//   - `hint`       : string | null    — optional connection guidance
 //
 // The health probe never throws — it returns `{reachable: false, error, code}`
 // on failure — so this endpoint always emits a success envelope.
@@ -220,34 +220,6 @@ router.use(enforceAiChatEnabled);
  * @property {string} [code]
  */
 
-/** @param {string} [baseUrl] */
-function toDisplayUrl(baseUrl) {
-  if (!baseUrl) return baseUrl;
-  return baseUrl.replace("host.docker.internal", "localhost");
-}
-
-/** @param {OllamaHealth} health */
-function buildConnectionHint(health) {
-  if (health.reachable) return null;
-  const usesContainerGateway =
-    typeof health.baseUrl === "string" &&
-    health.baseUrl.includes("host.docker.internal");
-  if (!usesContainerGateway) return null;
-  // Backend is containerized and tried the host gateway. The overwhelmingly
-  // common cause of a NETWORK_ERROR here is that the user's Ollama binds to
-  // 127.0.0.1 only — the host gateway IP the container uses is not loopback,
-  // so Ollama rejects it. Point them at the fix.
-  if (health.code === "NETWORK_ERROR" || health.code === "TIMEOUT") {
-    return (
-      "Ollama is running but only accepts connections from 127.0.0.1. " +
-      "Restart it with OLLAMA_HOST=0.0.0.0 (macOS: quit Ollama, then in a " +
-      "terminal run `OLLAMA_HOST=0.0.0.0 ollama serve`) so the Docker " +
-      "container can reach it."
-    );
-  }
-  return null;
-}
-
 router.get(
   "/status",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
@@ -259,11 +231,11 @@ router.get(
     res.ok({
       ok: Boolean(health.reachable),
       baseUrl: health.baseUrl,
-      displayUrl: toDisplayUrl(health.baseUrl),
+      displayUrl: health.baseUrl,
       modelCount: health.modelCount ?? 0,
       error: health.error ?? null,
       code: health.code ?? null,
-      hint: buildConnectionHint(health),
+      hint: null,
       defaultModel: settings.ollama.defaultModel,
       enabled: settings.aiChat.enabled,
     });

@@ -116,6 +116,9 @@ export async function update(id, fields) {
     normalizedFields.dividend_amount_convention =
       normalized.dividend_amount_convention;
   }
+  if (fields.recurrence_interval !== undefined) {
+    normalizedFields.recurrence_interval = normalized.recurrence_interval;
+  }
 
   if (fields.is_recurring === false) {
     normalizedFields.recurrence_interval = null;

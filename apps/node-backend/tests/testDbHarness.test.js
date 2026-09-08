@@ -41,6 +41,7 @@ function createFakePostgresBin() {
     "pg_ctl",
     "pg_isready",
     "createdb",
+    "psql",
   ]) {
     const toolPath = path.join(bin, tool);
     writeFileSync(toolPath, "#!/bin/sh\necho 'postgres (PostgreSQL) 18.6'\n");
@@ -50,18 +51,8 @@ function createFakePostgresBin() {
 }
 
 describe("disposable database test harness", () => {
-  it("rejects unknown providers before starting a database", () => {
-    const result = runHarness({ VISION_TEST_DB_PROVIDER: "remote" });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      "VISION_TEST_DB_PROVIDER must be auto, native, or docker",
-    );
-  });
-
   it("rejects unsafe port values before starting a database", () => {
     const result = runHarness({
-      VISION_TEST_DB_PROVIDER: "native",
       VISION_TEST_DB_PORT: "5432;echo unsafe",
     });
 
@@ -72,14 +63,12 @@ describe("disposable database test harness", () => {
     expect(result.stdout).not.toContain("unsafe");
   });
 
-  it("keeps native PostgreSQL isolated and Docker optional", () => {
+  it("keeps native PostgreSQL isolated", () => {
     expect(harnessSource).toContain("umask 077");
     expect(harnessSource).toContain("listen_addresses = '127.0.0.1'");
     expect(harnessSource).toContain("unix_socket_directories = ''");
     expect(harnessSource).toContain("--template=template0");
     expect(harnessSource).toContain("VISION_TEST_POSTGRES_BIN");
-    expect(harnessSource).toContain("VISION_TEST_DB_PROVIDER");
-    expect(harnessSource).toContain("postgres:18-alpine");
     expect(harnessSource).toContain(
       "bun run apps/node-backend/scripts/db-migrate.js",
     );
@@ -88,7 +77,6 @@ describe("disposable database test harness", () => {
   it("can probe native availability without initializing a cluster", () => {
     const fakePostgres = createFakePostgresBin();
     const result = runHarness({
-      VISION_TEST_DB_PROVIDER: "native",
       VISION_TEST_DB_CHECK_ONLY: "1",
       VISION_TEST_POSTGRES_BIN: fakePostgres.bin,
     });
@@ -99,10 +87,13 @@ describe("disposable database test harness", () => {
     expect(result.stdout).not.toContain("Initializing disposable");
   });
 
-  it("never removes Docker volumes or uses destructive Compose shutdown", () => {
-    expect(harnessSource).not.toMatch(/docker\s+volume\s+rm/);
-    expect(harnessSource).not.toMatch(/docker\s+compose[^\n]*down[^\n]*-v/);
-    expect(harnessSource).not.toContain("/var/lib/postgresql/data:/");
+  it("only removes an explicitly scoped temporary native cluster", () => {
+    expect(harnessSource).toContain(
+      'mktemp -d "$native_tmp_base/vision-test-pg.XXXXXX"',
+    );
+    expect(harnessSource).toContain(
+      "Refusing to remove unexpected native path",
+    );
   });
 
   it("probes migration executables and ignores stale virtual environments", () => {

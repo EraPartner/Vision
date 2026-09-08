@@ -445,13 +445,13 @@ export const getRecurringDetected = {
  * three detection services to the shared insightsDigestService (also backing
  * GET /api/info/insights-digest); it never recomputes anything itself.
  *
- * v1 passes no dismiss records (undismissed filtering is owned by the UI
- * surfacing layer) and no previous month-end projection.
+ * The shared service applies server-owned dismissals before this tool sees the
+ * digest, so neither tool calls nor the narration pre-call can revive a row.
  */
 export const insightsDigest = {
   name: "insightsDigest",
   description:
-    'Pre-computed insight findings from the detection layer: new subscriptions, subscription price changes, category overspend outliers, and the month-end cash forecast. Use for "insights digest", "what\'s new", "anything unusual in my spending", "give me my financial insights for today". Narrate and prioritize the returned findings — never invent figures.',
+    'Pre-computed insight findings from the detection layer: new subscriptions, subscription price changes, category overspend outliers, and zero-based month-end net cash flow. The cash-flow value is not an account balance or overdraft prediction. Use for "insights digest", "what\'s new", "anything unusual in my spending", "give me my financial insights for today". Narrate and prioritize the returned findings — never invent figures.',
   parameters: {
     type: "object",
     properties: {},

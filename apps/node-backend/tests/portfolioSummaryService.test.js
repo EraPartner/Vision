@@ -370,6 +370,7 @@ describe("getPortfolioSummary", () => {
       oversold: false,
     });
     expect(result.summaries[0].fullyAssigned).toBe(false);
+    expect(result.summaries[0].byAccount).toEqual(result.byAccount);
     // Global figures stay the exact flat-replay values.
     expect(result.byAccount[0].currentValue).toBeCloseTo(
       result.totals.totalPortfolioValue,
@@ -384,6 +385,88 @@ describe("getPortfolioSummary", () => {
       2,
     );
     expect(result.totals.totalPortfolioValue).toBe(1920); // 160 units @ 12
+  });
+
+  it("keeps null-account position and non-position contributions separate", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          investmentRow({ id: 1, currency: "EUR", current_price: 12 }),
+          investmentRow({
+            id: 2,
+            name: "Microsoft",
+            symbol: "MSFT",
+            currency: "EUR",
+            current_price: 20,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            id: 1,
+            investment_id: 1,
+            type: "buy",
+            amount: 1000,
+            units: 100,
+            currency: "EUR",
+            account_id: null,
+          }),
+          txnRow({
+            id: 2,
+            investment_id: 2,
+            type: "buy",
+            amount: 200,
+            units: 10,
+            currency: "EUR",
+            account_id: 10,
+          }),
+          txnRow({
+            id: 3,
+            investment_id: 2,
+            type: "dividend",
+            amount: 25,
+            units: 0,
+            currency: "EUR",
+            account_id: null,
+          }),
+        ],
+      });
+
+    const result = await getPortfolioSummary("EUR");
+
+    expect(result.summaries.map((summary) => summary.fullyAssigned)).toEqual([
+      false,
+      true,
+    ]);
+    expect(
+      result.byAccount.map((row) => ({
+        account_id: row.account_id,
+        contribution_kind: row.contribution_kind,
+      })),
+    ).toEqual([
+      { account_id: null, contribution_kind: "position" },
+      { account_id: 10, contribution_kind: "position" },
+      { account_id: null, contribution_kind: "non_position" },
+    ]);
+    expect(result.byAccount[2]).toMatchObject({
+      assignment: "unassigned",
+      currentValue: 0,
+      totalInvested: 0,
+    });
+    const sum = (field) =>
+      result.byAccount.reduce((total, row) => total + row[field], 0);
+    expect(sum("currentValue")).toBeCloseTo(
+      result.totals.totalPortfolioValue,
+      2,
+    );
+    expect(sum("totalInvested")).toBeCloseTo(result.totals.totalInvested, 2);
+    expect(sum("realizedGain")).toBeCloseTo(result.totals.totalRealizedGain, 2);
+    expect(sum("unrealizedGain")).toBeCloseTo(
+      result.totals.totalUnrealizedGain,
+      2,
+    );
+    expect(sum("gainLoss")).toBeCloseTo(result.totals.totalGainLoss, 2);
   });
 
   it("byAccount: fully-assigned lots partition per broker — sells consume SAME-account lots (ADR-108)", async () => {
@@ -432,6 +515,7 @@ describe("getPortfolioSummary", () => {
     expect(result.summaries[0].fullyAssigned).toBe(true);
     expect(result.summaries[0].oversold).toBe(false);
     expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20]);
+    expect(result.summaries[0].byAccount).toEqual(result.byAccount);
 
     // Account 20's sell consumes account 20's own 20/unit lot — NOT account
     // 10's older 10/unit lot that flat global FIFO would pick.

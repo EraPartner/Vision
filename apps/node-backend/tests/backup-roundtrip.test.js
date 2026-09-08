@@ -2,7 +2,7 @@
  * Backup Roundtrip Tests
  *
  * Tests the full create → open roundtrip of the .visionbak bundle format, plus
- * the encryption/decryption path.  No Docker, database, or network required.
+ * the encryption/decryption path. No database or network is required.
  *
  * The bundle module lives in packaging/electron/ and uses CommonJS, so we
  * import it via createRequire to stay compatible with this ESM test suite.

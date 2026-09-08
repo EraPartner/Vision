@@ -101,7 +101,10 @@ import {
 // NOT mocked: only .../importPipeline/index.js is. This is the real boundary
 // function, run here over the mocked pg connection.
 import { createBatch } from "../../src/services/importPipeline/stage.js";
-import { importRecipientsCSV } from "../../src/services/dataImportService.js";
+import {
+  importCategoriesCSV,
+  importRecipientsCSV,
+} from "../../src/services/dataImportService.js";
 import {
   getBatch,
   getPreviewRows,
@@ -112,7 +115,7 @@ import {
 import { query as dbQuery } from "../../src/database/connection.js";
 import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
 
-const { default: importRouter } =
+const { default: importRouter, __parseCsvImportOptionsForTests } =
   await import("../../src/routes/importRoutes.js");
 
 const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
@@ -134,6 +137,29 @@ const api = routeAgent(importRouter, {
 const seg = (v) => encodeURIComponent(String(v));
 
 describe("multipart parameter precedence", () => {
+  it("resolves CSV import options body-first without a listener", () => {
+    expect(
+      __parseCsvImportOptionsForTests({
+        body: { separator: "|", encoding: "utf-8" },
+        query: { separator: ";", encoding: "latin1" },
+      }),
+    ).toEqual({ separator: "|", encoding: "utf-8" });
+
+    expect(
+      __parseCsvImportOptionsForTests({
+        body: { separator: "", encoding: null },
+        query: { separator: ";", encoding: "latin1" },
+      }),
+    ).toEqual({ separator: ",", encoding: "utf-8" });
+
+    expect(
+      __parseCsvImportOptionsForTests({
+        body: {},
+        query: { separator: ";", encoding: "latin1" },
+      }),
+    ).toEqual({ separator: ";", encoding: "latin1" });
+  });
+
   it("uses a body bank_name before the legacy query fallback", async () => {
     runImportPipeline.mockResolvedValue({
       batchId: 1,
@@ -164,6 +190,7 @@ beforeEach(() => {
     errors: 0,
   });
   importRecipientsCSV.mockResolvedValue({ imported: 1, errors: 0 });
+  importCategoriesCSV.mockResolvedValue({ imported: 1, errors: 0 });
   customParserConfigRepository.create.mockResolvedValue({ id: 1 });
 });
 
@@ -415,10 +442,10 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
     });
   });
 
-  it("query wins over body; body is the fallback", async () => {
+  it("uses body values before compatibility query fallbacks", async () => {
     await run({ separator: ";" }, { separator: "|" }).expect(201);
     expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
-      separator: ";",
+      separator: "|",
       encoding: "utf-8",
     });
 
@@ -426,6 +453,18 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
     expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
       separator: "|",
       encoding: "latin1",
+    });
+  });
+
+  it("preserves body-field presence before applying endpoint defaults", async () => {
+    await run(
+      { separator: ";", encoding: "latin1" },
+      { separator: "", encoding: null },
+    ).expect(201);
+
+    expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
+      separator: ",",
+      encoding: "utf-8",
     });
   });
 
@@ -449,6 +488,21 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
     const res = await run({ separator: ";;" }).expect(400);
     expect(res.body.error.message).toMatch(/separator/);
     expect(importRecipientsCSV).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseCsvImportOptions pins (POST /categories)", () => {
+  it("uses body options before compatibility query fallbacks", async () => {
+    await api
+      .post(`${BASE}/categories`)
+      .query({ separator: ";", encoding: "latin1" })
+      .send({ separator: "|", encoding: "utf-8" })
+      .expect(201);
+
+    expect(importCategoriesCSV).toHaveBeenCalledWith("/tmp/pin.csv", {
+      separator: "|",
+      encoding: "utf-8",
+    });
   });
 });
 

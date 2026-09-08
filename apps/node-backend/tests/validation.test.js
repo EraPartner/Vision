@@ -98,8 +98,8 @@ describe("Validation Middleware", () => {
     });
 
     it("accepts an integer number but not a float, boolean, array or object", () => {
-      // Numbers matter because validateIdParam re-stamps req.params with the
-      // parsed integer, and because JSON bodies (splits.js) send real numbers.
+      // Numbers matter because JSON bodies and internal callers can supply
+      // real numbers even though Express path params remain strings.
       expect(validateId(42)).toEqual({ valid: true, value: 42 });
       for (const bad of [
         5.7,
@@ -155,7 +155,7 @@ describe("Validation Middleware", () => {
   });
 
   describe("assertIdParam", () => {
-    it("returns a validated id for raw strings and middleware-normalised numbers", () => {
+    it("returns a validated number for path strings and internal numeric inputs", () => {
       expect(
         assertIdParam(/** @type {any} */ ({ params: { id: "00042" } })),
       ).toBe(42);
@@ -541,14 +541,14 @@ describe("Validation Middleware", () => {
       expect(res.json).not.toHaveBeenCalled();
     });
 
-    it("coerces valid id to number and calls next", () => {
+    it("validates a string id without mutating the Express params object", () => {
       const req = { params: { id: "123" } };
       const res = mockResponse();
       const next = vi.fn();
 
       validateIdParam(req, res, next);
 
-      expect(req.params.id).toBe(123);
+      expect(req.params.id).toBe("123");
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
     });
@@ -568,14 +568,14 @@ describe("Validation Middleware", () => {
       }
     });
 
-    // validateIdParam re-stamps req.params.id as a number, so a second pass
-    // over an already-validated request (nested/stacked guards) must not 400.
-    it("is idempotent over an already-parsed numeric param", () => {
-      const req = { params: { id: 123 } };
+    it("is idempotent over repeated validation without changing the param", () => {
+      const req = { params: { id: "123" } };
       const next = vi.fn();
       validateIdParam(req, mockResponse(), next);
+      validateIdParam(req, mockResponse(), next);
+      expect(next).toHaveBeenCalledTimes(2);
       expect(next).toHaveBeenCalledWith();
-      expect(req.params.id).toBe(123);
+      expect(req.params.id).toBe("123");
     });
   });
 
@@ -586,7 +586,7 @@ describe("Validation Middleware", () => {
       const good = { params: { id: 1, patternId: "7" } };
       const next = vi.fn();
       guard(good, mockResponse(), next);
-      expect(good.params.patternId).toBe(7);
+      expect(good.params.patternId).toBe("7");
       expect(next).toHaveBeenCalledWith();
 
       for (const patternId of [

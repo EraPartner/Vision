@@ -23,6 +23,7 @@ import { buildSetClauses } from "../lib/sqlClauses.js";
  * @property {string|null} [startDate] 'YYYY-MM-DD'
  * @property {string|null} [endDate] 'YYYY-MM-DD'
  * @property {string|null} [bankAccount]
+ * @property {number|null} [accountId]
  * @property {number|null} [categoryId]
  * @property {number|null} [recipientId]
  * @property {boolean|null} [isRecurring]
@@ -129,6 +130,7 @@ function buildPlannedTransactionWhereClause({
   startDate = null,
   endDate = null,
   bankAccount = null,
+  accountId = null,
   categoryId = null,
   recipientId = null,
   isRecurring = null,
@@ -151,7 +153,10 @@ function buildPlannedTransactionWhereClause({
   }
   // Bank filter via the FK (ADR-088) — matches the account's canonical name,
   // never the retired bank_account string.
-  if (bankAccount) {
+  if (accountId != null) {
+    whereClause += ` AND pt.account_id = $${paramIdx++}`;
+    params.push(accountId);
+  } else if (bankAccount) {
     whereClause += ` AND pt.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`;
     params.push(`%${bankAccount}%`);
   }
@@ -350,7 +355,7 @@ export async function replaceLoanScheduleInTransaction(
 export async function insertPlannedTransactionInTransaction(client, input) {
   const result = await client.query(
     `INSERT INTO planned_transactions (
-       planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
+       planned_date, account_id, recipient_id, amount, memo, currency, category_id, comment, url,
        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
        reminder_days_before, is_executed, is_active,
        is_loan, loan_type, loan_principal, loan_annual_interest_rate,
@@ -363,7 +368,7 @@ export async function insertPlannedTransactionInTransaction(client, input) {
      ) RETURNING id`,
     [
       input.planned_date,
-      input.bank_account,
+      input.account_id,
       input.recipient_id,
       input.amount,
       input.memo,
@@ -433,6 +438,7 @@ export const plannedTransactionRepository = {
     startDate = null,
     endDate = null,
     bankAccount = null,
+    accountId = null,
     categoryId = null,
     recipientId = null,
     isRecurring = null,
@@ -444,6 +450,7 @@ export const plannedTransactionRepository = {
       startDate,
       endDate,
       bankAccount,
+      accountId,
       categoryId,
       recipientId,
       isRecurring,
@@ -720,18 +727,16 @@ export const plannedTransactionRepository = {
 
   /**
    * Repoint planned transactions off merged-away source accounts onto the
-   * survivor, stamping `bank_account` so the dual-write trigger (migration
-   * 0051) keeps account_id at the target (ADR-088).
+   * survivor.
    *
    * @param {number} targetId
-   * @param {string} targetName
    * @param {number[]} sourceIds
    * @returns {Promise<number>} rows repointed
    */
-  async repointAccount(targetId, targetName, sourceIds) {
+  async repointAccount(targetId, sourceIds) {
     const result = await query(
-      `UPDATE planned_transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
-      [targetId, targetName, sourceIds],
+      `UPDATE planned_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
+      [targetId, sourceIds],
     );
     return result.rowCount ?? 0;
   },
